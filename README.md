@@ -35,9 +35,9 @@ While everything you see here is very and open source; we don't hide any fees or
 Contact us: +249 925343834 (Mohamed Yousif) | +249 9023 00672 (Mohamed Gafar) | adonese@acts-sd.com (Mohamed Yousif)
 
 # Our simulator and EBS services
-Our team have developed an internal EBS QA test system that emulates EBS test environment. We offer our simulator as a paid service.
-- very superior to that of EBS testing server. It runs on weekends. Well, 24/7, just like any server should work.
-- hate EBS's bureaucracy? We do too. No need for the EBS busy servers, you can test our server at any time ¯\_(ツ)_/¯.
+Our team have developed an internal EBS QA test system that emulates EBS test environment. We offer our simulator as a paid service 
+- very superior to that of EBS testing server. It runs on weekends. Well, 24/7, just like any server should work ¯\_(ツ)_/¯.
+- hate EBS's bureaucracy? We do too. No need for the EBS busy servers, you can test our server at any time.
 - we have two plans for the simulator: 
 	- you can use our EBS simulator on your own; we won't test your services.
 	- we can use our EBS simulator while we do the plan for you, the exact way EBS does. Bear in mind that our testers are highly competitive and they're all ex-EBSers.
