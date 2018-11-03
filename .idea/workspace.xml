@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="209e304f-53a2-4c84-bf8a-6ac0a029cbc8" name="Default" comment="" />
+    <list default="true" id="209e304f-53a2-4c84-bf8a-6ac0a029cbc8" name="Default" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -14,7 +17,7 @@
       <file leaf-file-name="ebs_service.go" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/ebs_service.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="435">
+            <state relative-caret-position="-381">
               <caret line="87" column="29" selection-start-line="87" selection-start-column="29" selection-end-line="87" selection-end-column="29" />
               <folding>
                 <element signature="n#!!block;n#main#1" />
@@ -54,6 +57,9 @@
     </leaf>
   </component>
   <component name="GOROOT" path="$USER_HOME$/sources/go" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
@@ -72,11 +78,12 @@
     <packageJsonPaths />
   </component>
   <component name="ProjectFrameBounds">
-    <option name="x" value="81" />
-    <option name="y" value="151" />
-    <option name="width" value="1090" />
-    <option name="height" value="644" />
+    <option name="x" value="64" />
+    <option name="y" value="167" />
+    <option name="width" value="953" />
+    <option name="height" value="546" />
   </component>
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectView">
     <navigator proportions="" version="1">
       <foldersAlwaysOnTop value="true" />
@@ -150,15 +157,15 @@
     </option>
   </component>
   <component name="ToolWindowManager">
-    <frame x="81" y="151" width="1090" height="644" extended-state="0" />
+    <frame x="64" y="69" width="1090" height="644" extended-state="0" />
     <editor active="true" />
     <layout>
       <window_info content_ui="combo" id="Project" order="0" weight="0.22921348" />
       <window_info anchor="bottom" id="TODO" order="6" />
-      <window_info anchor="bottom" id="Event Log" order="7" side_tool="true" />
+      <window_info active="true" anchor="bottom" id="Event Log" order="7" side_tool="true" visible="true" weight="0.3289225" />
       <window_info anchor="right" id="Database" order="3" />
       <window_info anchor="bottom" id="Database Changes" order="7" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Version Control" order="7" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Version Control" order="7" />
       <window_info anchor="bottom" id="Run" order="2" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Terminal" order="7" />
@@ -306,7 +313,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/ebs_service.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="435">
+        <state relative-caret-position="-381">
           <caret line="87" column="29" selection-start-line="87" selection-start-column="29" selection-end-line="87" selection-end-column="29" />
           <folding>
             <element signature="n#!!block;n#main#1" />

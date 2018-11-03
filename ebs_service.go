@@ -56,7 +56,8 @@ type WorkingKeyFields struct {
 
 func WorkingKey(c *gin.Context){
 
-	url := "https://212.0.129.118/terminal_api/workingKey/"
+	url := "path/to/ebs/endpoint"	// EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
@@ -85,7 +86,9 @@ func WorkingKey(c *gin.Context){
 }
 
 func Purchase(c *gin.Context){
-	url := "https://212.0.129.118/terminal_api/Purchase/"
+	url := "uri/for/this_ebs_endpoint"
+	//FIXME: the URL should be composable of the IP and the endpoint uri
+	// - it should also be provided through a struct or in systems env
 	// consume the request here and pass it over onto the EBS.
 	requestBody, err := ioutil.ReadAll(c.Request.Body)
 	defer c.Request.Body.Close()
@@ -124,7 +127,8 @@ func EBSHttpClient(url string, c *gin.Context){
 		fmt.Println(err.Error())
 	}
 	reqHandler.Header.Set("Content-Type", "application/json")
-	reqHandler.Header.Set("API-Key", "5d6f54d4-3af4-4ffc-b78d-c2f1ca7827d9") // For Morsal case only.
+	reqHandler.Header.Set("API-Key", "removeme") // For Morsal case only.
+	// EBS doesn't impose any sort of API-keys or anything. Typical EBS.
 
 	response, err := ebsClient.Do(reqHandler)
 
