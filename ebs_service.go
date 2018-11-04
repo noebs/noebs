@@ -11,6 +11,8 @@ import (
 	"gopkg.in/go-playground/validator.v8"
 	"github.com/gin-gonic/gin/binding"
 	"bytes"
+	"encoding/json"
+	"strconv"
 )
 
 func main() {
@@ -146,10 +148,26 @@ func EBSHttpClient(url string, c *gin.Context){
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Ok",
-		"response": string(responseBody),})
-
-
+	var ebsResponse map[string]string
+	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil{
+		// there's no problem in Unmarshalling
+		if responseCode, ok := ebsResponse["responseCode"]; ok { //Frankly, if we went this far it will work anyway.
+			resCode, err := strconv.Atoi(string(responseCode))
+			if err != nil{
+				c.JSON(http.StatusInternalServerError, "There's a problem. Check again later.") //Fixme.
+			}
+			if resCode == 0{
+				// It's a successful transaction! Fuck it.
+				c.JSON(http.StatusOK, responseBody)
+			}
+		} else {
+			// Nope, it is not a successful transaction. You screwed.
+			c.JSON(http.StatusBadRequest, responseBody) // return the response as it is.
+		}
+		// There's an error in Unmarshalling the responseBody. Highly unlikely though. I, screwed.
+		c.JSON(http.StatusInternalServerError, "There's a problem. Check again later.") //Fixme.
+	}
+	
 	defer response.Body.Close()
 
 }
