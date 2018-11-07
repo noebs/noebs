@@ -2,8 +2,6 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="209e304f-53a2-4c84-bf8a-6ac0a029cbc8" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ebs_service.go" beforeDir="false" afterPath="$PROJECT_DIR$/ebs_service.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/notes.md" beforeDir="false" afterPath="$PROJECT_DIR$/notes.md" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -15,16 +13,14 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="ebs_service.go" pinned="false" current-in-tab="true">
+      <file leaf-file-name="ebs_service.go" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/ebs_service.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="331">
-              <caret line="169" column="4" selection-start-line="169" selection-start-column="4" selection-end-line="169" selection-end-column="4" />
+            <state relative-caret-position="216">
+              <caret line="162" column="16" lean-forward="true" selection-start-line="162" selection-start-column="16" selection-end-line="162" selection-end-column="16" />
               <folding>
                 <element signature="n#!!block;n#main#1" />
                 <element signature="n#!!block;n#workingKeyStructValidators#0" />
-                <element signature="e#4679#4778#0" />
-                <element signature="e#4797#4890#0" />
               </folding>
             </state>
           </provider>
@@ -33,7 +29,7 @@
       <file leaf-file-name="context.go" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/../../github.com/gin-gonic/gin/context.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="15">
+            <state relative-caret-position="11280">
               <caret line="768" column="18" selection-start-line="768" selection-start-column="18" selection-end-line="768" selection-end-column="18" />
             </state>
           </provider>
@@ -42,18 +38,18 @@
       <file leaf-file-name="binding.go" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/../../github.com/gin-gonic/gin/binding/binding.go">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-75">
+            <state relative-caret-position="405">
               <caret line="27" column="4" selection-start-line="27" selection-start-column="4" selection-end-line="27" selection-end-column="4" />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="notes.md" pinned="false" current-in-tab="false">
+      <file leaf-file-name="notes.md" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/notes.md">
           <provider selected="true" editor-type-id="split-provider[text-editor;MarkdownPreviewEditor]">
             <state split_layout="SPLIT">
-              <first_editor relative-caret-position="165">
-                <caret line="11" lean-forward="true" selection-start-line="11" selection-end-line="11" />
+              <first_editor relative-caret-position="180">
+                <caret line="12" column="49" selection-start-line="12" selection-start-column="49" selection-end-line="12" selection-end-column="49" />
               </first_editor>
               <second_editor>
                 <markdownNavigatorState />
@@ -71,8 +67,8 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/notes.md" />
         <option value="$PROJECT_DIR$/ebs_service.go" />
+        <option value="$PROJECT_DIR$/notes.md" />
       </list>
     </option>
   </component>
@@ -96,50 +92,7 @@
     <navigator proportions="" version="1">
       <foldersAlwaysOnTop value="true" />
     </navigator>
-    <panes>
-      <pane id="Scope" />
-      <pane id="ProjectPane">
-        <subPane>
-          <expand>
-            <path>
-              <item name="noebs" type="b2602c69:ProjectViewProjectNode" />
-              <item name="noebs" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="noebs" type="b2602c69:ProjectViewProjectNode" />
-              <item name="External Libraries" type="cb654da1:ExternalLibrariesNode" />
-            </path>
-            <path>
-              <item name="noebs" type="b2602c69:ProjectViewProjectNode" />
-              <item name="External Libraries" type="cb654da1:ExternalLibrariesNode" />
-              <item name="Go SDK 1.11beta2" type="20ee2d1f:SyntheticLibraryElementNode" />
-            </path>
-            <path>
-              <item name="noebs" type="b2602c69:ProjectViewProjectNode" />
-              <item name="External Libraries" type="cb654da1:ExternalLibrariesNode" />
-              <item name="Go SDK 1.11beta2" type="20ee2d1f:SyntheticLibraryElementNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="noebs" type="b2602c69:ProjectViewProjectNode" />
-              <item name="External Libraries" type="cb654da1:ExternalLibrariesNode" />
-              <item name="Go SDK 1.11beta2" type="20ee2d1f:SyntheticLibraryElementNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="io" type="462c0819:PsiDirectoryNode" />
-            </path>
-            <path>
-              <item name="noebs" type="b2602c69:ProjectViewProjectNode" />
-              <item name="External Libraries" type="cb654da1:ExternalLibrariesNode" />
-              <item name="Go SDK 1.11beta2" type="20ee2d1f:SyntheticLibraryElementNode" />
-              <item name="src" type="462c0819:PsiDirectoryNode" />
-              <item name="io" type="462c0819:PsiDirectoryNode" />
-              <item name="ioutil" type="462c0819:PsiDirectoryNode" />
-            </path>
-          </expand>
-          <select />
-        </subPane>
-      </pane>
-    </panes>
+    <panes />
   </component>
   <component name="PropertiesComponent">
     <property name="configurable.Global.GOPATH.is.expanded" value="true" />
@@ -150,7 +103,7 @@
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
     <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
     <property name="nodejs_npm_path_reset_for_default_project" value="true" />
-    <property name="settings.editor.selected.configurable" value="go.sdk" />
+    <property name="settings.editor.selected.configurable" value="preferences.pluginManager" />
   </component>
   <component name="RunDashboard">
     <option name="ruleStates">
@@ -166,7 +119,6 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="72" y="82" width="1223" height="627" extended-state="0" />
-    <editor active="true" />
     <layout>
       <window_info content_ui="combo" id="Project" order="0" weight="0.22921348" />
       <window_info anchor="bottom" id="TODO" order="6" />
@@ -190,21 +142,21 @@
     <layout-to-restore>
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="3" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="9" weight="0.4" />
-      <window_info anchor="bottom" id="Cvs" order="8" weight="0.25" />
       <window_info active="true" content_ui="combo" id="Project" order="1" visible="true" weight="0.22921348" />
       <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="1" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="2" weight="0.25" />
       <window_info anchor="bottom" id="TODO" order="10" />
+      <window_info anchor="bottom" id="Version Control" order="3" show_stripe_button="false" />
       <window_info anchor="bottom" id="Run" order="6" />
-      <window_info anchor="bottom" id="Message" order="4" />
+      <window_info anchor="bottom" id="Find" order="5" />
       <window_info anchor="bottom" id="Debug" order="7" weight="0.4" />
       <window_info anchor="right" id="Database" order="0" />
       <window_info anchor="bottom" id="Terminal" order="1" />
       <window_info anchor="bottom" id="Event Log" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Database Changes" order="0" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Version Control" order="3" show_stripe_button="false" />
-      <window_info anchor="bottom" id="Find" order="5" />
+      <window_info anchor="bottom" id="Cvs" order="8" weight="0.25" />
+      <window_info anchor="bottom" id="Message" order="4" />
       <window_info id="Favorites" order="0" side_tool="true" />
     </layout-to-restore>
   </component>
@@ -222,13 +174,48 @@
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/ebs_service.go">
       <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="2535">
+          <caret line="169" column="4" selection-start-line="169" selection-start-column="4" selection-end-line="169" selection-end-column="4" />
+          <folding>
+            <element signature="n#!!block;n#main#1" />
+            <element signature="n#!!block;n#workingKeyStructValidators#0" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/../../github.com/gin-gonic/gin/context.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="11520">
+          <caret line="768" column="18" selection-start-line="768" selection-start-column="18" selection-end-line="768" selection-end-column="18" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/../../github.com/gin-gonic/gin/binding/binding.go">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="405">
+          <caret line="27" column="4" selection-start-line="27" selection-start-column="4" selection-end-line="27" selection-end-column="4" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/notes.md">
+      <provider selected="true" editor-type-id="split-provider[text-editor;MarkdownPreviewEditor]">
+        <state split_layout="SPLIT">
+          <first_editor relative-caret-position="165">
+            <caret line="11" lean-forward="true" selection-start-line="11" selection-end-line="11" />
+          </first_editor>
+          <second_editor>
+            <markdownNavigatorState />
+          </second_editor>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/ebs_service.go">
+      <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="1800">
           <caret line="120" column="4" lean-forward="true" selection-start-line="120" selection-start-column="4" selection-end-line="120" selection-end-column="4" />
           <folding>
             <element signature="n#!!block;n#main#1" />
             <element signature="n#!!block;n#workingKeyStructValidators#0" />
-            <element signature="e#4679#4778#0" />
-            <element signature="e#4797#4890#0" />
           </folding>
         </state>
       </provider>
@@ -264,8 +251,6 @@
           <folding>
             <element signature="n#!!block;n#main#1" />
             <element signature="n#!!block;n#workingKeyStructValidators#0" />
-            <element signature="e#4679#4778#0" />
-            <element signature="e#4797#4890#0" />
           </folding>
         </state>
       </provider>
@@ -298,8 +283,6 @@
           <folding>
             <element signature="n#!!block;n#main#1" />
             <element signature="n#!!block;n#workingKeyStructValidators#0" />
-            <element signature="e#4679#4778#0" />
-            <element signature="e#4797#4890#0" />
           </folding>
         </state>
       </provider>
@@ -332,8 +315,6 @@
           <folding>
             <element signature="n#!!block;n#main#1" />
             <element signature="n#!!block;n#workingKeyStructValidators#0" />
-            <element signature="e#4679#4778#0" />
-            <element signature="e#4797#4890#0" />
           </folding>
         </state>
       </provider>
@@ -373,47 +354,45 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/notes.md">
-      <provider selected="true" editor-type-id="split-provider[text-editor;MarkdownPreviewEditor]">
-        <state split_layout="SPLIT">
-          <first_editor relative-caret-position="165">
-            <caret line="11" lean-forward="true" selection-start-line="11" selection-end-line="11" />
-          </first_editor>
-          <second_editor>
-            <markdownNavigatorState />
-          </second_editor>
-        </state>
-      </provider>
-      <provider editor-type-id="text-editor">
-        <state relative-caret-position="132">
-          <caret line="9" lean-forward="true" selection-start-line="9" selection-end-line="9" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/../../github.com/gin-gonic/gin/binding/binding.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-75">
+        <state relative-caret-position="405">
           <caret line="27" column="4" selection-start-line="27" selection-start-column="4" selection-end-line="27" selection-end-column="4" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/../../github.com/gin-gonic/gin/context.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="15">
+        <state relative-caret-position="11280">
           <caret line="768" column="18" selection-start-line="768" selection-start-column="18" selection-end-line="768" selection-end-column="18" />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/ebs_service.go">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="331">
-          <caret line="169" column="4" selection-start-line="169" selection-start-column="4" selection-end-line="169" selection-end-column="4" />
+        <state relative-caret-position="216">
+          <caret line="162" column="16" lean-forward="true" selection-start-line="162" selection-start-column="16" selection-end-line="162" selection-end-column="16" />
           <folding>
             <element signature="n#!!block;n#main#1" />
             <element signature="n#!!block;n#workingKeyStructValidators#0" />
-            <element signature="e#4679#4778#0" />
-            <element signature="e#4797#4890#0" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/notes.md">
+      <provider editor-type-id="text-editor">
+        <state relative-caret-position="132">
+          <caret line="9" lean-forward="true" selection-start-line="9" selection-end-line="9" />
+        </state>
+      </provider>
+      <provider selected="true" editor-type-id="split-provider[text-editor;MarkdownPreviewEditor]">
+        <state split_layout="SPLIT">
+          <first_editor relative-caret-position="180">
+            <caret line="12" column="49" selection-start-line="12" selection-start-column="49" selection-end-line="12" selection-end-column="49" />
+          </first_editor>
+          <second_editor>
+            <markdownNavigatorState />
+          </second_editor>
         </state>
       </provider>
     </entry>

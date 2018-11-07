@@ -9,3 +9,5 @@ in case you need to do logging/further validation with the request body.
 - parse EBS response body since they don't use proper HTTP codes. You have to parse that off the response body. I will
 a slice for that. The good thing is, EBS response is not nested, so I will only search for `responseCode == 0` in the
 request body and just either return 200 (if true), or 400 if wrong.
+- Horray! My idea, about this project is to experiment with writing microservices in go; both of which I'm learning. Turns out,
+the exact idea of building layers on top of each other's for every service is what gokit is doing. Which is really cool!

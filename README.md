@@ -52,3 +52,16 @@ Our team have developed an internal EBS QA test system that emulates EBS test en
 - we have two plans for the simulator: 
 	- you can use our EBS simulator on your own; we won't test your services.
 	- we can use our EBS simulator while we do the plan for you, the exact way EBS does. Bear in mind that our testers are highly competitive and they're all ex-EBSers.
+
+# FAQ
+- Why is the name?
+For no reason really. It is just the first name that came into my mind.
+- Why open source?
+Open source is nice! Yeey! We love open source.
+- Why Go?
+I was trying to learn it for awhile and I never get to actually do something useful with it. I've started this project with Python, using a framework called Sanic (very fast, Flask compatible microframework). Then I stumbled on the request validations issue:
+	- i either have to write my own validation schema
+	- or, just adapt another technology.
+I opted to the second one. Go is cool!
+- Commitment to this project?
+I'm very committed to this project.
