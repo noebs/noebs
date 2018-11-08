@@ -1,69 +1,71 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
-	"io/ioutil"
-	"time"
-	"crypto/tls"
-	"reflect"
-	"github.com/gin-gonic/gin"
-	"gopkg.in/go-playground/validator.v8"
-	"github.com/gin-gonic/gin/binding"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"gopkg.in/go-playground/validator.v8"
+	"io/ioutil"
+	"net/http"
+	"reflect"
 	"strconv"
+	"time"
 )
 
-func main() {
-
+func GetMainEngine() *gin.Engine {
 	route := gin.Default()
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterStructValidation(workingKeyStructValidators, WorkingKeyFields{})
 	}
 
 	route.POST("/workingKey", WorkingKey)
+	// This is like isAlive one...
 	route.POST("/test", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": true,})
+		context.JSON(http.StatusOK, gin.H{"message": true})
 	})
-	route.Run("0.0.0.0:3333")
-	}
-
-type PurchaseFields struct{
-	SystemTraceAuditNumber int `validator:"systemTraceAuditNumber" binding:"required"`
-	TranDateTime time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID string `validator:"terminalId" binding:"required"`
-	ClientID string `validator:"clientId" binding:"required"`
-	TranAmount float32 `validator:"tranAmount" binding:"required"`
-	Pan string `validator:"PAN" binding:"required"`
-	Pin string `validator:"PIN" binding:"required"`
-	ExpDate string `validator:"expDate" binding:"required"`
+	return route
 }
 
-func workingKeyStructValidators(validate *validator.Validate, structLevel *validator.StructLevel){
+func main() {
+	GetMainEngine().Run(":3333")
+}
+
+type PurchaseFields struct {
+	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
+	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
+	TerminalID             string    `validator:"terminalId" binding:"required"`
+	ClientID               string    `validator:"clientId" binding:"required"`
+	TranAmount             float32   `validator:"tranAmount" binding:"required"`
+	Pan                    string    `validator:"PAN" binding:"required"`
+	Pin                    string    `validator:"PIN" binding:"required"`
+	ExpDate                string    `validator:"expDate" binding:"required"`
+}
+
+func workingKeyStructValidators(validate *validator.Validate, structLevel *validator.StructLevel) {
 	workingKey := structLevel.CurrentStruct.Interface().(WorkingKeyFields)
-	if len(workingKey.TerminalID) != 8{
+	if len(workingKey.TerminalID) != 8 {
 		structLevel.ReportError(
 			reflect.ValueOf(workingKey.TerminalID), "terminalId", "length_8", "tag_8")
 	}
 }
 
 type WorkingKeyFields struct {
-	SystemTraceAuditNumber int `validator:"systemTraceAuditNumber" binding:"required"`
-	TranDateTime time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID string `validator:"terminalId" binding:"required"`
-	ClientID string `validator:"clientId" binding:"required"`
+	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
+	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
+	TerminalID             string    `validator:"terminalId" binding:"required"`
+	ClientID               string    `validator:"clientId" binding:"required"`
 }
 
+func WorkingKey(c *gin.Context) {
 
-func WorkingKey(c *gin.Context){
-
-	url := "path/to/ebs/endpoint"	// EBS simulator endpoint url goes here.
+	url := "path/to/ebs/endpoint" // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
-
 
 	var fields = WorkingKeyFields{}
 	reqBody, err := ioutil.ReadAll(c.Request.Body)
@@ -71,30 +73,29 @@ func WorkingKey(c *gin.Context){
 	reader2 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
 
 	c.Request.Body = reader1
-	if err != nil{
+	if err != nil {
 		fmt.Println("There's an error in nopclose init.")
 		c.AbortWithError(500, err)
 	}
-	if wkeyErr := c.ShouldBindBodyWith(&fields, binding.JSON); wkeyErr == nil{
+	if wkeyErr := c.ShouldBindBodyWith(&fields, binding.JSON); wkeyErr == nil {
 		c.Request.Body = reader2
 		EBSHttpClient(url, c)
-	}else{
-	c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
 	}
 
 	defer c.Request.Body.Close()
 
-
 }
 
-func Purchase(c *gin.Context){
+func Purchase(c *gin.Context) {
 	url := "uri/for/this_ebs_endpoint"
 	//FIXME: the URL should be composable of the IP and the endpoint uri
 	// - it should also be provided through a struct or in systems env
 	// consume the request here and pass it over onto the EBS.
 	requestBody, err := ioutil.ReadAll(c.Request.Body)
 	defer c.Request.Body.Close()
-	if err != nil{
+	if err != nil {
 		fmt.Println("somethong's wrong with the request.")
 		c.JSON(400, requestBody)
 	}
@@ -103,29 +104,28 @@ func Purchase(c *gin.Context){
 
 	var fields = WorkingKeyFields{}
 
-	if err := c.ShouldBindJSON(&fields); err == nil{
+	if err := c.ShouldBindJSON(&fields); err == nil {
 		EBSHttpClient(url, c)
-	}else{
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong", "error": err.Error()})
 	}
 
 }
 
-
 // a generic client for EBS's
-func EBSHttpClient(url string, c *gin.Context){
+func EBSHttpClient(url string, c *gin.Context) {
 
 	verifyTLS := &http.Transport{
-		TLSClientConfig:&tls.Config{InsecureSkipVerify:true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	ebsClient := http.Client{
-		Timeout: 30 * time.Second,
-		Transport:verifyTLS,
+		Timeout:   30 * time.Second,
+		Transport: verifyTLS,
 	}
 
 	reqHandler, err := http.NewRequest("POST", url, c.Request.Body)
-	if err != nil{
+	if err != nil {
 		fmt.Println(err.Error())
 	}
 	reqHandler.Header.Set("Content-Type", "application/json")
@@ -136,27 +136,27 @@ func EBSHttpClient(url string, c *gin.Context){
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Unable to reach EBS.",
-		"error": err.Error(),})
+			"error": err.Error()})
 		return
 	}
 
 	responseBody, err := ioutil.ReadAll(response.Body)
 	// else, the response is really working!
-	if err != nil{
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Unable to reach EBS.",
-			"error": err.Error(),})
+			"error": err.Error()})
 		return
 	}
 
 	var ebsResponse map[string]string
-	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil{
+	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil {
 		// there's no problem in Unmarshalling
 		if responseCode, ok := ebsResponse["responseCode"]; ok { //Frankly, if we went this far it will work anyway.
 			resCode, err := strconv.Atoi(string(responseCode))
-			if err != nil{
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, "There's a problem. Check again later.") //Fixme.
 			}
-			if resCode == 0{
+			if resCode == 0 {
 				// It's a successful transaction! Fuck it.
 				c.JSON(http.StatusOK, responseBody)
 			}
@@ -167,7 +167,7 @@ func EBSHttpClient(url string, c *gin.Context){
 		// There's an error in Unmarshalling the responseBody. Highly unlikely though. I, screwed.
 		c.JSON(http.StatusInternalServerError, "There's a problem. Check again later.") //Fixme.
 	}
-	
+
 	defer response.Body.Close()
 
 }
