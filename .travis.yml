@@ -1,3 +1,11 @@
 language: go
 go:
     - master
+deploy:
+  provider: releases
+  api_key:
+    secure: YOUR_API_KEY_ENCRYPTED
+  file: ebs_service
+  skip_cleanup: true
+  on:
+    tags: true
