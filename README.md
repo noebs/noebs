@@ -1,4 +1,6 @@
 [![Build Status](https://travis-ci.com/adonese/noebs.svg?branch=master)](https://travis-ci.com/adonese/noebs)
+[![codecov](https://codecov.io/gh/adonese/noebs/branch/master/graph/badge.svg)](https://codecov.io/gh/adonese/noebs)
+
 # noebs
 Open source e-payment platform (backend) that implements (most) of EBS services.
 
