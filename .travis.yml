@@ -8,6 +8,3 @@ deploy:
   file: "ebs_service"
   on:
     repo: adonese/noebs
-    branches:    # ← new!
-      only:      # ← new!
-        - master # ← new!
