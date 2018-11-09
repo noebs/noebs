@@ -8,3 +8,10 @@ deploy:
   file: "ebs_service"
   on:
     repo: adonese/noebs
+script:
+  - go test -race -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+env:
+  - CODECOV_TOKEN="037038aa-31ec-4600-936c-132be5f1bf09"
