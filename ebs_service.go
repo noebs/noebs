@@ -10,18 +10,22 @@ import (
 	"gopkg.in/go-playground/validator.v8"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"strconv"
 	"time"
 )
 
 func GetMainEngine() *gin.Engine {
 	route := gin.Default()
+
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterStructValidation(workingKeyStructValidators, WorkingKeyFields{})
 	}
 
+	route.HandleMethodNotAllowed = true
 	route.POST("/workingKey", WorkingKey)
+	route.POST("/cardTransfer", CardTransfer)
+	route.POST("/purchase", Purchase)
+
 	// This is like isAlive one...
 	route.POST("/test", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"message": true})
@@ -31,32 +35,6 @@ func GetMainEngine() *gin.Engine {
 
 func main() {
 	GetMainEngine().Run(":3333")
-}
-
-type PurchaseFields struct {
-	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
-	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required"`
-	ClientID               string    `validator:"clientId" binding:"required"`
-	TranAmount             float32   `validator:"tranAmount" binding:"required"`
-	Pan                    string    `validator:"PAN" binding:"required"`
-	Pin                    string    `validator:"PIN" binding:"required"`
-	ExpDate                string    `validator:"expDate" binding:"required"`
-}
-
-func workingKeyStructValidators(validate *validator.Validate, structLevel *validator.StructLevel) {
-	workingKey := structLevel.CurrentStruct.Interface().(WorkingKeyFields)
-	if len(workingKey.TerminalID) != 8 {
-		structLevel.ReportError(
-			reflect.ValueOf(workingKey.TerminalID), "terminalId", "length_8", "tag_8")
-	}
-}
-
-type WorkingKeyFields struct {
-	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
-	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required"`
-	ClientID               string    `validator:"clientId" binding:"required"`
 }
 
 func WorkingKey(c *gin.Context) {
@@ -78,6 +56,8 @@ func WorkingKey(c *gin.Context) {
 		c.AbortWithError(500, err)
 	}
 	if wkeyErr := c.ShouldBindBodyWith(&fields, binding.JSON); wkeyErr == nil {
+		// request body was already consumed here. But the request
+		// body was bounded to fields struct.
 		c.Request.Body = reader2
 		EBSHttpClient(url, c)
 	} else {
@@ -89,26 +69,61 @@ func WorkingKey(c *gin.Context) {
 }
 
 func Purchase(c *gin.Context) {
-	url := "uri/for/this_ebs_endpoint"
-	//FIXME: the URL should be composable of the IP and the endpoint uri
-	// - it should also be provided through a struct or in systems env
+
+	url := "path/to/ebs/endpoint" // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
-	requestBody, err := ioutil.ReadAll(c.Request.Body)
-	defer c.Request.Body.Close()
-	if err != nil {
-		fmt.Println("somethong's wrong with the request.")
-		c.JSON(400, requestBody)
-	}
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	var fields = WorkingKeyFields{}
+	var fields = PurchaseFields{}
+	reqBody, err := ioutil.ReadAll(c.Request.Body)
+	reader1 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
+	reader2 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
 
-	if err := c.ShouldBindJSON(&fields); err == nil {
+	c.Request.Body = reader1
+
+	if err != nil {
+		fmt.Println("There's an error in nopclose init.")
+		c.AbortWithError(500, err)
+	}
+	if wkeyErr := c.ShouldBindBodyWith(&fields, binding.JSON); wkeyErr == nil {
+		c.Request.Body = reader2
 		EBSHttpClient(url, c)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
 	}
+
+	defer c.Request.Body.Close()
+
+}
+
+func CardTransfer(c *gin.Context) {
+
+	url := "path/to/ebs/endpoint" // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var fields = CardTransferFields{}
+	reqBody, err := ioutil.ReadAll(c.Request.Body)
+	reader1 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
+	reader2 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
+
+	c.Request.Body = reader1
+	if err != nil {
+		fmt.Println("There's an error in nopclose init.")
+		c.AbortWithError(500, err)
+	}
+	if wkeyErr := c.ShouldBindBodyWith(&fields, binding.JSON); wkeyErr == nil {
+		c.Request.Body = reader2
+		EBSHttpClient(url, c)
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
+	}
+
+	defer c.Request.Body.Close()
 
 }
 

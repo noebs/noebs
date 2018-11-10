@@ -2,7 +2,7 @@
 [![codecov](https://codecov.io/gh/adonese/noebs/branch/master/graph/badge.svg)](https://codecov.io/gh/adonese/noebs)
 
 # noebs
-Open source e-payment platform (backend) that implements (most) of EBS services.
+Open source payment gateway that implements (most of) EBS services.
 
 # About this project
 This is an e-payment gateway system. It implements most of EBS's services with clear emphasis on scalabilty and a maintainable code. It is written in Go, a language for building high performant systems. It is also open source, the way any serious project should be. I wrote this software while I was learning Go, I tried to write an idiomatic Go as much as possible.

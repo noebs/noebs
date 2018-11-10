@@ -1,14 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"net/http/httptest"
 	"testing"
 	"time"
-	"fmt"
-	"bytes"
 )
 
 func TestWorkingKey(t *testing.T) {
@@ -31,11 +31,8 @@ func TestWorkingKey(t *testing.T) {
 	// Mock data BTW...
 	req := httptest.NewRequest("POST", "/test", bytes.NewBuffer(payload))
 
-
 	route.ServeHTTP(w, req)
 	assert.Equal(t, 200, w.Code)
 	// I'm really not sure why this would ever work.
 	// suddenly, things starting to make sense.
 }
-
-

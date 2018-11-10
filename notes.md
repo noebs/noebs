@@ -11,3 +11,25 @@ a slice for that. The good thing is, EBS response is not nested, so I will only 
 request body and just either return 200 (if true), or 400 if wrong.
 - Horray! My idea, about this project is to experiment with writing microservices in go; both of which I'm learning. Turns out,
 the exact idea of building layers on top of each other's for every service is what gokit is doing. Which is really cool!
+- properly use environmental variables to handle e.g., EBS url and other parameters
+- i don't like the amount of DRY i'm violating here.
+    - I already have skeleton handler for sending to EBS.
+    - Now, i need to make another skeleton to handle the rest of
+
+- what does our endpoint handler do?
+- check for the request fields
+- pass them over onto the next layer, in this case to EBS
+
+## Notes on the current implementation
+Well, it is really simple and I shouldn't be worried about it that much. But...
+
+- I can chain gin handlers, and using c.Next(), I can give the control onto the other one
+- each handler accepts only gin.Contect object, which captures everything about the request
+- the request body is a stream. It is consumed *only* once and then it gets emptied.
+- the request body is `Unmarshalled` into a request field template, one for each endpoint
+- and then, if succeeded, will be passed onto EBS Client
+- EBSClient accepts (gin.Context, url), for:
+    - gin.Context to return http responses
+    - url to call the appropriate EBS endpoint
+
+** Fuck all of that, or the last section of it. I'm smart ass!
