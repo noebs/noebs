@@ -1,14 +1,14 @@
 language: go
 go:
 - master
-deploy:
-  provider: releases
-  api_key:
-    secure: GF41IWvas/WMAafg5ESXoz1uVSRbdFwFUUz3bue2GSD1TQPxeRT8ppnsnLxNERA2pGBUXaREmGmasVht9plhOdYyP0H1CPDFpSKthXHqJKRbjHrfKPwPgumQq9l5T0+2KV7HXNuPaNImoLrCZec3lipR12zC72TauXE5FkxlB3I0Tw2wA6U3RcwD9SBv3ZrzJNT+j+5VeM8BOmTi5QSC3etqgeLpoBWjO/jgr8zIJEIp+LBZCxxxyfhNexICeGCXHL/QgaAuTCztuqoojdFRXKSDcadVvQTR1ucPm4MZS4EEFAVpCjnp8ji5JKYlxpRtjkTd9gbSWGHo5ZfdWssBpQzDpePbRG7peedgKwrkEWjSnMtoD9SHxq/53QRbHDalTkcr4D4kzyiIKppQn9fi9BNng30oofo3HTKZAL20zFBbqhhpP1YZVQKlb7xZ23RC77gr2aQixH2PWEo4Cx8FXkwcemVK+JRiDZEAq2031FcnCkgu2QkR79iJ1W91z1meNrtviTnzmM5S9QhnQ0BveIi6qkdmAgh/cGYa631R4U21ku7xDkC9AUIgXQQ3HQahcwuJG5MSHFZsat5P7bs2k4o+F0tiJYDOXGyTIXvnpLQb29DMRcDO7C2+rEBguTPLFaDMmsWtSHOwQdV7MMgbX5RmIoXSHQWAhAdbRy+L0uU=
-  file: "ebs_service"
-  on:
-    repo: adonese/noebs
-script:
+  # deploy:
+  #   provider: releases
+  #   api_key:
+  #     secure: GF41IWvas/WMAafg5ESXoz1uVSRbdFwFUUz3bue2GSD1TQPxeRT8ppnsnLxNERA2pGBUXaREmGmasVht9plhOdYyP0H1CPDFpSKthXHqJKRbjHrfKPwPgumQq9l5T0+2KV7HXNuPaNImoLrCZec3lipR12zC72TauXE5FkxlB3I0Tw2wA6U3RcwD9SBv3ZrzJNT+j+5VeM8BOmTi5QSC3etqgeLpoBWjO/jgr8zIJEIp+LBZCxxxyfhNexICeGCXHL/QgaAuTCztuqoojdFRXKSDcadVvQTR1ucPm4MZS4EEFAVpCjnp8ji5JKYlxpRtjkTd9gbSWGHo5ZfdWssBpQzDpePbRG7peedgKwrkEWjSnMtoD9SHxq/53QRbHDalTkcr4D4kzyiIKppQn9fi9BNng30oofo3HTKZAL20zFBbqhhpP1YZVQKlb7xZ23RC77gr2aQixH2PWEo4Cx8FXkwcemVK+JRiDZEAq2031FcnCkgu2QkR79iJ1W91z1meNrtviTnzmM5S9QhnQ0BveIi6qkdmAgh/cGYa631R4U21ku7xDkC9AUIgXQQ3HQahcwuJG5MSHFZsat5P7bs2k4o+F0tiJYDOXGyTIXvnpLQb29DMRcDO7C2+rEBguTPLFaDMmsWtSHOwQdV7MMgbX5RmIoXSHQWAhAdbRy+L0uU=
+  #   file: "ebs_service"
+  #   on:
+  #     repo: adonese/noebs
+- script:
   - go test -race -coverprofile=coverage.txt -covermode=atomic
 
 after_success:

@@ -8,8 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"gopkg.in/go-playground/validator.v8"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
@@ -21,7 +23,9 @@ func GetMainEngine() *gin.Engine {
 		v.RegisterStructValidation(workingKeyStructValidators, WorkingKeyFields{})
 	}
 
+
 	route.HandleMethodNotAllowed = true
+
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -34,6 +38,10 @@ func GetMainEngine() *gin.Engine {
 }
 
 func main() {
+	// Logging to a file.
+	f, _ := os.Create("gin.log")		// not sure whether this is the right place to do it. Maybe env vars?
+	gin.DefaultWriter = io.MultiWriter(f)
+
 	GetMainEngine().Run(":3333")
 }
 

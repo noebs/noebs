@@ -8,7 +8,7 @@ import "time"
 type CardTransferFields struct {
 	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
 	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required"`
+	TerminalID             string    `validator:"terminalId" binding:"required,len=8"`
 	ClientID               string    `validator:"clientId" binding:"required"`
 	TranCurrencyCode       string    `validator:"tranCurrencyCode"`
 	Pan                    string    `validator:"PAN" binding:"required"`
@@ -21,7 +21,7 @@ type CardTransferFields struct {
 type PurchaseFields struct {
 	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
 	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required"`
+	TerminalID             string    `validator:"terminalId" binding:"required,len=8"`
 	ClientID               string    `validator:"clientId" binding:"required"`
 	TranCurrencyCode       string    `validator:"tranCurrencyCode"`
 	Pan                    string    `validator:"PAN" binding:"required"`
@@ -33,7 +33,7 @@ type PurchaseFields struct {
 type ChangePin struct {
 	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
 	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required"`
+	TerminalID             string    `validator:"terminalId" binding:"required,len=8"`
 	ClientID               string    `validator:"clientId" binding:"required"`
 	Pan                    string    `validator:"PAN" binding:"required"`
 	Pin                    string    `validator:"PIN" binding:"required"`
@@ -44,6 +44,6 @@ type ChangePin struct {
 type WorkingKeyFields struct {
 	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
 	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required"`
+	TerminalID             string    `validator:"terminalId" binding:"required,len=8"`
 	ClientID               string    `validator:"clientId" binding:"required"`
 }

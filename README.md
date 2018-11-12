@@ -38,9 +38,9 @@ These services are particulary used since they're the most widely used services 
 
 ## Our milestones
 - [x] Write this README
-- [ ] Add unittestings. Ugggh.
-- [ ] Add test coverage
-- [ ] Use Travis CI
+- [x] Add unittestings. Ugggh.
+- [x] Add test coverage
+- [x] Use Travis CI
 - [ ] Add logging
 - [ ] Add DB for storing EBS's transactions
 
