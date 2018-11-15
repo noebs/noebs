@@ -12,12 +12,12 @@ import (
 )
 
 func TestWorkingKey(t *testing.T) {
-	workingKeyFields := WorkingKeyFields{
-		SystemTraceAuditNumber: rand.Intn(99999), // maybe better define it as const?
-		TranDateTime:           time.Now().UTC(),
-		TerminalID:             "15000trtrtrtrtrtr005", // wrong terminal ID. Just to reason about this whole thing.
-		ClientID:               "gndi",
-	}
+	var workingKeyFields WorkingKeyFields
+	workingKeyFields.ClientID = "noebs"
+	workingKeyFields.TerminalID = "12345678"
+	workingKeyFields.TranDateTime = time.Now().UTC()
+	workingKeyFields.SystemTraceAuditNumber = rand.Intn(99999)
+
 	payload, err := json.Marshal(workingKeyFields)
 	if err != nil {
 		t.Fatal()
