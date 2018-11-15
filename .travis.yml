@@ -1,16 +1,16 @@
 language: go
 go:
-- master
-- script:
-  - go test -race -coverprofile=coverage.txt -covermode=atomic
+    - master
+script:
+    - go test -race -coverprofile=coverage.txt -covermode=atomic
 after_success:
-- bash <(curl -s https://codecov.io/bash)
+    - bash <(curl -s https://codecov.io/bash)
 env:
-- CODECOV_TOKEN="037038aa-31ec-4600-936c-132be5f1bf09"
+    - CODECOV_TOKEN="037038aa-31ec-4600-936c-132be5f1bf09"
 notifications:
   email:
     on_success: change
-on_failure: always
+    on_failure: always
 deploy:
     provider: heroku
     api_key:
