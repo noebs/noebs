@@ -23,7 +23,6 @@ func GetMainEngine() *gin.Engine {
 		v.RegisterStructValidation(workingKeyStructValidators, WorkingKeyFields{})
 	}
 
-
 	route.HandleMethodNotAllowed = true
 
 	route.POST("/workingKey", WorkingKey)
@@ -39,7 +38,7 @@ func GetMainEngine() *gin.Engine {
 
 func main() {
 	// Logging to a file.
-	f, _ := os.Create("gin.log")		// not sure whether this is the right place to do it. Maybe env vars?
+	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
 
 	GetMainEngine().Run(":3333")
@@ -69,7 +68,7 @@ func WorkingKey(c *gin.Context) {
 		c.Request.Body = reader2
 		EBSHttpClient(url, c)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong", "error": wkeyErr.Error()})
 	}
 
 	defer c.Request.Body.Close()
