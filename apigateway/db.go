@@ -5,14 +5,15 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
-type ServiceModel struct {
+type Service struct {
 	gorm.Model
-	ServiceID string `gorm:"unqiue_index"`
-	Password  string
+	ServiceName string `gorm:"unqiue_index"`
+	Password    string
 }
 
-type JWTModel struct {
+type JWT struct {
 	gorm.Model
-	Jwt       string
-	ServiceModel
+	SecretKey string
+	Service   Service
+	ServiceID int
 }

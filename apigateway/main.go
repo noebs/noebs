@@ -6,7 +6,9 @@ import (
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 )
 
 func GetMainEngine() *gin.Engine {
@@ -43,7 +45,7 @@ func LoginHandler(c *gin.Context) {
 	// Now, the request is well valid. Let us check its credentials.
 
 	//db connection. Not good.
-	db, err := gorm.Open("sqlite", "/tmp/gorm_db")
+	db, err := gorm.Open("sqlite3", "/tmp/gorm_db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -51,37 +53,102 @@ func LoginHandler(c *gin.Context) {
 
 	defer db.Close()
 
-	var service ServiceModel
-	hashedPassword := requestStruct.HashPassword()
-	if err := db.Where("service_id = ?", requestStruct.ServiceID).First(&service); err != nil {
+	// do the Models migrations here. The ones you will be using
+	db.AutoMigrate(&Service{}, &JWT{})
+
+	var jwt JWT
+
+	// checke the entered password is correct.
+	// if not: return 401
+	// if yes, generate a JWT token.
+	if notFound := db.Preload("Service").Where("service_id = ?", requestStruct.ServiceID).First(&jwt).RecordNotFound(); notFound {
 		// service id is not found
-		log.Fatalf("User with service_id %s is not found. Error: %v", requestStruct.ServiceID, err)
-		c.AbortWithStatusJSON(404, gin.H{"message": "service id not found", "code": err})
+		log.Fatalf("User with service_id %s is not found.", requestStruct.ServiceID)
+		c.AbortWithStatusJSON(404, gin.H{"message": "service id not found", "code": "not_found"})
+	} else {
+		// there's a user with such a service id and its info is stored at jwt.
+		// now, check their entered password
+		if err := bcrypt.CompareHashAndPassword([]byte(jwt.Service.Password), []byte(requestStruct.Password)); err != nil {
+			log.Fatalf("there is an error in the password %v", err)
+			c.AbortWithStatusJSON(402, gin.H{"message": "wrong password entered", "code": "wrong_password"})
+		}
+		// the entered password is correct! Generate a token now, will you?
+		key, err := generateSecretKey(50)
+		if err != nil {
+			// why the fuck people?
+			c.AbortWithError(500, err)
+		}
+		token, err := generateJWT(key, jwt.Service.ServiceName)
+		if err != nil {
+			c.AbortWithError(500, err)
+		}
+
+		// commit token onto Db and send it over the wire...
+		jwt.SecretKey = string(key)
+		jwt.CreatedAt = time.Now().UTC()
+		db.Create(&jwt)
+		c.Writer.Header().Set("Authorization", token)
+		c.JSON(http.StatusOK, gin.H{"message": "authorization ok", "code": "authorization_ok"})
+
 	}
 
-	// Check their entered password
-	if err := bcrypt.CompareHashAndPassword([]byte(requestStruct.Password), hashedPassword); err != nil {
-		// user has entered a wrong password
-		log.Fatalf("Password hashing is wrong, %v", err)
-		c.AbortWithStatusJSON(401, gin.H{"message": "Wrong password was entered", "code": "wrong_password"})
+}
+
+func authorizationMiddleware(c *gin.Context) {
+	// just handle the simplest case, authorization is not provided.
+	auth := c.Request.Header.Get("Authorization")
+	if auth == "" {
+		// do something...
+		c.AbortWithStatusJSON(401, gin.H{"message": "authorization not provided",
+			"code": "unauthorized"})
+
 	}
+	// validate that the token
+	// get the ServiceID from the request body, use Nopcloser
+	// if invalid return 401, else 200, redirect.
 
-	// if we are here, that means
-	// Returns a valid JWT token in the response header
+	// I'm using a hash map because i'm lazy and there's no way to map all
+	// of the request variants.
 
-	// generate JWT
-	var jwtModel JWTModel
-
-	if token, err := generateJWT(requestStruct.ServiceID); err != nil{
-		// This is likely internal server error?
+	var req map[string]string
+	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "internal server error", "code": "server_error"})
 	} else {
-		// the secret key must be committed into the jwt table
-		if err := db.Where("service_id = ?", requestStruct.ServiceID).First(&jwtModel); err != nil {
-			// service id is not found
-			log.Fatalf("User with service_id %s is not found. Error: %v", requestStruct.ServiceID, err)
-			c.AbortWithStatusJSON(404, gin.H{"message": "service id not found", "code": err})
+		// get the authorization right of the request body
+		// there is no way authorization is not propagated upto here.
+
+		serviceID := req["service_id"]
+
+		// db stuffs
+		db, err := gorm.Open("sqlite3", "/tmp/gorm_db")
+
+		if err != nil {
+			log.Fatalf("There's an erron in DB connection, %v", err)
 		}
-		c.JSON(http.StatusOK, gin.H{"authorization": "access_token " + token})
+
+		defer db.Close()
+
+		var jwt JWT
+		if notFound := db.Preload("Service").Where("service_id = ?", serviceID).First(&jwt).RecordNotFound(); notFound {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "user not found", "code": "not_found"})
+		} else {
+			// there's a user
+			// validate their entered authorization
+			if _, err := verifyJWT(jwt.SecretKey); err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"message": err, "code": "unauthorized"})
+			} else {
+				c.Next()
+			}
+		}
+
 	}
+
+}
+
+func generateSecretKey(n int) ([]byte, error) {
+	key := make([]byte, n)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	return key, nil
 }
