@@ -56,19 +56,19 @@ func LoginHandler(c *gin.Context) {
 	// do the Models migrations here. The ones you will be using
 	db.AutoMigrate(&Service{}, &JWT{})
 
-	var jwt JWT
+	var service Service
 
 	// checke the entered password is correct.
 	// if not: return 401
 	// if yes, generate a JWT token.
-	if notFound := db.Preload("Service").Where("service_id = ?", requestStruct.ServiceID).First(&jwt).RecordNotFound(); notFound {
+	if notFound := db.Preload("JWT").Where("service_name = ?", requestStruct.ServiceID).First(&service).RecordNotFound(); notFound {
 		// service id is not found
 		log.Fatalf("User with service_id %s is not found.", requestStruct.ServiceID)
 		c.AbortWithStatusJSON(404, gin.H{"message": "service id not found", "code": "not_found"})
 	} else {
 		// there's a user with such a service id and its info is stored at jwt.
 		// now, check their entered password
-		if err := bcrypt.CompareHashAndPassword([]byte(jwt.Service.Password), []byte(requestStruct.Password)); err != nil {
+		if err := bcrypt.CompareHashAndPassword([]byte(service.Password), []byte(requestStruct.Password)); err != nil {
 			log.Fatalf("there is an error in the password %v", err)
 			c.AbortWithStatusJSON(402, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		}
@@ -78,15 +78,15 @@ func LoginHandler(c *gin.Context) {
 			// why the fuck people?
 			c.AbortWithError(500, err)
 		}
-		token, err := generateJWT(key, jwt.Service.ServiceName)
+		token, err := generateJWT(key, service.ServiceName)
 		if err != nil {
 			c.AbortWithError(500, err)
 		}
 
 		// commit token onto Db and send it over the wire...
-		jwt.SecretKey = string(key)
-		jwt.CreatedAt = time.Now().UTC()
-		db.Create(&jwt)
+		service.JWT.SecretKey = string(key)
+		service.JWT.CreatedAt = time.Now().UTC()
+		db.Create(&service)
 		c.Writer.Header().Set("Authorization", token)
 		c.JSON(http.StatusOK, gin.H{"message": "authorization ok", "code": "authorization_ok"})
 
@@ -117,7 +117,7 @@ func authorizationMiddleware(c *gin.Context) {
 		// get the authorization right of the request body
 		// there is no way authorization is not propagated upto here.
 
-		serviceID := req["service_id"]
+		serviceID := req["service_name"]
 
 		// db stuffs
 		db, err := gorm.Open("sqlite3", "/tmp/gorm_db")
@@ -128,13 +128,13 @@ func authorizationMiddleware(c *gin.Context) {
 
 		defer db.Close()
 
-		var jwt JWT
-		if notFound := db.Preload("Service").Where("service_id = ?", serviceID).First(&jwt).RecordNotFound(); notFound {
+		var service Service
+		if notfound := db.Preload("JWT").Where("service_name = ?", serviceID).First(&service).RecordNotFound(); notfound{
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "user not found", "code": "not_found"})
 		} else {
 			// there's a user
 			// validate their entered authorization
-			if _, err := verifyJWT(jwt.SecretKey); err != nil {
+			if _, err := verifyJWT(service.JWT.SecretKey); err != nil {
 				c.JSON(http.StatusUnauthorized, gin.H{"message": err, "code": "unauthorized"})
 			} else {
 				c.Next()

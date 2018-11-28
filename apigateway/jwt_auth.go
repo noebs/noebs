@@ -45,7 +45,7 @@ func verifyJWT(tokenString string) (bool, error) {
 	})
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		fmt.Println(claims["service_id"], claims["email"])
+		fmt.Println(claims["service_name"], claims["email"])
 
 		// maybe inject onto database here...
 		return true, nil
@@ -68,6 +68,6 @@ func verifyJWT(tokenString string) (bool, error) {
 }
 
 type TokenClaims struct {
-	ServiceID string `json:"service_id"`
+	ServiceName string `json:"service_name"`
 	jwt.StandardClaims
 }

@@ -8,12 +8,12 @@ import (
 type Service struct {
 	gorm.Model
 	ServiceName string `gorm:"unqiue_index"`
-	Password    string
+	Password  string
+	JWT JWT
+	JWTID int
 }
 
 type JWT struct {
 	gorm.Model
-	SecretKey string
-	Service   Service
-	ServiceID int
+	SecretKey  string
 }
