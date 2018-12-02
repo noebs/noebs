@@ -1,19 +1,27 @@
-FROM golang
+FROM golang:alpine AS builder
 
-# Create the directory where the application will reside
-RUN mkdir /app
-RUN apk install git
+# install git
+RUN apk update && apk add --no-cache git
 
-# Now CD into the /app directory, right?
-# Let's install dep first
-# RUN curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-RUN go get -u github.com/golang/dep/cmd/dep
+COPY . $GOPATH/src/noebs/
+WORKDIR $GOPATH/src/noebs/
 
-RUN cd /app
+# Fetch dependancies
+## git them
 RUN git clone https://github.com/adonese/noebs .
-RUN dep ensure
-RUN go build
-ADD noebs /app
+RUN go dep ensure
 
-ENTRYPOINT ["./noebs"]
+# Build the binary
+RUN go build -o /go/bin/noebs
+
+# Build a small image
+
+FROM scratch
+
+# Copy our static executable
+COPY --from=builder /go/bin/noebs /go/bin/noebs
+
+# RUN noebs
+ENTRYPOINT ["/go/bin/noebs"]
 EXPOSE 8080
+
