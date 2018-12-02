@@ -3,16 +3,16 @@ FROM golang:alpine AS builder
 # install git
 RUN apk update && apk add --no-cache git
 
-COPY . $GOPATH/src/noebs/
-WORKDIR $GOPATH/src/noebs/
+COPY . $GOPATH/src/
+WORKDIR $GOPATH/src/
 
 # Fetch dependancies
 ## git them
-RUN git clone https://github.com/adonese/noebs .
-RUN go dep ensure
+RUN git clone https://github.com/adonese/noebs noebs
+RUN cd noebs && go get -d -v
 
 # Build the binary
-RUN go build -o /go/bin/noebs
+RUN cd noebs && go build -o /go/bin/noebs
 
 # Build a small image
 
