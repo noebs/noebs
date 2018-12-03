@@ -40,8 +40,11 @@ func main() {
 	// Logging to a file.
 	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
-
-	GetMainEngine().Run(":3333")
+	if env := os.Getenv("PORT"); env != "" {
+		GetMainEngine().Run(env)
+	} else {
+		GetMainEngine().Run(":8080")
+	}
 }
 
 func WorkingKey(c *gin.Context) {
@@ -98,7 +101,7 @@ func Purchase(c *gin.Context) {
 		c.Request.Body = reader2
 		EBSHttpClient(url, c)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong", "code": wkeyErr.Error()})
 	}
 
 	defer c.Request.Body.Close()
@@ -127,7 +130,7 @@ func CardTransfer(c *gin.Context) {
 		c.Request.Body = reader2
 		EBSHttpClient(url, c)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wronffffg", "error": wkeyErr.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong", "code": wkeyErr.Error()})
 	}
 
 	defer c.Request.Body.Close()
@@ -158,7 +161,7 @@ func EBSHttpClient(url string, c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Unable to reach EBS.",
-			"error": err.Error()})
+			"code": err.Error()})
 		return
 	}
 
@@ -166,7 +169,7 @@ func EBSHttpClient(url string, c *gin.Context) {
 	// else, the response is really working!
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Unable to reach EBS.",
-			"error": err.Error()})
+			"code": err.Error()})
 		return
 	}
 
