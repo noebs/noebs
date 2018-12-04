@@ -2,3 +2,5 @@
 .vscode
 *.sublime-project
 .noebs
+*.log
+noebs

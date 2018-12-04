@@ -1,13 +1,10 @@
 version: '2'
 services:
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     ports:
-     - "8080:8080"
+      - "8080:8080"
   service-name:
     image: noebs
     environment:
-    - GIN_MODE=release
-    - PORT=8080
+      - GIN_MODE=release

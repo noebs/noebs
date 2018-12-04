@@ -129,7 +129,7 @@ func authorizationMiddleware(c *gin.Context) {
 		defer db.Close()
 
 		var service Service
-		if notfound := db.Preload("JWT").Where("service_name = ?", serviceID).First(&service).RecordNotFound(); notfound{
+		if notfound := db.Preload("JWT").Where("service_name = ?", serviceID).First(&service).RecordNotFound(); notfound {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "user not found", "code": "not_found"})
 		} else {
 			// there's a user

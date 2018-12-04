@@ -12,3 +12,14 @@ func workingKeyStructValidators(validate *validator.Validate, structLevel *valid
 			reflect.ValueOf(workingKey.TerminalID), "terminalId", "length_8", "tag_8")
 	}
 }
+
+type ResponseContract struct {
+	ResponseType ResponseType
+}
+
+type ResponseType struct {
+	Message string
+	Code int
+}
+
+type Response map[string]interface{}

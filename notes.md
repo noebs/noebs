@@ -31,6 +31,8 @@ Well, it is really simple and I shouldn't be worried about it that much. But...
 - EBSClient accepts (gin.Context, url), for:
     - gin.Context to return http responses
     - url to call the appropriate EBS endpoint
+- Handle the response messages. They are not clean at all
+- Handle the cases where the client didn't send any request!
 
 ** Fuck all of that, or the last section of it. I'm smart ass!
 
