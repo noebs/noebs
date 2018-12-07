@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/prometheus/common/log"
 	"gopkg.in/go-playground/validator.v8"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -19,10 +19,6 @@ import (
 
 func GetMainEngine() *gin.Engine {
 	route := gin.Default()
-
-	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		v.RegisterStructValidation(workingKeyStructValidators, WorkingKeyFields{})
-	}
 
 	route.HandleMethodNotAllowed = true
 
@@ -77,7 +73,17 @@ func WorkingKey(c *gin.Context) {
 	case reqBodyErr == io.EOF:
 		c.JSON(http.StatusBadRequest, gin.H{"message": "you have not sent any request fields", "error": "empty_request_body"})
 	case reqBodyErr != nil:
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Unknown client error", "error": "unknown_error"})
+		// do things to the error message. Parse it.
+
+			var errors []map[string]string
+
+			for _, err := range reqBodyErr.(validator.ValidationErrors) {
+
+				errors = append(errors, errorMessages(err))
+			}
+
+		//err := strings.Split(reqBodyErr.Error(), "\n")
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Unknown client error", "error": errors})
 	}
 
 	defer c.Request.Body.Close()
@@ -148,7 +154,7 @@ func CardTransfer(c *gin.Context) {
 		// Now, decode the struct into a json, or bytes buffer.
 
 		jsonBuffer, err := json.Marshal(fields)
-		if err != nil{
+		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			err := Response{"error": gin.H{"message": err.Error(), "code": "parsing_error"}}
 			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))

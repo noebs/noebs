@@ -13,7 +13,7 @@ type CardTransferFields struct {
 	CommonFields
 	CardInfoFields
 	AmountFields
-	ToCard string `validator:"toCard" binding:"required"`
+	ToCard string `binding:"toCard" binding:"required"`
 }
 
 type PurchaseFields struct {
@@ -24,23 +24,23 @@ type PurchaseFields struct {
 
 type ChangePin struct {
 	WorkingKeyFields
-	NewPin string `validator:"newPIN" binding:"required"`
+	NewPin string `json:"newPIN" binding:"required"`
 }
 
 type CommonFields struct {
-	SystemTraceAuditNumber int       `validator:"systemTraceAuditNumber" binding:"required"`
-	TranDateTime           time.Time `validator:"tranDateTime" binding:"required"`
-	TerminalID             string    `validator:"terminalId" binding:"required,len=8"`
-	ClientID               string    `validator:"clientId" binding:"required"`
+	SystemTraceAuditNumber int       `json:"systemTraceAuditNumber" binding:"required"`
+	TranDateTime           time.Time `json:"tranDateTime" binding:"required"`
+	TerminalID             string    `json:"terminalId" binding:"required,len=8"`
+	ClientID               string    `json:"clientId" binding:"required"`
 }
 
 type CardInfoFields struct {
-	Pan     string `validator:"PAN" binding:"required"`
-	Pin     string `validator:"PIN" binding:"required"`
-	Expdate string `validator:"expDate" binding:"required"`
+	Pan     string `json:"PAN" binding:"required"`
+	Pin     string `json:"PIN" binding:"required"`
+	Expdate string `json:"expDate" binding:"required"`
 }
 
 type AmountFields struct {
-	TranAmount       float32 `validator:"tranAmount" binding:"required"`
-	TranCurrencyCode string  `validator:"tranCurrencyCode"`
+	TranAmount       float32 `json:"tranAmount" binding:"required"`
+	TranCurrencyCode string  `json:"tranCurrencyCode"`
 }
