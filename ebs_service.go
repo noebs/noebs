@@ -75,12 +75,12 @@ func WorkingKey(c *gin.Context) {
 	case reqBodyErr != nil:
 		// do things to the error message. Parse it.
 
-			var errors []map[string]string
+		errors := make(map[string]string)
 
-			for _, err := range reqBodyErr.(validator.ValidationErrors) {
+		for _, err := range reqBodyErr.(validator.ValidationErrors) {
 
-				errors = append(errors, errorMessages(err))
-			}
+			errors[err.Field] = errorToString(err)
+		}
 
 		//err := strings.Split(reqBodyErr.Error(), "\n")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Unknown client error", "error": errors})
