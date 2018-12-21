@@ -13,11 +13,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"time"
 )
 
 func GetMainEngine() *gin.Engine {
+
 	route := gin.Default()
 
 	route.HandleMethodNotAllowed = true
@@ -81,7 +83,6 @@ func WorkingKey(c *gin.Context) {
 		var details []ValidationErrors
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-			errorToString(err)
 			details = append(details, errorToString(err))
 		}
 
@@ -115,12 +116,15 @@ func Purchase(c *gin.Context) {
 
 		var details []ValidationErrors
 
+		fields, _ := reflect.TypeOf(fields).FieldByName("json")
+		fmt.Printf("The field name is %s", fields.Tag)
+
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-			errorToString(err)
+			
 			details = append(details, errorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: "BAD_REQUEST"}
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: BAD_REQUEST}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
@@ -132,7 +136,7 @@ func Purchase(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: "PARSING_ERROR"}
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: PARSING_ERROR}
 			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
@@ -173,7 +177,6 @@ func CardTransfer(c *gin.Context) {
 		var details []ValidationErrors
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-			errorToString(err)
 			details = append(details, errorToString(err))
 		}
 
@@ -197,14 +200,13 @@ func CardTransfer(c *gin.Context) {
 		code, res, err := EBSHttpClient2(url, bytes.NewBuffer(jsonBuffer))
 		// {"ebs_error": "code": "message": ""}
 		if err != nil {
+
 			c.AbortWithStatusJSON(code, res)
 		} else {
 			// successful
 			c.JSON(code, res)
 		}
 	}
-
-	defer c.Request.Body.Close()
 
 }
 
@@ -244,6 +246,8 @@ func EBSHttpClient(url string, c *gin.Context) {
 		return
 	}
 
+	defer response.Body.Close()
+
 	var ebsResponse map[string]string
 	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil {
 		// there's no problem in Unmarshalling
@@ -264,7 +268,7 @@ func EBSHttpClient(url string, c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, "There's a problem. Check again later.") //Fixme.
 	}
 
-	defer response.Body.Close()
+
 
 }
 
@@ -296,13 +300,16 @@ func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
 	}
 
 	responseBody, err := ioutil.ReadAll(response.Body)
-
-	defer response.Body.Close()
-
 	if err != nil {
+		// TODO
+		// adhere to the new response style!
 		return 500, Response{"error": gin.H{"code": "internal_server_error", "message": "ebs_unreachable"}}, fmt.Errorf("unable to reach ebs %v", err)
 
 	}
+
+	defer response.Body.Close()
+
+
 
 	var ebsResponse map[string]string
 	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil {

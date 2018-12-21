@@ -5,9 +5,17 @@ import (
 	"gopkg.in/go-playground/validator.v8"
 )
 
+
+
 type ErrorResponse struct {
 	ResponseType ErrorDetails `json:"error"`
 }
+
+const (
+	BAD_REQUEST string = "BAD_REQUEST"
+	PARSING_ERROR string = "PARSING_ERROR"
+	INTERNAL_SERVER_ERROR string = "INTERNAL_SERVER_ERROR"
+)
 
 type ErrorDetails struct {
 	Message string             `json:"message"`
@@ -22,6 +30,7 @@ type Response map[string]interface{}
 
 func errorToString(e *validator.FieldError) ValidationErrors {
 	err := make(map[string]string)
+
 
 	switch e.Tag {
 	case "required":

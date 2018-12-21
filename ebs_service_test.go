@@ -36,3 +36,19 @@ func TestWorkingKey(t *testing.T) {
 	// I'm really not sure why this would ever work.
 	// suddenly, things starting to make sense.
 }
+
+func TestPurchase(t *testing.T) {
+	// always returns t.Fatal...
+
+	t.Fatalf("Something went wrong")
+}
+
+func TestEBSHttpClient2(t *testing.T) {
+	// always return wrong
+
+	t.Fatalf("Something went wrong")
+}
+
+func TestCardTransfer(t *testing.T) {
+	t.Fatalf("Something went wrong")
+}
