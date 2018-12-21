@@ -26,6 +26,9 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
 
+	// TODO
+	// Add the rest of EBS merchant services.
+
 	// This is like isAlive one...
 	route.POST("/test", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"message": true})
@@ -75,15 +78,15 @@ func WorkingKey(c *gin.Context) {
 	case reqBodyErr != nil:
 		// do things to the error message. Parse it.
 
-		errors := make(map[string]string)
+		var details []ValidationErrors
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-
-			errors[err.Field] = errorToString(err)
+			errorToString(err)
+			details = append(details, errorToString(err))
 		}
 
 		//err := strings.Split(reqBodyErr.Error(), "\n")
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Unknown client error", "error": errors})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Unknown client error", "error": details})
 	}
 
 	defer c.Request.Body.Close()
@@ -99,31 +102,51 @@ func Purchase(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = PurchaseFields{}
-	reqBody, err := ioutil.ReadAll(c.Request.Body)
-	reader1 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
-	reader2 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
-
-	c.Request.Body = reader1
-
-	if err != nil {
-		fmt.Println("There's an error in nopclose init.")
-		c.AbortWithError(500, err)
-	}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
 	switch {
+
+	case reqBodyErr == io.EOF:
+		er := ErrorDetails{Details: nil, Code: 400, Message: "Empty request body", Status: "EMPTY_REQUEST_BODY"}
+		c.JSON(http.StatusBadRequest, ErrorResponse{er})
+
+	case reqBodyErr != nil:
+
+		var details []ValidationErrors
+
+		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+			errorToString(err)
+			details = append(details, errorToString(err))
+		}
+
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: "BAD_REQUEST"}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+
 	case reqBodyErr == nil:
 		// request body was already consumed here. But the request
 		// body was bounded to fields struct.
-		c.Request.Body = reader2
-		EBSHttpClient(url, c)
-	case reqBodyErr == io.EOF:
-		c.JSON(http.StatusBadRequest, gin.H{"message": "you have not sent any request fields", "error": "empty_request_body"})
-	case reqBodyErr != nil:
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Unknown client error", "error": "unknown_error"})
-	}
+		// Now, decode the struct into a json, or bytes buffer.
 
-	defer c.Request.Body.Close()
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: "PARSING_ERROR"}
+			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, err := EBSHttpClient2(url, bytes.NewBuffer(jsonBuffer))
+		// {"ebs_error": "code": "message": ""}
+		if err != nil {
+			c.AbortWithStatusJSON(code, res)
+		} else {
+			// successful
+			c.JSON(code, res)
+		}
+	}
 
 }
 
@@ -138,15 +161,25 @@ func CardTransfer(c *gin.Context) {
 	var fields = CardTransferFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
 	switch {
 
-	case reqBodyErr != nil:
-		err := Response{"error": gin.H{"message": "Unknown client error", "error": "unknown_error"}}
-		c.JSON(http.StatusBadRequest, err)
-
 	case reqBodyErr == io.EOF:
-		err := Response{"error": gin.H{"message": "you have not sent any request fields", "error": "empty_request_body"}}
-		c.JSON(http.StatusBadRequest, err)
+		er := ErrorDetails{Details: nil, Code: 400, Message: reqBodyErr.Error(), Status: "EMPTY_REQUEST_BODY"}
+		c.JSON(http.StatusBadRequest, ErrorResponse{er})
+
+	case reqBodyErr != nil:
+
+		var details []ValidationErrors
+
+		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+			errorToString(err)
+			details = append(details, errorToString(err))
+		}
+
+		er := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error"}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{er})
 
 	case reqBodyErr == nil:
 		// request body was already consumed here. But the request
@@ -156,9 +189,9 @@ func CardTransfer(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			err := Response{"error": gin.H{"message": err.Error(), "code": "parsing_error"}}
+			er := ErrorDetails{Details: nil, Code: 400, Message: err.Error(), Status: "PARSING_ERROR"}
 			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
-			c.AbortWithStatusJSON(500, err)
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
 
 		code, res, err := EBSHttpClient2(url, bytes.NewBuffer(jsonBuffer))
