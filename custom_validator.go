@@ -5,6 +5,7 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 	"log"
 	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -45,6 +46,16 @@ func (v *defaultValidator) lazyinit() {
 		if err != nil {
 			log.Fatalf("Unexpected err %v", err)
 		}
+
+		v.validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+
+			if name == "-" {
+				return ""
+			}
+
+			return name
+		})
 	})
 }
 

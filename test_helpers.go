@@ -44,8 +44,9 @@ func populateWorkingKeyFields() WorkingKeyFields {
 func populateCommmonFields() CommonFields {
 	f := CommonFields{
 		TerminalID:             "12345678",
-		TranDateTime:           time.Now(),
+		TranDateTime:           time.Now().UTC(),
 		SystemTraceAuditNumber: rand.Int(),
+		ClientID: "noebs",
 	}
 	return f
 }

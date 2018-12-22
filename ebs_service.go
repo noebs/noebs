@@ -136,7 +136,7 @@ func Purchase(c *gin.Context) {
 			details = append(details, ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: BadRequest}
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
@@ -188,13 +188,17 @@ func CardTransfer(c *gin.Context) {
 
 		var details []ValidationErrors
 
+		fields, _ := reflect.TypeOf(fields).FieldByName("json")
+		fmt.Printf("The field name is %s", fields.Tag)
+
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+
 			details = append(details, ErrorToString(err))
 		}
 
-		er := ErrorDetails{Details: details, Code: 400, Message: "Missing field", Status: "MISSING_FIELDS"}
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{er})
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
 	case reqBodyErr == nil:
 		// request body was already consumed here. But the request
