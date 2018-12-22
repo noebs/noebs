@@ -83,7 +83,7 @@ func WorkingKey(c *gin.Context) {
 		var details []ValidationErrors
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-			details = append(details, errorToString(err))
+			details = append(details, ErrorToString(err))
 		}
 
 		//err := strings.Split(reqBodyErr.Error(), "\n")
@@ -121,7 +121,7 @@ func Purchase(c *gin.Context) {
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
 			
-			details = append(details, errorToString(err))
+			details = append(details, ErrorToString(err))
 		}
 
 		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: BAD_REQUEST}
@@ -177,10 +177,10 @@ func CardTransfer(c *gin.Context) {
 		var details []ValidationErrors
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-			details = append(details, errorToString(err))
+			details = append(details, ErrorToString(err))
 		}
 
-		er := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error"}
+		er := ErrorDetails{Details: details, Code: 400, Message: "Missing field", Status:"MISSING_FIELDS"}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{er})
 

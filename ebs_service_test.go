@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -39,8 +40,48 @@ func TestWorkingKey(t *testing.T) {
 
 func TestPurchase(t *testing.T) {
 	// always returns t.Fatal...
+	// test a missing field always returns 400.
 
-	t.Fatalf("Something went wrong")
+	route := GetMainEngine()
+
+	t.Run("Test all fields passed", func(t *testing.T) {
+		fields := populatePurchaseFields(false)
+		buff, err := json.Marshal(&fields)
+		if err != nil {
+			t.Fatalf("Error in marshalling %v", err)
+		}
+		req, _ := http.NewRequest(http.MethodPost, "/purchase", bytes.NewBuffer(buff))
+		w := httptest.NewRecorder()
+
+		route.ServeHTTP(w, req)
+
+		got := w.Code
+		want := 500
+
+		if got != want {
+			t.Errorf("got '%s', want '%s'", got, want)
+			t.Errorf(w.Body.String())
+		}
+	})
+
+	t.Run("Test missing field(s)", func(t *testing.T) {
+		fields := populatePurchaseFields(true)
+		buff, err := json.Marshal(&fields)
+		if err != nil {
+			t.Fatalf("Error in marshalling %v", err)
+		}
+		req, _ := http.NewRequest(http.MethodPost, "/purchase", bytes.NewBuffer(buff))
+		w := httptest.NewRecorder()
+
+		route.ServeHTTP(w, req)
+
+		got := w.Code
+		want := 400
+
+		if got != want {
+			t.Errorf("got '%s', want '%s'", got, want)
+		}
+	})
 }
 
 func TestEBSHttpClient2(t *testing.T) {
@@ -51,4 +92,26 @@ func TestEBSHttpClient2(t *testing.T) {
 
 func TestCardTransfer(t *testing.T) {
 	t.Fatalf("Something went wrong")
+}
+
+
+func populatePurchaseFields(missing bool) PurchaseFields{
+	// this should be a generic function for all fields
+	// it should also respects each struct types
+	// lets test populating purchase fields
+	var fields PurchaseFields
+	fields.TerminalID = "09123456"
+	fields.TranDateTime = time.Now().UTC()
+	fields.SystemTraceAuditNumber = rand.Int()
+	fields.ClientID = "noebs"
+	fields.Expdate = "2203"
+	fields.Pan = "1234567891234567"
+	fields.Pin = "1234"
+	fields.TranAmount = 232
+	fields.TranCurrencyCode = "SDG"
+	if missing{
+		fields.TerminalID = ""
+		return fields
+	}
+	return fields
 }

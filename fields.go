@@ -13,7 +13,7 @@ type CardTransferFields struct {
 	CommonFields
 	CardInfoFields
 	AmountFields
-	ToCard string `binding:"toCard" binding:"required"`
+	ToCard string `json:"toCard" binding:"required"`
 }
 
 type PurchaseFields struct {
@@ -28,10 +28,10 @@ type ChangePin struct {
 }
 
 type CommonFields struct {
-	SystemTraceAuditNumber int       `json:"systemTraceAuditNumber" binding:"required"`
-	TranDateTime           time.Time `json:"tranDateTime" binding:"required"`
-	TerminalID             string    `json:"terminalId" binding:"required,len=8"`
-	ClientID               string    `json:"clientId" binding:"required"`
+	SystemTraceAuditNumber int       `json:"systemTraceAuditNumber,omitempty" binding:"required"`
+	TranDateTime           time.Time `json:"tranDateTime,omitempty" binding:"required"`
+	TerminalID             string    `json:"terminalId,omitempty" binding:"required,len=8"`
+	ClientID               string    `json:"clientId,omitempty" binding:"required"`
 }
 
 type CardInfoFields struct {

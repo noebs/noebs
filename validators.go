@@ -28,9 +28,8 @@ type ValidationErrors map[string]string
 
 type Response map[string]interface{}
 
-func errorToString(e *validator.FieldError) ValidationErrors {
+func ErrorToString(e *validator.FieldError) ValidationErrors {
 	err := make(map[string]string)
-
 
 	switch e.Tag {
 	case "required":
