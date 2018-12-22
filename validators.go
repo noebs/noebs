@@ -2,19 +2,17 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/go-playground/validator.v8"
+	"gopkg.in/go-playground/validator.v9"
 )
-
-
 
 type ErrorResponse struct {
 	ResponseType ErrorDetails `json:"error"`
 }
 
 const (
-	BAD_REQUEST string = "BAD_REQUEST"
-	PARSING_ERROR string = "PARSING_ERROR"
-	INTERNAL_SERVER_ERROR string = "INTERNAL_SERVER_ERROR"
+	BadRequest          string = "BadRequest"
+	ParsingError        string = "ParsingError"
+	InternalServerError string = "InternalServerError"
 )
 
 type ErrorDetails struct {
@@ -28,27 +26,27 @@ type ValidationErrors map[string]string
 
 type Response map[string]interface{}
 
-func ErrorToString(e *validator.FieldError) ValidationErrors {
+func ErrorToString(e validator.FieldError) ValidationErrors {
 	err := make(map[string]string)
 
-	switch e.Tag {
+	switch e.Tag() {
 	case "required":
-		err[e.Field] = fmt.Sprintf("this field is required")
+		err[e.Field()] = fmt.Sprintf("this field is required")
 		return err
 	case "max":
-		err[e.Field] = fmt.Sprintf("this field cannot be longer than %s", e.Param)
+		err[e.Field()] = fmt.Sprintf("this field cannot be longer than %s", e.Param())
 		return err
 	case "min":
-		err[e.Field] = fmt.Sprintf("this field must be longer than %s", e.Param)
+		err[e.Field()] = fmt.Sprintf("this field must be longer than %s", e.Param())
 		return err
 	case "email":
-		err[e.Field] = fmt.Sprintf("invalid email format")
+		err[e.Field()] = fmt.Sprintf("invalid email format")
 		return err
 	case "len":
-		err[e.Field] = fmt.Sprintf("this field must be %s characters long", e.Param)
+		err[e.Field()] = fmt.Sprintf("this field must be %s characters long", e.Param())
 		return err
 	}
-	err[e.Field] = fmt.Sprintf("%s is not valid", e.Field)
+	err[e.Field()] = fmt.Sprintf("%s is not valid", e.Field())
 	return err
 
 }

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"gopkg.in/go-playground/validator.v8"
+	"gopkg.in/go-playground/validator.v9"
 	"io"
 	"io/ioutil"
 	"log"
@@ -38,10 +38,19 @@ func GetMainEngine() *gin.Engine {
 	return route
 }
 
+func init(){
+	// register the new validator
+	binding.Validator = new(defaultValidator)
+}
+
+
+
 func main() {
+
 	// Logging to a file.
 	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
+
 	if env := os.Getenv("PORT"); env != "" {
 		GetMainEngine().Run(env)
 	} else {
@@ -83,6 +92,9 @@ func WorkingKey(c *gin.Context) {
 		var details []ValidationErrors
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+			// switch err.Tag
+			fmt.Printf(err.Tag(), err.Param())
+
 			details = append(details, ErrorToString(err))
 		}
 
@@ -120,11 +132,11 @@ func Purchase(c *gin.Context) {
 		fmt.Printf("The field name is %s", fields.Tag)
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-			
+
 			details = append(details, ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: BAD_REQUEST}
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Unknown client error", Status: BadRequest}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
@@ -136,7 +148,7 @@ func Purchase(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: PARSING_ERROR}
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
 			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
@@ -180,7 +192,7 @@ func CardTransfer(c *gin.Context) {
 			details = append(details, ErrorToString(err))
 		}
 
-		er := ErrorDetails{Details: details, Code: 400, Message: "Missing field", Status:"MISSING_FIELDS"}
+		er := ErrorDetails{Details: details, Code: 400, Message: "Missing field", Status: "MISSING_FIELDS"}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{er})
 
@@ -192,7 +204,7 @@ func CardTransfer(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: err.Error(), Status: "PARSING_ERROR"}
+			er := ErrorDetails{Details: nil, Code: 400, Message: err.Error(), Status: "ParsingError"}
 			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
@@ -268,8 +280,6 @@ func EBSHttpClient(url string, c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, "There's a problem. Check again later.") //Fixme.
 	}
 
-
-
 }
 
 func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
@@ -283,7 +293,7 @@ func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
 		Transport: verifyTLS,
 	}
 
-	reqHandler, err := http.NewRequest("POST", url, req)
+	reqHandler, err := http.NewRequest(http.MethodPost, url, req)
 	if err != nil {
 		fmt.Println(err.Error())
 	}
@@ -308,8 +318,6 @@ func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
 	}
 
 	defer response.Body.Close()
-
-
 
 	var ebsResponse map[string]string
 	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil {

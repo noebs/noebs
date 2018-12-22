@@ -1,6 +1,9 @@
 package main
 
-import "time"
+import (
+	"gopkg.in/go-playground/validator.v9"
+	"time"
+)
 
 // not sure this would work. This package is just for storing struct representations
 // of each httpHandler
@@ -29,7 +32,7 @@ type ChangePin struct {
 
 type CommonFields struct {
 	SystemTraceAuditNumber int       `json:"systemTraceAuditNumber,omitempty" binding:"required"`
-	TranDateTime           time.Time `json:"tranDateTime,omitempty" binding:"required"`
+	TranDateTime           time.Time `json:"tranDateTime,omitempty" binding:"required,iso8601"`
 	TerminalID             string    `json:"terminalId,omitempty" binding:"required,len=8"`
 	ClientID               string    `json:"clientId,omitempty" binding:"required"`
 }
@@ -43,4 +46,14 @@ type CardInfoFields struct {
 type AmountFields struct {
 	TranAmount       float32 `json:"tranAmount" binding:"required"`
 	TranCurrencyCode string  `json:"tranCurrencyCode"`
+}
+
+func iso8601(fl validator.FieldLevel) bool {
+
+	dateLayout := time.RFC3339
+	_, err := time.Parse(dateLayout, fl.Field().String())
+	if err != nil{
+		return false
+	}
+	return true
 }
