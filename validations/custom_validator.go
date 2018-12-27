@@ -1,4 +1,4 @@
-package main
+package validations
 
 import (
 	"github.com/gin-gonic/gin/binding"
@@ -9,14 +9,14 @@ import (
 	"sync"
 )
 
-type defaultValidator struct {
+type DefaultValidator struct {
 	once     sync.Once
 	validate *validator.Validate
 }
 
-var _ binding.StructValidator = &defaultValidator{}
+var _ binding.StructValidator = &DefaultValidator{}
 
-func (v *defaultValidator) ValidateStruct(obj interface{}) error {
+func (v *DefaultValidator) ValidateStruct(obj interface{}) error {
 
 	if kindOfData(obj) == reflect.Struct {
 
@@ -30,13 +30,12 @@ func (v *defaultValidator) ValidateStruct(obj interface{}) error {
 	return nil
 }
 
-func (v *defaultValidator) Engine() interface{} {
+func (v *DefaultValidator) Engine() interface{} {
 	v.lazyinit()
 	return v.validate
 }
 
-
-func (v *defaultValidator) lazyinit() {
+func (v *DefaultValidator) lazyinit() {
 	v.once.Do(func() {
 		v.validate = validator.New()
 		v.validate.SetTagName("binding")
@@ -69,4 +68,3 @@ func kindOfData(data interface{}) reflect.Kind {
 	}
 	return valueType
 }
-

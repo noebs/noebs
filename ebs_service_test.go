@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
+	"morsal/noebs/validations"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestWorkingKey(t *testing.T) {
-	var workingKeyFields WorkingKeyFields
+	var workingKeyFields validations.WorkingKeyFields
 	workingKeyFields.ClientID = "noebs"
 	workingKeyFields.TerminalID = "12345678"
 	workingKeyFields.TranDateTime = time.Now().UTC()

@@ -7,10 +7,15 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/pkg/errors"
 	"gopkg.in/go-playground/validator.v9"
 	"io"
 	"io/ioutil"
 	"log"
+	"morsal/noebs/dashboard"
+	"morsal/noebs/validations"
 	"net/http"
 	"os"
 	"reflect"
@@ -38,12 +43,10 @@ func GetMainEngine() *gin.Engine {
 	return route
 }
 
-func init(){
+func init() {
 	// register the new validator
-	binding.Validator = new(defaultValidator)
+	binding.Validator = new(validations.DefaultValidator)
 }
-
-
 
 func main() {
 
@@ -66,7 +69,7 @@ func WorkingKey(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	var fields = WorkingKeyFields{}
+	var fields = validations.WorkingKeyFields{}
 	reqBody, err := ioutil.ReadAll(c.Request.Body)
 	reader1 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
 	reader2 := ioutil.NopCloser(bytes.NewBuffer([]byte(reqBody)))
@@ -107,14 +110,27 @@ func WorkingKey(c *gin.Context) {
 }
 
 func Purchase(c *gin.Context) {
+	db, err := gorm.Open("sqlite3", "test1.db")
 
-	url := "path/to/ebs/endpoint" // EBS simulator endpoint url goes here.
+	if err != nil {
+		log.Fatalf("There's an erron in DB connection, %v", err)
+	}
+
+	defer db.Close()
+
+	db.LogMode(false)
+
+	if err := db.AutoMigrate(&dashboard.Purchase{}); err != nil {
+		log.Printf("there is an error in migration %v", err.Error)
+	}
+
+	url := EBSMerchantIP + PurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	var fields = PurchaseFields{}
+	var fields = validations.PurchaseFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -155,12 +171,25 @@ func Purchase(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, err := EBSHttpClient2(url, bytes.NewBuffer(jsonBuffer))
-		// {"ebs_error": "code": "message": ""}
+
+		var successfulResponse SuccessfulResponse
+		successfulResponse.EBSResponse = res
+
+		purchaseDB := dashboard.Purchase{
+			GenericEBSResponseFields: res,
+		}
+
+		// God please make it works.
+		db.Create(&purchaseDB)
+		db.Commit()
+
 		if err != nil {
-			c.AbortWithStatusJSON(code, res)
+			// make it onto error one
+			payload := ErrorDetails{Code:code, Status:EBSError, Details:res, Message:EBSError}
+			c.JSON(code, payload)
+
 		} else {
-			// successful
-			c.JSON(code, res)
+			c.JSON(code, successfulResponse)
 		}
 	}
 
@@ -168,13 +197,28 @@ func Purchase(c *gin.Context) {
 
 func CardTransfer(c *gin.Context) {
 
-	url := "path/to/ebs/endpoint" // EBS simulator endpoint url goes here.
+	url := EBSMerchantIP + CardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	var fields = CardTransferFields{}
+	db, err := gorm.Open("sqlite3", "test1.db")
+
+	if err != nil {
+		log.Fatalf("There's an erron in DB connection, %v", err)
+	}
+
+	defer db.Close()
+
+	db.LogMode(false)
+
+	if err := db.AutoMigrate(&dashboard.CardTransfer{}); err != nil {
+		log.Printf("there is an error in migration %v", err.Error)
+	}
+
+
+	var fields = validations.CardTransferFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -208,19 +252,32 @@ func CardTransfer(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: err.Error(), Status: "ParsingError"}
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
 			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
 
+		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, err := EBSHttpClient2(url, bytes.NewBuffer(jsonBuffer))
-		// {"ebs_error": "code": "message": ""}
-		if err != nil {
 
-			c.AbortWithStatusJSON(code, res)
+		var successfulResponse SuccessfulResponse
+		successfulResponse.EBSResponse = res
+
+		purchaseDB := dashboard.Purchase{
+			GenericEBSResponseFields: res,
+		}
+
+		// God please make it works.
+		db.Create(&purchaseDB)
+		db.Commit()
+
+		if err != nil {
+			// make it onto error one
+			payload := ErrorDetails{Code:code, Status:EBSError, Details:res, Message:EBSError}
+			c.JSON(code, payload)
+
 		} else {
-			// successful
-			c.JSON(code, res)
+			c.JSON(code, successfulResponse)
 		}
 	}
 
@@ -286,7 +343,7 @@ func EBSHttpClient(url string, c *gin.Context) {
 
 }
 
-func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
+func EBSHttpClient2(url string, req io.Reader) (int, validations.GenericEBSResponseFields, error) {
 
 	verifyTLS := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -306,10 +363,11 @@ func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
 	// EBS doesn't impose any sort of API-keys or anything. Typical EBS.
 
 	response, err := ebsClient.Do(reqHandler)
+	var ebsGenericResponse validations.GenericEBSResponseFields
 
 	if err != nil {
-		res := Response{"error": gin.H{"code": "internal_server_error", "message": "ebs_unreachable"}}
-		return 500, res, fmt.Errorf("unable to reach ebs %v", err)
+
+		return 500, ebsGenericResponse, fmt.Errorf("unable to reach ebs %v", err)
 
 	}
 
@@ -317,37 +375,28 @@ func EBSHttpClient2(url string, req io.Reader) (int, Response, error) {
 	if err != nil {
 		// TODO
 		// adhere to the new response style!
-		return 500, Response{"error": gin.H{"code": "internal_server_error", "message": "ebs_unreachable"}}, fmt.Errorf("unable to reach ebs %v", err)
+		return 500, ebsGenericResponse, fmt.Errorf("unable to reach ebs %v", err)
 
 	}
 
 	defer response.Body.Close()
 
-	var ebsResponse map[string]string
-	if err := json.Unmarshal(responseBody, &ebsResponse); err == nil {
+	if err := json.Unmarshal(responseBody, ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling
+		if ebsGenericResponse.ResponseCode == 0 {
+			// the transaction is successful
 
-		if responseCode, ok := ebsResponse["responseCode"]; ok { //Frankly, if we went this far it will work anyway.
-			resCode, _ := strconv.Atoi(string(responseCode))
-
-			if resCode == 0 {
-				res := Response{"successful_transaction": gin.H{"message": ebsResponse, "code": resCode}}
-				return 200, res, nil
-			} else {
-				// Error in the clients request
-				res := Response{"EBS_error": gin.H{"message": ebsResponse, "code": resCode}}
-				return 400, res, nil
-			}
-
+			return 200, ebsGenericResponse, nil
 		} else {
-			// there is no responseCode
-			res := Response{"error": gin.H{"message": ebsResponse, "code": "unknown_error"}}
-			return 400, res, nil
+			// there is an error in the transaction
+
+			err := errors.New(ebsGenericResponse.ResponseMessage)
+			return 400, ebsGenericResponse, err
 		}
 
 	} else {
-		res := Response{"error": gin.H{"message": "error parsing the request body", "code": "parsing_request_error"}}
-		return 500, res, nil
+		// there is an error in handling the incoming EBS's response
+		return 500, ebsGenericResponse, err
 	}
 
 }

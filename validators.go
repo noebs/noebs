@@ -3,29 +3,33 @@ package main
 import (
 	"fmt"
 	"gopkg.in/go-playground/validator.v9"
+	"morsal/noebs/validations"
 	"time"
 )
 
+type SuccessfulResponse struct {
+	EBSResponse validations.GenericEBSResponseFields `json:"successful_transaction"`
+}
+
 type ErrorResponse struct {
-	ResponseType ErrorDetails `json:"error"`
+	Payload ErrorDetails `json:"error"`
 }
 
 const (
-	BadRequest          string = "BadRequest"
-	ParsingError        string = "ParsingError"
-	InternalServerError string = "InternalServerError"
+	BadRequest          = "BadRequest"
+	ParsingError        = "ParsingError"
+	InternalServerError = "InternalServerError"
+	EBSError = "EBSError"
 )
 
 type ErrorDetails struct {
 	Message string             `json:"message"`
 	Code    int                `json:"code"`
 	Status  string             `json:"status"`
-	Details []ValidationErrors `json:"details"`
+	Details interface{} `json:"details"`
 }
 
 type ValidationErrors map[string]string
-
-type Response map[string]interface{}
 
 func ErrorToString(e validator.FieldError) ValidationErrors {
 	err := make(map[string]string)

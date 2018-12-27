@@ -2,14 +2,15 @@ package main
 
 import (
 	"math/rand"
+	"morsal/noebs/validations"
 	"time"
 )
 
-func populatePurchaseFields(missing bool) PurchaseFields {
+func populatePurchaseFields(missing bool) validations.PurchaseFields {
 	// this should be a generic function for all fields
 	// it should also respects each struct types
 	// lets test populating purchase fields
-	fields := PurchaseFields{
+	fields := validations.PurchaseFields{
 		populateWorkingKeyFields(), populateCardInfoFields(),
 		populateAmountFields(),
 	}
@@ -21,10 +22,10 @@ func populatePurchaseFields(missing bool) PurchaseFields {
 	return fields
 }
 
-func populateCardTransferFields() CardTransferFields {
+func populateCardTransferFields() validations.CardTransferFields {
 	toCard := "1234567891234567"
 
-	f := CardTransferFields{
+	f := validations.CardTransferFields{
 		CommonFields:   populateCommmonFields(),
 		CardInfoFields: populateCardInfoFields(),
 		AmountFields:   populateAmountFields(),
@@ -34,25 +35,25 @@ func populateCardTransferFields() CardTransferFields {
 	return f
 }
 
-func populateWorkingKeyFields() WorkingKeyFields {
-	f := WorkingKeyFields{
+func populateWorkingKeyFields() validations.WorkingKeyFields {
+	f := validations.WorkingKeyFields{
 		CommonFields: populateCommmonFields(),
 	}
 	return f
 }
 
-func populateCommmonFields() CommonFields {
-	f := CommonFields{
+func populateCommmonFields() validations.CommonFields {
+	f := validations.CommonFields{
 		TerminalID:             "12345678",
 		TranDateTime:           time.Now().UTC(),
 		SystemTraceAuditNumber: rand.Int(),
-		ClientID: "noebs",
+		ClientID:               "noebs",
 	}
 	return f
 }
 
-func populateCardInfoFields() CardInfoFields {
-	f := CardInfoFields{
+func populateCardInfoFields() validations.CardInfoFields {
+	f := validations.CardInfoFields{
 		Pin:     "1234",
 		Pan:     "1234567891234567",
 		Expdate: "2209",
@@ -60,10 +61,10 @@ func populateCardInfoFields() CardInfoFields {
 	return f
 }
 
-func populateAmountFields() AmountFields {
+func populateAmountFields() validations.AmountFields {
 	currencyCode := "SDG"
 	amount := 32.43
-	f := AmountFields{
+	f := validations.AmountFields{
 		TranCurrencyCode: currencyCode,
 		TranAmount:       float32(amount),
 	}
