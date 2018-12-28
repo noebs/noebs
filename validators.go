@@ -26,13 +26,13 @@ type ErrorDetails struct {
 	Message string             `json:"message"`
 	Code    int                `json:"code"`
 	Status  string             `json:"status"`
-	Details interface{} `json:"details"`
+	Details []ErrDetails `json:"details"`
 }
 
-type ValidationErrors map[string]string
+type ErrDetails map[string]interface{}
 
-func ErrorToString(e validator.FieldError) ValidationErrors {
-	err := make(map[string]string)
+func ErrorToString(e validator.FieldError) ErrDetails {
+	err := make(map[string]interface{})
 
 	switch e.Tag() {
 	case "required":

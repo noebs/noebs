@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"fmt"
 	"github.com/jinzhu/gorm"
 	"log"
 )
@@ -19,8 +18,8 @@ func dbConnect() {
 
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&BillInquiry{}, &BillPayment{}, &CardTransfer{}, &ChangePIN{}); err != nil {
-		fmt.Errorf("there is an error in migration %v", err.Error)
+	if err := db.AutoMigrate(&Transaction{}); err != nil {
+		log.Fatalf("there is an error in migration %v", err.Error)
 	}
 	// you should also commit the results here..., and that has to be done per "endpoint"!
 

@@ -45,7 +45,7 @@ func populateWorkingKeyFields() validations.WorkingKeyFields {
 func populateCommmonFields() validations.CommonFields {
 	f := validations.CommonFields{
 		TerminalID:             "12345678",
-		TranDateTime:           time.Now().UTC(),
+		TranDateTime:           time.Now().UTC().String(),
 		SystemTraceAuditNumber: rand.Int(),
 		ClientID:               "noebs",
 	}

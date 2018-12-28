@@ -46,7 +46,7 @@ type BillInquiryFields struct {
 
 type CommonFields struct {
 	SystemTraceAuditNumber int       `json:"systemTraceAuditNumber,omitempty" binding:"required"`
-	TranDateTime           time.Time `json:"tranDateTime,omitempty" binding:"required,iso8601"`
+	TranDateTime           string `json:"tranDateTime,omitempty" binding:"required,iso8601"`
 	TerminalID             string    `json:"terminalId,omitempty" binding:"required,len=8"`
 	ClientID               string    `json:"clientId,omitempty" binding:"required"`
 }
@@ -80,10 +80,10 @@ func iso8601(fl validator.FieldLevel) bool {
 type GenericEBSResponseFields struct {
 	ImportantEBSFields
 
-	TerminalID             string  `json:"terminalId"`
+	TerminalID             string  `json:"terminalId" gorm:"unique_index"`
 	TranDateTime           string  `json:"tranDateTime"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber"`
-	ClientID               string  `json:"clientId"`
+	ClientID               string  `json:"clientId" gorm:"unique_index"`
 	PAN                    string  `json:"PAN"`
 	AdditionalData         string  `json:"additionalData"`
 	ServiceID              string  `json:"serviceId"`
@@ -98,6 +98,7 @@ type GenericEBSResponseFields struct {
 	OTP                    string  `json:"otp"`
 	OTPID                  string  `json:"otpId"`
 	TranCurrencyCode       string  `json:"tranCurrencyCode"`
+	EBSServiceName string
 }
 
 type ImportantEBSFields struct {

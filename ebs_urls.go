@@ -27,3 +27,11 @@ const (
 )
 
 const EBSMerchantIP = "https://197.16.8.8:8080/EBSGateway/"
+
+const (
+	PurchaseTransaction = "PurchaseTransaction"
+	PurchaseWithCashBackTransaction = "PurchaseWithCashBack"
+	BillPaymentTransaction = "BillPayment"
+	BillInquiryTransaction = "BillInquiry"
+	CardTransferTransaction = "CardTransfer"
+)

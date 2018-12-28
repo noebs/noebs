@@ -92,7 +92,7 @@ func WorkingKey(c *gin.Context) {
 	case reqBodyErr != nil:
 		// do things to the error message. Parse it.
 
-		var details []ValidationErrors
+		var details []ErrDetails
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
 			// switch err.Tag
@@ -120,7 +120,7 @@ func Purchase(c *gin.Context) {
 
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Purchase{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
@@ -142,7 +142,7 @@ func Purchase(c *gin.Context) {
 
 	case reqBodyErr != nil:
 
-		var details []ValidationErrors
+		var details []ErrDetails
 
 		fields, _ := reflect.TypeOf(fields).FieldByName("json")
 		fmt.Printf("The field name is %s", fields.Tag)
@@ -175,17 +175,24 @@ func Purchase(c *gin.Context) {
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
-		purchaseDB := dashboard.Purchase{
+		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res,
 		}
 
 		// God please make it works.
-		db.Create(&purchaseDB)
+		db.Create(&transaction)
 		db.Commit()
 
 		if err != nil {
 			// make it onto error one
-			payload := ErrorDetails{Code:code, Status:EBSError, Details:res, Message:EBSError}
+			var listDetails []ErrDetails
+			details := make(ErrDetails)
+
+			details[res.ResponseMessage] = res.ResponseCode
+
+			listDetails = append(listDetails, details)
+
+			payload := ErrorDetails{Code:code, Status:EBSError, Details:listDetails, Message:EBSError}
 			c.JSON(code, payload)
 
 		} else {
@@ -213,7 +220,7 @@ func CardTransfer(c *gin.Context) {
 
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.CardTransfer{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
@@ -230,7 +237,7 @@ func CardTransfer(c *gin.Context) {
 
 	case reqBodyErr != nil:
 
-		var details []ValidationErrors
+		var details []ErrDetails
 
 		fields, _ := reflect.TypeOf(fields).FieldByName("json")
 		fmt.Printf("The field name is %s", fields.Tag)
@@ -263,17 +270,29 @@ func CardTransfer(c *gin.Context) {
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
-		purchaseDB := dashboard.Purchase{
+		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res,
-		}
 
+		}
+		// there are, indeed, different approaches to tackle this problem:
+		// you could have just created a table for each service/endpoint; that would work really well (we used it in Morsal)
+		// but, when you come to filtering using TerminalID, the lies in the problem! It is not easy!
+
+		transaction.EBSServiceName = CardTransferTransaction
 		// God please make it works.
-		db.Create(&purchaseDB)
+		db.Create(&transaction)
 		db.Commit()
 
 		if err != nil {
 			// make it onto error one
-			payload := ErrorDetails{Code:code, Status:EBSError, Details:res, Message:EBSError}
+			var listDetails []ErrDetails
+			details := make(ErrDetails)
+
+			details[res.ResponseMessage] = res.ResponseCode
+
+			listDetails = append(listDetails, details)
+
+			payload := ErrorDetails{Code:code, Status:EBSError, Details:listDetails, Message:EBSError}
 			c.JSON(code, payload)
 
 		} else {
