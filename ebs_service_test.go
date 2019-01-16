@@ -88,11 +88,34 @@ func TestPurchase(t *testing.T) {
 	})
 }
 
-func TestEBSHttpClient2(t *testing.T) {
+func TestEBSHttpClient(t *testing.T) {
 	// always return wrong
 	// i need to mock up EBS server (which is really challenging!
 
 	//t.Fatalf("Something went wrong")
+	t.Run("Testing wrong content-types", func(t *testing.T) {
+		url := "https://212.0.129.118/terminal_api/purchase/"
+		payload := getSuccessfulPurchasePayload(validations.PurchaseFields{})
+		fmt.Println(string(payload))
+		_, _, err := EBSHttpClient(url, payload)
+
+		if err != contentTypeErr{
+			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, contentTypeErr)
+		}
+	})
+
+	t.Run("Check the return error type is EBSFailedTransactionErr", func(t *testing.T){
+		url := "https://212.0.129.118/terminal_api/purchase/"
+		payload := getFailedPurchasePayload(t, validations.PurchaseFields{})
+
+		fmt.Println(string(payload))
+		_, _, err := EBSHttpClient(url, payload)
+
+		if err != ebsFailedTransaction{
+			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, contentTypeErr)
+		}
+	})
+
 }
 
 func TestCardTransfer(t *testing.T) {
@@ -138,7 +161,7 @@ func TestCardTransfer(t *testing.T) {
 		want := 400
 
 		if got != want {
-			t.Errorf("got '%s', want '%s'", got, want)
+			t.Errorf("got '%d', want '%d'", got, want)
 		}
 	})
 

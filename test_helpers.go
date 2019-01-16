@@ -1,8 +1,10 @@
 package main
 
 import (
+	"github.com/gin-gonic/gin/json"
 	"math/rand"
 	"morsal/noebs/validations"
+	"testing"
 	"time"
 )
 
@@ -69,4 +71,34 @@ func populateAmountFields() validations.AmountFields {
 		TranAmount:       float32(amount),
 	}
 	return f
+}
+
+func getSuccessfulPurchasePayload(service interface{}) []byte{
+
+	// get the purchase struct only, try to generalize it later
+	if _, ok := service.(validations.PurchaseFields); ok {
+		f := populatePurchaseFields(false)
+		jsonFields, err := json.Marshal(f)
+
+		if err != nil{
+			return nil
+		}
+		return jsonFields
+	} else {
+		return nil
+	}
+
+}
+
+// invalid transaction fields to `which`? For now, let us make it for purchase ONLY.
+func getFailedPurchasePayload(t *testing.T, service interface{}) []byte {
+	t.Helper()
+	p := populatePurchaseFields(false)
+	p.TranAmount = -32.43
+	fields, err := json.Marshal(p)
+	if err == nil {
+		t.Fatalf("There is an error")
+		return nil
+	}
+	return fields
 }
