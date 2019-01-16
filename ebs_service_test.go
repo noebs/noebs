@@ -1,12 +1,12 @@
 package main
 
 import (
+	"noebs/validations"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
-	"./validations"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -63,7 +63,7 @@ func TestPurchase(t *testing.T) {
 		want := 500
 
 		if got != want {
-			t.Errorf("got '%s', want '%s'", got, want)
+			t.Errorf("got '%d', want '%d'", got, want)
 			t.Errorf(w.Body.String())
 		}
 	})
@@ -83,7 +83,7 @@ func TestPurchase(t *testing.T) {
 		want := 400
 
 		if got != want {
-			t.Errorf("got '%s', want '%s'", got, want)
+			t.Errorf("got '%d', want '%d'", got, want)
 		}
 	})
 }
@@ -118,7 +118,7 @@ func TestCardTransfer(t *testing.T) {
 		want := 500
 
 		if got != want {
-			t.Errorf("got '%s', want '%s'", got, want)
+			t.Errorf("got '%d', want '%d'", got, want)
 			t.Errorf(w.Body.String())
 		}
 	})
@@ -138,7 +138,7 @@ func TestCardTransfer(t *testing.T) {
 		want := 400
 
 		if got != want {
-			t.Errorf("got '%s', want '%s'", got, want)
+			t.Errorf("got '%d', want '%d'", got, want)
 		}
 	})
 

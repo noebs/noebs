@@ -45,10 +45,10 @@ type BillInquiryFields struct {
 }
 
 type CommonFields struct {
-	SystemTraceAuditNumber int       `json:"systemTraceAuditNumber,omitempty" binding:"required"`
+	SystemTraceAuditNumber int    `json:"systemTraceAuditNumber,omitempty" binding:"required"`
 	TranDateTime           string `json:"tranDateTime,omitempty" binding:"required,iso8601"`
-	TerminalID             string    `json:"terminalId,omitempty" binding:"required,len=8"`
-	ClientID               string    `json:"clientId,omitempty" binding:"required"`
+	TerminalID             string `json:"terminalId,omitempty" binding:"required,len=8"`
+	ClientID               string `json:"clientId,omitempty" binding:"required"`
 }
 
 type CardInfoFields struct {
@@ -98,7 +98,7 @@ type GenericEBSResponseFields struct {
 	OTP                    string  `json:"otp"`
 	OTPID                  string  `json:"otpId"`
 	TranCurrencyCode       string  `json:"tranCurrencyCode"`
-	EBSServiceName string
+	EBSServiceName         string
 }
 
 type ImportantEBSFields struct {

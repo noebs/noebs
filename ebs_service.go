@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"errors"
 	"gopkg.in/go-playground/validator.v9"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"noebs/dashboard"
 	"noebs/validations"
-	"net/http"
 	"os"
 	"reflect"
 	"strconv"
@@ -29,16 +29,14 @@ func GetMainEngine() *gin.Engine {
 
 	route.HandleMethodNotAllowed = true
 
+	// TODO
+	// Add the rest of EBS merchant services.
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
 
-	// TODO
-	// Add the rest of EBS merchant services.
-
-	// This is like isAlive one...
-	route.POST("/test", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": true})
+	route.POST("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 	return route
 }
@@ -192,7 +190,7 @@ func Purchase(c *gin.Context) {
 
 			listDetails = append(listDetails, details)
 
-			payload := ErrorDetails{Code:code, Status:EBSError, Details:listDetails, Message:EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
 			c.JSON(code, payload)
 
 		} else {
@@ -223,7 +221,6 @@ func CardTransfer(c *gin.Context) {
 	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
-
 
 	var fields = validations.CardTransferFields{}
 
@@ -272,7 +269,6 @@ func CardTransfer(c *gin.Context) {
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res,
-
 		}
 		// there are, indeed, different approaches to tackle this problem:
 		// you could have just created a table for each service/endpoint; that would work really well (we used it in Morsal)
@@ -292,7 +288,7 @@ func CardTransfer(c *gin.Context) {
 
 			listDetails = append(listDetails, details)
 
-			payload := ErrorDetails{Code:code, Status:EBSError, Details:listDetails, Message:EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
 			c.JSON(code, payload)
 
 		} else {

@@ -24,9 +24,6 @@ func GetMainEngine() *gin.Engine {
 	return route
 }
 
-func main() {
-	//
-}
 
 func LoginHandler(c *gin.Context) {
 	// Get the request object, check it.

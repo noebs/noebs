@@ -7,7 +7,7 @@ type Client struct {
 
 	Terminal []Terminal
 
-	BankID uint
+	BankID     uint
 	MerchantID uint
 }
 
@@ -24,23 +24,21 @@ type Merchant struct {
 	gorm.Model
 
 	MobileNumber string
-	Terminal Terminal
+	Terminal     Terminal
 
 	ClientID uint
-	BankID uint
-
+	BankID   uint
 }
 
 type Terminal struct {
 	gorm.Model
-	Name string
+	Name           string
 	TerminalNumber string `gorm:"unqiue_index"`
 
-	BankID uint
+	BankID     uint
 	MerchantID uint
-	ClientID uint
+	ClientID   uint
 }
-
 
 // `User` belongs to `Profile`, `ProfileID` is the foreign key
 
