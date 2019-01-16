@@ -5,6 +5,7 @@ import (
 	"noebs/validations"
 	"testing"
 	"time"
+	"encoding/json"
 )
 
 func populatePurchaseFields(missing bool) validations.PurchaseFields {

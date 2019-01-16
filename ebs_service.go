@@ -60,6 +60,12 @@ func main() {
 
 func WorkingKey(c *gin.Context) {
 
+	url := EBSMerchantIP + CardTransferEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
 	db, err := gorm.Open("sqlite3", "test1.db")
 
 	if err != nil {
@@ -73,82 +79,15 @@ func WorkingKey(c *gin.Context) {
 	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
-
-	url := EBSMerchantIP + PurchaseEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
 
 	var fields = validations.WorkingKeyFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-	switch {
-	case reqBodyErr == io.EOF:
-		er := ErrorDetails{Details: nil, Code: 400, Message: "Empty request body", Status: "EMPTY_REQUEST_BODY"}
-		c.JSON(http.StatusBadRequest, ErrorResponse{er})
-
-	case reqBodyErr != nil:
-
-		var details []ErrDetails
-
-		for _, err := range reqBodyErr.(validator.ValidationErrors) {
-
-			details = append(details, ErrorToString(err))
-		}
-
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
-
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
-
-
-		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code:code, Status:EBSError, Details:listDetails, Message:EBSError}
-			c.JSON(code, payload)
-
-		} else {
-			c.JSON(code, successfulResponse)
-		}
-	}
-}
-
-func Purchase(c *gin.Context) {
-	db, err := gorm.Open("sqlite3", "test1.db")
-
-	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
-	}
-
-	defer db.Close()
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
-		log.Printf("there is an error in migration %v", err.Error)
-	}
-
-	url := EBSMerchantIP + PurchaseEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
-	var fields = validations.PurchaseFields{}
-
-	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch {
 
 	case reqBodyErr == io.EOF:
-		er := ErrorDetails{Details: nil, Code: 400, Message: "Empty request body", Status: "EMPTY_REQUEST_BODY"}
+		er := ErrorDetails{Details: nil, Code: 400, Message: reqBodyErr.Error(), Status: "EMPTY_REQUEST_BODY"}
 		c.JSON(http.StatusBadRequest, ErrorResponse{er})
 
 	case reqBodyErr != nil:
@@ -163,7 +102,7 @@ func Purchase(c *gin.Context) {
 			details = append(details, ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
@@ -176,12 +115,24 @@ func Purchase(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
+			log.Fatalf("unable to parse the request %v, error: %v", string(jsonBuffer), err)
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, err := EBSHttpClient(url, jsonBuffer)
+
+		if err == ebsGatewayConnectivityErr{
+			// we are unable to connect..
+			er := ErrorDetails{Details:nil, Message:err.Error(), Status:ebsGatewayConnectivityErr.status, Code:code}
+			c.AbortWithStatusJSON(code, er)
+
+		}
+		//FIXME this is not a successful response! Yes, it came off of EBS
+		// But you have to check the returned error first:
+		// if its ebsConnectivity error, then panic
+		// if its ebsWebServiceErr (e.g., the response will have a responseCode, and responseMessage, parse it
+		// onto the successfulResponse struct.
 
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
@@ -189,7 +140,11 @@ func Purchase(c *gin.Context) {
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res,
 		}
+		// there are, indeed, different approaches to tackle this problem:
+		// you could have just created a table for each service/endpoint; that would work really well (we used it in Morsal)
+		// but, when you come to filtering using TerminalID, the lies in the problem! It is not easy!
 
+		transaction.EBSServiceName = WorkingKeyFields
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -210,7 +165,114 @@ func Purchase(c *gin.Context) {
 			c.JSON(code, successfulResponse)
 		}
 	}
+}
 
+func Purchase(c *gin.Context) {
+	url := EBSMerchantIP + CardTransferEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db, err := gorm.Open("sqlite3", "test1.db")
+
+	if err != nil {
+		log.Fatalf("There's an erron in DB connection, %v", err)
+	}
+
+	defer db.Close()
+
+	db.LogMode(false)
+
+	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+		log.Printf("there is an error in migration %v", err.Error)
+	}
+
+	var fields = validations.PurchaseFields{}
+
+	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch {
+
+	case reqBodyErr == io.EOF:
+		er := ErrorDetails{Details: nil, Code: 400, Message: reqBodyErr.Error(), Status: "EMPTY_REQUEST_BODY"}
+		c.JSON(http.StatusBadRequest, ErrorResponse{er})
+
+	case reqBodyErr != nil:
+
+		var details []ErrDetails
+
+		fields, _ := reflect.TypeOf(fields).FieldByName("json")
+		fmt.Printf("The field name is %s", fields.Tag)
+
+		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+
+			details = append(details, ErrorToString(err))
+		}
+
+		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+
+	case reqBodyErr == nil:
+		// request body was already consumed here. But the request
+		// body was bounded to fields struct.
+		// Now, decode the struct into a json, or bytes buffer.
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
+			log.Fatalf("unable to parse the request %v, error: %v", string(jsonBuffer), err)
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, err := EBSHttpClient(url, jsonBuffer)
+
+		if err == ebsGatewayConnectivityErr{
+			// we are unable to connect..
+			er := ErrorDetails{Details:nil, Message:err.Error(), Status:ebsGatewayConnectivityErr.status, Code:code}
+			c.AbortWithStatusJSON(code, er)
+
+		}
+		//FIXME this is not a successful response! Yes, it came off of EBS
+		// But you have to check the returned error first:
+		// if its ebsConnectivity error, then panic
+		// if its ebsWebServiceErr (e.g., the response will have a responseCode, and responseMessage, parse it
+		// onto the successfulResponse struct.
+
+		var successfulResponse SuccessfulResponse
+		successfulResponse.EBSResponse = res
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res,
+		}
+		// there are, indeed, different approaches to tackle this problem:
+		// you could have just created a table for each service/endpoint; that would work really well (we used it in Morsal)
+		// but, when you come to filtering using TerminalID, the lies in the problem! It is not easy!
+
+		transaction.EBSServiceName = PurchaseTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if err != nil {
+			// make it onto error one
+			var listDetails []ErrDetails
+			details := make(ErrDetails)
+
+			details[res.ResponseMessage] = res.ResponseCode
+
+			listDetails = append(listDetails, details)
+
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			c.JSON(code, payload)
+
+		} else {
+			c.JSON(code, successfulResponse)
+		}
+	}
 }
 
 func CardTransfer(c *gin.Context) {

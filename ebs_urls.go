@@ -33,4 +33,5 @@ const (
 	BillPaymentTransaction          = "BillPayment"
 	BillInquiryTransaction          = "BillInquiry"
 	CardTransferTransaction         = "CardTransfer"
+	WorkingKeyFields = "WorkingKeyFields"
 )
