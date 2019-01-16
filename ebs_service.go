@@ -83,9 +83,7 @@ func WorkingKey(c *gin.Context) {
 	var fields = validations.WorkingKeyFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-
 	switch {
-
 	case reqBodyErr == io.EOF:
 		er := ErrorDetails{Details: nil, Code: 400, Message: "Empty request body", Status: "EMPTY_REQUEST_BODY"}
 		c.JSON(http.StatusBadRequest, ErrorResponse{er})
@@ -93,9 +91,6 @@ func WorkingKey(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		var details []ErrDetails
-
-		fields, _ := reflect.TypeOf(fields).FieldByName("json")
-		fmt.Printf("The field name is %s", fields.Tag)
 
 		for _, err := range reqBodyErr.(validator.ValidationErrors) {
 
@@ -106,32 +101,6 @@ func WorkingKey(c *gin.Context) {
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
-	case reqBodyErr == nil:
-		// request body was already consumed here. But the request
-		// body was bounded to fields struct.
-		// Now, decode the struct into a json, or bytes buffer.
-
-		jsonBuffer, err := json.Marshal(fields)
-		if err != nil {
-			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			log.Fatalf("there is an error. Request is %v", string(jsonBuffer))
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
-		}
-
-		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, err := EBSHttpClient(url, jsonBuffer)
-
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
-		}
-
-		// God please make it works.
-		db.Create(&transaction)
-		db.Commit()
 
 		if err != nil {
 			// make it onto error one
