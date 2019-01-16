@@ -2,7 +2,7 @@ package main
 
 import (
 	"math/rand"
-	"morsal/noebs/validations"
+	"noebs/validations"
 	"time"
 )
 

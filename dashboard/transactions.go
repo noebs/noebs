@@ -2,7 +2,7 @@ package dashboard
 
 import (
 	"github.com/jinzhu/gorm"
-	"morsal/noebs/validations"
+	"noebs/validations"
 )
 
 type Transaction struct {
