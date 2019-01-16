@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
-	"morsal/noebs/validations"
+	"./validations"
 	"net/http"
 	"net/http/httptest"
 	"testing"
