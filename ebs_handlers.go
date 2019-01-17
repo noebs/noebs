@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 	"gopkg.in/go-playground/validator.v9"
+	"net/http"
 	"noebs/validations"
 	"time"
-	"net/http"
 )
 
 type SuccessfulResponse struct {
@@ -61,23 +61,22 @@ func ErrorToString(e validator.FieldError) ErrDetails {
 
 }
 
-
 // Make a new error that implements the errors interface
 
-type customError struct{
+type customError struct {
 	code    int
 	message string
-	status string
+	status  string
 }
 
-func (c customError) Error() string{
+func (c customError) Error() string {
 	return fmt.Sprintf("%s", c.message)
 }
 
 var (
-	contentTypeErr = customError{message: "Content-Type must be application/json", code:http.StatusBadGateway}
-	marshalingErr = customError{message: "unable to parse EBS response (json)", code:http.StatusBadGateway, status:"malformed_gateway_response"}
-	ebsGatewayConnectivityErr = customError{message: "transaction didn't went successful", code:http.StatusBadGateway, status:"EBS_gateway_error"}
-	)
+	contentTypeErr            = customError{message: "Content-Type must be application/json", code: http.StatusBadGateway}
+	marshalingErr             = customError{message: "unable to parse EBS response (json)", code: http.StatusBadGateway, status: "malformed_gateway_response"}
+	ebsGatewayConnectivityErr = customError{message: "transaction didn't went successful", code: http.StatusBadGateway, status: "EBS_gateway_error"}
+)
 
 var ebsFailedTransaction customError

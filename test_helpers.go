@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"math/rand"
 	"noebs/validations"
 	"testing"
 	"time"
-	"encoding/json"
 )
 
 func populatePurchaseFields(missing bool) validations.PurchaseFields {
@@ -73,14 +73,14 @@ func populateAmountFields() validations.AmountFields {
 	return f
 }
 
-func getSuccessfulPurchasePayload(service interface{}) []byte{
+func getSuccessfulPurchasePayload(service interface{}) []byte {
 
 	// get the purchase struct only, try to generalize it later
 	if _, ok := service.(validations.PurchaseFields); ok {
 		f := populatePurchaseFields(false)
 		jsonFields, err := json.Marshal(f)
 
-		if err != nil{
+		if err != nil {
 			return nil
 		}
 		return jsonFields

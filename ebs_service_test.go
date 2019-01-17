@@ -1,7 +1,6 @@
 package main
 
 import (
-	"noebs/validations"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"noebs/validations"
 	"testing"
 	"time"
 )
@@ -99,19 +99,19 @@ func TestEBSHttpClient(t *testing.T) {
 		fmt.Println(string(payload))
 		_, _, err := EBSHttpClient(url, payload)
 
-		if err != contentTypeErr{
+		if err != contentTypeErr {
 			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, contentTypeErr)
 		}
 	})
 
-	t.Run("Check the return error type is EBSFailedTransactionErr", func(t *testing.T){
+	t.Run("Check the return error type is EBSFailedTransactionErr", func(t *testing.T) {
 		url := "https://212.0.129.118/terminal_api/purchase/"
 		payload := getFailedPurchasePayload(t, validations.PurchaseFields{})
 
 		fmt.Println(string(payload))
 		_, _, err := EBSHttpClient(url, payload)
 
-		if err != ebsFailedTransaction{
+		if err != ebsFailedTransaction {
 			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, contentTypeErr)
 		}
 	})
