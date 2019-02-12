@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"noebs/validations"
+	"github.com/adonese/noebs/validations"
 	"testing"
 	"time"
 )

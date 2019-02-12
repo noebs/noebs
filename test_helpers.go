@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"math/rand"
-	"noebs/validations"
+	"github.com/adonese/noebs/validations"
 	"testing"
 	"time"
 )
