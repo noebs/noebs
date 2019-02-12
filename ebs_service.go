@@ -144,7 +144,7 @@ func WorkingKey(c *gin.Context) {
 		// you could have just created a table for each service/endpoint; that would work really well (we used it in Morsal)
 		// but, when you come to filtering using TerminalID, the lies in the problem! It is not easy!
 
-		transaction.EBSServiceName = WorkingKeyFields
+		transaction.EBSServiceName = WorkingKeyTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
