@@ -1,8 +1,8 @@
 package dashboard
 
 import (
-	"github.com/jinzhu/gorm"
 	"github.com/adonese/noebs/validations"
+	"github.com/jinzhu/gorm"
 )
 
 type Transaction struct {

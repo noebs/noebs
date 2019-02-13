@@ -12,7 +12,7 @@ type WorkingKeyFields struct {
 	CommonFields
 }
 
-type ChangePINFields struct{
+type ChangePINFields struct {
 	CommonFields
 	CardInfoFields
 	NewPIN string `json:"newPin" binding:"required"`
@@ -38,11 +38,11 @@ type BillPaymentFields struct {
 	BillerFields
 }
 
-type CashInFields struct {}
-type CashOutFields struct {}
-type RefundFields struct {}
-type PurchaseWithCashBackFields struct {}
-type ReverseFields struct {}
+type CashInFields struct{}
+type CashOutFields struct{}
+type RefundFields struct{}
+type PurchaseWithCashBackFields struct{}
+type ReverseFields struct{}
 
 type BillInquiryFields struct {
 	CommonFields

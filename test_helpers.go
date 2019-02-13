@@ -2,13 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	"math/rand"
 	"github.com/adonese/noebs/validations"
+	"math/rand"
 	"testing"
 	"time"
 )
 
 func populatePurchaseFields(missing bool) validations.PurchaseFields {
+	//FIXME
+	// accept the required transaction as an interface and return a struct.
+
 	// this should be a generic function for all fields
 	// it should also respects each struct types
 	// lets test populating purchase fields

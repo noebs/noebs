@@ -23,7 +23,7 @@ const (
 	PINChangeEndpoint                = "changePin"
 	VoucherCashInEndpoint            = "voucherCashIn"
 	GenerateOTPEndpoint              = "generateOTP"
-	ChangePINEndpoint = "changePin"
+	ChangePINEndpoint                = "changePin"
 )
 
 const EBSMerchantIP = "https://197.16.8.8:8080/EBSGateway/"
@@ -34,9 +34,9 @@ const (
 	BillPaymentTransaction          = "BillPayment"
 	BillInquiryTransaction          = "BillInquiry"
 	CardTransferTransaction         = "CardTransfer"
-	WorkingKeyTransaction                = "WorkingKeyFields"
-	ChangePINTransaction = "ChangePINTransaction"
-	RefundTransaction = "RefundTransaction"
-	CashInTransaction = "CashInTransaction"
-	CashOutTransaction = "CashOutTransaction"
+	WorkingKeyTransaction           = "WorkingKeyFields"
+	ChangePINTransaction            = "ChangePINTransaction"
+	RefundTransaction               = "RefundTransaction"
+	CashInTransaction               = "CashInTransaction"
+	CashOutTransaction              = "CashOutTransaction"
 )
