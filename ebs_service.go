@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
-	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/validations"
@@ -14,13 +11,13 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"gopkg.in/go-playground/validator.v9"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"reflect"
-	"time"
 )
+
+var TEST = false
 
 func GetMainEngine() *gin.Engine {
 
@@ -46,11 +43,16 @@ func init() {
 }
 
 func main() {
-
 	// Logging to a file.
+
 	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
 
+	if local := os.Getenv("EBS_LOCAL_DEV"); local != ""{
+		TEST = true
+	} else{
+		TEST = false
+	}
 	if env := os.Getenv("PORT"); env != "" {
 		GetMainEngine().Run(env)
 	} else {
@@ -925,67 +927,6 @@ func CashIn(c *gin.Context) {
 		} else {
 			c.JSON(code, successfulResponse)
 		}
-	}
-
-}
-
-func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseFields, error) {
-
-	verifyTLS := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	ebsClient := http.Client{
-		Timeout:   30 * time.Second,
-		Transport: verifyTLS,
-	}
-
-	reqBuffer := bytes.NewBuffer(req)
-	var ebsGenericResponse validations.GenericEBSResponseFields
-
-	reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return 500, ebsGenericResponse, err
-	}
-	reqHandler.Header.Set("Content-Type", "application/json")
-	reqHandler.Header.Set("API-Key", "removeme") // For Morsal case only.
-	// EBS doesn't impose any sort of API-keys or anything. Typical EBS.
-
-	ebsResponse, err := ebsClient.Do(reqHandler)
-	if err != nil {
-		return 500, ebsGenericResponse, ebsGatewayConnectivityErr
-	}
-
-	defer ebsResponse.Body.Close()
-
-	responseBody, err := ioutil.ReadAll(ebsResponse.Body)
-	if err != nil {
-		return 500, ebsGenericResponse, ebsGatewayConnectivityErr
-	}
-	log.Println(string(responseBody))
-
-	// check Content-type is application json, if not, panic!
-	if ebsResponse.Header.Get("Content-Type") != "application/json" {
-		// panic
-		return 500, ebsGenericResponse, contentTypeErr
-	}
-	if err := json.Unmarshal(responseBody, ebsGenericResponse); err == nil {
-		// there's no problem in Unmarshalling
-		if ebsGenericResponse.ResponseCode == 0 {
-			// the transaction is successful
-			return 200, ebsGenericResponse, nil
-
-		} else {
-			// there is an error in the transaction
-			err := errors.New(ebsGenericResponse.ResponseMessage)
-			return 400, ebsGenericResponse, err
-		}
-
-	} else {
-		// there is an error in handling the incoming EBS's ebsResponse
-		return 500, ebsGenericResponse, err
 	}
 
 }

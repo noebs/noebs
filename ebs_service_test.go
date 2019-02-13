@@ -94,7 +94,7 @@ func TestEBSHttpClient(t *testing.T) {
 
 	//t.Fatalf("Something went wrong")
 	t.Run("Testing wrong content-types", func(t *testing.T) {
-		url := "https://212.0.129.118/terminal_api/purchase/"
+		url := "https://example.com"
 		payload := getSuccessfulPurchasePayload(validations.PurchaseFields{})
 		fmt.Println(string(payload))
 		_, _, err := EBSHttpClient(url, payload)
