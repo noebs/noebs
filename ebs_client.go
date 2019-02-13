@@ -29,7 +29,7 @@ func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseF
 	reqBuffer := bytes.NewBuffer(req)
 	var ebsGenericResponse validations.GenericEBSResponseFields
 
-	if TEST{
+	if !TEST{
 		reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
 
 		if err != nil {

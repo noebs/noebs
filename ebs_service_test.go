@@ -9,9 +9,23 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
+
+func TestEnv(t *testing.T){
+	// Test that we can read environmental variables correctly.
+	key := "MYKEY"
+	val := "MYVA"
+	if err := os.Setenv(key, val); err != nil{
+		t.Errorf("An error occured: %s", err.Error())
+	}
+
+	if got := os.Getenv(key); got != val{
+		t.Errorf("environmental variable is incorrect. Wanted %s, Got: %s", key, got)
+	}
+}
 
 func TestWorkingKey(t *testing.T) {
 	var workingKeyFields validations.WorkingKeyFields

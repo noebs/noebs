@@ -50,9 +50,13 @@ func main() {
 
 	if local := os.Getenv("EBS_LOCAL_DEV"); local != ""{
 		TEST = true
+		log.Printf("The development flag is %s", local)
 	} else{
 		TEST = false
+		log.Printf("The development flag is %s", local)
+
 	}
+
 	if env := os.Getenv("PORT"); env != "" {
 		GetMainEngine().Run(env)
 	} else {
