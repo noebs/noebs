@@ -35,7 +35,8 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
-	route.Handle(http.MethodGet, "/metrics", promhttp.Handler())
+
+	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	return route
 }
 
