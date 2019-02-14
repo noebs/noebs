@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var TEST = false
@@ -34,6 +35,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
+	route.Handle(http.MethodGet, "/metrics", promhttp.Handler())
 	return route
 }
 
