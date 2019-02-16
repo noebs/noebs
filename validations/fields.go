@@ -12,6 +12,10 @@ type WorkingKeyFields struct {
 	CommonFields
 }
 
+type MiniStatementFields struct{
+	CommonFields
+	CardInfoFields
+}
 type ChangePINFields struct {
 	CommonFields
 	CardInfoFields

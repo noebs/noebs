@@ -10,6 +10,8 @@ type Transaction struct {
 	validations.GenericEBSResponseFields
 }
 
+
+
 //type ChangePIN struct {
 //	gorm.Model
 //	validations.ChangePinFields

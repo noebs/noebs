@@ -39,4 +39,5 @@ const (
 	RefundTransaction               = "RefundTransaction"
 	CashInTransaction               = "CashInTransaction"
 	CashOutTransaction              = "CashOutTransaction"
+	MiniStatementTransaction = "MiniStatementTransaction"
 )

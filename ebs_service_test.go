@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -119,14 +120,17 @@ func TestEBSHttpClient(t *testing.T) {
 	})
 
 	t.Run("Check the return error type is EBSFailedTransactionErr", func(t *testing.T) {
-		url := "https://212.0.129.118/terminal_api/purchase/"
+		url := "https://212.0.129.118/terminal_api/transactions/purchase/"
 		payload := getFailedPurchasePayload(t, validations.PurchaseFields{})
 
 		fmt.Println(string(payload))
 		_, _, err := EBSHttpClient(url, payload)
 
+		fmt.Print(reflect.TypeOf(err))
+
 		if err != ebsFailedTransaction {
-			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, contentTypeErr)
+
+			t.Fatalf("Returned error is not of the correct type. Got: (%s). Wanted: (%s)", reflect.TypeOf(err), contentTypeErr)
 		}
 	})
 

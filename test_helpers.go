@@ -99,8 +99,8 @@ func getFailedPurchasePayload(t *testing.T, service interface{}) []byte {
 	p := populatePurchaseFields(false)
 	p.TranAmount = -32.43
 	fields, err := json.Marshal(p)
-	if err == nil {
-		t.Fatalf("There is an error")
+	if err != nil {
+		t.Fatalf("There is an error: %s", err.Error())
 		return nil
 	}
 	return fields
