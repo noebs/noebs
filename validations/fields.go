@@ -110,6 +110,7 @@ type GenericEBSResponseFields struct {
 	OTPID                  string  `json:"otpId"`
 	TranCurrencyCode       string  `json:"tranCurrencyCode"`
 	EBSServiceName         string
+	WorkingKey string `json:"workingKey"`
 }
 
 type ImportantEBSFields struct {

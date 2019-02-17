@@ -20,7 +20,6 @@ const (
 	CashOutEndpoint                  = "cashOut"
 	GenerateVoucherEndpoint          = "generateVoucher"
 	VoucherCashOutWithAmountEndpoint = "cashOutVoucher"
-	PINChangeEndpoint                = "changePin"
 	VoucherCashInEndpoint            = "voucherCashIn"
 	GenerateOTPEndpoint              = "generateOTP"
 	ChangePINEndpoint                = "changePin"

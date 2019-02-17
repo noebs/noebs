@@ -1,31 +1,52 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/adonese/noebs/validations"
 	"math/rand"
 )
 
-func MockEbsResponse()validations.ImportantEBSFields{
-	code := getEbsErrorCodes()
-	n := getCodesNumber()
-	chosen := rand.Intn(len(n))
+func MockEbsResponse(field interface{}, res *validations.GenericEBSResponseFields){
+	//code := getEbsErrorCodes()
+	//n := getCodesNumber()
+	//chosen := rand.Intn(len(n))
+	//
+	//var status string
+	//
+	//if chosen == 0{
+	//	status = "Successful"
+	//}else{
+	//	status = "Failed"
+	//}
 
-	var status string
 
-	if chosen == 0{
-		status = "Successful"
-	}else{
-		status = "Failed"
-	}
-
-	response := validations.ImportantEBSFields{
-		ResponseMessage:      code[chosen],
-		ResponseStatus:       status,
-		ResponseCode:         chosen,
+	commonFields := validations.ImportantEBSFields{
+		ResponseMessage:      "Successful",
+		ResponseStatus:       "Successful",
+		ResponseCode:         0,
 		ReferenceNumber:      rand.Intn(9999),
 		ApprovalCode:         rand.Intn(9999),
 	}
-	return response
+
+	switch field.(type) {
+
+	case mockCardTransferResponse:
+		res.ToCard = "9223421234567893212"
+
+	case mockWorkingKeyResponse:
+		fmt.Printf("in workingkey")
+		key, _ := getWorkingKey()
+		res.WorkingKey = key
+
+	case mockMiniStatementResponse:
+
+		res.MiniStatementRecords = generateMiniStatement()
+	}
+
+	res.ImportantEBSFields = commonFields
+	res.AdditionalAmount = 544
+
 }
 
 
@@ -63,3 +84,63 @@ func getEbsErrorCodes() ebsCodes {
 func getCodesNumber() []int{
 	return []int{0,103,130,178,158,161,191,194,196,201,205,251,281,338,355,375,362,389,412,413,467}
 }
+
+func getWorkingKey() (string, error){
+
+	return "abcdef0123456789", nil
+}
+
+func generateMiniStatement() string{
+	miniStatement := make(map[string]string)
+
+	var l []map[string]string
+
+	for i := 0; i <= 12; i++ {
+		miniStatement["operationAmount"] = fmt.Sprintf("%03d", rand.Intn(999))
+		miniStatement["operationCode"] = fmt.Sprintf("%03d", rand.Intn(999))
+		miniStatement["operationSign"] = generateSign()
+		miniStatement["operationDate"] = generateDate()
+		l = append(l, miniStatement)
+	}
+
+	s, _ := json.Marshal(l)
+
+	return string(s)
+}
+
+func generateSign() string{
+	i := rand.Intn(2)
+	if i == 0{
+		return "-"
+	}
+	return "+"
+}
+
+func generateDate()string{
+	m := rand.Intn(13)
+	d := rand.Intn(32)
+
+	return fmt.Sprintf("%02d%02d", d, m)
+}
+
+type mockPurchaseResponse struct {
+	validations.ImportantEBSFields
+	validations.GenericEBSResponseFields
+
+}
+
+type mockWorkingKeyResponse struct{
+	validations.ImportantEBSFields
+	validations.GenericEBSResponseFields
+}
+
+type mockMiniStatementResponse struct {
+	validations.ImportantEBSFields
+	validations.GenericEBSResponseFields
+}
+
+type mockCardTransferResponse struct {
+	validations.ImportantEBSFields
+	validations.GenericEBSResponseFields
+}
+

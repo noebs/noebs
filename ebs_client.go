@@ -27,6 +27,7 @@ func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseF
 	}
 
 	reqBuffer := bytes.NewBuffer(req)
+
 	var ebsGenericResponse validations.GenericEBSResponseFields
 
 	if !TEST{
@@ -75,10 +76,30 @@ func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseF
 			return 500, ebsGenericResponse, err
 		}
 
-	}else{
-		//TODO populate EBS Fields
-		ebsGenericResponse.ImportantEBSFields = MockEbsResponse()
+
+	} else {
+		// mock settings.
+
+		MockEbsResponse(urlToMock(url), &ebsGenericResponse)
+		fmt.Printf("the ebs generic respons is %s", ebsGenericResponse.MiniStatementRecords)
 		return 200, ebsGenericResponse, nil
 	}
 
+}
+
+
+func urlToMock(url string) interface{}{
+	if url == EBSMerchantIP + BalanceEndpoint{
+		return mockPurchaseResponse{}
+	} else if url == EBSMerchantIP +PurchaseEndpoint{
+		return mockPurchaseResponse{}
+
+	} else if url == EBSMerchantIP + MiniStatementEndpoint{
+		return mockMiniStatementResponse{}
+
+	} else if url == EBSMerchantIP + WorkingKeyEndpoint{
+		fmt.Printf("i'm here..")
+		return mockWorkingKeyResponse{}
+	}
+	return mockWorkingKeyResponse{}
 }

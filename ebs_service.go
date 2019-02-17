@@ -71,7 +71,7 @@ func main() {
 	}
 
 	if env := os.Getenv("PORT"); env != "" {
-		GetMainEngine().Run(env)
+		GetMainEngine().Run(":"+env)
 	} else {
 		GetMainEngine().Run(":8080")
 	}
@@ -110,20 +110,25 @@ func WorkingKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ErrorResponse{er})
 
 	case reqBodyErr != nil:
+		_, ok := reqBodyErr.(validator.ValidationErrors)
+		if !ok{
+			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
+		} else {
 
-		var details []ErrDetails
+			var details []ErrDetails
 
-		fields, _ := reflect.TypeOf(fields).FieldByName("json")
-		fmt.Printf("The field name is %s", fields.Tag)
+			fields, _ := reflect.TypeOf(fields).FieldByName("json")
+			fmt.Printf("The field name is %s", fields.Tag)
 
-		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+			for _, err := range reqBodyErr.(validator.ValidationErrors) {
 
-			details = append(details, ErrorToString(err))
+				details = append(details, ErrorToString(err))
+			}
+
+			payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
+
+			c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 		}
-
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
-
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
 	case reqBodyErr == nil:
 		// request body was already consumed here. But the request
@@ -993,7 +998,7 @@ func CashIn(c *gin.Context) {
 
 func MiniStatement(c *gin.Context) {
 
-	url := EBSMerchantIP + CashInEndpoint // EBS simulator endpoint url goes here.
+	url := EBSMerchantIP + MiniStatementEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1046,9 +1051,6 @@ func MiniStatement(c *gin.Context) {
 		}
 
 	case reqBodyErr == nil:
-		// request body was already consumed here. But the request
-		// body was bounded to fields struct.
-		// Now, decode the struct into a json, or bytes buffer.
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
@@ -1079,9 +1081,6 @@ func MiniStatement(c *gin.Context) {
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res,
 		}
-		// there are, indeed, different approaches to tackle this problem:
-		// you could have just created a table for each service/endpoint; that would work really well (we used it in Morsal)
-		// but, when you come to filtering using TerminalID, the lies in the problem! It is not easy!
 
 		transaction.EBSServiceName = MiniStatementTransaction
 		// God please make it works.

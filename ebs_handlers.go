@@ -9,7 +9,7 @@ import (
 )
 
 type SuccessfulResponse struct {
-	EBSResponse validations.GenericEBSResponseFields `json:"successful_transaction"`
+	EBSResponse validations.GenericEBSResponseFields `json:"ebs_response"`
 }
 
 type ErrorResponse struct {
