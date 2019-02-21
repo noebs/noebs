@@ -13,8 +13,7 @@ import (
 	"time"
 )
 
-
-
+//EBSHttpClient
 func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseFields, error) {
 
 	verifyTLS := &http.Transport{
