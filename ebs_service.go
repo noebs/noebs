@@ -9,13 +9,13 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gopkg.in/go-playground/validator.v9"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"reflect"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"strings"
 )
 
@@ -44,12 +44,16 @@ func GetMainEngine() *gin.Engine {
 	// -miniStatement
 	// -voucherCashIn
 	// -voucherCashOut
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	env := &Env{db: db}
 
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
 	route.GET("/get_tid", TransactionByTid)
+	route.GET("/get", env.getTransactionbyID)
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	return route
 }
@@ -1076,6 +1080,10 @@ func MiniStatement(c *gin.Context) {
 }
 
 
+type Env struct {
+	db *gorm.DB
+}
+
 func TransactionByTid(c *gin.Context){
 
 	db, err := gorm.Open("sqlite3", "test.db")
@@ -1104,4 +1112,13 @@ func TransactionByTid(c *gin.Context){
 		// or, maybe change to into something like value not provided.
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "not_found"})
 	}
+}
+
+func (e *Env) getTransactionbyID(c *gin.Context){
+	var tran dashboard.Transaction
+	//id := c.Params.ByName("id")
+	err := e.db.Find(&tran).Error; if err != nil{
+		c.AbortWithStatus(404)
+	}
+	c.JSON(200, gin.H{"result": tran.ID})
 }
