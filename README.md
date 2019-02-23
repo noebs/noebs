@@ -1,5 +1,4 @@
-[![Build Status](https://travis-ci.com/adonese/noebs.svg?branch=master)](https://travis-ci.com/adonese/noebs)
-[![codecov](https://codecov.io/gh/adonese/noebs/branch/master/graph/badge.svg)](https://codecov.io/gh/adonese/noebs)
+[![Build Status](https://dev.azure.com/adonese/noebs/_apis/build/status/adonese.noebs?branchName=master)](https://dev.azure.com/adonese/noebs/_build/latest?definitionId=1&branchName=master)
 
 # noebs
 Open source payment gateway that implements (most of) EBS services.
@@ -29,20 +28,10 @@ All of these will be implemented in a microservice archiectural design pattern, 
 
 
 ## Services we offer
-Currently, we provide these services
-- Purchase
-- Working Key
-- Refund
-There are other EBS services that we are aware of, we will add them gradually.
-These services are particulary used since they're the most widely used services if we eventually have proper ecommerce businesses. You'll only need to use these services.
+`noebs` implements *ALL* of EBS merchant services. We are working to extend our support into other EBS services, e.g., consumer services, TITP, etc. However, those other services are not stable and some of them (consumer) are deem to deprecation.
 
-## Our milestones
-- [x] Write this README
-- [x] Add unittestings. Ugggh.
-- [x] Add test coverage
-- [x] Use Travis CI
-- [ ] Add logging
-- [ ] Add DB for storing EBS's transactions
+If YOU are interested in other services, please reach out and we will be more than happy to discuss them with you.
+
 
 # Consultancy
 While everything you see here is very and open source; we don't hide any fees or charges, we expect that some might be interested in a commercial plans. We offer our consultancy services via Gndi. We have a team with variety of proficiency, from backend engineers, mobile developers to UX/UI and QA testing engineers. Some of our team members have worked at EBS, while most of the team have a huge experience in e-payment systems.
