@@ -1,4 +1,4 @@
-package validations
+package ebs_fields
 
 import (
 	"github.com/gin-gonic/gin/binding"
@@ -40,7 +40,7 @@ func (v *DefaultValidator) lazyinit() {
 		v.validate = validator.New()
 		v.validate.SetTagName("binding")
 
-		// add any custom validations etc. here
+		// add any custom ebs_fields etc. here
 		err := v.validate.RegisterValidation("iso8601", iso8601)
 		if err != nil {
 			log.Fatalf("Unexpected err %v", err)

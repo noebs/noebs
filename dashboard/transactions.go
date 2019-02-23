@@ -1,14 +1,14 @@
 package dashboard
 
 import (
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 )
 
 type Transaction struct {
 	gorm.Model
-	validations.GenericEBSResponseFields
+	ebs_fields.GenericEBSResponseFields
 }
 
 
@@ -56,20 +56,20 @@ func (s *Server) getCustomers(w http.ResponseWriter, r *http.Request, _ httprout
 
 //type ChangePIN struct {
 //	gorm.Model
-//	validations.ChangePinFields
+//	ebs_fields.ChangePinFields
 //}
 //
 //type CardTransfer struct {
 //	gorm.Model
-//	validations.CardTransferFields
+//	ebs_fields.CardTransferFields
 //}
 //
 //type BillPayment struct {
 //	gorm.Model
-//	validations.BillPaymentFields
+//	ebs_fields.BillPaymentFields
 //}
 //
 //type BillInquiry struct {
 //	gorm.Model
-//	validations.BillPaymentFields
+//	ebs_fields.BillPaymentFields
 //}

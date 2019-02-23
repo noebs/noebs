@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,7 +14,7 @@ import (
 )
 
 //EBSHttpClient
-func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseFields, error) {
+func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFields, error) {
 
 	verifyTLS := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -27,7 +27,7 @@ func EBSHttpClient(url string, req []byte) (int, validations.GenericEBSResponseF
 
 	reqBuffer := bytes.NewBuffer(req)
 
-	var ebsGenericResponse validations.GenericEBSResponseFields
+	var ebsGenericResponse ebs_fields.GenericEBSResponseFields
 
 	if !TEST{
 		reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)

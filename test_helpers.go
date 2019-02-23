@@ -2,20 +2,20 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-func populatePurchaseFields(missing bool) validations.PurchaseFields {
+func populatePurchaseFields(missing bool) ebs_fields.PurchaseFields {
 	//FIXME
 	// accept the required transaction as an interface and return a struct.
 
 	// this should be a generic function for all fields
 	// it should also respects each struct types
 	// lets test populating purchase fields
-	fields := validations.PurchaseFields{
+	fields := ebs_fields.PurchaseFields{
 		populateWorkingKeyFields(), populateCardInfoFields(),
 		populateAmountFields(),
 	}
@@ -27,10 +27,10 @@ func populatePurchaseFields(missing bool) validations.PurchaseFields {
 	return fields
 }
 
-func populateCardTransferFields() validations.CardTransferFields {
+func populateCardTransferFields() ebs_fields.CardTransferFields {
 	toCard := "1234567891234567"
 
-	f := validations.CardTransferFields{
+	f := ebs_fields.CardTransferFields{
 		CommonFields:   populateCommmonFields(),
 		CardInfoFields: populateCardInfoFields(),
 		AmountFields:   populateAmountFields(),
@@ -40,15 +40,15 @@ func populateCardTransferFields() validations.CardTransferFields {
 	return f
 }
 
-func populateWorkingKeyFields() validations.WorkingKeyFields {
-	f := validations.WorkingKeyFields{
+func populateWorkingKeyFields() ebs_fields.WorkingKeyFields {
+	f := ebs_fields.WorkingKeyFields{
 		CommonFields: populateCommmonFields(),
 	}
 	return f
 }
 
-func populateCommmonFields() validations.CommonFields {
-	f := validations.CommonFields{
+func populateCommmonFields() ebs_fields.CommonFields {
+	f := ebs_fields.CommonFields{
 		TerminalID:             "12345678",
 		TranDateTime:           time.Now().UTC().String(),
 		SystemTraceAuditNumber: rand.Int(),
@@ -57,8 +57,8 @@ func populateCommmonFields() validations.CommonFields {
 	return f
 }
 
-func populateCardInfoFields() validations.CardInfoFields {
-	f := validations.CardInfoFields{
+func populateCardInfoFields() ebs_fields.CardInfoFields {
+	f := ebs_fields.CardInfoFields{
 		Pin:     "1234",
 		Pan:     "1234567891234567",
 		Expdate: "2209",
@@ -66,10 +66,10 @@ func populateCardInfoFields() validations.CardInfoFields {
 	return f
 }
 
-func populateAmountFields() validations.AmountFields {
+func populateAmountFields() ebs_fields.AmountFields {
 	currencyCode := "SDG"
 	amount := 32.43
-	f := validations.AmountFields{
+	f := ebs_fields.AmountFields{
 		TranCurrencyCode: currencyCode,
 		TranAmount:       float32(amount),
 	}
@@ -79,7 +79,7 @@ func populateAmountFields() validations.AmountFields {
 func getSuccessfulPurchasePayload(service interface{}) []byte {
 
 	// get the purchase struct only, try to generalize it later
-	if _, ok := service.(validations.PurchaseFields); ok {
+	if _, ok := service.(ebs_fields.PurchaseFields); ok {
 		f := populatePurchaseFields(false)
 		jsonFields, err := json.Marshal(f)
 

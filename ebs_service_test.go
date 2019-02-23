@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"net/http"
@@ -29,7 +29,7 @@ func TestEnv(t *testing.T){
 }
 
 func TestWorkingKey(t *testing.T) {
-	var workingKeyFields validations.WorkingKeyFields
+	var workingKeyFields ebs_fields.WorkingKeyFields
 	workingKeyFields.ClientID = "noebs"
 	workingKeyFields.TerminalID = "12345678"
 	workingKeyFields.TranDateTime = time.Now().UTC().String()
@@ -110,7 +110,7 @@ func TestEBSHttpClient(t *testing.T) {
 	//t.Fatalf("Something went wrong")
 	t.Run("Testing wrong content-types", func(t *testing.T) {
 		url := "https://example.com"
-		payload := getSuccessfulPurchasePayload(validations.PurchaseFields{})
+		payload := getSuccessfulPurchasePayload(ebs_fields.PurchaseFields{})
 		fmt.Println(string(payload))
 		_, _, err := EBSHttpClient(url, payload)
 
@@ -121,7 +121,7 @@ func TestEBSHttpClient(t *testing.T) {
 
 	t.Run("Check the return error type is EBSFailedTransactionErr", func(t *testing.T) {
 		url := "https://212.0.129.118/terminal_api/transactions/purchase/"
-		payload := getFailedPurchasePayload(t, validations.PurchaseFields{})
+		payload := getFailedPurchasePayload(t, ebs_fields.PurchaseFields{})
 
 		fmt.Println(string(payload))
 		_, _, err := EBSHttpClient(url, payload)

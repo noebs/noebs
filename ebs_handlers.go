@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"time"
 )
 
 type SuccessfulResponse struct {
-	EBSResponse validations.GenericEBSResponseFields `json:"ebs_response"`
+	EBSResponse ebs_fields.GenericEBSResponseFields `json:"ebs_response"`
 }
 
 type ErrorResponse struct {

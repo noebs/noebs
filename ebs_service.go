@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
@@ -57,7 +57,7 @@ func GetMainEngine() *gin.Engine {
 
 func init() {
 	// register the new validator
-	binding.Validator = new(validations.DefaultValidator)
+	binding.Validator = new(ebs_fields.DefaultValidator)
 }
 
 func main() {
@@ -105,7 +105,7 @@ func WorkingKey(c *gin.Context) {
 		log.Printf("there is an error in migration %v. Msg: %s", err, err.Error)
 	}
 
-	var fields= validations.WorkingKeyFields{}
+	var fields= ebs_fields.WorkingKeyFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -187,7 +187,7 @@ func Purchase(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.PurchaseFields{}
+	var fields = ebs_fields.PurchaseFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -300,7 +300,7 @@ func CardTransfer(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.CardTransferFields{}
+	var fields = ebs_fields.CardTransferFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -416,7 +416,7 @@ func BillInquiry(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.BillInquiryFields{}
+	var fields = ebs_fields.BillInquiryFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -531,7 +531,7 @@ func BillPayment(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.BillPaymentFields{}
+	var fields = ebs_fields.BillPaymentFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -647,7 +647,7 @@ func ChangePIN(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.ChangePINFields{}
+	var fields = ebs_fields.ChangePINFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -757,7 +757,7 @@ func CashOut(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.CashOutFields{}
+	var fields = ebs_fields.CashOutFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -873,7 +873,7 @@ func CashIn(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.CashInFields{}
+	var fields = ebs_fields.CashInFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -989,7 +989,7 @@ func MiniStatement(c *gin.Context) {
 		log.Printf("there is an error in migration %v", err.Error)
 	}
 
-	var fields = validations.MiniStatementFields{}
+	var fields = ebs_fields.MiniStatementFields{}
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -1110,8 +1110,8 @@ func MakeDummyTransaction(c *gin.Context){
 	}
 
 	tran := dashboard.Transaction{
-		GenericEBSResponseFields: validations.GenericEBSResponseFields{
-			ImportantEBSFields:     validations.ImportantEBSFields{},
+		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{
+			ImportantEBSFields:     ebs_fields.ImportantEBSFields{},
 			TerminalID:             "08000002",
 			TranDateTime:           time.Now().UTC().String(),
 			SystemTraceAuditNumber: rand.Intn(9999),

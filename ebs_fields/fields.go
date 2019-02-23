@@ -1,4 +1,4 @@
-package validations
+package ebs_fields
 
 import (
 	"gopkg.in/go-playground/validator.v9"

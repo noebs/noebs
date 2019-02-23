@@ -3,11 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/validations"
+	"github.com/adonese/noebs/ebs_fields"
 	"math/rand"
 )
 
-func MockEbsResponse(field interface{}, res *validations.GenericEBSResponseFields){
+func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields){
 	//code := getEbsErrorCodes()
 	//n := getCodesNumber()
 	//chosen := rand.Intn(len(n))
@@ -21,7 +21,7 @@ func MockEbsResponse(field interface{}, res *validations.GenericEBSResponseField
 	//}
 
 
-	commonFields := validations.ImportantEBSFields{
+	commonFields := ebs_fields.ImportantEBSFields{
 		ResponseMessage:      "Successful",
 		ResponseStatus:       "Successful",
 		ResponseCode:         0,
@@ -124,23 +124,23 @@ func generateDate()string{
 }
 
 type mockPurchaseResponse struct {
-	validations.ImportantEBSFields
-	validations.GenericEBSResponseFields
+	ebs_fields.ImportantEBSFields
+	ebs_fields.GenericEBSResponseFields
 
 }
 
 type mockWorkingKeyResponse struct{
-	validations.ImportantEBSFields
-	validations.GenericEBSResponseFields
+	ebs_fields.ImportantEBSFields
+	ebs_fields.GenericEBSResponseFields
 }
 
 type mockMiniStatementResponse struct {
-	validations.ImportantEBSFields
-	validations.GenericEBSResponseFields
+	ebs_fields.ImportantEBSFields
+	ebs_fields.GenericEBSResponseFields
 }
 
 type mockCardTransferResponse struct {
-	validations.ImportantEBSFields
-	validations.GenericEBSResponseFields
+	ebs_fields.ImportantEBSFields
+	ebs_fields.GenericEBSResponseFields
 }
 
