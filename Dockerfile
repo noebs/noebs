@@ -10,6 +10,9 @@ RUN go get github.com/adonese/noebs
 
 COPY /go/src/github.com/adonese/noebs /go
 
+WORKDIR /go/noebs
+RUN go build .
+
 CMD ["/go/noebs"]
 
 EXPOSE 8080
