@@ -13,15 +13,16 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
+	"time"
 )
 
 var TEST = false
 
-var server dashboard.Server
 
 func GetMainEngine() *gin.Engine {
 
@@ -31,6 +32,7 @@ func GetMainEngine() *gin.Engine {
 
 	// TODO
 	// Add the rest of EBS merchant services.
+
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -40,21 +42,16 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/billPayment", BillPayment)
 	route.POST("/changePin", ChangePIN)
 	route.POST("/miniStatement", MiniStatement)
-	//add
-	// -miniStatement
-	// -voucherCashIn
-	// -voucherCashOut
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	env := &Env{db: db}
 
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
 	route.GET("/get_tid", TransactionByTid)
-	route.GET("/get", env.getTransactionbyID)
+	route.GET("/get", TransactionByTid)
+	route.GET("/create", MakeDummyTransaction)
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	return route
 }
 
@@ -93,13 +90,14 @@ func WorkingKey(c *gin.Context) {
 
 	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	db, err := server.GetDB()
+	db, _ := gorm.Open("sqlite3", "test.db")
 
-	if err != nil {
-		log.Fatalf("Unable to connect to DB: %v", err)
-	}
+	env := &dashboard.Env{Db: db}
 
-	defer db.Close()
+	defer env.Db.Close()
+
+	db.AutoMigrate(&dashboard.Transaction{})
+
 
 	db.LogMode(false)
 
@@ -1080,45 +1078,66 @@ func MiniStatement(c *gin.Context) {
 }
 
 
-type Env struct {
-	db *gorm.DB
-}
 
 func TransactionByTid(c *gin.Context){
 
-	db, err := gorm.Open("sqlite3", "test.db")
-	if err != nil{
-		log.Fatalf("there is an error: %v", err)
-	}
-	defer db.Close()
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	env := &dashboard.Env{Db: db}
+
+	defer env.Db.Close()
 
 	db.AutoMigrate(&dashboard.Transaction{})
-	var res dashboard.Transaction
 
-	query := c.Request.URL.Query()
-
-	if id, ok := query["tid"]; ok {
-		// he has sent something
-
-		if err := db.Where(&dashboard.Transaction{
-			GenericEBSResponseFields: validations.GenericEBSResponseFields{TerminalID:id[0]},
-		}).Find(&res).Error; err != nil{
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"object_not_found": id, "error": err.Error()})
-		}else{
-			c.JSON(200, gin.H{"result": res.TerminalID})
-		}
-
-	}else{
-		// or, maybe change to into something like value not provided.
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "not_found"})
-	}
-}
-
-func (e *Env) getTransactionbyID(c *gin.Context){
 	var tran dashboard.Transaction
+	var count interface{}
 	//id := c.Params.ByName("id")
-	err := e.db.Find(&tran).Error; if err != nil{
+	err := env.Db.Model(&tran).Count(&count).Error; if err != nil{
 		c.AbortWithStatus(404)
 	}
-	c.JSON(200, gin.H{"result": tran.ID})
+	c.JSON(200, gin.H{"result": count})
+}
+
+
+func MakeDummyTransaction(c *gin.Context){
+
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	env := &dashboard.Env{Db: db}
+
+	if err := env.Db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil{
+		log.Fatalf("unable to automigrate: %s", err.Error())
+	}
+
+	tran := dashboard.Transaction{
+		GenericEBSResponseFields: validations.GenericEBSResponseFields{
+			ImportantEBSFields:     validations.ImportantEBSFields{},
+			TerminalID:             "08000002",
+			TranDateTime:           time.Now().UTC().String(),
+			SystemTraceAuditNumber: rand.Intn(9999),
+			ClientID:               "Morsa",
+			PAN:                    "123457894647372",
+			AdditionalData:         "",
+			ServiceID:              "",
+			TranFee:                0,
+			AdditionalAmount:       0,
+			TranAmount:             0,
+			PhoneNumber:            "",
+			FromAccount:            "",
+			ToAccount:              "",
+			FromCard:               "",
+			ToCard:                 "",
+			OTP:                    "",
+			OTPID:                  "",
+			TranCurrencyCode:       "",
+			EBSServiceName:         "",
+			WorkingKey:             "",
+		},
+	}
+
+	if err := env.Db.Create(&tran).Error; err != nil{
+		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
+	}else {
+		c.JSON(200, gin.H{"message": "object create successfully."})
+	}
 }

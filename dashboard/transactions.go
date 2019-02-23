@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"github.com/adonese/noebs/validations"
+	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 )
 
@@ -10,27 +11,23 @@ type Transaction struct {
 	validations.GenericEBSResponseFields
 }
 
-type Server struct{
-	db *gorm.DB
+
+
+type Env struct {
+	Db *gorm.DB
 }
 
-func (s *Server) GetDB() (*gorm.DB, error){
-	db, err := gorm.Open("sqlite3", "test.db")
-	if err != nil{
-		return nil, err
+func (e *Env) GetTransactionbyID(c *gin.Context){
+	var tran Transaction
+	//id := c.Params.ByName("id")
+	err := e.Db.Find(&tran).Error; if err != nil{
+		c.AbortWithStatus(404)
 	}
-	return db, nil
-}
-func (s *Server) Get(id string) ([]Transaction, error){
+	c.JSON(200, gin.H{"result": tran.ID})
 
-	var res []Transaction
-	if err := s.db.Where(&Transaction{
-		GenericEBSResponseFields: validations.GenericEBSResponseFields{TerminalID:id},
-	}).Find(&res).Error; err != nil {
-		return nil, err
-	}
-	return res, nil
+	defer e.Db.Close()
 }
+
 
 
 /*

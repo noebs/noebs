@@ -91,10 +91,10 @@ func iso8601(fl validator.FieldLevel) bool {
 type GenericEBSResponseFields struct {
 	ImportantEBSFields
 
-	TerminalID             string  `json:"terminalId" gorm:"unique_index"`
+	TerminalID             string  `json:"terminalId" gorm:"index"`
 	TranDateTime           string  `json:"tranDateTime"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber"`
-	ClientID               string  `json:"clientId" gorm:"unique_index"`
+	ClientID               string  `json:"clientId" gorm:"index"`
 	PAN                    string  `json:"PAN"`
 	AdditionalData         string  `json:"additionalData"`
 	ServiceID              string  `json:"serviceId"`
