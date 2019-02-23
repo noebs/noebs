@@ -11,4 +11,4 @@ COPY /go/src/github.com/adonese/noebs /go
 
 CMD ["/go/noebs"]
 
-EXPOSE["8080:8080"]
+EXPOSE ["8080"]
