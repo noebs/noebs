@@ -8,7 +8,6 @@ RUN apk add build-base
 ADD https://api.github.com/repos/adonese/noebs/git/refs/heads/master version.json
 RUN go get github.com/adonese/noebs
 
-RUN mkdir /go
 COPY /go/src/github.com/adonese/noebs /go
 
 CMD ["/go/noebs"]
