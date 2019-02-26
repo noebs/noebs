@@ -14,6 +14,35 @@ There are many reasons why I started this project. On one hand people can happil
 - a middleware for a many is major entry burden. Well, you have a free one now.
 - having a strong e-payment ecosystem will benefit all of us.
 
+# How to use noebs
+There are different ways to use noebs:
+## Building with `go get` command [not recommended]
+- make sure you have Go installed (Consult go website to see various ways to install go)[https://golang.org]
+- Then
+```shell
+# this command may likely takes along time depending on your internet connections.
+# also, make sure you are using a vpn since some of the libraries are hosted in GCE hosting which forbids Sudan
+$ go get github.com/adonese/noebs
+$ cd $GOPATH/github.com/adonese/noebs
+$ go build .
+```
+You will have a binary that after running it will spawn a production ready server!
+
+## Building using Docker and docker-compose
+We provide an easier way to build and run noebs using Docker.
+- Fork this repository (e.g., `git clone https://github.com/adonese/noebs`)
+- `cd` to noebs root directory (E.g., $HOME/src/noebs)
+- `docker build -t noebs .`  # -t for giving it a name
+- `docker run -it -p 8000:8000 noebs:latest`
+- Open `localhost:8000/test` in your broswer to interact with noebs
+
+## Notes on installation
+noebs needs to be connected with EBS merchant server in order to get useful responses. *However, you can run our embedded server that mocks EBS responses in cases where you cannot reach EBS server*. To do that, you need to enable the development mode using a special env var, `EBS_LOCAL_DEV`. In the manual installation, you can do this (after building the binary). You need to set `EBS_LOCAL_DEV=1` in order to use the mocking functionality.
+
+```shell
+$ export EBS_LOCAL_DEV=1 noebs
+```
+
 # This project philosophy
 noebs is not meant to be a full e-payment framework (e.g., unlike Morsal). It is meant as a generic e-payment gateway system. Currently, it implements EBS services, but we might add new gateway. Being such, adapts to Unix philosophy; doing one thing and do it good. Also, with our experience with embedded devices, working with authorizations and handling all of these headers and tokens (esp. JWT ones) has proven to be challenging as simply some of the older models cannot handle lengthy headers.
 You can however have this system architecture, suppose that you're building a mobile payment application system:

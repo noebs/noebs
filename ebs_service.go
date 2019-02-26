@@ -129,7 +129,6 @@ func WorkingKey(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			log.Fatalf("unable to parse the request %v, error: %v", string(jsonBuffer), bindingErr)
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
 
