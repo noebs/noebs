@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-//EBSHttpClient
+//EBSHttpClient the client to interact with EBS
 func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFields, error) {
 
 	verifyTLS := &http.Transport{
@@ -29,7 +29,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 	var ebsGenericResponse ebs_fields.GenericEBSResponseFields
 
-	if !TEST{
+	if !UseMockServer {
 		reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
 
 		if err != nil {

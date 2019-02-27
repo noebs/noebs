@@ -1,3 +1,6 @@
+/*
+The main entry point for noebs services.
+ */
 package main
 
 import (
@@ -21,7 +24,7 @@ import (
 	"time"
 )
 
-var TEST = false
+var UseMockServer = false
 
 
 func GetMainEngine() *gin.Engine {
@@ -67,10 +70,10 @@ func main() {
 	gin.DefaultWriter = io.MultiWriter(f)
 
 	if local := os.Getenv("EBS_LOCAL_DEV"); local != ""{
-		TEST = true
+		UseMockServer = true
 		log.Printf("The development flag is %s", local)
 	} else{
-		TEST = false
+		UseMockServer = false
 		log.Printf("The development flag is %s", local)
 
 	}

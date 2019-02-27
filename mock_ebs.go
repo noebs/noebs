@@ -9,26 +9,27 @@ import (
 
 func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields){
 	//code := getEbsErrorCodes()
-	//n := getCodesNumber()
-	//chosen := rand.Intn(len(n))
-	//
-	//var status string
-	//
-	//if chosen == 0{
-	//	status = "Successful"
-	//}else{
-	//	status = "Failed"
-	//}
+	n := getCodesNumber()
+	chosen := rand.Intn(len(n))
+
+	var status string
+
+	if chosen == 0{
+		status = "Successful"
+	}else{
+		status = "Failed"
+	}
 
 
 	commonFields := ebs_fields.ImportantEBSFields{
 		ResponseMessage:      "Successful",
-		ResponseStatus:       "Successful",
+		ResponseStatus:       status,
 		ResponseCode:         0,
 		ReferenceNumber:      rand.Intn(9999),
 		ApprovalCode:         rand.Intn(9999),
 	}
 
+	res.ImportantEBSFields = commonFields
 	switch field.(type) {
 
 	case mockCardTransferResponse:
@@ -44,8 +45,9 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 		res.MiniStatementRecords = generateMiniStatement()
 	}
 
-	res.ImportantEBSFields = commonFields
+	//res.ImportantEBSFields = commonFields
 	res.AdditionalAmount = 544
+	//res.MiniStatementRecords = generateMiniStatement()
 
 }
 
