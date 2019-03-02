@@ -1,4 +1,4 @@
-package gateway
+package main
 
 func main() {
 	// Write the test cases you want to imploy here...

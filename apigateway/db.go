@@ -1,4 +1,4 @@
-package gateway
+package main
 
 import (
 	"github.com/jinzhu/gorm"
@@ -7,7 +7,7 @@ import (
 
 type Service struct {
 	gorm.Model
-	ServiceName string `gorm:"unqiue_index"`
+	ServiceName string `gorm:"index"`
 	Password    string
 	JWT         JWT
 	JWTID       int
