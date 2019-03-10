@@ -1,4 +1,4 @@
-package main
+package gateway
 
 import (
 	"github.com/jinzhu/gorm"

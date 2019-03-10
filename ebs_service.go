@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,6 +54,7 @@ func GetMainEngine() *gin.Engine {
 	route.GET("/get_tid", TransactionByTid)
 	route.GET("/get", TransactionByTid)
 	route.GET("/create", MakeDummyTransaction)
+	route.GET("/all", GetAll)
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	return route
@@ -1142,4 +1144,31 @@ func MakeDummyTransaction(c *gin.Context){
 	}else {
 		c.JSON(200, gin.H{"message": "object create successfully."})
 	}
+}
+
+
+func GetAll(c *gin.Context) {
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	env := &dashboard.Env{Db: db}
+
+	defer env.Db.Close()
+
+	limit := 20
+
+	db.AutoMigrate(&dashboard.Transaction{})
+
+	qparam, ok := c.GetQuery("page")
+	if !ok{
+		// hack to make it works
+		qparam = "0"
+	}
+	p, _ := strconv.Atoi(qparam)
+
+	var tran []dashboard.Transaction
+	// just really return anything, even empty ones.
+	// or, not?
+	env.Db.Order("id desc").Limit(p+limit).Where("id = ?", p).Find(&tran)
+
+	c.JSON(200, gin.H{"result": tran})
 }

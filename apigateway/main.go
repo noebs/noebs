@@ -211,6 +211,8 @@ func GetServiceID(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": "this object is available"})
 }
 
+
+
 var (
 	serverError       = errors.New("unable to connect to the DB")
 	ErrCreateDbRow    = errors.New("unable to create a new db row/column")
