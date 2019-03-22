@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
-	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -107,8 +106,8 @@ func init() {
 // @scope.admin Grants read and write access to administrative information
 
 func main() {
+
 	// Logging to a file.
-	docs.SwaggerInfo.Title = "noebs Docs!"
 	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
 
