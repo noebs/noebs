@@ -1,32 +1,28 @@
-/*
-The main entry point for noebs services.
- */
 package main
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/swaggo/gin-swagger"
+	"github.com/swaggo/gin-swagger/swaggerFiles"
 	"gopkg.in/go-playground/validator.v9"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
-	"time"
 )
 
 var UseMockServer = false
-
 
 func GetMainEngine() *gin.Engine {
 
@@ -51,12 +47,15 @@ func GetMainEngine() *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
-	route.GET("/get_tid", TransactionByTid)
-	route.GET("/get", TransactionByTid)
-	route.GET("/create", MakeDummyTransaction)
-	route.GET("/all", GetAll)
-	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
-
+	dashboardGroup := route.Group("/dashboard")
+	{
+		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
+		dashboardGroup.GET("/get", dashboard.TransactionByTid)
+		dashboardGroup.GET("/create", dashboard.MakeDummyTransaction)
+		dashboardGroup.GET("/all", dashboard.GetAll)
+		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	}
+	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	return route
 }
 
@@ -65,25 +64,67 @@ func init() {
 	binding.Validator = new(ebs_fields.DefaultValidator)
 }
 
+// @title noebs Example API
+// @version 1.0
+// @description This is a sample server celler server.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.basic BasicAuth
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
+// @securitydefinitions.oauth2.application OAuth2Application
+// @tokenUrl https://example.com/oauth/token
+// @scope.write Grants write access
+// @scope.admin Grants read and write access to administrative information
+
+// @securitydefinitions.oauth2.implicit OAuth2Implicit
+// @authorizationurl https://example.com/oauth/authorize
+// @scope.write Grants write access
+// @scope.admin Grants read and write access to administrative information
+
+// @securitydefinitions.oauth2.password OAuth2Password
+// @tokenUrl https://example.com/oauth/token
+// @scope.read Grants read access
+// @scope.write Grants write access
+// @scope.admin Grants read and write access to administrative information
+
+// @securitydefinitions.oauth2.accessCode OAuth2AccessCode
+// @tokenUrl https://example.com/oauth/token
+// @authorizationurl https://example.com/oauth/authorize
+// @scope.admin Grants read and write access to administrative information
+
 func main() {
 	// Logging to a file.
-
+	docs.SwaggerInfo.Title = "noebs Docs!"
 	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
 
-	if local := os.Getenv("EBS_LOCAL_DEV"); local != ""{
+	if local := os.Getenv("EBS_LOCAL_DEV"); local != "" {
 		UseMockServer = true
 		log.Printf("The development flag is %s", local)
-	} else{
+	} else {
 		UseMockServer = false
 		log.Printf("The development flag is %s", local)
 
 	}
 
 	if env := os.Getenv("PORT"); env != "" {
-		if !strings.HasPrefix(env, ":"){
+		if !strings.HasPrefix(env, ":") {
 			env += ":"
-		}else {
+		} else {
 			GetMainEngine().Run(env)
 		}
 	} else {
@@ -91,6 +132,17 @@ func main() {
 	}
 }
 
+// WorkingKey godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param workingKey body ebs_fields.WorkingKeyFields true "Working Key Request Fields"
+// @Success 200 {array} ebs_fields.WorkingKeyFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /workingKey [post]
 func WorkingKey(c *gin.Context) {
 
 	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
@@ -103,14 +155,13 @@ func WorkingKey(c *gin.Context) {
 
 	db.AutoMigrate(&dashboard.Transaction{})
 
-
 	db.LogMode(false)
 
 	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.Printf("there is an error in migration %v. Msg: %s", err, err.Error)
 	}
 
-	var fields= ebs_fields.WorkingKeyFields{}
+	var fields = ebs_fields.WorkingKeyFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -147,7 +198,7 @@ func WorkingKey(c *gin.Context) {
 			GenericEBSResponseFields: res,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = WorkingKeyTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -162,7 +213,7 @@ func WorkingKey(c *gin.Context) {
 
 			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
 			c.JSON(code, payload)
-		}else {
+		} else {
 			c.JSON(code, successfulResponse)
 		}
 
@@ -170,6 +221,18 @@ func WorkingKey(c *gin.Context) {
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
+
+// Purchase godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
+// @Success 200 {array} main.SuccessfulResponse
+// @Failure 400 {object} main.ErrorDetails
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /purchase [post]
 func Purchase(c *gin.Context) {
 	url := EBSMerchantIP + PurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -195,7 +258,6 @@ func Purchase(c *gin.Context) {
 
 	reqBodyErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
-
 	switch {
 
 	case reqBodyErr == io.EOF:
@@ -205,20 +267,20 @@ func Purchase(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
-		var details []ErrDetails
+			var details []ErrDetails
 
-		for _, err := range reqBodyErr.(validator.ValidationErrors) {
+			for _, err := range reqBodyErr.(validator.ValidationErrors) {
 
-			details = append(details, ErrorToString(err))
-		}
+				details = append(details, ErrorToString(err))
+			}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
+			payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields valiation error", Status: BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+			c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 		}
 
 	case reqBodyErr == nil:
@@ -282,6 +344,17 @@ func Purchase(c *gin.Context) {
 	}
 }
 
+// CardTransfer godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param cardTransfer body ebs_fields.CardTransferFields true "Card Transfer Request Fields"
+// @Success 200 {array} ebs_fields.CardTransferFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /cardTransfer [post]
 func CardTransfer(c *gin.Context) {
 
 	url := EBSMerchantIP + CardTransferEndpoint // EBS simulator endpoint url goes here.
@@ -317,9 +390,9 @@ func CardTransfer(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -398,6 +471,17 @@ func CardTransfer(c *gin.Context) {
 
 }
 
+// BillInquiry godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param billInquiry body ebs_fields.BillInquiryFields true "Bill Inquiry Request Fields"
+// @Success 200 {array} ebs_fields.BillInquiryFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /billInquiry [post]
 func BillInquiry(c *gin.Context) {
 
 	url := EBSMerchantIP + BillInquiryEndpoint // EBS simulator endpoint url goes here.
@@ -432,9 +516,9 @@ func BillInquiry(c *gin.Context) {
 
 	case reqBodyErr != nil:
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -513,6 +597,17 @@ func BillInquiry(c *gin.Context) {
 
 }
 
+// BillPayment godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param billPayment body ebs_fields.BillPaymentFields true "Bill Payment Request Fields"
+// @Success 200 {array} ebs_fields.BillPaymentFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /billPayment [post]
 func BillPayment(c *gin.Context) {
 
 	url := EBSMerchantIP + BillPaymentEndpoint // EBS simulator endpoint url goes here.
@@ -548,9 +643,9 @@ func BillPayment(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -629,6 +724,17 @@ func BillPayment(c *gin.Context) {
 
 }
 
+// ChangePIN godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param changePIN body ebs_fields.ChangePINFields true "Change PIN Request Fields"
+// @Success 200 {array} ebs_fields.ChangePINFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /changePin [post]
 func ChangePIN(c *gin.Context) {
 
 	url := EBSMerchantIP + ChangePINEndpoint // EBS simulator endpoint url goes here.
@@ -664,9 +770,9 @@ func ChangePIN(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -740,6 +846,17 @@ func ChangePIN(c *gin.Context) {
 
 }
 
+// CashOut godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param cashOut body ebs_fields.CashOutFields true "Cash Out Request Fields"
+// @Success 200 {array} ebs_fields.CashOutFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /cashOut [post]
 func CashOut(c *gin.Context) {
 
 	url := EBSMerchantIP + CashOutEndpoint // EBS simulator endpoint url goes here.
@@ -774,9 +891,9 @@ func CashOut(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -855,6 +972,17 @@ func CashOut(c *gin.Context) {
 
 }
 
+// CashIn godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
+// @Success 200 {array} ebs_fields.CashInFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /cashIn [post]
 func CashIn(c *gin.Context) {
 
 	url := EBSMerchantIP + CashInEndpoint // EBS simulator endpoint url goes here.
@@ -890,9 +1018,9 @@ func CashIn(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -971,6 +1099,17 @@ func CashIn(c *gin.Context) {
 
 }
 
+// MiniStatement godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param miniStatement body ebs_fields.MiniStatementFields true "Mini Statement Request Fields"
+// @Success 200 {array} ebs_fields.MiniStatementFields
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /miniStatement [post]
 func MiniStatement(c *gin.Context) {
 
 	url := EBSMerchantIP + MiniStatementEndpoint // EBS simulator endpoint url goes here.
@@ -1006,9 +1145,9 @@ func MiniStatement(c *gin.Context) {
 	case reqBodyErr != nil:
 
 		_, ok := reqBodyErr.(validator.ValidationErrors)
-		if !ok{
+		if !ok {
 			c.AbortWithStatusJSON(400, gin.H{"test_error": reqBodyErr.Error()})
-		}else{
+		} else {
 
 			var details []ErrDetails
 
@@ -1079,96 +1218,4 @@ func MiniStatement(c *gin.Context) {
 		}
 	}
 
-}
-
-
-
-func TransactionByTid(c *gin.Context){
-
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	env := &dashboard.Env{Db: db}
-
-	defer env.Db.Close()
-
-	db.AutoMigrate(&dashboard.Transaction{})
-
-	var tran dashboard.Transaction
-	var count interface{}
-	//id := c.Params.ByName("id")
-	err := env.Db.Model(&tran).Count(&count).Error; if err != nil{
-		c.AbortWithStatus(404)
-	}
-	c.JSON(200, gin.H{"result": count})
-}
-
-
-func MakeDummyTransaction(c *gin.Context){
-
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	env := &dashboard.Env{Db: db}
-
-	if err := env.Db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil{
-		log.Fatalf("unable to automigrate: %s", err.Error())
-	}
-
-	tran := dashboard.Transaction{
-		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{
-			ImportantEBSFields:     ebs_fields.ImportantEBSFields{},
-			TerminalID:             "08000002",
-			TranDateTime:           time.Now().UTC().String(),
-			SystemTraceAuditNumber: rand.Intn(9999),
-			ClientID:               "Morsa",
-			PAN:                    "123457894647372",
-			AdditionalData:         "",
-			ServiceID:              "",
-			TranFee:                0,
-			AdditionalAmount:       0,
-			TranAmount:             0,
-			PhoneNumber:            "",
-			FromAccount:            "",
-			ToAccount:              "",
-			FromCard:               "",
-			ToCard:                 "",
-			OTP:                    "",
-			OTPID:                  "",
-			TranCurrencyCode:       "",
-			EBSServiceName:         "",
-			WorkingKey:             "",
-		},
-	}
-
-	if err := env.Db.Create(&tran).Error; err != nil{
-		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
-	}else {
-		c.JSON(200, gin.H{"message": "object create successfully."})
-	}
-}
-
-
-func GetAll(c *gin.Context) {
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	env := &dashboard.Env{Db: db}
-
-	defer env.Db.Close()
-
-	limit := 20
-
-	db.AutoMigrate(&dashboard.Transaction{})
-
-	qparam, ok := c.GetQuery("page")
-	if !ok{
-		// hack to make it works
-		qparam = "0"
-	}
-	p, _ := strconv.Atoi(qparam)
-
-	var tran []dashboard.Transaction
-	// just really return anything, even empty ones.
-	// or, not?
-	env.Db.Order("id desc").Limit(p+limit).Where("id = ?", p).Find(&tran)
-
-	c.JSON(200, gin.H{"result": tran})
 }
