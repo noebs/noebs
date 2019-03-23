@@ -1,0 +1,641 @@
+definitions:
+  ebs_fields.BillInquiryFields:
+    properties:
+      PAN:
+        type: string
+      PIN:
+        type: string
+      clientId:
+        type: string
+      expDate:
+        type: string
+      payeeId:
+        type: string
+      personalPaymentInfo:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      tranAmount:
+        type: number
+      tranCurrencyCode:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - PAN
+    - PIN
+    - clientId
+    - expDate
+    - payeeId
+    - personalPaymentInfo
+    - systemTraceAuditNumber
+    - terminalId
+    - tranAmount
+    - tranDateTime
+    type: object
+  ebs_fields.BillPaymentFields:
+    properties:
+      PAN:
+        type: string
+      PIN:
+        type: string
+      clientId:
+        type: string
+      expDate:
+        type: string
+      payeeId:
+        type: string
+      personalPaymentInfo:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      tranAmount:
+        type: number
+      tranCurrencyCode:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - PAN
+    - PIN
+    - clientId
+    - expDate
+    - payeeId
+    - personalPaymentInfo
+    - systemTraceAuditNumber
+    - terminalId
+    - tranAmount
+    - tranDateTime
+    type: object
+  ebs_fields.CardTransferFields:
+    properties:
+      PAN:
+        type: string
+      PIN:
+        type: string
+      clientId:
+        type: string
+      expDate:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      toCard:
+        type: string
+      tranAmount:
+        type: number
+      tranCurrencyCode:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - PAN
+    - PIN
+    - clientId
+    - expDate
+    - systemTraceAuditNumber
+    - terminalId
+    - toCard
+    - tranAmount
+    - tranDateTime
+    type: object
+  ebs_fields.CashInFields:
+    type: object
+  ebs_fields.CashOutFields:
+    type: object
+  ebs_fields.ChangePINFields:
+    properties:
+      PAN:
+        type: string
+      PIN:
+        type: string
+      clientId:
+        type: string
+      expDate:
+        type: string
+      newPin:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - PAN
+    - PIN
+    - clientId
+    - expDate
+    - newPin
+    - systemTraceAuditNumber
+    - terminalId
+    - tranDateTime
+    type: object
+  ebs_fields.GenericEBSResponseFields:
+    properties:
+      DisputeRRN:
+        type: string
+      PAN:
+        type: string
+      additionalAmount:
+        type: number
+      additionalData:
+        type: string
+      approvalCode:
+        type: integer
+      clientId:
+        type: string
+      ebsserviceName:
+        type: string
+      fromAccount:
+        type: string
+      fromCard:
+        type: string
+      miniStatementRecords:
+        type: string
+      otp:
+        type: string
+      otpId:
+        type: string
+      phoneNumber:
+        type: string
+      referenceNumber:
+        type: integer
+      responseCode:
+        type: integer
+      responseMessage:
+        type: string
+      responseStatus:
+        type: string
+      serviceId:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      toAccount:
+        type: string
+      toCard:
+        type: string
+      tranAmount:
+        type: number
+      tranCurrencyCode:
+        type: string
+      tranDateTime:
+        type: string
+      tranFee:
+        type: number
+      voucherNumber:
+        type: integer
+      workingKey:
+        type: string
+    type: object
+  ebs_fields.MiniStatementFields:
+    properties:
+      PAN:
+        type: string
+      PIN:
+        type: string
+      clientId:
+        type: string
+      expDate:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - PAN
+    - PIN
+    - clientId
+    - expDate
+    - systemTraceAuditNumber
+    - terminalId
+    - tranDateTime
+    type: object
+  ebs_fields.PurchaseFields:
+    properties:
+      PAN:
+        type: string
+      PIN:
+        type: string
+      clientId:
+        type: string
+      expDate:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      tranAmount:
+        type: number
+      tranCurrencyCode:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - PAN
+    - PIN
+    - clientId
+    - expDate
+    - systemTraceAuditNumber
+    - terminalId
+    - tranAmount
+    - tranDateTime
+    type: object
+  ebs_fields.WorkingKeyFields:
+    properties:
+      clientId:
+        type: string
+      systemTraceAuditNumber:
+        type: integer
+      terminalId:
+        type: string
+      tranDateTime:
+        type: string
+    required:
+    - clientId
+    - systemTraceAuditNumber
+    - terminalId
+    - tranDateTime
+    type: object
+  main.ErrDetails:
+    additionalProperties:
+      type: object
+    type: object
+  main.ErrorDetails:
+    properties:
+      code:
+        type: integer
+      details:
+        items:
+          $ref: '#/definitions/main.ErrDetails'
+        type: array
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  main.SuccessfulResponse:
+    properties:
+      ebs_response:
+        $ref: '#/definitions/ebs_fields.GenericEBSResponseFields'
+        type: object
+    type: object
+info:
+  contact: {}
+  license: {}
+paths:
+  /billInquiry:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Bill Inquiry Request Fields
+        in: body
+        name: billInquiry
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.BillInquiryFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.BillInquiryFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /billPayment:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Bill Payment Request Fields
+        in: body
+        name: billPayment
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.BillPaymentFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.BillPaymentFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /cardTransfer:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Card Transfer Request Fields
+        in: body
+        name: cardTransfer
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.CardTransferFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.CardTransferFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /cashIn:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Cash In Request Fields
+        in: body
+        name: cashOut
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.CashInFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.CashInFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /cashOut:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Cash Out Request Fields
+        in: body
+        name: cashOut
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.CashOutFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.CashOutFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /changePin:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Change PIN Request Fields
+        in: body
+        name: changePIN
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.ChangePINFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.ChangePINFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /dashboard/get_tid:
+    get:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: search list transactions by terminal ID
+        in: query
+        name: id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /miniStatement:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Mini Statement Request Fields
+        in: body
+        name: miniStatement
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.MiniStatementFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.MiniStatementFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /purchase:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Purchase Request Fields
+        in: body
+        name: purchase
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.PurchaseFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.SuccessfulResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/main.ErrorDetails'
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
+  /workingKey:
+    post:
+      consumes:
+      - application/json
+      description: get accounts
+      parameters:
+      - description: Working Key Request Fields
+        in: body
+        name: workingKey
+        required: true
+        schema:
+          $ref: '#/definitions/ebs_fields.WorkingKeyFields'
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/ebs_fields.WorkingKeyFields'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: integer
+        "404":
+          description: Not Found
+          schema:
+            type: integer
+        "500":
+          description: Internal Server Error
+          schema:
+            type: integer
+      summary: Get all transactions made by a specific terminal ID
