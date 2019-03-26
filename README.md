@@ -81,6 +81,8 @@ Our team have developed an internal EBS QA test system that emulates EBS test en
 	- you can use our EBS simulator on your own; we won't test your services.
 	- we can use our EBS simulator while we do the plan for you, the exact way EBS does. Bear in mind that our testers are highly competitive and they're all ex-EBSers.
 
+**We plan on releasing our simulator very soon. Stay tuned.**
+
 # FAQ
 - Why is the name?
 For no reason really. It is just the first name that came into my mind.
