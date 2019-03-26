@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -107,6 +108,7 @@ func init() {
 
 func main() {
 
+	docs.SwaggerInfo.Title = "noebs Docs"
 	// Logging to a file.
 	f, _ := os.Create("gin.log") // not sure whether this is the right place to do it. Maybe env vars?
 	gin.DefaultWriter = io.MultiWriter(f)
@@ -137,7 +139,7 @@ func main() {
 // @Accept  json
 // @Produce  json
 // @Param workingKey body ebs_fields.WorkingKeyFields true "Working Key Request Fields"
-// @Success 200 {array} ebs_fields.WorkingKeyFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -227,8 +229,8 @@ func WorkingKey(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {array} main.SuccessfulResponse
-// @Failure 400 {object} main.ErrorDetails
+// @Success 200 {object} main.SuccessfulResponse
+// @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
 // @Router /purchase [post]
@@ -349,7 +351,7 @@ func Purchase(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param cardTransfer body ebs_fields.CardTransferFields true "Card Transfer Request Fields"
-// @Success 200 {array} ebs_fields.CardTransferFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -476,7 +478,7 @@ func CardTransfer(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param billInquiry body ebs_fields.BillInquiryFields true "Bill Inquiry Request Fields"
-// @Success 200 {array} ebs_fields.BillInquiryFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -602,7 +604,7 @@ func BillInquiry(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param billPayment body ebs_fields.BillPaymentFields true "Bill Payment Request Fields"
-// @Success 200 {array} ebs_fields.BillPaymentFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -729,7 +731,7 @@ func BillPayment(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param changePIN body ebs_fields.ChangePINFields true "Change PIN Request Fields"
-// @Success 200 {array} ebs_fields.ChangePINFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -851,7 +853,7 @@ func ChangePIN(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param cashOut body ebs_fields.CashOutFields true "Cash Out Request Fields"
-// @Success 200 {array} ebs_fields.CashOutFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -977,7 +979,7 @@ func CashOut(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
-// @Success 200 {array} ebs_fields.CashInFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
@@ -1104,7 +1106,7 @@ func CashIn(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param miniStatement body ebs_fields.MiniStatementFields true "Mini Statement Request Fields"
-// @Success 200 {array} ebs_fields.MiniStatementFields
+// @Success 200 {object} main.SuccessfulResponse
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500

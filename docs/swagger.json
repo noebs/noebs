@@ -30,10 +30,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.BillInquiryFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -83,10 +81,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.BillPaymentFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -136,10 +132,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.CardTransferFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -189,10 +183,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.CashInFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -242,10 +234,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.CashOutFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -295,10 +285,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.ChangePINFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -394,10 +382,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.MiniStatementFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -447,17 +433,14 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/main.SuccessfulResponse"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "type": "object",
-                            "$ref": "#/definitions/main.ErrorDetails"
+                            "type": "integer"
                         }
                     },
                     "404": {
@@ -501,10 +484,8 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ebs_fields.WorkingKeyFields"
-                            }
+                            "type": "object",
+                            "$ref": "#/definitions/main.SuccessfulResponse"
                         }
                     },
                     "400": {
@@ -906,32 +887,6 @@
                     "type": "string"
                 },
                 "tranDateTime": {
-                    "type": "string"
-                }
-            }
-        },
-        "main.ErrDetails": {
-            "type": "object",
-            "additionalProperties": {
-                "type": "object"
-            }
-        },
-        "main.ErrorDetails": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "details": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.ErrDetails"
-                    }
-                },
-                "message": {
-                    "type": "string"
-                },
-                "status": {
                     "type": "string"
                 }
             }
