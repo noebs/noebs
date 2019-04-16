@@ -60,7 +60,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			return 500, ebsGenericResponse, contentTypeErr
 		}
 
-		if err := json.Unmarshal(responseBody, ebsGenericResponse); err == nil {
+		if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 			// there's no problem in Unmarshalling
 			if ebsGenericResponse.ResponseCode == 0 {
 				// the transaction is successful
