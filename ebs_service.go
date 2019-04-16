@@ -191,6 +191,7 @@ func WorkingKey(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
@@ -206,7 +207,7 @@ func WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			// log the transaction
-			log.Printf("a transaction was made: %v\tEBS Response:%v, \tResponse code:%v", jsonBuffer, res, code)
+			log.Printf("a transaction was made: Response: %v, \tResponse code:%v", res, code)
 			var listDetails []ErrDetails
 			details := make(ErrDetails)
 
