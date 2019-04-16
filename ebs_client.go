@@ -41,13 +41,14 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 		ebsResponse, err := ebsClient.Do(reqHandler)
 		if err != nil {
 			log.Printf("I couldn't make it into EBS")
-			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
+			return http.StatusBadGateway, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 
 		defer ebsResponse.Body.Close()
 
 		responseBody, err := ioutil.ReadAll(ebsResponse.Body)
 		if err != nil {
+			log.Printf("I couldn't make it into EBS")
 			// wrong. make the error of any other type than ebsGatewayConnectivityErr
 			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
@@ -75,6 +76,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			// there is an error in handling the incoming EBS's ebsResponse
 			// log the err here please
 			log.Printf("There is an error in EBS: %v. The res struct is: %+v", err, ebsGenericResponse)
+			log.Printf("The error is: %s\n", err.Error())
 			return 500, ebsGenericResponse, err
 		}
 
