@@ -37,11 +37,10 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			return 500, ebsGenericResponse, err
 		}
 		reqHandler.Header.Set("Content-Type", "application/json")
-		reqHandler.Header.Set("API-Key", "removeme") // For Morsal case only.
-		// EBS doesn't impose any sort of API-keys or anything. Typical EBS.
 
 		ebsResponse, err := ebsClient.Do(reqHandler)
 		if err != nil {
+			log.Printf("I couldn't make it into EBS")
 			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 
@@ -49,6 +48,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 		responseBody, err := ioutil.ReadAll(ebsResponse.Body)
 		if err != nil {
+			// wrong. make the error of any other type than ebsGatewayConnectivityErr
 			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 		log.Println(string(responseBody))
@@ -58,6 +58,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			// panic
 			return 500, ebsGenericResponse, contentTypeErr
 		}
+
 		if err := json.Unmarshal(responseBody, ebsGenericResponse); err == nil {
 			// there's no problem in Unmarshalling
 			if ebsGenericResponse.ResponseCode == 0 {
@@ -72,9 +73,10 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 		} else {
 			// there is an error in handling the incoming EBS's ebsResponse
+			// log the err here please
+			log.Printf("There is an error in EBS: %v. The res struct is: %+v", err, ebsGenericResponse)
 			return 500, ebsGenericResponse, err
 		}
-
 
 	} else {
 		// mock settings.
@@ -86,17 +88,16 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 }
 
-
-func urlToMock(url string) interface{}{
-	if url == EBSMerchantIP + BalanceEndpoint{
+func urlToMock(url string) interface{} {
+	if url == EBSMerchantIP+BalanceEndpoint {
 		return mockPurchaseResponse{}
-	} else if url == EBSMerchantIP +PurchaseEndpoint{
+	} else if url == EBSMerchantIP+PurchaseEndpoint {
 		return mockPurchaseResponse{}
 
-	} else if url == EBSMerchantIP + MiniStatementEndpoint{
+	} else if url == EBSMerchantIP+MiniStatementEndpoint {
 		return mockMiniStatementResponse{}
 
-	} else if url == EBSMerchantIP + WorkingKeyEndpoint{
+	} else if url == EBSMerchantIP+WorkingKeyEndpoint {
 		fmt.Printf("i'm here..")
 		return mockWorkingKeyResponse{}
 	}

@@ -191,7 +191,7 @@ func WorkingKey(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %v, %v", code, res, ebsErr)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
@@ -296,7 +296,7 @@ func Purchase(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			log.Fatalf("unable to parse the request %v, error: %v", string(jsonBuffer), err)
+			log.Printf("unable to parse the request %v, error: %v", string(jsonBuffer), err)
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
 
