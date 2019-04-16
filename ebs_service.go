@@ -205,6 +205,8 @@ func WorkingKey(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
+			// log the transaction
+			log.Printf("a transaction was made: %v\tEBS Response:%v, \tResponse code:%v", jsonBuffer, res, code)
 			var listDetails []ErrDetails
 			details := make(ErrDetails)
 
