@@ -211,7 +211,9 @@ func WorkingKey(c *gin.Context) {
 			var listDetails []ErrDetails
 			details := make(ErrDetails)
 
-			details[res.ResponseMessage] = res.ResponseMessage
+			details["responseMessage"] = res.ResponseMessage
+			details["responseCode"] = res.ResponseCode
+			// todo maybe get the whole EBS response?
 
 			listDetails = append(listDetails, details)
 
