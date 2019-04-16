@@ -208,7 +208,7 @@ func WorkingKey(c *gin.Context) {
 			var listDetails []ErrDetails
 			details := make(ErrDetails)
 
-			details[res.ResponseMessage] = res.ResponseCode
+			details[res.ResponseMessage] = res.ResponseMessage
 
 			listDetails = append(listDetails, details)
 
