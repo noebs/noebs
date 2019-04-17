@@ -5,9 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"log"
-	"math/rand"
 	"strconv"
-	"time"
 )
 
 // TransactionByTid godoc
@@ -54,17 +52,27 @@ func MakeDummyTransaction(c *gin.Context) {
 	}
 
 	tran := Transaction{
+		Model: gorm.Model{},
 		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{
-			ImportantEBSFields:     ebs_fields.ImportantEBSFields{},
-			TerminalID:             "08000002",
-			TranDateTime:           time.Now().UTC().String(),
-			SystemTraceAuditNumber: rand.Intn(9999),
-			ClientID:               "Morsa",
-			PAN:                    "123457894647372",
-			AdditionalData:         "",
+			ImportantEBSFields: ebs_fields.ImportantEBSFields{
+				ResponseMessage:      "",
+				ResponseStatus:       "",
+				ResponseCode:         0,
+				ReferenceNumber:      0,
+				ApprovalCode:         0,
+				VoucherNumber:        0,
+				MiniStatementRecords: "",
+				DisputeRRN:           "",
+				AdditionalData:       "",
+				TranDateTime:         "",
+				TranFee:              0,
+				AdditionalAmount:     0,
+			},
+			TerminalID:             "",
+			SystemTraceAuditNumber: 0,
+			ClientID:               "",
+			PAN:                    "",
 			ServiceID:              "",
-			TranFee:                0,
-			AdditionalAmount:       0,
 			TranAmount:             0,
 			PhoneNumber:            "",
 			FromAccount:            "",
