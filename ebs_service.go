@@ -322,17 +322,8 @@ func Purchase(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -448,17 +439,8 @@ func CardTransfer(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -574,17 +556,8 @@ func BillInquiry(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -701,17 +674,8 @@ func BillPayment(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -823,17 +787,8 @@ func ChangePIN(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -949,17 +904,8 @@ func CashOut(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -1076,17 +1022,8 @@ func CashIn(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
-
 		} else {
 			c.JSON(code, successfulResponse)
 		}
@@ -1197,15 +1134,7 @@ func MiniStatement(c *gin.Context) {
 		db.Commit()
 
 		if err != nil {
-			// make it onto error one
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details[res.ResponseMessage] = res.ResponseCode
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 
 		} else {

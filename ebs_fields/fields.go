@@ -97,18 +97,18 @@ type GenericEBSResponseFields struct {
 	ClientID               string `json:"clientId" gorm:"index"`
 	PAN                    string `json:"PAN"`
 
-	ServiceID        string  `json:"serviceId"`
+	ServiceID        string  `json:"serviceId,omitempty"`
 	TranAmount       float32 `json:"tranAmount"`
-	PhoneNumber      string  `json:"phoneNumber"`
-	FromAccount      string  `json:"fromAccount"`
-	ToAccount        string  `json:"toAccount"`
-	FromCard         string  `json:"fromCard"`
-	ToCard           string  `json:"toCard"`
-	OTP              string  `json:"otp"`
-	OTPID            string  `json:"otpId"`
-	TranCurrencyCode string  `json:"tranCurrencyCode"`
+	PhoneNumber      string  `json:"phoneNumber,omitempty"`
+	FromAccount      string  `json:"fromAccount,omitempty"`
+	ToAccount        string  `json:"toAccount,omitempty"`
+	FromCard         string  `json:"fromCard,omitempty"`
+	ToCard           string  `json:"toCard,omitempty"`
+	OTP              string  `json:"otp,omitempty"`
+	OTPID            string  `json:"otpId,omitempty"`
+	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
-	WorkingKey       string `json:"workingKey"`
+	WorkingKey       string `json:"workingKey,omitempty"`
 }
 
 type ImportantEBSFields struct {
