@@ -12,7 +12,7 @@ type WorkingKeyFields struct {
 	CommonFields
 }
 
-type MiniStatementFields struct{
+type MiniStatementFields struct {
 	CommonFields
 	CardInfoFields
 }
@@ -91,35 +91,37 @@ func iso8601(fl validator.FieldLevel) bool {
 type GenericEBSResponseFields struct {
 	ImportantEBSFields
 
-	TerminalID             string  `json:"terminalId" gorm:"index"`
-	TranDateTime           string  `json:"tranDateTime"`
-	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber"`
-	ClientID               string  `json:"clientId" gorm:"index"`
-	PAN                    string  `json:"PAN"`
-	AdditionalData         string  `json:"additionalData"`
-	ServiceID              string  `json:"serviceId"`
-	TranFee                float32 `json:"tranFee"`
-	AdditionalAmount       float32 `json:"additionalAmount"`
-	TranAmount             float32 `json:"tranAmount"`
-	PhoneNumber            string  `json:"phoneNumber"`
-	FromAccount            string  `json:"fromAccount"`
-	ToAccount              string  `json:"toAccount"`
-	FromCard               string  `json:"fromCard"`
-	ToCard                 string  `json:"toCard"`
-	OTP                    string  `json:"otp"`
-	OTPID                  string  `json:"otpId"`
-	TranCurrencyCode       string  `json:"tranCurrencyCode"`
-	EBSServiceName         string
-	WorkingKey string `json:"workingKey"`
+	TerminalID string `json:"terminalId" gorm:"index"`
+
+	SystemTraceAuditNumber int    `json:"systemTraceAuditNumber"`
+	ClientID               string `json:"clientId" gorm:"index"`
+	PAN                    string `json:"PAN"`
+
+	ServiceID        string  `json:"serviceId"`
+	TranAmount       float32 `json:"tranAmount"`
+	PhoneNumber      string  `json:"phoneNumber"`
+	FromAccount      string  `json:"fromAccount"`
+	ToAccount        string  `json:"toAccount"`
+	FromCard         string  `json:"fromCard"`
+	ToCard           string  `json:"toCard"`
+	OTP              string  `json:"otp"`
+	OTPID            string  `json:"otpId"`
+	TranCurrencyCode string  `json:"tranCurrencyCode"`
+	EBSServiceName   string
+	WorkingKey       string `json:"workingKey"`
 }
 
 type ImportantEBSFields struct {
-	ResponseMessage      string `json:"responseMessage"`
-	ResponseStatus       string `json:"responseStatus"`
-	ResponseCode         int    `json:"responseCode"`
-	ReferenceNumber      int    `json:"referenceNumber"`
-	ApprovalCode         int    `json:"approvalCode"`
-	VoucherNumber        int    `json:"voucherNumber"`
-	MiniStatementRecords string `json:"miniStatementRecords"`
-	DisputeRRN           string `json:"DisputeRRN"`
+	ResponseMessage      string  `json:"responseMessage,omitempty"`
+	ResponseStatus       string  `json:"responseStatus,omitempty"`
+	ResponseCode         int     `json:"responseCode"`
+	ReferenceNumber      int     `json:"referenceNumber,omitempty"`
+	ApprovalCode         int     `json:"approvalCode,omitempty"`
+	VoucherNumber        int     `json:"voucherNumber,omitempty"`
+	MiniStatementRecords string  `json:"miniStatementRecords,omitempty"`
+	DisputeRRN           string  `json:"DisputeRRN,omitempty"`
+	AdditionalData       string  `json:"additionalData,omitempty"`
+	TranDateTime         string  `json:"tranDateTime,omitempty"`
+	TranFee              float32 `json:"tranFee,omitempty"`
+	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
 }

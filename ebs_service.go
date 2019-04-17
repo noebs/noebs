@@ -206,18 +206,7 @@ func WorkingKey(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			// log the transaction
-			log.Printf("a transaction was made: Response: %v, \tResponse code:%v", res, code)
-			var listDetails []ErrDetails
-			details := make(ErrDetails)
-
-			details["responseMessage"] = res.ResponseMessage
-			details["responseCode"] = res.ResponseCode
-			// todo maybe get the whole EBS response?
-
-			listDetails = append(listDetails, details)
-
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: listDetails, Message: EBSError}
+			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)

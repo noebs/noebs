@@ -24,10 +24,10 @@ const (
 )
 
 type ErrorDetails struct {
-	Message string       `json:"message"`
-	Code    int          `json:"code"`
-	Status  string       `json:"status"`
-	Details []ErrDetails `json:"details"`
+	Message string      `json:"message"`
+	Code    int         `json:"code"`
+	Status  string      `json:"status"`
+	Details interface{} `json:"details"`
 }
 
 type ErrDetails map[string]interface{}
