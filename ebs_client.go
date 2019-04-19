@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/sirupsen/logrus"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"time"
 )
@@ -34,13 +34,18 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 		if err != nil {
 			fmt.Println(err.Error())
+			log.WithFields(logrus.Fields{
+				"error": err.Error(),
+			}).Error("Error in establishing connection to the host")
 			return 500, ebsGenericResponse, err
 		}
 		reqHandler.Header.Set("Content-Type", "application/json")
 
 		ebsResponse, err := ebsClient.Do(reqHandler)
 		if err != nil {
-			log.Printf("I couldn't make it into EBS")
+			log.WithFields(logrus.Fields{
+				"error": err.Error(),
+			}).Error("Error in establishing connection to the host")
 			return http.StatusBadGateway, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 
@@ -48,15 +53,21 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 		responseBody, err := ioutil.ReadAll(ebsResponse.Body)
 		if err != nil {
-			log.Printf("I couldn't make it into EBS")
+			log.WithFields(logrus.Fields{
+				"error": err.Error(),
+			}).Error("Error reading ebs response")
 			// wrong. make the error of any other type than ebsGatewayConnectivityErr
+			// perhaps, gateway error? as this error is ebs's one
 			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 		log.Println(string(responseBody))
 
 		// check Content-type is application json, if not, panic!
 		if ebsResponse.Header.Get("Content-Type") != "application/json" {
-			// panic
+			log.WithFields(logrus.Fields{
+				"error":   "wrong content type parsed",
+				"details": ebsResponse.Header.Get("Content-Type"),
+			}).Error("ebs response content type is not application/json")
 			return 500, ebsGenericResponse, contentTypeErr
 		}
 
@@ -64,10 +75,18 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			// there's no problem in Unmarshalling
 			if ebsGenericResponse.ResponseCode == 0 {
 				// the transaction is successful
+				log.WithFields(logrus.Fields{
+					"ebs_response": ebsGenericResponse,
+				}).Info("ebs response transaction")
+
 				return http.StatusOK, ebsGenericResponse, nil
 
 			} else {
 				// there is an error in the transaction
+				log.WithFields(logrus.Fields{
+					"ebs_response": ebsGenericResponse,
+				}).Info("ebs response transaction")
+
 				err := errors.New(ebsGenericResponse.ResponseMessage)
 				return http.StatusBadGateway, ebsGenericResponse, err
 			}
@@ -75,8 +94,11 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 		} else {
 			// there is an error in handling the incoming EBS's ebsResponse
 			// log the err here please
-			log.Printf("There is an error in EBS: %v. The res struct is: %+v", err, ebsGenericResponse)
-			log.Printf("The error is: %s\n", err.Error())
+			log.WithFields(logrus.Fields{
+				"error":   err.Error(),
+				"details": ebsGenericResponse,
+			}).Info("ebs response transaction")
+
 			return http.StatusInternalServerError, ebsGenericResponse, err
 		}
 

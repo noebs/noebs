@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"log"
 	"math/rand"
 	"net/http"
 	"time"
@@ -130,7 +130,7 @@ func authMiddleware() gin.HandlerFunc {
 		defer db.Close()
 
 		var service TokenClaims
-		
+
 		claim, err := verifyJWT(h, &service)
 		if err != nil {
 			c.AbortWithStatusJSON(400, gin.H{"message": err.Error()})
@@ -210,8 +210,6 @@ func GetServiceID(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": "this object is available"})
 }
-
-
 
 var (
 	serverError       = errors.New("unable to connect to the DB")

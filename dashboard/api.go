@@ -4,9 +4,11 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
-	"log"
+	"github.com/sirupsen/logrus"
 	"strconv"
 )
+
+var log = logrus.New()
 
 // TransactionByTid godoc
 // @Summary Get all transactions made by a specific terminal ID
@@ -19,9 +21,7 @@ import (
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
 // @Router /dashboard/get_tid [get]
-func TransactionByTid(c *gin.Context) {
-	//FIXME
-	// this function counts; it doesnt make *queries*
+func TransactionsCount(c *gin.Context) {
 
 	db, _ := gorm.Open("sqlite3", "test.db")
 
@@ -39,6 +39,31 @@ func TransactionByTid(c *gin.Context) {
 		c.AbortWithStatus(404)
 	}
 	c.JSON(200, gin.H{"result": count})
+}
+
+func TransactionByTid(c *gin.Context) {
+
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	env := &Env{Db: db}
+
+	defer env.Db.Close()
+
+	db.AutoMigrate(&Transaction{})
+
+	q := c.Request.URL.Query()
+	tid := q["tid"][0]
+
+	var tran []Transaction
+	err := env.Db.Model(&tran).Where("transaction_id = ?", tid).Find(&tran).Error
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": tran,
+		}).Info("no transaction with this ID")
+		c.AbortWithStatus(404)
+	}
+	c.JSON(200, gin.H{"result": tran})
 }
 
 func MakeDummyTransaction(c *gin.Context) {

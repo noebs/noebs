@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"github.com/jinzhu/gorm"
-	"log"
 )
 
 // what do i really want to do?
