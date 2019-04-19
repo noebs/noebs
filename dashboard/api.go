@@ -51,11 +51,10 @@ func TransactionByTid(c *gin.Context) {
 
 	db.AutoMigrate(&Transaction{})
 
-	q := c.Request.URL.Query()
-	tid := q["tid"][0]
+	tid, _ := c.GetQuery("tid")
 
 	var tran []Transaction
-	err := env.Db.Model(&tran).Where("transaction_id = ?", tid).Find(&tran).Error
+	err := env.Db.Model(&tran).Where("terminal_id = ?", tid).Find(&tran).Error
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"error":   err.Error(),
