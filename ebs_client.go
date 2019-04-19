@@ -64,12 +64,12 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			// there's no problem in Unmarshalling
 			if ebsGenericResponse.ResponseCode == 0 {
 				// the transaction is successful
-				return 200, ebsGenericResponse, nil
+				return http.StatusOK, ebsGenericResponse, nil
 
 			} else {
 				// there is an error in the transaction
 				err := errors.New(ebsGenericResponse.ResponseMessage)
-				return 400, ebsGenericResponse, err
+				return http.StatusBadGateway, ebsGenericResponse, err
 			}
 
 		} else {
@@ -77,7 +77,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			// log the err here please
 			log.Printf("There is an error in EBS: %v. The res struct is: %+v", err, ebsGenericResponse)
 			log.Printf("The error is: %s\n", err.Error())
-			return 500, ebsGenericResponse, err
+			return http.StatusInternalServerError, ebsGenericResponse, err
 		}
 
 	} else {
