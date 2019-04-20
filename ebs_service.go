@@ -102,7 +102,7 @@ func main() {
 	if err == nil {
 		log.Out = file
 	} else {
-
+		log.Out = os.Stderr
 		log.Info("Failed to log to file, using default stderr: %v", err)
 	}
 
