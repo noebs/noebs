@@ -175,7 +175,7 @@ func WorkingKey(c *gin.Context) {
 			details = append(details, ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 
@@ -205,7 +205,7 @@ func WorkingKey(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
