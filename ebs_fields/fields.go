@@ -42,11 +42,21 @@ type BillPaymentFields struct {
 	BillerFields
 }
 
-type CashInFields struct{}
-type CashOutFields struct{}
-type RefundFields struct{}
-type PurchaseWithCashBackFields struct{}
-type ReverseFields struct{}
+type CashInFields struct {
+	PurchaseFields
+}
+type CashOutFields struct {
+	PurchaseFields
+}
+type RefundFields struct {
+	PurchaseFields
+}
+type PurchaseWithCashBackFields struct {
+	PurchaseFields
+}
+type ReverseFields struct {
+	PurchaseFields
+}
 
 type BillInquiryFields struct {
 	CommonFields
@@ -57,7 +67,7 @@ type BillInquiryFields struct {
 
 type CommonFields struct {
 	SystemTraceAuditNumber int    `json:"systemTraceAuditNumber,omitempty" binding:"required"`
-	TranDateTime           string `json:"tranDateTime,omitempty" binding:"required,iso8601"`
+	TranDateTime           string `json:"tranDateTime,omitempty" binding:"required"`
 	TerminalID             string `json:"terminalId,omitempty" binding:"required,len=8"`
 	ClientID               string `json:"clientId,omitempty" binding:"required"`
 }
