@@ -124,7 +124,7 @@ type GenericEBSResponseFields struct {
 type ImportantEBSFields struct {
 	ResponseMessage      string  `json:"responseMessage,omitempty"`
 	ResponseStatus       string  `json:"responseStatus,omitempty"`
-	ResponseCode         int     `json:"responseCode"`
+	ResponseCode         *int    `json:"responseCode"`
 	ReferenceNumber      int     `json:"referenceNumber,omitempty"`
 	ApprovalCode         int     `json:"approvalCode,omitempty"`
 	VoucherNumber        int     `json:"voucherNumber,omitempty"`
