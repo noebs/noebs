@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -74,8 +73,8 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 		if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 			// there's no problem in Unmarshalling
-			rescode, _ := strconv.Atoi(ebsGenericResponse.ResponseCode)
-			if rescode == 0 {
+
+			if ebsGenericResponse.ResponseCode == 0 {
 				// the transaction is successful
 				log.WithFields(logrus.Fields{
 					"ebs_response": ebsGenericResponse,

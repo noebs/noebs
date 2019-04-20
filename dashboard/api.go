@@ -82,7 +82,7 @@ func MakeDummyTransaction(c *gin.Context) {
 			ImportantEBSFields: ebs_fields.ImportantEBSFields{
 				ResponseMessage:      "",
 				ResponseStatus:       "",
-				ResponseCode:         "",
+				ResponseCode:         0,
 				ReferenceNumber:      0,
 				ApprovalCode:         0,
 				VoucherNumber:        0,
