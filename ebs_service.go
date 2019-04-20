@@ -16,6 +16,7 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -205,7 +206,9 @@ func WorkingKey(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: *res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			// convert ebs res code to int
+			rescode, _ := strconv.Atoi(res.ResponseCode)
+			payload := ErrorDetails{Code: rescode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)

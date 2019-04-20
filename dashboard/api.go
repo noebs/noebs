@@ -75,7 +75,6 @@ func MakeDummyTransaction(c *gin.Context) {
 		log.Fatalf("unable to automigrate: %s", err.Error())
 	}
 
-	a := int(4)
 	tran := Transaction{
 
 		Model: gorm.Model{},
@@ -83,7 +82,7 @@ func MakeDummyTransaction(c *gin.Context) {
 			ImportantEBSFields: ebs_fields.ImportantEBSFields{
 				ResponseMessage:      "",
 				ResponseStatus:       "",
-				ResponseCode:         &a,
+				ResponseCode:         "",
 				ReferenceNumber:      0,
 				ApprovalCode:         0,
 				VoucherNumber:        0,
