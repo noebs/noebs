@@ -105,6 +105,7 @@ func main() {
 		log.Out = os.Stderr
 		log.Info("Failed to log to file, using default stderr: %v", err)
 	}
+	log.Level = logrus.TraceLevel
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 
