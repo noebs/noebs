@@ -8,6 +8,9 @@ import (
 // not sure this would work. This package is just for storing struct representations
 // of each httpHandler
 
+type IsAliveFields struct {
+	CommonFields
+}
 type WorkingKeyFields struct {
 	CommonFields
 }

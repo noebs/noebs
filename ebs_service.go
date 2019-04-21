@@ -40,6 +40,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/billPayment", BillPayment)
 	route.POST("/changePin", ChangePIN)
 	route.POST("/miniStatement", MiniStatement)
+	route.POST("/isAlive", IsAlive)
 
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
@@ -128,6 +129,93 @@ func main() {
 		}
 	} else {
 		GetMainEngine().Run(":8080")
+	}
+}
+
+// IsAlive godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param workingKey body ebs_fields.IsAliveFields true "Working Key Request Fields"
+// @Success 200 {object} main.SuccessfulResponse
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /workingKey [post]
+func IsAlive(c *gin.Context) {
+
+	url := EBSMerchantIP + IsAliveEndpoint // EBS simulator endpoint url goes here.
+
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	env := &dashboard.Env{Db: db}
+
+	defer env.Db.Close()
+
+	db.AutoMigrate(&dashboard.Transaction{})
+
+	db.LogMode(false)
+
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error": err.Error(),
+		}).Info("Unable to migrate database")
+	}
+
+	var fields = ebs_fields.IsAliveFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ErrorToString(err))
+		}
+
+		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		var successfulResponse SuccessfulResponse
+		successfulResponse.EBSResponse = res
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res,
+		}
+
+		transaction.EBSServiceName = IsAliveTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			// convert ebs res code to int
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, successfulResponse)
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
 
