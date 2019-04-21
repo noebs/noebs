@@ -296,7 +296,7 @@ func Purchase(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -386,7 +386,7 @@ func CardTransfer(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -477,7 +477,7 @@ func BillInquiry(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -566,7 +566,7 @@ func BillPayment(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -655,7 +655,7 @@ func ChangePIN(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -743,7 +743,7 @@ func CashOut(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -832,7 +832,7 @@ func CashIn(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -922,7 +922,7 @@ func MiniStatement(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: code, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
