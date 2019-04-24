@@ -76,6 +76,7 @@ func MakeDummyTransaction(c *gin.Context) {
 	}
 
 	tran := Transaction{
+
 		Model: gorm.Model{},
 		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{
 			ImportantEBSFields: ebs_fields.ImportantEBSFields{

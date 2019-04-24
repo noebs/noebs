@@ -46,7 +46,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			log.WithFields(logrus.Fields{
 				"error": err.Error(),
 			}).Error("Error in establishing connection to the host")
-			return http.StatusBadGateway, ebsGenericResponse, ebsGatewayConnectivityErr
+			return http.StatusGatewayTimeout, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 
 		defer ebsResponse.Body.Close()
@@ -73,6 +73,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 		if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 			// there's no problem in Unmarshalling
+
 			if ebsGenericResponse.ResponseCode == 0 {
 				// the transaction is successful
 				log.WithFields(logrus.Fields{

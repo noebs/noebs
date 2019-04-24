@@ -1,6 +1,7 @@
 package main
 
 const (
+	IsAliveEndpoint                  = "isAlive"
 	PurchaseEndpoint                 = "purchase"
 	PurchaseWithCashBackEndpoint     = "purchaseWithCashBack"
 	PurchaseMobileEndpoint           = "purchaseMobile"
@@ -40,5 +41,6 @@ const (
 	RefundTransaction               = "RefundTransaction"
 	CashInTransaction               = "CashInTransaction"
 	CashOutTransaction              = "CashOutTransaction"
-	MiniStatementTransaction = "MiniStatementTransaction"
+	MiniStatementTransaction        = "MiniStatementTransaction"
+	IsAliveTransaction              = "IsAliveTransaction"
 )

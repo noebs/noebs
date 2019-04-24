@@ -7,26 +7,25 @@ import (
 	"math/rand"
 )
 
-func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields){
+func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields) {
 	//code := getEbsErrorCodes()
 	n := getCodesNumber()
 	chosen := rand.Intn(len(n))
 
 	var status string
 
-	if chosen == 0{
+	if chosen == 0 {
 		status = "Successful"
-	}else{
+	} else {
 		status = "Failed"
 	}
 
-
 	commonFields := ebs_fields.ImportantEBSFields{
-		ResponseMessage:      "Successful",
-		ResponseStatus:       status,
-		ResponseCode:         0,
-		ReferenceNumber:      rand.Intn(9999),
-		ApprovalCode:         rand.Intn(9999),
+		ResponseMessage: "Successful",
+		ResponseStatus:  status,
+		ResponseCode:    0,
+		ReferenceNumber: rand.Intn(9999),
+		ApprovalCode:    rand.Intn(9999),
 	}
 
 	res.ImportantEBSFields = commonFields
@@ -51,13 +50,12 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 
 }
 
-
 type ebsCodes map[int]string
 
 func getEbsErrorCodes() ebsCodes {
 
 	code := ebsCodes{
-		0: "Approval",
+		0:   "Approval",
 		103: "Format Error",
 		130: "Invalid Format",
 		178: "Original Request Not Found",
@@ -83,16 +81,16 @@ func getEbsErrorCodes() ebsCodes {
 }
 
 //Return the corresponding EBS Code. To be used for indexing.
-func getCodesNumber() []int{
-	return []int{0,103,130,178,158,161,191,194,196,201,205,251,281,338,355,375,362,389,412,413,467}
+func getCodesNumber() []int {
+	return []int{0, 103, 130, 178, 158, 161, 191, 194, 196, 201, 205, 251, 281, 338, 355, 375, 362, 389, 412, 413, 467}
 }
 
-func getWorkingKey() (string, error){
+func getWorkingKey() (string, error) {
 
 	return "abcdef0123456789", nil
 }
 
-func generateMiniStatement() string{
+func generateMiniStatement() string {
 	miniStatement := make(map[string]string)
 
 	var l []map[string]string
@@ -110,15 +108,15 @@ func generateMiniStatement() string{
 	return string(s)
 }
 
-func generateSign() string{
+func generateSign() string {
 	i := rand.Intn(2)
-	if i == 0{
+	if i == 0 {
 		return "-"
 	}
 	return "+"
 }
 
-func generateDate()string{
+func generateDate() string {
 	m := rand.Intn(13)
 	d := rand.Intn(32)
 
@@ -128,10 +126,9 @@ func generateDate()string{
 type mockPurchaseResponse struct {
 	ebs_fields.ImportantEBSFields
 	ebs_fields.GenericEBSResponseFields
-
 }
 
-type mockWorkingKeyResponse struct{
+type mockWorkingKeyResponse struct {
 	ebs_fields.ImportantEBSFields
 	ebs_fields.GenericEBSResponseFields
 }
@@ -145,4 +142,3 @@ type mockCardTransferResponse struct {
 	ebs_fields.ImportantEBSFields
 	ebs_fields.GenericEBSResponseFields
 }
-
