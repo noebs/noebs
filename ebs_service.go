@@ -203,7 +203,12 @@ func IsAlive(c *gin.Context) {
 
 		transaction.EBSServiceName = IsAliveTransaction
 		// God please make it works.
-		db.Create(&transaction)
+		if err := db.Create(&transaction).Error; err != nil {
+			log.WithFields(logrus.Fields{
+				"error":   err.Error(),
+				"details": "Error in writing to database",
+			})
+		}
 		db.Commit()
 
 		if ebsErr != nil {
