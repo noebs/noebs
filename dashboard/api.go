@@ -11,7 +11,7 @@ import (
 
 var log = logrus.New()
 
-// TransactionByTid godoc
+// TransactionCount godoc
 // @Summary Get all transactions made by a specific terminal ID
 // @Description get accounts
 // @Accept  json
@@ -83,10 +83,10 @@ func TransactionByTid(c *gin.Context) {
 			}).Info("error in database")
 	}
 
-	tid, _ := c.GetQuery("tid")
+	//tid, _ := c.GetQuery("tid")
 
 	var tran []Transaction
-	if err := env.Db.Model(&tran).Where("terminal_id = ?", tid).Find(&tran).Error; err != nil {
+	if err := env.Db.Find(&tran).Error; err != nil {
 		log.WithFields(logrus.Fields{
 			"error":   err.Error(),
 			"details": tran,
