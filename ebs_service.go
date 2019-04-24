@@ -147,13 +147,24 @@ func IsAlive(c *gin.Context) {
 
 	url := EBSMerchantIP + IsAliveEndpoint // EBS simulator endpoint url goes here.
 
-	db, _ := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
+	}
 	env := &dashboard.Env{Db: db}
 
 	defer env.Db.Close()
 
-	db.AutoMigrate(&dashboard.Transaction{})
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
 
 	db.LogMode(false)
 

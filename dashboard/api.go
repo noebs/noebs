@@ -43,7 +43,7 @@ func TransactionsCount(c *gin.Context) {
 
 func TransactionByTid(c *gin.Context) {
 
-	db, _ := gorm.Open("sqlite3", "test.db")
+	db, _ := gorm.Open("sqlite3", "./test.db")
 
 	env := &Env{Db: db}
 
