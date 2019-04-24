@@ -172,6 +172,8 @@ func GetAll(c *gin.Context) {
 	var tran []Transaction
 	// just really return anything, even empty ones.
 	// or, not?
+
+	//FIXME This api is not working
 	env.Db.Order("id desc").Limit(p+limit).Where("id = ?", p).Find(&tran)
 
 	c.JSON(200, gin.H{"result": tran})
