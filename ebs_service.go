@@ -207,7 +207,7 @@ func IsAlive(c *gin.Context) {
 			log.WithFields(logrus.Fields{
 				"error":   err.Error(),
 				"details": "Error in writing to database",
-			}).Fatal("Problem in transaction table committing")
+			}).Info("Problem in transaction table committing")
 		}
 
 		db.Commit()
