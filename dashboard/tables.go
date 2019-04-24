@@ -7,7 +7,7 @@ import (
 // what do i really want to do?
 
 func dbConnect() {
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)

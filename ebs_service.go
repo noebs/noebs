@@ -233,7 +233,7 @@ func Purchase(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -323,7 +323,7 @@ func CardTransfer(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -414,7 +414,7 @@ func BillInquiry(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -504,7 +504,7 @@ func BillPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -593,7 +593,7 @@ func ChangePIN(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -681,7 +681,7 @@ func CashOut(c *gin.Context) {
 	// - open a DB connection (getDB)
 	// - check for the binding errors
 	//
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -770,7 +770,7 @@ func CashIn(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
@@ -859,7 +859,7 @@ func MiniStatement(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test1.db")
+	db, err := gorm.Open("sqlite3", "test.db")
 
 	if err != nil {
 		log.Fatalf("There's an erron in DB connection, %v", err)
