@@ -94,7 +94,7 @@ func TransactionByTid(c *gin.Context) {
 		c.AbortWithStatus(404)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": tran})
+	c.JSON(http.StatusOK, gin.H{"result": tran, "count": len(tran)})
 }
 
 func MakeDummyTransaction(c *gin.Context) {
