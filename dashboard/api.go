@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
+	"net/http"
 	"strconv"
 )
 
@@ -20,49 +21,80 @@ var log = logrus.New()
 // @Failure 400 {integer} 400
 // @Failure 404 {integer} 404
 // @Failure 500 {integer} 500
-// @Router /dashboard/get_tid [get]
+// @Router /dashboard/count [get]
 func TransactionsCount(c *gin.Context) {
 
-	db, _ := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		log.WithFields(
+			logrus.Fields{
+				"error":   err.Error(),
+				"details": "error in database",
+			}).Info("error in database")
+	}
 
 	env := &Env{Db: db}
 
 	defer env.Db.Close()
 
-	db.AutoMigrate(&Transaction{})
+	if err := db.AutoMigrate(&Transaction{}).Error; err != nil {
+		log.WithFields(
+			logrus.Fields{
+				"error":   err.Error(),
+				"details": "error in database",
+			}).Info("error in database")
+	}
 
 	var tran Transaction
 	var count interface{}
-	//id := c.Params.ByName("id")
-	err := env.Db.Model(&tran).Count(&count).Error
-	if err != nil {
+
+	if err := env.Db.Model(&tran).Count(&count).Error; err != nil {
+		log.WithFields(
+			logrus.Fields{
+				"error":   err.Error(),
+				"details": "error in database",
+			}).Info("error in database")
 		c.AbortWithStatus(404)
 	}
-	c.JSON(200, gin.H{"result": count})
+
+	c.JSON(http.StatusOK, gin.H{"result": count})
 }
 
 func TransactionByTid(c *gin.Context) {
 
-	db, _ := gorm.Open("sqlite3", "./test.db")
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		log.WithFields(
+			logrus.Fields{
+				"error":   err.Error(),
+				"details": "error in database",
+			}).Info("error in database")
+	}
 
 	env := &Env{Db: db}
 
 	defer env.Db.Close()
 
-	db.AutoMigrate(&Transaction{})
+	if err := db.AutoMigrate(&Transaction{}).Error; err != nil {
+		log.WithFields(
+			logrus.Fields{
+				"error":   err.Error(),
+				"details": "error in database",
+			}).Info("error in database")
+	}
 
 	tid, _ := c.GetQuery("tid")
 
 	var tran []Transaction
-	err := env.Db.Model(&tran).Where("terminal_id = ?", tid).Find(&tran).Error
-	if err != nil {
+	if err := env.Db.Model(&tran).Where("terminal_id = ?", tid).Find(&tran).Error; err != nil {
 		log.WithFields(logrus.Fields{
 			"error":   err.Error(),
 			"details": tran,
 		}).Info("no transaction with this ID")
 		c.AbortWithStatus(404)
 	}
-	c.JSON(200, gin.H{"result": tran})
+
+	c.JSON(http.StatusOK, gin.H{"result": tran})
 }
 
 func MakeDummyTransaction(c *gin.Context) {

@@ -52,6 +52,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
 		dashboardGroup.GET("/create", dashboard.MakeDummyTransaction)
 		dashboardGroup.GET("/all", dashboard.GetAll)
+		dashboardGroup.GET("/count", dashboard.TransactionsCount)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	}
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -98,7 +99,7 @@ func init() {
 func main() {
 	// logging and instrumentation
 
-	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile("/var/log/logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
 	if err == nil {
 		log.Out = file
 	} else {
