@@ -97,8 +97,8 @@ func init() {
 // @authorizationurl https://example.com/oauth/authorize
 // @scope.admin Grants read and write access to administrative information
 func main() {
-	// logging and instrumentation
 
+	// logging and instrumentation
 	file, err := os.OpenFile("/var/log/logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
 	if err == nil {
 		log.Out = file
@@ -156,9 +156,11 @@ func IsAlive(c *gin.Context) {
 			"details": "there's an error in connecting to DB",
 		}).Info("there is an error in connecting to DB")
 	}
-	env := &dashboard.Env{Db: db}
 
-	defer env.Db.Close()
+	// why are we using env here?
+	// clearly i'm using db variable directly
+
+	defer db.Close()
 
 	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
@@ -252,13 +254,26 @@ func WorkingKey(c *gin.Context) {
 
 	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	db, _ := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
-	env := &dashboard.Env{Db: db}
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
+	}
 
-	defer env.Db.Close()
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
-	db.AutoMigrate(&dashboard.Transaction{})
+	defer db.Close()
+
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
 
 	db.LogMode(false)
 
@@ -342,21 +357,8 @@ func Purchase(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
-
-	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
-	}
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.PurchaseFields{}
 
@@ -432,19 +434,32 @@ func CardTransfer(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
+
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
+			"error": err.Error(),
 		}).Info("Unable to migrate database")
 	}
 
@@ -523,22 +538,34 @@ func BillInquiry(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
-		}).Info("Unable to migrate database")
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
 	}
 
+	db.LogMode(false)
+
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error": err.Error(),
+		}).Info("Unable to migrate database")
+	}
 	var fields = ebs_fields.BillInquiryFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -613,23 +640,36 @@ func BillPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
+
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
+			"error": err.Error(),
 		}).Info("Unable to migrate database")
 	}
 
-	var fields = ebs_fields.WorkingKeyFields{}
+	var fields = ebs_fields.BillPaymentFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
@@ -702,23 +742,36 @@ func ChangePIN(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
+
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
+			"error": err.Error(),
 		}).Info("Unable to migrate database")
 	}
 
-	var fields = ebs_fields.WorkingKeyFields{}
+	var fields = ebs_fields.ChangePINFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
@@ -790,23 +843,36 @@ func CashOut(c *gin.Context) {
 	// - open a DB connection (getDB)
 	// - check for the binding errors
 	//
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
+
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
+			"error": err.Error(),
 		}).Info("Unable to migrate database")
 	}
 
-	var fields = ebs_fields.WorkingKeyFields{}
+	var fields = ebs_fields.CashOutFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
@@ -879,23 +945,36 @@ func CashIn(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
+
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
+			"error": err.Error(),
 		}).Info("Unable to migrate database")
 	}
 
-	var fields = ebs_fields.WorkingKeyFields{}
+	var fields = ebs_fields.CashInFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
@@ -968,23 +1047,36 @@ func MiniStatement(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open("sqlite3", "./test.db")
 
 	if err != nil {
-		log.Fatalf("There's an erron in DB connection, %v", err)
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in connecting to DB")
 	}
+
+	// why are we using env here?
+	// clearly i'm using db variable directly
 
 	defer db.Close()
 
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
+		log.WithFields(logrus.Fields{
+			"error":   err.Error(),
+			"details": "there's an error in connecting to DB",
+		}).Info("there is an error in  DB")
+	}
+
 	db.LogMode(false)
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}); err != nil {
+	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error,
+			"error": err.Error(),
 		}).Info("Unable to migrate database")
 	}
 
-	var fields = ebs_fields.WorkingKeyFields{}
+	var fields = ebs_fields.MiniStatementFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -1028,6 +1120,67 @@ func MiniStatement(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, successfulResponse)
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+func testAPI(c *gin.Context) {
+
+	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
+
+	// create database function
+	db := database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.WorkingKeyFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+	case validator.ValidationErrors:
+		var details []ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ErrorToString(err))
+		}
+
+		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+	case nil:
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		var successfulResponse SuccessfulResponse
+		successfulResponse.EBSResponse = res
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res,
+		}
+
+		transaction.EBSServiceName = WorkingKeyTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			// convert ebs res code to int
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
