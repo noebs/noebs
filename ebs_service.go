@@ -434,34 +434,8 @@ func CardTransfer(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.CardTransferFields{}
 
@@ -538,34 +512,9 @@ func BillInquiry(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
 
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 	var fields = ebs_fields.BillInquiryFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -640,34 +589,8 @@ func BillPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.BillPaymentFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -742,34 +665,8 @@ func ChangePIN(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.ChangePINFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -843,34 +740,8 @@ func CashOut(c *gin.Context) {
 	// - open a DB connection (getDB)
 	// - check for the binding errors
 	//
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.CashOutFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -945,34 +816,8 @@ func CashIn(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.CashInFields{}
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -1047,34 +892,8 @@ func MiniStatement(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.MiniStatementFields{}
 
