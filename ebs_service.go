@@ -7,7 +7,6 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -148,34 +147,8 @@ func IsAlive(c *gin.Context) {
 
 	url := EBSMerchantIP + IsAliveEndpoint // EBS simulator endpoint url goes here.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.IsAliveFields{}
 
@@ -216,6 +189,10 @@ func IsAlive(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = IsAliveTransaction
+
+		// return a masked pan
+		transaction.MaskPAN()
+
 		// God please make it works.
 		if err := db.Create(&transaction).Error; err != nil {
 			log.WithFields(logrus.Fields{
@@ -254,34 +231,8 @@ func WorkingKey(c *gin.Context) {
 
 	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	db, err := gorm.Open("sqlite3", "./test.db")
-
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	// why are we using env here?
-	// clearly i'm using db variable directly
-
+	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in  DB")
-	}
-
-	db.LogMode(false)
-
-	if err := db.AutoMigrate(&dashboard.Transaction{}).Error; err != nil {
-		log.WithFields(logrus.Fields{
-			"error": err.Error(),
-		}).Info("Unable to migrate database")
-	}
 
 	var fields = ebs_fields.WorkingKeyFields{}
 
