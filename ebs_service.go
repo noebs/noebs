@@ -350,6 +350,8 @@ func Purchase(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+		// return a masked pan
+		transaction.MaskPAN()
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
