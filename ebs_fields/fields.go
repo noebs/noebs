@@ -138,3 +138,11 @@ type ImportantEBSFields struct {
 	TranFee              float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
 }
+
+// MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
+func (res *GenericEBSResponseFields) MaskPAN() {
+	if res.PAN != "" {
+		length := len(res.PAN)
+		res.PAN = res.PAN[length-4 : length]
+	}
+}

@@ -342,6 +342,8 @@ func Purchase(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
+		// mask the pan
+		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
@@ -351,7 +353,7 @@ func Purchase(c *gin.Context) {
 
 		transaction.EBSServiceName = PurchaseTransaction
 		// return a masked pan
-		transaction.MaskPAN()
+
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
