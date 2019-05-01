@@ -178,7 +178,7 @@ func GetAll(c *gin.Context) {
 
 	//FIXME This api is not working
 	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
-	db.Offset(p).Limit(l).Find(&tran)
+	db.Order("id desc").Offset(p).Limit(l).Find(&tran)
 
 	c.JSON(200, gin.H{"result": tran, "first": p, "last": p + l})
 }
