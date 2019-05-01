@@ -115,7 +115,7 @@ func MakeDummyTransaction(c *gin.Context) {
 				ResponseMessage:      "",
 				ResponseStatus:       "",
 				ResponseCode:         0,
-				ReferenceNumber:      0,
+				ReferenceNumber:      "",
 				ApprovalCode:         0,
 				VoucherNumber:        0,
 				MiniStatementRecords: "",
