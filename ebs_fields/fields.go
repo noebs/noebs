@@ -26,7 +26,7 @@ type MiniStatementFields struct {
 type ChangePINFields struct {
 	CommonFields
 	CardInfoFields
-	NewPIN string `json:"newPin" binding:"required"`
+	NewPIN string `json:"newPIN" binding:"required"`
 }
 
 type CardTransferFields struct {
