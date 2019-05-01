@@ -161,6 +161,9 @@ func GetAll(c *gin.Context) {
 	db.AutoMigrate(&Transaction{})
 
 	qparam, _ := c.GetQuery("page")
+	if qparam == "" {
+		qparam = "1" // first db id
+	}
 	p, _ := strconv.Atoi(qparam)
 
 	limit, _ := c.GetQuery("limit")
@@ -175,7 +178,7 @@ func GetAll(c *gin.Context) {
 
 	//FIXME This api is not working
 	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
-	db.Offset(p).Limit(20).Find(&tran)
+	db.Offset(p).Limit(l).Find(&tran)
 
 	c.JSON(200, gin.H{"result": tran, "first": p, "last": p + l})
 }
