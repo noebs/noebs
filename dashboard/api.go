@@ -162,11 +162,7 @@ func GetAll(c *gin.Context) {
 
 	db.AutoMigrate(&Transaction{})
 
-	qparam, ok := c.GetQuery("page")
-	if !ok {
-		// hack to make it works
-		qparam = "0"
-	}
+	qparam, _ := c.GetQuery("page")
 	p, _ := strconv.Atoi(qparam)
 
 	var tran []Transaction
@@ -174,7 +170,7 @@ func GetAll(c *gin.Context) {
 	// or, not?
 
 	//FIXME This api is not working
-	env.Db.Order("id desc").Limit(p+limit).Where("id = ?", p).Find(&tran)
+	env.Db.Order("id desc").Limit(p + limit).Find(&tran)
 
 	c.JSON(200, gin.H{"result": tran})
 }
