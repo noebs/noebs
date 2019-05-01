@@ -166,19 +166,22 @@ func GetAll(c *gin.Context) {
 	}
 	p, _ := strconv.Atoi(qparam)
 
-	limit, _ := c.GetQuery("limit")
-	if limit == "" {
-		limit = "20" // default page size
-	}
-	l, _ := strconv.Atoi(limit)
-
 	var tran []Transaction
 	// just really return anything, even empty ones.
 	// or, not?
 
 	//FIXME This api is not working
 	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
-	db.Order("id desc").Offset(p).Limit(l).Find(&tran)
+	db.Order("id desc").Offset(p).Limit(50).Find(&tran)
 
-	c.JSON(200, gin.H{"result": tran, "first": p, "last": p + l})
+	paging := map[string]interface{}{
+		"previous": "",
+		"after":    "",
+	}
+	c.JSON(200, gin.H{"result": tran, "paging": paging})
+}
+
+// pagination handles prev - next cases
+func pagination() {
+
 }

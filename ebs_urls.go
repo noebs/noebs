@@ -26,8 +26,6 @@ const (
 	ChangePINEndpoint                = "changePin"
 )
 
-// https://172.16.199.1:8181/QAEBSGateway/getBalance
-
 const EBSMerchantIP = "https://172.16.199.1:8181/QAEBSGateway/"
 
 const (
@@ -43,4 +41,5 @@ const (
 	CashOutTransaction              = "CashOutTransaction"
 	MiniStatementTransaction        = "MiniStatementTransaction"
 	IsAliveTransaction              = "IsAliveTransaction"
+	BalanceTransaction              = "BalanceTransaction"
 )

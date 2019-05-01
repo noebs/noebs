@@ -11,14 +11,6 @@ type Transaction struct {
 	ebs_fields.GenericEBSResponseFields
 }
 
-// MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
-func (t *Transaction) MaskPAN() {
-	if t.PAN != "" {
-		length := len(t.PAN)
-		t.PAN = t.PAN[length-4 : length]
-	}
-}
-
 type Env struct {
 	Db *gorm.DB
 }

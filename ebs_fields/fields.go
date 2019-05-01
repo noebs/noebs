@@ -15,6 +15,10 @@ type WorkingKeyFields struct {
 	CommonFields
 }
 
+type BalanceFields struct {
+	CommonFields
+	CardInfoFields
+}
 type MiniStatementFields struct {
 	CommonFields
 	CardInfoFields
@@ -144,5 +148,15 @@ func (res *GenericEBSResponseFields) MaskPAN() {
 	if res.PAN != "" {
 		length := len(res.PAN)
 		res.PAN = res.PAN[length-4 : length]
+	}
+
+	if res.ToCard != "" {
+		length := len(res.ToCard)
+		res.ToCard = res.ToCard[length-4 : length]
+	}
+
+	if res.FromCard != "" {
+		length := len(res.FromCard)
+		res.FromCard = res.FromCard[length-4 : length]
 	}
 }
