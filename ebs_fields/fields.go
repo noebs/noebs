@@ -133,7 +133,7 @@ type ImportantEBSFields struct {
 	ResponseStatus       string  `json:"responseStatus,omitempty"`
 	ResponseCode         int     `json:"responseCode"`
 	ReferenceNumber      string  `json:"referenceNumber,omitempty"`
-	ApprovalCode         int     `json:"approvalCode,omitempty"`
+	ApprovalCode         string  `json:"approvalCode,omitempty"`
 	VoucherNumber        int     `json:"voucherNumber,omitempty"`
 	MiniStatementRecords string  `json:"miniStatementRecords,omitempty"`
 	DisputeRRN           string  `json:"DisputeRRN,omitempty"`
