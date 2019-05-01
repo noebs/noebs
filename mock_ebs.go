@@ -25,7 +25,7 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 		ResponseStatus:  status,
 		ResponseCode:    0,
 		ReferenceNumber: "",
-		ApprovalCode:    rand.Intn(9999),
+		ApprovalCode:    "",
 	}
 
 	res.ImportantEBSFields = commonFields

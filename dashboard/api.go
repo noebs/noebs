@@ -116,7 +116,7 @@ func MakeDummyTransaction(c *gin.Context) {
 				ResponseStatus:       "",
 				ResponseCode:         0,
 				ReferenceNumber:      "",
-				ApprovalCode:         0,
+				ApprovalCode:         "",
 				VoucherNumber:        0,
 				MiniStatementRecords: "",
 				DisputeRRN:           "",
