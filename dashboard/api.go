@@ -158,7 +158,7 @@ func GetAll(c *gin.Context) {
 
 	defer env.Db.Close()
 
-	limit := 20
+	//limit := 20
 
 	db.AutoMigrate(&Transaction{})
 
@@ -170,7 +170,8 @@ func GetAll(c *gin.Context) {
 	// or, not?
 
 	//FIXME This api is not working
-	env.Db.Order("id desc").Limit(p + limit).Find(&tran)
+	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
+	db.Offset(p).Limit(20).Find(&tran, "id = ?", p)
 
 	c.JSON(200, gin.H{"result": tran})
 }
