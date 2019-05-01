@@ -158,12 +158,16 @@ func GetAll(c *gin.Context) {
 
 	defer env.Db.Close()
 
-	//limit := 20
-
 	db.AutoMigrate(&Transaction{})
 
 	qparam, _ := c.GetQuery("page")
 	p, _ := strconv.Atoi(qparam)
+
+	limit, _ := c.GetQuery("limit")
+	if limit == "" {
+		limit = "20" // default page size
+	}
+	l, _ := strconv.Atoi(limit)
 
 	var tran []Transaction
 	// just really return anything, even empty ones.
@@ -173,5 +177,5 @@ func GetAll(c *gin.Context) {
 	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
 	db.Offset(p).Limit(20).Find(&tran)
 
-	c.JSON(200, gin.H{"result": tran})
+	c.JSON(200, gin.H{"result": tran, "first": p, "last": p + l})
 }
