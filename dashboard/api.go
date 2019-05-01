@@ -170,7 +170,6 @@ func GetAll(c *gin.Context) {
 	// just really return anything, even empty ones.
 	// or, not?
 
-	//FIXME This api is not working
 	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
 	db.Order("id desc").Offset(p).Limit(50).Find(&tran)
 
