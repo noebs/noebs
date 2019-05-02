@@ -99,7 +99,7 @@ func init() {
 func main() {
 
 	// logging and instrumentation
-	file, err := os.OpenFile("/var/log/logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
 	if err == nil {
 		log.Out = file
 	} else {
@@ -107,6 +107,7 @@ func main() {
 		log.Info("Failed to log to file, using default stderr: %v", err)
 	}
 	log.Level = logrus.TraceLevel
+	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 
@@ -504,6 +505,7 @@ func CardTransfer(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
+		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
@@ -734,6 +736,7 @@ func ChangePIN(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
+		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
