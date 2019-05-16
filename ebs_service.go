@@ -53,6 +53,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/create", dashboard.MakeDummyTransaction)
 		dashboardGroup.GET("/all", dashboard.GetAll)
 		dashboardGroup.GET("/count", dashboard.TransactionsCount)
+		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	}
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -70,32 +71,13 @@ func init() {
 // @termsOfService http://swagger.io/terms/
 // @contact.name API Support
 // @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
+// @contact.email adonese@soluspay/net
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
-// @host localhost:8080
-// @BasePath /api/v1
+// @host beta.soluspay.net
+// @BasePath /api/
 // @securityDefinitions.basic BasicAuth
-// @securityDefinitions.apikey ApiKeyAuth
 // @in header
-// @name Authorization
-// @securitydefinitions.oauth2.application OAuth2Application
-// @tokenUrl https://example.com/oauth/token
-// @scope.write Grants write access
-// @scope.admin Grants read and write access to administrative information
-// @securitydefinitions.oauth2.implicit OAuth2Implicit
-// @authorizationurl https://example.com/oauth/authorize
-// @scope.write Grants write access
-// @scope.admin Grants read and write access to administrative information
-// @securitydefinitions.oauth2.password OAuth2Password
-// @tokenUrl https://example.com/oauth/token
-// @scope.read Grants read access
-// @scope.write Grants write access
-// @scope.admin Grants read and write access to administrative information
-// @securitydefinitions.oauth2.accessCode OAuth2AccessCode
-// @tokenUrl https://example.com/oauth/token
-// @authorizationurl https://example.com/oauth/authorize
-// @scope.admin Grants read and write access to administrative information
 func main() {
 
 	// logging and instrumentation
@@ -719,7 +701,7 @@ func ChangePIN(c *gin.Context) {
 			details = append(details, ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
 
 		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
 

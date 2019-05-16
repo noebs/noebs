@@ -26,3 +26,8 @@ func (e *Env) GetTransactionbyID(c *gin.Context) {
 
 	defer e.Db.Close()
 }
+
+type PurchaseModel struct {
+	gorm.Model
+	ebs_fields.GenericEBSResponseFields
+}

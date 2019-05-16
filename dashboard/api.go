@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 var log = logrus.New()
@@ -183,4 +184,35 @@ func GetAll(c *gin.Context) {
 // pagination handles prev - next cases
 func pagination() {
 
+}
+
+const (
+	dateFormat = "2006-01-02"
+)
+
+// This endpoint is highly experimental. It has many security issues and it is only
+// used by us for testing and prototyping only. YOU HAVE TO USE PROPER AUTHENTICATION system
+// if you decide to go with it. See apigateway package if you are interested.
+func DailySettlement(c *gin.Context) {
+	// get the results from DB
+	db, _ := gorm.Open("sqlite3", "test.db")
+	env := &Env{Db: db}
+	defer env.Db.Close()
+
+	db.AutoMigrate(&PurchaseModel{})
+	var tran PurchaseModel
+
+	q, _ := c.GetQuery("terminal")
+	if q == "" {
+		// case of empty terminal
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "empty terminal ID", "code": "empty_terminal_id"})
+	}
+	t := time.Now()
+	today := t.Format(dateFormat)
+	yesterday, _ := time.Parse(dateFormat, today)
+	yesterday = yesterday.Add(-24 * time.Hour)
+	todayDate, _ := time.Parse(dateFormat, today)
+
+	db.Where("terminal_id = ? AND created_at BETWEEN ? AND ?", q, todayDate, yesterday).Find(&tran)
+	c.JSON(http.StatusOK, gin.H{"transactions": tran})
 }
