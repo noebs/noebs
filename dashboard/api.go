@@ -190,17 +190,18 @@ const (
 	dateFormat = "2006-01-02"
 )
 
+type purchasesSum map[string]interface{}
+
 // This endpoint is highly experimental. It has many security issues and it is only
 // used by us for testing and prototyping only. YOU HAVE TO USE PROPER AUTHENTICATION system
 // if you decide to go with it. See apigateway package if you are interested.
 func DailySettlement(c *gin.Context) {
 	// get the results from DB
 	db, _ := gorm.Open("sqlite3", "test.db")
-	env := &Env{Db: db}
-	defer env.Db.Close()
+	defer db.Close()
 
 	db.AutoMigrate(&PurchaseModel{})
-	var tran PurchaseModel
+	var tran []PurchaseModel
 
 	q, _ := c.GetQuery("terminal")
 	if q == "" {
@@ -214,5 +215,26 @@ func DailySettlement(c *gin.Context) {
 	todayDate, _ := time.Parse(dateFormat, today)
 
 	db.Where("terminal_id = ? AND created_at BETWEEN ? AND ?", q, todayDate, yesterday).Find(&tran)
-	c.JSON(http.StatusOK, gin.H{"transactions": tran})
+
+	//rows, err := db.Model(&PurchaseModel{}).Select("date(created_at) as date, sum(amount) as total").Group("date(created_at)").Rows()
+	//if err != nil {
+	//	log.WithFields(logrus.Fields{
+	//		"error": "Error in counting results",
+	//		"message": err.Error(),
+	//	}).Info("unable to count purchase settlement results")
+	//}
+	//for rows.Next() {
+	//
+	//}
+
+	p := make(purchasesSum)
+	var listP []purchasesSum
+	var sum float32
+	for _, v := range tran {
+		p["date"] = v.UpdatedAt
+		p["amount"] = v.TranAmount
+		listP = append(listP, p)
+		sum += v.TranAmount
+	}
+	c.JSON(http.StatusOK, gin.H{"transactions": listP, "sum": sum})
 }
