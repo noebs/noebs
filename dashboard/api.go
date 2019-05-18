@@ -207,6 +207,7 @@ func DailySettlement(c *gin.Context) {
 	if q == "" {
 		// case of empty terminal
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "empty terminal ID", "code": "empty_terminal_id"})
+		return
 	}
 	t := time.Now()
 	today := t.Format(dateFormat)
