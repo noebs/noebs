@@ -19,3 +19,5 @@ func database(dialect string, fname string) *gorm.DB {
 
 	return db
 }
+
+type redisPurchaseFields map[string]interface{}

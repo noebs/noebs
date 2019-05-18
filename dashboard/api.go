@@ -231,7 +231,7 @@ func DailySettlement(c *gin.Context) {
 	var listP []purchasesSum
 	var sum float32
 	for _, v := range tran {
-		p["date"] = v.UpdatedAt
+		p["date"] = v.CreatedAt
 		p["amount"] = v.TranAmount
 		listP = append(listP, p)
 		sum += v.TranAmount

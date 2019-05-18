@@ -7,6 +7,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-redis/redis"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
