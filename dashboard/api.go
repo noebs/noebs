@@ -212,7 +212,7 @@ func DailySettlement(c *gin.Context) {
 	today := time.Now()
 	yesterday := today.Add(-24 * time.Hour)
 
-	db.Where("created_at BETWEEN ? AND ?", yesterday, today).Find(&tran)
+	db.Where("created_at BETWEEN ? AND ? AND terminal_id = ?", yesterday, today, q).Find(&tran)
 	//db.Model(&PurchaseModel{}).Find(&tran)
 
 	//rows, err := db.Model(&PurchaseModel{}).Select("date(created_at) as date, sum(amount) as total").Group("date(created_at)").Rows()
@@ -230,11 +230,14 @@ func DailySettlement(c *gin.Context) {
 	p := make(purchasesSum)
 	var listP []purchasesSum
 	var sum float32
+	count := len(tran)
 	for _, v := range tran {
 		p["date"] = v.TranDateTime
 		p["amount"] = v.TranAmount
+		p["human_readable_time"] = v.CreatedAt
+
 		listP = append(listP, p)
 		sum += v.TranAmount
 	}
-	c.JSON(http.StatusOK, gin.H{"transactions": listP, "sum": sum})
+	c.JSON(http.StatusOK, gin.H{"transactions": listP, "sum": sum, "count": count})
 }
