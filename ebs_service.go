@@ -334,6 +334,25 @@ func Purchase(c *gin.Context) {
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res,
 		}
+		p := dashboard.PurchaseModel{
+			PurchaseFields: ebs_fields.PurchaseFields{
+				WorkingKeyFields: ebs_fields.WorkingKeyFields{
+					CommonFields: ebs_fields.CommonFields{
+						SystemTraceAuditNumber: res.SystemTraceAuditNumber,
+						TranDateTime:           res.TranDateTime,
+						TerminalID:             res.TerminalID,
+						ClientID:               res.ClientID,
+					},
+				},
+				CardInfoFields: ebs_fields.CardInfoFields{
+					Pan: res.PAN,
+				},
+				AmountFields: ebs_fields.AmountFields{
+					TranAmount:       res.TranAmount,
+					TranCurrencyCode: res.TranCurrencyCode,
+				},
+			},
+		}
 
 		var purchaseTransaction dashboard.PurchaseModel
 		transaction.EBSServiceName = PurchaseTransaction
@@ -343,7 +362,7 @@ func Purchase(c *gin.Context) {
 
 		db.AutoMigrate(&dashboard.PurchaseModel{})
 
-		if err := db.Model(&purchaseTransaction).Create(&transaction).Error; err != nil {
+		if err := db.Model(&purchaseTransaction).Create(&p).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err.Error(),
