@@ -209,10 +209,10 @@ func DailySettlement(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "empty terminal ID", "code": "empty_terminal_id"})
 		return
 	}
-	t := time.Now()
-	yesterday := t.Add(-24 * time.Hour)
+	today := time.Now()
+	yesterday := today.Add(-24 * time.Hour)
 
-	db.Where("created_at BETWEEN ? AND ?", t, yesterday).Find(&tran)
+	db.Where("created_at BETWEEN ? AND ?", yesterday, today).Find(&tran)
 	//db.Model(&PurchaseModel{}).Find(&tran)
 
 	//rows, err := db.Model(&PurchaseModel{}).Select("date(created_at) as date, sum(amount) as total").Group("date(created_at)").Rows()
