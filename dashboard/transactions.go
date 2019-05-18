@@ -11,6 +11,10 @@ type Transaction struct {
 	ebs_fields.GenericEBSResponseFields
 }
 
+type PurchaseModel struct {
+	gorm.Model
+	ebs_fields.PurchaseFields
+}
 type Env struct {
 	Db *gorm.DB
 }
@@ -25,9 +29,4 @@ func (e *Env) GetTransactionbyID(c *gin.Context) {
 	c.JSON(200, gin.H{"result": tran.ID})
 
 	defer e.Db.Close()
-}
-
-type PurchaseModel struct {
-	gorm.Model
-	ebs_fields.GenericEBSResponseFields
 }

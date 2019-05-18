@@ -335,12 +335,13 @@ func Purchase(c *gin.Context) {
 			GenericEBSResponseFields: res,
 		}
 
+		var purchaseTransaction dashboard.PurchaseModel
 		transaction.EBSServiceName = PurchaseTransaction
-		// return a masked pan
 
 		// God please make it works.
 		db.Create(&transaction)
-		db.Commit()
+		db.AutoMigrate(&purchaseTransaction)
+		db.Model(&purchaseTransaction).Create(&transaction)
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
