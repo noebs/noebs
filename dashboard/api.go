@@ -212,7 +212,7 @@ func DailySettlement(c *gin.Context) {
 	t := time.Now()
 	today := t.Format(dateFormat)
 	yesterday, _ := time.Parse(dateFormat, today)
-	yesterday = yesterday.Add(-24 * time.Hour)
+	yesterday = yesterday.Add(-8 * 24 * time.Hour)
 	todayDate, _ := time.Parse(dateFormat, today)
 
 	db.Where("terminal_id = ? AND created_at BETWEEN ? AND ?", q, todayDate, yesterday).Find(&tran)
