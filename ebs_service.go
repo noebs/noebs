@@ -340,8 +340,15 @@ func Purchase(c *gin.Context) {
 
 		// God please make it works.
 		db.Create(&transaction)
-		db.AutoMigrate(&purchaseTransaction)
-		db.Model(&purchaseTransaction).Create(&transaction)
+
+		db.AutoMigrate(&dashboard.PurchaseModel{})
+
+		if err := db.Model(&purchaseTransaction).Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
