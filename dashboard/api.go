@@ -213,9 +213,10 @@ func DailySettlement(c *gin.Context) {
 	today := t.Format(dateFormat)
 	yesterday, _ := time.Parse(dateFormat, today)
 	yesterday = yesterday.Add(-8 * 24 * time.Hour)
-	todayDate, _ := time.Parse(dateFormat, today)
+	//todayDate, _ := time.Parse(dateFormat, today)
 
-	db.Where("terminal_id = ? AND created_at BETWEEN ? AND ?", q, todayDate, yesterday).Find(&tran)
+	//db.Model(&PurchaseModel{}).Where("terminal_id = ? AND created_at BETWEEN ? AND ?", q, todayDate, yesterday).Find(&tran)
+	db.Model(&PurchaseModel{}).Find(&tran)
 
 	//rows, err := db.Model(&PurchaseModel{}).Select("date(created_at) as date, sum(amount) as total").Group("date(created_at)").Rows()
 	//if err != nil {
