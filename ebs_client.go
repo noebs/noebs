@@ -56,11 +56,9 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			log.WithFields(logrus.Fields{
 				"error": err.Error(),
 			}).Error("Error reading ebs response")
-			// wrong. make the error of any other type than ebsGatewayConnectivityErr
-			// perhaps, gateway error? as this error is ebs's one
+
 			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
-		log.Println(string(responseBody))
 
 		// check Content-type is application json, if not, panic!
 		if ebsResponse.Header.Get("Content-Type") != "application/json" {
@@ -70,23 +68,11 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			}).Error("ebs response content type is not application/json")
 			return 500, ebsGenericResponse, contentTypeErr
 		}
-
 		if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 			// there's no problem in Unmarshalling
-
 			if ebsGenericResponse.ResponseCode == 0 {
-				// the transaction is successful
-				log.WithFields(logrus.Fields{
-					"ebs_response": ebsGenericResponse,
-				}).Info("ebs response transaction")
-
 				return http.StatusOK, ebsGenericResponse, nil
-
 			} else {
-				// there is an error in the transaction
-				log.WithFields(logrus.Fields{
-					"ebs_response": ebsGenericResponse,
-				}).Info("ebs response transaction")
 
 				err := errors.New(ebsGenericResponse.ResponseMessage)
 				return http.StatusBadGateway, ebsGenericResponse, err
@@ -96,8 +82,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 			// there is an error in handling the incoming EBS's ebsResponse
 			// log the err here please
 			log.WithFields(logrus.Fields{
-				"error":   err.Error(),
-				"details": ebsGenericResponse,
+				"error": err.Error(),
 			}).Info("ebs response transaction")
 
 			return http.StatusInternalServerError, ebsGenericResponse, err
@@ -107,8 +92,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 		// mock settings.
 
 		MockEbsResponse(urlToMock(url), &ebsGenericResponse)
-		fmt.Printf("the ebs generic respons is %s", ebsGenericResponse.MiniStatementRecords)
-		return 200, ebsGenericResponse, nil
+		return http.StatusOK, ebsGenericResponse, nil
 	}
 
 }
