@@ -6,7 +6,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"net/http"
-	"strconv"
 	"time"
 )
 
@@ -61,6 +60,17 @@ func TransactionsCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": count})
 }
 
+// TransactionByTid godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param id query string false "search list transactions by terminal ID"
+// @Success 200 {string} ok
+// @Failure 400 {integer} 400
+// @Failure 404 {integer} 404
+// @Failure 500 {integer} 500
+// @Router /dashboard/get_tid [get]
 func TransactionByTid(c *gin.Context) {
 
 	db, err := gorm.Open("sqlite3", "test.db")
@@ -72,9 +82,7 @@ func TransactionByTid(c *gin.Context) {
 			}).Info("error in database")
 	}
 
-	env := &Env{Db: db}
-
-	defer env.Db.Close()
+	defer db.Close()
 
 	if err := db.AutoMigrate(&Transaction{}).Error; err != nil {
 		log.WithFields(
@@ -84,10 +92,10 @@ func TransactionByTid(c *gin.Context) {
 			}).Info("error in database")
 	}
 
-	//tid, _ := c.GetQuery("tid")
+	tid, _ := c.GetQuery("tid")
 
 	var tran []Transaction
-	if err := env.Db.Find(&tran).Error; err != nil {
+	if err := db.Where("terminal_id LIKE ?", tid+"%").Find(&tran).Error; err != nil {
 		log.WithFields(logrus.Fields{
 			"error":   err.Error(),
 			"details": tran,
@@ -155,35 +163,38 @@ func MakeDummyTransaction(c *gin.Context) {
 func GetAll(c *gin.Context) {
 	db, _ := gorm.Open("sqlite3", "test.db")
 
-	env := &Env{Db: db}
-
-	defer env.Db.Close()
+	defer db.Close()
 
 	db.AutoMigrate(&Transaction{})
 
-	qparam, _ := c.GetQuery("page")
-	if qparam == "" {
-		qparam = "1" // first db id
-	}
-	p, _ := strconv.Atoi(qparam)
+	q := c.GetInt("page")
+
+	// page represents a 30 result from the database.
+	// the computation should be done like this:
+	// offset = page * 50
+	// limit = offset + 50
+	pageSize := 50
+	offset := q * pageSize
+	limit := offset + pageSize
 
 	var tran []Transaction
-	// just really return anything, even empty ones.
-	// or, not?
 
-	//env.Db.Order("id desc").Limit(p + limit).Find(&tran)
-	db.Order("id desc").Offset(p).Limit(50).Find(&tran)
+	// another good alternative
+	db.Order("ID DESC").Where("id = ?", offset).Limit(limit).Find(&tran)
+
+	var previous int
+	if q <= 1 {
+		previous = 1
+
+	}
+	previous = q - 1
+	next := q + 1
 
 	paging := map[string]interface{}{
-		"previous": "",
-		"after":    "",
+		"previous": previous,
+		"after":    next,
 	}
-	c.JSON(200, gin.H{"result": tran, "paging": paging})
-}
-
-// pagination handles prev - next cases
-func pagination() {
-
+	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
 
 const (
@@ -209,23 +220,12 @@ func DailySettlement(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "empty terminal ID", "code": "empty_terminal_id"})
 		return
 	}
-	today := time.Now()
-	yesterday := today.Add(-24 * time.Hour)
+	format := "2006-10-12"
+	today := time.Now().Format(format)
+	t, _ := time.Parse(format, today)
+	yesterday := t.Add(-23 * time.Hour).Add(-59 * time.Minute).Add(-59 * time.Second)
 
-	db.Where("created_at BETWEEN ? AND ? AND terminal_id = ?", yesterday, today, q).Find(&tran)
-	//db.Model(&PurchaseModel{}).Find(&tran)
-
-	//rows, err := db.Model(&PurchaseModel{}).Select("date(created_at) as date, sum(amount) as total").Group("date(created_at)").Rows()
-	//if err != nil {
-	//	log.WithFields(logrus.Fields{
-	//		"error": "Error in counting results",
-	//		"message": err.Error(),
-	//	}).Info("unable to count purchase settlement results")
-	//}
-	//for rows.Next() {
-	//
-
-	//}
+	db.Where("created_at BETWEEN ? AND ? AND terminal_id = ?", yesterday, t, q).Find(&tran)
 
 	p := make(purchasesSum)
 	var listP []purchasesSum
