@@ -173,6 +173,10 @@ func GetAll(c *gin.Context) {
 	// the computation should be done like this:
 	// offset = page * 50
 	// limit = offset + 50
+
+	if q <= 0 {
+		q += 1
+	}
 	pageSize := 50
 	offset := q * pageSize
 	limit := offset + pageSize
