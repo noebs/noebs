@@ -258,7 +258,12 @@ func WorkingKey(c *gin.Context) {
 
 		transaction.EBSServiceName = WorkingKeyTransaction
 		// God please make it works.
-		db.Create(&transaction)
+		if err := db.Create(&transaction).Error; err != nil {
+			log.WithFields(logrus.Fields{
+				"error":   err.Error(),
+				"details": "Error in writing to database",
+			}).Info("Problem in transaction table committing")
+		}
 		db.Commit()
 
 		if ebsErr != nil {
