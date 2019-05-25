@@ -178,14 +178,12 @@ func IsAlive(c *gin.Context) {
 		transaction.MaskPAN()
 
 		// God please make it works.
-		if err := db.Create(&transaction).Error; err != nil {
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			log.WithFields(logrus.Fields{
 				"error":   err.Error(),
 				"details": "Error in writing to database",
 			}).Info("Problem in transaction table committing")
 		}
-
-		db.Commit()
 
 		if ebsErr != nil {
 			// convert ebs res code to int
@@ -340,16 +338,14 @@ func Purchase(c *gin.Context) {
 			GenericEBSResponseFields: res,
 		}
 
-		var purchaseTransaction dashboard.PurchaseModel
 		transaction.EBSServiceName = PurchaseTransaction
 
-		if err := db.Model(&purchaseTransaction).Create(&transaction).Error; err != nil {
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
-		db.Commit()
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -428,8 +424,7 @@ func Balance(c *gin.Context) {
 		// return a masked pan
 
 		// God please make it works.
-		db.Create(&transaction)
-		db.Commit()
+		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -506,8 +501,7 @@ func CardTransfer(c *gin.Context) {
 
 		transaction.EBSServiceName = CardTransferTransaction
 		// God please make it works.
-		db.Create(&transaction)
-		db.Commit()
+		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
