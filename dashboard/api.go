@@ -187,7 +187,7 @@ func GetAll(c *gin.Context) {
 	var tran []Transaction
 
 	// another good alternative
-	db.Where("id = ?", offset).Limit(limit).Find(&tran)
+	db.Table("transactions").Where("id = ?", offset).Limit(limit).Find(&tran)
 
 	previous := page - 1
 	next := page + 1
