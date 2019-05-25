@@ -180,7 +180,7 @@ func GetAll(c *gin.Context) {
 	var tran []Transaction
 
 	// another good alternative
-	db.Order("ID DESC").Where("id = ?", offset).Limit(limit).Find(&tran)
+	db.Where("id = ?", offset).Limit(limit).Find(&tran)
 
 	var previous int
 	if q <= 1 {
