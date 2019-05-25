@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
@@ -181,13 +182,13 @@ func GetAll(c *gin.Context) {
 	// limit = offset + 50
 
 	pageSize := 50
-	offset := page * pageSize
-	limit := offset + pageSize
+	offset := page*pageSize - pageSize + 1
 
+	fmt.Println(offset, page)
 	var tran []Transaction
 
 	// another good alternative
-	db.Table("transactions").Where("id = ?", offset).Limit(limit).Find(&tran)
+	db.Where("id = ?", offset).Limit(pageSize).Find(&tran)
 
 	previous := page - 1
 	next := page + 1
