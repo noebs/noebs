@@ -182,7 +182,7 @@ func GetAll(c *gin.Context) {
 	// limit = offset + 50
 
 	pageSize := 50
-	offset := page*pageSize - pageSize
+	offset := page*pageSize - pageSize + 1
 
 	fmt.Println(offset, page)
 	var tran []Transaction
