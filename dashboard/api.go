@@ -184,16 +184,9 @@ func GetAll(c *gin.Context) {
 	var tran []Transaction
 
 	// another good alternative
-	db.Where("id = ?", offset).Limit(limit).Find(&tran)
+	db.Where("id = ?", q).Limit(limit).Find(&tran)
 
-	var previous int
-	if q <= 1 {
-		previous = 1
-
-	} else {
-		previous = q - 1
-
-	}
+	previous := q - 1
 	next := q + 1
 
 	paging := map[string]interface{}{
