@@ -6,6 +6,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -167,18 +168,20 @@ func GetAll(c *gin.Context) {
 
 	db.AutoMigrate(&Transaction{})
 
-	q := c.GetInt("page")
+	var page int
+	if q := c.Query("page"); q != "" {
+		page, _ = strconv.Atoi(q)
+	} else {
+		page = 1
+	}
 
 	// page represents a 30 result from the database.
 	// the computation should be done like this:
 	// offset = page * 50
 	// limit = offset + 50
 
-	if q <= 0 {
-		q += 1
-	}
 	pageSize := 50
-	offset := q * pageSize
+	offset := page * pageSize
 	limit := offset + pageSize
 
 	var tran []Transaction
@@ -186,8 +189,8 @@ func GetAll(c *gin.Context) {
 	// another good alternative
 	db.Where("id = ?", offset).Limit(limit).Find(&tran)
 
-	previous := q - 1
-	next := q + 1
+	previous := page - 1
+	next := page + 1
 
 	paging := map[string]interface{}{
 		"previous": previous,
