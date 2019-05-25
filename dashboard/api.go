@@ -186,8 +186,10 @@ func GetAll(c *gin.Context) {
 	if q <= 1 {
 		previous = 1
 
+	} else {
+		previous = q - 1
+
 	}
-	previous = q - 1
 	next := q + 1
 
 	paging := map[string]interface{}{
