@@ -182,13 +182,13 @@ func GetAll(c *gin.Context) {
 	// limit = offset + 50
 
 	pageSize := 50
-	offset := page*pageSize - pageSize + 1
+	offset := page*pageSize - pageSize
 
-	fmt.Println(offset, page)
+	fmt.Println(offset)
 	var tran []Transaction
 
 	// another good alternative
-	db.Where("id = ?", offset).Limit(pageSize).Find(&tran)
+	db.Offset(offset).Limit(pageSize).Find(&tran)
 
 	previous := page - 1
 	next := page + 1
