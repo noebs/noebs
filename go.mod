@@ -14,7 +14,7 @@ require (
 	github.com/mattn/go-isatty v0.0.0-20170307163044-57fdcb988a5c
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/stretchr/testify v1.2.2
+	github.com/stretchr/testify v1.3.0
 	github.com/ugorji/go v0.0.0-20170215201144-c88ee250d022
 	golang.org/x/crypto v0.0.0-20181127143415-eb0de9b17e85
 	golang.org/x/sys v0.0.0-20181128092732-4ed8d59d0b35
