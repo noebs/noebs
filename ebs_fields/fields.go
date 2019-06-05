@@ -46,7 +46,7 @@ type BillPaymentFields struct {
 	CommonFields
 	CardInfoFields
 	AmountFields
-	BillerFields
+	billerFields
 }
 
 type CashInFields struct {
@@ -69,7 +69,7 @@ type BillInquiryFields struct {
 	CommonFields
 	CardInfoFields
 	AmountFields
-	BillerFields
+	billerFields
 }
 
 type CommonFields struct {
@@ -90,7 +90,7 @@ type AmountFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode"`
 }
 
-type BillerFields struct {
+type billerFields struct {
 	PersonalPaymentInfo string `json:"personalPaymentInfo" binding:"required"`
 	PayeeID             string `json:"payeeId" binding:"required"`
 }

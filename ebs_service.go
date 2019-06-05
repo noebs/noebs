@@ -28,7 +28,7 @@ func GetMainEngine() *gin.Engine {
 	route.HandleMethodNotAllowed = true
 
 	// TODO
-	// Add the rest of EBS merchant services.
+	// Add the rest of EBS merchant codegen.
 
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
@@ -42,6 +42,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/isAlive", IsAlive)
 	route.POST("/balance", Balance)
 
+	//route.GET("/list_services", listing)
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
@@ -92,6 +93,7 @@ func main() {
 	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
+
 
 	if local := os.Getenv("EBS_LOCAL_DEV"); local != "" {
 		UseMockServer = true
