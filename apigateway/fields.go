@@ -13,12 +13,12 @@ type UserModel struct {
 	JWTID     int
 }
 
-func (um *UserModel) hashPassword() error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(um.Password), 8)
+func (m *UserModel) hashPassword() error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(m.Password), 8)
 	if err != nil {
 		return err
 	}
-	um.Password = string(hashedPassword)
+	m.Password = string(hashedPassword)
 	return nil
 }
 

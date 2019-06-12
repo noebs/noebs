@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/sirupsen/logrus"
@@ -57,7 +56,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 				"error": err.Error(),
 			}).Error("Error reading ebs response")
 
-			return 500, ebsGenericResponse, ebsGatewayConnectivityErr
+			return http.StatusInternalServerError, ebsGenericResponse, ebsGatewayConnectivityErr
 		}
 
 		// check Content-type is application json, if not, panic!
@@ -66,16 +65,16 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 				"error":   "wrong content type parsed",
 				"details": ebsResponse.Header.Get("Content-Type"),
 			}).Error("ebs response content type is not application/json")
-			return 500, ebsGenericResponse, contentTypeErr
+			return http.StatusInternalServerError, ebsGenericResponse, contentTypeErr
 		}
 		if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 			// there's no problem in Unmarshalling
 			if ebsGenericResponse.ResponseCode == 0 {
 				return http.StatusOK, ebsGenericResponse, nil
 			} else {
-
-				err := errors.New(ebsGenericResponse.ResponseMessage)
-				return http.StatusBadGateway, ebsGenericResponse, err
+				// the error here should be nil!
+				// we don't actually have any errors!
+				return http.StatusBadGateway, ebsGenericResponse, nil
 			}
 
 		} else {

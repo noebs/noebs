@@ -42,4 +42,5 @@ const (
 	MiniStatementTransaction        = "MiniStatementTransaction"
 	IsAliveTransaction              = "IsAliveTransaction"
 	BalanceTransaction              = "BalanceTransaction"
+	PayeesListTransaction           = "PayeesListTransaction"
 )

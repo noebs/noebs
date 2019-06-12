@@ -46,7 +46,7 @@ type BillPaymentFields struct {
 	CommonFields
 	CardInfoFields
 	AmountFields
-	billerFields
+	BillerFields
 }
 
 type CashInFields struct {
@@ -69,14 +69,14 @@ type BillInquiryFields struct {
 	CommonFields
 	CardInfoFields
 	AmountFields
-	billerFields
+	BillerFields
 }
 
 type CommonFields struct {
-	SystemTraceAuditNumber int    `json:"systemTraceAuditNumber,omitempty" binding:"required"`
-	TranDateTime           string `json:"tranDateTime,omitempty" binding:"required"`
-	TerminalID             string `json:"terminalId,omitempty" binding:"required,len=8"`
-	ClientID               string `json:"clientId,omitempty" binding:"required"`
+	SystemTraceAuditNumber int    `json:"systemTraceAuditNumber,omitempty" binding:"required" form:"systemTraceAuditNumber"`
+	TranDateTime           string `json:"tranDateTime,omitempty" binding:"required" form:"tranDateTime"`
+	TerminalID             string `json:"terminalId,omitempty" binding:"required,len=8" form:"terminalId"`
+	ClientID               string `json:"clientId,omitempty" binding:"required" form:"clientId"`
 }
 
 type CardInfoFields struct {
@@ -90,9 +90,13 @@ type AmountFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode"`
 }
 
-type billerFields struct {
+type BillerFields struct {
 	PersonalPaymentInfo string `json:"personalPaymentInfo" binding:"required"`
 	PayeeID             string `json:"payeeId" binding:"required"`
+}
+
+type PayeesListFields struct {
+	CommonFields
 }
 
 func iso8601(fl validator.FieldLevel) bool {

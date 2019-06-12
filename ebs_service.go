@@ -94,7 +94,6 @@ func main() {
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 
-
 	if local := os.Getenv("EBS_LOCAL_DEV"); local != "" {
 		UseMockServer = true
 		log.WithFields(logrus.Fields{
@@ -138,7 +137,13 @@ func IsAlive(c *gin.Context) {
 
 	var fields = ebs_fields.IsAliveFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	// use bind to get free Form support rendering!
+	// there is no practical need of using c.ShouldBindBodyWith;
+	// Bind is more perfomant than ShouldBindBodyWith; the later copies the request body and reuse it
+	// while Bind works directly on the responseBody stream.
+	// More importantly, Bind smartly handles Forms rendering and validations; ShouldBindBodyWith forces you
+	// into using only a *pre-specified* binding schema
+	bindingErr := c.Bind(&fields)
 
 	switch bindingErr := bindingErr.(type) {
 
