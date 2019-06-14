@@ -8,7 +8,7 @@ require (
 	github.com/gin-contrib/sse v0.0.0-20170109093832-22d885f9ecc7
 	github.com/gin-gonic/gin v1.4.0
 	github.com/golang/protobuf v0.0.0-20170601230230-5a0f697c9ed9
-	github.com/jinzhu/gorm v1.9.2
+	github.com/jinzhu/gorm v1.9.9
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a
 	github.com/json-iterator/go v0.0.0-20170829155851-36b14963da70
 	github.com/mattn/go-isatty v0.0.0-20170307163044-57fdcb988a5c
