@@ -208,9 +208,9 @@ func (res *GenericEBSResponseFields) MaskPAN() {
 }
 
 type ConsumerCommonFields struct {
-	ApplicationId string `json:"applicationId" form:"applicationId"`
-	TranDateTime  string `json:"tranDateTime" form:"tranDateTime"`
-	UUID          string `json:"UUID" form:"UUID"`
+	ApplicationId string `json:"applicationId" form:"applicationId" binding:"required"`
+	TranDateTime  string `json:"tranDateTime" form:"tranDateTime" binding:"required"`
+	UUID          string `json:"UUID" form:"UUID" binding:"required"`
 }
 
 type ConsumerBillInquiryFields struct {
