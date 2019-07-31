@@ -1,11 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 )
@@ -26,8 +30,7 @@ func database(dialect string, fname string) *gorm.DB {
 
 type redisPurchaseFields map[string]interface{}
 
-
-func structFields(s interface{}) (fields []map[string]interface{}){
+func structFields(s interface{}) (fields []map[string]interface{}) {
 	val := reflect.Indirect(reflect.ValueOf(s))
 	// val is a reflect.Type now
 
@@ -39,13 +42,13 @@ func structFields(s interface{}) (fields []map[string]interface{}){
 		tag := f.Tag.Get("binding")
 		sType := f.Type
 
-		if tag == ""{
+		if tag == "" {
 			tag = "optional"
 		}
 		field := map[string]interface{}{
-			"field": name,
+			"field":       name,
 			"is_required": tag,
-			"type": sType,
+			"type":        sType,
 		}
 		fields = append(fields, field)
 
@@ -55,15 +58,15 @@ func structFields(s interface{}) (fields []map[string]interface{}){
 
 //endpointToFields the corresponding struct field for the endpoint string.
 // we use simple string matching to capture the results
-func endpointToFields(e string) ( interface{}) {
+func endpointToFields(e string) interface{} {
 	if strings.Contains(e, "cashIn") {
 		return ebs_fields.CashInFields{}
 	}
 	if strings.Contains(e, "cashOut") {
-		return  ebs_fields.CashOutFields{}
+		return ebs_fields.CashOutFields{}
 	}
 	if strings.Contains(e, "balance") {
-		return  ebs_fields.BalanceFields{}
+		return ebs_fields.BalanceFields{}
 	}
 	if strings.Contains(e, "billPayment") {
 		return ebs_fields.BillPaymentFields{}
@@ -110,26 +113,72 @@ func generateDoc(e string) []map[string]interface{} {
 
 //getAllRoutes gets all routes for this particular engine
 // perhaps, it could better be rewritten to explicitly show that
-func getAllRoutes() []map[string]string{
+func getAllRoutes() []map[string]string {
 	e := GetMainEngine()
 	endpoints := e.Routes()
 	var allRoutes []map[string]string
-	for _, r := range endpoints{
+	for _, r := range endpoints {
 		name := strings.TrimPrefix(r.Path, "/")
 		mapping := map[string]string{
 			"http_method": r.Method,
-			"path": name,
+			"path":        name,
 		}
 		allRoutes = append(allRoutes, mapping)
 	}
 	return allRoutes
 }
 
-func getRedis() *redis.Client{
+func getRedis() *redis.Client {
 	client := redis.NewClient(&redis.Options{
-		Addr:               "127.0.0.1:6379",
-		DB:                 0,
-
+		Addr: "127.0.0.1:6379",
+		DB:   0,
 	})
 	return client
+}
+
+var response = ebs_fields.GenericEBSResponseFields{
+	ImportantEBSFields: ebs_fields.ImportantEBSFields{
+		ResponseMessage: "Successful",
+		ResponseStatus:  "Successful",
+		ResponseCode:    0,
+		ReferenceNumber: "094930",
+		ApprovalCode:    "0032",
+		TranDateTime:    "190613085100",
+	},
+	TerminalID:             "19000019",
+	SystemTraceAuditNumber: 0,
+	ClientID:               "ACTS",
+	PAN:                    "92220817",
+}
+
+func MockEBSServer() *httptest.Server {
+	f := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Header().Set("Content-Type", "application/json")
+
+		// write the Generic ResponseBody onto the response writer
+		b, err := json.Marshal(&response)
+		if err != nil {
+			log.Errorf("theres an error")
+		}
+		w.Write(b)
+
+	}
+	return httptest.NewServer(http.HandlerFunc(f))
+}
+
+func urlToMock(url string) interface{} {
+	if url == EBSMerchantIP+BalanceEndpoint {
+		return mockPurchaseResponse{}
+	} else if url == EBSMerchantIP+PurchaseEndpoint {
+		return mockPurchaseResponse{}
+
+	} else if url == EBSMerchantIP+MiniStatementEndpoint {
+		return mockMiniStatementResponse{}
+
+	} else if url == EBSMerchantIP+WorkingKeyEndpoint {
+		fmt.Printf("i'm here..")
+		return mockWorkingKeyResponse{}
+	}
+	return mockWorkingKeyResponse{}
 }

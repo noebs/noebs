@@ -44,3 +44,20 @@ const (
 	BalanceTransaction              = "BalanceTransaction"
 	PayeesListTransaction           = "PayeesListTransaction"
 )
+
+const (
+	EBSIp = "https://172.16.199.1:8877/QAEBSGateway/"
+)
+
+const (
+	ConsumerIsAliveEndpoint      = "isAlive"
+	ConsumerWorkingKeyEndpoint   = "getPublicKey"
+	ConsumerBalanceEndpoint      = "getBalance"
+	ConsumerBillInquiryEndpoint  = "getBill"
+	ConsumerBillPaymentEndpoint  = "payment"
+	ConsumerCardTransferEndpoint = "doCardTransfer"
+	ConsumerPayeesListEndpoint   = "getPayeesList"
+	ConsumerChangeIPinEndpoint   = "changeIPin"
+	ConsumerPurchaseEndpoint     = "specialPayment"
+	ConsumerStatusEndpoint       = "getTransactionStatus"
+)

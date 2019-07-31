@@ -80,19 +80,19 @@ type CommonFields struct {
 }
 
 type CardInfoFields struct {
-	Pan     string `json:"PAN" binding:"required"`
-	Pin     string `json:"PIN" binding:"required"`
-	Expdate string `json:"expDate" binding:"required"`
+	Pan     string `json:"PAN" binding:"required" form:"PAN"`
+	Pin     string `json:"PIN" binding:"required" form:"PIN"`
+	Expdate string `json:"expDate" binding:"required" form:"expDate"`
 }
 
 type AmountFields struct {
-	TranAmount       float32 `json:"tranAmount" binding:"required"`
-	TranCurrencyCode string  `json:"tranCurrencyCode"`
+	TranAmount       float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
+	TranCurrencyCode string  `json:"tranCurrencyCode" form:"tranCurrencyCode"`
 }
 
 type BillerFields struct {
-	PersonalPaymentInfo string `json:"personalPaymentInfo" binding:"required"`
-	PayeeID             string `json:"payeeId" binding:"required"`
+	PersonalPaymentInfo string `json:"personalPaymentInfo" binding:"required" form:"personalPaymentInfo"`
+	PayeeID             string `json:"payeeId" binding:"required" form:"payeeId"`
 }
 
 type PayeesListFields struct {
@@ -146,6 +146,49 @@ type ImportantEBSFields struct {
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
 }
 
+type ConsumerSpecificFields struct {
+	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
+	Mbr             string  `json:"mbr,omitempty" form:"mbr"`
+	Ipin            string  `json:"IPIN" form:"IPIN" binding:"required"`
+	FromAccountType string  `json:"fromAccountType" form:"fromAccountType"`
+	ToAccountType   string  `json:"toAccountType" form:"toAccountType"`
+	AccountCurrency string  `json:"accountCurrency" form:"accountCurrency"`
+	AcqTranFee      float32 `json:"acqTranFee" form:"acqTranFee"`
+	IssuerTranFee   float32 `json:"issuerTranFee" form:"issuerTranFee"`
+
+	// billers
+	BillInfo string `json:"billInfo" form:"billInfo"`
+	Payees   string `json:"payees" form:"payees"`
+
+	// tran time
+	OriginalTranUUID     string `json:"originalTranUUID" form:"originalTranUUID"`
+	OriginalTranDateTime string `json:"originalTranDateTime" form:"originalTranDateTime"`
+
+	// User settings
+	Username     string `json:"userName" Form:"userName"`
+	UserPassword string `json:"userPassword" form:"userPassword"`
+
+	// Entities
+	EntityType  string `json:"entityType" form:"entityType"`
+	EntityId    string `json:"entityId" form:"entityId"`
+	EntityGroup string `json:"entityGroup" form:"entityGroup"`
+	PubKeyValue string `json:"pubKeyValue" form:"pubKeyValue"`
+	Email       string `json:"email" form:"email"`
+	ExtraInfo   string `json:"extraInfo" form:"extraInfo"`
+	//.. omitted fields
+
+	PhoneNo                string `json:"phoneNo" form:"phoneNo"`
+	NewIpin                string `json:"newIPIN" form:"newIPIN"`
+	NewUserPassword        string `json:"newUserPassword" form:"newUserPassword"`
+	SecurityQuestion       string `json:"securityQuestion" form:"securityQuestion"`
+	SecurityQuestionAnswer string `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
+	AdminUserName          string `json:"adminUserName" form:"adminUserName"`
+
+	// other fields
+	OriginalTransaction map[string]interface{} `json:"originalTransaction" form:"originalTransaction"`
+	OriginalTranType    string                 `json:"originalTranType" form:"originalTranType"`
+}
+
 // MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
 func (res *GenericEBSResponseFields) MaskPAN() {
 	if res.PAN != "" {
@@ -162,4 +205,64 @@ func (res *GenericEBSResponseFields) MaskPAN() {
 		length := len(res.FromCard)
 		res.FromCard = res.FromCard[length-4 : length]
 	}
+}
+
+type ConsumerCommonFields struct {
+	ApplicationId string `json:"applicationId" form:"applicationId"`
+	TranDateTime  string `json:"tranDateTime" form:"tranDateTime"`
+	UUID          string `json:"UUID" form:"UUID"`
+}
+
+type ConsumerBillInquiryFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+}
+
+type ConsumerCardHolderFields struct {
+	Pan     string `json:"PAN" form:"PAN"`
+	Ipin    string `json:"IPIN" form:"IPIN"`
+	ExpDate string `json:"expDate" form:"expDate"`
+}
+
+type ConsumerIsAliveFields struct {
+	ConsumerCommonFields
+}
+
+type ConsumerBalanceFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+}
+type ConsumersBillersFields struct {
+	PayeeId     string `json:"payeeId" form:"payeeId"`
+	PaymentInfo string `json:"paymentInfo" form:""`
+}
+
+type ConsumerPurchaseFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+}
+
+type ConsumerBillPaymentFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	ConsumersBillersFields
+}
+
+type ConsumerWorkingKeyFields struct {
+	ConsumerCommonFields
+}
+
+type ConsumerCardTransferFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	ToCard string `json:"toCard" binding:"required"`
+}
+
+type ConsumerStatusFields struct {
+	CommonFields
+	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
 }

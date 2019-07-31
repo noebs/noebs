@@ -26,7 +26,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/create", CreateServiceID)
 	route.POST("/get_service", GetServiceID)
 
-	auth := route.Group("/admin", authMiddleware())
+	auth := route.Group("/admin", AuthMiddleware())
 
 	auth.POST("/test", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"message": true, "code": "ok"})
@@ -108,7 +108,7 @@ func LoginHandler(c *gin.Context) {
 
 }
 
-func authMiddleware() gin.HandlerFunc {
+func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		// just handle the simplest case, authorization is not provided.

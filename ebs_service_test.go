@@ -15,15 +15,15 @@ import (
 	"time"
 )
 
-func TestEnv(t *testing.T){
+func TestEnv(t *testing.T) {
 	// Test that we can read environmental variables correctly.
 	key := "MYKEY"
 	val := "MYVA"
-	if err := os.Setenv(key, val); err != nil{
+	if err := os.Setenv(key, val); err != nil {
 		t.Errorf("An error occured: %s", err.Error())
 	}
 
-	if got := os.Getenv(key); got != val{
+	if got := os.Getenv(key); got != val {
 		t.Errorf("environmental variable is incorrect. Wanted %s, Got: %s", key, got)
 	}
 }

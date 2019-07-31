@@ -28,86 +28,62 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 	var ebsGenericResponse ebs_fields.GenericEBSResponseFields
 
-	if !UseMockServer {
-		reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
+	reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
 
-		if err != nil {
-			fmt.Println(err.Error())
-			log.WithFields(logrus.Fields{
-				"error": err.Error(),
-			}).Error("Error in establishing connection to the host")
-			return 500, ebsGenericResponse, err
-		}
-		reqHandler.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		fmt.Println(err.Error())
+		log.WithFields(logrus.Fields{
+			"error": err.Error(),
+		}).Error("Error in establishing connection to the host")
+		return 500, ebsGenericResponse, err
+	}
+	reqHandler.Header.Set("Content-Type", "application/json")
 
-		ebsResponse, err := ebsClient.Do(reqHandler)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"error": err.Error(),
-			}).Error("Error in establishing connection to the host")
-			return http.StatusGatewayTimeout, ebsGenericResponse, ebsGatewayConnectivityErr
-		}
+	ebsResponse, err := ebsClient.Do(reqHandler)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"error": err.Error(),
+		}).Error("Error in establishing connection to the host")
+		return http.StatusGatewayTimeout, ebsGenericResponse, ebsGatewayConnectivityErr
+	}
 
-		defer ebsResponse.Body.Close()
+	defer ebsResponse.Body.Close()
 
-		responseBody, err := ioutil.ReadAll(ebsResponse.Body)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"error": err.Error(),
-			}).Error("Error reading ebs response")
+	responseBody, err := ioutil.ReadAll(ebsResponse.Body)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"error": err.Error(),
+		}).Error("Error reading ebs response")
 
-			return http.StatusInternalServerError, ebsGenericResponse, ebsGatewayConnectivityErr
-		}
+		return http.StatusInternalServerError, ebsGenericResponse, ebsGatewayConnectivityErr
+	}
 
-		// check Content-type is application json, if not, panic!
-		if ebsResponse.Header.Get("Content-Type") != "application/json" {
-			log.WithFields(logrus.Fields{
-				"error":   "wrong content type parsed",
-				"details": ebsResponse.Header.Get("Content-Type"),
-			}).Error("ebs response content type is not application/json")
-			return http.StatusInternalServerError, ebsGenericResponse, contentTypeErr
-		}
-		if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
-			// there's no problem in Unmarshalling
-			if ebsGenericResponse.ResponseCode == 0 {
-				return http.StatusOK, ebsGenericResponse, nil
-			} else {
-				// the error here should be nil!
-				// we don't actually have any errors!
-				return http.StatusBadGateway, ebsGenericResponse, nil
-			}
-
+	// check Content-type is application json, if not, panic!
+	if ebsResponse.Header.Get("Content-Type") != "application/json" {
+		log.WithFields(logrus.Fields{
+			"error":   "wrong content type parsed",
+			"details": ebsResponse.Header.Get("Content-Type"),
+		}).Error("ebs response content type is not application/json")
+		return http.StatusInternalServerError, ebsGenericResponse, contentTypeErr
+	}
+	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
+		// there's no problem in Unmarshalling
+		if ebsGenericResponse.ResponseCode == 0 {
+			return http.StatusOK, ebsGenericResponse, nil
 		} else {
-			// there is an error in handling the incoming EBS's ebsResponse
-			// log the err here please
-			log.WithFields(logrus.Fields{
-				"error": err.Error(),
-			}).Info("ebs response transaction")
-
-			return http.StatusInternalServerError, ebsGenericResponse, err
+			// the error here should be nil!
+			// we don't actually have any errors!
+			return http.StatusBadGateway, ebsGenericResponse, nil
 		}
 
 	} else {
-		// mock settings.
+		// there is an error in handling the incoming EBS's ebsResponse
+		// log the err here please
+		log.WithFields(logrus.Fields{
+			"error": err.Error(),
+		}).Info("ebs response transaction")
 
-		MockEbsResponse(urlToMock(url), &ebsGenericResponse)
-		return http.StatusOK, ebsGenericResponse, nil
+		return http.StatusInternalServerError, ebsGenericResponse, err
 	}
 
-}
-
-func urlToMock(url string) interface{} {
-	if url == EBSMerchantIP+BalanceEndpoint {
-		return mockPurchaseResponse{}
-	} else if url == EBSMerchantIP+PurchaseEndpoint {
-		return mockPurchaseResponse{}
-
-	} else if url == EBSMerchantIP+MiniStatementEndpoint {
-		return mockMiniStatementResponse{}
-
-	} else if url == EBSMerchantIP+WorkingKeyEndpoint {
-		fmt.Printf("i'm here..")
-		return mockWorkingKeyResponse{}
-	}
-	return mockWorkingKeyResponse{}
 }

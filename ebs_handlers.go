@@ -13,7 +13,7 @@ type SuccessfulResponse struct {
 }
 
 type ErrorResponse struct {
-	Payload ErrorDetails `json:"error"`
+	ErrorDetails
 }
 
 const (
