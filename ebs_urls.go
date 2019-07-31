@@ -46,7 +46,7 @@ const (
 )
 
 const (
-	EBSIp = "https://172.16.199.1:8877/QAEBSGateway/"
+	EBSIp = "https://172.16.199.1:8877/QAConsumer/"
 )
 
 const (
