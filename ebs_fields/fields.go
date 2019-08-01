@@ -129,6 +129,7 @@ type GenericEBSResponseFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
+	PubKeyValue      string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 }
 
 type ImportantEBSFields struct {
@@ -144,8 +145,6 @@ type ImportantEBSFields struct {
 	TranDateTime         string  `json:"tranDateTime,omitempty"`
 	TranFee              float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
-
-	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 }
 
 type ConsumerSpecificFields struct {
