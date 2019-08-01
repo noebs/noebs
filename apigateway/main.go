@@ -20,12 +20,14 @@ func GetMainEngine() *gin.Engine {
 
 	route.POST("/login", LoginHandler)
 	// This is like isAlive one...
+
+	route.POST("/create", CreateUser)
+
+	route.POST("/get_service", GetServiceID)
+
 	route.POST("/test", func(context *gin.Context) {
 		context.JSON(http.StatusOK, gin.H{"message": true, "code": "ok"})
 	})
-	route.POST("/create", CreateServiceID)
-	route.POST("/get_service", GetServiceID)
-
 	auth := route.Group("/admin", AuthMiddleware())
 
 	auth.POST("/test", func(context *gin.Context) {
@@ -66,9 +68,9 @@ func LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	var u UserModel
 
-	if notFound := db.Preload("JWT").Where("service_id = ?", req.ServiceID).First(&u).RecordNotFound(); notFound {
+	if notFound := db.Preload("JWT").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
 		// service id is not found
-		log.Printf("User with service_id %s is not found.", req.ServiceID)
+		log.Printf("User with service_id %s is not found.", req.Username)
 		c.AbortWithStatusJSON(404, gin.H{"message": notFound, "code": "not_found"})
 		return
 	}
@@ -88,7 +90,7 @@ func LoginHandler(c *gin.Context) {
 		// why the fuck people?
 		c.AbortWithError(500, err)
 	}
-	token, err := generateJWT(u.ServiceID)
+	token, err := GenerateJWT(u.Username)
 	if err != nil {
 		c.AbortWithError(500, err)
 	}
@@ -114,30 +116,19 @@ func AuthMiddleware() gin.HandlerFunc {
 		// just handle the simplest case, authorization is not provided.
 		h := c.GetHeader("Authorization")
 		if h == "" {
-			c.AbortWithStatusJSON(401, gin.H{"message": "empty header was sent",
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
 				"code": "unauthorized"})
 			return
 
 		}
-		// db stuffs
-		db, err := gorm.Open("sqlite3", "test.db")
-
-		if err != nil {
-			log.Printf("There's an erron in DB connection, %v", err)
-			c.AbortWithError(500, err)
-			return
-		}
-		defer db.Close()
 
 		var service TokenClaims
 
-		claim, err := verifyJWT(h, &service)
+		_, err := VerifyJWT(h, &service)
 		if err != nil {
-			c.AbortWithStatusJSON(400, gin.H{"message": err.Error()})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 			return
 		}
-		log.Printf("The claim object is %v, The claims are: %v", claim.Valid(), service)
-
 		c.Next()
 	}
 
@@ -151,7 +142,7 @@ func generateSecretKey(n int) ([]byte, error) {
 	return key, nil
 }
 
-func CreateServiceID(c *gin.Context) {
+func CreateUser(c *gin.Context) {
 	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"message": serverError.Error()})
@@ -162,26 +153,28 @@ func CreateServiceID(c *gin.Context) {
 
 	var u UserModel
 	if err := db.AutoMigrate(&UserModel{}).Error; err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
+		// log the error, but don't quit.
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
 
 	err = c.ShouldBindBodyWith(&u, binding.JSON)
+	// make the errors insane
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
 		return
 	}
 
-	fmt.Printf("Raw password is: %v\n", u)
+	// make sure that the user doesn't exist in the database
 
 	err = u.hashPassword()
 	if err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
-	fmt.Printf("Raw password is: %v\nLength is: %v", u, len(u.Password))
 
 	if err := db.Create(&u).Error; err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
+		// unable to create this user; see possible reasons
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": "object was successfully created", "details": u})
@@ -204,7 +197,7 @@ func GetServiceID(c *gin.Context) {
 	fmt.Printf("the qparam is: %v\n", id)
 	var res Service
 
-	if err := db.Where("service_name = ?", id).First(&res).Error; err != nil {
+	if err := db.Where("username = ?", id).First(&res).Error; err != nil {
 		c.AbortWithStatusJSON(404, gin.H{"message": err.Error()})
 		return
 	}

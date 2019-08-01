@@ -144,6 +144,8 @@ type ImportantEBSFields struct {
 	TranDateTime         string  `json:"tranDateTime,omitempty"`
 	TranFee              float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
+
+	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 }
 
 type ConsumerSpecificFields struct {

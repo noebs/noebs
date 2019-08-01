@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
@@ -54,12 +55,14 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	}
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	consumer := route.Group("/consumer")
 
+	consumer := route.Group("/consumer")
 	//consumer.Use(gateway.AuthMiddleware())
 	{
 		// consumer APIs go here...
 		// and also add authorization here
+		consumer.POST("/login", gateway.LoginHandler)
+		consumer.POST("/register", gateway.CreateUser)
 
 		consumer.POST("/balance", ConsumerBalance)
 		consumer.POST("/is_alive", ConsumerIsAlive)
