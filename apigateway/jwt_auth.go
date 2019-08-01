@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"time"
@@ -9,10 +8,10 @@ import (
 
 var SECRETKEY, _ = generateSecretKey(50)
 
-func generateJWT(serviceID string) (string, error) {
+func GenerateJWT(serviceID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
-	expiresAt := time.Now().Add(time.Hour * 24).UTC().Unix()
+	expiresAt := time.Now().Add(time.Minute * 5).UTC().Unix()
 
 	claims := TokenClaims{
 		serviceID,
@@ -28,12 +27,12 @@ func generateJWT(serviceID string) (string, error) {
 	if tokenString, err := token.SignedString(SECRETKEY); err == nil {
 		fmt.Println(tokenString)
 		return tokenString, nil
-	} else{
+	} else {
 		return "", err
 	}
 }
 
-func verifyJWT(tokenString string, claims jwt.Claims) (jwt.Claims, error) {
+func VerifyJWT(tokenString string, claims jwt.Claims) (jwt.Claims, error) {
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 
@@ -51,12 +50,6 @@ func verifyJWT(tokenString string, claims jwt.Claims) (jwt.Claims, error) {
 }
 
 type TokenClaims struct {
-	ServiceName string `json:"service_name"`
+	Username string `json:"username"`
 	jwt.StandardClaims
 }
-
-var (
-	errInvalidToken     = errors.New("not a valid token")
-	errMalformedToken   = errors.New("malformed token")
-	errNotValidYetToken = errors.New("not valid yet token")
-)

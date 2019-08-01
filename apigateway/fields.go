@@ -7,10 +7,13 @@ import (
 
 type UserModel struct {
 	gorm.Model
-	ServiceID string `binding:"required" json:"service_id"`
-	Password  string `binding:"required" json:"password"`
-	JWT       JWT
-	JWTID     int
+	Username string `binding:"required" json:"username" gorm:"unique_index"`
+	Password string `binding:"required" json:"password"`
+	JWT      JWT
+	JWTID    int
+	Fullname string `json:"fullname"`
+	Birthday string `json:"birthday"`
+	Mobile   string `json:"mobile" binding:"required" gorm:"unique_index"`
 }
 
 func (m *UserModel) hashPassword() error {
