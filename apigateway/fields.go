@@ -20,6 +20,10 @@ type UserModel struct {
 	Card []Cards
 }
 
+type UserLogin struct {
+	Username  string `binding:"required" json:"username"`
+	Password  string `binding:"required" json:"password"`
+}
 func (m *UserModel) hashPassword() error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(m.Password), 8)
 	if err != nil {

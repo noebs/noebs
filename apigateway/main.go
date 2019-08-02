@@ -47,7 +47,7 @@ var jwtKey = keyFromEnv()
 
 func LoginHandler(c *gin.Context) {
 
-	var req UserModel
+	var req UserLogin
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
@@ -66,7 +66,7 @@ func LoginHandler(c *gin.Context) {
 	defer db.Close()
 
 	// do the Models migrations here. The ones you will be using
-	db.AutoMigrate(&Service{}, &JWT{}, &UserModel{})
+	db.AutoMigrate(&Service{}, &JWT{}, &UserModel{}, &UserLogin{})
 
 	log.Printf("the processed request is: %v\n", req)
 	var u UserModel
