@@ -36,6 +36,7 @@ type ErrorResponse struct {
 
 type Cards struct {
 	gorm.Model
-	PAN     string `json:"pan"`
-	Expdate string `json:"exp_date"`
+	PAN       string `json:"pan" binding:"required"`
+	Expdate   string `json:"exp_date" binding:"required"`
+	IsPrimary bool   `json:"is_primary" binding:"required"`
 }

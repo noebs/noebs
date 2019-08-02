@@ -60,17 +60,23 @@ func GetMainEngine() *gin.Engine {
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
 
-	//consumer.Use(gateway.AuthMiddleware())
+	consumer.POST("/balance", ConsumerBalance)
+	consumer.POST("/is_alive", ConsumerIsAlive)
+	consumer.POST("/bill_payment", ConsumerBillPayment)
+	consumer.POST("/bill_inquiry", ConsumerBillPayment)
+	consumer.POST("/p2p", ConsumerCardTransfer)
+	consumer.POST("/purchase", ConsumerPurchase)
+	consumer.POST("/status", ConsumerStatus)
+	consumer.POST("/key", ConsumerWorkingKey)
+	consumer.Use(gateway.AuthMiddleware())
 	{
 		// protected endpoints
-		consumer.POST("/balance", ConsumerBalance)
-		consumer.POST("/is_alive", ConsumerIsAlive)
-		consumer.POST("/bill_payment", ConsumerBillPayment)
-		consumer.POST("/bill_inquiry", ConsumerBillPayment)
-		consumer.POST("/p2p", ConsumerCardTransfer)
-		consumer.POST("/purchase", ConsumerPurchase)
-		consumer.POST("/status", ConsumerStatus)
-		consumer.POST("/key", ConsumerWorkingKey)
+
+		consumer.GET("/get_cards", GetCards)
+		consumer.POST("/add_card", AddCards)
+
+		consumer.GET("/get_mobile", GetMobile)
+		consumer.POST("/add_mobile", AddMobile)
 
 		consumer.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
@@ -1593,7 +1599,7 @@ func GetCards(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 	} else {
-		cards, err := redisClient.Get(username).Result()
+		cards, err := redisClient.SMembers(username + ":cards").Result()
 		if err != nil {
 			// handle the error somehow
 			logrus.WithFields(logrus.Fields{
@@ -1612,7 +1618,7 @@ func GetCards(c *gin.Context) {
 func AddCards(c *gin.Context) {
 	redisClient := getRedis()
 
-	var fields []gateway.Cards
+	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
@@ -1622,8 +1628,66 @@ func AddCards(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
-			redisClient.LPush(username, string(buf))
+			if fields.IsMain {
+				redisClient.HSet(username, "main_card", buf)
+				redisClient.SAdd(username+":cards", buf)
+			} else {
+				redisClient.SAdd(username+":cards", buf)
+			}
+
 			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": string(buf)})
+		}
+	}
+
+}
+
+func AddMobile(c *gin.Context) {
+	redisClient := getRedis()
+
+	var fields ebs_fields.MobileRedis
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+	} else {
+		buf, _ := json.Marshal(fields)
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else {
+			if fields.IsMain {
+				redisClient.HSet(username, "main_mobile", buf)
+				redisClient.SAdd(username+":cards", buf)
+			} else {
+				redisClient.SAdd(username+":mobile_numbers", buf)
+			}
+
+			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": string(buf)})
+		}
+	}
+
+}
+
+func GetMobile(c *gin.Context) {
+	redisClient := getRedis()
+
+	var fields ebs_fields.CardsRedis
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+	} else {
+		buf, _ := json.Marshal(fields)
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else {
+			if fields.IsMain {
+				redisClient.HSet(username, "main_mobile", buf)
+				redisClient.SAdd(username+":mobile_numbers", buf)
+			} else {
+				redisClient.SAdd(username+":mobile_numbers", buf)
+			}
+
+			c.JSON(http.StatusCreated, gin.H{"username": username, "mobile_numbers": string(buf)})
 		}
 	}
 

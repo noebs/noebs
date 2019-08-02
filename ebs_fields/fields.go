@@ -278,3 +278,15 @@ type DisputeFields struct {
 	STAN    int     `json:"stan"`
 	Amount  float32 `json:"amount"`
 }
+
+type CardsRedis struct {
+	PAN     string `json:"pan" binding:"required"`
+	Expdate string `json:"exp_date" binding:"required"`
+	IsMain  bool   `json:"is_main"`
+}
+
+type MobileRedis struct {
+	Mobile   string `json:"mobile" binding:"required"`
+	Provider string `json:"provider"`
+	IsMain   bool   `json:"is_main"`
+}
