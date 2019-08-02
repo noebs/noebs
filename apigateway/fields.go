@@ -14,7 +14,7 @@ type UserModel struct {
 	Fullname  string `json:"fullname"`
 	Birthday  string `json:"birthday"`
 	Mobile    string `json:"mobile" binding:"required" gorm:"unique_index"`
-	Email     string `json:"email" binding:"email"`
+	Email     string `json:"email"`
 	Password2 string `binding:"required,eqfield=Password,min=8,max=20" json:"password2"`
 
 	Card []Cards
