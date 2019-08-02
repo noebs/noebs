@@ -51,7 +51,8 @@ func LoginHandler(c *gin.Context) {
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		return
 	}
 
 
@@ -73,7 +74,7 @@ func LoginHandler(c *gin.Context) {
 	if notFound := db.Preload("JWT").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
 		return
 	}
 
@@ -83,18 +84,13 @@ func LoginHandler(c *gin.Context) {
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		log.Printf("there is an error in the password %v", err)
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		return
 	}
-	// the entered password is correct! Generate a token now, will you?
-	if err != nil {
-		// why the fuck people?
-		c.AbortWithError(http.StatusInternalServerError, err)
-	}
-
 	token, err := GenerateJWT(u.Username, jwtKey)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, err)
+		return
 	}
 
 	u.JWT.SecretKey = string(jwtKey)
@@ -102,7 +98,7 @@ func LoginHandler(c *gin.Context) {
 
 	err = db.Save(&u).Error
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, err.Error())
+		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.Writer.Header().Set("Authorization", token)
