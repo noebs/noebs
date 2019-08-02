@@ -51,7 +51,7 @@ func LoginHandler(c *gin.Context) {
 	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Bad UserRequest", "code": "bad_request"})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 	}
 
 
