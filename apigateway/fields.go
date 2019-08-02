@@ -7,7 +7,7 @@ import (
 
 type UserModel struct {
 	gorm.Model
-	Username  string `binding:"required_without=Email" json:"username" gorm:"unique_index"`
+	Username  string `binding:"required" json:"username" gorm:"unique_index"`
 	Password  string `binding:"required" json:"password"`
 	JWT       JWT
 	JWTID     int
