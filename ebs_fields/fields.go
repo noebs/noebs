@@ -220,9 +220,9 @@ type ConsumerBillInquiryFields struct {
 }
 
 type ConsumerCardHolderFields struct {
-	Pan     string `json:"PAN" form:"PAN"`
-	Ipin    string `json:"IPIN" form:"IPIN"`
-	ExpDate string `json:"expDate" form:"expDate"`
+	Pan     string `json:"PAN" form:"PAN" binding:"required"`
+	Ipin    string `json:"IPIN" form:"IPIN" binding:"required"`
+	ExpDate string `json:"expDate" form:"expDate" binding:"required"`
 }
 
 type ConsumerIsAliveFields struct {
@@ -235,7 +235,7 @@ type ConsumerBalanceFields struct {
 }
 type ConsumersBillersFields struct {
 	PayeeId     string `json:"payeeId" form:"payeeId"`
-	PaymentInfo string `json:"paymentInfo" form:""`
+	PaymentInfo string `json:"paymentInfo" form:"paymentInfo"`
 }
 
 type ConsumerPurchaseFields struct {

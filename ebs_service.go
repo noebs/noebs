@@ -57,13 +57,12 @@ func GetMainEngine() *gin.Engine {
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	consumer := route.Group("/consumer")
+	consumer.POST("/login", gateway.LoginHandler)
+	consumer.POST("/register", gateway.CreateUser)
+
 	//consumer.Use(gateway.AuthMiddleware())
 	{
-		// consumer APIs go here...
-		// and also add authorization here
-		consumer.POST("/login", gateway.LoginHandler)
-		consumer.POST("/register", gateway.CreateUser)
-
+		// protected endpoints
 		consumer.POST("/balance", ConsumerBalance)
 		consumer.POST("/is_alive", ConsumerIsAlive)
 		consumer.POST("/bill_payment", ConsumerBillPayment)
@@ -73,7 +72,12 @@ func GetMainEngine() *gin.Engine {
 		consumer.POST("/status", ConsumerStatus)
 		consumer.POST("/key", ConsumerWorkingKey)
 
+		consumer.POST("/test", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": true})
+		})
+
 	}
+
 	return route
 }
 
