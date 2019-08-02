@@ -129,7 +129,10 @@ type GenericEBSResponseFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
-	PubKeyValue      string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+
+	// Consumer fields
+	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+	UUID        string `json:"UUID,omitempty" form:"UUID"`
 }
 
 type ImportantEBSFields struct {
@@ -220,9 +223,9 @@ type ConsumerBillInquiryFields struct {
 }
 
 type ConsumerCardHolderFields struct {
-	Pan     string `json:"PAN" form:"PAN"`
-	Ipin    string `json:"IPIN" form:"IPIN"`
-	ExpDate string `json:"expDate" form:"expDate"`
+	Pan     string `json:"PAN" form:"PAN" binding:"required"`
+	Ipin    string `json:"IPIN" form:"IPIN" binding:"required"`
+	ExpDate string `json:"expDate" form:"expDate" binding:"required"`
 }
 
 type ConsumerIsAliveFields struct {
@@ -235,7 +238,7 @@ type ConsumerBalanceFields struct {
 }
 type ConsumersBillersFields struct {
 	PayeeId     string `json:"payeeId" form:"payeeId"`
-	PaymentInfo string `json:"paymentInfo" form:""`
+	PaymentInfo string `json:"paymentInfo" form:"paymentInfo"`
 }
 
 type ConsumerPurchaseFields struct {
@@ -266,4 +269,24 @@ type ConsumerCardTransferFields struct {
 type ConsumerStatusFields struct {
 	CommonFields
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
+}
+
+type DisputeFields struct {
+	Time    string  `json:"time"`
+	Service string  `json:"service"`
+	UUID    string  `json:"uuid"`
+	STAN    int     `json:"stan"`
+	Amount  float32 `json:"amount"`
+}
+
+type CardsRedis struct {
+	PAN     string `json:"pan" binding:"required"`
+	Expdate string `json:"exp_date" binding:"required"`
+	IsMain  bool   `json:"is_main"`
+}
+
+type MobileRedis struct {
+	Mobile   string `json:"mobile" binding:"required"`
+	Provider string `json:"provider"`
+	IsMain   bool   `json:"is_main"`
 }

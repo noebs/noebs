@@ -128,9 +128,10 @@ func getAllRoutes() []map[string]string {
 	return allRoutes
 }
 
+// getRedis returns a *redis.Client instance
 func getRedis() *redis.Client {
 	client := redis.NewClient(&redis.Options{
-		Addr: "127.0.0.1:6379",
+		Addr: "http://127.0.0.1:6379",
 		DB:   0,
 	})
 	return client
