@@ -1606,6 +1606,7 @@ func GetCards(c *gin.Context) {
 				"error":   "unable to get results from redis",
 				"message": err.Error(),
 			}).Info("unable to get results from redis")
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
 		}
 
 		// unmrshall cards and send them back to the user
