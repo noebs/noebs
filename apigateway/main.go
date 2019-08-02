@@ -140,7 +140,7 @@ func CreateUser(c *gin.Context) {
 	err = c.ShouldBindBodyWith(&u, binding.JSON)
 	// make the errors insane
 	if err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
 
@@ -153,10 +153,11 @@ func CreateUser(c *gin.Context) {
 
 	if err := db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
+
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": "object was successfully created", "details": u})
+	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
 func GetServiceID(c *gin.Context) {

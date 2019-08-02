@@ -183,5 +183,3 @@ func urlToMock(url string) interface{} {
 	}
 	return mockWorkingKeyResponse{}
 }
-
-func getContext() {}

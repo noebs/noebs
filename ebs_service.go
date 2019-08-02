@@ -1574,4 +1574,23 @@ func ConsumerStatus(c *gin.Context) {
 
 func ConsumerTransactions(c *gin.Context) {
 	//TODO get the transaction from Redis instance!
+	redisClient := getRedis()
+
+	username := c.GetString("username")
+	if username == "" {
+		username = "invalid_key"
+	}
+
+	redisClient.Get(username)
+
+	// you should probably marshal these data
+	c.JSON(http.StatusOK, gin.H{"transactions": username})
+}
+
+func GetCards(c *gin.Context) {
+
+}
+
+func AddCards(c *gin.Context) {
+
 }
