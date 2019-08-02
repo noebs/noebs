@@ -54,7 +54,6 @@ func LoginHandler(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Bad UserRequest", "code": "bad_request"})
 	}
 
-	// Now, the request is well valid. Let us check its credentials.
 
 	//db connection. Not good.
 	db, err := gorm.Open("sqlite3", "test.db")
@@ -108,16 +107,7 @@ func LoginHandler(c *gin.Context) {
 	}
 	c.Writer.Header().Set("Authorization", token)
 
-	// Return the token content
-
-	tokenPayload, err := VerifyJWT(token, jwtKey)
-	if err != nil {
-		log.Printf("There is an error: %v\n", err)
-		// do nothing
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "authorization ok", "code": "authorization_ok",
-		"payload": tokenPayload})
+	c.JSON(http.StatusOK, gin.H{"authorization": token})
 
 }
 
@@ -209,6 +199,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 		c.Set("username", claims.Username)
+		log.Printf("the username is: %s", claims.Username)
 		c.Next()
 	}
 
