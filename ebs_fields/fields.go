@@ -129,7 +129,10 @@ type GenericEBSResponseFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
-	PubKeyValue      string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+
+	// Consumer fields
+	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+	UUID        string `json:"UUID,omitempty" form:"UUID"`
 }
 
 type ImportantEBSFields struct {
@@ -266,4 +269,12 @@ type ConsumerCardTransferFields struct {
 type ConsumerStatusFields struct {
 	CommonFields
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
+}
+
+type DisputeFields struct {
+	Time    string  `json:"time"`
+	Service string  `json:"service"`
+	UUID    string  `json:"uuid"`
+	STAN    int     `json:"stan"`
+	Amount  float32 `json:"amount"`
 }

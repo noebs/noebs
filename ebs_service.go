@@ -1429,6 +1429,9 @@ func ConsumerCardTransfer(c *gin.Context) {
 	db := database("sqlite3", "test.db")
 	defer db.Close()
 
+	// redis instance
+	redisClient := getRedis()
+
 	var fields = ebs_fields.ConsumerCardTransferFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
@@ -1477,6 +1480,14 @@ func ConsumerCardTransfer(c *gin.Context) {
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
+
+		// Write the request onto Redis
+		username := c.GetString("username")
+		if username == "" {
+			username = "invalid_key"
+		}
+
+		redisClient.LPush(username, string(jsonBuffer))
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1559,4 +1570,8 @@ func ConsumerStatus(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
+}
+
+func ConsumerTransactions(c *gin.Context) {
+	//TODO get the transaction from Redis instance!
 }
