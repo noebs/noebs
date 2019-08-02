@@ -1580,7 +1580,6 @@ func ConsumerTransactions(c *gin.Context) {
 	if username == "" {
 		username = "invalid_key"
 	}
-
 	redisClient.Get(username)
 
 	// you should probably marshal these data
@@ -1588,9 +1587,44 @@ func ConsumerTransactions(c *gin.Context) {
 }
 
 func GetCards(c *gin.Context) {
+	redisClient := getRedis()
+
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+	} else {
+		cards, err := redisClient.Get(username).Result()
+		if err != nil {
+			// handle the error somehow
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to get results from redis",
+				"message": err.Error(),
+			}).Info("unable to get results from redis")
+		}
+
+		// unmrshall cards and send them back to the user
+		// they should be a []Cards
+		c.JSON(http.StatusOK, gin.H{"cards": cards})
+	}
 
 }
 
 func AddCards(c *gin.Context) {
+	redisClient := getRedis()
+
+	var fields []gateway.Cards
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+	} else {
+		buf, _ := json.Marshal(fields)
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else {
+			redisClient.LPush(username, string(buf))
+			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": string(buf)})
+		}
+	}
 
 }

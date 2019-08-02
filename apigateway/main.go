@@ -154,7 +154,7 @@ func CreateUser(c *gin.Context) {
 	if err := db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
 
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
