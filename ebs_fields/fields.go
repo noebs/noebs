@@ -280,9 +280,11 @@ type DisputeFields struct {
 }
 
 type CardsRedis struct {
+	ID int `json:"id"`
 	PAN     string `json:"pan" binding:"required"`
 	Expdate string `json:"exp_date" binding:"required"`
 	IsMain  bool   `json:"is_main"`
+	Name string `json:"name"`
 }
 
 type MobileRedis struct {
