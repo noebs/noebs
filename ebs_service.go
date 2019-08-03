@@ -1640,7 +1640,7 @@ func AddCards(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
-			z := redis.Z{
+			z := &redis.Z{
 				Member:buf,
 			}
 			if fields.IsMain {
@@ -1684,10 +1684,10 @@ func EditCards(c *gin.Context) {
 				// get the old item using the ID
 
 				redisClient.ZRem(username+":cards", key)
-				redisClient.ZAdd(username+":cards", *z)
+				redisClient.ZAdd(username+":cards", z)
 			} else {
 				redisClient.ZRem(username+":cards", key)
-				redisClient.ZAdd(username+":cards", *z)
+				redisClient.ZAdd(username+":cards", z)
 			}
 
 			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
