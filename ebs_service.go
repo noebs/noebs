@@ -1651,7 +1651,7 @@ func AddCards(c *gin.Context) {
 			} else {
 				redisClient.ZAdd(username+":cards", z)
 			}
-			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": buf})
+			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
 		}
 	}
 
