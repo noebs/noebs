@@ -1710,13 +1710,11 @@ func RemoveCard(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
-			z := &redis.Z{
-				Member:buf,
-			}
+
 			if fields.IsMain {
 				redisClient.HDel(username+":cards", "main_card")
 			} else {
-				_, err := redisClient.ZRem(username+":cards", z).Result()
+				_, err := redisClient.ZRem(username+":cards", buf).Result()
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
 				}
