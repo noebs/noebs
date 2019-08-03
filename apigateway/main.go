@@ -103,7 +103,7 @@ func LoginHandler(c *gin.Context) {
 	}
 	c.Writer.Header().Set("Authorization", token)
 
-	c.JSON(http.StatusOK, gin.H{"authorization": token})
+	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 
 }
 
