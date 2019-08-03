@@ -1,10 +1,12 @@
-package main
+package utils
 
 import (
-	"fmt"
+	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	//"encoding/pem"
 	//"crypto/sha256"
 	"crypto/x509"
@@ -42,4 +44,11 @@ func rsaEncrypt(text string, key string){
 	fmt.Printf("the encryption is: %v", rsakey)
 	encodedKey := base64.StdEncoding.EncodeToString(rsakey)
 	fmt.Printf("the key is: %v", encodedKey)
+}
+
+
+func StringsToBytes(s []string) (bytes.Buffer, error){
+	b := bytes.Buffer{}
+	err := json.NewEncoder(&b).Encode(s)
+	return b, err
 }
