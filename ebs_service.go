@@ -1670,9 +1670,7 @@ func EditCard(c *gin.Context) {
 	} else {
 		buf, _ := json.Marshal(fields)
 		username := c.GetString("username")
-		if username == "" || fields.ID == 0 {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		}else if fields.ID == 0{
+		if username == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
 			//id := fields.ID
@@ -1709,10 +1707,8 @@ func RemoveCard(c *gin.Context) {
 	} else {
 		buf, _ := json.Marshal(fields)
 		username := c.GetString("username")
-		if username == "" || fields.ID == 0 {
+		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		}else if fields.ID == 0{
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
 			//id := fields.ID
 			//key := redisClient.ZRange(username+":cards", int64(id), int64(id))
