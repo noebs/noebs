@@ -75,6 +75,8 @@ func GetMainEngine() *gin.Engine {
 
 		consumer.GET("/get_cards", GetCards)
 		consumer.POST("/add_card", AddCards)
+		consumer.PUT("/edit_card", EditCard)
+		consumer.DELETE("/delete_card", RemoveCard)
 
 		consumer.GET("/get_mobile", GetMobile)
 		consumer.POST("/add_mobile", AddMobile)
@@ -1658,7 +1660,7 @@ func AddCards(c *gin.Context) {
 }
 
 // EditCards a work in progress. This function needs to be reviewed and refactored
-func EditCards(c *gin.Context) {
+func EditCard(c *gin.Context) {
 	redisClient := getRedis()
 
 	var fields ebs_fields.CardsRedis
