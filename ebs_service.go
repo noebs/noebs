@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -1614,9 +1612,11 @@ func GetCards(c *gin.Context) {
 		// unmrshall cards and send them back to the user
 		// they should be a []Cards
 
-		var b bytes.Buffer
-		b, _ = utils.StringsToBytes(cards)
-		c.JSON(http.StatusOK, gin.H{"cards": b})
+		var cardBytes []ebs_fields.CardsRedis
+		for _, v := range cards {
+			json.Unmarshal([]byte(v), &cardBytes)
+		}
+		c.JSON(http.StatusOK, gin.H{"cards": cardBytes})
 	}
 
 }
