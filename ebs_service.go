@@ -1685,10 +1685,10 @@ func EditCard(c *gin.Context) {
 				redisClient.HSet(username, "main_card", buf)
 				// get the old item using the ID
 
-				redisClient.ZRem(username+":cards", key)
+				redisClient.ZRem(username+":cards", z)
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZRem(username+":cards", key)
+				redisClient.ZRem(username+":cards", z)
 				redisClient.ZAdd(username+":cards", z)
 			}
 
