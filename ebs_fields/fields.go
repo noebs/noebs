@@ -280,7 +280,7 @@ type DisputeFields struct {
 }
 
 type CardsRedis struct {
-	ID int `json:"id"`
+	ID int `json:"id,omitempty"`
 	PAN     string `json:"pan" binding:"required"`
 	Expdate string `json:"exp_date" binding:"required"`
 	IsMain  bool   `json:"is_main"`
