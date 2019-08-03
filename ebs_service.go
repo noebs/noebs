@@ -1675,8 +1675,8 @@ func EditCard(c *gin.Context) {
 		}else if fields.ID == 0{
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
-			id := fields.ID
-			key := redisClient.ZRange(username+":cards", int64(id), int64(id))
+			//id := fields.ID
+			////key := redisClient.ZRange(username+":cards", int64(id), int64(id))
 			z := &redis.Z{
 				Member:buf,
 			}
@@ -1685,10 +1685,10 @@ func EditCard(c *gin.Context) {
 				redisClient.HSet(username, "main_card", buf)
 				// get the old item using the ID
 
-				redisClient.ZRem(username+":cards", key)
+				redisClient.ZRem(username+":cards", z)
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZRem(username+":cards", key)
+				redisClient.ZRem(username+":cards", z)
 				redisClient.ZAdd(username+":cards", z)
 			}
 
@@ -1714,13 +1714,15 @@ func RemoveCard(c *gin.Context) {
 		}else if fields.ID == 0{
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
-			id := fields.ID
-			key := redisClient.ZRange(username+":cards", int64(id), int64(id))
-
+			//id := fields.ID
+			//key := redisClient.ZRange(username+":cards", int64(id), int64(id))
+			z := &redis.Z{
+				Member:buf,
+			}
 			if fields.IsMain {
 				redisClient.HDel(username+":cards", "main_card")
 			} else {
-				redisClient.ZRem(username+":cards", key)
+				redisClient.ZRem(username+":cards", z)
 			}
 
 			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
