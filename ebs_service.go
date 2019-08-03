@@ -1612,9 +1612,11 @@ func GetCards(c *gin.Context) {
 		// unmrshall cards and send them back to the user
 		// they should be a []Cards
 
+		var cb ebs_fields.CardsRedis
 		var cardBytes []ebs_fields.CardsRedis
 		for _, v := range cards {
-			json.Unmarshal([]byte(v), &cardBytes)
+			json.Unmarshal([]byte(v), &cb)
+			cardBytes = append(cardBytes, cb)
 		}
 		c.JSON(http.StatusOK, gin.H{"cards": cardBytes})
 	}
