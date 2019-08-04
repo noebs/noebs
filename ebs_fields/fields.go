@@ -294,6 +294,6 @@ type MobileRedis struct {
 }
 
 type ItemID struct {
-	ID int `json:"id,omitempty"`
+	ID int `json:"id,omitempty" binding:"required"`
 	IsMain  bool   `json:"is_main"`
 }
