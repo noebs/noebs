@@ -6,6 +6,7 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
@@ -1673,8 +1674,12 @@ func EditCard(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
-			//id := fields.ID
-			////key := redisClient.ZRange(username+":cards", int64(id), int64(id))
+			//FIXME please
+			id := fields.ID
+			keys, _ := redisClient.ZRange(username+":cards", int64(id), int64(id)).Result()
+
+			// after getting the key, we are offloading it to the card instance
+			cards := utils.RedisHelper(keys)
 			z := &redis.Z{
 				Member:buf,
 			}
@@ -1683,14 +1688,14 @@ func EditCard(c *gin.Context) {
 				redisClient.HSet(username, "main_card", buf)
 				// get the old item using the ID
 
-				redisClient.ZRem(username+":cards", buf)
+				redisClient.ZRem(username+":cards", cards)
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZRem(username+":cards", buf)
+				redisClient.ZRem(username+":cards", cards)
 				redisClient.ZAdd(username+":cards", z)
 			}
 
-			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
+			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf, "cards_old": cards})
 		}
 	}
 
