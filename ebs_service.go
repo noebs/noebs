@@ -1711,7 +1711,7 @@ func EditCard(c *gin.Context) {
 func RemoveCard(c *gin.Context) {
 	redisClient := getRedis()
 
-	var fields ebs_fields.CardsRedis
+	var fields ebs_fields.ItemID
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
