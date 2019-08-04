@@ -1643,7 +1643,7 @@ func AddCards(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
-			z := redis.Z{
+			z := &redis.Z{
 				Member:fields,
 			}
 			if fields.IsMain {
@@ -1682,7 +1682,7 @@ func EditCard(c *gin.Context) {
 
 			// after getting the key, we are offloading it to the card instance
 			cards := utils.RedisHelper(keys)
-			z := redis.Z{
+			z := &redis.Z{
 				Member:buf,
 			}
 			if fields.IsMain {
