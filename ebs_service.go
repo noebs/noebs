@@ -1654,7 +1654,7 @@ func AddCards(c *gin.Context) {
 			} else {
 				_, err := redisClient.ZAdd(username+":cards", z).Result()
 				if err != nil {
-					c.JSON(200, gin.H{"message": err.Error()})
+					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 					return
 				}
 			}
@@ -1669,40 +1669,60 @@ func EditCard(c *gin.Context) {
 	redisClient := getRedis()
 
 	var fields ebs_fields.CardsRedis
+
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		// there is no error in the request body
 	} else {
 		buf, _ := json.Marshal(fields)
+
 		username := c.GetString("username")
 		if username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access", "code": "empty_card_id"})
-		}else if fields.ID <= 0{
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
-		} else {
-			//FIXME please
-			id := fields.ID
-			keys, _ := redisClient.ZRange(username+":cards", int64(id), int64(id)).Result()
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else if fields.ID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+			return
+		}
+		// core functionality
+		id := fields.ID
+		key, _ := redisClient.ZRange(username+":cards", int64(id-1), int64(id-1)).Result()
+		cards := []byte(key[0])
 
-			// after getting the key, we are offloading it to the card instance
-			cards := utils.RedisHelper(keys)
+		{
+			// step 1: removing the card; copied from RemoveCard
+			if fields.IsMain {
+				redisClient.HDel(username+":cards", "main_card")
+			} else {
+				_, err := redisClient.ZRem(username+":cards", cards).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+					return
+				}
+			}
+		}
+
+		// step 2: Add the card; copied from AddCard
+
+		{
 			z := &redis.Z{
 				Member:buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
 				redisClient.HSet(username, "main_card", buf)
-				// get the old item using the ID
 
-				redisClient.ZRem(username+":cards", cards)
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZRem(username+":cards", cards)
-				redisClient.ZAdd(username+":cards", z)
+				_, err := redisClient.ZAdd(username+":cards", z).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+					return
+				}
 			}
-
-			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf, "cards_old": cards})
 		}
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
+
 	}
 
 }
