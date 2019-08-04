@@ -1724,11 +1724,10 @@ func RemoveCard(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
 			return
 		}
+		// core functionality
 		id := fields.ID
-		key, _ := redisClient.ZRange(username+":cards", int64(id), int64(id)).Result()
+		key, _ := redisClient.ZRange(username+":cards", int64(id-1), int64(id-1)).Result()
 		cards := []byte(key[0])
-
-		// marshall this into a json or,
 
 			if fields.IsMain {
 				redisClient.HDel(username+":cards", "main_card")
