@@ -6,6 +6,7 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
@@ -1642,8 +1643,8 @@ func AddCards(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
-			z := &redis.Z{
-				Member:buf,
+			z := redis.Z{
+				Member:fields,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -1671,11 +1672,17 @@ func EditCard(c *gin.Context) {
 		buf, _ := json.Marshal(fields)
 		username := c.GetString("username")
 		if username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access", "code": "empty_card_id"})
+		}else if fields.ID <= 0{
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
-			//id := fields.ID
-			////key := redisClient.ZRange(username+":cards", int64(id), int64(id))
-			z := &redis.Z{
+			//FIXME please
+			id := fields.ID
+			keys, _ := redisClient.ZRange(username+":cards", int64(id), int64(id)).Result()
+
+			// after getting the key, we are offloading it to the card instance
+			cards := utils.RedisHelper(keys)
+			z := redis.Z{
 				Member:buf,
 			}
 			if fields.IsMain {
@@ -1683,14 +1690,14 @@ func EditCard(c *gin.Context) {
 				redisClient.HSet(username, "main_card", buf)
 				// get the old item using the ID
 
-				redisClient.ZRem(username+":cards", buf)
+				redisClient.ZRem(username+":cards", cards)
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZRem(username+":cards", buf)
+				redisClient.ZRem(username+":cards", cards)
 				redisClient.ZAdd(username+":cards", z)
 			}
 
-			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
+			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf, "cards_old": cards})
 		}
 	}
 
@@ -1704,24 +1711,30 @@ func RemoveCard(c *gin.Context) {
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		// there is no error in the request body
 	} else {
-		buf, _ := json.Marshal(fields)
 		username := c.GetString("username")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
+		} else if fields.ID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+			return
+		}
+		id := fields.ID
+		key, _ := redisClient.ZRange(username+":cards", int64(id), int64(id)).Result()
+		cards := utils.RedisHelper(key)
 
 			if fields.IsMain {
 				redisClient.HDel(username+":cards", "main_card")
 			} else {
-				_, err := redisClient.ZRem(username+":cards", buf).Result()
+				_, err := redisClient.ZRem(username+":cards", cards).Result()
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
 				}
 			}
 
-			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
-		}
+			c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
+
 	}
 
 }
