@@ -292,3 +292,8 @@ type MobileRedis struct {
 	Provider string `json:"provider"`
 	IsMain   bool   `json:"is_main"`
 }
+
+type ItemID struct {
+	ID int `json:"id,omitempty" binding:"required"`
+	IsMain  bool   `json:"is_main"`
+}
