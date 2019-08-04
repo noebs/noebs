@@ -59,7 +59,7 @@ func RedisHelper(s []string) ebs_fields.CardsRedis{
 	var c ebs_fields.CardsRedis
 	if len(s) == 1{
 		for _, v := range s{
-			json.Unmarshal(v, &c)
+			json.Unmarshal([]byte(v), &c)
 		}
 	}
 	return c
