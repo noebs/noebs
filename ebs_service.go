@@ -1644,7 +1644,7 @@ func AddCards(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
 			z := &redis.Z{
-				Member:&fields,
+				Member:&buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
