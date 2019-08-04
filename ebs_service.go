@@ -1726,7 +1726,9 @@ func RemoveCard(c *gin.Context) {
 		}
 		id := fields.ID
 		key, _ := redisClient.ZRange(username+":cards", int64(id), int64(id)).Result()
-		cards := utils.RedisHelper(key)
+		cards := []byte(key[0])
+
+		// marshall this into a json or,
 
 			if fields.IsMain {
 				redisClient.HDel(username+":cards", "main_card")
@@ -1734,6 +1736,7 @@ func RemoveCard(c *gin.Context) {
 				_, err := redisClient.ZRem(username+":cards", cards).Result()
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+					return
 				}
 			}
 
