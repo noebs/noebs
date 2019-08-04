@@ -1652,7 +1652,11 @@ func AddCards(c *gin.Context) {
 
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZAdd(username+":cards", z)
+				_, err := redisClient.ZAdd(username+":cards", z).Result()
+				if err != nil {
+					c.JSON(200, gin.H{"message": err.Error()})
+					return
+				}
 			}
 			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
 		}
