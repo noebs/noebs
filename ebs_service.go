@@ -6,7 +6,6 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
