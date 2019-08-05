@@ -1347,7 +1347,7 @@ func ConsumerBalance(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
-			c.JSON(code, gin.H{"payload": payload, "res": successfulResponse})
+			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
 		}
