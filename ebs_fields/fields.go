@@ -133,7 +133,7 @@ type GenericEBSResponseFields struct {
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 	UUID        string `json:"UUID,omitempty" form:"UUID"`
-	Balance string `json:"balance,omitempty"`
+	Balance float32 `json:"balance,omitempty"`
 }
 
 type ImportantEBSFields struct {
