@@ -135,7 +135,7 @@ type GenericEBSResponseFields struct {
 	UUID           string                 `json:"UUID,omitempty" form:"UUID"`
 	Balance        map[string]interface{} `json:"balance,omitempty"`
 	AdditionalData map[string]interface{} `json:"additionalData,omitempty"`
-	PaymentInfo    string                 `json:"paymentInfo,omitempty"`
+	PaymentInfo    interface{}            `json:"paymentInfo,omitempty"`
 }
 
 type ImportantEBSFields struct {
