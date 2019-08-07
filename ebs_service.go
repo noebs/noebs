@@ -69,6 +69,7 @@ func GetMainEngine() *gin.Engine {
 	consumer.POST("/purchase", ConsumerPurchase)
 	consumer.POST("/status", ConsumerStatus)
 	consumer.POST("/key", ConsumerWorkingKey)
+	consumer.POST("/ipin", ConsumerIPinChange)
 	consumer.Use(gateway.AuthMiddleware())
 	{
 		// protected endpoints
@@ -1485,7 +1486,7 @@ func ConsumerIPinChange(c *gin.Context) {
 	// redis instance
 	redisClient := getRedis()
 
-	var fields = ebs_fields.ConsumerCardTransferFields{}
+	var fields = ebs_fields.ConsumerIPinFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -1552,6 +1553,7 @@ func ConsumerIPinChange(c *gin.Context) {
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
+
 func ConsumerStatus(c *gin.Context) {
 	url := EBSIp + ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.

@@ -232,7 +232,7 @@ type ConsumerCommonFields struct {
 
 type ConsumerBillInquiryFields struct {
 	ConsumerCommonFields
-	ConsumerCardHolderFields
+	ConsumersBillersFields
 }
 
 type ConsumerCardHolderFields struct {
@@ -252,7 +252,6 @@ type ConsumerBalanceFields struct {
 type ConsumersBillersFields struct {
 	PayeeId     string `json:"payeeId" form:"payeeId"`
 	PaymentInfo string `json:"paymentInfo" form:"paymentInfo"`
-	AmountFields
 }
 
 type ConsumerPurchaseFields struct {
@@ -271,6 +270,11 @@ type ConsumerBillPaymentFields struct {
 
 type ConsumerWorkingKeyFields struct {
 	ConsumerCommonFields
+}
+
+type ConsumerIPinFields struct {
+	ConsumerCommonFields
+	NewIPIN string `json:"newIPIN" binding:"required"`
 }
 
 type ConsumerCardTransferFields struct {
