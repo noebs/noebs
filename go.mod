@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/stretchr/testify v1.3.0
-	github.com/ugorji/go v1.1.4
+	github.com/ugorji/go v1.1.7
 	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 	golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
 	gopkg.in/go-playground/validator.v8 v8.18.2
