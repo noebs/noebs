@@ -233,6 +233,7 @@ type ConsumerCommonFields struct {
 type ConsumerBillInquiryFields struct {
 	ConsumerCommonFields
 	ConsumersBillersFields
+	ConsumerCardHolderFields
 }
 
 type ConsumerCardHolderFields struct {
