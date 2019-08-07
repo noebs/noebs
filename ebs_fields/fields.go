@@ -1,7 +1,6 @@
 package ebs_fields
 
 import (
-	"gopkg.in/go-playground/validator.v9"
 	"time"
 )
 
@@ -131,9 +130,11 @@ type GenericEBSResponseFields struct {
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
 
 	// Consumer fields
-	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
-	UUID        string `json:"UUID,omitempty" form:"UUID"`
-	Balance map[string]interface{} `json:"balance,omitempty"`
+	PubKeyValue    string                 `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+	UUID           string                 `json:"UUID,omitempty" form:"UUID"`
+	Balance        map[string]interface{} `json:"balance,omitempty"`
+	AdditionalData map[string]interface{} `json:"additionalData,omitempty"`
+	PaymentInfo    string                 `json:"paymentInfo,omitempty"`
 }
 
 type ImportantEBSFields struct {
@@ -281,11 +282,11 @@ type DisputeFields struct {
 }
 
 type CardsRedis struct {
-	ID int `json:"id,omitempty"`
+	ID      int    `json:"id,omitempty"`
 	PAN     string `json:"pan" binding:"required"`
 	Expdate string `json:"exp_date" binding:"required"`
 	IsMain  bool   `json:"is_main"`
-	Name string `json:"name"`
+	Name    string `json:"name"`
 }
 
 type MobileRedis struct {
@@ -295,6 +296,6 @@ type MobileRedis struct {
 }
 
 type ItemID struct {
-	ID int `json:"id,omitempty" binding:"required"`
-	IsMain  bool   `json:"is_main"`
+	ID     int  `json:"id,omitempty" binding:"required"`
+	IsMain bool `json:"is_main"`
 }
