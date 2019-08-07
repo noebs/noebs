@@ -202,10 +202,10 @@ func IsAlive(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = IsAliveTransaction
@@ -223,7 +223,7 @@ func IsAlive(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -284,10 +284,10 @@ func WorkingKey(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = WorkingKeyTransaction
@@ -302,7 +302,7 @@ func WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -368,10 +368,10 @@ func Purchase(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -384,7 +384,7 @@ func Purchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -450,10 +450,10 @@ func Balance(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BalanceTransaction
@@ -463,7 +463,7 @@ func Balance(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -529,10 +529,10 @@ func CardTransfer(c *gin.Context) {
 
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CardTransferTransaction
@@ -540,7 +540,7 @@ func CardTransfer(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -606,10 +606,10 @@ func BillInquiry(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BillInquiryTransaction
@@ -618,7 +618,7 @@ func BillInquiry(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -682,10 +682,10 @@ func BillPayment(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BillPaymentTransaction
@@ -694,7 +694,7 @@ func BillPayment(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -759,10 +759,10 @@ func ChangePIN(c *gin.Context) {
 
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = ChangePINTransaction
@@ -771,7 +771,7 @@ func ChangePIN(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -834,10 +834,10 @@ func CashOut(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CashOutTransaction
@@ -846,7 +846,7 @@ func CashOut(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -910,10 +910,10 @@ func CashIn(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CashInTransaction
@@ -922,7 +922,7 @@ func CashIn(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -987,10 +987,10 @@ func MiniStatement(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = MiniStatementTransaction
@@ -1047,10 +1047,10 @@ func testAPI(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = WorkingKeyTransaction
@@ -1117,10 +1117,10 @@ func ConsumerPurchase(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1133,7 +1133,7 @@ func ConsumerPurchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -1185,13 +1185,13 @@ func ConsumerIsAlive(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		// mask the pan
+		//// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1259,10 +1259,10 @@ func ConsumerBillPayment(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1330,10 +1330,10 @@ func ConsumerBalance(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1401,10 +1401,10 @@ func ConsumerWorkingKey(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1475,10 +1475,10 @@ func ConsumerCardTransfer(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1554,10 +1554,10 @@ func ConsumerStatus(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1602,7 +1602,7 @@ func GetCards(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 	} else {
-		cards, err := redisClient.ZRange(username + ":cards", 0, -1).Result()
+		cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
 		if err != nil {
 			// handle the error somehow
 			logrus.WithFields(logrus.Fields{
@@ -1643,7 +1643,7 @@ func AddCards(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
 			z := &redis.Z{
-				Member:buf,
+				Member: buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -1705,7 +1705,7 @@ func EditCard(c *gin.Context) {
 
 		{
 			z := &redis.Z{
-				Member:buf,
+				Member: buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -1748,17 +1748,17 @@ func RemoveCard(c *gin.Context) {
 		key, _ := redisClient.ZRange(username+":cards", int64(id-1), int64(id-1)).Result()
 		cards := []byte(key[0])
 
-			if fields.IsMain {
-				redisClient.HDel(username+":cards", "main_card")
-			} else {
-				_, err := redisClient.ZRem(username+":cards", cards).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
-					return
-				}
+		if fields.IsMain {
+			redisClient.HDel(username+":cards", "main_card")
+		} else {
+			_, err := redisClient.ZRem(username+":cards", cards).Result()
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+				return
 			}
+		}
 
-			c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
 
 	}
 

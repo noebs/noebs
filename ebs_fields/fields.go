@@ -148,12 +148,21 @@ type ImportantEBSFields struct {
 	TranDateTime         string  `json:"tranDateTime,omitempty"`
 	TranFee              float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
+}
 
+// you have to update this to account for the non-db-able fields
+type EBSParserFields struct {
+	GenericEBSResponseFields
+	EBSMapFields
+}
+
+// special case to handle ebs non-DB-able fields e.g., hashmaps and other complex types
+type EBSMapFields struct {
+	// these
 	Balance     map[string]interface{} `json:"balance,omitempty"`
 	PaymentInfo string                 `json:"paymentInfo,omitempty"`
 	BillInfo    interface{}            `json:"billInfo,omitempty"`
 }
-
 type ConsumerSpecificFields struct {
 	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
 	Mbr             string  `json:"mbr,omitempty" form:"mbr"`
