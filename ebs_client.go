@@ -13,7 +13,7 @@ import (
 )
 
 //EBSHttpClient the client to interact with EBS
-func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFields, error) {
+func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, error) {
 
 	verifyTLS := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -26,7 +26,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.GenericEBSResponseFi
 
 	reqBuffer := bytes.NewBuffer(req)
 
-	var ebsGenericResponse ebs_fields.GenericEBSResponseFields
+	var ebsGenericResponse ebs_fields.EBSParserFields
 
 	reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
 

@@ -202,10 +202,10 @@ func IsAlive(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = IsAliveTransaction
@@ -223,7 +223,7 @@ func IsAlive(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -284,10 +284,10 @@ func WorkingKey(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = WorkingKeyTransaction
@@ -302,7 +302,7 @@ func WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -368,10 +368,10 @@ func Purchase(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -384,7 +384,7 @@ func Purchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -450,10 +450,10 @@ func Balance(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BalanceTransaction
@@ -463,7 +463,7 @@ func Balance(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -529,10 +529,10 @@ func CardTransfer(c *gin.Context) {
 
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CardTransferTransaction
@@ -540,7 +540,7 @@ func CardTransfer(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -606,10 +606,10 @@ func BillInquiry(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BillInquiryTransaction
@@ -618,7 +618,7 @@ func BillInquiry(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -682,10 +682,10 @@ func BillPayment(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BillPaymentTransaction
@@ -694,7 +694,7 @@ func BillPayment(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -759,10 +759,10 @@ func ChangePIN(c *gin.Context) {
 
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = ChangePINTransaction
@@ -771,7 +771,7 @@ func ChangePIN(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -834,10 +834,10 @@ func CashOut(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CashOutTransaction
@@ -846,7 +846,7 @@ func CashOut(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -910,10 +910,10 @@ func CashIn(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CashInTransaction
@@ -922,7 +922,7 @@ func CashIn(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -987,10 +987,10 @@ func MiniStatement(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = MiniStatementTransaction
@@ -1047,10 +1047,10 @@ func testAPI(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = WorkingKeyTransaction
@@ -1117,23 +1117,23 @@ func ConsumerPurchase(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
-		//transaction := dashboard.Transaction{
-		//	GenericEBSResponseFields: res,
-		//}
-		//
-		//transaction.EBSServiceName = PurchaseTransaction
-		//
-		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-		//	logrus.WithFields(logrus.Fields{
-		//		"error":   "unable to migrate purchase model",
-		//		"message": err.Error(),
-		//	}).Info("error in migrating purchase model")
-		//}
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, successfulResponse)
@@ -1186,22 +1186,22 @@ func ConsumerIsAlive(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		//// mask the pan
-		//res.MaskPAN()
-		//var successfulResponse SuccessfulResponse
-		//successfulResponse.EBSResponse = res
-		//
-		//transaction := dashboard.Transaction{
-		//	GenericEBSResponseFields: res,
-		//}
-		//
-		//transaction.EBSServiceName = PurchaseTransaction
-		//
-		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-		//	logrus.WithFields(logrus.Fields{
-		//		"error":   "unable to migrate purchase model",
-		//		"message": err.Error(),
-		//	}).Info("error in migrating purchase model")
-		//}
+		res.MaskPAN()
+		var successfulResponse SuccessfulResponse
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1259,20 +1259,20 @@ func ConsumerBillPayment(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
-		//transaction := dashboard.Transaction{
-		//	GenericEBSResponseFields: res,
-		//}
-		//
-		//transaction.EBSServiceName = PurchaseTransaction
-		//
-		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-		//	logrus.WithFields(logrus.Fields{
-		//		"error":   "unable to migrate purchase model",
-		//		"message": err.Error(),
-		//	}).Info("error in migrating purchase model")
-		//}
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1330,10 +1330,10 @@ func ConsumerBalance(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1401,20 +1401,20 @@ func ConsumerWorkingKey(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
-		//transaction := dashboard.Transaction{
-		//	GenericEBSResponseFields: res,
-		//}
-		//
-		//transaction.EBSServiceName = PurchaseTransaction
-		//
-		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-		//	logrus.WithFields(logrus.Fields{
-		//		"error":   "unable to migrate purchase model",
-		//		"message": err.Error(),
-		//	}).Info("error in migrating purchase model")
-		//}
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1475,20 +1475,20 @@ func ConsumerCardTransfer(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
-		//transaction := dashboard.Transaction{
-		//	GenericEBSResponseFields: res,
-		//}
-		//
-		//transaction.EBSServiceName = PurchaseTransaction
-		//
-		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-		//	logrus.WithFields(logrus.Fields{
-		//		"error":   "unable to migrate purchase model",
-		//		"message": err.Error(),
-		//	}).Info("error in migrating purchase model")
-		//}
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		// Write the request onto Redis
 		username := c.GetString("username")
@@ -1554,10 +1554,10 @@ func ConsumerStatus(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
+		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
