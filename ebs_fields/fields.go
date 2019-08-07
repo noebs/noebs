@@ -252,6 +252,7 @@ type ConsumerBalanceFields struct {
 type ConsumersBillersFields struct {
 	PayeeId     string `json:"payeeId" form:"payeeId"`
 	PaymentInfo string `json:"paymentInfo" form:"paymentInfo"`
+	AmountFields
 }
 
 type ConsumerPurchaseFields struct {
