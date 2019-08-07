@@ -1253,7 +1253,7 @@ func ConsumerBillPayment(c *gin.Context) {
 }
 
 func ConsumerBillInquiry(c *gin.Context) {
-	url := EBSIp + ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
+	url := EBSIp + ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1262,7 +1262,7 @@ func ConsumerBillInquiry(c *gin.Context) {
 	db := database("sqlite3", "test.db")
 	defer db.Close()
 
-	var fields = ebs_fields.BillInquiryFields{}
+	var fields = ebs_fields.ConsumerBillInquiryFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
