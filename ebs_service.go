@@ -754,7 +754,7 @@ func ChangePIN(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -826,7 +826,7 @@ func CashOut(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -899,7 +899,8 @@ func CashIn(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -973,7 +974,7 @@ func MiniStatement(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -1031,7 +1032,8 @@ func testAPI(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1102,7 +1104,7 @@ func ConsumerPurchase(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -1171,7 +1173,7 @@ func ConsumerIsAlive(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -1240,7 +1242,8 @@ func ConsumerBillPayment(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1309,7 +1312,8 @@ func ConsumerBalance(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1378,7 +1382,8 @@ func ConsumerWorkingKey(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1458,7 +1463,8 @@ func ConsumerCardTransfer(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1527,7 +1533,8 @@ func ConsumerStatus(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
