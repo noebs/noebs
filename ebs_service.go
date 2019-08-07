@@ -201,9 +201,6 @@ func IsAlive(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -226,7 +223,7 @@ func IsAlive(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -283,9 +280,6 @@ func WorkingKey(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -305,7 +299,7 @@ func WorkingKey(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -367,8 +361,6 @@ func Purchase(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -387,7 +379,7 @@ func Purchase(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -449,8 +441,6 @@ func Balance(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -466,7 +456,7 @@ func Balance(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -528,8 +518,6 @@ func CardTransfer(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -543,7 +531,7 @@ func CardTransfer(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -605,9 +593,6 @@ func BillInquiry(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -621,7 +606,7 @@ func BillInquiry(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -681,9 +666,6 @@ func BillPayment(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -697,7 +679,7 @@ func BillPayment(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -758,8 +740,6 @@ func ChangePIN(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -774,7 +754,7 @@ func ChangePIN(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -833,9 +813,6 @@ func CashOut(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -849,7 +826,7 @@ func CashOut(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -909,9 +886,6 @@ func CashIn(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -925,7 +899,7 @@ func CashIn(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -986,9 +960,6 @@ func MiniStatement(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -1002,7 +973,7 @@ func MiniStatement(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1046,9 +1017,6 @@ func testAPI(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
@@ -1063,7 +1031,7 @@ func testAPI(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1116,8 +1084,6 @@ func ConsumerPurchase(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1136,7 +1102,7 @@ func ConsumerPurchase(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1187,8 +1153,6 @@ func ConsumerIsAlive(c *gin.Context) {
 
 		//// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1207,7 +1171,7 @@ func ConsumerIsAlive(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1258,8 +1222,6 @@ func ConsumerBillPayment(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1278,7 +1240,7 @@ func ConsumerBillPayment(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1329,8 +1291,6 @@ func ConsumerBalance(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1349,7 +1309,7 @@ func ConsumerBalance(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1400,8 +1360,6 @@ func ConsumerWorkingKey(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1420,7 +1378,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1474,8 +1432,6 @@ func ConsumerCardTransfer(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1502,7 +1458,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:
@@ -1553,8 +1509,6 @@ func ConsumerStatus(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res.GenericEBSResponseFields
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1573,7 +1527,7 @@ func ConsumerStatus(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, res)
 		}
 
 	default:

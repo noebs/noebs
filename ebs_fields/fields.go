@@ -152,8 +152,8 @@ type ImportantEBSFields struct {
 
 // you have to update this to account for the non-db-able fields
 type EBSParserFields struct {
-	GenericEBSResponseFields
 	EBSMapFields
+	GenericEBSResponseFields
 }
 
 // special case to handle ebs non-DB-able fields e.g., hashmaps and other complex types
