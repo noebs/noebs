@@ -1926,7 +1926,7 @@ func EditCard1(c *gin.Context) {
 				}
 			}
 		}
-		c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
 
 	}
 
