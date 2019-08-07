@@ -161,7 +161,7 @@ type EBSMapFields struct {
 	// these
 	Balance     map[string]interface{} `json:"balance,omitempty"`
 	PaymentInfo string                 `json:"paymentInfo,omitempty"`
-	BillInfo    interface{}            `json:"billInfo,omitempty"`
+	BillInfo    map[string]interface{} `json:"billInfo,omitempty"`
 }
 type ConsumerSpecificFields struct {
 	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
