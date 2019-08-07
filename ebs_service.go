@@ -76,8 +76,9 @@ func GetMainEngine() *gin.Engine {
 
 		consumer.GET("/get_cards", GetCards)
 		consumer.POST("/add_card", AddCards)
-		consumer.PUT("/edit_card", EditCard)
-		consumer.DELETE("/delete_card", RemoveCard)
+
+		consumer.PUT("/edit_card", EditCard1)
+		consumer.DELETE("/delete_card", RemoveCard1)
 
 		consumer.GET("/get_mobile", GetMobile)
 		consumer.POST("/add_mobile", AddMobile)
@@ -1776,6 +1777,40 @@ func AddCards(c *gin.Context) {
 
 }
 
+func AddCards1(c *gin.Context) {
+	redisClient := getRedis()
+
+	var fields ebs_fields.CardsRedis
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+	} else {
+		buf, _ := json.Marshal(fields)
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else {
+			z := &redis.Z{
+				Member: buf,
+			}
+			if fields.IsMain {
+				// refactor me, please!
+				redisClient.HSet(username, "main_card", buf)
+
+				redisClient.ZAdd(username+":cards", z)
+			} else {
+				_, err := redisClient.ZAdd(username+":cards", z).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+					return
+				}
+			}
+			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
+		}
+	}
+
+}
+
 // EditCards a work in progress. This function needs to be reviewed and refactored
 func EditCard(c *gin.Context) {
 	redisClient := getRedis()
@@ -1807,6 +1842,64 @@ func EditCard(c *gin.Context) {
 				redisClient.HDel(username+":cards", "main_card")
 			} else {
 				_, err := redisClient.ZRem(username+":cards", cards).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+					return
+				}
+			}
+		}
+
+		// step 2: Add the card; copied from AddCard
+
+		{
+			z := &redis.Z{
+				Member: buf,
+			}
+			if fields.IsMain {
+				// refactor me, please!
+				redisClient.HSet(username, "main_card", buf)
+
+				redisClient.ZAdd(username+":cards", z)
+			} else {
+				_, err := redisClient.ZAdd(username+":cards", z).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+					return
+				}
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
+
+	}
+
+}
+func EditCard1(c *gin.Context) {
+	redisClient := getRedis()
+
+	var fields ebs_fields.CardsRedis
+
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		// there is no error in the request body
+	} else {
+		buf, _ := json.Marshal(fields)
+
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else if fields.ID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+			return
+		}
+		// core functionality
+		id := fields.ID
+		{
+			// step 1: removing the card; copied from RemoveCard
+			if fields.IsMain {
+				redisClient.HDel(username+":cards", "main_card")
+			} else {
+				_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
 				if err != nil {
 					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
 					return
@@ -1877,6 +1970,41 @@ func RemoveCard(c *gin.Context) {
 
 }
 
+// this will work, but it is quite unpredictable
+func RemoveCard1(c *gin.Context) {
+	redisClient := getRedis()
+
+	var fields ebs_fields.ItemID
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		// there is no error in the request body
+	} else {
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else if fields.ID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+			return
+		}
+		// core functionality
+		id := fields.ID
+
+		if fields.IsMain {
+			redisClient.HDel(username+":cards", "main_card")
+		} else {
+			_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
+
+	}
+
+}
 func AddMobile(c *gin.Context) {
 	redisClient := getRedis()
 
