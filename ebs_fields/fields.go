@@ -274,6 +274,7 @@ type ConsumerWorkingKeyFields struct {
 
 type ConsumerIPinFields struct {
 	ConsumerCommonFields
+	ConsumerCardHolderFields
 	NewIPIN string `json:"newIPIN" binding:"required"`
 }
 
