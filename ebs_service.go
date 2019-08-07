@@ -1119,18 +1119,18 @@ func ConsumerPurchase(c *gin.Context) {
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
-		}
-
-		transaction.EBSServiceName = PurchaseTransaction
-
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
-			}).Info("error in migrating purchase model")
-		}
+		//transaction := dashboard.Transaction{
+		//	GenericEBSResponseFields: res,
+		//}
+		//
+		//transaction.EBSServiceName = PurchaseTransaction
+		//
+		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		//	logrus.WithFields(logrus.Fields{
+		//		"error":   "unable to migrate purchase model",
+		//		"message": err.Error(),
+		//	}).Info("error in migrating purchase model")
+		//}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1185,23 +1185,23 @@ func ConsumerIsAlive(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		// mask the pan
-		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
-		}
-
-		transaction.EBSServiceName = PurchaseTransaction
-
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
-			}).Info("error in migrating purchase model")
-		}
+		//// mask the pan
+		//res.MaskPAN()
+		//var successfulResponse SuccessfulResponse
+		//successfulResponse.EBSResponse = res
+		//
+		//transaction := dashboard.Transaction{
+		//	GenericEBSResponseFields: res,
+		//}
+		//
+		//transaction.EBSServiceName = PurchaseTransaction
+		//
+		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		//	logrus.WithFields(logrus.Fields{
+		//		"error":   "unable to migrate purchase model",
+		//		"message": err.Error(),
+		//	}).Info("error in migrating purchase model")
+		//}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1261,18 +1261,18 @@ func ConsumerBillPayment(c *gin.Context) {
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
-		}
-
-		transaction.EBSServiceName = PurchaseTransaction
-
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
-			}).Info("error in migrating purchase model")
-		}
+		//transaction := dashboard.Transaction{
+		//	GenericEBSResponseFields: res,
+		//}
+		//
+		//transaction.EBSServiceName = PurchaseTransaction
+		//
+		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		//	logrus.WithFields(logrus.Fields{
+		//		"error":   "unable to migrate purchase model",
+		//		"message": err.Error(),
+		//	}).Info("error in migrating purchase model")
+		//}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1403,18 +1403,18 @@ func ConsumerWorkingKey(c *gin.Context) {
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
-		}
-
-		transaction.EBSServiceName = PurchaseTransaction
-
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
-			}).Info("error in migrating purchase model")
-		}
+		//transaction := dashboard.Transaction{
+		//	GenericEBSResponseFields: res,
+		//}
+		//
+		//transaction.EBSServiceName = PurchaseTransaction
+		//
+		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		//	logrus.WithFields(logrus.Fields{
+		//		"error":   "unable to migrate purchase model",
+		//		"message": err.Error(),
+		//	}).Info("error in migrating purchase model")
+		//}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1477,18 +1477,18 @@ func ConsumerCardTransfer(c *gin.Context) {
 		var successfulResponse SuccessfulResponse
 		successfulResponse.EBSResponse = res
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
-		}
-
-		transaction.EBSServiceName = PurchaseTransaction
-
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
-			}).Info("error in migrating purchase model")
-		}
+		//transaction := dashboard.Transaction{
+		//	GenericEBSResponseFields: res,
+		//}
+		//
+		//transaction.EBSServiceName = PurchaseTransaction
+		//
+		//if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		//	logrus.WithFields(logrus.Fields{
+		//		"error":   "unable to migrate purchase model",
+		//		"message": err.Error(),
+		//	}).Info("error in migrating purchase model")
+		//}
 
 		// Write the request onto Redis
 		username := c.GetString("username")
@@ -1602,7 +1602,7 @@ func GetCards(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 	} else {
-		cards, err := redisClient.ZRange(username + ":cards", 0, -1).Result()
+		cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
 		if err != nil {
 			// handle the error somehow
 			logrus.WithFields(logrus.Fields{
@@ -1643,7 +1643,7 @@ func AddCards(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
 			z := &redis.Z{
-				Member:buf,
+				Member: buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -1705,7 +1705,7 @@ func EditCard(c *gin.Context) {
 
 		{
 			z := &redis.Z{
-				Member:buf,
+				Member: buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -1748,17 +1748,17 @@ func RemoveCard(c *gin.Context) {
 		key, _ := redisClient.ZRange(username+":cards", int64(id-1), int64(id-1)).Result()
 		cards := []byte(key[0])
 
-			if fields.IsMain {
-				redisClient.HDel(username+":cards", "main_card")
-			} else {
-				_, err := redisClient.ZRem(username+":cards", cards).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
-					return
-				}
+		if fields.IsMain {
+			redisClient.HDel(username+":cards", "main_card")
+		} else {
+			_, err := redisClient.ZRem(username+":cards", cards).Result()
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+				return
 			}
+		}
 
-			c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": cards})
 
 	}
 
