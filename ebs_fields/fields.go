@@ -131,12 +131,8 @@ type GenericEBSResponseFields struct {
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
 
 	// Consumer fields
-	PubKeyValue    string                 `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
-	UUID           string                 `json:"UUID,omitempty" form:"UUID"`
-	Balance        map[string]interface{} `json:"balance,omitempty"`
-	AdditionalData map[string]interface{} `json:"additionalData,omitempty"`
-	PaymentInfo    string                 `json:"paymentInfo,omitempty"`
-	BillInfo       interface{}            `json:"billInfo,omitempty"`
+	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+	UUID        string `json:"UUID,omitempty" form:"UUID"`
 }
 
 type ImportantEBSFields struct {
@@ -152,6 +148,10 @@ type ImportantEBSFields struct {
 	TranDateTime         string  `json:"tranDateTime,omitempty"`
 	TranFee              float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
+
+	Balance     map[string]interface{} `json:"balance,omitempty"`
+	PaymentInfo string                 `json:"paymentInfo,omitempty"`
+	BillInfo    interface{}            `json:"billInfo,omitempty"`
 }
 
 type ConsumerSpecificFields struct {
