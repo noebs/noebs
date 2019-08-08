@@ -8,14 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/go-redis/redis"
 
 	//"encoding/pem"
 	//"crypto/sha256"
 	"crypto/x509"
 )
 
-
-func main(){
+func main() {
 	text := "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJ4HwthfqXiK09AgShnnLqAqMyT5VUV0hvSdG+ySMx+a54Ui5EStkmO8iOdVG9DlWv55eLBoodjSfd0XRxN7an0CAwEAAQ=="
 
 	msg := "12413940-4350-4fdd-9a96-fa08715d35130000"
@@ -23,9 +23,9 @@ func main(){
 
 }
 
-func rsaEncrypt(text string, key string){
+func rsaEncrypt(text string, key string) {
 	block, err := base64.StdEncoding.DecodeString(text)
-	
+
 	if err != nil {
 		panic(err)
 	}
@@ -39,7 +39,7 @@ func rsaEncrypt(text string, key string){
 	fmt.Printf("The key is: %v, its type is %T", rsaPub, rsaPub)
 
 	// do the encryption
-	rsakey,err := rsa.EncryptPKCS1v15(rand.Reader, rsaPub, []byte(key))
+	rsakey, err := rsa.EncryptPKCS1v15(rand.Reader, rsaPub, []byte(key))
 	if err != nil {
 		panic(err)
 	}
@@ -48,19 +48,31 @@ func rsaEncrypt(text string, key string){
 	fmt.Printf("the key is: %v", encodedKey)
 }
 
-
-func StringsToBytes(s []string) (bytes.Buffer, error){
+func StringsToBytes(s []string) (bytes.Buffer, error) {
 	b := bytes.Buffer{}
 	err := json.NewEncoder(&b).Encode(s)
 	return b, err
 }
 
-func RedisHelper(s []string) ebs_fields.CardsRedis{
+func RedisHelper(s []string) ebs_fields.CardsRedis {
 	var c ebs_fields.CardsRedis
-	if len(s) == 1{
-		for _, v := range s{
+	if len(s) == 1 {
+		for _, v := range s {
 			json.Unmarshal([]byte(v), &c)
 		}
 	}
 	return c
+}
+
+// MarshalIntoRedis marshals a type interface{} into a redis data
+func MarshalIntoRedis(f interface{}, r *redis.Client, key string) error {
+	res, err := json.Marshal(f)
+	if err != nil {
+		return err
+	}
+	mem := &redis.Z{
+		Member: res,
+	}
+	_, err = r.ZAdd(key, mem).Result()
+	return err
 }

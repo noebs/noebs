@@ -5,9 +5,6 @@ import (
 	"time"
 )
 
-// not sure this would work. This package is just for storing struct representations
-// of each httpHandler
-
 type IsAliveFields struct {
 	CommonFields
 }
@@ -292,17 +289,25 @@ type ConsumerStatusFields struct {
 }
 
 type DisputeFields struct {
-	Time    string  `json:"time"`
-	Service string  `json:"service"`
-	UUID    string  `json:"uuid"`
-	STAN    int     `json:"stan"`
-	Amount  float32 `json:"amount"`
+	Time    string  `json:"time,omitempty"`
+	Service string  `json:"service,omitempty"`
+	UUID    string  `json:"uuid,omitempty"`
+	STAN    int     `json:"stan,omitempty"`
+	Amount  float32 `json:"amount,omitempty"`
+}
+
+func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
+	d.Amount = f.TranAmount
+	d.Service = f.EBSServiceName
+	d.UUID = f.UUID
+	d.Time = f.TranDateTime
+	return d
 }
 
 type CardsRedis struct {
 	ID      int    `json:"id,omitempty"`
-	PAN     string `json:"pan" binding:"required"`
-	Expdate string `json:"exp_date" binding:"required"`
+	PAN     string `json:"pan" binding:"required,oneof=16 19"`
+	Expdate string `json:"exp_date" binding:"required,length=4"`
 	IsMain  bool   `json:"is_main"`
 	Name    string `json:"name"`
 }
