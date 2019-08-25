@@ -9,8 +9,8 @@ type UserModel struct {
 	gorm.Model
 	Username  string `binding:"required" json:"username" gorm:"unique_index"`
 	Password  string `binding:"required,min=8,max=20" json:"password"`
-	JWT       JWT
-	JWTID     int
+	jwt       JWT
+	jwtId     int
 	Fullname  string `json:"fullname"`
 	Birthday  string `json:"birthday"`
 	Mobile    string `json:"mobile" binding:"required" gorm:"unique_index"`

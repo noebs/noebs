@@ -74,7 +74,7 @@ func LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	var u UserModel
 
-	if notFound := db.Preload("JWT").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
+	if notFound := db.Preload("jwt").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
@@ -112,8 +112,8 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	u.JWT.SecretKey = string(jwtKey)
-	u.JWT.CreatedAt = time.Now().UTC()
+	u.jwt.SecretKey = string(jwtKey)
+	u.jwt.CreatedAt = time.Now().UTC()
 
 	err = db.Save(&u).Error
 	if err != nil {
@@ -234,7 +234,7 @@ func GenerateSecretKey(n int) ([]byte, error) {
 	return key, nil
 }
 
-// keyFromEnv either generates or retrieve a JWT which will be used to generate a secret key
+// keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
 func keyFromEnv() []byte {
 	// it either checks for environment for the specific key, or generates and saves a one
 	if key := os.Getenv("Jwt-Token"); key != "" {
