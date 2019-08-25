@@ -90,6 +90,7 @@ func LoginHandler(c *gin.Context) {
 	} else if err == nil {
 		count, _ := strconv.Atoi(res)
 		if count >= 5 {
+			// Allow users to use another login method (e.g., totp, or they should reset their password)
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
 			return
 		}
@@ -207,7 +208,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		claims, err := VerifyJWT(h, jwtKey)
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": e.Errors})
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": e.Inner.Error(), "another_error": e.Error()})
 				return
 			}
 		} else if err == nil {
