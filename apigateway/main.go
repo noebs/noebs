@@ -88,20 +88,18 @@ func LoginHandler(c *gin.Context) {
 		// the has just logged in
 		redisClient.Set(req.Username+":login_counts", 0, time.Hour)
 	} else if err == nil {
-		redisClient.Incr(req.Username + ":login_counts")
+		count, _ := strconv.Atoi(res)
+		if count >= 5 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
+			return
+		}
 	}
-	count, _ := strconv.Atoi(res)
-	if count >= 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
-		return
-	}
-
-	counter[req.Username] = ctr + 1
-	redisClient.HMSet("login_counter", counter)
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		log.Printf("there is an error in the password %v", err)
+		redisClient.Incr(req.Username + ":login_counts")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
+
 		return
 	}
 	token, err := GenerateJWT(u.Username, jwtKey)
