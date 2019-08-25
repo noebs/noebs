@@ -8,11 +8,13 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -79,12 +81,17 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	counter := make(map[string]interface{})
 	redisClient := utils.GetRedis()
-	userCount, _ := redisClient.HMGet("login_counter", req.Username).Result()
+	res, err := redisClient.Get(req.Username + ":login_counts").Result()
 
-	ctr := userCount[0].(int)
-	if ctr >= 5 {
+	if err == redis.Nil {
+		// the has just logged in
+		redisClient.Set(req.Username+":login_counts", 0, time.Hour)
+	} else if err == nil {
+		redisClient.Incr(req.Username + ":login_counts")
+	}
+	count, _ := strconv.Atoi(res)
+	if count >= 5 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
 		return
 	}
