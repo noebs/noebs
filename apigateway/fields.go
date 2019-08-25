@@ -7,13 +7,13 @@ import (
 
 type UserModel struct {
 	gorm.Model
-	Username  string `binding:"required" json:"username" gorm:"unique_index"`
+	Username  string `binding:"required,min=3" json:"username" gorm:"unique_index"`
 	Password  string `binding:"required,min=8,max=20" json:"password"`
 	jwt       JWT
 	jwtId     int
 	Fullname  string `json:"fullname"`
 	Birthday  string `json:"birthday"`
-	Mobile    string `json:"mobile" binding:"required" gorm:"unique_index"`
+	Mobile    string `json:"mobile" binding:"required,len=10" gorm:"unique_index"`
 	Email     string `json:"email"`
 	Password2 string `binding:"required,eqfield=Password,min=8,max=20" json:"password2"`
 
