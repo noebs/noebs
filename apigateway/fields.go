@@ -31,6 +31,7 @@ func (m *UserModel) hashPassword() error {
 		return err
 	}
 	m.Password = string(hashedPassword)
+	m.Password2 = string(hashedPassword)
 	return nil
 }
 

@@ -91,6 +91,8 @@ func LoginHandler(c *gin.Context) {
 		count, _ := strconv.Atoi(res)
 		if count >= 5 {
 			// Allow users to use another login method (e.g., totp, or they should reset their password)
+			// Lock their account
+			//redisClient.HSet(req.Username, "suspecious_behavior", 1)
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
 			return
 		}
@@ -100,9 +102,10 @@ func LoginHandler(c *gin.Context) {
 		log.Printf("there is an error in the password %v", err)
 		redisClient.Incr(req.Username + ":login_counts")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
-
 		return
 	}
+	// it is a successful login attempt
+	redisClient.Del(req.Username + ":login_counts")
 	token, err := GenerateJWT(u.Username, jwtKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
