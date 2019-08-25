@@ -22,7 +22,6 @@ import (
 	"sync"
 )
 
-var UseMockServer = false
 var log = logrus.New()
 
 func GetMainEngine() *gin.Engine {
@@ -126,18 +125,6 @@ func main() {
 	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
-
-	if local := os.Getenv("EBS_LOCAL_DEV"); local != "" {
-		UseMockServer = true
-		log.WithFields(logrus.Fields{
-			"ebs_local_flag": local,
-		}).Info("User has opted to use the development server")
-	} else {
-		UseMockServer = false
-		log.WithFields(logrus.Fields{
-			"ebs_local_flag": local,
-		}).Info("User has opted to not use the development server")
-	}
 
 	if env := os.Getenv("PORT"); env != "" {
 		if !strings.HasPrefix(env, ":") {
@@ -1446,7 +1433,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 		transaction.EBSServiceName = PurchaseTransaction
 
 		// store the transaction into redis (for more performance gain)
-		redisClient := getRedis()
+		redisClient := utils.GetRedis()
 		var d ebs_fields.DisputeFields
 		d.New(res)
 		// later, the username should be added username + ":all_transactions"
@@ -1490,7 +1477,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 	defer db.Close()
 
 	// redis instance
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields = ebs_fields.ConsumerCardTransferFields{}
 
@@ -1571,7 +1558,7 @@ func ConsumerIPinChange(c *gin.Context) {
 	defer db.Close()
 
 	// redis instance
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields = ebs_fields.ConsumerIPinFields{}
 
@@ -1713,7 +1700,7 @@ func ConsumerStatus(c *gin.Context) {
 
 func ConsumerTransactions(c *gin.Context) {
 	//TODO get the transaction from Redis instance!
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	username := c.GetString("username")
 	if username == "" {
@@ -1726,7 +1713,7 @@ func ConsumerTransactions(c *gin.Context) {
 }
 
 func GetCards(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	username := c.GetString("username")
 	if username == "" {
@@ -1760,7 +1747,7 @@ func GetCards(c *gin.Context) {
 }
 
 func AddCards(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -1795,7 +1782,7 @@ func AddCards(c *gin.Context) {
 }
 
 func EditCard(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 
@@ -1855,7 +1842,7 @@ func EditCard(c *gin.Context) {
 
 // this will work, but it is quite unpredictable
 func RemoveCard(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.ItemID
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -1889,7 +1876,7 @@ func RemoveCard(c *gin.Context) {
 
 }
 func AddMobile(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -1915,7 +1902,7 @@ func AddMobile(c *gin.Context) {
 }
 
 func GetMobile(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)

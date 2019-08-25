@@ -10,18 +10,8 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis"
 
-	//"encoding/pem"
-	//"crypto/sha256"
 	"crypto/x509"
 )
-
-func main() {
-	text := "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAJ4HwthfqXiK09AgShnnLqAqMyT5VUV0hvSdG+ySMx+a54Ui5EStkmO8iOdVG9DlWv55eLBoodjSfd0XRxN7an0CAwEAAQ=="
-
-	msg := "12413940-4350-4fdd-9a96-fa08715d35130000"
-	rsaEncrypt(text, msg)
-
-}
 
 func rsaEncrypt(text string, key string) {
 	block, err := base64.StdEncoding.DecodeString(text)

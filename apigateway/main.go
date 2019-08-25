@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/adonese/noebs/utils"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/gorm"
@@ -55,7 +57,6 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-
 	//db connection. Not good.
 	db, err := gorm.Open("sqlite3", "test.db")
 
@@ -78,9 +79,18 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// there's a user with such a service id and its info is stored at jwt. celebrity
-	// now, check their entered password
-	log.Printf("passwords are: %v, %v\n", u.Password, req.Password)
+	counter := make(map[string]interface{})
+	redisClient := utils.GetRedis()
+	userCount, _ := redisClient.HMGet("login_counter", req.Username).Result()
+
+	ctr := userCount[0].(int)
+	if ctr >= 5 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
+		return
+	}
+
+	counter[req.Username] = ctr + 1
+	redisClient.HMSet("login_counter", counter)
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		log.Printf("there is an error in the password %v", err)
@@ -190,13 +200,16 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		claims, err := VerifyJWT(h, jwtKey)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-			return
+		if e, ok := err.(*jwt.ValidationError); ok {
+			if e.Errors&jwt.ValidationErrorExpired != 0 {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": e.Errors})
+				return
+			}
+		} else if err == nil {
+			c.Set("username", claims.Username)
+			log.Printf("the username is: %s", claims.Username)
+			c.Next()
 		}
-		c.Set("username", claims.Username)
-		log.Printf("the username is: %s", claims.Username)
-		c.Next()
 	}
 
 }
