@@ -74,7 +74,7 @@ func LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	var u UserModel
 
-	if notFound := db.Preload("JWT").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
+	if notFound := db.Preload("jwt").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
@@ -91,6 +91,8 @@ func LoginHandler(c *gin.Context) {
 		count, _ := strconv.Atoi(res)
 		if count >= 5 {
 			// Allow users to use another login method (e.g., totp, or they should reset their password)
+			// Lock their account
+			//redisClient.HSet(req.Username, "suspecious_behavior", 1)
 			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
 			return
 		}
@@ -100,17 +102,18 @@ func LoginHandler(c *gin.Context) {
 		log.Printf("there is an error in the password %v", err)
 		redisClient.Incr(req.Username + ":login_counts")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
-
 		return
 	}
+	// it is a successful login attempt
+	redisClient.Del(req.Username + ":login_counts")
 	token, err := GenerateJWT(u.Username, jwtKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 
-	u.JWT.SecretKey = string(jwtKey)
-	u.JWT.CreatedAt = time.Now().UTC()
+	u.jwt.SecretKey = string(jwtKey)
+	u.jwt.CreatedAt = time.Now().UTC()
 
 	err = db.Save(&u).Error
 	if err != nil {
@@ -231,7 +234,7 @@ func GenerateSecretKey(n int) ([]byte, error) {
 	return key, nil
 }
 
-// keyFromEnv either generates or retrieve a JWT which will be used to generate a secret key
+// keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
 func keyFromEnv() []byte {
 	// it either checks for environment for the specific key, or generates and saves a one
 	if key := os.Getenv("Jwt-Token"); key != "" {
