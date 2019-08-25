@@ -8,7 +8,7 @@ import (
 type UserModel struct {
 	gorm.Model
 	Username  string `binding:"required" json:"username" gorm:"unique_index"`
-	Password  string `binding:"required" json:"password"`
+	Password  string `binding:"required,min=8,max=20" json:"password"`
 	JWT       JWT
 	JWTID     int
 	Fullname  string `json:"fullname"`
@@ -21,9 +21,10 @@ type UserModel struct {
 }
 
 type UserLogin struct {
-	Username  string `binding:"required" json:"username"`
-	Password  string `binding:"required" json:"password"`
+	Username string `binding:"required" json:"username"`
+	Password string `binding:"required" json:"password"`
 }
+
 func (m *UserModel) hashPassword() error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(m.Password), 8)
 	if err != nil {
