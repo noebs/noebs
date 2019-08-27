@@ -307,7 +307,7 @@ func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
 type CardsRedis struct {
 	ID      int    `json:"id,omitempty"`
 	PAN     string `json:"pan" binding:"required,oneof=16 19"`
-	Expdate string `json:"exp_date" binding:"required,length=4"`
+	Expdate string `json:"exp_date" binding:"required,len=4"`
 	IsMain  bool   `json:"is_main"`
 	Name    string `json:"name"`
 }

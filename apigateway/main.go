@@ -211,6 +211,8 @@ func AuthMiddleware() gin.HandlerFunc {
 		claims, err := VerifyJWT(h, jwtKey)
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
+
+				// in this case you might need to give it another spin
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
 				return
 			} else {
