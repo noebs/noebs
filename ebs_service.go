@@ -64,6 +64,7 @@ func GetMainEngine() *gin.Engine {
 	consumer := route.Group("/consumer")
 
 	consumer.Use(cors.Default())
+
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
 
