@@ -7,6 +7,7 @@ import (
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
@@ -47,6 +48,7 @@ func GetMainEngine() *gin.Engine {
 	})
 
 	dashboardGroup := route.Group("/dashboard")
+	dashboardGroup.Use(cors.Default())
 	{
 		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
@@ -59,6 +61,8 @@ func GetMainEngine() *gin.Engine {
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	consumer := route.Group("/consumer")
+	consumer.Use(cors.Default())
+
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
 
@@ -89,7 +93,6 @@ func GetMainEngine() *gin.Engine {
 		})
 
 	}
-
 	return route
 }
 
