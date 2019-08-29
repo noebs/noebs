@@ -81,9 +81,18 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	// Make sure the user doesn't have any active sessions!
 	redisClient := utils.GetRedis()
-	res, err := redisClient.Get(req.Username + ":login_counts").Result()
+	_, err = redisClient.Get(req.Username + "logged_in_devices").Result()
+	if err != redis.Nil {
+		// The user is already logged in somewhere else. Communicate that to them, clearly!
+		c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
+			"error": "You are logging from another device. You can only have one valid session"})
+		return
+	}
 
+	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
+	res, err := redisClient.Get(req.Username + ":login_counts").Result()
 	if err == redis.Nil {
 		// the has just logged in
 		redisClient.Set(req.Username+":login_counts", 0, time.Hour)
@@ -122,8 +131,34 @@ func LoginHandler(c *gin.Context) {
 	}
 	c.Writer.Header().Set("Authorization", token)
 
+	// Redis add The user is now logged in -- and has active session
+	redisClient.Incr(req.Username + ":logged_in_devices")
+
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 
+}
+
+func LogOut(c *gin.Context) {
+	//TODO implement logout API to limit the number of currently logged in devices
+	// just handle the simplest case, authorization is not provided.
+	h := c.GetHeader("Authorization")
+	if h == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
+			"code": "unauthorized"})
+		return
+	}
+
+	claims, _ := VerifyJWT(h, jwtKey)
+	username := claims.Username
+	if username != "" {
+		redisClient := utils.GetRedis()
+		redisClient.Decr(username + ":logged_in_devices")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Device Successfully Logged Out"})
+		return
+	} else {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "code": "unauthorized"})
+		return
+	}
 }
 
 func CreateUser(c *gin.Context) {
@@ -245,4 +280,20 @@ func keyFromEnv() []byte {
 	key, _ := GenerateSecretKey(50)
 	os.Setenv("Jwt-Token", string(key))
 	return key
+}
+
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }
