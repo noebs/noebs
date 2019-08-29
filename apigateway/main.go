@@ -138,6 +138,37 @@ func LoginHandler(c *gin.Context) {
 
 }
 
+func RefreshHandler(c *gin.Context) {
+
+	// just handle the simplest case, authorization is not provided.
+	h := c.GetHeader("Authorization")
+	if h == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
+			"code": "unauthorized"})
+		return
+
+	}
+
+	claims, err := VerifyJWT(h, jwtKey)
+	if e, ok := err.(*jwt.ValidationError); ok {
+		if e.Errors&jwt.ValidationErrorExpired != 0 {
+			// Generate a new token
+		} else {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+			return
+		}
+	}
+	if claims == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+		return
+	}
+	secret, _ := GenerateSecretKey(50)
+	token, _ := GenerateJWT(claims.Username, secret)
+	c.Writer.Header().Set("Authorization", token)
+
+	c.JSON(http.StatusOK, gin.H{"authorization": token})
+}
+
 func LogOut(c *gin.Context) {
 	//TODO implement logout API to limit the number of currently logged in devices
 	// just handle the simplest case, authorization is not provided.

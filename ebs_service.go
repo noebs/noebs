@@ -66,6 +66,7 @@ func GetMainEngine() *gin.Engine {
 
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
+	consumer.POST("/refresh", gateway.RefreshHandler)
 
 	consumer.POST("/balance", ConsumerBalance)
 	consumer.POST("/is_alive", ConsumerIsAlive)
