@@ -69,6 +69,7 @@ func GetMainEngine() *gin.Engine {
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
 	consumer.POST("/refresh", gateway.RefreshHandler)
+	consumer.POST("/logout", gateway.LogOut)
 
 	consumer.POST("/balance", ConsumerBalance)
 	consumer.POST("/is_alive", ConsumerIsAlive)
@@ -94,7 +95,6 @@ func GetMainEngine() *gin.Engine {
 		consumer.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
-		consumer.POST("/logout", gateway.LogOut)
 	}
 
 	return route
