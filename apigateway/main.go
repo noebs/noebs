@@ -18,35 +18,6 @@ import (
 	"time"
 )
 
-func GetMainEngine() *gin.Engine {
-	route := gin.Default()
-
-	route.HandleMethodNotAllowed = true
-
-	route.POST("/login", LoginHandler)
-	// This is like isAlive one...
-
-	route.POST("/create", CreateUser)
-
-	route.POST("/get_service", GetServiceID)
-
-	route.POST("/test", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": true, "code": "ok"})
-	})
-	auth := route.Group("/admin", AuthMiddleware())
-
-	auth.POST("/test", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": true, "code": "ok"})
-	})
-
-	return route
-}
-
-func main() {
-	r := GetMainEngine()
-	r.Run(":8001")
-}
-
 var jwtKey = keyFromEnv()
 
 func LoginHandler(c *gin.Context) {
@@ -179,7 +150,12 @@ func LogOut(c *gin.Context) {
 		return
 	}
 
-	claims, _ := VerifyJWT(h, jwtKey)
+	claims, err := VerifyJWT(h, jwtKey)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "malformed_jwt_token"})
+		return
+	}
+
 	username := claims.Username
 	if username != "" {
 		redisClient := utils.GetRedis()
