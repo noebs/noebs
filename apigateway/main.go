@@ -83,7 +83,7 @@ func LoginHandler(c *gin.Context) {
 
 	// Make sure the user doesn't have any active sessions!
 	redisClient := utils.GetRedis()
-	_, err = redisClient.Get(req.Username + "logged_in_devices").Result()
+	_, err = redisClient.Get(req.Username + ":logged_in_devices").Result()
 	if err != redis.Nil {
 		// The user is already logged in somewhere else. Communicate that to them, clearly!
 		c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
@@ -323,6 +323,5 @@ func OptionsMiddleware(c *gin.Context) {
 		c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		c.Header("Content-Type", "application/json")
 		c.AbortWithStatus(http.StatusOK)
-		return
 	}
 }

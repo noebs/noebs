@@ -81,20 +81,21 @@ func GetMainEngine() *gin.Engine {
 	consumer.POST("/ipin", ConsumerIPinChange)
 
 	consumer.Use(gateway.AuthMiddleware())
+	{
+		consumer.GET("/get_cards", GetCards)
+		consumer.POST("/add_card", AddCards)
 
-	consumer.GET("/get_cards", GetCards)
-	consumer.POST("/add_card", AddCards)
+		consumer.PUT("/edit_card", EditCard)
+		consumer.DELETE("/delete_card", RemoveCard)
 
-	consumer.PUT("/edit_card", EditCard)
-	consumer.DELETE("/delete_card", RemoveCard)
+		consumer.GET("/get_mobile", GetMobile)
+		consumer.POST("/add_mobile", AddMobile)
 
-	consumer.GET("/get_mobile", GetMobile)
-	consumer.POST("/add_mobile", AddMobile)
-
-	consumer.POST("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": true})
-	})
-	consumer.POST("/logout", gateway.LogOut)
+		consumer.POST("/test", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": true})
+		})
+		consumer.POST("/logout", gateway.LogOut)
+	}
 
 	return route
 }
