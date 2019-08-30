@@ -30,6 +30,8 @@ func GetMainEngine() *gin.Engine {
 
 	route.HandleMethodNotAllowed = true
 
+	route.Use(gateway.OptionsMiddleware)
+
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -47,7 +49,7 @@ func GetMainEngine() *gin.Engine {
 	})
 
 	dashboardGroup := route.Group("/dashboard")
-	dashboardGroup.Use(gateway.CORSMiddleware())
+	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
 		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
@@ -62,7 +64,7 @@ func GetMainEngine() *gin.Engine {
 
 	consumer := route.Group("/consumer")
 
-	consumer.Use(gateway.CORSMiddleware())
+	//consumer.Use(gateway.OptionsMiddleware)
 
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
@@ -77,25 +79,23 @@ func GetMainEngine() *gin.Engine {
 	consumer.POST("/status", ConsumerStatus)
 	consumer.POST("/key", ConsumerWorkingKey)
 	consumer.POST("/ipin", ConsumerIPinChange)
+
 	consumer.Use(gateway.AuthMiddleware())
-	{
-		// protected endpoints
 
-		consumer.GET("/get_cards", GetCards)
-		consumer.POST("/add_card", AddCards)
+	consumer.GET("/get_cards", GetCards)
+	consumer.POST("/add_card", AddCards)
 
-		consumer.PUT("/edit_card", EditCard)
-		consumer.DELETE("/delete_card", RemoveCard)
+	consumer.PUT("/edit_card", EditCard)
+	consumer.DELETE("/delete_card", RemoveCard)
 
-		consumer.GET("/get_mobile", GetMobile)
-		consumer.POST("/add_mobile", AddMobile)
+	consumer.GET("/get_mobile", GetMobile)
+	consumer.POST("/add_mobile", AddMobile)
 
-		consumer.POST("/test", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"message": true})
-		})
-		consumer.POST("/logout", gateway.LogOut)
+	consumer.POST("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": true})
+	})
+	consumer.POST("/logout", gateway.LogOut)
 
-	}
 	return route
 }
 
