@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func VerifyJWT(tokenString string,  secret []byte) (*TokenClaims, error) {
+func VerifyJWT(tokenString string, secret []byte) (*TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		// Don't forget to validate the alg is what you expect:
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -14,7 +14,13 @@ func VerifyJWT(tokenString string,  secret []byte) (*TokenClaims, error) {
 		}
 
 		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
-		return secret, nil                                                                                    })
+		return secret, nil
+	})
+
+	// a user might had submitted a non-jwt token
+	if err != nil {
+		return nil, err
+	}
 
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
 		return claims, nil
