@@ -138,6 +138,37 @@ func LoginHandler(c *gin.Context) {
 
 }
 
+func RefreshHandler(c *gin.Context) {
+
+	// just handle the simplest case, authorization is not provided.
+	h := c.GetHeader("Authorization")
+	if h == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
+			"code": "unauthorized"})
+		return
+
+	}
+
+	claims, err := VerifyJWT(h, jwtKey)
+	if e, ok := err.(*jwt.ValidationError); ok {
+		if e.Errors&jwt.ValidationErrorExpired != 0 {
+			// Generate a new token
+		} else {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+			return
+		}
+	}
+	if claims == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+		return
+	}
+	secret, _ := GenerateSecretKey(50)
+	token, _ := GenerateJWT(claims.Username, secret)
+	c.Writer.Header().Set("Authorization", token)
+
+	c.JSON(http.StatusOK, gin.H{"authorization": token})
+}
+
 func LogOut(c *gin.Context) {
 	//TODO implement logout API to limit the number of currently logged in devices
 	// just handle the simplest case, authorization is not provided.
@@ -282,18 +313,16 @@ func keyFromEnv() []byte {
 	return key
 }
 
-func CORSMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		//c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
+func OptionsMiddleware(c *gin.Context) {
+	if c.Request.Method != "OPTIONS" {
 		c.Next()
+	} else {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept")
+		c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Header("Content-Type", "application/json")
+		c.AbortWithStatus(http.StatusOK)
+		return
 	}
 }
