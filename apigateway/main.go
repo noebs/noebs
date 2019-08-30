@@ -152,7 +152,7 @@ func LogOut(c *gin.Context) {
 
 	claims, err := VerifyJWT(h, jwtKey)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "malformed_jwt_token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error(), "code": "malformed_jwt_token"})
 		return
 	}
 
