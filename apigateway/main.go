@@ -54,8 +54,11 @@ func LoginHandler(c *gin.Context) {
 
 	// Make sure the user doesn't have any active sessions!
 	redisClient := utils.GetRedis()
-	_, err = redisClient.Get(req.Username + ":logged_in_devices").Result()
-	if err != redis.Nil {
+	lCount, err := redisClient.Get(req.Username + ":logged_in_devices").Result()
+
+	num, _ := strconv.Atoi(lCount)
+	// Allow for the user to be logged in -- add allowance through someway
+	if err != redis.Nil && num > 1 {
 		// The user is already logged in somewhere else. Communicate that to them, clearly!
 		c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
 			"error": "You are logging from another device. You can only have one valid session"})

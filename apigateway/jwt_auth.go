@@ -20,6 +20,7 @@ func VerifyJWT(tokenString string, secret []byte) (*TokenClaims, error) {
 	// a user might had submitted a non-jwt token
 	if err != nil {
 		return nil, err
+
 	}
 
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
