@@ -265,6 +265,9 @@ func AuthMiddleware() gin.HandlerFunc {
 				return
 			}
 		} else if err == nil {
+			// FIXME it is better to let the endpoint explicitly Get the claim off the user
+			//  as we will assume the auth server will reside in a different domain!
+
 			c.Set("username", claims.Username)
 			log.Printf("the username is: %s", claims.Username)
 			c.Next()
