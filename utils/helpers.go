@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
 )
 
@@ -20,8 +19,8 @@ func SaveRedisList(r *redis.Client, key string, value interface{}) error {
 
 }
 
-func GetOrDefault(c *gin.Context, key, def string) (string, bool) {
-	value, ok := c.Get(key)
+func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
+	value, ok := keys[key]
 	if !ok {
 		return def, ok
 	}

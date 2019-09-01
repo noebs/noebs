@@ -1091,7 +1091,7 @@ func ConsumerPurchase(c *gin.Context) {
 		transaction.EBSServiceName = PurchaseTransaction
 
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
@@ -1162,7 +1162,7 @@ func ConsumerIsAlive(c *gin.Context) {
 		}
 
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -1237,7 +1237,7 @@ func ConsumerBillPayment(c *gin.Context) {
 		transaction.EBSServiceName = PurchaseTransaction
 
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
@@ -1319,7 +1319,7 @@ func ConsumerBillInquiry(c *gin.Context) {
 
 		// Save to Redis list
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if ebsErr != nil {
@@ -1386,7 +1386,7 @@ func ConsumerBalance(c *gin.Context) {
 		transaction.EBSServiceName = PurchaseTransaction
 
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
@@ -1474,7 +1474,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 		//wg.Done()
 
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
@@ -1548,7 +1548,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 		transaction.EBSServiceName = PurchaseTransaction
 
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
@@ -1621,7 +1621,7 @@ func ConsumerIPinChange(c *gin.Context) {
 
 		transaction.EBSServiceName = PurchaseTransaction
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
@@ -1694,7 +1694,7 @@ func ConsumerStatus(c *gin.Context) {
 
 		transaction.EBSServiceName = PurchaseTransaction
 		redisClient := utils.GetRedis()
-		username, _ := utils.GetOrDefault(c, "username", "anon")
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
