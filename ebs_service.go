@@ -220,7 +220,7 @@ func IsAlive(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -296,7 +296,7 @@ func WorkingKey(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -376,7 +376,7 @@ func Purchase(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -453,7 +453,7 @@ func Balance(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -528,7 +528,7 @@ func CardTransfer(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -603,7 +603,7 @@ func BillInquiry(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -676,7 +676,7 @@ func BillPayment(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, res)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
