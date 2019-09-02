@@ -60,9 +60,10 @@ func LoginHandler(c *gin.Context) {
 	// Allow for the user to be logged in -- add allowance through someway
 	if err != redis.Nil && num > 1 {
 		// The user is already logged in somewhere else. Communicate that to them, clearly!
-		c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
-			"error": "You are logging from another device. You can only have one valid session"})
-		return
+		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
+		//	"error": "You are logging from another device. You can only have one valid session"})
+		//return
+		log.Print("The user is logging from a different location")
 	}
 
 	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
@@ -265,6 +266,9 @@ func AuthMiddleware() gin.HandlerFunc {
 				return
 			}
 		} else if err == nil {
+			// FIXME it is better to let the endpoint explicitly Get the claim off the user
+			//  as we will assume the auth server will reside in a different domain!
+
 			c.Set("username", claims.Username)
 			log.Printf("the username is: %s", claims.Username)
 			c.Next()

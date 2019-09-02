@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 )
 
 var log = logrus.New()
@@ -1091,6 +1090,10 @@ func ConsumerPurchase(c *gin.Context) {
 
 		transaction.EBSServiceName = PurchaseTransaction
 
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
@@ -1157,6 +1160,10 @@ func ConsumerIsAlive(c *gin.Context) {
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		transaction.EBSServiceName = PurchaseTransaction
 
@@ -1228,6 +1235,10 @@ func ConsumerBillPayment(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1306,6 +1317,11 @@ func ConsumerBillInquiry(c *gin.Context) {
 			}).Info("error in migrating purchase model")
 		}
 
+		// Save to Redis list
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
@@ -1368,6 +1384,10 @@ func ConsumerBalance(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1438,20 +1458,24 @@ func ConsumerWorkingKey(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+		//
+		//// store the transaction into redis (for more performance gain)
+		//redisClient := utils.GetRedis()
+		//var d ebs_fields.DisputeFields
+		//d.New(res)
+		//// later, the username should be added username + ":all_transactions"
+		//// this will never work for now
+		//// this might work, as we have added a new wg stuff
+		//// it will work
+		//key := "all_transactions"
+		//var wg sync.WaitGroup
+		//wg.Add(1)
+		//go utils.MarshalIntoRedis(d, redisClient, key)
+		//wg.Done()
 
-		// store the transaction into redis (for more performance gain)
 		redisClient := utils.GetRedis()
-		var d ebs_fields.DisputeFields
-		d.New(res)
-		// later, the username should be added username + ":all_transactions"
-		// this will never work for now
-		// this might work, as we have added a new wg stuff
-		// it will work
-		key := "all_transactions"
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go utils.MarshalIntoRedis(d, redisClient, key)
-		wg.Done()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1482,9 +1506,6 @@ func ConsumerCardTransfer(c *gin.Context) {
 
 	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	// redis instance
-	redisClient := utils.GetRedis()
 
 	var fields = ebs_fields.ConsumerCardTransferFields{}
 
@@ -1526,20 +1547,16 @@ func ConsumerCardTransfer(c *gin.Context) {
 
 		transaction.EBSServiceName = PurchaseTransaction
 
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
-
-		// Write the request onto Redis
-		username := c.GetString("username")
-		if username == "" {
-			username = "invalid_key"
-		}
-
-		redisClient.LPush(username, string(jsonBuffer))
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1563,9 +1580,6 @@ func ConsumerIPinChange(c *gin.Context) {
 
 	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	// redis instance
-	redisClient := utils.GetRedis()
 
 	var fields = ebs_fields.ConsumerIPinFields{}
 
@@ -1606,6 +1620,9 @@ func ConsumerIPinChange(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1613,14 +1630,6 @@ func ConsumerIPinChange(c *gin.Context) {
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
-
-		// Write the request onto Redis
-		username := c.GetString("username")
-		if username == "" {
-			username = "invalid_key"
-		}
-
-		redisClient.LPush(username, string(jsonBuffer))
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
@@ -1684,6 +1693,9 @@ func ConsumerStatus(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{

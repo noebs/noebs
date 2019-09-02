@@ -1,6 +1,7 @@
 package ebs_fields
 
 import (
+	"encoding/json"
 	"gopkg.in/go-playground/validator.v9"
 	"time"
 )
@@ -151,6 +152,17 @@ type ImportantEBSFields struct {
 type EBSParserFields struct {
 	EBSMapFields
 	GenericEBSResponseFields
+}
+
+// To allow Redis to use this struct directly in marshaling
+func (p *EBSParserFields) MarshalBinary() ([]byte, error) {
+	return json.Marshal(p)
+
+}
+
+// To allow Redis to use this struct directly in marshaling
+func (p *EBSParserFields) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, p)
 }
 
 // special case to handle ebs non-DB-able fields e.g., hashmaps and other complex types
