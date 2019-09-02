@@ -298,6 +298,7 @@ func keyFromEnv() []byte {
 
 func OptionsMiddleware(c *gin.Context) {
 	if c.Request.Method != "OPTIONS" {
+		c.Header("Access-Control-Allow-Origin", "*")
 		c.Next()
 	} else {
 		c.Header("Access-Control-Allow-Origin", "*")
