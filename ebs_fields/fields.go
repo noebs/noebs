@@ -260,8 +260,8 @@ type ConsumerBalanceFields struct {
 	ConsumerCardHolderFields
 }
 type ConsumersBillersFields struct {
-	PayeeId     string `json:"payeeId" form:"payeeId"`
-	PaymentInfo string `json:"paymentInfo" form:"paymentInfo"`
+	PayeeId     string `json:"payeeId" form:"payeeId" binding:"required"`
+	PaymentInfo string `json:"paymentInfo" form:"paymentInfo" binding:"required"`
 }
 
 type ConsumerPurchaseFields struct {
