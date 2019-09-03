@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"net/http"
@@ -95,7 +94,7 @@ func generateDoc(e string) []map[string]interface{} {
 //func redisOrNew(key string, data []map[string]interface{}) (string, error){
 //	routes := getAllRoutes()
 //
-//	client := getRedis()
+//	client := GetRedis()
 //
 //	v, err := client.HMGet("doc")
 //	if err == redis.Nil {
@@ -126,15 +125,6 @@ func getAllRoutes() []map[string]string {
 		allRoutes = append(allRoutes, mapping)
 	}
 	return allRoutes
-}
-
-// getRedis returns a *redis.Client instance
-func getRedis() *redis.Client {
-	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-		DB:   0,
-	})
-	return client
 }
 
 var response = ebs_fields.GenericEBSResponseFields{

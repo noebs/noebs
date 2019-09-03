@@ -1,12 +1,10 @@
 package ebs_fields
 
 import (
+	"encoding/json"
 	"gopkg.in/go-playground/validator.v9"
 	"time"
 )
-
-// not sure this would work. This package is just for storing struct representations
-// of each httpHandler
 
 type IsAliveFields struct {
 	CommonFields
@@ -150,6 +148,30 @@ type ImportantEBSFields struct {
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
 }
 
+// you have to update this to account for the non-db-able fields
+type EBSParserFields struct {
+	EBSMapFields
+	GenericEBSResponseFields
+}
+
+// To allow Redis to use this struct directly in marshaling
+func (p *EBSParserFields) MarshalBinary() ([]byte, error) {
+	return json.Marshal(p)
+
+}
+
+// To allow Redis to use this struct directly in marshaling
+func (p *EBSParserFields) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, p)
+}
+
+// special case to handle ebs non-DB-able fields e.g., hashmaps and other complex types
+type EBSMapFields struct {
+	// these
+	Balance     map[string]interface{} `json:"balance,omitempty"`
+	PaymentInfo string                 `json:"paymentInfo,omitempty"`
+	BillInfo    map[string]interface{} `json:"billInfo,omitempty"`
+}
 type ConsumerSpecificFields struct {
 	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
 	Mbr             string  `json:"mbr,omitempty" form:"mbr"`
@@ -219,6 +241,7 @@ type ConsumerCommonFields struct {
 
 type ConsumerBillInquiryFields struct {
 	ConsumerCommonFields
+	ConsumersBillersFields
 	ConsumerCardHolderFields
 }
 
@@ -237,8 +260,8 @@ type ConsumerBalanceFields struct {
 	ConsumerCardHolderFields
 }
 type ConsumersBillersFields struct {
-	PayeeId     string `json:"payeeId" form:"payeeId"`
-	PaymentInfo string `json:"paymentInfo" form:"paymentInfo"`
+	PayeeId     string `json:"payeeId" form:"payeeId" binding:"required"`
+	PaymentInfo string `json:"paymentInfo" form:"paymentInfo" binding:"required"`
 }
 
 type ConsumerPurchaseFields struct {
@@ -259,6 +282,12 @@ type ConsumerWorkingKeyFields struct {
 	ConsumerCommonFields
 }
 
+type ConsumerIPinFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	NewIPIN string `json:"newIPIN" binding:"required"`
+}
+
 type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
@@ -272,23 +301,36 @@ type ConsumerStatusFields struct {
 }
 
 type DisputeFields struct {
-	Time    string  `json:"time"`
-	Service string  `json:"service"`
-	UUID    string  `json:"uuid"`
-	STAN    int     `json:"stan"`
-	Amount  float32 `json:"amount"`
+	Time    string  `json:"time,omitempty"`
+	Service string  `json:"service,omitempty"`
+	UUID    string  `json:"uuid,omitempty"`
+	STAN    int     `json:"stan,omitempty"`
+	Amount  float32 `json:"amount,omitempty"`
+}
+
+func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
+	d.Amount = f.TranAmount
+	d.Service = f.EBSServiceName
+	d.UUID = f.UUID
+	d.Time = f.TranDateTime
+	return d
 }
 
 type CardsRedis struct {
-	ID int `json:"id,omitempty"`
+	ID      int    `json:"id,omitempty"`
 	PAN     string `json:"pan" binding:"required"`
-	Expdate string `json:"exp_date" binding:"required"`
+	Expdate string `json:"exp_date" binding:"required,len=4"`
 	IsMain  bool   `json:"is_main"`
-	Name string `json:"name"`
+	Name    string `json:"name"`
 }
 
 type MobileRedis struct {
 	Mobile   string `json:"mobile" binding:"required"`
 	Provider string `json:"provider"`
 	IsMain   bool   `json:"is_main"`
+}
+
+type ItemID struct {
+	ID     int  `json:"id,omitempty" binding:"required"`
+	IsMain bool `json:"is_main"`
 }

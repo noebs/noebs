@@ -4,44 +4,19 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/adonese/noebs/utils"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-redis/redis"
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
-
-func GetMainEngine() *gin.Engine {
-	route := gin.Default()
-
-	route.HandleMethodNotAllowed = true
-
-	route.POST("/login", LoginHandler)
-	// This is like isAlive one...
-
-	route.POST("/create", CreateUser)
-
-	route.POST("/get_service", GetServiceID)
-
-	route.POST("/test", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": true, "code": "ok"})
-	})
-	auth := route.Group("/admin", AuthMiddleware())
-
-	auth.POST("/test", func(context *gin.Context) {
-		context.JSON(http.StatusOK, gin.H{"message": true, "code": "ok"})
-	})
-
-	return route
-}
-
-func main() {
-	r := GetMainEngine()
-	r.Run(":8001")
-}
 
 var jwtKey = keyFromEnv()
 
@@ -54,7 +29,6 @@ func LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-
 
 	//db connection. Not good.
 	db, err := gorm.Open("sqlite3", "test.db")
@@ -71,30 +45,59 @@ func LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	var u UserModel
 
-	if notFound := db.Preload("JWT").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
+	if notFound := db.Preload("jwt").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
 		return
 	}
 
-	// there's a user with such a service id and its info is stored at jwt. celebrity
-	// now, check their entered password
-	log.Printf("passwords are: %v, %v\n", u.Password, req.Password)
+	// Make sure the user doesn't have any active sessions!
+	redisClient := utils.GetRedis()
+	lCount, err := redisClient.Get(req.Username + ":logged_in_devices").Result()
+
+	num, _ := strconv.Atoi(lCount)
+	// Allow for the user to be logged in -- add allowance through someway
+	if err != redis.Nil && num > 1 {
+		// The user is already logged in somewhere else. Communicate that to them, clearly!
+		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
+		//	"error": "You are logging from another device. You can only have one valid session"})
+		//return
+		log.Print("The user is logging from a different location")
+	}
+
+	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
+	res, err := redisClient.Get(req.Username + ":login_counts").Result()
+	if err == redis.Nil {
+		// the has just logged in
+		redisClient.Set(req.Username+":login_counts", 0, time.Hour)
+	} else if err == nil {
+		count, _ := strconv.Atoi(res)
+		if count >= 5 {
+			// Allow users to use another login method (e.g., totp, or they should reset their password)
+			// Lock their account
+			//redisClient.HSet(req.Username, "suspecious_behavior", 1)
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
+			return
+		}
+	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		log.Printf("there is an error in the password %v", err)
+		redisClient.Incr(req.Username + ":login_counts")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		return
 	}
+	// it is a successful login attempt
+	redisClient.Del(req.Username + ":login_counts")
 	token, err := GenerateJWT(u.Username, jwtKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
 
-	u.JWT.SecretKey = string(jwtKey)
-	u.JWT.CreatedAt = time.Now().UTC()
+	u.jwt.SecretKey = string(jwtKey)
+	u.jwt.CreatedAt = time.Now().UTC()
 
 	err = db.Save(&u).Error
 	if err != nil {
@@ -103,8 +106,70 @@ func LoginHandler(c *gin.Context) {
 	}
 	c.Writer.Header().Set("Authorization", token)
 
+	// Redis add The user is now logged in -- and has active session
+	redisClient.Incr(req.Username + ":logged_in_devices")
+
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 
+}
+
+func RefreshHandler(c *gin.Context) {
+
+	// just handle the simplest case, authorization is not provided.
+	h := c.GetHeader("Authorization")
+	if h == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
+			"code": "unauthorized"})
+		return
+
+	}
+
+	claims, err := VerifyJWT(h, jwtKey)
+	if e, ok := err.(*jwt.ValidationError); ok {
+		if e.Errors&jwt.ValidationErrorExpired != 0 {
+			// Generate a new token
+		} else {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+			return
+		}
+	}
+	if claims == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+		return
+	}
+	secret, _ := GenerateSecretKey(50)
+	token, _ := GenerateJWT(claims.Username, secret)
+	c.Writer.Header().Set("Authorization", token)
+
+	c.JSON(http.StatusOK, gin.H{"authorization": token})
+}
+
+func LogOut(c *gin.Context) {
+	//TODO implement logout API to limit the number of currently logged in devices
+	// just handle the simplest case, authorization is not provided.
+	h := c.GetHeader("Authorization")
+	if h == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
+			"code": "unauthorized"})
+		return
+	}
+
+	claims, err := VerifyJWT(h, jwtKey)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error(), "code": "malformed_jwt_token"})
+		return
+	}
+
+	username := claims.Username
+	if username != "" {
+		redisClient := utils.GetRedis()
+		redisClient.Decr(username + ":logged_in_devices")
+		c.JSON(http.StatusNoContent, gin.H{"message": "Device Successfully Logged Out"})
+		return
+	} else {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "code": "unauthorized"})
+		return
+	}
 }
 
 func CreateUser(c *gin.Context) {
@@ -190,13 +255,24 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		claims, err := VerifyJWT(h, jwtKey)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-			return
+		if e, ok := err.(*jwt.ValidationError); ok {
+			if e.Errors&jwt.ValidationErrorExpired != 0 {
+
+				// in this case you might need to give it another spin
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
+				return
+			} else {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+				return
+			}
+		} else if err == nil {
+			// FIXME it is better to let the endpoint explicitly Get the claim off the user
+			//  as we will assume the auth server will reside in a different domain!
+
+			c.Set("username", claims.Username)
+			log.Printf("the username is: %s", claims.Username)
+			c.Next()
 		}
-		c.Set("username", claims.Username)
-		log.Printf("the username is: %s", claims.Username)
-		c.Next()
 	}
 
 }
@@ -209,7 +285,7 @@ func GenerateSecretKey(n int) ([]byte, error) {
 	return key, nil
 }
 
-// keyFromEnv either generates or retrieve a JWT which will be used to generate a secret key
+// keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
 func keyFromEnv() []byte {
 	// it either checks for environment for the specific key, or generates and saves a one
 	if key := os.Getenv("Jwt-Token"); key != "" {
@@ -218,4 +294,18 @@ func keyFromEnv() []byte {
 	key, _ := GenerateSecretKey(50)
 	os.Setenv("Jwt-Token", string(key))
 	return key
+}
+
+func OptionsMiddleware(c *gin.Context) {
+	if c.Request.Method != "OPTIONS" {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Next()
+	} else {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept")
+		c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
+		c.Header("Content-Type", "application/json")
+		c.AbortWithStatus(http.StatusOK)
+	}
 }

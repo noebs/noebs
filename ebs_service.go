@@ -6,6 +6,7 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
@@ -20,7 +21,6 @@ import (
 	"strings"
 )
 
-var UseMockServer = false
 var log = logrus.New()
 
 func GetMainEngine() *gin.Engine {
@@ -28,6 +28,8 @@ func GetMainEngine() *gin.Engine {
 	route := gin.Default()
 
 	route.HandleMethodNotAllowed = true
+
+	route.Use(gateway.OptionsMiddleware)
 
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
@@ -46,6 +48,7 @@ func GetMainEngine() *gin.Engine {
 	})
 
 	dashboardGroup := route.Group("/dashboard")
+	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
 		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
@@ -55,26 +58,35 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	}
+
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	consumer := route.Group("/consumer")
+
+	//consumer.Use(gateway.OptionsMiddleware)
+
 	consumer.POST("/login", gateway.LoginHandler)
 	consumer.POST("/register", gateway.CreateUser)
+	consumer.POST("/refresh", gateway.RefreshHandler)
+	consumer.POST("/logout", gateway.LogOut)
 
 	consumer.POST("/balance", ConsumerBalance)
 	consumer.POST("/is_alive", ConsumerIsAlive)
 	consumer.POST("/bill_payment", ConsumerBillPayment)
-	consumer.POST("/bill_inquiry", ConsumerBillPayment)
+	consumer.POST("/bill_inquiry", ConsumerBillInquiry)
 	consumer.POST("/p2p", ConsumerCardTransfer)
 	consumer.POST("/purchase", ConsumerPurchase)
 	consumer.POST("/status", ConsumerStatus)
 	consumer.POST("/key", ConsumerWorkingKey)
+	consumer.POST("/ipin", ConsumerIPinChange)
+
 	consumer.Use(gateway.AuthMiddleware())
 	{
-		// protected endpoints
-
 		consumer.GET("/get_cards", GetCards)
 		consumer.POST("/add_card", AddCards)
+
+		consumer.PUT("/edit_card", EditCard)
+		consumer.DELETE("/delete_card", RemoveCard)
 
 		consumer.GET("/get_mobile", GetMobile)
 		consumer.POST("/add_mobile", AddMobile)
@@ -82,7 +94,6 @@ func GetMainEngine() *gin.Engine {
 		consumer.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
-
 	}
 
 	return route
@@ -120,18 +131,6 @@ func main() {
 	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
-
-	if local := os.Getenv("EBS_LOCAL_DEV"); local != "" {
-		UseMockServer = true
-		log.WithFields(logrus.Fields{
-			"ebs_local_flag": local,
-		}).Info("User has opted to use the development server")
-	} else {
-		UseMockServer = false
-		log.WithFields(logrus.Fields{
-			"ebs_local_flag": local,
-		}).Info("User has opted to not use the development server")
-	}
 
 	if env := os.Getenv("PORT"); env != "" {
 		if !strings.HasPrefix(env, ":") {
@@ -199,11 +198,8 @@ func IsAlive(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = IsAliveTransaction
@@ -221,10 +217,10 @@ func IsAlive(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -281,11 +277,8 @@ func WorkingKey(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = WorkingKeyTransaction
@@ -300,10 +293,10 @@ func WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -365,11 +358,9 @@ func Purchase(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
@@ -382,10 +373,10 @@ func Purchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -447,11 +438,9 @@ func Balance(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BalanceTransaction
@@ -461,10 +450,10 @@ func Balance(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -526,11 +515,9 @@ func CardTransfer(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CardTransferTransaction
@@ -538,10 +525,10 @@ func CardTransfer(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -603,11 +590,8 @@ func BillInquiry(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BillInquiryTransaction
@@ -616,10 +600,10 @@ func BillInquiry(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -679,11 +663,8 @@ func BillPayment(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = BillPaymentTransaction
@@ -692,10 +673,10 @@ func BillPayment(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -756,11 +737,9 @@ func ChangePIN(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = ChangePINTransaction
@@ -769,10 +748,10 @@ func ChangePIN(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -831,11 +810,8 @@ func CashOut(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CashOutTransaction
@@ -844,10 +820,10 @@ func CashOut(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -907,11 +883,8 @@ func CashIn(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = CashInTransaction
@@ -920,10 +893,11 @@ func CashIn(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -984,11 +958,8 @@ func MiniStatement(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = MiniStatementTransaction
@@ -1000,7 +971,7 @@ func MiniStatement(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -1044,11 +1015,8 @@ func testAPI(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
-
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = WorkingKeyTransaction
@@ -1061,7 +1029,8 @@ func testAPI(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1114,14 +1083,16 @@ func ConsumerPurchase(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1131,10 +1102,10 @@ func ConsumerPurchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -1183,14 +1154,16 @@ func ConsumerIsAlive(c *gin.Context) {
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		// mask the pan
+		//// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		transaction.EBSServiceName = PurchaseTransaction
 
@@ -1205,7 +1178,7 @@ func ConsumerIsAlive(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
@@ -1256,14 +1229,16 @@ func ConsumerBillPayment(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1276,7 +1251,83 @@ func ConsumerBillPayment(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+func ConsumerBillInquiry(c *gin.Context) {
+	url := EBSIp + ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db := database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.ConsumerBillInquiryFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ErrorToString(err))
+		}
+
+		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		// Save to Redis list
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
+		if ebsErr != nil {
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1327,14 +1378,16 @@ func ConsumerBalance(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1347,7 +1400,8 @@ func ConsumerBalance(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1398,14 +1452,30 @@ func ConsumerWorkingKey(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+		//
+		//// store the transaction into redis (for more performance gain)
+		//redisClient := utils.GetRedis()
+		//var d ebs_fields.DisputeFields
+		//d.New(res)
+		//// later, the username should be added username + ":all_transactions"
+		//// this will never work for now
+		//// this might work, as we have added a new wg stuff
+		//// it will work
+		//key := "all_transactions"
+		//var wg sync.WaitGroup
+		//wg.Add(1)
+		//go utils.MarshalIntoRedis(d, redisClient, key)
+		//wg.Done()
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1418,7 +1488,8 @@ func ConsumerWorkingKey(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1435,9 +1506,6 @@ func ConsumerCardTransfer(c *gin.Context) {
 
 	db := database("sqlite3", "test.db")
 	defer db.Close()
-
-	// redis instance
-	redisClient := getRedis()
 
 	var fields = ebs_fields.ConsumerCardTransferFields{}
 
@@ -1472,14 +1540,16 @@ func ConsumerCardTransfer(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1488,19 +1558,85 @@ func ConsumerCardTransfer(c *gin.Context) {
 			}).Info("error in migrating purchase model")
 		}
 
-		// Write the request onto Redis
-		username := c.GetString("username")
-		if username == "" {
-			username = "invalid_key"
+		if ebsErr != nil {
+			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
-		redisClient.LPush(username, string(jsonBuffer))
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+func ConsumerIPinChange(c *gin.Context) {
+	url := EBSIp + ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db := database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.ConsumerIPinFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ErrorToString(err))
+		}
+
+		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+
+		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
+			c.AbortWithStatusJSON(400, ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = PurchaseTransaction
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1551,14 +1687,15 @@ func ConsumerStatus(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-		var successfulResponse SuccessfulResponse
-		successfulResponse.EBSResponse = res
 
 		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res,
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
 		transaction.EBSServiceName = PurchaseTransaction
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1571,7 +1708,8 @@ func ConsumerStatus(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, successfulResponse)
+			c.JSON(code, gin.H{"ebs_response": res})
+
 		}
 
 	default:
@@ -1581,7 +1719,7 @@ func ConsumerStatus(c *gin.Context) {
 
 func ConsumerTransactions(c *gin.Context) {
 	//TODO get the transaction from Redis instance!
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	username := c.GetString("username")
 	if username == "" {
@@ -1594,13 +1732,13 @@ func ConsumerTransactions(c *gin.Context) {
 }
 
 func GetCards(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 	} else {
-		cards, err := redisClient.ZRange(username + ":cards", 0, -1).Result()
+		cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
 		if err != nil {
 			// handle the error somehow
 			logrus.WithFields(logrus.Fields{
@@ -1628,7 +1766,7 @@ func GetCards(c *gin.Context) {
 }
 
 func AddCards(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -1640,8 +1778,9 @@ func AddCards(c *gin.Context) {
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
-			z := redis.Z{
-				Member:buf,
+			// make sure the length of the card and expDate is valid
+			z := &redis.Z{
+				Member: buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -1649,86 +1788,114 @@ func AddCards(c *gin.Context) {
 
 				redisClient.ZAdd(username+":cards", z)
 			} else {
-				redisClient.ZAdd(username+":cards", z)
+				_, err := redisClient.ZAdd(username+":cards", z).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+					return
+				}
 			}
-			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": buf})
+			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
 		}
 	}
 
 }
 
-// EditCards a work in progress. This function needs to be reviewed and refactored
-func EditCards(c *gin.Context) {
-	redisClient := getRedis()
+func EditCard(c *gin.Context) {
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
+
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		// there is no error in the request body
 	} else {
 		buf, _ := json.Marshal(fields)
+
 		username := c.GetString("username")
-		if username == "" || fields.ID == 0 {
+		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		}else if fields.ID == 0{
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
-		} else {
-			id := fields.ID
-			key := redisClient.ZRange(username+":cards", int64(id), int64(id))
-			z := redis.Z{
-				Member:buf,
-			}
-			if fields.IsMain {
-				// refactor me, please!
-				redisClient.HSet(username, "main_card", buf)
-				// get the old item using the ID
-
-				redisClient.ZRem(username+":cards", key)
-				redisClient.ZAdd(username+":cards", z)
-			} else {
-				redisClient.ZRem(username+":cards", key)
-				redisClient.ZAdd(username+":cards", z)
-			}
-
-			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
+		} else if fields.ID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+			return
 		}
-	}
-
-}
-
-// RemoveCard a work in progress. This function needs to be reviewed and refactored
-func RemoveCard(c *gin.Context) {
-	redisClient := getRedis()
-
-	var fields ebs_fields.CardsRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	} else {
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
-		if username == "" || fields.ID == 0 {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		}else if fields.ID == 0{
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
-		} else {
-			id := fields.ID
-			key := redisClient.ZRange(username+":cards", int64(id), int64(id))
-
+		// core functionality
+		id := fields.ID
+		{
+			// step 1: removing the card; copied from RemoveCard
 			if fields.IsMain {
 				redisClient.HDel(username+":cards", "main_card")
 			} else {
-				redisClient.ZRem(username+":cards", key)
+				_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+					return
+				}
 			}
-
-			c.JSON(http.StatusNoContent, gin.H{"username": username, "cards": buf})
 		}
+
+		// step 2: Add the card; copied from AddCard
+
+		{
+			z := &redis.Z{
+				Member: buf,
+			}
+			if fields.IsMain {
+				// refactor me, please!
+				redisClient.HSet(username, "main_card", buf)
+
+				redisClient.ZAdd(username+":cards", z)
+			} else {
+				_, err := redisClient.ZAdd(username+":cards", z).Result()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+					return
+				}
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
+
 	}
 
 }
 
+// this will work, but it is quite unpredictable
+func RemoveCard(c *gin.Context) {
+	redisClient := utils.GetRedis()
+
+	var fields ebs_fields.ItemID
+	err := c.ShouldBindWith(&fields, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		// there is no error in the request body
+	} else {
+		username := c.GetString("username")
+		if username == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		} else if fields.ID <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+			return
+		}
+		// core functionality
+		id := fields.ID
+
+		if fields.IsMain {
+			redisClient.HDel(username+":cards", "main_card")
+		} else {
+			_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
+
+	}
+
+}
 func AddMobile(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -1754,7 +1921,7 @@ func AddMobile(c *gin.Context) {
 }
 
 func GetMobile(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
