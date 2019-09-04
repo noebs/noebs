@@ -45,7 +45,7 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 	}
 
 	//res.ImportantEBSFields = commonFields
-	res.AdditionalAmount = 544
+	*res.AdditionalAmount = 544
 	//res.MiniStatementRecords = generateMiniStatement()
 
 }
