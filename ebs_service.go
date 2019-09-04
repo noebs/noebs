@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
@@ -10,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/swaggo/gin-swagger"
@@ -22,7 +22,6 @@ import (
 )
 
 var log = logrus.New()
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 func GetMainEngine() *gin.Engine {
 

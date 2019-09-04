@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/sirupsen/logrus"
