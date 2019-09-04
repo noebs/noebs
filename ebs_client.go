@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/sirupsen/logrus"
@@ -73,7 +74,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, err
 		} else {
 			// the error here should be nil!
 			// we don't actually have any errors!
-			return http.StatusBadGateway, ebsGenericResponse, nil
+			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 		}
 
 	} else {
