@@ -131,6 +131,7 @@ func main() {
 	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
+	gin.SetMode(gin.ReleaseMode)
 
 	if env := os.Getenv("PORT"); env != "" {
 		if !strings.HasPrefix(env, ":") {
