@@ -169,7 +169,7 @@ func IsAlive(c *gin.Context) {
 	// while Bind works directly on the responseBody stream.
 	// More importantly, Bind smartly handles Forms rendering and validations; ShouldBindBodyWith forces you
 	// into using only a *pre-specified* binding schema
-	bindingErr := c.Bind(&fields)
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
