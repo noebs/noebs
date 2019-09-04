@@ -150,7 +150,7 @@ func MakeDummyTransaction(c *gin.Context) {
 			DisputeRRN:             "",
 			AdditionalData:         "",
 			TranDateTime:           "",
-			TranFee:                0,
+			TranFee:                nil,
 			AdditionalAmount:       nil,
 		},
 	}

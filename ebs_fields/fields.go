@@ -140,7 +140,7 @@ type GenericEBSResponseFields struct {
 	DisputeRRN           string   `json:"DisputeRRN,omitempty"`
 	AdditionalData       string   `json:"additionalData,omitempty"`
 	TranDateTime         string   `json:"tranDateTime,omitempty"`
-	TranFee              float32  `json:"tranFee,omitempty"`
+	TranFee              *float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     *float32 `json:"additionalAmount,omitempty"`
 }
 
