@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/adonese/noebs/ebs_fields"
 	"math/rand"
 	"testing"
