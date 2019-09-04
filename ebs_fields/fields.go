@@ -108,8 +108,6 @@ func iso8601(fl validator.FieldLevel) bool {
 }
 
 type GenericEBSResponseFields struct {
-	ImportantEBSFields
-
 	TerminalID             string `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int    `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string `json:"clientId,omitempty"`
@@ -131,9 +129,7 @@ type GenericEBSResponseFields struct {
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 	UUID        string `json:"UUID,omitempty" form:"UUID"`
-}
 
-type ImportantEBSFields struct {
 	ResponseMessage      string  `json:"responseMessage,omitempty"`
 	ResponseStatus       string  `json:"responseStatus,omitempty"`
 	ResponseCode         int     `json:"responseCode"`
@@ -146,6 +142,9 @@ type ImportantEBSFields struct {
 	TranDateTime         string  `json:"tranDateTime,omitempty"`
 	TranFee              float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     float32 `json:"additionalAmount,omitempty"`
+}
+
+type ImportantEBSFields struct {
 }
 
 // you have to update this to account for the non-db-able fields

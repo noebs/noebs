@@ -453,7 +453,7 @@ func Balance(c *gin.Context) {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res.GenericEBSResponseFields})
+			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
 	default:
