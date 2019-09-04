@@ -20,7 +20,7 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 		status = "Failed"
 	}
 
-	commonFields := ebs_fields.ImportantEBSFields{
+	commonFields := ebs_fields.GenericEBSResponseFields{
 		ResponseMessage: "Successful",
 		ResponseStatus:  status,
 		ResponseCode:    0,
@@ -28,7 +28,7 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 		ApprovalCode:    "",
 	}
 
-	res.ImportantEBSFields = commonFields
+	*res = commonFields
 	switch field.(type) {
 
 	case mockCardTransferResponse:

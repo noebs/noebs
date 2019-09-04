@@ -128,14 +128,14 @@ func getAllRoutes() []map[string]string {
 }
 
 var response = ebs_fields.GenericEBSResponseFields{
-	ImportantEBSFields: ebs_fields.ImportantEBSFields{
-		ResponseMessage: "Successful",
-		ResponseStatus:  "Successful",
-		ResponseCode:    0,
-		ReferenceNumber: "094930",
-		ApprovalCode:    "0032",
-		TranDateTime:    "190613085100",
-	},
+
+	ResponseMessage: "Successful",
+	ResponseStatus:  "Successful",
+	ResponseCode:    0,
+	ReferenceNumber: "094930",
+	ApprovalCode:    "0032",
+	TranDateTime:    "190613085100",
+
 	TerminalID:             "19000019",
 	SystemTraceAuditNumber: 0,
 	ClientID:               "ACTS",
