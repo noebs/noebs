@@ -169,7 +169,7 @@ func IsAlive(c *gin.Context) {
 	// while Bind works directly on the responseBody stream.
 	// More importantly, Bind smartly handles Forms rendering and validations; ShouldBindBodyWith forces you
 	// into using only a *pre-specified* binding schema
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -248,7 +248,7 @@ func WorkingKey(c *gin.Context) {
 
 	var fields = ebs_fields.WorkingKeyFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -407,7 +407,7 @@ func Balance(c *gin.Context) {
 
 	var fields = ebs_fields.BalanceFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -485,7 +485,7 @@ func CardTransfer(c *gin.Context) {
 
 	var fields = ebs_fields.CardTransferFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -561,7 +561,7 @@ func BillInquiry(c *gin.Context) {
 
 	var fields = ebs_fields.BillInquiryFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -634,7 +634,7 @@ func BillPayment(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.BillPaymentFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -707,7 +707,7 @@ func ChangePIN(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.ChangePINFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -781,7 +781,7 @@ func CashOut(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.CashOutFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -854,7 +854,7 @@ func CashIn(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.CashInFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -929,7 +929,7 @@ func MiniStatement(c *gin.Context) {
 
 	var fields = ebs_fields.MiniStatementFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
 
