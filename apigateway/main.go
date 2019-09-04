@@ -288,11 +288,11 @@ func GenerateSecretKey(n int) ([]byte, error) {
 // keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
 func keyFromEnv() []byte {
 	// it either checks for environment for the specific key, or generates and saves a one
-	if key := os.Getenv("Jwt-Token"); key != "" {
+	if key := os.Getenv("NOEBS_JWT_TOKEN"); key != "" {
 		return []byte(key)
 	}
 	key, _ := GenerateSecretKey(50)
-	os.Setenv("Jwt-Token", string(key))
+	os.Setenv("NOEBS_JWT_TOKEN", string(key))
 	return key
 }
 
