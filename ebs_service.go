@@ -379,7 +379,7 @@ func Purchase(c *gin.Context) {
 
 		redisClient := utils.GetRedis()
 		pTran := dashboard.ToPurchase(fields)
-
+		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			redisClient.Incr(fields.TerminalID + ":failed_transactions")
