@@ -261,5 +261,11 @@ func MerchantTransactionsEndpoint(c *gin.Context) {
 		return
 	}
 	sum := purchaseSum(v)
-	c.JSON(http.StatusOK, gin.H{"result": sum})
+	failedTransactions, _ := redisClient.Get(tid + ":failed_transactions").Result()
+	successfulTransactions, _ := redisClient.Get(tid + ":successful_transactions").Result()
+	failed, _ := strconv.Atoi(failedTransactions)
+	succ, _ := strconv.Atoi(successfulTransactions)
+
+	p := MerchantTransactions{PurchaseAmount: sum, FailedTransactions: failed, SuccessfulTransactions: succ}
+	c.JSON(http.StatusOK, gin.H{"result": p})
 }
