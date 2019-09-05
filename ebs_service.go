@@ -137,10 +137,10 @@ func main() {
 		if !strings.HasPrefix(env, ":") {
 			env += ":"
 		} else {
-			GetMainEngine().Run(env)
+			GetMainEngine().RunTLS(env, ".certs/server.pem", ".certs/server.key")
 		}
 	} else {
-		err := GetMainEngine().RunTLS(":8080", ".certs/server.pem", ".certs/server.key")
+		err := GetMainEngine().Run(":8080")
 		if err != nil {
 			panic(err)
 		}
