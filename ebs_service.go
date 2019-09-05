@@ -140,7 +140,10 @@ func main() {
 			GetMainEngine().Run(env)
 		}
 	} else {
-		GetMainEngine().Run(":8080")
+		err := GetMainEngine().RunTLS(":8080", ".certs/server.pem", ".certs/server.key")
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
