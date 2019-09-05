@@ -33,9 +33,8 @@ func (e *Env) GetTransactionbyID(c *gin.Context) {
 }
 
 type MerchantTransactions struct {
-	PurchaseNumber         int     `json:"purchase_number"`
 	PurchaseAmount         float32 `json:"purchase_amount"`
-	AllTransactions        int     `json:"all_transactions"`
+	AllTransactions        int     `json:"purchases_count"`
 	SuccessfulTransactions int     `json:"successful_transactions"`
 	FailedTransactions     int     `json:"failed_transactions"`
 }
