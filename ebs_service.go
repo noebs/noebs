@@ -379,12 +379,12 @@ func Purchase(c *gin.Context) {
 
 		redisClient := utils.GetRedis()
 		pTran := dashboard.ToPurchase(fields)
-		redisClient.LPush(fields.TerminalID+":purchase", &pTran)
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)
 		} else {
+			redisClient.LPush(fields.TerminalID+":purchase", &pTran)
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
