@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	ginprometheus "github.com/mcuadros/go-gin-prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/swaggo/gin-swagger"
@@ -26,6 +27,8 @@ var log = logrus.New()
 func GetMainEngine() *gin.Engine {
 
 	route := gin.Default()
+	p := ginprometheus.NewPrometheus("gin")
+	p.Use(route)
 
 	route.HandleMethodNotAllowed = true
 
