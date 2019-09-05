@@ -33,11 +33,11 @@ func (e *Env) GetTransactionbyID(c *gin.Context) {
 }
 
 type MerchantTransactions struct {
-	PurchaseNumber         *int     `json:"purchase_number"`
-	PurchaseAmount         *float32 `json:"purchase_amount"`
-	AllTransactions        *int     `json:"all_transactions"`
-	SuccessfulTransactions *int     `json:"successful_transactions"`
-	FailedTransactions     *int     `json:"failed_transactions"`
+	PurchaseNumber         int     `json:"purchase_number"`
+	PurchaseAmount         float32 `json:"purchase_amount"`
+	AllTransactions        int     `json:"all_transactions"`
+	SuccessfulTransactions int     `json:"successful_transactions"`
+	FailedTransactions     int     `json:"failed_transactions"`
 }
 
 // To allow Redis to use this struct directly in marshaling
@@ -60,14 +60,14 @@ func purchaseSum(tran []string) float32 {
 	}
 	var sum float32
 	for _, k := range trans {
-		sum += *k.PurchaseAmount
+		sum += k.PurchaseAmount
 	}
 	return sum
 }
 
-func ToPurchase(f ebs_fields.PurchaseFields) *MerchantTransactions {
+func ToPurchase(f ebs_fields.PurchaseFields) MerchantTransactions {
 	amount := f.TranAmount
-	m := new(MerchantTransactions)
-	*m.PurchaseAmount = amount
+	var m MerchantTransactions
+	m.PurchaseAmount = amount
 	return m
 }
