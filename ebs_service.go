@@ -376,6 +376,10 @@ func Purchase(c *gin.Context) {
 			}).Info("error in migrating purchase model")
 		}
 
+		redisClient := utils.GetRedis()
+		pTran := dashboard.ToPurchase(fields)
+		redisClient.LPush(fields.TerminalID, &pTran)
+
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			c.JSON(code, payload)

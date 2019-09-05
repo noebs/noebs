@@ -3,6 +3,7 @@ package dashboard
 import (
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
@@ -243,4 +244,22 @@ func DailySettlement(c *gin.Context) {
 		sum += v.TranAmount
 	}
 	c.JSON(http.StatusOK, gin.H{"transactions": listP, "sum": sum, "count": count})
+}
+
+func MerchantTransactionsEndpoint(c *gin.Context) {
+	tid := c.GetString("terminal")
+	if tid == "" && len(tid) < 8 {
+		// the user didn't sent any id
+		c.JSON(http.StatusBadRequest, gin.H{"message": "terminal id not present in url params",
+			"code": "terminal_id_not_present_in_request"})
+		return
+	}
+	redisClient := utils.GetRedis()
+	v, err := redisClient.LRange(tid+"purchase", 0, -1).Result()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"result": MerchantTransactions{}})
+		return
+	}
+	sum := purchaseSum(v)
+	c.JSON(http.StatusOK, gin.H{"result": sum})
 }
