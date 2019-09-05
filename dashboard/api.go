@@ -255,7 +255,7 @@ func MerchantTransactionsEndpoint(c *gin.Context) {
 		return
 	}
 	redisClient := utils.GetRedis()
-	v, err := redisClient.LRange(tid+"purchase", 0, -1).Result()
+	v, err := redisClient.LRange(tid+":purchase", 0, -1).Result()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"result": MerchantTransactions{}})
 		return
