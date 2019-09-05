@@ -57,6 +57,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/count", dashboard.TransactionsCount)
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
+		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -375,6 +376,10 @@ func Purchase(c *gin.Context) {
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
+
+		redisClient := utils.GetRedis()
+		pTran := dashboard.ToPurchase(fields)
+		redisClient.LPush(fields.TerminalID+":purchase", &pTran)
 
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
