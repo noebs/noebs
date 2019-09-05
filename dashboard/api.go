@@ -247,8 +247,8 @@ func DailySettlement(c *gin.Context) {
 }
 
 func MerchantTransactionsEndpoint(c *gin.Context) {
-	tid := c.GetString("terminal")
-	if tid == "" && len(tid) < 8 {
+	tid := c.Query("terminal")
+	if tid == "" {
 		// the user didn't sent any id
 		c.JSON(http.StatusBadRequest, gin.H{"message": "terminal id not present in url params",
 			"code": "terminal_id_not_present_in_request"})
