@@ -7,6 +7,8 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
+	ginprometheus "github.com/zsais/go-gin-prometheus"
+	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -172,4 +174,46 @@ func urlToMock(url string) interface{} {
 		return mockWorkingKeyResponse{}
 	}
 	return mockWorkingKeyResponse{}
+}
+
+func Metrics() []*ginprometheus.Metric {
+	metrics := []*ginprometheus.Metric{
+		{
+			ID:          "1234",                // optional string
+			Name:        "test_metric",         // required string
+			Description: "Counter test metric", // required string
+			Type:        "counter",             // required string
+		},
+		{
+			ID:          "1235",                // Identifier
+			Name:        "test_metric_2",       // Metric Name
+			Description: "Summary test metric", // Help Description
+			Type:        "summary",             // type associated with prometheus collector
+		},
+		{
+			ID:          "1235",                // Identifier
+			Name:        "test_metric_3",       // Metric Name
+			Description: "Summary test metric", // Help Description
+			Type:        "counter_vec",         // type associated with prometheus collector
+		},
+		{
+			ID:          "1236",                // Identifier
+			Name:        "test_metric_4",       // Metric Name
+			Description: "Summary test metric", // Help Description
+			Type:        "histogram_vec",       // type associated with prometheus collector
+		},
+		// Type Options:
+		//	counter, counter_vec, gauge, gauge_vec,
+		//	histogram, histogram_vec, summary, summary_vec
+	}
+	return metrics
+}
+
+func validateRequest(v validator.ValidationErrors) ErrorDetails {
+	var details []ErrDetails
+	for _, err := range v {
+		details = append(details, ErrorToString(err))
+	}
+	payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+	return payload
 }
