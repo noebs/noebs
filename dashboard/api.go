@@ -233,7 +233,7 @@ func BrowerDashboard(c *gin.Context) {
 
 	var search SearchModel
 	var totAmount dashboardStats
-	pager := pagination(count, 50)
+
 	db.Table("transactions").Count(&count)
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
 	//db.Table("transactions").Select("created_at, tran_amount, terminal_id").Group("terminal_id").Having("tran_amount > ?", 50).Scan(&totAmount)
@@ -243,6 +243,8 @@ func BrowerDashboard(c *gin.Context) {
 		db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
 
 	}
+
+	pager := pagination(count, 50)
 	errors := errorsCounter(tran)
 	stats := map[string]int{
 		"NumberTransactions":     count,
