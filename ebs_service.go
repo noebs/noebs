@@ -7,6 +7,7 @@ import (
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
@@ -15,8 +16,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
-	ginprometheus "github.com/zsais/go-gin-prometheus"
+	"github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -27,12 +29,16 @@ var log = logrus.New()
 func GetMainEngine() *gin.Engine {
 
 	route := gin.Default()
+	//metrics := Metrics()
 	p := ginprometheus.NewPrometheus("gin")
 	p.Use(route)
 
 	route.HandleMethodNotAllowed = true
 
 	route.Use(gateway.OptionsMiddleware)
+
+	route.SetFuncMap(template.FuncMap{"N": iter.N})
+	route.LoadHTMLFiles("./dashboard/template/table.html")
 
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
@@ -61,6 +67,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
+		dashboardGroup.GET("/", dashboard.BrowerDashboard)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -106,17 +113,18 @@ func GetMainEngine() *gin.Engine {
 func init() {
 	// register the new validator
 	binding.Validator = new(ebs_fields.DefaultValidator)
+
 }
 
 // @title noebs Example API
 // @version 1.0
 // @description This is a sample server celler server.
-// @termsOfService http://swagger.io/terms/
+// @termsOfService http://soluspay.net/terms
 // @contact.name API Support
-// @contact.url http://www.swagger.io/support
-// @contact.email adonese@soluspay/net
+// @contact.url https://soluspay.net/support
+// @contact.email adonese@soluspay.net
 // @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @license.url https://github.com/adonese/noebs/LICENSE
 // @host beta.soluspay.net
 // @BasePath /api/
 // @securityDefinitions.basic BasicAuth
@@ -334,67 +342,50 @@ func Purchase(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.PurchaseFields{}
-
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-
-	switch bindingErr := bindingErr.(type) {
-
-	case validator.ValidationErrors:
-		var details []ErrDetails
-
-		for _, err := range bindingErr {
-
-			details = append(details, ErrorToString(err))
-		}
-
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
-
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
-
-	case nil:
-
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+	if bindingErr == nil {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
 			c.AbortWithStatusJSON(400, ErrorResponse{er})
 		}
-
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-
 		// mask the pan
 		res.MaskPAN()
-
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
-
 		transaction.EBSServiceName = PurchaseTransaction
-
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
-
 		redisClient := utils.GetRedis()
-		pTran := dashboard.ToPurchase(fields)
+
+		redisClient.LPush(fields.TerminalID+":purchase", &res)
 		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
+
 		if ebsErr != nil {
 			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
 			redisClient.Incr(fields.TerminalID + ":failed_transactions")
 			c.JSON(code, payload)
 		} else {
-			redisClient.LPush(fields.TerminalID+":purchase", &pTran)
+
 			redisClient.Incr(fields.TerminalID + ":successful_transactions")
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
-
-	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	} else {
+		if valErr, ok := bindingErr.(validator.ValidationErrors); ok {
+			payload := validateRequest(valErr)
+			c.JSON(http.StatusBadRequest, payload)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"message": bindingErr.Error(), "code": "generic_error"})
+		}
 	}
 }
 

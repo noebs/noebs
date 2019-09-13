@@ -251,7 +251,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
 				"code": "unauthorized"})
 			return
-
 		}
 
 		claims, err := VerifyJWT(h, jwtKey)
