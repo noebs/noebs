@@ -74,7 +74,7 @@
         <div class="col">
             <ul class="pagination">
                 {{range $i, $_ := N .count}}
-                    <li class="page-item"><a class="page-link" href="/dashboard/?page={{$i}}">{{$i}}</a></li>
+                    <li class="page-item"><a class="page-link" href="?page={{$i}}">{{$i}}</a></li>
                 {{end}}
             </ul>
         </div>
