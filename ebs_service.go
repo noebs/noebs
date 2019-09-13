@@ -7,6 +7,7 @@ import (
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
@@ -17,6 +18,7 @@ import (
 	"github.com/swaggo/gin-swagger/swaggerFiles"
 	"github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -34,6 +36,9 @@ func GetMainEngine() *gin.Engine {
 	route.HandleMethodNotAllowed = true
 
 	route.Use(gateway.OptionsMiddleware)
+
+	route.SetFuncMap(template.FuncMap{"N": iter.N})
+	route.LoadHTMLFiles("./dashboard/template/table.html")
 
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
@@ -62,6 +67,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
+		dashboardGroup.GET("/", dashboard.BrowerDashboard)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

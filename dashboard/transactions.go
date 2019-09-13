@@ -70,3 +70,30 @@ func ToPurchase(f ebs_fields.PurchaseFields) MerchantTransactions {
 	m.PurchaseAmount = amount
 	return m
 }
+
+type SearchModel struct {
+	Page       int    `form:"page"`
+	TerminalID string `form:"tid" binding:"required"`
+}
+
+func pagination(num int, page int) int {
+	r := num % page
+	if r == 0 {
+		return num / page
+	}
+	return num/page + 1
+}
+
+func errorsCounter(t []Transaction) int {
+	var errors int
+	for _, v := range t {
+		if v.ResponseCode != 0 {
+			errors++
+		}
+	}
+	return errors
+}
+
+type dashboardStats struct {
+	Amount float32
+}

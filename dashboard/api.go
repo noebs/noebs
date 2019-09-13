@@ -182,6 +182,7 @@ func GetAll(c *gin.Context) {
 	// offset = page * 50
 	// limit = offset + 50
 
+	//todo make a pagination function
 	pageSize := 50
 	offset := page*pageSize - pageSize
 
@@ -191,6 +192,7 @@ func GetAll(c *gin.Context) {
 	// another good alternative
 	db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
 
+	// check whether we are accessing it from a browser
 	previous := page - 1
 	next := page + 1
 
@@ -199,6 +201,56 @@ func GetAll(c *gin.Context) {
 		"after":    next,
 	}
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
+}
+
+func BrowerDashboard(c *gin.Context) {
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	defer db.Close()
+
+	db.AutoMigrate(&Transaction{})
+
+	var page int
+	if q := c.Query("page"); q != "" {
+		page, _ = strconv.Atoi(q)
+	} else {
+		page = 1
+	}
+
+	// page represents a 30 result from the database.
+	// the computation should be done like this:
+	// offset = page * 50
+	// limit = offset + 50
+
+	//todo make a pagination function
+	pageSize := 50
+	offset := page*pageSize - pageSize
+
+	var tran []Transaction
+
+	// another good alternative
+	var count int
+
+	var search SearchModel
+	var totAmount dashboardStats
+	pager := pagination(count, 50)
+	db.Table("transactions").Count(&count)
+	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
+	//db.Table("transactions").Select("created_at, tran_amount, terminal_id").Group("terminal_id").Having("tran_amount > ?", 50).Scan(&totAmount)
+	if c.ShouldBind(&search) == nil {
+		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Limit(pageSize).Find(&tran)
+	} else {
+		db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
+
+	}
+	errors := errorsCounter(tran)
+	stats := map[string]int{
+		"NumberTransactions":     count,
+		"SuccessfulTransactions": count - errors,
+		"FailedTransactions":     errors,
+	}
+	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran,
+		"count": pager + 1, "stats": stats, "amounts": totAmount})
 }
 
 const (
@@ -237,7 +289,7 @@ func DailySettlement(c *gin.Context) {
 	count := len(tran)
 	for _, v := range tran {
 		p["date"] = v.TranDateTime
-		p["amount"] = v.TranAmount
+		p["Amount"] = v.TranAmount
 		p["human_readable_time"] = v.CreatedAt
 
 		listP = append(listP, p)
