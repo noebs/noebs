@@ -97,3 +97,12 @@ func errorsCounter(t []Transaction) int {
 type dashboardStats struct {
 	Amount float32
 }
+
+func structToSlice(t []Transaction) []string {
+	var s []string
+	for _, v := range t {
+		d, _ := json.Marshal(v)
+		s = append(s, string(d))
+	}
+	return s
+}
