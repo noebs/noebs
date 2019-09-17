@@ -142,6 +142,9 @@ type GenericEBSResponseFields struct {
 	TranDateTime         string   `json:"tranDateTime,omitempty"`
 	TranFee              *float32 `json:"tranFee,omitempty"`
 	AdditionalAmount     *float32 `json:"additionalAmount,omitempty"`
+	AcqTranFee           *float32 `json:"acqTranFee,omitempty"`
+	IssTranFee           *float32 `json:"issuerTranFee,omitempty"`
+	TranCurrency         string   `json:"tranCurrency,omitempty"`
 }
 
 type ImportantEBSFields struct {
@@ -171,6 +174,7 @@ type EBSMapFields struct {
 	PaymentInfo string                 `json:"paymentInfo,omitempty"`
 	BillInfo    map[string]interface{} `json:"billInfo,omitempty"`
 }
+
 type ConsumerSpecificFields struct {
 	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
 	Mbr             string  `json:"mbr,omitempty" form:"mbr"`

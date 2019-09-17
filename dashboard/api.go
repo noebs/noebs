@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
@@ -258,6 +260,25 @@ func BrowerDashboard(c *gin.Context) {
 const (
 	dateFormat = "2006-01-02"
 )
+
+func Stream(c *gin.Context) {
+	var trans []Transaction
+	var stream bytes.Buffer
+
+	db, _ := gorm.Open("sqlite3", "test.db")
+
+	defer db.Close()
+
+	db.AutoMigrate(&Transaction{})
+	db.Table("transactions").Find(&trans)
+	json.NewEncoder(&stream).Encode(trans)
+
+	extraHeaders := map[string]string{
+		"Content-Disposition": `attachment; filename="transactions.json"`,
+	}
+	c.DataFromReader(http.StatusOK, int64(stream.Len()), "application/octet-stream", &stream, extraHeaders)
+
+}
 
 type purchasesSum map[string]interface{}
 

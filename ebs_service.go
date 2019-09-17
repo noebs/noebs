@@ -68,6 +68,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
 		dashboardGroup.GET("/", dashboard.BrowerDashboard)
+		dashboardGroup.GET("/stream", dashboard.Stream)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
