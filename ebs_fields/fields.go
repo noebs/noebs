@@ -291,6 +291,10 @@ type ConsumerIPinFields struct {
 	NewIPIN string `json:"newIPIN" binding:"required"`
 }
 
+type ConsumerCardTransferAndMobileFields struct {
+	ConsumerCardTransferFields
+	Mobile string `json:"mobile_number"`
+}
 type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields

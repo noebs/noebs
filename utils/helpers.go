@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"github.com/adonese/noebs/dashboard"
 	"github.com/go-redis/redis"
+	"github.com/jinzhu/gorm"
 )
 
 // GetRedis returns a *redis.Client instance
@@ -25,4 +27,26 @@ func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
 		return def, ok
 	}
 	return value.(string), ok
+}
+
+func Database(dialect string, fname string) *gorm.DB {
+	db, err := gorm.Open(dialect, fname)
+	if err != nil {
+	}
+
+	db.AutoMigrate(&dashboard.Transaction{})
+	return db
+}
+
+func PanfromMobile(username string, r *redis.Client) (string, bool) {
+	c, err := r.HGet(username, "main_card").Result()
+	if err == nil {
+		return c, true
+	} else {
+		c, err := r.LRange(username+":pans", 0, 0).Result()
+		if err == nil {
+			return c[0], true
+		}
+	}
+	return "", false
 }

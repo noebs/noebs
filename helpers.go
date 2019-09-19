@@ -3,10 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/jinzhu/gorm"
-	"github.com/sirupsen/logrus"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
@@ -14,20 +11,6 @@ import (
 	"reflect"
 	"strings"
 )
-
-func database(dialect string, fname string) *gorm.DB {
-	db, err := gorm.Open(dialect, fname)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	db.AutoMigrate(&dashboard.Transaction{})
-
-	return db
-}
 
 type redisPurchaseFields map[string]interface{}
 
@@ -161,15 +144,15 @@ func MockEBSServer() *httptest.Server {
 }
 
 func urlToMock(url string) interface{} {
-	if url == EBSMerchantIP+BalanceEndpoint {
+	if url == ebs_fields.EBSMerchantIP+ebs_fields.BalanceEndpoint {
 		return mockPurchaseResponse{}
-	} else if url == EBSMerchantIP+PurchaseEndpoint {
+	} else if url == ebs_fields.EBSMerchantIP+ebs_fields.PurchaseEndpoint {
 		return mockPurchaseResponse{}
 
-	} else if url == EBSMerchantIP+MiniStatementEndpoint {
+	} else if url == ebs_fields.EBSMerchantIP+ebs_fields.MiniStatementEndpoint {
 		return mockMiniStatementResponse{}
 
-	} else if url == EBSMerchantIP+WorkingKeyEndpoint {
+	} else if url == ebs_fields.EBSMerchantIP+ebs_fields.WorkingKeyEndpoint {
 		fmt.Printf("i'm here..")
 		return mockWorkingKeyResponse{}
 	}

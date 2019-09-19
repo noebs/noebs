@@ -1,4 +1,4 @@
-package main
+package ebs_fields
 
 const (
 	IsAliveEndpoint                  = "isAlive"

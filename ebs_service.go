@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	gateway "github.com/adonese/noebs/apigateway"
+	consumer2 "github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
@@ -10,7 +11,6 @@ import (
 	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/go-redis/redis"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -91,17 +91,18 @@ func GetMainEngine() *gin.Engine {
 	consumer.POST("/status", ConsumerStatus)
 	consumer.POST("/key", ConsumerWorkingKey)
 	consumer.POST("/ipin", ConsumerIPinChange)
+	consumer.GET("/mobile2pan", consumer2.CardFromNumber)
 
 	consumer.Use(gateway.AuthMiddleware())
 	{
-		consumer.GET("/get_cards", GetCards)
-		consumer.POST("/add_card", AddCards)
+		consumer.GET("/get_cards", consumer2.GetCards)
+		consumer.POST("/add_card", consumer2.AddCards)
 
-		consumer.PUT("/edit_card", EditCard)
-		consumer.DELETE("/delete_card", RemoveCard)
+		consumer.PUT("/edit_card", consumer2.EditCard)
+		consumer.DELETE("/delete_card", consumer2.RemoveCard)
 
-		consumer.GET("/get_mobile", GetMobile)
-		consumer.POST("/add_mobile", AddMobile)
+		consumer.GET("/get_mobile", consumer2.GetMobile)
+		consumer.POST("/add_mobile", consumer2.AddMobile)
 
 		consumer.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
@@ -173,9 +174,9 @@ func main() {
 // @Router /workingKey [post]
 func IsAlive(c *gin.Context) {
 
-	url := EBSMerchantIP + IsAliveEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.IsAliveFields{}
@@ -219,7 +220,7 @@ func IsAlive(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = IsAliveTransaction
+		transaction.EBSServiceName = ebs_fields.IsAliveTransaction
 
 		// return a masked pan
 		transaction.MaskPAN()
@@ -228,7 +229,7 @@ func IsAlive(c *gin.Context) {
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			log.WithFields(logrus.Fields{
 				"error":   err.Error(),
-				"details": "Error in writing to database",
+				"details": "Error in writing to Database",
 			}).Info("Problem in transaction table committing")
 		}
 
@@ -258,9 +259,9 @@ func IsAlive(c *gin.Context) {
 // @Router /workingKey [post]
 func WorkingKey(c *gin.Context) {
 
-	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.WorkingKeyFields{}
@@ -298,12 +299,12 @@ func WorkingKey(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = WorkingKeyTransaction
+		transaction.EBSServiceName = ebs_fields.WorkingKeyTransaction
 		// God please make it works.
 		if err := db.Create(&transaction).Error; err != nil {
 			log.WithFields(logrus.Fields{
 				"error":   err.Error(),
-				"details": "Error in writing to database",
+				"details": "Error in writing to Database",
 			}).Info("Problem in transaction table committing")
 		}
 		db.Commit()
@@ -333,13 +334,13 @@ func WorkingKey(c *gin.Context) {
 // @Failure 500 {integer} 500
 // @Router /purchase [post]
 func Purchase(c *gin.Context) {
-	url := EBSMerchantIP + PurchaseEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.PurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.PurchaseFields{}
@@ -359,7 +360,7 @@ func Purchase(c *gin.Context) {
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
@@ -402,13 +403,13 @@ func Purchase(c *gin.Context) {
 // @Failure 500 {integer} 500
 // @Router /purchase [post]
 func Balance(c *gin.Context) {
-	url := EBSMerchantIP + BalanceEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.BalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.BalanceFields{}
@@ -449,7 +450,7 @@ func Balance(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = BalanceTransaction
+		transaction.EBSServiceName = ebs_fields.BalanceTransaction
 		// return a masked pan
 
 		// God please make it works.
@@ -480,13 +481,13 @@ func Balance(c *gin.Context) {
 // @Router /cardTransfer [post]
 func CardTransfer(c *gin.Context) {
 
-	url := EBSMerchantIP + CardTransferEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.CardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.CardTransferFields{}
@@ -526,7 +527,7 @@ func CardTransfer(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = CardTransferTransaction
+		transaction.EBSServiceName = ebs_fields.CardTransferTransaction
 		// God please make it works.
 		db.Table("transactions").Create(&transaction)
 
@@ -556,13 +557,13 @@ func CardTransfer(c *gin.Context) {
 // @Router /billInquiry [post]
 func BillInquiry(c *gin.Context) {
 
-	url := EBSMerchantIP + BillInquiryEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.BillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.BillInquiryFields{}
@@ -600,7 +601,7 @@ func BillInquiry(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = BillInquiryTransaction
+		transaction.EBSServiceName = ebs_fields.BillInquiryTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -630,13 +631,13 @@ func BillInquiry(c *gin.Context) {
 // @Router /billPayment [post]
 func BillPayment(c *gin.Context) {
 
-	url := EBSMerchantIP + BillPaymentEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.BillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.BillPaymentFields{}
@@ -673,7 +674,7 @@ func BillPayment(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = BillPaymentTransaction
+		transaction.EBSServiceName = ebs_fields.BillPaymentTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -703,13 +704,13 @@ func BillPayment(c *gin.Context) {
 // @Router /changePin [post]
 func ChangePIN(c *gin.Context) {
 
-	url := EBSMerchantIP + ChangePINEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.ChangePINEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ChangePINFields{}
@@ -748,7 +749,7 @@ func ChangePIN(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = ChangePINTransaction
+		transaction.EBSServiceName = ebs_fields.ChangePINTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -778,12 +779,12 @@ func ChangePIN(c *gin.Context) {
 // @Router /cashOut [post]
 func CashOut(c *gin.Context) {
 
-	url := EBSMerchantIP + CashOutEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.CashOutEndpoint // EBS simulator endpoint url goes here.
 	// This function flow:
 	// - open a DB connection (getDB)
 	// - check for the binding errors
 	//
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.CashOutFields{}
@@ -820,7 +821,7 @@ func CashOut(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = CashOutTransaction
+		transaction.EBSServiceName = ebs_fields.CashOutTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -850,13 +851,13 @@ func CashOut(c *gin.Context) {
 // @Router /cashIn [post]
 func CashIn(c *gin.Context) {
 
-	url := EBSMerchantIP + CashInEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.CashInEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.CashInFields{}
@@ -893,7 +894,7 @@ func CashIn(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = CashInTransaction
+		transaction.EBSServiceName = ebs_fields.CashInTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -924,13 +925,13 @@ func CashIn(c *gin.Context) {
 // @Router /miniStatement [post]
 func MiniStatement(c *gin.Context) {
 
-	url := EBSMerchantIP + MiniStatementEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.MiniStatementEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.MiniStatementFields{}
@@ -968,7 +969,7 @@ func MiniStatement(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = MiniStatementTransaction
+		transaction.EBSServiceName = ebs_fields.MiniStatementTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -987,10 +988,10 @@ func MiniStatement(c *gin.Context) {
 
 func testAPI(c *gin.Context) {
 
-	url := EBSMerchantIP + WorkingKeyEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	// create database function
-	db := database("sqlite3", "test.db")
+	// create Database function
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.WorkingKeyFields{}
@@ -1025,7 +1026,7 @@ func testAPI(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = WorkingKeyTransaction
+		transaction.EBSServiceName = ebs_fields.WorkingKeyTransaction
 		// God please make it works.
 		db.Create(&transaction)
 		db.Commit()
@@ -1047,13 +1048,13 @@ func testAPI(c *gin.Context) {
 // Consumer Services
 
 func ConsumerPurchase(c *gin.Context) {
-	url := EBSIp + ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerPurchaseFields{}
@@ -1094,7 +1095,7 @@ func ConsumerPurchase(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
@@ -1120,13 +1121,13 @@ func ConsumerPurchase(c *gin.Context) {
 }
 
 func ConsumerIsAlive(c *gin.Context) {
-	url := EBSIp + ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerIsAliveFields{}
@@ -1171,7 +1172,7 @@ func ConsumerIsAlive(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1193,13 +1194,13 @@ func ConsumerIsAlive(c *gin.Context) {
 }
 
 func ConsumerBillPayment(c *gin.Context) {
-	url := EBSIp + ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerBillPaymentFields{}
@@ -1240,7 +1241,7 @@ func ConsumerBillPayment(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
@@ -1267,13 +1268,13 @@ func ConsumerBillPayment(c *gin.Context) {
 }
 
 func ConsumerBillInquiry(c *gin.Context) {
-	url := EBSIp + ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerBillInquiryFields{}
@@ -1314,7 +1315,7 @@ func ConsumerBillInquiry(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
 		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1342,13 +1343,13 @@ func ConsumerBillInquiry(c *gin.Context) {
 }
 
 func ConsumerBalance(c *gin.Context) {
-	url := EBSIp + ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerBalanceFields{}
@@ -1389,7 +1390,7 @@ func ConsumerBalance(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
@@ -1416,13 +1417,13 @@ func ConsumerBalance(c *gin.Context) {
 }
 
 func ConsumerWorkingKey(c *gin.Context) {
-	url := EBSIp + ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerWorkingKeyFields{}
@@ -1463,7 +1464,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 		//
 		//// store the transaction into redis (for more performance gain)
 		//redisClient := utils.GetRedis()
@@ -1504,16 +1505,16 @@ func ConsumerWorkingKey(c *gin.Context) {
 }
 
 func ConsumerCardTransfer(c *gin.Context) {
-	url := EBSIp + ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
-	var fields = ebs_fields.ConsumerCardTransferFields{}
+	var fields = ebs_fields.ConsumerCardTransferAndMobileFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -1533,7 +1534,12 @@ func ConsumerCardTransfer(c *gin.Context) {
 
 	case nil:
 
-		jsonBuffer, err := json.Marshal(fields)
+		// save this to redis
+		if mobile := fields.Mobile; mobile != "" {
+			redisClient := utils.GetRedis()
+			redisClient.Set(fields.Mobile+":pan", fields.Pan, 0)
+		}
+		jsonBuffer, err := json.Marshal(fields.ConsumerCardTransferFields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
@@ -1551,7 +1557,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
@@ -1578,13 +1584,13 @@ func ConsumerCardTransfer(c *gin.Context) {
 }
 
 func ConsumerIPinChange(c *gin.Context) {
-	url := EBSIp + ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerIPinFields{}
@@ -1625,7 +1631,7 @@ func ConsumerIPinChange(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
@@ -1651,13 +1657,13 @@ func ConsumerIPinChange(c *gin.Context) {
 }
 
 func ConsumerStatus(c *gin.Context) {
-	url := EBSIp + ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := database("sqlite3", "test.db")
+	db := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerStatusFields{}
@@ -1698,7 +1704,7 @@ func ConsumerStatus(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		transaction.EBSServiceName = PurchaseTransaction
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
@@ -1735,219 +1741,4 @@ func ConsumerTransactions(c *gin.Context) {
 
 	// you should probably marshal these data
 	c.JSON(http.StatusOK, gin.H{"transactions": username})
-}
-
-func GetCards(c *gin.Context) {
-	redisClient := utils.GetRedis()
-
-	username := c.GetString("username")
-	if username == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-	} else {
-		cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
-		if err != nil {
-			// handle the error somehow
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to get results from redis",
-				"message": err.Error(),
-			}).Info("unable to get results from redis")
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
-		}
-
-		// unmrshall cards and send them back to the user
-		// they should be a []Cards
-
-		var cb ebs_fields.CardsRedis
-		var cardBytes []ebs_fields.CardsRedis
-		var id = 1
-		for _, v := range cards {
-			json.Unmarshal([]byte(v), &cb)
-			cb.ID = id
-			cardBytes = append(cardBytes, cb)
-			id++
-		}
-		c.JSON(http.StatusOK, gin.H{"cards": cardBytes})
-	}
-
-}
-
-func AddCards(c *gin.Context) {
-	redisClient := utils.GetRedis()
-
-	var fields ebs_fields.CardsRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	} else {
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
-			// make sure the length of the card and expDate is valid
-			z := &redis.Z{
-				Member: buf,
-			}
-			if fields.IsMain {
-				// refactor me, please!
-				redisClient.HSet(username, "main_card", buf)
-
-				redisClient.ZAdd(username+":cards", z)
-			} else {
-				_, err := redisClient.ZAdd(username+":cards", z).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-					return
-				}
-			}
-			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
-		}
-	}
-
-}
-
-func EditCard(c *gin.Context) {
-	redisClient := utils.GetRedis()
-
-	var fields ebs_fields.CardsRedis
-
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-		// there is no error in the request body
-	} else {
-		buf, _ := json.Marshal(fields)
-
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else if fields.ID <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
-			return
-		}
-		// core functionality
-		id := fields.ID
-		{
-			// step 1: removing the card; copied from RemoveCard
-			if fields.IsMain {
-				redisClient.HDel(username+":cards", "main_card")
-			} else {
-				_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
-					return
-				}
-			}
-		}
-
-		// step 2: Add the card; copied from AddCard
-
-		{
-			z := &redis.Z{
-				Member: buf,
-			}
-			if fields.IsMain {
-				// refactor me, please!
-				redisClient.HSet(username, "main_card", buf)
-
-				redisClient.ZAdd(username+":cards", z)
-			} else {
-				_, err := redisClient.ZAdd(username+":cards", z).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-					return
-				}
-			}
-		}
-		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
-
-	}
-
-}
-
-// this will work, but it is quite unpredictable
-func RemoveCard(c *gin.Context) {
-	redisClient := utils.GetRedis()
-
-	var fields ebs_fields.ItemID
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-		// there is no error in the request body
-	} else {
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else if fields.ID <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
-			return
-		}
-		// core functionality
-		id := fields.ID
-
-		if fields.IsMain {
-			redisClient.HDel(username+":cards", "main_card")
-		} else {
-			_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
-				return
-			}
-		}
-
-		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
-
-	}
-
-}
-func AddMobile(c *gin.Context) {
-	redisClient := utils.GetRedis()
-
-	var fields ebs_fields.MobileRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	} else {
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
-			if fields.IsMain {
-				redisClient.HSet(username, "main_mobile", buf)
-				redisClient.SAdd(username+":cards", buf)
-			} else {
-				redisClient.SAdd(username+":mobile_numbers", buf)
-			}
-
-			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": string(buf)})
-		}
-	}
-
-}
-
-func GetMobile(c *gin.Context) {
-	redisClient := utils.GetRedis()
-
-	var fields ebs_fields.CardsRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	} else {
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
-			if fields.IsMain {
-				redisClient.HSet(username, "main_mobile", buf)
-				redisClient.SAdd(username+":mobile_numbers", buf)
-			} else {
-				redisClient.SAdd(username+":mobile_numbers", buf)
-			}
-
-			c.JSON(http.StatusCreated, gin.H{"username": username, "mobile_numbers": string(buf)})
-		}
-	}
-
 }

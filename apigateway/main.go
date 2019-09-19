@@ -208,6 +208,9 @@ func CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
 	}
+	redisClient := utils.GetRedis()
+	redisClient.Set(u.Mobile, u.Username, 0)
+
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
