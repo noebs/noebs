@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/jinzhu/gorm"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
@@ -192,11 +194,20 @@ func Metrics() []*ginprometheus.Metric {
 	return metrics
 }
 
-func validateRequest(v validator.ValidationErrors) ErrorDetails {
-	var details []ErrDetails
+func validateRequest(v validator.ValidationErrors) ebs_fields.ErrorDetails {
+	var details []ebs_fields.ErrDetails
 	for _, err := range v {
-		details = append(details, ErrorToString(err))
+		details = append(details, ebs_fields.ErrorToString(err))
 	}
-	payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+	payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 	return payload
+}
+
+func Database(dialect, fname string) *gorm.DB {
+	db, err := gorm.Open(dialect, fname)
+	if err != nil {
+	}
+
+	db.AutoMigrate(&dashboard.Transaction{})
+	return db
 }

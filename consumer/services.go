@@ -42,7 +42,6 @@ func CardFromNumber(c *gin.Context) {
 //GetCards Get all cards for the currently authorized user
 func GetCards(c *gin.Context) {
 	redisClient := utils.GetRedis()
-
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
@@ -56,22 +55,9 @@ func GetCards(c *gin.Context) {
 			}).Info("unable to get results from redis")
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
 		}
-
-		// unmrshall cards and send them back to the user
-		// they should be a []Cards
-
-		var cb ebs_fields.CardsRedis
-		var cardBytes []ebs_fields.CardsRedis
-		var id = 1
-		for _, v := range cards {
-			json.Unmarshal([]byte(v), &cb)
-			cb.ID = id
-			cardBytes = append(cardBytes, cb)
-			id++
-		}
+		cardBytes := cardsFromZ(cards)
 		c.JSON(http.StatusOK, gin.H{"cards": cardBytes})
 	}
-
 }
 
 //AddCards Allow users to add card to their profile
@@ -96,7 +82,8 @@ func AddCards(c *gin.Context) {
 			}
 			if fields.IsMain {
 				// refactor me, please!
-				redisClient.HSet(username, "main_card", buf)
+				ucard := card{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
+				redisClient.HMSet(username, ucard)
 				redisClient.ZAdd(username+":cards", z)
 			} else {
 				_, err := redisClient.ZAdd(username+":cards", z).Result()
@@ -111,7 +98,6 @@ func AddCards(c *gin.Context) {
 			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
 		}
 	}
-
 }
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)

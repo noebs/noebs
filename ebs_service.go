@@ -173,10 +173,8 @@ func main() {
 // @Failure 500 {integer} 500
 // @Router /workingKey [post]
 func IsAlive(c *gin.Context) {
-
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
-
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.IsAliveFields{}
@@ -192,14 +190,14 @@ func IsAlive(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
 		c.JSON(http.StatusBadRequest, payload)
 
@@ -208,12 +206,12 @@ func IsAlive(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
 			c.AbortWithStatusJSON(400, er)
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -235,7 +233,7 @@ func IsAlive(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -261,7 +259,7 @@ func WorkingKey(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.WorkingKeyFields{}
@@ -271,28 +269,28 @@ func WorkingKey(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -311,7 +309,7 @@ func WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -340,7 +338,7 @@ func Purchase(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.PurchaseFields{}
@@ -349,11 +347,11 @@ func Purchase(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		// mask the pan
 		res.MaskPAN()
@@ -373,7 +371,7 @@ func Purchase(c *gin.Context) {
 		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			redisClient.Incr(fields.TerminalID + ":failed_transactions")
 			c.JSON(code, payload)
 		} else {
@@ -409,7 +407,7 @@ func Balance(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.BalanceFields{}
@@ -419,28 +417,28 @@ func Balance(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -457,7 +455,7 @@ func Balance(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -487,7 +485,7 @@ func CardTransfer(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.CardTransferFields{}
@@ -497,28 +495,28 @@ func CardTransfer(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
@@ -532,7 +530,7 @@ func CardTransfer(c *gin.Context) {
 		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -563,7 +561,7 @@ func BillInquiry(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.BillInquiryFields{}
@@ -573,28 +571,28 @@ func BillInquiry(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -607,7 +605,7 @@ func BillInquiry(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -637,7 +635,7 @@ func BillPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.BillPaymentFields{}
@@ -646,28 +644,28 @@ func BillPayment(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -680,7 +678,7 @@ func BillPayment(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -710,7 +708,7 @@ func ChangePIN(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ChangePINFields{}
@@ -719,28 +717,28 @@ func ChangePIN(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
@@ -755,7 +753,7 @@ func ChangePIN(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -784,7 +782,7 @@ func CashOut(c *gin.Context) {
 	// - open a DB connection (getDB)
 	// - check for the binding errors
 	//
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.CashOutFields{}
@@ -793,28 +791,28 @@ func CashOut(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -827,7 +825,7 @@ func CashOut(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -857,7 +855,7 @@ func CashIn(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.CashInFields{}
@@ -866,28 +864,28 @@ func CashIn(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -900,7 +898,7 @@ func CashIn(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -931,7 +929,7 @@ func MiniStatement(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.MiniStatementFields{}
@@ -941,28 +939,28 @@ func MiniStatement(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -975,7 +973,7 @@ func MiniStatement(c *gin.Context) {
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -991,7 +989,7 @@ func testAPI(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
 	// create Database function
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.WorkingKeyFields{}
@@ -1000,26 +998,26 @@ func testAPI(c *gin.Context) {
 
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 	case nil:
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		transaction := dashboard.Transaction{
@@ -1033,7 +1031,7 @@ func testAPI(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1054,7 +1052,7 @@ func ConsumerPurchase(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerPurchaseFields{}
@@ -1064,28 +1062,22 @@ func ConsumerPurchase(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
-
+		var details []ebs_fields.ErrDetails
 		for _, err := range bindingErr {
-
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
-
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
-
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 	case nil:
-
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1109,7 +1101,7 @@ func ConsumerPurchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res.GenericEBSResponseFields, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1127,7 +1119,7 @@ func ConsumerIsAlive(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerIsAliveFields{}
@@ -1137,28 +1129,28 @@ func ConsumerIsAlive(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		//// mask the pan
@@ -1182,7 +1174,7 @@ func ConsumerIsAlive(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1200,7 +1192,7 @@ func ConsumerBillPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerBillPaymentFields{}
@@ -1210,28 +1202,28 @@ func ConsumerBillPayment(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1255,7 +1247,7 @@ func ConsumerBillPayment(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1274,7 +1266,7 @@ func ConsumerBillInquiry(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerBillInquiryFields{}
@@ -1284,28 +1276,28 @@ func ConsumerBillInquiry(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1330,7 +1322,7 @@ func ConsumerBillInquiry(c *gin.Context) {
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1349,7 +1341,7 @@ func ConsumerBalance(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerBalanceFields{}
@@ -1359,28 +1351,28 @@ func ConsumerBalance(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1404,7 +1396,7 @@ func ConsumerBalance(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1423,7 +1415,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerWorkingKeyFields{}
@@ -1433,28 +1425,28 @@ func ConsumerWorkingKey(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1492,7 +1484,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1511,7 +1503,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerCardTransferAndMobileFields{}
@@ -1521,16 +1513,16 @@ func ConsumerCardTransfer(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
@@ -1542,12 +1534,12 @@ func ConsumerCardTransfer(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields.ConsumerCardTransferFields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1571,7 +1563,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1590,7 +1582,7 @@ func ConsumerIPinChange(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerIPinFields{}
@@ -1600,28 +1592,28 @@ func ConsumerIPinChange(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1644,7 +1636,7 @@ func ConsumerIPinChange(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1663,7 +1655,7 @@ func ConsumerStatus(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db := utils.Database("sqlite3", "test.db")
+	db := Database("sqlite3", "test.db")
 	defer db.Close()
 
 	var fields = ebs_fields.ConsumerStatusFields{}
@@ -1673,28 +1665,28 @@ func ConsumerStatus(c *gin.Context) {
 	switch bindingErr := bindingErr.(type) {
 
 	case validator.ValidationErrors:
-		var details []ErrDetails
+		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
 
-			details = append(details, ErrorToString(err))
+			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
-		payload := ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: BadRequest}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
-			er := ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ParsingError}
-			c.AbortWithStatusJSON(400, ErrorResponse{er})
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
@@ -1717,7 +1709,7 @@ func ConsumerStatus(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ErrorDetails{Code: res.ResponseCode, Status: EBSError, Details: res, Message: EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})

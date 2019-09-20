@@ -3,7 +3,6 @@ package ebs_fields
 import (
 	"github.com/gin-gonic/gin/binding"
 	"gopkg.in/go-playground/validator.v9"
-	"log"
 	"reflect"
 	"strings"
 	"sync"

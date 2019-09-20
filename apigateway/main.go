@@ -23,7 +23,7 @@ var jwtKey = keyFromEnv()
 func LoginHandler(c *gin.Context) {
 
 	var req UserLogin
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
@@ -77,7 +77,10 @@ func LoginHandler(c *gin.Context) {
 			// Allow users to use another login method (e.g., totp, or they should reset their password)
 			// Lock their account
 			//redisClient.HSet(req.Username, "suspecious_behavior", 1)
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
+			redisClient.HIncrBy(req.Username, "suspicious_behavior", 1)
+			ttl, _ := redisClient.TTL(req.Username + ":login_counts").Result()
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts",
+				"code": "maximum_login", "ttl_minutes": ttl.Minutes()})
 			return
 		}
 	}
@@ -247,7 +250,6 @@ var (
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		// just handle the simplest case, authorization is not provided.
 		h := c.GetHeader("Authorization")
 		if h == "" {
@@ -255,11 +257,9 @@ func AuthMiddleware() gin.HandlerFunc {
 				"code": "unauthorized"})
 			return
 		}
-
 		claims, err := VerifyJWT(h, jwtKey)
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
-
 				// in this case you might need to give it another spin
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
 				return
