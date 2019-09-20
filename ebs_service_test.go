@@ -137,9 +137,7 @@ func TestEBSHttpClient(t *testing.T) {
 }
 
 func TestCardTransfer(t *testing.T) {
-
 	route := GetMainEngine()
-
 	t.Run("Test all CardTransfer passed", func(t *testing.T) {
 		fields := populateCardTransferFields()
 		now := time.Now()
