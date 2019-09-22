@@ -25,6 +25,8 @@ import (
 )
 
 var log = logrus.New()
+var billChan = make(chan ebs_fields.GenericEBSResponseFields)
+var uChan = make(chan string)
 
 func GetMainEngine() *gin.Engine {
 
@@ -139,10 +141,12 @@ func main() {
 		log.Out = file
 	} else {
 		log.Out = os.Stderr
-		log.Info("Failed to log to file, using default stderr: %v", err)
 	}
 	log.Level = logrus.DebugLevel
 	log.SetReportCaller(true) // get the method/function where the logging occured
+
+	// go routines before blocking
+	go handleChan(uChan)
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 	gin.SetMode(gin.ReleaseMode)
@@ -181,7 +185,7 @@ func IsAlive(c *gin.Context) {
 
 	// use bind to get free Form support rendering!
 	// there is no practical need of using c.ShouldBindBodyWith;
-	// Bind is more perfomant than ShouldBindBodyWith; the later copies the request body and reuse it
+	// Bind is more performant than ShouldBindBodyWith; the later copies the request body and reuse it
 	// while Bind works directly on the responseBody stream.
 	// More importantly, Bind smartly handles Forms rendering and validations; ShouldBindBodyWith forces you
 	// into using only a *pre-specified* binding schema
@@ -272,21 +276,19 @@ func WorkingKey(c *gin.Context) {
 		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
-
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
 			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			return
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1214,7 +1216,6 @@ func ConsumerBillPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
-
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1226,6 +1227,13 @@ func ConsumerBillPayment(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
+		{
+			// do some stuffs here regarding concurrency in GO
+			if u := c.GetString("username"); u != "" {
+				uChan <- u
+			}
+			billChan <- res.GenericEBSResponseFields
+		}
 		// mask the pan
 		res.MaskPAN()
 

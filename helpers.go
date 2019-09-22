@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/jinzhu/gorm"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -207,7 +209,140 @@ func Database(dialect, fname string) *gorm.DB {
 	db, err := gorm.Open(dialect, fname)
 	if err != nil {
 	}
-
 	db.AutoMigrate(&dashboard.Transaction{})
 	return db
+}
+
+func handleChan(u chan string) {
+	// when getting redis results, ALWAYS json.Marshal them
+	redisClient := utils.GetRedis()
+	user := <-u
+	for {
+		select {
+		case c := <-billChan:
+			if c.PayeeID == necPayment {
+				var m necBill
+				mapFields := additionalFieldsToHash(c.AdditionalData)
+				m.NewFromMap(mapFields)
+				redisClient.RPush(user+":stats", "nec", m)
+			} else if c.PayeeID == mtnTopUp {
+				var m mtnBill
+				mapFields := additionalFieldsToHash(c.AdditionalData)
+				m.NewFromMap(mapFields)
+				redisClient.RPush(user+":stats", "mtn_topup", m)
+			} else if c.PayeeID == sudaniTopUp {
+				var m sudaniBill
+				mapFields := additionalFieldsToHash(c.AdditionalData)
+				m.NewFromMap(mapFields)
+				redisClient.RPush(user+":stats", "sudani_topup", m)
+			}
+		}
+	}
+}
+
+func additionalFieldsToHash(a string) map[string]string {
+	fields := strings.Split(a, ";")
+	out := make(map[string]string)
+	for _, v := range fields {
+		f := strings.Split(v, "=")
+		out[f[0]] = f[1]
+	}
+	return out
+}
+
+type test struct {
+	AdditionalData string
+	PayeeID        string
+}
+
+type mtnBill struct {
+	PaidAmount    float64 `json:"PaidAmount"`
+	SubNewBalance float64 `json:"SubNewBalance"`
+}
+
+func (m *mtnBill) MarshalBinary() (data []byte, err error) {
+	d, err := json.Marshal(m)
+	return d, err
+}
+
+func (m *mtnBill) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, m)
+}
+
+func (m *mtnBill) NewFromMap(f map[string]string) {
+	m.PaidAmount, _ = strconv.ParseFloat(f["PaidAmount"], 32)
+	m.SubNewBalance, _ = strconv.ParseFloat(f["SubNewBalance"], 32)
+}
+
+type sudaniBill struct {
+	Status string `json:"Status"`
+}
+
+func (s *sudaniBill) MarshalBinary() (data []byte, err error) {
+	d, err := json.Marshal(s)
+	return d, err
+}
+
+func (s *sudaniBill) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, s)
+}
+func (s *sudaniBill) NewFromMap(f map[string]string) {
+	s.Status = f["Status"]
+}
+
+type necBill struct {
+	SalesAmount  float64 `json:"SalesAmount"`
+	FixedFee     float64 `json:"FixedFee"`
+	Token        string  `json:"Token"`
+	MeterNumber  string  `json:"MeterNumber"`
+	CustomerName string  `json:"CustomerName"`
+}
+
+func (n *necBill) MarshalBinary() (data []byte, err error) {
+	d, err := json.Marshal(n)
+	return d, err
+}
+
+func (n *necBill) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, n)
+}
+
+func (n *necBill) NewFromMap(f map[string]string) {
+	n.SalesAmount, _ = strconv.ParseFloat(f["SalesAmount"], 32)
+	n.CustomerName = f["CustomerName"]
+	n.FixedFee, _ = strconv.ParseFloat(f["FixedFee"], 32)
+	n.MeterNumber = f["MeterNumber"]
+	n.Token = f["Token"]
+}
+
+const (
+	zainBillInquiry      = "0010010002"
+	zainBillPayment      = "0010010002"
+	zainTopUp            = "0010010001"
+	mtnBillInquiry       = "0010010004"
+	mtnBillPayment       = "0010010004"
+	mtnTopUp             = "0010010003"
+	necPayment           = "0010020001"
+	sudaniInquiryPayment = "0010010006"
+	sudaniBillPayment    = "0010010006"
+	sudaniTopUp          = "0010030002"
+	moheBillInquiry      = "0010030002"
+	moheBillPayment      = "0010030002"
+	customsBillInquiry   = "0010030003"
+	customsBillPayment   = "0010030003"
+	moheArabBillInquiry  = "0010030004"
+	moheArabBillPayment  = "0010030004"
+	e15BillInquiry       = "0010050001"
+	e15BillPayment       = "0010050001"
+)
+
+func idToInterface(id string) (interface{}, bool) {
+	if id == mtnTopUp {
+		return &mtnBill{}, true
+	} else if id == sudaniTopUp {
+		return &sudaniBill{}, true
+	} else if id == necPayment {
+		return &necBill{}, true
+	}
+	return "", false
 }

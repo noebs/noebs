@@ -56,7 +56,9 @@ func GetCards(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
 		}
 		cardBytes := cardsFromZ(cards)
-		c.JSON(http.StatusOK, gin.H{"cards": cardBytes})
+		m, _ := redisClient.HGet(username+":cards", "main_card").Result()
+		mCard := cardsFromZ([]string{m})
+		c.JSON(http.StatusOK, gin.H{"cards": cardBytes, "main_card": mCard[0]})
 	}
 }
 
@@ -70,6 +72,7 @@ func AddCards(c *gin.Context) {
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		return
 	} else {
 		buf, _ := json.Marshal(fields)
 		username := c.GetString("username")

@@ -125,6 +125,7 @@ type GenericEBSResponseFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
+	PayeeID          string `json:"payeeId"`
 
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`

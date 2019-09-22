@@ -11,12 +11,16 @@ type card map[string]interface{}
 func cardsFromZ(cards []string) []ebs_fields.CardsRedis {
 	var cb ebs_fields.CardsRedis
 	var cardBytes []ebs_fields.CardsRedis
-	var id = 1
-	for _, v := range cards {
+	for k, v := range cards {
 		json.Unmarshal([]byte(v), &cb)
-		cb.ID = id
+		cb.ID = k + 1
 		cardBytes = append(cardBytes, cb)
-		id++
 	}
 	return cardBytes
+}
+
+func generateCardsIds(c *[]ebs_fields.CardsRedis) {
+	for id, card := range *c {
+		card.ID = id + 1
+	}
 }
