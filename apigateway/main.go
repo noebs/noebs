@@ -19,7 +19,6 @@ import (
 )
 
 var apiKey = make([]byte, 16)
-
 var jwtKey = keyFromEnv()
 
 func GenerateAPIKey(c *gin.Context) {
@@ -292,6 +291,18 @@ func AuthMiddleware() gin.HandlerFunc {
 
 }
 
+func ApiAuth() gin.HandlerFunc {
+	r := utils.GetRedis()
+	return func(c *gin.Context) {
+		if key := c.GetHeader("api-key"); key != "" {
+			if ok := isMember("api_keys", key, r); ok {
+				c.Next()
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
+			"message": "visit https://soluspay.net/contact for a key"})
+	}
+}
 func GenerateSecretKey(n int) ([]byte, error) {
 	key := make([]byte, n)
 	if _, err := rand.Read(key); err != nil {
@@ -329,4 +340,13 @@ func generateApiKey() (string, error) {
 	_, err := rand.Read(apiKey)
 	a := fmt.Sprintf("%x", apiKey)
 	return a, err
+}
+
+func isMember(key, val string, r *redis.Client) bool {
+	if ok, err := r.SIsMember(key, val).Result(); err == nil && ok {
+		if ok {
+			return true
+		}
+	}
+	return false
 }
