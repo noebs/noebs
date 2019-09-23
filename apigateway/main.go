@@ -18,7 +18,18 @@ import (
 	"time"
 )
 
+var apiKey = make([]byte, 16)
+
 var jwtKey = keyFromEnv()
+
+func GenerateAPIKey(c *gin.Context) {
+	// check authorization
+
+	k, _ := generateApiKey()
+	getRedis := utils.GetRedis()
+	getRedis.SAdd("api_keys", k)
+	c.JSON(http.StatusOK, gin.H{"result": k})
+}
 
 func LoginHandler(c *gin.Context) {
 
@@ -205,6 +216,8 @@ func CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
 
+	// make the user capital - small
+	u.sanitizeName()
 	if err := db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
 
@@ -310,4 +323,10 @@ func OptionsMiddleware(c *gin.Context) {
 		c.Header("Content-Type", "application/json")
 		c.AbortWithStatus(http.StatusOK)
 	}
+}
+
+func generateApiKey() (string, error) {
+	_, err := rand.Read(apiKey)
+	a := fmt.Sprintf("%x", apiKey)
+	return a, err
 }

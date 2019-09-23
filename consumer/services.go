@@ -67,7 +67,6 @@ func GetCards(c *gin.Context) {
 // it will remove the previously selected one FIXME
 func AddCards(c *gin.Context) {
 	redisClient := utils.GetRedis()
-
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {

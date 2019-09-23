@@ -3,6 +3,7 @@ package gateway
 import (
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"strings"
 )
 
 type UserModel struct {
@@ -20,18 +21,22 @@ type UserModel struct {
 	Card []Cards
 }
 
+func (u *UserModel) sanitizeName() {
+	u.Username = strings.ToLower(u.Username)
+}
+
 type UserLogin struct {
 	Username string `binding:"required" json:"username"`
 	Password string `binding:"required" json:"password"`
 }
 
-func (m *UserModel) hashPassword() error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(m.Password), 8)
+func (u *UserModel) hashPassword() error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), 8)
 	if err != nil {
 		return err
 	}
-	m.Password = string(hashedPassword)
-	m.Password2 = string(hashedPassword)
+	u.Password = string(hashedPassword)
+	u.Password2 = string(hashedPassword)
 	return nil
 }
 
