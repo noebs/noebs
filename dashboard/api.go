@@ -22,10 +22,10 @@ var log = logrus.New()
 // @Accept  json
 // @Produce  json
 // @Param id query string false "search list transactions by terminal ID"
-// @Success 200 {string} ok
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /dashboard/count [get]
 func TransactionsCount(c *gin.Context) {
 
@@ -71,10 +71,10 @@ func TransactionsCount(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param id query string false "search list transactions by terminal ID"
-// @Success 200 {string} ok
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /dashboard/get_tid [get]
 func TransactionByTid(c *gin.Context) {
 

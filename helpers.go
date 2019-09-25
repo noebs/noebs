@@ -118,7 +118,6 @@ func getAllRoutes() []map[string]string {
 }
 
 var response = ebs_fields.GenericEBSResponseFields{
-
 	ResponseMessage: "Successful",
 	ResponseStatus:  "Successful",
 	ResponseCode:    0,

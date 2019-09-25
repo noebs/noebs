@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	gateway "github.com/adonese/noebs/apigateway"
-	consumer2 "github.com/adonese/noebs/consumer"
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
@@ -75,38 +75,39 @@ func GetMainEngine() *gin.Engine {
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	consumer := route.Group("/consumer")
+	cons := route.Group("/cons")
 
-	//consumer.Use(gateway.OptionsMiddleware)
+	//cons.Use(gateway.OptionsMiddleware)
 
-	consumer.POST("/login", gateway.LoginHandler)
-	consumer.POST("/register", gateway.CreateUser)
-	consumer.POST("/refresh", gateway.RefreshHandler)
-	consumer.POST("/logout", gateway.LogOut)
+	cons.POST("/login", gateway.LoginHandler)
+	cons.POST("/register", gateway.CreateUser)
+	cons.POST("/refresh", gateway.RefreshHandler)
+	cons.POST("/logout", gateway.LogOut)
 
-	consumer.POST("/balance", ConsumerBalance)
-	consumer.POST("/is_alive", ConsumerIsAlive)
-	consumer.POST("/bill_payment", ConsumerBillPayment)
-	consumer.POST("/bill_inquiry", ConsumerBillInquiry)
-	consumer.POST("/p2p", ConsumerCardTransfer)
-	consumer.POST("/purchase", ConsumerPurchase)
-	consumer.POST("/status", ConsumerStatus)
-	consumer.POST("/key", ConsumerWorkingKey)
-	consumer.POST("/ipin", ConsumerIPinChange)
-	consumer.GET("/mobile2pan", consumer2.CardFromNumber)
+	cons.POST("/balance", ConsumerBalance)
+	cons.POST("/is_alive", ConsumerIsAlive)
+	cons.POST("/bill_payment", ConsumerBillPayment)
+	cons.POST("/bill_inquiry", ConsumerBillInquiry)
+	cons.POST("/p2p", ConsumerCardTransfer)
+	cons.POST("/purchase", ConsumerPurchase)
+	cons.POST("/status", ConsumerStatus)
+	cons.POST("/key", ConsumerWorkingKey)
+	cons.POST("/ipin", ConsumerIPinChange)
+	cons.GET("/mobile2pan", consumer.CardFromNumber)
+	cons.GET("/nec2name", consumer.EelToName)
 
-	consumer.Use(gateway.AuthMiddleware())
+	cons.Use(gateway.AuthMiddleware())
 	{
-		consumer.GET("/get_cards", consumer2.GetCards)
-		consumer.POST("/add_card", consumer2.AddCards)
+		cons.GET("/get_cards", consumer.GetCards)
+		cons.POST("/add_card", consumer.AddCards)
 
-		consumer.PUT("/edit_card", consumer2.EditCard)
-		consumer.DELETE("/delete_card", consumer2.RemoveCard)
+		cons.PUT("/edit_card", consumer.EditCard)
+		cons.DELETE("/delete_card", consumer.RemoveCard)
 
-		consumer.GET("/get_mobile", consumer2.GetMobile)
-		consumer.POST("/add_mobile", consumer2.AddMobile)
+		cons.GET("/get_mobile", consumer.GetMobile)
+		cons.POST("/add_mobile", consumer.AddMobile)
 
-		consumer.POST("/test", func(c *gin.Context) {
+		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
 	}
@@ -168,13 +169,13 @@ func main() {
 // IsAlive godoc
 // @Summary Get all transactions made by a specific terminal ID
 // @Description get accounts
-// @Accept  json
-// @Produce  json
+// @Accept json
+// @Produce json
 // @Param workingKey body ebs_fields.IsAliveFields true "Working Key Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /workingKey [post]
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
@@ -254,10 +255,10 @@ func IsAlive(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param workingKey body ebs_fields.WorkingKeyFields true "Working Key Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /workingKey [post]
 func WorkingKey(c *gin.Context) {
 
@@ -328,10 +329,10 @@ func WorkingKey(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /purchase [post]
 func Purchase(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.PurchaseEndpoint // EBS simulator endpoint url goes here.
@@ -399,10 +400,10 @@ func Purchase(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /purchase [post]
 func Balance(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BalanceEndpoint // EBS simulator endpoint url goes here.
@@ -476,10 +477,10 @@ func Balance(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param cardTransfer body ebs_fields.CardTransferFields true "Card Transfer Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /cardTransfer [post]
 func CardTransfer(c *gin.Context) {
 
@@ -552,10 +553,10 @@ func CardTransfer(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param billInquiry body ebs_fields.BillInquiryFields true "Bill Inquiry Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /billInquiry [post]
 func BillInquiry(c *gin.Context) {
 
@@ -626,10 +627,10 @@ func BillInquiry(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param billPayment body ebs_fields.BillPaymentFields true "Bill Payment Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /billPayment [post]
 func BillPayment(c *gin.Context) {
 
@@ -699,10 +700,10 @@ func BillPayment(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param changePIN body ebs_fields.ChangePINFields true "Change PIN Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /changePin [post]
 func ChangePIN(c *gin.Context) {
 
@@ -774,10 +775,10 @@ func ChangePIN(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param cashOut body ebs_fields.CashOutFields true "Cash Out Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /cashOut [post]
 func CashOut(c *gin.Context) {
 
@@ -846,10 +847,10 @@ func CashOut(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /cashIn [post]
 func CashIn(c *gin.Context) {
 
@@ -920,10 +921,10 @@ func CashIn(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param miniStatement body ebs_fields.MiniStatementFields true "Mini Statement Request Fields"
-// @Success 200 {object} main.SuccessfulResponse
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /miniStatement [post]
 func MiniStatement(c *gin.Context) {
 
