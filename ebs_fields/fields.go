@@ -142,10 +142,11 @@ type GenericEBSResponseFields struct {
 	AdditionalData       string   `json:"additionalData,omitempty"`
 	TranDateTime         string   `json:"tranDateTime,omitempty"`
 	TranFee              *float32 `json:"tranFee,omitempty"`
-	AdditionalAmount     *float32 `json:"additionalAmount,omitempty"`
-	AcqTranFee           *float32 `json:"acqTranFee,omitempty"`
-	IssTranFee           *float32 `json:"issuerTranFee,omitempty"`
-	TranCurrency         string   `json:"tranCurrency,omitempty"`
+
+	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
+	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
+	IssTranFee       *float32 `json:"issuerTranFee,omitempty"`
+	TranCurrency     string   `json:"tranCurrency,omitempty"`
 }
 
 type ImportantEBSFields struct {

@@ -369,7 +369,9 @@ func Purchase(c *gin.Context) {
 		}
 		redisClient := utils.GetRedis()
 
-		redisClient.LPush(fields.TerminalID+":purchase", &res)
+		uid := generateUUID()
+		redisClient.HSet(fields.TerminalID+":purchase", uid, &res)
+
 		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
 
 		if ebsErr != nil {

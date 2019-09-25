@@ -6,6 +6,7 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/google/uuid"
 	"github.com/jinzhu/gorm"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
@@ -213,6 +214,10 @@ func Database(dialect, fname string) *gorm.DB {
 	return db
 }
 
+func generateUUID() string {
+	return uuid.New().String()
+}
+
 func handleChan(u chan string) {
 	// when getting redis results, ALWAYS json.Marshal them
 	redisClient := utils.GetRedis()
@@ -225,6 +230,7 @@ func handleChan(u chan string) {
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
 				redisClient.RPush(user+":stats", "nec", m)
+				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
 			} else if c.PayeeID == mtnTopUp {
 				var m mtnBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)

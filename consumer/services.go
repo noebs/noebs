@@ -250,3 +250,15 @@ func GetMobile(c *gin.Context) {
 	}
 
 }
+
+func EelToName(c *gin.Context) {
+	if nec := c.Query("nec"); nec != "" {
+		redisClient := utils.GetRedis()
+		name, err := redisClient.HGet("meters", nec).Result()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "No user found with this NEC", "code": "nec_not_found"})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"result": name})
+		}
+	}
+}
