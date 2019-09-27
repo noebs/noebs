@@ -217,10 +217,9 @@ func generateUUID() string {
 	return uuid.New().String()
 }
 
-func handleChan(u chan string) {
+func handleChan() {
 	// when getting redis results, ALWAYS json.Marshal them
 	redisClient := utils.GetRedis()
-	user := <-u
 	for {
 		select {
 		case c := <-billChan:
@@ -228,18 +227,15 @@ func handleChan(u chan string) {
 				var m necBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
-				redisClient.RPush(user+":stats", "nec", m)
 				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
 			} else if c.PayeeID == mtnTopUp {
 				var m mtnBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
-				redisClient.RPush(user+":stats", "mtn_topup", m)
 			} else if c.PayeeID == sudaniTopUp {
 				var m sudaniBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
-				redisClient.RPush(user+":stats", "sudani_topup", m)
 			}
 		}
 	}
@@ -350,4 +346,11 @@ func idToInterface(id string) (interface{}, bool) {
 		return &necBill{}, true
 	}
 	return "", false
+}
+
+func generateFields() *ebs_fields.GenericEBSResponseFields {
+	f := &ebs_fields.GenericEBSResponseFields{}
+	f.AdditionalData = "SalesAmount=10.3;FixedFee=22.3;Token=23232;MeterNumber=12345;CustomerName=mohamed"
+	f.PayeeID = "0010010003"
+	return f
 }

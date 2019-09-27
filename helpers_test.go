@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/adonese/noebs/ebs_fields"
 	"reflect"
 	"testing"
 )
@@ -74,12 +73,6 @@ func Test_additionalFieldsToHash(t *testing.T) {
 //	}
 //}
 
-func generateFields() *ebs_fields.GenericEBSResponseFields {
-	var f ebs_fields.GenericEBSResponseFields
-	f.AdditionalData = "SalesAmount=10.3;FixedFee=22.3;Token=23232;MeterNumber=12345;CustomerName=mohamed"
-	return &f
-}
-
 func wantFields() necBill {
 	v := necBill{
 		SalesAmount:  10.3,
@@ -96,13 +89,31 @@ func Test_generateUUID(t *testing.T) {
 		name string
 		want string
 	}{
-		// TODO: Add test cases.
+		{},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := generateUUID(); got != tt.want {
 				t.Errorf("generateUUID() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+
+}
+
+func Test_handleChan(t *testing.T) {
+	type args struct {
+		u chan string
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 		})
 	}
 }

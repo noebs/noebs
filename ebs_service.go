@@ -25,8 +25,8 @@ import (
 )
 
 var log = logrus.New()
+
 var billChan = make(chan ebs_fields.GenericEBSResponseFields)
-var uChan = make(chan string)
 
 func GetMainEngine() *gin.Engine {
 
@@ -75,7 +75,7 @@ func GetMainEngine() *gin.Engine {
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	cons := route.Group("/cons")
+	cons := route.Group("/consumer")
 
 	//cons.Use(gateway.OptionsMiddleware)
 
@@ -118,7 +118,6 @@ func GetMainEngine() *gin.Engine {
 func init() {
 	// register the new validator
 	binding.Validator = new(ebs_fields.DefaultValidator)
-
 }
 
 // @title noebs Example API
@@ -136,6 +135,8 @@ func init() {
 // @in header
 func main() {
 
+	go handleChan()
+
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
 	if err == nil {
@@ -145,9 +146,6 @@ func main() {
 	}
 	log.Level = logrus.DebugLevel
 	log.SetReportCaller(true) // get the method/function where the logging occured
-
-	// go routines before blocking
-	go handleChan(uChan)
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 	gin.SetMode(gin.ReleaseMode)
@@ -483,7 +481,6 @@ func Balance(c *gin.Context) {
 // @Failure 500 {object} http.InternalServerError
 // @Router /cardTransfer [post]
 func CardTransfer(c *gin.Context) {
-
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -494,21 +491,14 @@ func CardTransfer(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.CardTransferFields{}
-
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
 
 	case nil:
@@ -666,7 +656,7 @@ func BillPayment(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -678,7 +668,9 @@ func BillPayment(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = ebs_fields.BillPaymentTransaction
-		// God please make it works.
+		billChan <- *generateFields()
+		res.MaskPAN()
+
 		db.Create(&transaction)
 		db.Commit()
 
@@ -907,9 +899,7 @@ func CashIn(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
-
 	default:
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
@@ -1230,13 +1220,16 @@ func ConsumerBillPayment(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		{
-			// do some stuffs here regarding concurrency in GO
-			if u := c.GetString("username"); u != "" {
-				uChan <- u
-			}
-			billChan <- res.GenericEBSResponseFields
-		}
+		//{
+		//	// do some stuffs here regarding concurrency in GO
+		//	if u := c.GetString("username"); u != "" {
+		//		uChan <- u
+		//	}else{
+		//		uChan <- "anon"
+		//	}
+		//	billChan <-*generateFields()
+		//}
+		//
 		// mask the pan
 		res.MaskPAN()
 
@@ -1468,20 +1461,6 @@ func ConsumerWorkingKey(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-		//
-		//// store the transaction into redis (for more performance gain)
-		//redisClient := utils.GetRedis()
-		//var d ebs_fields.DisputeFields
-		//d.New(res)
-		//// later, the username should be added username + ":all_transactions"
-		//// this will never work for now
-		//// this might work, as we have added a new wg stuff
-		//// it will work
-		//key := "all_transactions"
-		//var wg sync.WaitGroup
-		//wg.Add(1)
-		//go utils.MarshalIntoRedis(d, redisClient, key)
-		//wg.Done()
 
 		redisClient := utils.GetRedis()
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
@@ -1578,7 +1557,6 @@ func ConsumerCardTransfer(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
 
 	default:
@@ -1587,7 +1565,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 }
 
 func ConsumerIPinChange(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
