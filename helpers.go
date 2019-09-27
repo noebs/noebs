@@ -227,7 +227,10 @@ func handleChan() {
 				var m necBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
-				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
+				_, err := redisClient.HSet("meters", m.MeterNumber, m.CustomerName).Result()
+				if err != nil {
+					panic(err)
+				}
 			} else if c.PayeeID == mtnTopUp {
 				var m mtnBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)
@@ -351,6 +354,6 @@ func idToInterface(id string) (interface{}, bool) {
 func generateFields() *ebs_fields.GenericEBSResponseFields {
 	f := &ebs_fields.GenericEBSResponseFields{}
 	f.AdditionalData = "SalesAmount=10.3;FixedFee=22.3;Token=23232;MeterNumber=12345;CustomerName=mohamed"
-	f.PayeeID = "0010010003"
+	f.PayeeID = "0010020001"
 	return f
 }

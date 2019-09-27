@@ -668,7 +668,7 @@ func BillPayment(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = ebs_fields.BillPaymentTransaction
-		billChan <- *generateFields()
+
 		res.MaskPAN()
 
 		db.Create(&transaction)
@@ -1231,6 +1231,8 @@ func ConsumerBillPayment(c *gin.Context) {
 		//}
 		//
 		// mask the pan
+
+		billChan <- res.GenericEBSResponseFields
 		res.MaskPAN()
 
 		transaction := dashboard.Transaction{
