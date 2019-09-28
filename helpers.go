@@ -227,10 +227,7 @@ func handleChan() {
 				var m necBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
-				_, err := redisClient.HSet("meters", m.MeterNumber, m.CustomerName).Result()
-				if err != nil {
-					panic(err)
-				}
+				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
 			} else if c.PayeeID == mtnTopUp {
 				var m mtnBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)

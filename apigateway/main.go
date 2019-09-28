@@ -22,12 +22,48 @@ var apiKey = make([]byte, 16)
 var jwtKey = keyFromEnv()
 
 func GenerateAPIKey(c *gin.Context) {
-	// check authorization
+	m := make(map[string]string)
+	if err := c.ShouldBindJSON(m); err != nil {
+		if email, ok := m["email"]; ok {
+			k, _ := generateApiKey()
+			getRedis := utils.GetRedis()
+			getRedis.HSet("api_keys", email, k)
+			c.JSON(http.StatusOK, gin.H{"result": k})
+			return
+		}
+	}
+	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "error in email"})
+}
 
-	k, _ := generateApiKey()
-	getRedis := utils.GetRedis()
-	getRedis.SAdd("api_keys", k)
-	c.JSON(http.StatusOK, gin.H{"result": k})
+func ApiKeyMiddleware(c *gin.Context) {
+	email := c.GetHeader("X-Email")
+	key := c.GetHeader("X-API-Key")
+	if email == "" || key == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
+		return
+	}
+	redisClient := utils.GetRedis()
+	res, err := redisClient.HGet("api_keys", email).Result()
+	if err != redis.Nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
+		return
+	}
+	if key == res {
+		c.Next()
+	} else {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
+		return
+	}
+}
+func IpFilterMiddleware(c *gin.Context) {
+	ip := c.ClientIP()
+	if u := c.GetString("username"); u != "" {
+		redisClient := utils.GetRedis()
+		redisClient.HIncrBy(u+":ips_count", ip, 1)
+		c.Next()
+	} else {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access"})
+	}
 }
 
 func LoginHandler(c *gin.Context) {
@@ -219,12 +255,13 @@ func CreateUser(c *gin.Context) {
 	u.sanitizeName()
 	if err := db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
-
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
 	}
 	redisClient := utils.GetRedis()
 	redisClient.Set(u.Mobile, u.Username, 0)
+	ip := c.ClientIP()
+	redisClient.HSet(u.Username+":ips_count", "first_ip", ip)
 
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
