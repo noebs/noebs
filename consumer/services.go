@@ -104,62 +104,26 @@ func AddCards(c *gin.Context) {
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func EditCard(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	var card ebs_fields.CardsRedis
 
-	var fields ebs_fields.CardsRedis
-
-	err := c.ShouldBindWith(&fields, binding.JSON)
+	err := c.ShouldBindWith(&card, binding.JSON)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-		// there is no error in the request body
-	} else {
-		buf, _ := json.Marshal(fields)
-
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else if fields.ID <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
-			return
-		}
-		// core functionality
-		id := fields.ID
-		{
-			// step 1: removing the card; copied from RemoveCard
-			if fields.IsMain {
-				redisClient.HDel(username+":cards", "main_card")
-			} else {
-				_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
-					return
-				}
-			}
-		}
-
-		// step 2: Add the card; copied from AddCard
-
-		{
-			z := &redis.Z{
-				Member: buf,
-			}
-			if fields.IsMain {
-				// refactor me, please!
-				redisClient.HSet(username, "main_card", buf)
-
-				redisClient.ZAdd(username+":cards", z)
-			} else {
-				_, err := redisClient.ZAdd(username+":cards", z).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-					return
-				}
-			}
-		}
-		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
-
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		return
 	}
-
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+	} else if card.ID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+		return
+	}
+	card.RmCard(username, card.ID)
+	err = card.AddCard(username)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err})
+	}
+	c.JSON(http.StatusOK, gin.H{"username": username, "cards": card})
 }
 
 //RemoveCard allow authorized users to remove their card
@@ -192,9 +156,7 @@ func RemoveCard(c *gin.Context) {
 				return
 			}
 		}
-
 		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
-
 	}
 
 }

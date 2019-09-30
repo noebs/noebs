@@ -3,11 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/google/uuid"
-	"github.com/jinzhu/gorm"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
@@ -205,14 +204,6 @@ func validateRequest(v validator.ValidationErrors) ebs_fields.ErrorDetails {
 	return payload
 }
 
-func Database(dialect, fname string) *gorm.DB {
-	db, err := gorm.Open(dialect, fname)
-	if err != nil {
-	}
-	db.AutoMigrate(&dashboard.Transaction{})
-	return db
-}
-
 func generateUUID() string {
 	return uuid.New().String()
 }
@@ -222,7 +213,7 @@ func handleChan() {
 	redisClient := utils.GetRedis()
 	for {
 		select {
-		case c := <-billChan:
+		case c := <-consumer.BillChan:
 			if c.PayeeID == necPayment {
 				var m necBill
 				mapFields := additionalFieldsToHash(c.AdditionalData)

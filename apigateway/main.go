@@ -21,6 +21,8 @@ import (
 var apiKey = make([]byte, 16)
 var jwtKey = keyFromEnv()
 
+//GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
+// the user must submit their email to generate a unique token per email.
 func GenerateAPIKey(c *gin.Context) {
 	m := make(map[string]string)
 	if err := c.ShouldBindJSON(m); err != nil {
@@ -35,6 +37,7 @@ func GenerateAPIKey(c *gin.Context) {
 	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "error in email"})
 }
 
+//ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
 func ApiKeyMiddleware(c *gin.Context) {
 	email := c.GetHeader("X-Email")
 	key := c.GetHeader("X-API-Key")
@@ -55,6 +58,7 @@ func ApiKeyMiddleware(c *gin.Context) {
 		return
 	}
 }
+
 func IpFilterMiddleware(c *gin.Context) {
 	ip := c.ClientIP()
 	if u := c.GetString("username"); u != "" {
@@ -258,6 +262,7 @@ func CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
 	}
+
 	redisClient := utils.GetRedis()
 	redisClient.Set(u.Mobile, u.Username, 0)
 	ip := c.ClientIP()
