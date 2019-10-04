@@ -41,7 +41,7 @@ func GetMainEngine() *gin.Engine {
 
 	route.LoadHTMLGlob("./dashboard/template/*")
 
-	route.Static("/assets", "./dashboard/template")
+	route.Static("/dashboard/assets", "./dashboard/template")
 
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
