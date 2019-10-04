@@ -40,6 +40,8 @@ func GetMainEngine() *gin.Engine {
 	route.SetFuncMap(template.FuncMap{"N": iter.N})
 	route.LoadHTMLFiles("./dashboard/template/table.html")
 
+	route.Static("/assets", "./dashboard/template")
+
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -146,7 +148,7 @@ func main() {
 	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
-	gin.SetMode(gin.ReleaseMode)
+	//gin.SetMode(gin.ReleaseMode)
 
 	if env := os.Getenv("PORT"); env != "" {
 		if !strings.HasPrefix(env, ":") {

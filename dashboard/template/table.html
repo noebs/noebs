@@ -4,14 +4,26 @@
     <title>Dashboard</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
           integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
+<nav class="navbar navbar-dark fixed-top bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="">Solus Middleware</a>
+        <ul class="navbar-nav mr-auto"></ul>
+    </div>
+</nav>
 
+<main role="main">
 <div class="container">
     <div class="row">
         <div class="col">
             <form action="">
-                <input type="text" placeholder="Search.." name="tid">
+                <label>
+                    <input type="text" placeholder="Search.." name="tid">
+                </label>
+
                 <button type="submit" class="btn btn-outline-primary btn-sm">Submit</button>
             </form>
         </div>
@@ -85,6 +97,6 @@
 
 </div>
 
-
+</main>
 </body>
 </html>
