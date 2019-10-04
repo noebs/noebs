@@ -3,31 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/jinzhu/gorm"
-	"github.com/sirupsen/logrus"
+	"github.com/adonese/noebs/utils"
+	"github.com/google/uuid"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 )
-
-func database(dialect string, fname string) *gorm.DB {
-	db, err := gorm.Open(dialect, fname)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
-			"details": "there's an error in connecting to DB",
-		}).Info("there is an error in connecting to DB")
-	}
-
-	db.AutoMigrate(&dashboard.Transaction{})
-
-	return db
-}
 
 type redisPurchaseFields map[string]interface{}
 
@@ -130,7 +117,6 @@ func getAllRoutes() []map[string]string {
 }
 
 var response = ebs_fields.GenericEBSResponseFields{
-
 	ResponseMessage: "Successful",
 	ResponseStatus:  "Successful",
 	ResponseCode:    0,
@@ -161,15 +147,15 @@ func MockEBSServer() *httptest.Server {
 }
 
 func urlToMock(url string) interface{} {
-	if url == EBSMerchantIP+BalanceEndpoint {
+	if url == ebs_fields.EBSMerchantIP+ebs_fields.BalanceEndpoint {
 		return mockPurchaseResponse{}
-	} else if url == EBSMerchantIP+PurchaseEndpoint {
+	} else if url == ebs_fields.EBSMerchantIP+ebs_fields.PurchaseEndpoint {
 		return mockPurchaseResponse{}
 
-	} else if url == EBSMerchantIP+MiniStatementEndpoint {
+	} else if url == ebs_fields.EBSMerchantIP+ebs_fields.MiniStatementEndpoint {
 		return mockMiniStatementResponse{}
 
-	} else if url == EBSMerchantIP+WorkingKeyEndpoint {
+	} else if url == ebs_fields.EBSMerchantIP+ebs_fields.WorkingKeyEndpoint {
 		fmt.Printf("i'm here..")
 		return mockWorkingKeyResponse{}
 	}
@@ -209,11 +195,153 @@ func Metrics() []*ginprometheus.Metric {
 	return metrics
 }
 
-func validateRequest(v validator.ValidationErrors) ErrorDetails {
-	var details []ErrDetails
+func validateRequest(v validator.ValidationErrors) ebs_fields.ErrorDetails {
+	var details []ebs_fields.ErrDetails
 	for _, err := range v {
-		details = append(details, ErrorToString(err))
+		details = append(details, ebs_fields.ErrorToString(err))
 	}
-	payload := ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: BadRequest}
+	payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 	return payload
+}
+
+func generateUUID() string {
+	return uuid.New().String()
+}
+
+func handleChan() {
+	// when getting redis results, ALWAYS json.Marshal them
+	redisClient := utils.GetRedis()
+	for {
+		select {
+		case c := <-consumer.BillChan:
+			if c.PayeeID == necPayment {
+				var m necBill
+				mapFields := additionalFieldsToHash(c.AdditionalData)
+				m.NewFromMap(mapFields)
+				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
+			} else if c.PayeeID == mtnTopUp {
+				var m mtnBill
+				mapFields := additionalFieldsToHash(c.AdditionalData)
+				m.NewFromMap(mapFields)
+			} else if c.PayeeID == sudaniTopUp {
+				var m sudaniBill
+				mapFields := additionalFieldsToHash(c.AdditionalData)
+				m.NewFromMap(mapFields)
+			}
+		}
+	}
+}
+
+func additionalFieldsToHash(a string) map[string]string {
+	fields := strings.Split(a, ";")
+	out := make(map[string]string)
+	for _, v := range fields {
+		f := strings.Split(v, "=")
+		out[f[0]] = f[1]
+	}
+	return out
+}
+
+type test struct {
+	AdditionalData string
+	PayeeID        string
+}
+
+type mtnBill struct {
+	PaidAmount    float64 `json:"PaidAmount"`
+	SubNewBalance float64 `json:"SubNewBalance"`
+}
+
+func (m *mtnBill) MarshalBinary() (data []byte, err error) {
+	d, err := json.Marshal(m)
+	return d, err
+}
+
+func (m *mtnBill) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, m)
+}
+
+func (m *mtnBill) NewFromMap(f map[string]string) {
+	m.PaidAmount, _ = strconv.ParseFloat(f["PaidAmount"], 32)
+	m.SubNewBalance, _ = strconv.ParseFloat(f["SubNewBalance"], 32)
+}
+
+type sudaniBill struct {
+	Status string `json:"Status"`
+}
+
+func (s *sudaniBill) MarshalBinary() (data []byte, err error) {
+	d, err := json.Marshal(s)
+	return d, err
+}
+
+func (s *sudaniBill) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, s)
+}
+func (s *sudaniBill) NewFromMap(f map[string]string) {
+	s.Status = f["Status"]
+}
+
+type necBill struct {
+	SalesAmount  float64 `json:"SalesAmount"`
+	FixedFee     float64 `json:"FixedFee"`
+	Token        string  `json:"Token"`
+	MeterNumber  string  `json:"MeterNumber"`
+	CustomerName string  `json:"CustomerName"`
+}
+
+func (n *necBill) MarshalBinary() (data []byte, err error) {
+	d, err := json.Marshal(n)
+	return d, err
+}
+
+func (n *necBill) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, n)
+}
+
+func (n *necBill) NewFromMap(f map[string]string) {
+	n.SalesAmount, _ = strconv.ParseFloat(f["SalesAmount"], 32)
+	n.CustomerName = f["CustomerName"]
+	n.FixedFee, _ = strconv.ParseFloat(f["FixedFee"], 32)
+	n.MeterNumber = f["MeterNumber"]
+	n.Token = f["Token"]
+}
+
+const (
+	zainBillInquiry      = "0010010002"
+	zainBillPayment      = "0010010002"
+	zainTopUp            = "0010010001"
+	mtnBillInquiry       = "0010010004"
+	mtnBillPayment       = "0010010004"
+	mtnTopUp             = "0010010003"
+	necPayment           = "0010020001"
+	sudaniInquiryPayment = "0010010006"
+	sudaniBillPayment    = "0010010006"
+	sudaniTopUp          = "0010030002"
+	moheBillInquiry      = "0010030002"
+	moheBillPayment      = "0010030002"
+	customsBillInquiry   = "0010030003"
+	customsBillPayment   = "0010030003"
+	moheArabBillInquiry  = "0010030004"
+	moheArabBillPayment  = "0010030004"
+	e15BillInquiry       = "0010050001"
+	e15BillPayment       = "0010050001"
+)
+
+func idToInterface(id string) (interface{}, bool) {
+	if id == mtnTopUp {
+		return &mtnBill{}, true
+	} else if id == sudaniTopUp {
+		return &sudaniBill{}, true
+	} else if id == necPayment {
+		return &necBill{}, true
+	}
+	return "", false
+}
+
+func generateFields() *ebs_fields.GenericEBSResponseFields {
+	f := &ebs_fields.GenericEBSResponseFields{}
+	f.AdditionalData = "SalesAmount=10.3;FixedFee=22.3;Token=23232;MeterNumber=12345;CustomerName=mohamed"
+	f.PayeeID = "0010020001"
+	return f
 }

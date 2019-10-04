@@ -1,4 +1,4 @@
-package main
+package ebs_fields
 
 import (
 	"bytes"
@@ -6,15 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"time"
 )
 
+var log = logrus.New()
+
 //EBSHttpClient the client to interact with EBS
-func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, error) {
+func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 
 	verifyTLS := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -27,7 +28,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, err
 
 	reqBuffer := bytes.NewBuffer(req)
 
-	var ebsGenericResponse ebs_fields.EBSParserFields
+	var ebsGenericResponse EBSParserFields
 
 	reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
 
@@ -45,7 +46,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, err
 		log.WithFields(logrus.Fields{
 			"error": err.Error(),
 		}).Error("Error in establishing connection to the host")
-		return http.StatusGatewayTimeout, ebsGenericResponse, ebsGatewayConnectivityErr
+		return http.StatusGatewayTimeout, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
 
 	defer ebsResponse.Body.Close()
@@ -56,7 +57,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, err
 			"error": err.Error(),
 		}).Error("Error reading ebs response")
 
-		return http.StatusInternalServerError, ebsGenericResponse, ebsGatewayConnectivityErr
+		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
 
 	// check Content-type is application json, if not, panic!
@@ -65,7 +66,7 @@ func EBSHttpClient(url string, req []byte) (int, ebs_fields.EBSParserFields, err
 			"error":   "wrong content type parsed",
 			"details": ebsResponse.Header.Get("Content-Type"),
 		}).Error("ebs response content type is not application/json")
-		return http.StatusInternalServerError, ebsGenericResponse, contentTypeErr
+		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
 	}
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling

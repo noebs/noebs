@@ -1,4 +1,4 @@
-package main
+package ebs_fields
 
 import (
 	"fmt"
@@ -69,9 +69,9 @@ func (c customError) Error() string {
 }
 
 var (
-	contentTypeErr            = customError{message: "Content-Type must be application/json", code: http.StatusBadGateway}
+	ContentTypeErr            = customError{message: "Content-Type must be application/json", code: http.StatusBadGateway}
 	marshalingErr             = customError{message: "unable to parse EBS response (json)", code: http.StatusBadGateway, status: "malformed_gateway_response"}
-	ebsGatewayConnectivityErr = customError{message: "transaction didn't went successful", code: http.StatusBadGateway, status: "EBS_gateway_error"}
+	EbsGatewayConnectivityErr = customError{message: "transaction didn't went successful", code: http.StatusBadGateway, status: "EBS_gateway_error"}
 )
 
-var ebsFailedTransaction customError
+var EbsFailedTransaction customError

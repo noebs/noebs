@@ -18,12 +18,62 @@ import (
 	"time"
 )
 
+var apiKey = make([]byte, 16)
 var jwtKey = keyFromEnv()
+
+//GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
+// the user must submit their email to generate a unique token per email.
+func GenerateAPIKey(c *gin.Context) {
+	m := make(map[string]string)
+	if err := c.ShouldBindJSON(m); err != nil {
+		if email, ok := m["email"]; ok {
+			k, _ := generateApiKey()
+			getRedis := utils.GetRedis()
+			getRedis.HSet("api_keys", email, k)
+			c.JSON(http.StatusOK, gin.H{"result": k})
+			return
+		}
+	}
+	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "error in email"})
+}
+
+//ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
+func ApiKeyMiddleware(c *gin.Context) {
+	email := c.GetHeader("X-Email")
+	key := c.GetHeader("X-API-Key")
+	if email == "" || key == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
+		return
+	}
+	redisClient := utils.GetRedis()
+	res, err := redisClient.HGet("api_keys", email).Result()
+	if err != redis.Nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
+		return
+	}
+	if key == res {
+		c.Next()
+	} else {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
+		return
+	}
+}
+
+func IpFilterMiddleware(c *gin.Context) {
+	ip := c.ClientIP()
+	if u := c.GetString("username"); u != "" {
+		redisClient := utils.GetRedis()
+		redisClient.HIncrBy(u+":ips_count", ip, 1)
+		c.Next()
+	} else {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access"})
+	}
+}
 
 func LoginHandler(c *gin.Context) {
 
 	var req UserLogin
-	if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
@@ -77,7 +127,10 @@ func LoginHandler(c *gin.Context) {
 			// Allow users to use another login method (e.g., totp, or they should reset their password)
 			// Lock their account
 			//redisClient.HSet(req.Username, "suspecious_behavior", 1)
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts", "code": "maximum_login"})
+			redisClient.HIncrBy(req.Username, "suspicious_behavior", 1)
+			ttl, _ := redisClient.TTL(req.Username + ":login_counts").Result()
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts",
+				"code": "maximum_login", "ttl_minutes": ttl.Minutes()})
 			return
 		}
 	}
@@ -202,12 +255,19 @@ func CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
 
+	// make the user capital - small
+	u.sanitizeName()
 	if err := db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
-
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
 	}
+
+	redisClient := utils.GetRedis()
+	redisClient.Set(u.Mobile, u.Username, 0)
+	ip := c.ClientIP()
+	redisClient.HSet(u.Username+":ips_count", "first_ip", ip)
+
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
@@ -244,7 +304,6 @@ var (
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		// just handle the simplest case, authorization is not provided.
 		h := c.GetHeader("Authorization")
 		if h == "" {
@@ -252,11 +311,9 @@ func AuthMiddleware() gin.HandlerFunc {
 				"code": "unauthorized"})
 			return
 		}
-
 		claims, err := VerifyJWT(h, jwtKey)
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
-
 				// in this case you might need to give it another spin
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
 				return
@@ -276,6 +333,18 @@ func AuthMiddleware() gin.HandlerFunc {
 
 }
 
+func ApiAuth() gin.HandlerFunc {
+	r := utils.GetRedis()
+	return func(c *gin.Context) {
+		if key := c.GetHeader("api-key"); key != "" {
+			if ok := isMember("api_keys", key, r); ok {
+				c.Next()
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
+			"message": "visit https://soluspay.net/contact for a key"})
+	}
+}
 func GenerateSecretKey(n int) ([]byte, error) {
 	key := make([]byte, n)
 	if _, err := rand.Read(key); err != nil {
@@ -307,4 +376,19 @@ func OptionsMiddleware(c *gin.Context) {
 		c.Header("Content-Type", "application/json")
 		c.AbortWithStatus(http.StatusOK)
 	}
+}
+
+func generateApiKey() (string, error) {
+	_, err := rand.Read(apiKey)
+	a := fmt.Sprintf("%x", apiKey)
+	return a, err
+}
+
+func isMember(key, val string, r *redis.Client) bool {
+	if ok, err := r.SIsMember(key, val).Result(); err == nil && ok {
+		if ok {
+			return true
+		}
+	}
+	return false
 }

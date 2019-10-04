@@ -1,7 +1,9 @@
 package utils
 
 import (
+	//"github.com/adonese/noebs/dashboard"
 	"github.com/go-redis/redis"
+	"github.com/jinzhu/gorm"
 )
 
 // GetRedis returns a *redis.Client instance
@@ -13,10 +15,10 @@ func GetRedis() *redis.Client {
 	return client
 }
 
+//SaveRedisList
 func SaveRedisList(r *redis.Client, key string, value interface{}) error {
 	_, err := r.LPush(key, value).Result()
 	return err
-
 }
 
 func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
@@ -25,4 +27,25 @@ func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
 		return def, ok
 	}
 	return value.(string), ok
+}
+
+func PanfromMobile(username string, r *redis.Client) (string, bool) {
+	c, err := r.HGet(username, "main_card").Result()
+	if err == nil {
+		return c, true
+	} else {
+		c, err := r.LRange(username+":pans", 0, 0).Result()
+		if err == nil {
+			return c[0], true
+		}
+	}
+	return "", false
+}
+
+func Database(dialect, fname string) (*gorm.DB, error) {
+	db, err := gorm.Open(dialect, fname)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }

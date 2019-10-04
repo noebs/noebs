@@ -112,10 +112,10 @@ func TestEBSHttpClient(t *testing.T) {
 		url := "https://example.com"
 		payload := getSuccessfulPurchasePayload(ebs_fields.PurchaseFields{})
 		fmt.Println(string(payload))
-		_, _, err := EBSHttpClient(url, payload)
+		_, _, err := ebs_fields.EBSHttpClient(url, payload)
 
-		if err != contentTypeErr {
-			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, contentTypeErr)
+		if err != ebs_fields.ContentTypeErr {
+			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, ebs_fields.ContentTypeErr)
 		}
 	})
 
@@ -124,22 +124,20 @@ func TestEBSHttpClient(t *testing.T) {
 		payload := getFailedPurchasePayload(t, ebs_fields.PurchaseFields{})
 
 		fmt.Println(string(payload))
-		_, _, err := EBSHttpClient(url, payload)
+		_, _, err := ebs_fields.EBSHttpClient(url, payload)
 
 		fmt.Print(reflect.TypeOf(err))
 
-		if err != ebsFailedTransaction {
+		if err != ebs_fields.EbsFailedTransaction {
 
-			t.Fatalf("Returned error is not of the correct type. Got: (%s). Wanted: (%s)", reflect.TypeOf(err), contentTypeErr)
+			t.Fatalf("Returned error is not of the correct type. Got: (%s). Wanted: (%s)", reflect.TypeOf(err), ebs_fields.ContentTypeErr)
 		}
 	})
 
 }
 
 func TestCardTransfer(t *testing.T) {
-
 	route := GetMainEngine()
-
 	t.Run("Test all CardTransfer passed", func(t *testing.T) {
 		fields := populateCardTransferFields()
 		now := time.Now()

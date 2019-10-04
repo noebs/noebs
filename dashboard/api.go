@@ -22,10 +22,10 @@ var log = logrus.New()
 // @Accept  json
 // @Produce  json
 // @Param id query string false "search list transactions by terminal ID"
-// @Success 200 {string} ok
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /dashboard/count [get]
 func TransactionsCount(c *gin.Context) {
 
@@ -71,10 +71,10 @@ func TransactionsCount(c *gin.Context) {
 // @Accept  json
 // @Produce  json
 // @Param id query string false "search list transactions by terminal ID"
-// @Success 200 {string} ok
-// @Failure 400 {integer} 400
-// @Failure 404 {integer} 404
-// @Failure 500 {integer} 500
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
 // @Router /dashboard/get_tid [get]
 func TransactionByTid(c *gin.Context) {
 
@@ -240,10 +240,9 @@ func BrowerDashboard(c *gin.Context) {
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
 	//db.Table("transactions").Select("created_at, tran_amount, terminal_id").Group("terminal_id").Having("tran_amount > ?", 50).Scan(&totAmount)
 	if c.ShouldBind(&search) == nil {
-		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Limit(pageSize).Find(&tran)
+		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 	} else {
-		db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
-
+		db.Table("transactions").Where("id >= ?", offset).Order("id desc").Limit(pageSize).Find(&tran)
 	}
 
 	pager := pagination(count, 50)
@@ -257,10 +256,23 @@ func BrowerDashboard(c *gin.Context) {
 		"count": pager + 1, "stats": stats, "amounts": totAmount})
 }
 
-const (
-	dateFormat = "2006-01-02"
-)
+func LandingPage(c *gin.Context) {
+	showForm := true
+	if c.Request.Method == "POST" {
+		var f form
+		err := c.ShouldBind(&f)
+		if err == nil {
+			redisClient := utils.GetRedis()
+			redisClient.LPush("voices", &f)
+			showForm = false
+		}
+	}
 
+	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
+}
+func IndexPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "index.html", nil)
+}
 func Stream(c *gin.Context) {
 	var trans []Transaction
 	var stream bytes.Buffer

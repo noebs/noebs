@@ -2,6 +2,7 @@ package ebs_fields
 
 import (
 	"encoding/json"
+	"github.com/go-redis/redis"
 	"gopkg.in/go-playground/validator.v9"
 	"time"
 )
@@ -77,6 +78,10 @@ type CommonFields struct {
 	ClientID               string `json:"clientId,omitempty" binding:"required" form:"clientId"`
 }
 
+func (c *CommonFields) sendRequest(f []byte) {
+	panic("implement me!")
+}
+
 type CardInfoFields struct {
 	Pan     string `json:"PAN" binding:"required" form:"PAN"`
 	Pin     string `json:"PIN" binding:"required" form:"PIN"`
@@ -125,6 +130,7 @@ type GenericEBSResponseFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
+	PayeeID          string `json:"payeeId"`
 
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
@@ -141,10 +147,11 @@ type GenericEBSResponseFields struct {
 	AdditionalData       string   `json:"additionalData,omitempty"`
 	TranDateTime         string   `json:"tranDateTime,omitempty"`
 	TranFee              *float32 `json:"tranFee,omitempty"`
-	AdditionalAmount     *float32 `json:"additionalAmount,omitempty"`
-	AcqTranFee           *float32 `json:"acqTranFee,omitempty"`
-	IssTranFee           *float32 `json:"issuerTranFee,omitempty"`
-	TranCurrency         string   `json:"tranCurrency,omitempty"`
+
+	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
+	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
+	IssTranFee       *float32 `json:"issuerTranFee,omitempty"`
+	TranCurrency     string   `json:"tranCurrency,omitempty"`
 }
 
 type ImportantEBSFields struct {
@@ -291,6 +298,10 @@ type ConsumerIPinFields struct {
 	NewIPIN string `json:"newIPIN" binding:"required"`
 }
 
+type ConsumerCardTransferAndMobileFields struct {
+	ConsumerCardTransferFields
+	Mobile string `json:"mobile_number"`
+}
 type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
@@ -325,6 +336,30 @@ type CardsRedis struct {
 	Expdate string `json:"exp_date" binding:"required,len=4"`
 	IsMain  bool   `json:"is_main"`
 	Name    string `json:"name"`
+	redis   *redis.Client
+}
+
+func (c *CardsRedis) AddCard(username string) error {
+	buf, err := json.Marshal(c)
+	if err != nil {
+		return err
+	}
+	z := &redis.Z{
+		Member: buf,
+	}
+	c.redis.ZAdd(username+":cards", z)
+	if c.IsMain {
+		c.redis.HSet(username, "main_card", buf)
+	}
+	return nil
+}
+
+func (c *CardsRedis) RmCard(username string, id int) {
+	if c.IsMain {
+		c.redis.HDel(username+":cards", "main_card")
+	} else {
+		c.redis.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1))
+	}
 }
 
 type MobileRedis struct {

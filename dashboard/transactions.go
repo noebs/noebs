@@ -3,8 +3,10 @@ package dashboard
 import (
 	"encoding/json"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"time"
 )
 
 type Transaction struct {
@@ -105,4 +107,26 @@ func structToSlice(t []Transaction) []string {
 		s = append(s, string(d))
 	}
 	return s
+}
+
+func TimeFormatter(t time.Time) string {
+	return t.Format("Mon Jan 2, 15:04:05 CAT 2006")
+}
+
+func GenerateMultiTemplate() multitemplate.Renderer {
+	r := multitemplate.NewRenderer()
+	r.AddFromFiles("table", "dashboard/template/base.html", "dashboard/template/table.html")
+	r.AddFromFiles("index", "dashboard/template/base.html", "dashboard/template/index.html")
+	return r
+}
+
+type form struct {
+	Text      string `form:"vote" binding:"required"`
+	Android   bool   `form:"android"`
+	Ios       bool   `form:"ios"`
+	Subscribe bool   `form:"newsletter"`
+}
+
+func (f *form) MarshalBinary() ([]byte, error) {
+	return json.Marshal(f)
 }
