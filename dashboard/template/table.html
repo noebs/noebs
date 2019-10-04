@@ -72,7 +72,7 @@
                 {{range .transactions}}
                     <tr>
                         <th scope="row">{{.ID}}</th>
-                        <td>{{.CreatedAt}}</td>
+                        <td>{{time .CreatedAt}}</td>
                         <td>{{.TranAmount}}</td>
                         <td>{{.ReferenceNumber}}</td>
                         <td>{{.ApprovalCode}}</td>

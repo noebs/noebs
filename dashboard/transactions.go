@@ -5,6 +5,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"time"
 )
 
 type Transaction struct {
@@ -105,4 +106,8 @@ func structToSlice(t []Transaction) []string {
 		s = append(s, string(d))
 	}
 	return s
+}
+
+func TimeFormatter(t time.Time) string {
+	return t.Format("Mon Jan 2, 15:04:05 CAT 2006")
 }

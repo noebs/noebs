@@ -37,7 +37,7 @@ func GetMainEngine() *gin.Engine {
 
 	route.Use(gateway.OptionsMiddleware)
 
-	route.SetFuncMap(template.FuncMap{"N": iter.N})
+	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
 	route.LoadHTMLFiles("./dashboard/template/table.html")
 
 	route.Static("/assets", "./dashboard/template")
