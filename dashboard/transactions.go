@@ -119,3 +119,14 @@ func GenerateMultiTemplate() multitemplate.Renderer {
 	r.AddFromFiles("index", "dashboard/template/base.html", "dashboard/template/index.html")
 	return r
 }
+
+type form struct {
+	Text      string `form:"vote" binding:"required"`
+	Android   bool   `form:"android"`
+	Ios       bool   `form:"ios"`
+	Subscribe bool   `form:"newsletter"`
+}
+
+func (f *form) MarshalBinary() ([]byte, error) {
+	return json.Marshal(f)
+}

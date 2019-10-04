@@ -73,6 +73,7 @@ func GetMainEngine() *gin.Engine {
 
 		dashboardGroup.GET("/", dashboard.BrowerDashboard)
 		dashboardGroup.GET("/test_browser", dashboard.IndexPage)
+		dashboardGroup.Any("/hearout", dashboard.LandingPage)
 		dashboardGroup.GET("/stream", dashboard.Stream)
 	}
 

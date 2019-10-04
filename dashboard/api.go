@@ -256,6 +256,20 @@ func BrowerDashboard(c *gin.Context) {
 		"count": pager + 1, "stats": stats, "amounts": totAmount})
 }
 
+func LandingPage(c *gin.Context) {
+	showForm := true
+	if c.Request.Method == "POST" {
+		var f form
+		err := c.ShouldBind(&f)
+		if err == nil {
+			redisClient := utils.GetRedis()
+			redisClient.LPush("voices", &f)
+			showForm = false
+		}
+	}
+
+	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
+}
 func IndexPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
 }
