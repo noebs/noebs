@@ -37,15 +37,15 @@
             <ul class="list-group list-group-horizontal-sm">
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     All transactions so far
-                    <span class="badge badge-primary badge-pill">{{.stats.NumberTransactions}}</span>
+                    <span class="badge badge-primary badge-pill"> {{.stats.NumberTransactions}}</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     Successful Transactions
-                    <span class="badge badge-primary badge-pill">{{.stats.SuccessfulTransactions}}</span>
+                    <span class="badge badge-primary badge-pill"> {{.stats.SuccessfulTransactions}}</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     Failed Transactions
-                    <span class="badge badge-primary badge-pill">{{.stats.FailedTransactions}}</span>
+                    <span class="badge badge-primary badge-pill"> {{.stats.FailedTransactions}}</span>
                 </li>
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     Total Amount
@@ -72,7 +72,7 @@
                 {{range .transactions}}
                     <tr>
                         <th scope="row">{{.ID}}</th>
-                        <td>{{.TranDateTime}}</td>
+                        <td>{{.CreatedAt}}</td>
                         <td>{{.TranAmount}}</td>
                         <td>{{.ReferenceNumber}}</td>
                         <td>{{.ApprovalCode}}</td>

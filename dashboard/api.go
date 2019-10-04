@@ -240,10 +240,9 @@ func BrowerDashboard(c *gin.Context) {
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
 	//db.Table("transactions").Select("created_at, tran_amount, terminal_id").Group("terminal_id").Having("tran_amount > ?", 50).Scan(&totAmount)
 	if c.ShouldBind(&search) == nil {
-		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Limit(pageSize).Find(&tran)
+		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 	} else {
-		db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
-
+		db.Table("transactions").Where("id >= ?", offset).Order("id desc").Limit(pageSize).Find(&tran)
 	}
 
 	pager := pagination(count, 50)
@@ -256,10 +255,6 @@ func BrowerDashboard(c *gin.Context) {
 	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran,
 		"count": pager + 1, "stats": stats, "amounts": totAmount})
 }
-
-const (
-	dateFormat = "2006-01-02"
-)
 
 func Stream(c *gin.Context) {
 	var trans []Transaction
