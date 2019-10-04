@@ -49,7 +49,3 @@ func Database(dialect, fname string) (*gorm.DB, error) {
 	}
 	return db, nil
 }
-
-func RemoveZ(r *redis.Client) {
-
-}

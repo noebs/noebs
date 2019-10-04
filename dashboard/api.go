@@ -256,6 +256,9 @@ func BrowerDashboard(c *gin.Context) {
 		"count": pager + 1, "stats": stats, "amounts": totAmount})
 }
 
+func IndexPage(c *gin.Context) {
+	c.HTML(http.StatusOK, "index.html", nil)
+}
 func Stream(c *gin.Context) {
 	var trans []Transaction
 	var stream bytes.Buffer

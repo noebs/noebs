@@ -38,7 +38,8 @@ func GetMainEngine() *gin.Engine {
 	route.Use(gateway.OptionsMiddleware)
 
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
-	route.LoadHTMLFiles("./dashboard/template/table.html")
+
+	route.LoadHTMLGlob("./dashboard/template/*")
 
 	route.Static("/assets", "./dashboard/template")
 
@@ -71,6 +72,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
 
 		dashboardGroup.GET("/", dashboard.BrowerDashboard)
+		dashboardGroup.GET("/test_browser", dashboard.IndexPage)
 		dashboardGroup.GET("/stream", dashboard.Stream)
 	}
 
