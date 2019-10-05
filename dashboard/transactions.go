@@ -122,9 +122,10 @@ func GenerateMultiTemplate() multitemplate.Renderer {
 
 type form struct {
 	Text      string `form:"vote" binding:"required"`
-	Android   bool   `form:"android"`
-	Ios       bool   `form:"ios"`
+	Android   string `form:"android"`
+	Ios       string `form:"ios"`
 	Subscribe bool   `form:"newsletter"`
+	UserAgent string `form:"-"`
 }
 
 func (f *form) MarshalBinary() ([]byte, error) {
