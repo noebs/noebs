@@ -262,9 +262,10 @@ func LandingPage(c *gin.Context) {
 		var f form
 		err := c.ShouldBind(&f)
 		if err == nil {
-			f.UserAgent = c.GetHeader("User-Agent")
+			ua := c.GetHeader("User-Agent")
 			redisClient := utils.GetRedis()
 			redisClient.LPush("voices", &f)
+			redisClient.LPush("voices:ua", ua)
 			showForm = false
 		}
 	}
