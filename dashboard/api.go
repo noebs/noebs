@@ -262,8 +262,10 @@ func LandingPage(c *gin.Context) {
 		var f form
 		err := c.ShouldBind(&f)
 		if err == nil {
+			ua := c.GetHeader("User-Agent")
 			redisClient := utils.GetRedis()
 			redisClient.LPush("voices", &f)
+			redisClient.LPush("voices:ua", ua)
 			showForm = false
 		}
 	}
@@ -358,4 +360,16 @@ func MerchantTransactionsEndpoint(c *gin.Context) {
 	p := MerchantTransactions{PurchaseAmount: sum, FailedTransactions: failed, SuccessfulTransactions: succ,
 		AllTransactions: num}
 	c.JSON(http.StatusOK, gin.H{"result": p})
+}
+
+func ReportIssueEndpoint(c *gin.Context) {
+	var issue merchantsIssues
+	if err := c.ShouldBindJSON(&issue); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
+	} else {
+		redisClient := utils.GetRedis()
+		redisClient.LPush("complaints", &issue)
+		redisClient.LPush(issue.TerminalID+":complaints", &issue)
+		c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	}
 }

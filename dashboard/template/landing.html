@@ -12,42 +12,15 @@
     <div class="container">
         {{if .showform }}
             <form method="post">
-                <div class="form-group">
-                    <label for="vote">What do you want the MOST on a payment application?</label>
+
+                <label for="vote">What do you want the MOST on a payment application?</label>
                     <textarea class="form-control" name="vote" id="vote"
-                              placeholder="Say something exciting! Get BIG!"></textarea>
-                </div>
-                <div class="form-group">
+                              placeholder="Say something exciting! Get BIG!" required></textarea>
                     <label for="email">Email address</label>
                     <input type="email" class="form-control" id="email" name="email" aria-describedby="emailHelp"
                            placeholder="Enter email">
                     <small id="emailHelp" class="form-text text-muted">We'll never share your email with anyone
                         else.</small>
-                </div>
-
-                <fieldset class="form-group">
-                    <div class="row">
-                        <legend class="col-form-label col-sm-2 pt-0">What's your mobile device?</legend>
-                        <div class="col-sm-10">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="android" id="android">
-                                <label class="form-check-label" for="android">
-                                    Android
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" id="ios" name="ios">
-                                <label class="form-check-label" for="ios">
-                                    Second radio
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </fieldset>
-                <div class="form-group form-check">
-                    <input type="checkbox" class="form-check-input" id="newsletter" name="newsletter">
-                    <label class="form-check-label" for="newsletter">Interested to be invited to our beta App?</label>
-                </div>
                 <button type="submit" class="btn btn-primary">Submit</button>
             </form>
         {{else}}

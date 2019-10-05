@@ -41,7 +41,7 @@ func GetMainEngine() *gin.Engine {
 
 	route.LoadHTMLGlob("./dashboard/template/*")
 
-	route.Static("/assets", "./dashboard/template")
+	route.Static("/dashboard/assets", "./dashboard/template")
 
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
@@ -70,6 +70,8 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
+
+		dashboardGroup.POST("/issues", dashboard.ReportIssueEndpoint)
 
 		dashboardGroup.GET("/", dashboard.BrowerDashboard)
 		dashboardGroup.GET("/test_browser", dashboard.IndexPage)

@@ -122,11 +122,22 @@ func GenerateMultiTemplate() multitemplate.Renderer {
 
 type form struct {
 	Text      string `form:"vote" binding:"required"`
-	Android   bool   `form:"android"`
-	Ios       bool   `form:"ios"`
+	Android   string `form:"android"`
+	Ios       string `form:"ios"`
 	Subscribe bool   `form:"newsletter"`
 }
 
 func (f *form) MarshalBinary() ([]byte, error) {
 	return json.Marshal(f)
+}
+
+type merchantsIssues struct {
+	TerminalID string    `json:"terminalId" binding:"required"`
+	Latitude   float32   `json:"lat"`
+	Longitude  float32   `json:"long"`
+	Time       time.Time `json:"time"`
+}
+
+func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
 }
