@@ -71,6 +71,8 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
 
+		dashboardGroup.POST("/issues", dashboard.ReportIssueEndpoint)
+
 		dashboardGroup.GET("/", dashboard.BrowerDashboard)
 		dashboardGroup.GET("/test_browser", dashboard.IndexPage)
 		dashboardGroup.Any("/hearout", dashboard.LandingPage)

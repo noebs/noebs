@@ -130,3 +130,14 @@ type form struct {
 func (f *form) MarshalBinary() ([]byte, error) {
 	return json.Marshal(f)
 }
+
+type merchantsIssues struct {
+	TerminalID string    `json:"terminalId" binding:"required"`
+	Latitude   float32   `json:"lat"`
+	Longitude  float32   `json:"long"`
+	Time       time.Time `json:"time"`
+}
+
+func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
+}

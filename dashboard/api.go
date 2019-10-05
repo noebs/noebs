@@ -361,3 +361,15 @@ func MerchantTransactionsEndpoint(c *gin.Context) {
 		AllTransactions: num}
 	c.JSON(http.StatusOK, gin.H{"result": p})
 }
+
+func ReportIssueEndpoint(c *gin.Context) {
+	var issue merchantsIssues
+	if err := c.ShouldBindJSON(&issue); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
+	} else {
+		redisClient := utils.GetRedis()
+		redisClient.LPush("complaints", &issue)
+		redisClient.LPush(issue.TerminalID+":complaints", &issue)
+		c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	}
+}
