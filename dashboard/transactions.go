@@ -125,7 +125,7 @@ type form struct {
 	Android   string `form:"android"`
 	Ios       string `form:"ios"`
 	Subscribe bool   `form:"newsletter"`
-	UserAgent string `form:"-"`
+	UserAgent string
 }
 
 func (f *form) MarshalBinary() ([]byte, error) {
