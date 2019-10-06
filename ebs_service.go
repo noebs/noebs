@@ -21,7 +21,6 @@ import (
 	"html/template"
 	"net/http"
 	"os"
-	"strings"
 )
 
 var log = logrus.New()
@@ -157,15 +156,8 @@ func main() {
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 	//gin.SetMode(gin.ReleaseMode)
+	log.Fatal(GetMainEngine().Run(":8080"))
 
-	if env := os.Getenv("PORT"); env != "" {
-		if !strings.HasPrefix(env, ":") {
-			env += ":"
-		}
-		log.Fatal(GetMainEngine().Run(env))
-	} else {
-		log.Fatal(GetMainEngine().Run(":8080"))
-	}
 }
 
 // IsAlive godoc
