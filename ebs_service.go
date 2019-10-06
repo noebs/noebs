@@ -161,9 +161,8 @@ func main() {
 	if env := os.Getenv("PORT"); env != "" {
 		if !strings.HasPrefix(env, ":") {
 			env += ":"
-		} else {
-			log.Fatal(GetMainEngine().RunTLS(env, ".certs/server.pem", ".certs/server.key"))
 		}
+		log.Fatal(GetMainEngine().Run(env))
 	} else {
 		log.Fatal(GetMainEngine().Run(":8080"))
 	}
