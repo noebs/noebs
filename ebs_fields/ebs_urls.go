@@ -61,4 +61,7 @@ const (
 	ConsumerChangeIPinEndpoint   = "changeIPin"
 	ConsumerPurchaseEndpoint     = "specialPayment"
 	ConsumerStatusEndpoint       = "getTransactionStatus"
+	ConsumerQRPaymentEndpoint    = "doQRPurchase"
+	ConsumerQRGenerationEndpoint = "doMerchantRegistration"
+	ConsumerQRRefundEndpoint     = "doQRRefund"
 )
