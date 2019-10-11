@@ -307,6 +307,7 @@ type MerchantRegistrationFields struct {
 	MerchantAccountReference string `json:"merchantAccountReference" binding:"required"`
 	ExpDate                  string `json:"expDate" binding:"required"`
 }
+
 type Merchant struct {
 	MerchantName         string `json:"merchantName" binding:"required"`
 	MerchantCity         string `json:"merchantCity" binding:"required"`
@@ -314,6 +315,37 @@ type Merchant struct {
 	IDType               string `json:"idType" binding:"required"`
 	IDNo                 string `json:"idNo" binding:"required"`
 }
+type mLabel struct {
+	Value string
+	Label string
+	Help  string
+}
+
+func (m *Merchant) Details() []mLabel {
+	res := []mLabel{
+		{"merchantName", "Merchant Name", "Enter merchant name"},
+		{"mobileNo", "Mobile Number", "Enter mobile number"},
+		{"merchantCity", "Merchant City", "Enter merchant city"},
+		{"idType", "ID Type (National ID, Driving License", "Enter ID Type"},
+		{"idNo", "ID number", "Enter id no"},
+	}
+	return res
+}
+
+func (m *Merchant) ToMap() map[string]interface{} {
+	a := make(map[string]interface{})
+	a["merchantName"] = m.MerchantName
+	a["mobileNo"] = m.MerchantMobileNumber
+	a["merchantCity"] = m.MerchantCity
+	a["idType"] = m.IDType
+	a["idNo"] = m.IDNo
+	return a
+}
+
+func (m *Merchant) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
+}
+
 type ConsumerBillPaymentFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields

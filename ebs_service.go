@@ -72,10 +72,11 @@ func GetMainEngine() *gin.Engine {
 
 		dashboardGroup.POST("/issues", dashboard.ReportIssueEndpoint)
 
-		dashboardGroup.GET("/", dashboard.BrowerDashboard)
+		dashboardGroup.GET("/", dashboard.BrowserDashboard)
 		dashboardGroup.GET("/test_browser", dashboard.IndexPage)
 		dashboardGroup.Any("/hearout", dashboard.LandingPage)
 		dashboardGroup.GET("/stream", dashboard.Stream)
+		dashboardGroup.Any("/merchants", dashboard.MerchantPage)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

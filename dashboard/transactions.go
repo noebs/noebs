@@ -89,7 +89,7 @@ func pagination(num int, page int) int {
 func errorsCounter(t []Transaction) int {
 	var errors int
 	for _, v := range t {
-		if v.ResponseCode != 0 {
+		if v.ResponseCode != 0 && v.ResponseStatus == "Successful" {
 			errors++
 		}
 	}

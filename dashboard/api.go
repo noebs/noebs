@@ -205,7 +205,7 @@ func GetAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
 
-func BrowerDashboard(c *gin.Context) {
+func BrowserDashboard(c *gin.Context) {
 	db, _ := gorm.Open("sqlite3", "test.db")
 
 	defer db.Close()
@@ -218,11 +218,6 @@ func BrowerDashboard(c *gin.Context) {
 	} else {
 		page = 1
 	}
-
-	// page represents a 30 result from the database.
-	// the computation should be done like this:
-	// offset = page * 50
-	// limit = offset + 50
 
 	//todo make a pagination function
 	pageSize := 50
@@ -252,8 +247,7 @@ func BrowerDashboard(c *gin.Context) {
 		"SuccessfulTransactions": count - errors,
 		"FailedTransactions":     errors,
 	}
-	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran,
-		"count": pager + 1, "stats": stats, "amounts": totAmount})
+	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1, "stats": stats, "amounts": totAmount})
 }
 
 func LandingPage(c *gin.Context) {
@@ -272,9 +266,30 @@ func LandingPage(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
 }
+
+func MerchantPage(c *gin.Context) {
+	var f ebs_fields.Merchant
+	if c.Request.Method == "POST" {
+		err := c.ShouldBind(&f)
+		if err == nil {
+			redisClient := utils.GetRedis()
+			redisClient.SAdd("merchants:all", f.MerchantName)
+			redisClient.HMSet("merchant:"+f.MerchantName, f.ToMap())
+			c.HTML(http.StatusOK, "landing.html", gin.H{"showform": false})
+		} else {
+			er, _ := c.Errors.MarshalJSON()
+			log.Printf("Errors are: %s, and the binding err: %v", string(er), err.Error())
+		}
+	} else if c.Request.Method == "GET" {
+		fields := f.Details()
+		c.HTML(http.StatusOK, "merchant_registration.html", gin.H{"showform": true, "fields": fields})
+	}
+}
+
 func IndexPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
 }
+
 func Stream(c *gin.Context) {
 	var trans []Transaction
 	var stream bytes.Buffer
@@ -373,3 +388,7 @@ func ReportIssueEndpoint(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"result": "ok"})
 	}
 }
+
+//TODO
+// - Add Merchant views
+// - Add Merchant stats / per month
