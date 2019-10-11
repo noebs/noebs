@@ -100,6 +100,12 @@ type dashboardStats struct {
 	Amount float32
 }
 
+type merchantStats struct {
+	//created_at, sum(tran_amount) as amount, terminal_id").Group("terminal_id"
+	Amount     float32
+	TerminalID string
+}
+
 func structToSlice(t []Transaction) []string {
 	var s []string
 	for _, v := range t {

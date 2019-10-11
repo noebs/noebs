@@ -225,21 +225,32 @@ func BrowserDashboard(c *gin.Context) {
 
 	var tran []Transaction
 
-	// another good alternative
 	var count int
 
 	var search SearchModel
 	var totAmount dashboardStats
 
+	var mStats []merchantStats
+	var leastMerchants []merchantStats
+
 	db.Table("transactions").Count(&count)
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
-	//db.Table("transactions").Select("created_at, tran_amount, terminal_id").Group("terminal_id").Having("tran_amount > ?", 50).Scan(&totAmount)
+
 	if c.ShouldBind(&search) == nil {
 		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 	} else {
 		db.Table("transactions").Where("id >= ?", offset).Order("id desc").Limit(pageSize).Find(&tran)
 	}
 
+	// get the most transactions per terminal_id
+	// choose interval, which should be *this* month
+	month := time.Now().Month()
+	m := fmt.Sprintf("%02d", int(month))
+
+	db.Table("transactions").Select("sum(tran_amount) as amount, terminal_id, datetime(created_at) as time").Where("strftime('%m', time) = ?", m).Group("terminal_id").Order("amount desc").Scan(&mStats)
+	db.Table("transactions").Select("count(tran_amount) as amount, response_status, terminal_id, datetime(created_at) as time").Where("tran_amount >= ? AND response_status = ? AND strftime('%m', time) = ?", 1, "Successful", m).Group("terminal_id").Order("amount").Scan(&leastMerchants)
+
+	log.Printf("the least merchats are: %v", leastMerchants)
 	pager := pagination(count, 50)
 	errors := errorsCounter(tran)
 	stats := map[string]int{
@@ -247,7 +258,8 @@ func BrowserDashboard(c *gin.Context) {
 		"SuccessfulTransactions": count - errors,
 		"FailedTransactions":     errors,
 	}
-	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1, "stats": stats, "amounts": totAmount})
+	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1,
+		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants})
 }
 
 func LandingPage(c *gin.Context) {

@@ -17,6 +17,7 @@
 
 <main role="main">
 <div class="container">
+    <!--Search model -->
     <div class="row">
         <div class="col">
             <form action="">
@@ -32,6 +33,7 @@
         </div>
     </div>
 
+    <!--Transactions Summary -->
     <div class="row">
         <div class="col">
             <ul class="list-group list-group-horizontal-sm">
@@ -55,6 +57,7 @@
         </div>
     </div>
 
+    <!--Transactions Table-->
     <div class="row">
         <div class="col">
             <table class="table table-striped table-sm">
@@ -85,6 +88,7 @@
         </div>
     </div>
 
+    <!--paginator-->
     <div class="row">
         <div class="col">
             <ul class="pagination">
@@ -92,6 +96,49 @@
                     <li class="page-item"><a class="page-link" href="?page={{$i}}">{{$i}}</a></li>
                 {{end}}
             </ul>
+        </div>
+    </div>
+
+    <hr>
+
+    <!--least and most used terminals-->
+    <div class="row">
+
+        <div class="col">
+            <p class="lead">Top Transactions This Week</p>
+            <table class="table table-sm">
+                <thead class="thead-dark">
+                <tr>
+                    <th scope="col">Terminal ID</th>
+                    <th scope="col">Monthly Amount</th>
+                </tr>
+                </thead>
+                {{range .merchant_stats}}
+                    <tr>
+                        <th scope="row">{{.TerminalID}}</th>
+                        <td>{{.Amount}}</td>
+                    </tr>
+                {{end}}
+            </table>
+
+        </div>
+        <div class="col">
+            <p class="lead">Terminals With LEAST # Transactions</p>
+            <table class="table table-sm">
+                <thead class="thead-dark">
+                <tr>
+                    <th scope="col">Terminal ID</th>
+                    <th scope="col">Number of Transactions</th>
+                </tr>
+                </thead>
+                {{range .least_merchants}}
+                    <tr>
+                        <th scope="row">{{.TerminalID}}</th>
+                        <td>{{.Amount}}</td>
+                    </tr>
+                {{end}}
+            </table>
+
         </div>
     </div>
 
