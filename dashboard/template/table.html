@@ -106,36 +106,50 @@
 
         <div class="col">
             <p class="lead">Top Transactions This Week</p>
-            <table class="table table-sm">
-                <thead class="thead-dark">
+            <table class="table table-sm table-hover">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Terminal ID</th>
                     <th scope="col">Monthly Amount</th>
                 </tr>
                 </thead>
-                {{range .merchant_stats}}
-                    <tr>
-                        <th scope="row">{{.TerminalID}}</th>
-                        <td>{{.Amount}}</td>
+                {{ range $k, $v := .merchant_stats}}
+                    {{ if eq $k 0}}
+                        <tr class="table-primary">
+                            <th scope="row">{{$v.TerminalID}}</th>
+                            <td>{{$v.Amount}}</td>
                     </tr>
+                    {{else}}
+                        <tr>
+                            <th scope="row">{{$v.TerminalID}}</th>
+                            <td>{{$v.Amount}}</td>
+                        </tr>
+                    {{end}}
                 {{end}}
             </table>
 
         </div>
         <div class="col">
             <p class="lead">Terminals With LEAST # Transactions</p>
-            <table class="table table-sm">
-                <thead class="thead-dark">
+            <table class="table table-sm table-hover">
+                <thead class="thead-light">
                 <tr>
                     <th scope="col">Terminal ID</th>
                     <th scope="col">Number of Transactions</th>
                 </tr>
                 </thead>
-                {{range .least_merchants}}
-                    <tr>
+                {{range $k, $v := .least_merchants}}
+                    {{if eq $k 0}}
+                        <tr class="table-danger">
                         <th scope="row">{{.TerminalID}}</th>
                         <td>{{.Amount}}</td>
                     </tr>
+                    {{else}}
+                        <tr>
+                            <th scope="row">{{.TerminalID}}</th>
+                            <td>{{.Amount}}</td>
+                        </tr>
+                    {{end}}
                 {{end}}
             </table>
 
