@@ -232,6 +232,7 @@ func BrowserDashboard(c *gin.Context) {
 
 	var mStats []merchantStats
 	var leastMerchants []merchantStats
+	var terminalFees []merchantStats
 
 	db.Table("transactions").Count(&count)
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
@@ -249,6 +250,7 @@ func BrowserDashboard(c *gin.Context) {
 
 	db.Table("transactions").Select("sum(tran_amount) as amount, terminal_id, datetime(created_at) as time").Where("strftime('%m', time) = ?", m).Group("terminal_id").Order("amount desc").Scan(&mStats)
 	db.Table("transactions").Select("count(tran_amount) as amount, response_status, terminal_id, datetime(created_at) as time").Where("tran_amount >= ? AND response_status = ? AND strftime('%m', time) = ?", 1, "Successful", m).Group("terminal_id").Order("amount").Scan(&leastMerchants)
+	db.Table("transactions").Select("count(tran_fee) as amount, response_status, terminal_id, datetime(created_at) as time").Where("tran_amount >= ? AND response_status = ? AND strftime('%m', time) = ?", 1, "Successful", m).Group("terminal_id").Order("amount").Scan(&terminalFees)
 
 	log.Printf("the least merchats are: %v", leastMerchants)
 	pager := pagination(count, 50)
@@ -258,8 +260,10 @@ func BrowserDashboard(c *gin.Context) {
 		"SuccessfulTransactions": count - errors,
 		"FailedTransactions":     errors,
 	}
+
+	sumFees := computeSum(terminalFees)
 	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1,
-		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants})
+		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants, "terminal_fees": terminalFees, "sum_fees": sumFees})
 }
 
 func LandingPage(c *gin.Context) {
@@ -404,3 +408,11 @@ func ReportIssueEndpoint(c *gin.Context) {
 //TODO
 // - Add Merchant views
 // - Add Merchant stats / per month
+
+func computeSum(m []merchantStats) float32 {
+	var s float32
+	for _, v := range m {
+		s += v.Amount
+	}
+	return s
+}

@@ -154,6 +154,38 @@
             </table>
 
         </div>
+
+    </div>
+
+    <div class="row">
+        <div class="col">
+            <p class="lead">Transaction Fees Per Terminal</p>
+            <table class="table table-sm table-hover">
+                <thead class="thead-light">
+                <tr>
+                    <th scope="col">Terminal ID</th>
+                    <th scope="col">Transaction Fees Amount</th>
+                </tr>
+                </thead>
+                {{range $k, $v := .terminal_fees}}
+                    {{if eq $k 0}}
+                        <tr class="table-danger">
+                            <th scope="row">{{.TerminalID}}</th>
+                            <td>{{.Amount}}</td>
+                        </tr>
+                    {{else}}
+                        <tr>
+                            <th scope="row">{{.TerminalID}}</th>
+                            <td>{{.Amount}}</td>
+                        </tr>
+                    {{end}}
+                {{end}}
+            </table>
+
+        </div>
+        <div class="col">
+            <p class="lead">The sum of transaction fees is: {{.sum_fees}}</p>
+        </div>
     </div>
 
 </div>
