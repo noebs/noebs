@@ -101,7 +101,8 @@
 
     <hr>
 
-    <!--least and most used terminals-->
+    <!--transaction fees table-->
+
     <div class="row">
 
         <div class="col">
@@ -157,6 +158,8 @@
 
     </div>
 
+    <hr>
+
     <div class="row">
         <div class="col">
             <p class="lead">Transaction Fees Per Terminal</p>
@@ -169,7 +172,7 @@
                 </thead>
                 {{range $k, $v := .terminal_fees}}
                     {{if eq $k 0}}
-                        <tr class="table-danger">
+                        <tr class="table-primary">
                             <th scope="row">{{.TerminalID}}</th>
                             <td>{{.Amount}}</td>
                         </tr>
