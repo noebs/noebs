@@ -21,7 +21,6 @@ import (
 	"html/template"
 	"net/http"
 	"os"
-	"strings"
 )
 
 var log = logrus.New()
@@ -73,10 +72,11 @@ func GetMainEngine() *gin.Engine {
 
 		dashboardGroup.POST("/issues", dashboard.ReportIssueEndpoint)
 
-		dashboardGroup.GET("/", dashboard.BrowerDashboard)
+		dashboardGroup.GET("/", dashboard.BrowserDashboard)
 		dashboardGroup.GET("/test_browser", dashboard.IndexPage)
 		dashboardGroup.Any("/hearout", dashboard.LandingPage)
 		dashboardGroup.GET("/stream", dashboard.Stream)
+		dashboardGroup.Any("/merchants", dashboard.MerchantPage)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -99,6 +99,9 @@ func GetMainEngine() *gin.Engine {
 	cons.POST("/status", consumer.ConsumerStatus)
 	cons.POST("/key", consumer.ConsumerWorkingKey)
 	cons.POST("/ipin", consumer.ConsumerIPinChange)
+	cons.POST("/generate_qr", consumer.QRGeneration)
+	cons.POST("/qr_payment", consumer.QRPayment)
+	cons.POST("/qr_refund", consumer.QRRefund)
 	cons.GET("/mobile2pan", consumer.CardFromNumber)
 	cons.GET("/nec2name", consumer.EelToName)
 
@@ -154,16 +157,8 @@ func main() {
 
 	docs.SwaggerInfo.Title = "noebs Docs"
 	//gin.SetMode(gin.ReleaseMode)
+	log.Fatal(GetMainEngine().Run(":8080"))
 
-	if env := os.Getenv("PORT"); env != "" {
-		if !strings.HasPrefix(env, ":") {
-			env += ":"
-		} else {
-			log.Fatal(GetMainEngine().RunTLS(env, ".certs/server.pem", ".certs/server.key"))
-		}
-	} else {
-		log.Fatal(GetMainEngine().Run(":8080"))
-	}
 }
 
 // IsAlive godoc

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+{{block "head" .}}
+{{end}}
+
+{{block "navbar" .}}
+
+{{end}}
+<body>
+
+<main role="main">
+    <div class="container">
+        {{if .showform }}
+            {{ range .fields}}
+                <form method="post">
+
+                <label for="{{.}}">{{.Label}}</label>
+                <input type="text" class="form-control" id="{{.Value}}" name="{{.Value}}"
+                       aria-describedby="{{.Help}}Help"
+                       placeholder="Type here">
+            {{end}}
+            <button type="submit" class="btn btn-primary">Submit</button>
+            </form>
+        {{else}}
+            <p>We have listened to your voice! ThanQ!</p>
+        {{end}}
+    </div>
+</main>
+
+
+</body>
+</html>

@@ -205,7 +205,7 @@ func GetAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
 
-func BrowerDashboard(c *gin.Context) {
+func BrowserDashboard(c *gin.Context) {
 	db, _ := gorm.Open("sqlite3", "test.db")
 
 	defer db.Close()
@@ -219,32 +219,40 @@ func BrowerDashboard(c *gin.Context) {
 		page = 1
 	}
 
-	// page represents a 30 result from the database.
-	// the computation should be done like this:
-	// offset = page * 50
-	// limit = offset + 50
-
 	//todo make a pagination function
 	pageSize := 50
 	offset := page*pageSize - pageSize
 
 	var tran []Transaction
 
-	// another good alternative
 	var count int
 
 	var search SearchModel
 	var totAmount dashboardStats
 
+	var mStats []merchantStats
+	var leastMerchants []merchantStats
+	var terminalFees []merchantStats
+
 	db.Table("transactions").Count(&count)
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
-	//db.Table("transactions").Select("created_at, tran_amount, terminal_id").Group("terminal_id").Having("tran_amount > ?", 50).Scan(&totAmount)
+
 	if c.ShouldBind(&search) == nil {
 		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 	} else {
 		db.Table("transactions").Where("id >= ?", offset).Order("id desc").Limit(pageSize).Find(&tran)
 	}
 
+	// get the most transactions per terminal_id
+	// choose interval, which should be *this* month
+	month := time.Now().Month()
+	m := fmt.Sprintf("%02d", int(month))
+
+	db.Table("transactions").Select("sum(tran_amount) as amount, terminal_id, datetime(created_at) as time").Where("strftime('%m', time) = ?", m).Group("terminal_id").Order("amount desc").Scan(&mStats)
+	db.Table("transactions").Select("count(tran_amount) as amount, response_status, terminal_id, datetime(created_at) as time").Where("tran_amount >= ? AND response_status = ? AND strftime('%m', time) = ?", 1, "Successful", m).Group("terminal_id").Order("amount").Scan(&leastMerchants)
+	db.Table("transactions").Select("count(tran_fee) as amount, response_status, terminal_id, datetime(created_at) as time").Where("tran_amount >= ? AND response_status = ? AND strftime('%m', time) = ?", 1, "Successful", m).Group("terminal_id").Order("amount desc").Scan(&terminalFees)
+
+	log.Printf("the least merchats are: %v", leastMerchants)
 	pager := pagination(count, 50)
 	errors := errorsCounter(tran)
 	stats := map[string]int{
@@ -252,8 +260,10 @@ func BrowerDashboard(c *gin.Context) {
 		"SuccessfulTransactions": count - errors,
 		"FailedTransactions":     errors,
 	}
-	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran,
-		"count": pager + 1, "stats": stats, "amounts": totAmount})
+
+	sumFees := computeSum(terminalFees)
+	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1,
+		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants, "terminal_fees": terminalFees, "sum_fees": sumFees})
 }
 
 func LandingPage(c *gin.Context) {
@@ -272,9 +282,30 @@ func LandingPage(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
 }
+
+func MerchantPage(c *gin.Context) {
+	var f ebs_fields.Merchant
+	if c.Request.Method == "POST" {
+		err := c.ShouldBind(&f)
+		if err == nil {
+			redisClient := utils.GetRedis()
+			redisClient.SAdd("merchants:all", f.MerchantName)
+			redisClient.HMSet("merchant:"+f.MerchantName, f.ToMap())
+			c.HTML(http.StatusOK, "landing.html", gin.H{"showform": false})
+		} else {
+			er, _ := c.Errors.MarshalJSON()
+			log.Printf("Errors are: %s, and the binding err: %v", string(er), err.Error())
+		}
+	} else if c.Request.Method == "GET" {
+		fields := f.Details()
+		c.HTML(http.StatusOK, "merchant_registration.html", gin.H{"showform": true, "fields": fields})
+	}
+}
+
 func IndexPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
 }
+
 func Stream(c *gin.Context) {
 	var trans []Transaction
 	var stream bytes.Buffer
@@ -372,4 +403,16 @@ func ReportIssueEndpoint(c *gin.Context) {
 		redisClient.LPush(issue.TerminalID+":complaints", &issue)
 		c.JSON(http.StatusOK, gin.H{"result": "ok"})
 	}
+}
+
+//TODO
+// - Add Merchant views
+// - Add Merchant stats / per month
+
+func computeSum(m []merchantStats) float32 {
+	var s float32
+	for _, v := range m {
+		s += v.Amount
+	}
+	return s
 }

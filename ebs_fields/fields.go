@@ -130,7 +130,7 @@ type GenericEBSResponseFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName   string
 	WorkingKey       string `json:"workingKey,omitempty" gorm:"-"`
-	PayeeID          string `json:"payeeId"`
+	PayeeID          string `json:"payeeId,omitempty"`
 
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
@@ -152,6 +152,10 @@ type GenericEBSResponseFields struct {
 	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
 	IssTranFee       *float32 `json:"issuerTranFee,omitempty"`
 	TranCurrency     string   `json:"tranCurrency,omitempty"`
+
+	// QR payment fields
+	MerchantID  string `json:"merchantID,omitempty"`
+	GeneratedQR string `json:"generatedQR,omitempty"`
 }
 
 type ImportantEBSFields struct {
@@ -279,6 +283,67 @@ type ConsumerPurchaseFields struct {
 	ConsumerCardHolderFields
 	AmountFields
 	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+}
+
+type ConsumerQRPaymentFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	MerchantID string `json:"merchantID" binding:"required"`
+}
+
+type ConsumerQRRefundFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
+}
+
+type MerchantRegistrationFields struct {
+	ConsumerCommonFields
+	Merchant
+	//allowed fields are CARD only for now. CF ebs document
+	MerchantAccountType string `json:"merchantAccountType" binding:"required"`
+	// this is the pan
+	MerchantAccountReference string `json:"merchantAccountReference" binding:"required"`
+	ExpDate                  string `json:"expDate" binding:"required"`
+}
+
+type Merchant struct {
+	MerchantName         string `json:"merchantName" binding:"required"`
+	MerchantCity         string `json:"merchantCity" binding:"required"`
+	MerchantMobileNumber string `json:"mobileNo" binding:"required"`
+	IDType               string `json:"idType" binding:"required"`
+	IDNo                 string `json:"idNo" binding:"required"`
+}
+type mLabel struct {
+	Value string
+	Label string
+	Help  string
+}
+
+func (m *Merchant) Details() []mLabel {
+	res := []mLabel{
+		{"merchantName", "Merchant Name", "Enter merchant name"},
+		{"mobileNo", "Mobile Number", "Enter mobile number"},
+		{"merchantCity", "Merchant City", "Enter merchant city"},
+		{"idType", "ID Type (National ID, Driving License", "Enter ID Type"},
+		{"idNo", "ID number", "Enter id no"},
+	}
+	return res
+}
+
+func (m *Merchant) ToMap() map[string]interface{} {
+	a := make(map[string]interface{})
+	a["merchantName"] = m.MerchantName
+	a["mobileNo"] = m.MerchantMobileNumber
+	a["merchantCity"] = m.MerchantCity
+	a["idType"] = m.IDType
+	a["idNo"] = m.IDNo
+	return a
+}
+
+func (m *Merchant) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
 }
 
 type ConsumerBillPaymentFields struct {
