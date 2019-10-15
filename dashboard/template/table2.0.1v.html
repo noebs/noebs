@@ -1,0 +1,174 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Noebs Middleware</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.5/css/bulma.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.7.5/css/bulma.css.map" />
+    <script defer src="https://use.fontawesome.com/releases/v5.3.1/js/all.js"></script>
+</head>
+<body>
+    <nav class="navbar has-background-light">
+        <div class="navbar-brand">
+            <a class="navbar-item" href="#">
+                Noebs Middleware
+            </a>
+            <div class="navbar-burger burger" data-target="navbarExampleTransparentExample">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+
+        <div id="navbarExampleTransparentExample" class="navbar-menu">
+            <div class="navbar-start">
+                <a class="navbar-item" href="#">
+                    Home
+                </a>
+                <div class="navbar-item has-dropdown is-hoverable">
+                    <a class="navbar-link" href="#">
+                        Options
+                    </a>
+                    <div class="navbar-dropdown is-boxed">
+                        <a class="navbar-item" href="#">
+                            Option 1
+                        </a>
+                        <a class="navbar-item" href="#">
+                            Option 2
+                        </a>
+
+
+
+                        <hr class="navbar-divider">
+                        <a class="navbar-item" href="#">
+                            Option 3
+                        </a>
+                        <a class="navbar-item is-active" href="#">
+                            Active Option
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </nav>
+    <section class="section">
+        <div class="container">
+            <div class="columns ">
+                <div class="column">
+                    <div class="box">
+                        <article class="media ">
+                            <div class="media-left">
+                                <span class="fa fa-clipboard-list fa-3x has-text-primary"></span>
+                            </div>
+                            <div class="media-content">
+                                <div class="content">
+                                    <p>
+                                        <small>
+                                            <strong> {{.stats.NumberTransactions}}</strong>
+                                        </small>
+                                       
+                                        <br>
+                                        <small>   All Transactions so far </small>
+
+                                    </p>
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+                </div>
+
+                <div class="column">
+                    <div class="box">
+                        <article class="media ">
+                            <div class="media-left">
+
+
+                                <span class="fa fa-check-circle fa-3x  has-text-success"></span>
+
+                            </div>
+                            <div class="media-content">
+                                <div class="content">
+                                    <p>
+                                        <small>
+                                            <strong>{{.stats.SuccessfulTransactions}}</strong>
+                                        </small>
+                                    
+                                        <br>
+                                        <small>  Successful Transactions</small>
+
+
+                                    </p>
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+                </div>
+
+
+                <div class="column">
+                    <div class="box">
+                        <article class="media ">
+                            <div class="media-left">
+
+                                <span class="fa fa-arrow-circle-down fa-3x  has-text-danger"></span>
+
+                            </div>
+                            <div class="media-content">
+                                <div class="content">
+                                    <p>
+                                        <small>
+                                            <strong>{{.stats.FailedTransactions}}</strong>
+                                        </small>
+                                        <br>
+                                        <small>
+                                            Failed
+                                            Transactions
+                                        </small>
+
+                                    </p>
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+                </div>
+
+                <div class="column">
+                    <div class="box">
+                        <article class="media ">
+                            <div class="media-left">
+                                <figure>
+                                    <i class="fa fa-money-check-alt fa-3x has-text-info"></i>
+                                </figure>
+                            </div>
+                            <div class="media-content">
+                                <div class="content">
+                                    <p>
+                                        <small>
+                                            <strong>{{.amounts.Amount}}</strong>
+                                        </small>
+                                        <br>
+
+                                        <small>
+                                            Total Amount
+                                        </small>
+                                    </p>
+                                </div>
+
+                            </div>
+                        </article>
+                    </div>
+                </div>
+
+            </div>
+
+
+        </div>
+    </section>
+</body>
+</html>
