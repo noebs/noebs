@@ -216,6 +216,7 @@ func handleChan() {
 		case c := <-consumer.BillChan:
 			if c.PayeeID == necPayment {
 				var m necBill
+				//FIXME there is a bug here
 				mapFields := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
 				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)

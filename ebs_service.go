@@ -143,7 +143,7 @@ func init() {
 // @in header
 func main() {
 
-	go handleChan()
+	//go handleChan()
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
