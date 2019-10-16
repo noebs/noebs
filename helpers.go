@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
@@ -217,30 +218,33 @@ func handleChan() {
 			if c.PayeeID == necPayment {
 				var m necBill
 				//FIXME there is a bug here
-				mapFields := additionalFieldsToHash(c.AdditionalData)
+				mapFields, _ := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
 				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
 			} else if c.PayeeID == mtnTopUp {
 				var m mtnBill
-				mapFields := additionalFieldsToHash(c.AdditionalData)
+				mapFields, _ := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
 			} else if c.PayeeID == sudaniTopUp {
 				var m sudaniBill
-				mapFields := additionalFieldsToHash(c.AdditionalData)
+				mapFields, _ := additionalFieldsToHash(c.AdditionalData)
 				m.NewFromMap(mapFields)
 			}
 		}
 	}
 }
 
-func additionalFieldsToHash(a string) map[string]string {
+func additionalFieldsToHash(a string) (map[string]string, error) {
 	fields := strings.Split(a, ";")
+	if len(fields) < 2 {
+		return nil, errors.New("index out of range")
+	}
 	out := make(map[string]string)
 	for _, v := range fields {
 		f := strings.Split(v, "=")
 		out[f[0]] = f[1]
 	}
-	return out
+	return out, nil
 }
 
 type test struct {

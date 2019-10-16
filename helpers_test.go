@@ -37,11 +37,15 @@ func Test_additionalFieldsToHash(t *testing.T) {
 		want map[string]interface{}
 	}{
 		{"successful case - nec", a, want},
+		{"failed case - nec", "", want},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := additionalFieldsToHash(tt.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("additionalFieldsToHash() = %v, want %v", got, tt.want)
+			got, err := additionalFieldsToHash(tt.args)
+			if err != nil {
+				t.Errorf("Hello there! it worked")
+			} else if ok := !reflect.DeepEqual(got, tt.want); !ok {
+				t.Errorf("I cannot pass this test!")
 			}
 		})
 	}
@@ -100,20 +104,4 @@ func Test_generateUUID(t *testing.T) {
 		})
 	}
 
-}
-
-func Test_handleChan(t *testing.T) {
-	type args struct {
-		u chan string
-	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-		})
-	}
 }
