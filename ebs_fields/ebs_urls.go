@@ -26,8 +26,8 @@ const (
 	ChangePINEndpoint                = "changePin"
 )
 
-const EBSMerchantIPTesting = "https://172.16.199.1:8181/QAEBSGateway/"
-const EBSMerchantIP = "https://172.16.198.14:8888/EBSGateway/"
+const EBSMerchantIP = "https://172.16.199.1:8181/QAEBSGateway/"
+const EBSMerchantIPLive = "https://172.16.198.14:8888/EBSGateway/"
 
 const (
 	PurchaseTransaction             = "PurchaseTransaction"
@@ -47,8 +47,13 @@ const (
 )
 
 const (
+<<<<<<< HEAD
 	EBSIpConsumerTesting = "https://172.16.199.1:8877/QAConsumer/"
 	EBSIp = "https://172.24.160.30:8443/Consumer/"
+=======
+	EBSIp = "https://172.16.199.1:8877/QAConsumer/"
+	EBSIpTesting = "https://172.24.16.30:8443/Consumer/"
+>>>>>>> bde10054dd0d2bcf9aaca08662e738385a3833fa
 )
 
 const (

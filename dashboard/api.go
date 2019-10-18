@@ -16,17 +16,14 @@ import (
 
 var log = logrus.New()
 
-// TransactionCount godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param id query string false "search list transactions by terminal ID"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /dashboard/count [get]
+func MerchantViews(c *gin.Context) {
+	//id := c.Param("id")
+	//db, _ := utils.Database("sqlite3", "test.db")
+
+	//db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
+
+}
+
 func TransactionsCount(c *gin.Context) {
 
 	db, err := gorm.Open("sqlite3", "test.db")
@@ -65,17 +62,6 @@ func TransactionsCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": count})
 }
 
-// TransactionByTid godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param id query string false "search list transactions by terminal ID"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /dashboard/get_tid [get]
 func TransactionByTid(c *gin.Context) {
 
 	db, err := gorm.Open("sqlite3", "test.db")
