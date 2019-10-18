@@ -19,8 +19,10 @@ import (
 	"github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 )
 
 var log = logrus.New()
@@ -33,6 +35,7 @@ func GetMainEngine() *gin.Engine {
 	p.Use(route)
 
 	route.HandleMethodNotAllowed = true
+	route.POST("/ebs/*all", EBS)
 
 	route.Use(gateway.OptionsMiddleware)
 
@@ -53,6 +56,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/miniStatement", MiniStatement)
 	route.POST("/isAlive", IsAlive)
 	route.POST("/balance", Balance)
+	route.POST("/refund", Refund)
 
 	route.POST("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
@@ -143,7 +147,7 @@ func init() {
 // @in header
 func main() {
 
-	//go handleChan()
+	go handleChan()
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
@@ -772,10 +776,6 @@ func ChangePIN(c *gin.Context) {
 func CashOut(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashOutEndpoint // EBS simulator endpoint url goes here.
-	// This function flow:
-	// - open a DB connection (getDB)
-	// - check for the binding errors
-	//
 	db, _ := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
@@ -844,11 +844,6 @@ func CashOut(c *gin.Context) {
 func CashIn(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashInEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
 	db, _ := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
@@ -1033,4 +1028,91 @@ func testAPI(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
+}
+
+func Refund(c *gin.Context) {
+	url := ebs_fields.EBSMerchantIP + ebs_fields.RefundEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.RefundFields{}
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+	if bindingErr == nil {
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+		}
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		// mask the pan
+		res.MaskPAN()
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+		redisClient := utils.GetRedis()
+
+		uid := generateUUID()
+		redisClient.HSet(fields.TerminalID+":purchase", uid, &res)
+
+		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			redisClient.Incr(fields.TerminalID + ":failed_transactions")
+			c.JSON(code, payload)
+		} else {
+
+			redisClient.Incr(fields.TerminalID + ":successful_transactions")
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+	} else {
+		if valErr, ok := bindingErr.(validator.ValidationErrors); ok {
+			payload := validateRequest(valErr)
+			c.JSON(http.StatusBadRequest, payload)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"message": bindingErr.Error(), "code": "generic_error"})
+		}
+	}
+}
+
+//EBS is an EBS compatible endpoint! Well.
+// it really just works as a reverse proxy with db and nothing more!
+func EBS(c *gin.Context) {
+	url := c.Request.URL.Path
+	endpoint := strings.Split(url, "/")[2]
+	ebsUrl := ebs_fields.EBSMerchantIP + endpoint
+	log.Printf("the url is: %v", url)
+
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	jsonBuffer, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		panic(err)
+	}
+	_, res, _ := ebs_fields.EBSHttpClient(ebsUrl, jsonBuffer)
+	// now write it to the DB :)
+	transaction := dashboard.Transaction{
+		GenericEBSResponseFields: res.GenericEBSResponseFields,
+	}
+
+	transaction.EBSServiceName = endpoint
+	// God please make it works.
+	db.Create(&transaction)
+	c.JSON(http.StatusOK, res)
 }

@@ -195,7 +195,7 @@ func ConsumerBillPayment(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		//BillChan <- res.GenericEBSResponseFields
+		BillChan <- res.GenericEBSResponseFields
 
 		res.MaskPAN()
 
@@ -220,8 +220,8 @@ func ConsumerBillPayment(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
+			BillChan <- res.GenericEBSResponseFields
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
 
 	default:

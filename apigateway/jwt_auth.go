@@ -34,7 +34,7 @@ func VerifyJWT(tokenString string, secret []byte) (*TokenClaims, error) {
 func GenerateJWT(serviceID string, secret []byte) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
-	expiresAt := time.Now().Add(time.Hour * 5).UTC().Unix()
+	expiresAt := time.Now().Add(time.Hour * 1000).UTC().Unix()
 
 	claims := TokenClaims{
 		serviceID,
