@@ -73,6 +73,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
 		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
+		dashboardGroup.GET("/merchant/:id", dashboard.MerchantViews)
 
 		dashboardGroup.POST("/issues", dashboard.ReportIssueEndpoint)
 

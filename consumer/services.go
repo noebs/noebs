@@ -11,6 +11,13 @@ import (
 	"net/http"
 )
 
+func ResetPassword(c *gin.Context) {
+	//TODO complete me
+	//- we want to make sure that it *was* you
+	//-enter your mobile number
+
+}
+
 func CardFromNumber(c *gin.Context) {
 	// the user must submit in their mobile number *ONLY*, and it is get
 	if q, ok := c.GetQuery("mobile_number"); !ok {
