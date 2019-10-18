@@ -17,10 +17,10 @@ import (
 var log = logrus.New()
 
 func MerchantViews(c *gin.Context) {
-	id := c.Param("id")
-	db, _ := utils.Database("sqlite3", "test.db")
+	//id := c.Param("id")
+	//db, _ := utils.Database("sqlite3", "test.db")
 
-	db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
+	//db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 
 }
 
