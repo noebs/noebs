@@ -70,6 +70,7 @@
                     <th scope="col">Approval Code</th>
                     <th scope="col">Terminal ID</th>
                     <th scope="col">Response Code</th>
+                    <th scope="col">Service</th>
                 </tr>
                 </thead>
                 {{range .transactions}}
@@ -81,7 +82,7 @@
                         <td>{{.ApprovalCode}}</td>
                         <td>{{.TerminalID}}</td>
                         <td>{{.ResponseCode}}</td>
-
+                        <td>{{.EBSServiceName}}</td>
                     </tr>
                 {{end}}
             </table>

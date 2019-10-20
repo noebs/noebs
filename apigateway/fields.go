@@ -21,7 +21,7 @@ type UserModel struct {
 	Card []Cards
 }
 
-func (u *UserModel) sanitizeName() {
+func (u *UserModel) SanitizeName() {
 	u.Username = strings.ToLower(u.Username)
 }
 

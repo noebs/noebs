@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -95,7 +96,7 @@ func LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	var u UserModel
 
-	if notFound := db.Preload("jwt").Where("username = ?", req.Username).First(&u).RecordNotFound(); notFound {
+	if notFound := db.Preload("jwt").Where("username = ?", strings.ToLower(req.Username)).First(&u).RecordNotFound(); notFound {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
@@ -256,7 +257,7 @@ func CreateUser(c *gin.Context) {
 	}
 
 	// make the user capital - small
-	u.sanitizeName()
+	u.SanitizeName()
 	if err := db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})

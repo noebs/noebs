@@ -19,7 +19,7 @@ func TestUserModel_sanitizeName(t *testing.T) {
 			u := &UserModel{
 				Username: have,
 			}
-			u.sanitizeName()
+			u.SanitizeName()
 			if u.Username != want {
 				t.Errorf("Want: %v, Have: %v", want, u.Username)
 			}

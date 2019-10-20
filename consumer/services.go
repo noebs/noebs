@@ -76,6 +76,9 @@ func AddCards(c *gin.Context) {
 	redisClient := utils.GetRedis()
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
+	//check if the card is not from non EBS affiliated banks
+	//TODO make sure that the card is not from private switch
+	// checkCardIsWorking(fields.PAN)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
