@@ -58,6 +58,7 @@ type RefundFields struct {
 	PurchaseFields
 	OriginalSTAN int `json:"originalSystemTraceAuditNumber" binding:"required"`
 }
+
 type PurchaseWithCashBackFields struct {
 	PurchaseFields
 }

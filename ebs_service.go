@@ -418,17 +418,13 @@ func Balance(c *gin.Context) {
 	var fields = ebs_fields.BalanceFields{}
 
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
 
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
@@ -1043,51 +1039,53 @@ func Refund(c *gin.Context) {
 
 	var fields = ebs_fields.RefundFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
-	if bindingErr == nil {
+
+	switch bindingErr := bindingErr.(type) {
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+
+	case nil:
+
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
 			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
 		}
+
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
 		// mask the pan
 		res.MaskPAN()
+
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
-			}).Info("error in migrating purchase model")
-		}
-		redisClient := utils.GetRedis()
 
-		uid := generateUUID()
-		redisClient.HSet(fields.TerminalID+":purchase", uid, &res)
+		transaction.EBSServiceName = ebs_fields.BalanceTransaction
+		// return a masked pan
 
-		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
+		// God please make it works.
+		db.Table("transactions").Create(&transaction)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
-			redisClient.Incr(fields.TerminalID + ":failed_transactions")
 			c.JSON(code, payload)
 		} else {
-
-			redisClient.Incr(fields.TerminalID + ":successful_transactions")
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
-	} else {
-		if valErr, ok := bindingErr.(validator.ValidationErrors); ok {
-			payload := validateRequest(valErr)
-			c.JSON(http.StatusBadRequest, payload)
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"message": bindingErr.Error(), "code": "generic_error"})
-		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
 
