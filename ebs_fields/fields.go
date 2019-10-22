@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/go-redis/redis"
 	"gopkg.in/go-playground/validator.v9"
+	"regexp"
 	"time"
 )
 
@@ -408,9 +409,11 @@ type CardsRedis struct {
 
 func (c *CardsRedis) AddCard(username string) error {
 	buf, err := json.Marshal(c)
+
 	if err != nil {
 		return err
 	}
+
 	z := &redis.Z{
 		Member: buf,
 	}
@@ -438,4 +441,17 @@ type MobileRedis struct {
 type ItemID struct {
 	ID     int  `json:"id,omitempty" binding:"required"`
 	IsMain bool `json:"is_main"`
+}
+
+func isEBS(pan string) bool {
+	/*
+		Bank Code        Bank Card PREFIX        Bank Short Name        Bank Full name
+		2                    639186                      FISB                                 Faisal Islamic Bank
+		4                    639256                      BAKH                                  Bank of Khartoum
+		16                    639184                       RAKA                                  Al Baraka Sudanese Bank
+		30                    639330                       ALSA                                  Al Salam Bank
+	*/
+
+	re := regexp.MustCompile(`(^639186|^639256|^639184|^639330)`)
+	return re.Match([]byte(pan))
 }

@@ -83,6 +83,11 @@ func AddCards(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
 	} else {
+		// check isEbs
+		if notEbs(fields.PAN) {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Card not supported (not compatible with EBS)", "code": "card_not_supported"})
+			return
+		}
 		buf, _ := json.Marshal(fields)
 		username := c.GetString("username")
 		if username == "" {
