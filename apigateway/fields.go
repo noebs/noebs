@@ -8,7 +8,7 @@ import (
 
 type UserModel struct {
 	gorm.Model
-	Username  string `binding:"required,min=3" json:"username" gorm:"unique_index"`
+	Username  string `binding:"min=3" json:"username"`
 	Password  string `binding:"required,min=8,max=20" json:"password"`
 	jwt       JWT
 	jwtId     int

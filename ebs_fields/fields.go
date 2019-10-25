@@ -2,7 +2,6 @@ package ebs_fields
 
 import (
 	"encoding/json"
-	"github.com/go-redis/redis"
 	"gopkg.in/go-playground/validator.v9"
 	"regexp"
 	"time"
@@ -399,38 +398,40 @@ func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
 }
 
 type CardsRedis struct {
-	ID      int    `json:"id,omitempty"`
+	ID      int    `json:"id,omitempty" binding:"required"`
 	PAN     string `json:"pan" binding:"required"`
 	Expdate string `json:"exp_date" binding:"required,len=4"`
 	IsMain  bool   `json:"is_main"`
 	Name    string `json:"name"`
-	redis   *redis.Client
 }
 
-func (c *CardsRedis) AddCard(username string) error {
-	buf, err := json.Marshal(c)
+//
+//func (c *CardsRedis) AddCard(username string) error {
+//	buf, err := json.Marshal(c)
+//
+//	rC := utils.GetRedis()
+//	if err != nil {
+//		return err
+//	}
+//
+//	z := &redis.Z{
+//		Member: buf,
+//	}
+//	rC.ZAdd(username+":cards", z)
+//	if c.IsMain {
+//		rC.HSet(username, "main_card", buf)
+//	}
+//	return nil
+//}
 
-	if err != nil {
-		return err
-	}
-
-	z := &redis.Z{
-		Member: buf,
-	}
-	c.redis.ZAdd(username+":cards", z)
-	if c.IsMain {
-		c.redis.HSet(username, "main_card", buf)
-	}
-	return nil
-}
-
-func (c *CardsRedis) RmCard(username string, id int) {
-	if c.IsMain {
-		c.redis.HDel(username+":cards", "main_card")
-	} else {
-		c.redis.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1))
-	}
-}
+//func (c CardsRedis) RmCard(username string, id int) {
+//	rC := utils.GetRedis()
+//	if c.IsMain {
+//		rC.HDel(username+":cards", "main_card")
+//	} else {
+//		rC.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1))
+//	}
+//}
 
 type MobileRedis struct {
 	Mobile   string `json:"mobile" binding:"required"`
