@@ -13,7 +13,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -360,11 +359,12 @@ func GenerateSecretKey(n int) ([]byte, error) {
 // keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
 func keyFromEnv() []byte {
 	// it either checks for environment for the specific key, or generates and saves a one
-	if key := os.Getenv("NOEBS_JWT_TOKEN"); key != "" {
+	redisClient := utils.GetRedis()
+	if key := redisClient.Get("jwt").String(); key != ""{
 		return []byte(key)
 	}
 	key, _ := GenerateSecretKey(50)
-	os.Setenv("NOEBS_JWT_TOKEN", string(key))
+	redisClient.Set("jwt", key, 0)
 	return key
 }
 
