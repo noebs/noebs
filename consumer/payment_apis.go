@@ -195,8 +195,6 @@ func ConsumerBillPayment(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		BillChan <- res.GenericEBSResponseFields
-
 		res.MaskPAN()
 
 		transaction := dashboard.Transaction{
