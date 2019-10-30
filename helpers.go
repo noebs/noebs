@@ -218,8 +218,8 @@ func handleChan() {
 			if c.PayeeID == necPayment {
 				var m necBill
 				//FIXME there is a bug here
-				mapFields, _ := additionalFieldsToHash(c.AdditionalData)
-				m.NewFromMap(mapFields)
+				//mapFields, _ := additionalFieldsToHash(c.BillInfo)
+				m.NewFromMap(c.BillInfo)
 				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
 			} else if c.PayeeID == mtnTopUp {
 				var m mtnBill
@@ -304,12 +304,12 @@ func (n *necBill) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, n)
 }
 
-func (n *necBill) NewFromMap(f map[string]string) {
-	n.SalesAmount, _ = strconv.ParseFloat(f["SalesAmount"], 32)
-	n.CustomerName = f["CustomerName"]
-	n.FixedFee, _ = strconv.ParseFloat(f["FixedFee"], 32)
-	n.MeterNumber = f["MeterNumber"]
-	n.Token = f["Token"]
+func (n *necBill) NewFromMap(f map[string]interface{}) {
+	n.SalesAmount, _ = strconv.ParseFloat(f["SalesAmount"].(string), 32)
+	n.CustomerName = f["CustomerName"].(string)
+	n.FixedFee, _ = strconv.ParseFloat(f["FixedFee"].(string), 32)
+	n.MeterNumber = f["MeterNumber"].(string)
+	n.Token = f["Token"].(string)
 }
 
 const (

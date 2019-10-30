@@ -13,7 +13,7 @@ import (
 )
 
 var log = logrus.New()
-var BillChan = make(chan ebs_fields.GenericEBSResponseFields)
+var BillChan = make(chan ebs_fields.EBSParserFields)
 
 func ConsumerPurchase(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
@@ -218,7 +218,7 @@ func ConsumerBillPayment(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
-			BillChan <- res.GenericEBSResponseFields
+			BillChan <- res
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
