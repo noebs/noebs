@@ -305,11 +305,22 @@ func (n *necBill) UnmarshalBinary(data []byte) error {
 }
 
 func (n *necBill) NewFromMap(f map[string]interface{}) {
-	n.SalesAmount, _ = strconv.ParseFloat(f["SalesAmount"].(string), 32)
-	n.CustomerName = f["CustomerName"].(string)
-	n.FixedFee, _ = strconv.ParseFloat(f["FixedFee"].(string), 32)
-	n.MeterNumber = f["MeterNumber"].(string)
-	n.Token = f["Token"].(string)
+	/*
+	            "accountNo": "AM042111907231",
+	            "customerName": "ALSAFIE BAKHIEYT HEMYDAN",
+	            "meterFees": "0",
+	            "meterNumber": "04203594959",
+	            "netAmount": "10",
+	            "opertorMessage": "Credit Purchase",
+	            "token": "07246305192693082213",
+	            "unitsInKWh": "66.7",
+	            "waterFees": "0.00"
+	 */
+	n.SalesAmount, _ = strconv.ParseFloat(f["netAmount"].(string), 32)
+	n.CustomerName = f["customerName"].(string)
+	n.FixedFee, _ = strconv.ParseFloat(f["meterFees"].(string), 32)
+	n.MeterNumber = f["meterNumber"].(string)
+	n.Token = f["token"].(string)
 }
 
 const (
