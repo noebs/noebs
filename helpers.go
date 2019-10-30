@@ -221,15 +221,16 @@ func handleChan() {
 				//mapFields, _ := additionalFieldsToHash(c.BillInfo)
 				m.NewFromMap(c.BillInfo)
 				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
-			} else if c.PayeeID == mtnTopUp {
-				var m mtnBill
-				mapFields, _ := additionalFieldsToHash(c.AdditionalData)
-				m.NewFromMap(mapFields)
-			} else if c.PayeeID == sudaniTopUp {
-				var m sudaniBill
-				mapFields, _ := additionalFieldsToHash(c.AdditionalData)
-				m.NewFromMap(mapFields)
 			}
+			//} else if c.PayeeID == mtnTopUp {
+			//	var m mtnBill
+			//	mapFields, _ := additionalFieldsToHash(c.AdditionalData)
+			//	m.NewFromMap(mapFields)
+			//} else if c.PayeeID == sudaniTopUp {
+			//	var m sudaniBill
+			//	mapFields, _ := additionalFieldsToHash(c.AdditionalData)
+			//	m.NewFromMap(mapFields)
+			//}
 		}
 	}
 }
