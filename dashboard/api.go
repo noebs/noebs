@@ -17,10 +17,31 @@ import (
 var log = logrus.New()
 
 func MerchantViews(c *gin.Context) {
-	//id := c.Param("id")
-	//db, _ := utils.Database("sqlite3", "test.db")
+	db, _ := utils.Database("sqlite3", "test.db")
+	terminal := c.Param("id")
 
-	//db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
+	pageSize := 50
+	page := c.DefaultQuery("page", "0")
+	p, _ := strconv.Atoi(page)
+	offset := p*pageSize - pageSize
+
+	var tran []Transaction
+	db.Table("transactions").Where("id >= ? and terminal_id LIKE ? and approval_code != ?", offset, "%"+terminal+"%", "").Order("id desc").Limit(pageSize).Find(&tran)
+	// get complaints
+	redisClient := utils.GetRedis()
+	com, _ := redisClient.LRange("complaints", 0, -1).Result()
+
+	var mC []merchantsIssues
+	var m merchantsIssues
+
+	for _, iss := range com {
+		json.Unmarshal([]byte(iss), &m)
+		mC = append(mC, m)
+	}
+
+	c.HTML(http.StatusOK, "merchants.html", gin.H{"tran": tran, "issues": mC})
+
+	//TODO get merchant profile
 
 }
 
@@ -269,7 +290,7 @@ func LandingPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
 }
 
-func MerchantPage(c *gin.Context) {
+func MerchantRegistration(c *gin.Context) {
 	var f ebs_fields.Merchant
 	if c.Request.Method == "POST" {
 		err := c.ShouldBind(&f)

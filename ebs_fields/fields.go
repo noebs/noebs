@@ -316,6 +316,7 @@ type Merchant struct {
 	MerchantMobileNumber string `json:"mobileNo" binding:"required"`
 	IDType               string `json:"idType" binding:"required"`
 	IDNo                 string `json:"idNo" binding:"required"`
+	TerminalID           string `json:"-"`
 }
 type mLabel struct {
 	Value string
