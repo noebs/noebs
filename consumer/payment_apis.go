@@ -819,7 +819,6 @@ func QRRefund(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
 
 	default:
