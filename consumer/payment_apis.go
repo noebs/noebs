@@ -757,6 +757,7 @@ func QRPayment(c *gin.Context) {
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
+
 func QRRefund(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRRefundEndpoint // EBS simulator endpoint url goes here.
 
@@ -832,6 +833,154 @@ func QRGeneration(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.MerchantRegistrationFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+func ConsumerGenerateIpin(c *gin.Context) {
+	url := ebs_fields.EBSIp + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.ConsumerGenerateIPin{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+
+		redisClient := utils.GetRedis()
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
+
+		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+func ConsumerCompleteIpin(c *gin.Context) {
+	url := ebs_fields.EBSIp + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.ConsumerGenerateIPinCompletion{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 

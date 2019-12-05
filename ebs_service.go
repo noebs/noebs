@@ -106,6 +106,9 @@ func GetMainEngine() *gin.Engine {
 	cons.POST("/ipin", consumer.ConsumerIPinChange)
 	cons.POST("/generate_qr", consumer.QRGeneration)
 	cons.POST("/qr_payment", consumer.QRPayment)
+	cons.POST("/generate_ipin", consumer.ConsumerGenerateIpin)
+	cons.POST("/complete_ipin", consumer.ConsumerCompleteIpin)
+
 	cons.POST("/qr_refund", consumer.QRRefund)
 	cons.GET("/mobile2pan", consumer.CardFromNumber)
 	cons.GET("/nec2name", consumer.EelToName)

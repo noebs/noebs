@@ -65,4 +65,8 @@ const (
 	ConsumerQRPaymentEndpoint    = "doQRPurchase"
 	ConsumerQRGenerationEndpoint = "doMerchantRegistration"
 	ConsumerQRRefundEndpoint     = "doQRRefund"
+
+	// IPIN generation
+	IPinGeneration = "doGenerateIPinRequest"
+	IPinCompletion  = "doGenerateCompletionIPinRequest"
 )
