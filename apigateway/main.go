@@ -25,17 +25,22 @@ var jwtKey = keyFromEnv()
 //GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
 // the user must submit their email to generate a unique token per email.
 func GenerateAPIKey(c *gin.Context) {
-	m := make(map[string]string)
-	if err := c.ShouldBindJSON(m); err != nil {
-		if email, ok := m["email"]; ok {
+	var m map[string]string
+	if err := c.ShouldBindJSON(&m); err != nil {
+		if _, ok := m["email"]; ok {
 			k, _ := generateApiKey()
 			getRedis := utils.GetRedis()
-			getRedis.HSet("api_keys", email, k)
+			getRedis.SAdd("apikeys", k)
 			c.JSON(http.StatusOK, gin.H{"result": k})
 			return
+		}else{
+			c.JSON(http.StatusBadRequest, gin.H{"message": "missing_field"})
+			return
 		}
+	}else{
+		c.JSON(http.StatusBadRequest, gin.H{"message": "error in email"})
+
 	}
-	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "error in email"})
 }
 
 //ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
@@ -341,14 +346,18 @@ func ApiAuth() gin.HandlerFunc {
 	r := utils.GetRedis()
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
-			if ok := isMember("api_keys", key, r); ok {
+			if ok := isMember("apikeys", key, r); ok {
 				c.Next()
 			}
+		} else{
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
+				"message": "visit https://soluspay.net/contact for a key"})
+			return
 		}
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
-			"message": "visit https://soluspay.net/contact for a key"})
+
 	}
 }
+
 func GenerateSecretKey(n int) ([]byte, error) {
 	key := make([]byte, n)
 	if _, err := rand.Read(key); err != nil {
@@ -360,12 +369,12 @@ func GenerateSecretKey(n int) ([]byte, error) {
 // keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
 func keyFromEnv() []byte {
 	// it either checks for environment for the specific key, or generates and saves a one
-	if key := os.Getenv("noebs_jwt"); key != ""{
+	if key := os.Getenv("noebs_jwt"); key != "" {
 		return []byte(key)
 	}
 
 	redisClient := utils.GetRedis()
-	if key := redisClient.Get("jwt").String(); key != ""{
+	if key := redisClient.Get("jwt").String(); key != "" {
 		return []byte(key)
 	}
 	key, _ := GenerateSecretKey(50)
@@ -402,4 +411,16 @@ func isMember(key, val string, r *redis.Client) bool {
 		}
 	}
 	return false
+}
+
+func getMap(key, val string, r *redis.Client) (bool, error){
+	res, err := r.HGet("api_keys", key).Result()
+	if err != nil {
+		return false, err
+	}
+	if res != val {
+		return false, errors.New("wrong_key")
+	}
+
+return true, nil
 }

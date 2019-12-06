@@ -45,6 +45,8 @@ func GetMainEngine() *gin.Engine {
 
 	route.Static("/dashboard/assets", "./dashboard/template")
 
+	route.POST("/generate_api_key", gateway.GenerateAPIKey)
+
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -89,32 +91,32 @@ func GetMainEngine() *gin.Engine {
 	cons := route.Group("/consumer")
 
 	//cons.Use(gateway.OptionsMiddleware)
-
-	cons.POST("/login", gateway.LoginHandler)
-	cons.POST("/register", gateway.CreateUser)
-	cons.POST("/refresh", gateway.RefreshHandler)
-	cons.POST("/logout", gateway.LogOut)
-
-	cons.POST("/balance", consumer.ConsumerBalance)
-	cons.POST("/is_alive", consumer.ConsumerIsAlive)
-	cons.POST("/bill_payment", consumer.ConsumerBillPayment)
-	cons.POST("/bill_inquiry", consumer.ConsumerBillInquiry)
-	cons.POST("/p2p", consumer.ConsumerCardTransfer)
-	cons.POST("/purchase", consumer.ConsumerPurchase)
-	cons.POST("/status", consumer.ConsumerStatus)
-	cons.POST("/key", consumer.ConsumerWorkingKey)
-	cons.POST("/ipin", consumer.ConsumerIPinChange)
-	cons.POST("/generate_qr", consumer.QRGeneration)
-	cons.POST("/qr_payment", consumer.QRPayment)
-	cons.POST("/generate_ipin", consumer.ConsumerGenerateIpin)
-	cons.POST("/complete_ipin", consumer.ConsumerCompleteIpin)
-
-	cons.POST("/qr_refund", consumer.QRRefund)
-	cons.GET("/mobile2pan", consumer.CardFromNumber)
-	cons.GET("/nec2name", consumer.EelToName)
-
-	cons.Use(gateway.AuthMiddleware())
+	// we want to use /v2 for consumer and merchant services
 	{
+		cons.POST("/register", gateway.CreateUser)
+		cons.POST("/refresh", gateway.RefreshHandler)
+		cons.POST("/logout", gateway.LogOut)
+
+		cons.POST("/balance", consumer.ConsumerBalance)
+		cons.POST("/is_alive", consumer.ConsumerIsAlive)
+		cons.POST("/bill_payment", consumer.ConsumerBillPayment)
+		cons.POST("/bill_inquiry", consumer.ConsumerBillInquiry)
+		cons.POST("/p2p", consumer.ConsumerCardTransfer)
+		cons.POST("/purchase", consumer.ConsumerPurchase)
+		cons.POST("/status", consumer.ConsumerStatus)
+		cons.POST("/key", consumer.ConsumerWorkingKey)
+		cons.POST("/ipin", consumer.ConsumerIPinChange)
+		cons.POST("/generate_qr", consumer.QRGeneration)
+		cons.POST("/qr_payment", consumer.QRPayment)
+		cons.POST("/generate_ipin", consumer.ConsumerGenerateIpin)
+		cons.POST("/complete_ipin", consumer.ConsumerCompleteIpin)
+
+		cons.POST("/qr_refund", consumer.QRRefund)
+		cons.GET("/mobile2pan", consumer.CardFromNumber)
+		cons.GET("/nec2name", consumer.EelToName)
+
+		cons.POST("/login", gateway.LoginHandler)
+		cons.Use(gateway.AuthMiddleware())
 		cons.GET("/get_cards", consumer.GetCards)
 		cons.POST("/add_card", consumer.AddCards)
 
@@ -129,6 +131,7 @@ func GetMainEngine() *gin.Engine {
 		})
 	}
 
+	consumer.ConsumerRoutes("/v1", route)
 	return route
 }
 

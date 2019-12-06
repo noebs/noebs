@@ -384,21 +384,19 @@ type ConsumerStatusFields struct {
 
 type ConsumerGenerateIPin struct {
 	ConsumerCommonFields
-	Pan string `json:"pan"`
+	Pan          string `json:"pan"`
 	MobileNumber string `json:"mobileNumber"`
-	Expdate string `json:"expDate"`
+	Expdate      string `json:"expDate"`
 }
 
 type ConsumerGenerateIPinCompletion struct {
 	ConsumerCommonFields
-	Pan string `json:"pan"`
-	Expdate string `json:"expDate"`
+	Pan          string `json:"pan"`
+	Expdate      string `json:"expDate"`
 	MobileNumber string `json:"mobileNumber"`
-	Otp string `json:"otp"`
-	Ipin string `json:"ipin"`
+	Otp          string `json:"otp"`
+	Ipin         string `json:"ipin"`
 }
-
-
 
 type DisputeFields struct {
 	Time    string  `json:"time,omitempty"`

@@ -18,7 +18,7 @@ func GetCards(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 	} else {
-		cards, err := redisClient.ZRange(username + ":cards", 0, -1).Result()
+		cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
 		if err != nil {
 			// handle the error somehow
 			logrus.WithFields(logrus.Fields{
@@ -59,7 +59,7 @@ func AddCards(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
 			z := &redis.Z{
-				Member:buf,
+				Member: buf,
 			}
 			if fields.IsMain {
 				// refactor me, please!
@@ -88,7 +88,7 @@ func EditCard(c *gin.Context) {
 		username := c.GetString("username")
 		if username == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access", "code": "empty_card_id"})
-		}else if fields.ID <= 0{
+		} else if fields.ID <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not submitted", "code": "empty_card_id"})
 		} else {
 			//FIXME please
@@ -132,7 +132,7 @@ func RemoveCard(c *gin.Context) {
 		username := c.GetString("username")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else if fields.ID <= 0{
+		} else if fields.ID <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
 
 			if fields.IsMain {
