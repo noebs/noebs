@@ -346,16 +346,15 @@ func ApiAuth() gin.HandlerFunc {
 	r := utils.GetRedis()
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
-			if ok := isMember("apikeys", key, r); ok {
-				c.Next()
+			if !isMember("apikeys", key, r) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
+					"message": "visit https://soluspay.net/contact for a key"})
+				return
 			}
-		} else{
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
-				"message": "visit https://soluspay.net/contact for a key"})
-			return
 		}
-
+		c.Next()
 	}
+
 }
 
 func GenerateSecretKey(n int) ([]byte, error) {
@@ -405,16 +404,12 @@ func generateApiKey() (string, error) {
 }
 
 func isMember(key, val string, r *redis.Client) bool {
-	if ok, err := r.SIsMember(key, val).Result(); err == nil && ok {
-		if ok {
-			return true
-		}
-	}
-	return false
+	b, _ := r.SIsMember(key, val).Result()
+	return b
 }
 
 func getMap(key, val string, r *redis.Client) (bool, error){
-	res, err := r.HGet("api_keys", key).Result()
+	res, err := r.HGet("apikeys", key).Result()
 	if err != nil {
 		return false, err
 	}
@@ -422,5 +417,5 @@ func getMap(key, val string, r *redis.Client) (bool, error){
 		return false, errors.New("wrong_key")
 	}
 
-return true, nil
+	return true, nil
 }
