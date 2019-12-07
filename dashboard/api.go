@@ -220,16 +220,15 @@ func BrowserDashboard(c *gin.Context) {
 	db.AutoMigrate(&Transaction{})
 
 	var page int
-	if q := c.Query("page"); q != "" {
-		page, _ = strconv.Atoi(q)
-	} else {
-		page = 1
-	}
+
+	q := c.DefaultQuery("page", "1")
+	page, _ = strconv.Atoi(q)
+
 
 	//todo make a pagination function
 	pageSize := 50
 	offset := page*pageSize - pageSize
-
+	log.Printf("The offset is: %v", offset)
 	var tran []Transaction
 
 	var count int
@@ -247,7 +246,7 @@ func BrowserDashboard(c *gin.Context) {
 	if c.ShouldBind(&search) == nil {
 		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 	} else {
-		db.Table("transactions").Where("id >= ?", offset).Order("id desc").Limit(pageSize).Find(&tran)
+		db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
 	}
 
 	// get the most transactions per terminal_id
@@ -260,6 +259,7 @@ func BrowserDashboard(c *gin.Context) {
 	db.Table("transactions").Select("count(tran_fee) as amount, response_status, terminal_id, datetime(created_at) as time").Where("tran_amount >= ? AND response_status = ? AND strftime('%m', time) = ?", 1, "Successful", m).Group("terminal_id").Order("amount desc").Scan(&terminalFees)
 
 	log.Printf("the least merchats are: %v", leastMerchants)
+
 	pager := pagination(count, 50)
 	errors := errorsCounter(tran)
 	stats := map[string]int{
@@ -270,7 +270,8 @@ func BrowserDashboard(c *gin.Context) {
 
 	sumFees := computeSum(terminalFees)
 	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1,
-		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants, "terminal_fees": terminalFees, "sum_fees": sumFees})
+		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants,
+		"terminal_fees": terminalFees, "sum_fees": sumFees})
 }
 
 func LandingPage(c *gin.Context) {

@@ -73,16 +73,16 @@
                     <th scope="col">Service</th>
                 </tr>
                 </thead>
-                {{range $i, $v := .transactions}}
+                {{range .transactions}}
                     <tr>
-                        <th scope="row">{{$i}}</th>
-                        <td>{{time $v.CreatedAt}}</td>
-                        <td>{{$v.TranAmount}}</td>
-                        <td>{{$v.ReferenceNumber}}</td>
-                        <td>{{$v.ApprovalCode}}</td>
-                        <td>{{$v.TerminalID}}</td>
-                        <td>{{$v.ResponseCode}}</td>
-                        <td>{{$v.EBSServiceName}}</td>
+                        <th scope="row">{{.ID}}</th>
+                        <td>{{time .CreatedAt}}</td>
+                        <td>{{.TranAmount}}</td>
+                        <td>{{.ReferenceNumber}}</td>
+                        <td>{{.ApprovalCode}}</td>
+                        <td>{{.TerminalID}}</td>
+                        <td>{{.ResponseCode}}</td>
+                        <td>{{.EBSServiceName}}</td>
                     </tr>
                 {{end}}
             </table>

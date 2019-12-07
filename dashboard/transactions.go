@@ -116,7 +116,7 @@ func structToSlice(t []Transaction) []string {
 }
 
 func TimeFormatter(t time.Time) string {
-	return t.Format("Mon Jan 2, 15:04:05 CAT 2006")
+	return t.Format(time.RFC3339)
 }
 
 func GenerateMultiTemplate() multitemplate.Renderer {

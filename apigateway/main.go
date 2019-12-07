@@ -308,6 +308,8 @@ var (
 	errObjectNotFound = errors.New("object not found")
 )
 
+//AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
+//to get a username from the payload (maybe change it to mobile number at somepoint)
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// just handle the simplest case, authorization is not provided.
@@ -342,6 +344,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 }
 
+//ApiAuth API-Key middleware. Currently is used by consumer services
 func ApiAuth() gin.HandlerFunc {
 	r := utils.GetRedis()
 	return func(c *gin.Context) {
