@@ -71,7 +71,7 @@ func Instrumentation() gin.HandlerFunc{
 		}
 		start := time.Now()
 		c.Next()
-		duration := time.Since(start).Seconds()
+		duration := float64(time.Since(start))/ float64(time.Millisecond)
 
 		rSize := c.Writer.Size()
 		rqSize := c.Request.ContentLength
@@ -80,10 +80,10 @@ func Instrumentation() gin.HandlerFunc{
 		url := getUrl(c)
 
 		counterVec.WithLabelValues(status, c.Request.Method, c.HandlerName(), c.Request.Host, url).Inc()
-		resTime.Observe(float64(duration))
+		resTime.Observe(duration)
 		resSize.Observe(float64(rSize))
 		reqSize.Observe(float64(rqSize))
-		resTimeSum.Observe(float64(duration))
+		resTimeSum.Observe(duration)
 
 	}
 }
