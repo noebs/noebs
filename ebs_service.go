@@ -16,7 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
-	"github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
 	"html/template"
 	"io/ioutil"
@@ -31,8 +30,10 @@ func GetMainEngine() *gin.Engine {
 
 	route := gin.Default()
 	//metrics := Metrics()
-	p := ginprometheus.NewPrometheus("gin")
-	p.Use(route)
+	//p := ginprometheus.NewPrometheus("gin")
+	instrument := gateway.Instrumentation()
+
+	route.Use(instrument)
 
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", EBS)
@@ -67,13 +68,14 @@ func GetMainEngine() *gin.Engine {
 	dashboardGroup := route.Group("/dashboard")
 	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
+		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
 		dashboardGroup.GET("/create", dashboard.MakeDummyTransaction)
 		dashboardGroup.GET("/all", dashboard.GetAll)
 		dashboardGroup.GET("/count", dashboard.TransactionsCount)
 		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
-		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
 		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
 		dashboardGroup.GET("/merchant/:id", dashboard.MerchantViews)
 
