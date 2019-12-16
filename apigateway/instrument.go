@@ -71,7 +71,7 @@ func Instrumentation() gin.HandlerFunc{
 		}
 		start := time.Now()
 		c.Next()
-		duration := time.Since(start) * time.Microsecond
+		duration := time.Now().Sub(start) * time.Millisecond
 
 		rSize := c.Writer.Size()
 		rqSize := c.Request.ContentLength
