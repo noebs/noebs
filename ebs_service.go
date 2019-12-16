@@ -65,10 +65,12 @@ func GetMainEngine() *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
+	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	dashboardGroup := route.Group("/dashboard")
 	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
-		dashboardGroup.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 
 		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
