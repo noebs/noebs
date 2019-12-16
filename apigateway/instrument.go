@@ -9,8 +9,8 @@ import (
 
 func Instrumentation() gin.HandlerFunc{
 	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace:   "gin",
-		Subsystem:   "gin_label",
+		Namespace:   "noebs",
+		Subsystem:   "request",
 		Name:        "requests_count",
 		Help:        "Number of requests per each endpoint",
 		ConstLabels: nil,
@@ -71,7 +71,7 @@ func Instrumentation() gin.HandlerFunc{
 		}
 		start := time.Now()
 		c.Next()
-		duration := float64(time.Since(start))
+		duration := float64(time.Since(start)) * 1e-6 // to millisecond
 
 		rSize := c.Writer.Size()
 		rqSize := c.Request.ContentLength
