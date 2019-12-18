@@ -186,7 +186,13 @@ func RefreshHandler(c *gin.Context) {
 	claims, err := VerifyJWT(h, jwtKey)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			// Generate a new token
+			username := claims.Username
+			auth, err := GenerateJWT(username, jwtKey)
+			if err != nil {
+				c.Writer.Header().Set("Authorization", auth)
+				c.JSON(http.StatusOK, gin.H{"authorization": auth})
+				return
+			}
 		} else {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
 			return

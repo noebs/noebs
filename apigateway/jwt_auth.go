@@ -31,6 +31,7 @@ func VerifyJWT(tokenString string, secret []byte) (*TokenClaims, error) {
 	}
 }
 
+
 func GenerateJWT(serviceID string, secret []byte) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
