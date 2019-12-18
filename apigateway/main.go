@@ -33,11 +33,11 @@ func GenerateAPIKey(c *gin.Context) {
 			getRedis.SAdd("apikeys", k)
 			c.JSON(http.StatusOK, gin.H{"result": k})
 			return
-		}else{
+		} else {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "missing_field"})
 			return
 		}
-	}else{
+	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "error in email"})
 
 	}
@@ -177,36 +177,32 @@ func RefreshHandler(c *gin.Context) {
 	// just handle the simplest case, authorization is not provided.
 	h := c.GetHeader("Authorization")
 	if h == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
-			"code": "unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent", "code": "unauthorized"})
 		return
-
 	}
 
 	claims, err := VerifyJWT(h, jwtKey)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			username := claims.Username
-			auth, err := GenerateJWT(username, jwtKey)
-			if err != nil {
-				c.Writer.Header().Set("Authorization", auth)
-				c.JSON(http.StatusOK, gin.H{"authorization": auth})
-				return
-			}
+			// in this case you might need to give it another spin
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
+			return
+			// allow for expired tokens to live...FIXME
+			//c.Set("username", claims.Username)
+			//c.Next()
 		} else {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
 			return
 		}
-	}
-	if claims == nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
-		return
-	}
-	secret, _ := GenerateSecretKey(50)
-	token, _ := GenerateJWT(claims.Username, secret)
-	c.Writer.Header().Set("Authorization", token)
+	} else if err == nil {
+		// FIXME it is better to let the endpoint explicitly Get the claim off the user
+		//  as we will assume the auth server will reside in a different domain!
+		log.Printf("the username is: %s", claims.Username)
 
-	c.JSON(http.StatusOK, gin.H{"authorization": token})
+		auth, _ := GenerateJWT(claims.Username, jwtKey)
+		c.Writer.Header().Set("Authorization", auth)
+		c.JSON(http.StatusOK, gin.H{"authorization": auth})
+	}
 }
 
 func LogOut(c *gin.Context) {
@@ -417,7 +413,7 @@ func isMember(key, val string, r *redis.Client) bool {
 	return b
 }
 
-func getMap(key, val string, r *redis.Client) (bool, error){
+func getMap(key, val string, r *redis.Client) (bool, error) {
 	res, err := r.HGet("apikeys", key).Result()
 	if err != nil {
 		return false, err
