@@ -47,7 +47,6 @@ func GetMainEngine() *gin.Engine {
 	route.Static("/dashboard/assets", "./dashboard/template")
 
 	route.POST("/generate_api_key", gateway.GenerateAPIKey)
-
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -70,8 +69,6 @@ func GetMainEngine() *gin.Engine {
 	dashboardGroup := route.Group("/dashboard")
 	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
-
-
 		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
 		dashboardGroup.GET("/get", dashboard.TransactionByTid)
 		dashboardGroup.GET("/create", dashboard.MakeDummyTransaction)
@@ -97,6 +94,7 @@ func GetMainEngine() *gin.Engine {
 	//cons.Use(gateway.OptionsMiddleware)
 	// we want to use /v2 for consumer and merchant services
 	{
+		cons.GET("/rate", gin.WrapF(consumer.Rate))
 		cons.POST("/register", gateway.CreateUser)
 		cons.POST("/refresh", gateway.RefreshHandler)
 		cons.POST("/logout", gateway.LogOut)

@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"time"
@@ -59,4 +60,18 @@ func GenerateJWT(serviceID string, secret []byte) (string, error) {
 type TokenClaims struct {
 	Username string `json:"username"`
 	jwt.StandardClaims
+}
+
+//secretFromClaims returns the claim's secret. in this case it is a user name
+func secretFromClaims(token string, skipTime bool) (string, error){
+	claims, err := VerifyJWT(token, jwtKey)
+	if e, ok := err.(*jwt.ValidationError); ok {
+		if e.Errors&jwt.ValidationErrorExpired > 0 && skipTime{
+			return claims.Username, nil
+		} else {
+			return "", errors.New("token is invalid")
+		}
+	} else {
+		return "", errors.New("token is invalid")
+	}
 }

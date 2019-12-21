@@ -184,12 +184,12 @@ func RefreshHandler(c *gin.Context) {
 	claims, err := VerifyJWT(h, jwtKey)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			// in this case you might need to give it another spin
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
-			return
-			// allow for expired tokens to live...FIXME
-			//c.Set("username", claims.Username)
-			//c.Next()
+			log.Printf("the username is: %s", claims.Username)
+
+			auth, _ := GenerateJWT(claims.Username, jwtKey)
+			c.Writer.Header().Set("Authorization", auth)
+			c.JSON(http.StatusOK, gin.H{"authorization": auth})
+
 		} else {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
 			return

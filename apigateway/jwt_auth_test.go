@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-func main() {
-	// Write the test cases you want to imploy here...
-	/*
-		- test valid tokens are valid
-		- test that the token is only valid for its user
-		- test that outdated token is not accepted
-		- test tokens in the future
-	*/
-}
 
 func TestGenerateJWT(t *testing.T) {
 	type args struct {
@@ -58,6 +49,33 @@ func TestVerifyJWT(t *testing.T) {
 			got, _ := VerifyJWT(j, []byte("abcdef012345678"))
 			if !reflect.DeepEqual(got.Username, tt.want) {
 				t.Errorf("VerifyJWT() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_secretFromClaims(t *testing.T) {
+	type args struct {
+		token    string
+		skipTime bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := secretFromClaims(tt.args.token, tt.args.skipTime)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("secretFromClaims() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("secretFromClaims() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
