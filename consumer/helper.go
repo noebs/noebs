@@ -57,7 +57,7 @@ func ConsumerRoutes(groupName string, route *gin.Engine) {
 
 
 func rateRpc() float32{
-	address := "localhost:50051"
+	address := "192.168.20.21:50051"
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
