@@ -5,7 +5,7 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
-	pb "rateit/rate"
+	pb "github.com/adonese/microservices/raterpc/rate"
 	"net/http"
 	"time"
 )
@@ -57,6 +57,7 @@ func ConsumerRoutes(groupName string, route *gin.Engine) {
 
 
 func rateRpc() float32{
+	address := "localhost:50051"
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
