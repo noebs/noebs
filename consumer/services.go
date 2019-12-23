@@ -259,17 +259,17 @@ func EelToName(c *gin.Context) {
 	}
 }
 
-func Rate(w http.ResponseWriter, r *http.Request){
-	rate := rateRpc()
-	w.Header().Add("content-type", "application/json")
-	ra := struct {
-		Result float32
-	}{rate}
-	resBytes, err := json.Marshal(&ra)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(resBytes)
-}
+//func Rate(w http.ResponseWriter, r *http.Request){
+//	rate := rateRpc()
+//	w.Header().Add("content-type", "application/json")
+//	ra := struct {
+//		Result float32
+//	}{rate}
+//	resBytes, err := json.Marshal(&ra)
+//	if err != nil {
+//		w.WriteHeader(http.StatusBadRequest)
+//		return
+//	}
+//	w.WriteHeader(http.StatusOK)
+//	w.Write(resBytes)
+//}

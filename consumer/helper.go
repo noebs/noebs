@@ -1,13 +1,10 @@
 package consumer
 
 import (
-	"context"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/gin-gonic/gin"
-	"google.golang.org/grpc"
-	pb "github.com/adonese/microservices/raterpc/rate"
+
 	"net/http"
-	"time"
 )
 
 func ConsumerRoutes(groupName string, route *gin.Engine) {
@@ -56,23 +53,23 @@ func ConsumerRoutes(groupName string, route *gin.Engine) {
 }
 
 
-func rateRpc() float32{
-	address := "192.168.20.21:50051"
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("did not connect: %v", err)
-	}
-	defer conn.Close()
-	c := pb.NewRaterClient(conn)
-
-	// Contact the server and print out its response.
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	r, err := c.GetSDGRate(ctx, &pb.Empty{})
-	if err != nil {
-		log.Fatalf("could not greet: %v", err)
-	}
-	log.Printf("Greeting: %f", r.Message)
-	return r.Message
-}
+//func rateRpc() float32{
+//	address := "192.168.20.21:50051"
+//	conn, err := grpc.Dial(address, grpc.WithInsecure())
+//	if err != nil {
+//		log.Fatalf("did not connect: %v", err)
+//	}
+//	defer conn.Close()
+//	c := pb.NewRaterClient(conn)
+//
+//	// Contact the server and print out its response.
+//
+//	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+//	defer cancel()
+//	r, err := c.GetSDGRate(ctx, &pb.Empty{})
+//	if err != nil {
+//		log.Fatalf("could not greet: %v", err)
+//	}
+//	log.Printf("Greeting: %f", r.Message)
+//	return r.Message
+//}
