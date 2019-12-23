@@ -22,7 +22,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	}
 
 	ebsClient := http.Client{
-		Timeout:   5 * time.Second,
+		Timeout:   30 * time.Second,
 		Transport: verifyTLS,
 	}
 
