@@ -94,7 +94,7 @@ func GetMainEngine() *gin.Engine {
 	//cons.Use(gateway.OptionsMiddleware)
 	// we want to use /v2 for consumer and merchant services
 	{
-		cons.GET("/rate", gin.WrapF(consumer.Rate))
+		//cons.GET("/rate", gin.WrapF(consumer.Rate))
 		cons.POST("/register", gateway.CreateUser)
 		cons.POST("/refresh", gateway.RefreshHandler)
 		cons.POST("/logout", gateway.LogOut)
