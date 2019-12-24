@@ -188,10 +188,14 @@ func mapSearchField(f string) string{
 	 */
 	var result = f
 	for i, v := range []rune(f){
+		if i == 0 {
+			continue
+		}
 		if unicode.IsUpper(v){
-			result = f[:i] + "_" + strings.ToLower(string(v)) + f[i+1:]
+			result = result[:i] + "_" + strings.ToLower(string(v)) + f[i+1:]
 			break
 		}
 	}
-	return result
+	return strings.ToLower(result)
+
 }
