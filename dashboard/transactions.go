@@ -157,8 +157,9 @@ func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase stri
 
 	searchField = mapSearchField(searchField)
 	sortField = mapSearchField(sortField)
+	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
 
-	if searchField != ""{
+	if searchField != "" || search != ""{
 		// where can you search?
 		// terminal_id
 		// date time range TODO
@@ -173,7 +174,7 @@ func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase stri
 		}
 	}else{
 		// we only want to sort, no searching required
-		db.Table("transactions").Where("id >= ?", offset).Count(&count).Limit(pageSize).Order(sortField + sortCase).Find(&tran)
+		db.Table("transactions").Where("id >= ?", offset).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
 	}
 	return tran, count
 
@@ -185,7 +186,7 @@ func mapSearchField(f string) string{
 	tranDateTime: tran_date_time
 	approvalCode: approval_code
 	 */
-	var result string
+	var result = f
 	for i, v := range []rune(f){
 		if unicode.IsUpper(v){
 			result = f[:i] + "_" + strings.ToLower(string(v)) + f[i+1:]

@@ -11,6 +11,7 @@ func Test_mapSearchField(t *testing.T) {
 	}{
 		{"success_case", "terminalId", "terminal_id"},
 		{"success_case", "approvalCode", "approval_code"},
+		{"success_case", "approval_code", "approval_code"},
 
 	}
 	for _, tt := range tests {

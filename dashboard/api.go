@@ -183,14 +183,14 @@ func GetAll(c *gin.Context) {
 	s := c.DefaultQuery("size", "50")
 	search := c.DefaultQuery("search", "")
 	searchField := c.DefaultQuery("field", "")
-	sortField := c.DefaultQuery("sort_field", "id")
+	sortField:= c.DefaultQuery("sort_field", "id")
 	sortCase := c.DefaultQuery("order", "")
 
 	pageSize, _ := strconv.Atoi(s)
 	page, _ := strconv.Atoi(p)
 
 	offset := page*(pageSize+1) - pageSize
-	fmt.Println(offset)
+	fmt.Printf("%+v,%+v,%+v,%+v,%+v,%+v\n",searchField, search, sortField, sortCase, offset, pageSize)
 	tran, count := sortTable(db, searchField, search, sortField, sortCase, offset, pageSize)
 
 	paging := map[string]interface{}{
