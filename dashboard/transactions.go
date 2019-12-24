@@ -6,7 +6,9 @@ import (
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"strings"
 	"time"
+	"unicode"
 )
 
 type Transaction struct {
@@ -152,6 +154,10 @@ func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase stri
 
 	var tran []Transaction
 	var count int
+
+	searchField = mapSearchField(searchField)
+	sortField = mapSearchField(sortField)
+
 	if searchField != ""{
 		// where can you search?
 		// terminal_id
@@ -171,4 +177,20 @@ func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase stri
 	}
 	return tran, count
 
+}
+
+func mapSearchField(f string) string{
+	/*
+	terminalId: terminal_id
+	tranDateTime: tran_date_time
+	approvalCode: approval_code
+	 */
+	var result string
+	for i, v := range []rune(f){
+		if unicode.IsUpper(v){
+			result = f[:i] + "_" + strings.ToLower(string(v)) + f[i+1:]
+			break
+		}
+	}
+	return result
 }
