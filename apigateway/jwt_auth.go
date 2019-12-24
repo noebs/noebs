@@ -32,7 +32,6 @@ func VerifyJWT(tokenString string, secret []byte) (*TokenClaims, error) {
 	}
 }
 
-
 func GenerateJWT(serviceID string, secret []byte) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
@@ -63,10 +62,10 @@ type TokenClaims struct {
 }
 
 //secretFromClaims returns the claim's secret. in this case it is a user name
-func secretFromClaims(token string, skipTime bool) (string, error){
+func secretFromClaims(token string, skipTime bool) (string, error) {
 	claims, err := VerifyJWT(token, jwtKey)
 	if e, ok := err.(*jwt.ValidationError); ok {
-		if e.Errors&jwt.ValidationErrorExpired > 0 && skipTime{
+		if e.Errors&jwt.ValidationErrorExpired > 0 && skipTime {
 			return claims.Username, nil
 		} else {
 			return "", errors.New("token is invalid")

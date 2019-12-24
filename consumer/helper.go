@@ -52,7 +52,6 @@ func ConsumerRoutes(groupName string, route *gin.Engine) {
 	}
 }
 
-
 //func rateRpc() float32{
 //	address := "192.168.20.21:50051"
 //	conn, err := grpc.Dial(address, grpc.WithInsecure())

@@ -147,3 +147,28 @@ type merchantsIssues struct {
 func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
 	return json.Marshal(m)
 }
+
+func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase string, offset, pageSize int) ([]Transaction, int) {
+
+	var tran []Transaction
+	var count int
+	if searchField != ""{
+		// where can you search?
+		// terminal_id
+		// date time range TODO
+		// systemTraceAuditNumber
+		switch searchField{
+		case "created_at":
+			db.Table("transactions").Where("id >= ? AND created_at in (?)", offset, search).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
+		case "system_trace_audit_number": // exact match
+			db.Table("transactions").Where("id >= ? AND system_trace_audit_number = ?", offset, search).Count(&count).Limit(pageSize).Order(sortField +" "+ sortCase).Find(&tran)
+		default:
+			db.Table("transactions").Where("id >= ? AND terminal_id LIKE ?", offset, "%"+search+"%").Count(&count).Limit(pageSize).Order(sortField+" " + sortCase).Find(&tran)
+		}
+	}else{
+		// we only want to sort, no searching required
+		db.Table("transactions").Where("id >= ?", offset).Count(&count).Limit(pageSize).Order(sortField + sortCase).Find(&tran)
+	}
+	return tran, count
+
+}

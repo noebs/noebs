@@ -179,35 +179,24 @@ func GetAll(c *gin.Context) {
 
 	db.AutoMigrate(&Transaction{})
 
-	var page int
-	if q := c.Query("page"); q != "" {
-		page, _ = strconv.Atoi(q)
-	} else {
-		page = 1
-	}
+	p := c.DefaultQuery("page", "0")
+	s := c.DefaultQuery("size", "50")
+	search := c.DefaultQuery("search", "")
+	searchField := c.DefaultQuery("field", "")
+	sortField := c.DefaultQuery("sort_field", "id")
+	sortCase := c.DefaultQuery("order", "")
 
-	// page represents a 30 result from the database.
-	// the computation should be done like this:
-	// offset = page * 50
-	// limit = offset + 50
+	pageSize, _ := strconv.Atoi(s)
+	page, _ := strconv.Atoi(p)
 
-	//todo make a pagination function
-	pageSize := 50
-	offset := page*pageSize - pageSize
-
+	offset := page*(pageSize+1) - pageSize
 	fmt.Println(offset)
-	var tran []Transaction
-
-	// another good alternative
-	db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
-
-	// check whether we are accessing it from a browser
-	previous := page - 1
-	next := page + 1
+	tran, count := sortTable(db, searchField, search, sortField, sortCase, offset, pageSize)
 
 	paging := map[string]interface{}{
-		"previous": previous,
-		"after":    next,
+		"previous": page-1,
+		"after":    page+1,
+		"count":    count,
 	}
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
@@ -223,7 +212,6 @@ func BrowserDashboard(c *gin.Context) {
 
 	q := c.DefaultQuery("page", "1")
 	page, _ = strconv.Atoi(q)
-
 
 	//todo make a pagination function
 	pageSize := 50

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func Instrumentation() gin.HandlerFunc{
+func Instrumentation() gin.HandlerFunc {
 	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace:   "noebs",
 		Subsystem:   "request",
@@ -57,7 +57,7 @@ func Instrumentation() gin.HandlerFunc{
 
 	// prometheus collector
 	colls := []prometheus.Collector{counterVec, resTime, resSize, reqSize, resTimeSum}
-	for _, v := range colls{
+	for _, v := range colls {
 		err := prometheus.Register(v)
 		if err != nil {
 			panic(err)
@@ -65,7 +65,7 @@ func Instrumentation() gin.HandlerFunc{
 	}
 	return func(c *gin.Context) {
 
-		if c.Request.URL.Path == "/metrics"{
+		if c.Request.URL.Path == "/metrics" {
 			c.Next()
 			return
 		}
@@ -88,6 +88,6 @@ func Instrumentation() gin.HandlerFunc{
 	}
 }
 
-func getUrl(c *gin.Context) string{
+func getUrl(c *gin.Context) string {
 	return c.Request.URL.Path
 }

@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-
 func TestGenerateJWT(t *testing.T) {
 	type args struct {
 		serviceID string
@@ -38,8 +37,8 @@ func TestVerifyJWT(t *testing.T) {
 	j, _ := GenerateJWT("test", key)
 
 	tests := []struct {
-		name    string
-		have    string
+		name string
+		have string
 		want string
 	}{
 		{"test_successful_retrieval", "test", "test"},
