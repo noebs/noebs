@@ -181,21 +181,26 @@ func GetAll(c *gin.Context) {
 
 	p := c.DefaultQuery("page", "0")
 	s := c.DefaultQuery("size", "50")
+	perPage := c.DefaultQuery("perPage", "")
+
 	search := c.DefaultQuery("search", "")
 	searchField := c.DefaultQuery("field", "")
-	sortField:= c.DefaultQuery("sort_field", "id")
+	sortField := c.DefaultQuery("sort_field", "id")
 	sortCase := c.DefaultQuery("order", "")
 
+	if perPage != "" {
+		s = perPage
+	}
 	pageSize, _ := strconv.Atoi(s)
 	page, _ := strconv.Atoi(p)
 
 	offset := page*(pageSize+1) - pageSize
-	fmt.Printf("%+v,%+v,%+v,%+v,%+v,%+v\n",searchField, search, sortField, sortCase, offset, pageSize)
+	fmt.Printf("%+v,%+v,%+v,%+v,%+v,%+v\n", searchField, search, sortField, sortCase, offset, pageSize)
 	tran, count := sortTable(db, searchField, search, sortField, sortCase, offset, pageSize)
 
 	paging := map[string]interface{}{
-		"previous": page-1,
-		"after":    page+1,
+		"previous": page - 1,
+		"after":    page + 1,
 		"count":    count,
 	}
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
