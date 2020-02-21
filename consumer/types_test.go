@@ -3,9 +3,10 @@ package consumer
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/ebs_fields"
 	"reflect"
 	"testing"
+
+	"github.com/adonese/noebs/ebs_fields"
 )
 
 func Test_cardsFromZ(t *testing.T) {
@@ -69,6 +70,71 @@ func Test_generateCardsIds(t *testing.T) {
 				if !reflect.DeepEqual(c, tt.want[i]) {
 					t.Errorf("have: %v, want: %v", c, tt.want[i])
 				}
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_toMap(t *testing.T) {
+
+	type fields struct {
+		Name   string
+		Amount float32
+		ID     string
+	}
+	f := fields{Name: "mohamed", Amount: 30.2, ID: "my id"}
+	w := map[string]interface{}{
+		"name": "mohamed", "amount": 30.2, "id": "my id",
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   map[string]interface{}
+	}{
+		{"successful test", f, w},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+				Name:   tt.fields.Name,
+				Amount: tt.fields.Amount,
+				ID:     tt.fields.ID,
+			}
+			if got := p.toMap(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("paymentTokens.toMap() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_getFromRedis(t *testing.T) {
+	type fields struct {
+		Name   string
+		Amount float32
+		ID     string
+		UUID   string
+	}
+	type args struct {
+		id string
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+				Name:   tt.fields.Name,
+				Amount: tt.fields.Amount,
+				ID:     tt.fields.ID,
+				UUID:   tt.fields.UUID,
+			}
+			if err := p.getFromRedis(tt.args.id); (err != nil) != tt.wantErr {
+				t.Errorf("paymentTokens.getFromRedis() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

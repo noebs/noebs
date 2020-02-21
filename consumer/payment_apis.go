@@ -2,6 +2,8 @@ package consumer
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
@@ -9,13 +11,12 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
-	"net/http"
 )
 
 var log = logrus.New()
 var BillChan = make(chan ebs_fields.EBSParserFields)
 
-func ConsumerPurchase(c *gin.Context) {
+func Purchase(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -82,7 +83,7 @@ func ConsumerPurchase(c *gin.Context) {
 	}
 }
 
-func ConsumerIsAlive(c *gin.Context) {
+func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -155,7 +156,7 @@ func ConsumerIsAlive(c *gin.Context) {
 	}
 }
 
-func ConsumerBillPayment(c *gin.Context) {
+func BillPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -227,7 +228,7 @@ func ConsumerBillPayment(c *gin.Context) {
 	}
 }
 
-func ConsumerBillInquiry(c *gin.Context) {
+func BillInquiry(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -302,7 +303,7 @@ func ConsumerBillInquiry(c *gin.Context) {
 	}
 }
 
-func ConsumerBalance(c *gin.Context) {
+func Balance(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -376,7 +377,7 @@ func ConsumerBalance(c *gin.Context) {
 	}
 }
 
-func ConsumerWorkingKey(c *gin.Context) {
+func WorkingKey(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -450,7 +451,7 @@ func ConsumerWorkingKey(c *gin.Context) {
 	}
 }
 
-func ConsumerCardTransfer(c *gin.Context) {
+func CardTransfer(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -528,7 +529,7 @@ func ConsumerCardTransfer(c *gin.Context) {
 	}
 }
 
-func ConsumerIPinChange(c *gin.Context) {
+func IPinChange(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -601,7 +602,7 @@ func ConsumerIPinChange(c *gin.Context) {
 	}
 }
 
-func ConsumerStatus(c *gin.Context) {
+func Status(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -674,7 +675,7 @@ func ConsumerStatus(c *gin.Context) {
 	}
 }
 
-func ConsumerTransactions(c *gin.Context) {
+func Transactions(c *gin.Context) {
 	//TODO get the transaction from Redis instance!
 	redisClient := utils.GetRedis()
 
@@ -826,6 +827,7 @@ func QRRefund(c *gin.Context) {
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
+
 func QRGeneration(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 
@@ -896,7 +898,7 @@ func QRGeneration(c *gin.Context) {
 	}
 }
 
-func ConsumerGenerateIpin(c *gin.Context) {
+func GenerateIpin(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -970,7 +972,7 @@ func ConsumerGenerateIpin(c *gin.Context) {
 	}
 }
 
-func ConsumerCompleteIpin(c *gin.Context) {
+func CompleteIpin(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1036,7 +1038,6 @@ func ConsumerCompleteIpin(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
 
 	default:
@@ -1046,10 +1047,76 @@ func ConsumerCompleteIpin(c *gin.Context) {
 
 //SpecialPayment is a new payment service that:
 
+//GeneratePaymentToken generates a token
 func GeneratePaymentToken(c *gin.Context) {
+	var t paymentTokens
+	if err := c.ShouldBindJSON(&t); err != nil {
+		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+	if err := t.toRedis(); err != nil {
+		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
 
+	c.JSON(http.StatusCreated, gin.H{"result": t, "uuid": t.UUID})
 }
 
 func SpecialPayment(c *gin.Context) {
+	// get token
+	// get token service from redis
+	// perform the payment
+	// /consumer/payment/uuid
+	url := ebs_fields.ConsumerPurchaseEndpoint
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	id := c.Param("uuid")
+	if id == "" {
+		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	// this should really be the final step...
+	var p ebs_fields.ConsumerPurchaseFields
+	if err := c.ShouldBindJSON(&p); err != nil {
+		ve := validationError{Message: err.Error(), Code: "validation_error"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	var t paymentTokens
+	t.getFromRedis(id)
+	if !t.validate(id, p.TranAmount) {
+		ve := validationError{Message: "Wrong payment info. Amount and Payment ID doesn't match existing records", Code: "mismatched_special_payment_data"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	// perform the payment
+	req, _ := json.Marshal(&p)
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
+
+	// mask the pan
+	res.MaskPAN()
+
+	transaction := dashboard.Transaction{
+		GenericEBSResponseFields: res.GenericEBSResponseFields,
+	}
+
+	transaction.EBSServiceName = "special_payment"
+	db.Table("transactions").Create(&transaction)
+
+	if ebsErr != nil {
+		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, payload)
+		return
+	} else {
+		c.JSON(code, gin.H{"ebs_response": res})
+		return
+	}
 
 }

@@ -2,6 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"html/template"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"strings"
+
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
@@ -14,14 +20,9 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"github.com/swaggo/gin-swagger"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
 	"gopkg.in/go-playground/validator.v9"
-	"html/template"
-	"io/ioutil"
-	"net/http"
-	"os"
-	"strings"
 )
 
 var log = logrus.New()
@@ -99,19 +100,19 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/refresh", gateway.RefreshHandler)
 		cons.POST("/logout", gateway.LogOut)
 
-		cons.POST("/balance", consumer.ConsumerBalance)
-		cons.POST("/is_alive", consumer.ConsumerIsAlive)
-		cons.POST("/bill_payment", consumer.ConsumerBillPayment)
-		cons.POST("/bill_inquiry", consumer.ConsumerBillInquiry)
-		cons.POST("/p2p", consumer.ConsumerCardTransfer)
-		cons.POST("/purchase", consumer.ConsumerPurchase)
-		cons.POST("/status", consumer.ConsumerStatus)
-		cons.POST("/key", consumer.ConsumerWorkingKey)
-		cons.POST("/ipin", consumer.ConsumerIPinChange)
+		cons.POST("/balance", consumer.Balance)
+		cons.POST("/is_alive", consumer.IsAlive)
+		cons.POST("/bill_payment", consumer.BillPayment)
+		cons.POST("/bill_inquiry", consumer.BillInquiry)
+		cons.POST("/p2p", consumer.CardTransfer)
+		cons.POST("/purchase", consumer.Purchase)
+		cons.POST("/status", consumer.Status)
+		cons.POST("/key", consumer.WorkingKey)
+		cons.POST("/ipin", consumer.IPinChange)
 		cons.POST("/generate_qr", consumer.QRGeneration)
 		cons.POST("/qr_payment", consumer.QRPayment)
-		cons.POST("/generate_ipin", consumer.ConsumerGenerateIpin)
-		cons.POST("/complete_ipin", consumer.ConsumerCompleteIpin)
+		cons.POST("/generate_ipin", consumer.GenerateIpin)
+		cons.POST("/complete_ipin", consumer.CompleteIpin)
 
 		cons.POST("/qr_refund", consumer.QRRefund)
 		cons.GET("/mobile2pan", consumer.CardFromNumber)

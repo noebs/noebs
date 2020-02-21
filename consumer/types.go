@@ -2,8 +2,11 @@ package consumer
 
 import (
 	"encoding/json"
-	"github.com/adonese/noebs/ebs_fields"
 	"regexp"
+
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
+	"github.com/google/uuid"
 )
 
 type card map[string]interface{}
@@ -40,7 +43,74 @@ func notEbs(pan string) bool {
 }
 
 type paymentTokens struct {
-	Name   string
-	Amount float32
-	ID     string ``
+	Name   string  `json:"name,omitempty" validator:"required"`
+	Amount float32 `json:"amount,omitempty" validator:"required"`
+	ID     string  `json:"id,omitempty"`
+	UUID   string  `json:"uuid"`
+}
+
+func (p *paymentTokens) getUUID() string {
+	if p.UUID != "" {
+		return p.UUID
+	}
+	id := uuid.New().String()
+	p.UUID = id
+	return id
+}
+
+func (p *paymentTokens) validate(id string, amount float32) bool {
+	return p.ID == id && p.Amount == amount
+}
+func (p *paymentTokens) toMap() map[string]interface{} {
+	res := map[string]interface{}{
+		"id":     p.ID,
+		"amount": p.Amount,
+		"name":   p.Name,
+	}
+	return res
+}
+
+func (p *paymentTokens) fromMap(m map[string]interface{}) {
+	p.Amount = m["amount"].(float32)
+	p.ID = m["id"].(string)
+	p.Name = m["name"].(string)
+}
+
+func (p *paymentTokens) toRedis() error {
+	r := utils.GetRedis()
+
+	id := p.getUUID()
+	h := p.toMap()
+
+	if _, err := r.HMSet(id, h).Result(); err != nil {
+		return err
+	} else {
+		return nil
+	}
+
+}
+
+func (p *paymentTokens) getFromRedis(id string) error {
+	r := utils.GetRedis()
+	res, err := r.HMGet(id, "id", "amount").Result()
+	if err != nil {
+		return err
+	}
+	p.ID = res[0].(string)
+	p.Amount = res[1].(float32)
+	return nil
+}
+
+func (p *paymentTokens) getResponse() {
+
+}
+
+type validationError struct {
+	Message string `json:"message"`
+	Code    string `json:"code"`
+}
+
+func (ve *validationError) marshal() []byte {
+	d, _ := json.Marshal(ve)
+	return d
 }

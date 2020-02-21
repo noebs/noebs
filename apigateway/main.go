@@ -1,3 +1,4 @@
+// Package gateway implments various auth logic used across noebs services
 package gateway
 
 import (
