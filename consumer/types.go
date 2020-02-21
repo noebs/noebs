@@ -3,6 +3,7 @@ package consumer
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
@@ -59,7 +60,8 @@ func (p *paymentTokens) getUUID() string {
 }
 
 func (p *paymentTokens) validate(id string, amount float32) bool {
-	return p.ID == id && p.Amount == amount
+	log.Printf("Given: ID: %s - Amount: %f\nWanted: %s - Amount: %f", id, amount, p.ID, p.Amount)
+	return p.Amount == amount
 }
 func (p *paymentTokens) toMap() map[string]interface{} {
 	res := map[string]interface{}{
@@ -97,7 +99,8 @@ func (p *paymentTokens) getFromRedis(id string) error {
 		return err
 	}
 	p.ID = res[0].(string)
-	p.Amount = res[1].(float32)
+	amount, _ := strconv.ParseFloat(res[1].(string), 32)
+	p.Amount = float32(amount)
 	return nil
 }
 

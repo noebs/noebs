@@ -1069,7 +1069,7 @@ func SpecialPayment(c *gin.Context) {
 	// get token service from redis
 	// perform the payment
 	// /consumer/payment/uuid
-	url := ebs_fields.ConsumerPurchaseEndpoint
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint
 	db, _ := utils.Database("sqlite3", "test.db")
 	defer db.Close()
 
