@@ -1043,3 +1043,13 @@ func ConsumerCompleteIpin(c *gin.Context) {
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
 }
+
+//SpecialPayment is a new payment service that:
+
+func GeneratePaymentToken(c *gin.Context) {
+
+}
+
+func SpecialPayment(c *gin.Context) {
+
+}

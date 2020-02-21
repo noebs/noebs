@@ -38,3 +38,9 @@ func notEbs(pan string) bool {
 	re := regexp.MustCompile(`(^639186|^639256|^639184|^639330)`)
 	return re.Match([]byte(pan))
 }
+
+type paymentTokens struct {
+	Name   string
+	Amount float32
+	ID     string ``
+}

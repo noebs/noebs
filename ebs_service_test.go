@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"net/http"
@@ -181,4 +182,20 @@ func TestCardTransfer(t *testing.T) {
 		}
 	})
 
+}
+
+func TestPurchase1(t *testing.T) {
+	type args struct {
+		c *gin.Context
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+		})
+	}
 }
