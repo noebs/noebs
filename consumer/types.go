@@ -104,8 +104,13 @@ func (p *paymentTokens) getFromRedis(id string) error {
 	return nil
 }
 
-func (p *paymentTokens) getResponse() {
-
+func (p *paymentTokens) invalidate(id string) error {
+	r := utils.GetRedis()
+	_, err := r.Del(id).Result()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type validationError struct {

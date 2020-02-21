@@ -498,13 +498,7 @@ func CardTransfer(c *gin.Context) {
 			redisClient := utils.GetRedis()
 			redisClient.Set(fields.Mobile+":pan", fields.Pan, 0)
 		}
-		jsonBuffer, err := json.Marshal(fields.ConsumerCardTransferFields)
-		if err != nil {
-			// there's an error in parsing the struct. Server error.
-			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
-		}
-
+		jsonBuffer := fields.MustMarshal()
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
@@ -1065,8 +1059,6 @@ func CompleteIpin(c *gin.Context) {
 	}
 }
 
-//SpecialPayment is a new payment service that:
-
 //GeneratePaymentToken generates a token
 func GeneratePaymentToken(c *gin.Context) {
 	var t paymentTokens
@@ -1114,12 +1106,18 @@ func SpecialPayment(c *gin.Context) {
 	}
 
 	var t paymentTokens
-	t.getFromRedis(id)
+	if err := t.getFromRedis(id); err != nil {
+		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
 	if !t.validate(id, p.TranAmount) {
 		ve := validationError{Message: "Wrong payment info. Amount and Payment ID doesn't match existing records", Code: "mismatched_special_payment_data"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
+	// necessary to invalidate key after issuance
+	t.invalidate(id)
 
 	// perform the payment
 	req, _ := json.Marshal(&p)
