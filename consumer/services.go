@@ -2,15 +2,17 @@ package consumer
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
+//ResetPassword reset user password after passing some check
 func ResetPassword(c *gin.Context) {
 	//TODO complete me
 	//- we want to make sure that it *was* you
@@ -18,6 +20,7 @@ func ResetPassword(c *gin.Context) {
 
 }
 
+//CardFromNumber gets the gussesed associated mobile number to this pan
 func CardFromNumber(c *gin.Context) {
 	// the user must submit in their mobile number *ONLY*, and it is get
 	if q, ok := c.GetQuery("mobile_number"); !ok {
@@ -52,21 +55,23 @@ func GetCards(c *gin.Context) {
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-	} else {
-		cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
-		if err != nil {
-			// handle the error somehow
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to get results from redis",
-				"message": err.Error(),
-			}).Info("unable to get results from redis")
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
-		}
-		cardBytes := cardsFromZ(cards)
-		m, _ := redisClient.HGet(username+":cards", "main_card").Result()
-		mCard := cardsFromZ([]string{m})
-		c.JSON(http.StatusOK, gin.H{"cards": cardBytes, "main_card": mCard[0]})
+		return
 	}
+	cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
+	if err != nil {
+		// handle the error somehow
+		logrus.WithFields(logrus.Fields{
+			"error":   "unable to get results from redis",
+			"message": err.Error(),
+		}).Info("unable to get results from redis")
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
+		return
+	}
+	cardBytes := cardsFromZ(cards)
+	m, _ := redisClient.HGet(username+":cards", "main_card").Result()
+	mCard := cardsFromZ([]string{m})
+	c.JSON(http.StatusOK, gin.H{"cards": cardBytes, "main_card": mCard[0]})
+
 }
 
 //AddCards Allow users to add card to their profile
@@ -82,39 +87,40 @@ func AddCards(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
-	} else {
-		// check isEbs
-		if notEbs(fields.PAN) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Card not supported (not compatible with EBS)", "code": "card_not_supported"})
-			return
-		}
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
-			// make sure the length of the card and expDate is valid
-			z := &redis.Z{
-				Member: buf,
-			}
-			if fields.IsMain {
-				// refactor me, please!
-				ucard := card{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
-				redisClient.HMSet(username, ucard)
-				redisClient.ZAdd(username+":cards", z)
-			} else {
-				_, err := redisClient.ZAdd(username+":cards", z).Result()
-				if err != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-					return
-				}
-				// also it is necessary to add it into a list of user's pans
-				//FIXME better handle this error smh
-				redisClient.RPush(username+":pans", fields.PAN)
-			}
-			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
-		}
 	}
+	// check isEbs
+	if notEbs(fields.PAN) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Card not supported (not compatible with EBS)", "code": "card_not_supported"})
+		return
+	}
+	buf, _ := json.Marshal(fields)
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		return
+	}
+	// make sure the length of the card and expDate is valid
+	z := &redis.Z{
+		Member: buf,
+	}
+	if fields.IsMain {
+		// refactor me, please!
+		ucard := card{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
+		redisClient.HMSet(username, ucard)
+		redisClient.ZAdd(username+":cards", z)
+		return
+	}
+	_, err = redisClient.ZAdd(username+":cards", z).Result()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+	// also it is necessary to add it into a list of user's pans
+	//FIXME better handle this error smh
+	redisClient.RPush(username+":pans", fields.PAN)
+
+	c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
+
 }
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
@@ -195,6 +201,7 @@ func RemoveCard(c *gin.Context) {
 
 }
 
+//AddMobile adds a mobile number to the current authorized user
 func AddMobile(c *gin.Context) {
 	redisClient := utils.GetRedis()
 
@@ -221,6 +228,7 @@ func AddMobile(c *gin.Context) {
 
 }
 
+//GetMobile gets list of mobile numbers to this user
 func GetMobile(c *gin.Context) {
 	redisClient := utils.GetRedis()
 
@@ -247,7 +255,8 @@ func GetMobile(c *gin.Context) {
 
 }
 
-func EelToName(c *gin.Context) {
+//NecToName gets an nec number from the context and maps it to its meter number
+func NecToName(c *gin.Context) {
 	if nec := c.Query("nec"); nec != "" {
 		redisClient := utils.GetRedis()
 		name, err := redisClient.HGet("meters", nec).Result()

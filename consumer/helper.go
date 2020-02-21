@@ -7,7 +7,8 @@ import (
 	"net/http"
 )
 
-func ConsumerRoutes(groupName string, route *gin.Engine) {
+//Routes get all consumer routes to be used in main noebs program
+func Routes(groupName string, route *gin.Engine) {
 	cv1 := route.Group(groupName)
 	cv1.Use(gateway.ApiAuth())
 	{
@@ -34,7 +35,7 @@ func ConsumerRoutes(groupName string, route *gin.Engine) {
 
 		cv1.POST("/qr_refund", QRRefund)
 		cv1.GET("/mobile2pan", CardFromNumber)
-		cv1.GET("/nec2name", EelToName)
+		cv1.GET("/nec2name", NecToName)
 
 		cv1.POST("/login", gateway.LoginHandler)
 		cv1.Use(gateway.AuthMiddleware())

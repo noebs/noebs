@@ -14,8 +14,14 @@ import (
 )
 
 var log = logrus.New()
+
+//BillChan it is used to asyncronysly parses ebs response to get and assign values to the billers
+// such as assigning the name to utility personal payment info
 var BillChan = make(chan ebs_fields.EBSParserFields)
 
+//Purchase performs special payment api from ebs consumer services
+// It requires: card info (src), amount fields, specialPaymentId (destination)
+// in order to complete the transaction
 func Purchase(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -38,13 +44,13 @@ func Purchase(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -83,6 +89,7 @@ func Purchase(c *gin.Context) {
 	}
 }
 
+//IsAlive performs isAlive request to inquire for ebs server availability
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -109,7 +116,7 @@ func IsAlive(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -117,7 +124,7 @@ func IsAlive(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -156,6 +163,7 @@ func IsAlive(c *gin.Context) {
 	}
 }
 
+//BillPayment is responsible for utility, telecos, e-government and other payment services
 func BillPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -182,14 +190,14 @@ func BillPayment(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -228,6 +236,7 @@ func BillPayment(c *gin.Context) {
 	}
 }
 
+//BillInquiry for telecos, utility and government (billers inquiries)
 func BillInquiry(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -254,7 +263,7 @@ func BillInquiry(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -262,7 +271,7 @@ func BillInquiry(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -303,6 +312,7 @@ func BillInquiry(c *gin.Context) {
 	}
 }
 
+//Balance gets performs get balance transaction for the provided card info
 func Balance(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -329,7 +339,7 @@ func Balance(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -337,7 +347,7 @@ func Balance(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -377,6 +387,7 @@ func Balance(c *gin.Context) {
 	}
 }
 
+//WorkingKey get ebs working key for encrypting ipin for consumer transactions
 func WorkingKey(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -403,7 +414,7 @@ func WorkingKey(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -411,7 +422,7 @@ func WorkingKey(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -451,6 +462,7 @@ func WorkingKey(c *gin.Context) {
 	}
 }
 
+//CardTransfer performs p2p transactions
 func CardTransfer(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -477,7 +489,7 @@ func CardTransfer(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -490,7 +502,7 @@ func CardTransfer(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -529,6 +541,7 @@ func CardTransfer(c *gin.Context) {
 	}
 }
 
+//IPinChange changes the ipin for the card holder provided card
 func IPinChange(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -555,7 +568,7 @@ func IPinChange(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -563,7 +576,7 @@ func IPinChange(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -602,6 +615,7 @@ func IPinChange(c *gin.Context) {
 	}
 }
 
+//Status get transactions status from ebs
 func Status(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -628,7 +642,7 @@ func Status(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -636,7 +650,7 @@ func Status(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -675,6 +689,7 @@ func Status(c *gin.Context) {
 	}
 }
 
+//Transactions get transactions stored in our redis data store
 func Transactions(c *gin.Context) {
 	//TODO get the transaction from Redis instance!
 	redisClient := utils.GetRedis()
@@ -689,6 +704,7 @@ func Transactions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"transactions": username})
 }
 
+//QRPayment performs QR payment transaction
 func QRPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
 
@@ -711,7 +727,7 @@ func QRPayment(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -719,7 +735,7 @@ func QRPayment(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -759,6 +775,7 @@ func QRPayment(c *gin.Context) {
 	}
 }
 
+//QRRefund performs qr refund transaction
 func QRRefund(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRRefundEndpoint // EBS simulator endpoint url goes here.
 
@@ -781,7 +798,7 @@ func QRRefund(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -789,7 +806,7 @@ func QRRefund(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -828,6 +845,7 @@ func QRRefund(c *gin.Context) {
 	}
 }
 
+//QRGeneration generates a qr token for the registered merchant
 func QRGeneration(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 
@@ -850,7 +868,7 @@ func QRGeneration(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -858,7 +876,7 @@ func QRGeneration(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -898,6 +916,7 @@ func QRGeneration(c *gin.Context) {
 	}
 }
 
+//GenerateIpin generates a new ipin for card holder
 func GenerateIpin(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -924,7 +943,7 @@ func GenerateIpin(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -932,7 +951,7 @@ func GenerateIpin(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -972,6 +991,7 @@ func GenerateIpin(c *gin.Context) {
 	}
 }
 
+//CompleteIpin performs an otp check from ebs to complete ipin change transaction
 func CompleteIpin(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -998,7 +1018,7 @@ func CompleteIpin(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{payload})
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -1006,7 +1026,7 @@ func CompleteIpin(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{er})
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1064,6 +1084,11 @@ func GeneratePaymentToken(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"result": t, "uuid": t.UUID})
 }
 
+// SpecialPayment is a new api to allow for site users to securely request payment
+// it is really just a payment request with:
+// - tran amount
+// - payee id
+// later we can add more features such as expiration for the token and more.
 func SpecialPayment(c *gin.Context) {
 	// get token
 	// get token service from redis

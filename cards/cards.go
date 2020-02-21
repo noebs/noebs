@@ -2,17 +2,20 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
-	"net/http"
 )
 
+//GetCards returns a list of cards (default and others) associated to this
+//authorized user
 func GetCards(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	username := c.GetString("username")
 	if username == "" {
@@ -45,8 +48,9 @@ func GetCards(c *gin.Context) {
 
 }
 
+//AddCards to the current authorized user
 func AddCards(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -75,9 +79,9 @@ func AddCards(c *gin.Context) {
 
 }
 
-// EditCards a work in progress. This function needs to be reviewed and refactored
+// EditCard a work in progress. This function needs to be reviewed and refactored
 func EditCard(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -97,9 +101,9 @@ func EditCard(c *gin.Context) {
 
 			// after getting the key, we are offloading it to the card instance
 			cards := utils.RedisHelper(keys)
-			//z := &redis.Z{
-			//	Member:buf,
-			//}
+			z := &redis.Z{
+				Member: buf,
+			}
 			if fields.IsMain {
 				// refactor me, please!
 				redisClient.HSet(username, "main_card", buf)
@@ -120,7 +124,7 @@ func EditCard(c *gin.Context) {
 
 // RemoveCard a work in progress. This function needs to be reviewed and refactored
 func RemoveCard(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -150,8 +154,9 @@ func RemoveCard(c *gin.Context) {
 
 }
 
+//AddMobile adds a new mobile number entry to this current authorized user
 func AddMobile(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -176,8 +181,9 @@ func AddMobile(c *gin.Context) {
 
 }
 
+//GetMobile returns a user list of mobile numbers from redis database
 func GetMobile(c *gin.Context) {
-	redisClient := getRedis()
+	redisClient := utils.GetRedis()
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
