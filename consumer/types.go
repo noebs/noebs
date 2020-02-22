@@ -86,9 +86,8 @@ func (p *paymentTokens) toRedis() error {
 
 	if _, err := r.HMSet(id, h).Result(); err != nil {
 		return err
-	} else {
-		return nil
 	}
+	return nil
 
 }
 

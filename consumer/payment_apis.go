@@ -1076,6 +1076,25 @@ func GeneratePaymentToken(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"result": t, "uuid": t.UUID})
 }
 
+//GetPaymentToken retrieves a generated payment token by ID (UUID)
+func GetPaymentToken(c *gin.Context) {
+	id := c.Param("uuid")
+	if id == "" {
+		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	var t paymentTokens
+	if err := t.getFromRedis(id); err != nil {
+		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": []paymentTokens{t}})
+
+}
+
 // SpecialPayment is a new api to allow for site users to securely request payment
 // it is really just a payment request with:
 // - tran amount
@@ -1137,9 +1156,7 @@ func SpecialPayment(c *gin.Context) {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
 		return
-	} else {
-		c.JSON(code, gin.H{"ebs_response": res})
-		return
 	}
-
+	c.JSON(code, gin.H{"ebs_response": res})
+	return
 }

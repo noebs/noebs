@@ -23,28 +23,28 @@ func ResetPassword(c *gin.Context) {
 //CardFromNumber gets the gussesed associated mobile number to this pan
 func CardFromNumber(c *gin.Context) {
 	// the user must submit in their mobile number *ONLY*, and it is get
-	if q, ok := c.GetQuery("mobile_number"); !ok {
+	q, ok := c.GetQuery("mobile_number")
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "mobile number is empty", "code": "empty_mobile_number"})
 		return
+	}
+	// now search through redis for this mobile number!
+	redisClient := utils.GetRedis()
+	// first check if we have already collected that number before
+	pan, err := redisClient.Get(q + ":pan").Result()
+	if err == nil {
+		c.JSON(http.StatusOK, gin.H{"result": pan})
+		return
+	}
+	username, err := redisClient.Get(q).Result()
+	if err == redis.Nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
+		return
+	}
+	if pan, ok := utils.PanfromMobile(username, redisClient); ok {
+		c.JSON(http.StatusOK, gin.H{"result": pan})
 	} else {
-		// now search through redis for this mobile number!
-		redisClient := utils.GetRedis()
-		// first check if we have already collected that number before
-		pan, err := redisClient.Get(q + ":pan").Result()
-		if err == nil {
-			c.JSON(http.StatusOK, gin.H{"result": pan})
-			return
-		}
-		username, err := redisClient.Get(q).Result()
-		if err == redis.Nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
-			return
-		}
-		if pan, ok := utils.PanfromMobile(username, redisClient); ok {
-			c.JSON(http.StatusOK, gin.H{"result": pan})
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
-		}
+		c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
 	}
 
 }
