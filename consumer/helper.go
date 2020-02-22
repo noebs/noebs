@@ -10,7 +10,7 @@ import (
 //Routes get all consumer routes to be used in main noebs program
 func Routes(groupName string, route *gin.Engine) {
 	cv1 := route.Group(groupName)
-	cv1.Use(gateway.ApiAuth())
+	cv1.Use(gateway.APIAuth())
 	{
 
 		cv1.POST("/register", gateway.CreateUser)

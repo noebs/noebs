@@ -5,6 +5,12 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/adonese/noebs/utils"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -13,11 +19,6 @@ import (
 	"github.com/jinzhu/gorm"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"net/http"
-	"os"
-	"strconv"
-	"strings"
-	"time"
 )
 
 var apiKey = make([]byte, 16)
@@ -347,8 +348,8 @@ func AuthMiddleware() gin.HandlerFunc {
 
 }
 
-//ApiAuth API-Key middleware. Currently is used by consumer services
-func ApiAuth() gin.HandlerFunc {
+//APIAuth API-Key middleware. Currently is used by consumer services
+func APIAuth() gin.HandlerFunc {
 	r := utils.GetRedis()
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
@@ -363,6 +364,7 @@ func ApiAuth() gin.HandlerFunc {
 
 }
 
+//GenerateSecretKey generates secret key for jwt signing
 func GenerateSecretKey(n int) ([]byte, error) {
 	key := make([]byte, n)
 	if _, err := rand.Read(key); err != nil {

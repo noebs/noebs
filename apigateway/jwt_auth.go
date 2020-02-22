@@ -3,8 +3,9 @@ package gateway
 import (
 	"errors"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 // VerifyJWT giving a jwt token and a secret it validates the token against a hard coded TokenClaims struct
@@ -20,10 +21,10 @@ func VerifyJWT(tokenString string, secret []byte) (*TokenClaims, error) {
 	})
 
 	// a user might had submitted a non-jwt token
-	if err != nil {
-		return nil, err
+	// if err != nil {
+	// 	return nil, err
 
-	}
+	// }
 
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
 		return claims, nil
