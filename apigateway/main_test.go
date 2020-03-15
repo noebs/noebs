@@ -2,7 +2,7 @@ package gateway
 
 import (
 	"fmt"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v7"
 	"testing"
 )
 
