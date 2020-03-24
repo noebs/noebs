@@ -534,7 +534,7 @@ func (f *ConsumerStatusFields) MustMarshal() []byte {
 type ConsumerGenerateIPin struct {
 	ConsumerCommonFields
 	Pan          string `json:"pan"`
-	MobileNumber string `json:"mobileNumber"`
+	MobileNumber string `json:"phoneNumber" binding:"required"`
 	Expdate      string `json:"expDate"`
 }
 
@@ -545,11 +545,10 @@ func (gi *ConsumerGenerateIPin) MustMarshal() []byte {
 
 type ConsumerGenerateIPinCompletion struct {
 	ConsumerCommonFields
-	Pan          string `json:"pan"`
-	Expdate      string `json:"expDate"`
-	MobileNumber string `json:"mobileNumber"`
-	Otp          string `json:"otp"`
-	Ipin         string `json:"ipin"`
+	Pan     string `json:"pan" binding:"required"`
+	Expdate string `json:"expDate" binding:"required"`
+	Otp     string `json:"otp"  binding:"required"`
+	Ipin    string `json:"ipin" binding:"required"`
 }
 
 func (gip *ConsumerGenerateIPinCompletion) MustMarshal() []byte {
