@@ -66,6 +66,8 @@ func GetMainEngine() *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
+	route.POST("/wrk", isAliveWrk)
+
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	dashboardGroup := route.Group("/dashboard")
@@ -257,6 +259,17 @@ func IsAlive(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
 	}
+}
+
+// isAliveWrk is for testing only. We want to bypass our middleware checks and move
+// up directly to ebs
+func isAliveWrk(c *gin.Context) {
+	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint
+	req := strings.NewReader(`{"clientId": "ACTS", "systemTraceAuditNumber": 79, "tranDateTime": "200419085611", "terminalId": "18000377"}`)
+	b, _ := json.Marshal(&req)
+	ebs_fields.EBSHttpClient(url, b) // let that sink in
+	c.JSON(http.StatusOK, gin.H{"result": true})
+
 }
 
 // WorkingKey godoc
