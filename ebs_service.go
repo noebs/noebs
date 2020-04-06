@@ -62,11 +62,11 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/balance", Balance)
 	route.POST("/refund", Refund)
 
-	route.POST("/test", func(c *gin.Context) {
+	route.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
-	route.POST("/wrk", isAliveWrk)
+	route.GET("/wrk", isAliveWrk)
 
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
