@@ -7,7 +7,7 @@ require (
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/gin-contrib/multitemplate v0.0.0-20200226145339-3e397ee01bc6
-	github.com/gin-gonic/gin v1.5.0
+	github.com/gin-gonic/gin v1.6.3
 	github.com/go-openapi/spec v0.19.7 // indirect
 	github.com/go-openapi/swag v0.19.8 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
