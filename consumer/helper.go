@@ -35,6 +35,9 @@ func Routes(groupName string, route *gin.Engine) {
 		cv1.GET("/payment/:uuid", GetPaymentToken)
 
 		cv1.POST("/qr_refund", QRRefund)
+		cv1.POST("card_info", EbsGetCardInfo)
+		cv1.POST("pan_from_mobile", GetMSISDNFromCard)
+
 		cv1.GET("/mobile2pan", CardFromNumber)
 		cv1.GET("/nec2name", NecToName)
 

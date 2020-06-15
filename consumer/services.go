@@ -282,3 +282,8 @@ func NecToName(c *gin.Context) {
 //	w.WriteHeader(http.StatusOK)
 //	w.Write(resBytes)
 //}
+
+func cacheKeys(c *gin.Context) {
+	// it should check ebs first
+
+}

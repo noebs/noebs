@@ -234,6 +234,10 @@ type GenericEBSResponseFields struct {
 	// QR payment fields
 	MerchantID  string `json:"merchantID,omitempty"`
 	GeneratedQR string `json:"generatedQR,omitempty"`
+	Bank        string `json:"bank,omitempty"`
+	Name        string `json:"name,omitempty"`
+	CardType    string `json:"card_type,omitempty"`
+	LastPAN     string `json:"last4PANDigits,omitempty"`
 }
 
 type ImportantEBSFields struct {
@@ -549,6 +553,17 @@ type ConsumerGenerateIPinCompletion struct {
 	Expdate string `json:"expDate" binding:"required"`
 	Otp     string `json:"otp"  binding:"required"`
 	Ipin    string `json:"ipin" binding:"required"`
+}
+
+type ConsumerPANFromMobileFields struct {
+	ConsumerCommonFields
+	EntityID string `json:"entityId" binding:"required"`
+	Last4PAN string `json:"last4PANDigits" binding:"required`
+}
+
+type ConsumerCardInfoFields struct {
+	ConsumerCommonFields
+	PAN string `json:"PAN" binding:"required"`
 }
 
 func (gip *ConsumerGenerateIPinCompletion) MustMarshal() []byte {

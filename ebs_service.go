@@ -118,6 +118,8 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/complete_ipin", consumer.CompleteIpin)
 
 		cons.POST("/qr_refund", consumer.QRRefund)
+		cons.POST("/card_info", consumer.EbsGetCardInfo)
+		cons.POST("/pan_from_mobile", consumer.GetMSISDNFromCard)
 		cons.GET("/mobile2pan", consumer.CardFromNumber)
 		cons.GET("/nec2name", consumer.NecToName)
 

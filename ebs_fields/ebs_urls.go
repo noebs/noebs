@@ -65,6 +65,8 @@ const (
 	ConsumerQRPaymentEndpoint    = "doQRPurchase"
 	ConsumerQRGenerationEndpoint = "doMerchantRegistration"
 	ConsumerQRRefundEndpoint     = "doQRRefund"
+	ConsumerPANFromMobile        = "checkMsisdnAganistPAN"
+	ConsumerCardInfo             = "getCustomerInfo"
 
 	// IPIN generation
 	IPinGeneration = "doGenerateIPinRequest"
