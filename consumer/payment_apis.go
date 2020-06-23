@@ -52,12 +52,20 @@ Examples
 cURL:
 
 1. Generate Token
-curl -X POST https://api.soluspay.net/api/consumer/generate_token -d '{"amount": 14.12, "biller": "12345678"} // EBS biller length is usually 8
+curl -X POST https://api.soluspay.net/api/v1/payment_token -d '{"amount": 10}'
 
-2. Complete Payment
-curl -X POST https://api.soluspay.net/api/consumer/generate_token -d '{"tranAmount": 14.12, "biller": "12345678", "tranDateTime": "230620095200", "UUID": "UUID-v4-with-hyphens", "PAN": "user pan", "IPIN": "16 hex ipin", "expDate": "YYMM"} // EBS biller length is usually 8
+> {"result":{"amount":10,"uuid":"6eb3ae20-ecbc-4603-b079-ed98549cf9f2"},"uuid":"6eb3ae20-ecbc-4603-b079-ed98549cf9f2"}
 
-* Note authentication might be added to this API soon
+2. Inquire token via UUID
+curl -X GET https://api.soluspay.net/api/v1/payment/6eb3ae20-ecbc-4603-b079-ed98549cf9f2 -d '{"amount": 10}'
+
+3. Complete Payment
+curl -X POST https://api.soluspay.net/api/v1/payment/6eb3ae20-ecbc-4603-b079-ed98549cf9f2 -d '{"amount": 10}'
+
+
+NOTE that in payment inquiry we use GET method, while we use POST for payment
+
+* Note authentication might be added to this API
 
 PIN Block
 
