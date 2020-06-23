@@ -1,3 +1,73 @@
+// Package consumer provides services for EBS consumer APIs, and custom
+// apis we have developed as well.
+// It offers a seamless and unified api to be used for both
+// merchant pos and mobile payment
+/*
+EBS Services
+
+
+- Get Balance
+
+- Working Key
+
+- Is Alive
+
+- Card transfer
+
+- Billers
+
+Special Payment
+
+Special Payment is a secure way to tokenize payments for external service providers through a custom url
+link. The URL is only valid once and it cannot be reused.
+
+Workflow
+
+Here's how the system works.
+
+- Generate a payment token (/consumer/generate_token)
+
+Parameters:
+- amount
+
+- biller id
+
+It will return a new response with a UUID that to be used by the client's users for payment.
+
+- Special payment (/consumer/special_payment/:UUID)
+
+Parameters:
+
+- tranAmount (the same as before!)
+
+- billerId
+
+- ConsumerServices payload
+
+It will return 400 ONLY if the amount OR the biller id didn't match the specified UUID in the system
+
+
+Examples
+
+cURL:
+
+1. Generate Token
+curl -X POST https://api.soluspay.net/api/consumer/generate_token -d '{"amount": 14.12, "biller": "12345678"} // EBS biller length is usually 8
+
+2. Complete Payment
+curl -X POST https://api.soluspay.net/api/consumer/generate_token -d '{"tranAmount": 14.12, "biller": "12345678", "tranDateTime": "230620095200", "UUID": "UUID-v4-with-hyphens", "PAN": "user pan", "IPIN": "16 hex ipin", "expDate": "YYMM"} // EBS biller length is usually 8
+
+* Note authentication might be added to this API soon
+
+PIN Block
+
+Please advice with ebs documentations about iPIN block encryption. You can cite these locations for iPIN implementation:
+
+- https://github.com/adonese/donates (JS)
+- https://github.com/adonese/noebs-wasm (GO)
+- https://github.com/adonese/cashq (Java)
+
+*/
 package consumer
 
 import (
