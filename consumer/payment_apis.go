@@ -1138,6 +1138,7 @@ func CompleteIpin(c *gin.Context) {
 }
 
 //GeneratePaymentToken generates a token
+// BUG(adonese) we have to make it mandatory for biller id as well
 func GeneratePaymentToken(c *gin.Context) {
 	var t paymentTokens
 	if err := c.ShouldBindJSON(&t); err != nil {
