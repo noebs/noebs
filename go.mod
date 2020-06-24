@@ -10,16 +10,13 @@ require (
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-openapi/spec v0.19.8 // indirect
 	github.com/go-openapi/swag v0.19.9 // indirect
-	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator/v10 v10.3.0 // indirect
 	github.com/go-redis/redis/v7 v7.4.0
 	github.com/google/uuid v1.1.1
 	github.com/jinzhu/gorm v1.9.14
-	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.1 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
-	github.com/prometheus/client_golang v1.7.0
+	github.com/prometheus/client_golang v1.7.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
 	github.com/stretchr/testify v1.4.0
