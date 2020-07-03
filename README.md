@@ -25,6 +25,8 @@ There are different ways to use noebs:
 ```shell
 # this command may likely takes along time depending on your internet connections.
 # also, make sure you are using a vpn since some of the libraries are hosted in GCE hosting which forbids Sudan
+# as Redis v7 uses https://github.com/golang/go/wiki/Modules do this command first it sometimes needs to be initated 
+$ go mod init github.com/go-redis/redis/v7
 $ go get github.com/adonese/noebs
 $ cd $GOPATH/github.com/adonese/noebs
 $ go build .
