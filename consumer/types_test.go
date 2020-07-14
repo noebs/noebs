@@ -7,7 +7,14 @@ import (
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
+	"github.com/alicebob/miniredis"
 )
+
+
+var mr, _ = miniredis.Run()
+var mockRedis = utils.GetRedis(mr.Addr())
+
 
 func Test_cardsFromZ(t *testing.T) {
 	lcards := []ebs_fields.CardsRedis{
@@ -117,6 +124,8 @@ func Test_paymentTokens_getFromRedis(t *testing.T) {
 	type args struct {
 		id string
 	}
+
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -133,8 +142,37 @@ func Test_paymentTokens_getFromRedis(t *testing.T) {
 				ID:     tt.fields.ID,
 				UUID:   tt.fields.UUID,
 			}
-			if err := p.getFromRedis(tt.args.id); (err != nil) != tt.wantErr {
+			if err := p.getFromRedis(tt.args.id, mockRedis); (err != nil) != tt.wantErr {
 				t.Errorf("paymentTokens.getFromRedis() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_check(t *testing.T) {
+
+	type args struct {
+		id     string
+		amount float32
+	}
+	tests := []struct {
+		name   string
+		args   args
+		want   bool
+		want1  validationError
+	}{
+		{"testing validation error", args{id: "my id", amount: 32}, false, validationError{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+			}
+			got, got1 := p.check(tt.args.id, tt.args.amount, mockRedis)
+			if got != tt.want {
+				t.Errorf("paymentTokens.check() got = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got1, tt.want1) {
+				t.Errorf("paymentTokens.check() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}

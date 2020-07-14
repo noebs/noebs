@@ -144,7 +144,7 @@ func Purchase(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -216,7 +216,7 @@ func IsAlive(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -290,7 +290,7 @@ func BillPayment(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -373,7 +373,7 @@ func BillInquiry(c *gin.Context) {
 		}
 
 		// Save to Redis list
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -441,7 +441,7 @@ func Balance(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -516,7 +516,7 @@ func WorkingKey(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -573,7 +573,7 @@ func CardTransfer(c *gin.Context) {
 
 		// save this to redis
 		if mobile := fields.Mobile; mobile != "" {
-			redisClient := utils.GetRedis()
+			redisClient := utils.GetRedis("localhost:6379")
 			redisClient.Set(fields.Mobile+":pan", fields.Pan, 0)
 		}
 		jsonBuffer := fields.MustMarshal()
@@ -590,7 +590,7 @@ func CardTransfer(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -663,7 +663,7 @@ func IPinChange(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -737,7 +737,7 @@ func Status(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -764,7 +764,7 @@ func Status(c *gin.Context) {
 //Transactions get transactions stored in our redis data store
 func Transactions(c *gin.Context) {
 	//TODO get the transaction from Redis instance!
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	username := c.GetString("username")
 	if username == "" {
@@ -823,7 +823,7 @@ func QRPayment(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -894,7 +894,7 @@ func QRRefund(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -964,7 +964,7 @@ func QRGeneration(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -1039,7 +1039,7 @@ func GenerateIpin(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -1114,7 +1114,7 @@ func CompleteIpin(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -1165,7 +1165,7 @@ func GetPaymentToken(c *gin.Context) {
 	}
 
 	var t paymentTokens
-	if err := t.getFromRedis(id); err != nil {
+	if err := t.getFromRedis(id, redisClient); err != nil {
 		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
@@ -1204,14 +1204,8 @@ func SpecialPayment(c *gin.Context) {
 	}
 
 	var t paymentTokens
-	if err := t.getFromRedis(id); err != nil {
-		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-	if !t.validate(id, p.TranAmount) {
-		ve := validationError{Message: "Wrong payment info. Amount and Payment ID doesn't match existing records", Code: "mismatched_special_payment_data"}
-		c.JSON(http.StatusBadRequest, ve)
+	if ok, err := t.check(id, p.TranAmount, redisClient); !ok {
+		c.JSON(http.StatusBadRequest, err)
 		return
 	}
 	// necessary to invalidate key after issuance
@@ -1237,7 +1231,6 @@ func SpecialPayment(c *gin.Context) {
 		return
 	}
 	c.JSON(code, gin.H{"ebs_response": res})
-	return
 }
 
 func EbsGetCardInfo(c *gin.Context) {
@@ -1290,7 +1283,7 @@ func EbsGetCardInfo(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 
@@ -1364,7 +1357,7 @@ func GetMSISDNFromCard(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(redisClient, username+":all_transactions", &res)
 

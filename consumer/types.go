@@ -7,10 +7,13 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/go-redis/redis/v7"
 	"github.com/google/uuid"
 )
 
 type card map[string]interface{}
+
+var redisClient = utils.GetRedis("")
 
 //cardsFromZ marshals []string to []ebs_fields.CardsRedis
 func cardsFromZ(cards []string) []ebs_fields.CardsRedis {
@@ -50,6 +53,21 @@ type paymentTokens struct {
 	UUID   string  `json:"uuid"`
 }
 
+func (p *paymentTokens)check(id string, amount float32, redisClient *redis.Client) (bool, validationError) {
+	return true, validationError{}
+
+	if err := p.getFromRedis(id, redisClient); err != nil {
+		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
+		return false, ve
+	}
+
+	if !p.validate(id, amount) {
+		ve := validationError{Message: "Wrong payment info. Amount and Payment ID doesn't match existing records", Code: "mismatched_special_payment_data"}
+		return false, ve
+	}
+	return true, validationError{} 
+}
+
 func (p *paymentTokens) getUUID() string {
 	if p.UUID != "" {
 		return p.UUID
@@ -63,6 +81,7 @@ func (p *paymentTokens) validate(id string, amount float32) bool {
 	log.Printf("Given: ID: %s - Amount: %f\nWanted: %s - Amount: %f", id, amount, p.ID, p.Amount)
 	return p.Amount == amount
 }
+
 func (p *paymentTokens) toMap() map[string]interface{} {
 	res := map[string]interface{}{
 		"id":     p.ID,
@@ -79,7 +98,7 @@ func (p *paymentTokens) fromMap(m map[string]interface{}) {
 }
 
 func (p *paymentTokens) toRedis() error {
-	r := utils.GetRedis()
+	r := utils.GetRedis("localhost:6379")
 
 	id := p.getUUID()
 	h := p.toMap()
@@ -91,8 +110,9 @@ func (p *paymentTokens) toRedis() error {
 
 }
 
-func (p *paymentTokens) getFromRedis(id string) error {
-	r := utils.GetRedis()
+
+func (p *paymentTokens) getFromRedis(id string, r *redis.Client) error {
+
 	res, err := r.HMGet(id, "id", "amount").Result()
 	if err != nil {
 		return err
@@ -104,7 +124,7 @@ func (p *paymentTokens) getFromRedis(id string) error {
 }
 
 func (p *paymentTokens) invalidate(id string) error {
-	r := utils.GetRedis()
+	r := utils.GetRedis("localhost:6379")
 	_, err := r.Del(id).Result()
 	if err != nil {
 		return err

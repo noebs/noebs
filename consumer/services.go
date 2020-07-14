@@ -29,7 +29,7 @@ func CardFromNumber(c *gin.Context) {
 		return
 	}
 	// now search through redis for this mobile number!
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	// first check if we have already collected that number before
 	pan, err := redisClient.Get(q + ":pan").Result()
 	if err == nil {
@@ -51,7 +51,7 @@ func CardFromNumber(c *gin.Context) {
 
 //GetCards Get all cards for the currently authorized user
 func GetCards(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
@@ -78,7 +78,7 @@ func GetCards(c *gin.Context) {
 // if main_card was set to true, then it will be their main card AND
 // it will remove the previously selected one FIXME
 func AddCards(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	//check if the card is not from non EBS affiliated banks
@@ -126,7 +126,7 @@ func AddCards(c *gin.Context) {
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func EditCard(c *gin.Context) {
 	var card ebs_fields.CardsRedis
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	err := c.ShouldBindWith(&card, binding.JSON)
 	if err != nil {
@@ -169,7 +169,7 @@ func EditCard(c *gin.Context) {
 //RemoveCard allow authorized users to remove their card
 // when the send the card id (from its list in app view)
 func RemoveCard(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.ItemID
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -203,7 +203,7 @@ func RemoveCard(c *gin.Context) {
 
 //AddMobile adds a mobile number to the current authorized user
 func AddMobile(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -230,7 +230,7 @@ func AddMobile(c *gin.Context) {
 
 //GetMobile gets list of mobile numbers to this user
 func GetMobile(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -258,7 +258,7 @@ func GetMobile(c *gin.Context) {
 //NecToName gets an nec number from the context and maps it to its meter number
 func NecToName(c *gin.Context) {
 	if nec := c.Query("nec"); nec != "" {
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		name, err := redisClient.HGet("meters", nec).Result()
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "No user found with this NEC", "code": "nec_not_found"})

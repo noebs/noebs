@@ -599,7 +599,7 @@ type CardsRedis struct {
 //func (c *CardsRedis) AddCard(username string) error {
 //	buf, err := json.Marshal(c)
 //
-//	rC := utils.GetRedis()
+//	rC := utils.GetRedis("localhost:6379")
 //	if err != nil {
 //		return err
 //	}
@@ -615,7 +615,7 @@ type CardsRedis struct {
 //}
 
 //func (c CardsRedis) RmCard(username string, id int) {
-//	rC := utils.GetRedis()
+//	rC := utils.GetRedis("localhost:6379")
 //	if c.IsMain {
 //		rC.HDel(username+":cards", "main_card")
 //	} else {

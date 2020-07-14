@@ -393,7 +393,7 @@ func Purchase(c *gin.Context) {
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 
 		uid := generateUUID()
 		redisClient.HSet(fields.TerminalID+":purchase", uid, &res)

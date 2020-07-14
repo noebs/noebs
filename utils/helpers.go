@@ -7,9 +7,12 @@ import (
 )
 
 // GetRedis returns a *redis.Client instance
-func GetRedis() *redis.Client {
+func GetRedis(addr string) *redis.Client {
+	if addr == "" {
+		addr = "localhost:6379"
+	}
 	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: addr,
 		DB:   0,
 	})
 	return client

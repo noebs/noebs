@@ -4,17 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/google/uuid"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
-	"net/http"
-	"net/http/httptest"
-	"reflect"
-	"strconv"
-	"strings"
 )
 
 type redisPurchaseFields map[string]interface{}
@@ -211,7 +212,7 @@ func generateUUID() string {
 
 func handleChan() {
 	// when getting redis results, ALWAYS json.Marshal them
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	for {
 		select {
 		case c := <-consumer.BillChan:

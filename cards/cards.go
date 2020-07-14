@@ -15,7 +15,7 @@ import (
 //GetCards returns a list of cards (default and others) associated to this
 //authorized user
 func GetCards(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	username := c.GetString("username")
 	if username == "" {
@@ -50,7 +50,7 @@ func GetCards(c *gin.Context) {
 
 //AddCards to the current authorized user
 func AddCards(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -81,7 +81,7 @@ func AddCards(c *gin.Context) {
 
 // EditCard a work in progress. This function needs to be reviewed and refactored
 func EditCard(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -124,7 +124,7 @@ func EditCard(c *gin.Context) {
 
 // RemoveCard a work in progress. This function needs to be reviewed and refactored
 func RemoveCard(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -156,7 +156,7 @@ func RemoveCard(c *gin.Context) {
 
 //AddMobile adds a new mobile number entry to this current authorized user
 func AddMobile(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -183,7 +183,7 @@ func AddMobile(c *gin.Context) {
 
 //GetMobile returns a user list of mobile numbers from redis database
 func GetMobile(c *gin.Context) {
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)

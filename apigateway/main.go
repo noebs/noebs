@@ -31,7 +31,7 @@ func GenerateAPIKey(c *gin.Context) {
 	if err := c.ShouldBindJSON(&m); err != nil {
 		if _, ok := m["email"]; ok {
 			k, _ := generateApiKey()
-			getRedis := utils.GetRedis()
+			getRedis := utils.GetRedis("localhost:6379")
 			getRedis.SAdd("apikeys", k)
 			c.JSON(http.StatusOK, gin.H{"result": k})
 			return
@@ -53,7 +53,7 @@ func ApiKeyMiddleware(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
 		return
 	}
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	res, err := redisClient.HGet("api_keys", email).Result()
 	if err != redis.Nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
@@ -70,7 +70,7 @@ func ApiKeyMiddleware(c *gin.Context) {
 func IpFilterMiddleware(c *gin.Context) {
 	ip := c.ClientIP()
 	if u := c.GetString("username"); u != "" {
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		redisClient.HIncrBy(u+":ips_count", ip, 1)
 		c.Next()
 	} else {
@@ -111,7 +111,7 @@ func LoginHandler(c *gin.Context) {
 	}
 
 	// Make sure the user doesn't have any active sessions!
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	lCount, err := redisClient.Get(req.Username + ":logged_in_devices").Result()
 
 	num, _ := strconv.Atoi(lCount)
@@ -225,7 +225,7 @@ func LogOut(c *gin.Context) {
 
 	username := claims.Username
 	if username != "" {
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		redisClient.Decr(username + ":logged_in_devices")
 		c.JSON(http.StatusNoContent, gin.H{"message": "Device Successfully Logged Out"})
 		return
@@ -273,7 +273,7 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	redisClient.Set(u.Mobile, u.Username, 0)
 	ip := c.ClientIP()
 	redisClient.HSet(u.Username+":ips_count", "first_ip", ip)
@@ -350,7 +350,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 //APIAuth API-Key middleware. Currently is used by consumer services
 func APIAuth() gin.HandlerFunc {
-	r := utils.GetRedis()
+	r := utils.GetRedis("localhost:6379")
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
 			if !isMember("apikeys", key, r) {
@@ -380,7 +380,7 @@ func keyFromEnv() []byte {
 		return []byte(key)
 	}
 
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	if key := redisClient.Get("jwt").String(); key != "" {
 		return []byte(key)
 	}

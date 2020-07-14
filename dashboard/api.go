@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"strconv"
-	"time"
 )
 
 var log = logrus.New()
@@ -28,7 +29,7 @@ func MerchantViews(c *gin.Context) {
 	var tran []Transaction
 	db.Table("transactions").Where("id >= ? and terminal_id LIKE ? and approval_code != ?", offset, "%"+terminal+"%", "").Order("id desc").Limit(pageSize).Find(&tran)
 	// get complaints
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	com, _ := redisClient.LRange("complaints", 0, -1).Result()
 
 	var mC []merchantsIssues
@@ -274,7 +275,7 @@ func LandingPage(c *gin.Context) {
 		err := c.ShouldBind(&f)
 		if err == nil {
 			ua := c.GetHeader("User-Agent")
-			redisClient := utils.GetRedis()
+			redisClient := utils.GetRedis("localhost:6379")
 			redisClient.LPush("voices", &f)
 			redisClient.LPush("voices:ua", ua)
 			showForm = false
@@ -289,7 +290,7 @@ func MerchantRegistration(c *gin.Context) {
 	if c.Request.Method == "POST" {
 		err := c.ShouldBind(&f)
 		if err == nil {
-			redisClient := utils.GetRedis()
+			redisClient := utils.GetRedis("localhost:6379")
 			redisClient.SAdd("merchants:all", f.MerchantName)
 			redisClient.HMSet("merchant:"+f.MerchantName, f.ToMap())
 			c.HTML(http.StatusOK, "landing.html", gin.H{"showform": false})
@@ -375,7 +376,7 @@ func MerchantTransactionsEndpoint(c *gin.Context) {
 			"code": "terminal_id_not_present_in_request"})
 		return
 	}
-	redisClient := utils.GetRedis()
+	redisClient := utils.GetRedis("localhost:6379")
 	v, err := redisClient.LRange(tid+":purchase", 0, -1).Result()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"result": MerchantTransactions{}})
@@ -399,7 +400,7 @@ func ReportIssueEndpoint(c *gin.Context) {
 	if err := c.ShouldBindJSON(&issue); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
 	} else {
-		redisClient := utils.GetRedis()
+		redisClient := utils.GetRedis("localhost:6379")
 		redisClient.LPush("complaints", &issue)
 		redisClient.LPush(issue.TerminalID+":complaints", &issue)
 		c.JSON(http.StatusOK, gin.H{"result": "ok"})

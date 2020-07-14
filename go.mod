@@ -18,17 +18,16 @@ require (
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/prometheus/client_golang v1.7.1
 	github.com/sirupsen/logrus v1.6.0
-	github.com/skip2/go-qrcode v0.0.0-20191027152451-9434209cb086
-	github.com/stretchr/testify v1.4.0
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	github.com/stretchr/testify v1.6.1
 	github.com/swaggo/gin-swagger v1.2.0
 	github.com/swaggo/swag v1.6.7
 	github.com/zsais/go-gin-prometheus v0.1.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/mod v0.3.0 // indirect
-	golang.org/x/net v0.0.0-20200625001655-4c5254603344 // indirect
+	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
+	golang.org/x/net v0.0.0-20200707034311-ab3426394381 // indirect
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	golang.org/x/text v0.3.3 // indirect
-	golang.org/x/tools v0.0.0-20200626171337-aa94e735be7f // indirect
+	golang.org/x/tools v0.0.0-20200713235242-6acd2ab80ede // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/go-playground/validator.v9 v9.31.0
 	gopkg.in/yaml.v2 v2.3.0 // indirect
