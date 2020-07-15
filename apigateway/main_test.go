@@ -2,14 +2,15 @@ package gateway
 
 import (
 	"fmt"
-	"github.com/go-redis/redis/v7"
 	"testing"
+
+	"github.com/go-redis/redis/v7"
 )
 
 func Test_generateApiKey(t *testing.T) {
 
 	t.Run("successful test", func(t *testing.T) {
-		if got, err := generateApiKey(); err != nil {
+		if got, err := generateAPIKey(); err != nil {
 			fmt.Printf("The resultant is: %v, %v", got, err)
 		} else {
 			fmt.Printf("The resultant is: %v", got)

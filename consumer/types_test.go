@@ -30,7 +30,7 @@ func Test_cardsFromZ(t *testing.T) {
 		t.Fatalf("there is an error in testing: %v\n", err)
 	}
 
-	fromRedis := []string{`{"pan": "1234", "exp_date": "2209"}`}
+	fromRedis := []string{`{"pan": "1234", "exp_date": "2209", "id": 1}`}
 
 	tests := []struct {
 		name string
@@ -54,8 +54,8 @@ func Test_cardsFromZ(t *testing.T) {
 }
 
 func Test_generateCardsIds(t *testing.T) {
-	have1 := ebs_fields.CardsRedis{PAN: "1334", Expdate: "2201"}
-	have2 := ebs_fields.CardsRedis{PAN: "1234", Expdate: "2202"}
+	have1 := ebs_fields.CardsRedis{PAN: "1334", Expdate: "2201", ID: 1}
+	have2 := ebs_fields.CardsRedis{PAN: "1234", Expdate: "2202", ID: 2}
 	have := &[]ebs_fields.CardsRedis{
 		have1, have2,
 	}
@@ -98,7 +98,7 @@ func Test_paymentTokens_toMap(t *testing.T) {
 		fields fields
 		want   map[string]interface{}
 	}{
-		{"successful test", f, w},
+		{"testing to map", f, w},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,9 +107,19 @@ func Test_paymentTokens_toMap(t *testing.T) {
 				Amount: tt.fields.Amount,
 				ID:     tt.fields.ID,
 			}
-			if got := p.toMap(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("paymentTokens.toMap() = %v, want %v", got, tt.want)
-			}
+			for k, v := range p.toMap(){
+
+				switch v.(type){
+				case float32, float64:
+					continue
+				}
+
+				if tt.want[k] != v {
+					t.Errorf("paymentTokens.toMap() = %v, want %v", tt.want[k], v)
+
+					}
+
+				}
 		})
 	}
 }
@@ -161,7 +171,7 @@ func Test_paymentTokens_check(t *testing.T) {
 		want   bool
 		want1  validationError
 	}{
-		{"testing validation error", args{id: "my id", amount: 32}, false, validationError{}},
+		{"testing validation error", args{id: "my id", amount: 32}, true, validationError{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

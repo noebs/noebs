@@ -30,7 +30,7 @@ func GenerateAPIKey(c *gin.Context) {
 	var m map[string]string
 	if err := c.ShouldBindJSON(&m); err != nil {
 		if _, ok := m["email"]; ok {
-			k, _ := generateApiKey()
+			k, _ := generateAPIKey()
 			getRedis := utils.GetRedis("localhost:6379")
 			getRedis.SAdd("apikeys", k)
 			c.JSON(http.StatusOK, gin.H{"result": k})
@@ -405,7 +405,7 @@ func OptionsMiddleware(c *gin.Context) {
 	}
 }
 
-func generateApiKey() (string, error) {
+func generateAPIKey() (string, error) {
 	_, err := rand.Read(apiKey)
 	a := fmt.Sprintf("%x", apiKey)
 	return a, err

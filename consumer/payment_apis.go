@@ -1233,6 +1233,8 @@ func SpecialPayment(c *gin.Context) {
 	c.JSON(code, gin.H{"ebs_response": res})
 }
 
+
+//EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
 func EbsGetCardInfo(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardInfo // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -1307,6 +1309,7 @@ func EbsGetCardInfo(c *gin.Context) {
 
 }
 
+//GetMSISDNFromCard for ussd to get pan info from sim card
 func GetMSISDNFromCard(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPANFromMobile // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.

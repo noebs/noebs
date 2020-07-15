@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"encoding/json"
+	"errors"
 	"regexp"
 	"strconv"
 
@@ -54,7 +55,7 @@ type paymentTokens struct {
 }
 
 func (p *paymentTokens)check(id string, amount float32, redisClient *redis.Client) (bool, validationError) {
-	return true, validationError{}
+	// return true, validationError{}
 
 	if err := p.getFromRedis(id, redisClient); err != nil {
 		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
@@ -114,9 +115,14 @@ func (p *paymentTokens) toRedis() error {
 func (p *paymentTokens) getFromRedis(id string, r *redis.Client) error {
 
 	res, err := r.HMGet(id, "id", "amount").Result()
-	if err != nil {
+	if err != nil || res == nil{
 		return err
 	}
+
+	if res[0] == nil || res[1] == nil {
+		return errors.New("nil values")
+	}
+
 	p.ID = res[0].(string)
 	amount, _ := strconv.ParseFloat(res[1].(string), 32)
 	p.Amount = float32(amount)
