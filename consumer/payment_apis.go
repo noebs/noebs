@@ -1351,6 +1351,7 @@ func GetMSISDNFromCard(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
+		billerForm <- res.GenericEBSResponseFields // a devil made code FIX ME
 		// mask the pan
 		res.MaskPAN()
 

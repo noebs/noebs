@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 
@@ -286,4 +287,24 @@ func NecToName(c *gin.Context) {
 func cacheKeys(c *gin.Context) {
 	// it should check ebs first
 
+}
+
+var billerForm chan ebs_fields.GenericEBSResponseFields
+
+
+func BillerHooks(url string) error{
+	var data *bytes.Buffer
+
+	for {
+		select{
+		case b := <-billerForm:
+			if err := json.NewEncoder(data).Encode(b); err != nil {
+				return err
+			}
+			
+			if _, err := http.Post(url, "application/json", data); err != nil {
+				return err
+			}
+		}
+	}
 }

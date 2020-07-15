@@ -163,6 +163,7 @@ func init() {
 func main() {
 
 	go handleChan()
+	go consumer.BillerHooks("my testing url")
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
