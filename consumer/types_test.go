@@ -13,7 +13,7 @@ import (
 
 
 var mr, _ = miniredis.Run()
-var mockRedis = utils.GetRedis(mr.Addr())
+var mockRedis = utils.GetRedisClient(mr.Addr())
 
 
 func Test_cardsFromZ(t *testing.T) {

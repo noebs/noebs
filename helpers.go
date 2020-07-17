@@ -12,7 +12,7 @@ import (
 
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
+	"github.com/go-redis/redis/v7"
 	"github.com/google/uuid"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
 	"gopkg.in/go-playground/validator.v9"
@@ -210,9 +210,8 @@ func generateUUID() string {
 	return uuid.New().String()
 }
 
-func handleChan() {
+func handleChan(r *redis.Client) {
 	// when getting redis results, ALWAYS json.Marshal them
-	redisClient := utils.GetRedis("localhost:6379")
 	for {
 		select {
 		case c := <-consumer.BillChan:
@@ -221,7 +220,7 @@ func handleChan() {
 				//FIXME there is a bug here
 				//mapFields, _ := additionalFieldsToHash(c.BillInfo)
 				m.NewFromMap(c.BillInfo)
-				redisClient.HSet("meters", m.MeterNumber, m.CustomerName)
+				r.HSet("meters", m.MeterNumber, m.CustomerName)
 			}
 			//} else if c.PayeeID == mtnTopUp {
 			//	var m mtnBill

@@ -6,8 +6,8 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-// GetRedis returns a *redis.Client instance
-func GetRedis(addr string) *redis.Client {
+// GetRedisClient returns a *redis.Client instance
+func GetRedisClient(addr string) *redis.Client {
 	if addr == "" {
 		addr = "localhost:6379"
 	}
@@ -17,6 +17,7 @@ func GetRedis(addr string) *redis.Client {
 	})
 	return client
 }
+
 
 //SaveRedisList
 func SaveRedisList(r *redis.Client, key string, value interface{}) error {

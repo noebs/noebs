@@ -7,14 +7,11 @@ import (
 	"strconv"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
 	"github.com/go-redis/redis/v7"
 	"github.com/google/uuid"
 )
 
 type card map[string]interface{}
-
-var redisClient = utils.GetRedis("")
 
 //cardsFromZ marshals []string to []ebs_fields.CardsRedis
 func cardsFromZ(cards []string) []ebs_fields.CardsRedis {
@@ -47,11 +44,13 @@ func notEbs(pan string) bool {
 	return re.Match([]byte(pan))
 }
 
+//FIXME #62 make sure to add redisClient here
 type paymentTokens struct {
 	Name   string  `json:"name,omitempty" validator:"required"`
 	Amount float32 `json:"amount,omitempty" validator:"required"`
 	ID     string  `json:"id,omitempty"`
 	UUID   string  `json:"uuid"`
+	redisClient *redis.Client
 }
 
 func (p *paymentTokens)check(id string, amount float32, redisClient *redis.Client) (bool, validationError) {
@@ -99,12 +98,11 @@ func (p *paymentTokens) fromMap(m map[string]interface{}) {
 }
 
 func (p *paymentTokens) toRedis() error {
-	r := utils.GetRedis("localhost:6379")
 
 	id := p.getUUID()
 	h := p.toMap()
 
-	if _, err := r.HMSet(id, h).Result(); err != nil {
+	if _, err := p.redisClient.HMSet(id, h).Result(); err != nil {
 		return err
 	}
 	return nil
@@ -130,8 +128,7 @@ func (p *paymentTokens) getFromRedis(id string, r *redis.Client) error {
 }
 
 func (p *paymentTokens) invalidate(id string) error {
-	r := utils.GetRedis("localhost:6379")
-	_, err := r.Del(id).Result()
+	_, err := p.redisClient.Del(id).Result()
 	if err != nil {
 		return err
 	}

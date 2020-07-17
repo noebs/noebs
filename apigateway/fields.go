@@ -1,9 +1,10 @@
 package gateway
 
 import (
+	"strings"
+
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
-	"strings"
 )
 
 type UserModel struct {
@@ -30,7 +31,7 @@ type UserLogin struct {
 	Password string `binding:"required" json:"password"`
 }
 
-func (u *UserModel) hashPassword() error {
+func (u *UserModel) HashPassword() error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), 8)
 	if err != nil {
 		return err

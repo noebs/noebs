@@ -13,8 +13,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type Other struct {
+	Service
+}
 //ResetPassword reset user password after passing some check
-func ResetPassword(c *gin.Context) {
+func (o *Other) ResetPassword(c *gin.Context) {
 	//TODO complete me
 	//- we want to make sure that it *was* you
 	//-enter your mobile number
@@ -22,7 +25,7 @@ func ResetPassword(c *gin.Context) {
 }
 
 //CardFromNumber gets the gussesed associated mobile number to this pan
-func CardFromNumber(c *gin.Context) {
+func (o *Other) CardFromNumber(c *gin.Context) {
 	// the user must submit in their mobile number *ONLY*, and it is get
 	q, ok := c.GetQuery("mobile_number")
 	if !ok {
@@ -30,19 +33,18 @@ func CardFromNumber(c *gin.Context) {
 		return
 	}
 	// now search through redis for this mobile number!
-	redisClient := utils.GetRedis("localhost:6379")
 	// first check if we have already collected that number before
-	pan, err := redisClient.Get(q + ":pan").Result()
+	pan, err := o.Redis.Get(q + ":pan").Result()
 	if err == nil {
 		c.JSON(http.StatusOK, gin.H{"result": pan})
 		return
 	}
-	username, err := redisClient.Get(q).Result()
+	username, err := o.Redis.Get(q).Result()
 	if err == redis.Nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
 		return
 	}
-	if pan, ok := utils.PanfromMobile(username, redisClient); ok {
+	if pan, ok := utils.PanfromMobile(username, o.Redis); ok {
 		c.JSON(http.StatusOK, gin.H{"result": pan})
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
@@ -51,14 +53,13 @@ func CardFromNumber(c *gin.Context) {
 }
 
 //GetCards Get all cards for the currently authorized user
-func GetCards(c *gin.Context) {
-	redisClient := utils.GetRedis("localhost:6379")
+func (o *Other) GetCards(c *gin.Context) {
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
 	}
-	cards, err := redisClient.ZRange(username+":cards", 0, -1).Result()
+	cards, err := o.Redis.ZRange(username+":cards", 0, -1).Result()
 	if err != nil {
 		// handle the error somehow
 		logrus.WithFields(logrus.Fields{
@@ -69,7 +70,7 @@ func GetCards(c *gin.Context) {
 		return
 	}
 	cardBytes := cardsFromZ(cards)
-	m, _ := redisClient.HGet(username+":cards", "main_card").Result()
+	m, _ := o.Redis.HGet(username+":cards", "main_card").Result()
 	mCard := cardsFromZ([]string{m})
 	c.JSON(http.StatusOK, gin.H{"cards": cardBytes, "main_card": mCard[0]})
 
@@ -78,8 +79,7 @@ func GetCards(c *gin.Context) {
 //AddCards Allow users to add card to their profile
 // if main_card was set to true, then it will be their main card AND
 // it will remove the previously selected one FIXME
-func AddCards(c *gin.Context) {
-	redisClient := utils.GetRedis("localhost:6379")
+func (o *Other) AddCards(c *gin.Context) {
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	//check if the card is not from non EBS affiliated banks
@@ -107,27 +107,26 @@ func AddCards(c *gin.Context) {
 	if fields.IsMain {
 		// refactor me, please!
 		ucard := card{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
-		redisClient.HMSet(username, ucard)
-		redisClient.ZAdd(username+":cards", z)
+		o.Redis.HMSet(username, ucard)
+		o.Redis.ZAdd(username+":cards", z)
 		return
 	}
-	_, err = redisClient.ZAdd(username+":cards", z).Result()
+	_, err = o.Redis.ZAdd(username+":cards", z).Result()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 	// also it is necessary to add it into a list of user's pans
 	//FIXME better handle this error smh
-	redisClient.RPush(username+":pans", fields.PAN)
+	o.Redis.RPush(username+":pans", fields.PAN)
 
 	c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
 
 }
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
-func EditCard(c *gin.Context) {
+func (o *Other) EditCard(c *gin.Context) {
 	var card ebs_fields.CardsRedis
-	redisClient := utils.GetRedis("localhost:6379")
 
 	err := c.ShouldBindWith(&card, binding.JSON)
 	if err != nil {
@@ -145,9 +144,9 @@ func EditCard(c *gin.Context) {
 
 	// rm card
 	if card.IsMain {
-		redisClient.HDel(username+":cards", "main_card")
+		o.Redis.HDel(username+":cards", "main_card")
 	} else {
-		redisClient.ZRemRangeByRank(username+":cards", int64(card.ID-1), int64(card.ID-1))
+		o.Redis.ZRemRangeByRank(username+":cards", int64(card.ID-1), int64(card.ID-1))
 	}
 	//card.RmCard(username, card.ID)
 	buf, err := json.Marshal(card)
@@ -159,9 +158,9 @@ func EditCard(c *gin.Context) {
 	z := &redis.Z{
 		Member: buf,
 	}
-	redisClient.ZAdd(username+":cards", z)
+	o.Redis.ZAdd(username+":cards", z)
 	if card.IsMain {
-		redisClient.HSet(username, "main_card", buf)
+		o.Redis.HSet(username, "main_card", buf)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"username": username, "cards": card})
@@ -169,8 +168,7 @@ func EditCard(c *gin.Context) {
 
 //RemoveCard allow authorized users to remove their card
 // when the send the card id (from its list in app view)
-func RemoveCard(c *gin.Context) {
-	redisClient := utils.GetRedis("localhost:6379")
+func (o *Other) RemoveCard(c *gin.Context) {
 
 	var fields ebs_fields.ItemID
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -189,9 +187,9 @@ func RemoveCard(c *gin.Context) {
 		id := fields.ID
 
 		if fields.IsMain {
-			redisClient.HDel(username+":cards", "main_card")
+			o.Redis.HDel(username+":cards", "main_card")
 		} else {
-			_, err := redisClient.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
+			_, err := o.Redis.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
 				return
@@ -203,8 +201,7 @@ func RemoveCard(c *gin.Context) {
 }
 
 //AddMobile adds a mobile number to the current authorized user
-func AddMobile(c *gin.Context) {
-	redisClient := utils.GetRedis("localhost:6379")
+func (o *Other) AddMobile(c *gin.Context) {
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -217,10 +214,10 @@ func AddMobile(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
 			if fields.IsMain {
-				redisClient.HSet(username, "main_mobile", buf)
-				redisClient.SAdd(username+":cards", buf)
+				o.Redis.HSet(username, "main_mobile", buf)
+				o.Redis.SAdd(username+":cards", buf)
 			} else {
-				redisClient.SAdd(username+":mobile_numbers", buf)
+				o.Redis.SAdd(username+":mobile_numbers", buf)
 			}
 
 			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": string(buf)})
@@ -230,8 +227,7 @@ func AddMobile(c *gin.Context) {
 }
 
 //GetMobile gets list of mobile numbers to this user
-func GetMobile(c *gin.Context) {
-	redisClient := utils.GetRedis("localhost:6379")
+func (o *Other) GetMobile(c *gin.Context) {
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -244,10 +240,10 @@ func GetMobile(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
 			if fields.IsMain {
-				redisClient.HSet(username, "main_mobile", buf)
-				redisClient.SAdd(username+":mobile_numbers", buf)
+				o.Redis.HSet(username, "main_mobile", buf)
+				o.Redis.SAdd(username+":mobile_numbers", buf)
 			} else {
-				redisClient.SAdd(username+":mobile_numbers", buf)
+				o.Redis.SAdd(username+":mobile_numbers", buf)
 			}
 
 			c.JSON(http.StatusCreated, gin.H{"username": username, "mobile_numbers": string(buf)})
@@ -257,10 +253,9 @@ func GetMobile(c *gin.Context) {
 }
 
 //NecToName gets an nec number from the context and maps it to its meter number
-func NecToName(c *gin.Context) {
+func (o *Other) NecToName(c *gin.Context) {
 	if nec := c.Query("nec"); nec != "" {
-		redisClient := utils.GetRedis("localhost:6379")
-		name, err := redisClient.HGet("meters", nec).Result()
+		name, err := o.Redis.HGet("meters", nec).Result()
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "No user found with this NEC", "code": "nec_not_found"})
 		} else {
@@ -269,7 +264,7 @@ func NecToName(c *gin.Context) {
 	}
 }
 
-//func Rate(w http.ResponseWriter, r *http.Request){
+//func (o *Other) Rate(w http.ResponseWriter, r *http.Request){
 //	rate := rateRpc()
 //	w.Header().Add("content-type", "application/json")
 //	ra := struct {
@@ -284,7 +279,7 @@ func NecToName(c *gin.Context) {
 //	w.Write(resBytes)
 //}
 
-func cacheKeys(c *gin.Context) {
+func (o *Other) cacheKeys(c *gin.Context) {
 	// it should check ebs first
 
 }
@@ -292,7 +287,8 @@ func cacheKeys(c *gin.Context) {
 var billerForm chan ebs_fields.GenericEBSResponseFields
 
 
-func BillerHooks(url string) error{
+//BillerHooks submits results to external endpoint
+func (o *Other) BillerHooks(url string) error{
 	var data *bytes.Buffer
 
 	for {

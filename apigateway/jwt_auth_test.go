@@ -8,36 +8,14 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
-func TestGenerateJWT(t *testing.T) {
-	type args struct {
-		serviceID string
-		secret    []byte
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := GenerateJWT(tt.args.serviceID, tt.args.secret)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GenerateJWT() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("GenerateJWT() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
+var key = []byte("abcdef012345678")
+var jj = &JWTAuth{Key: key}
 
 func TestVerifyJWT(t *testing.T) {
-	key := []byte("abcdef012345678")
-	j, _ := GenerateJWT("test", key)
+
+
+	
+	j, _ := jj.GenerateJWT("test")
 
 	tests := []struct {
 		name string
@@ -48,7 +26,7 @@ func TestVerifyJWT(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := VerifyJWT(j, []byte("abcdef012345678"))
+			got, _ := jj.VerifyJWT(j)
 			if !reflect.DeepEqual(got.Username, tt.want) {
 				t.Errorf("VerifyJWT() got = %v, want %v", got, tt.want)
 			}
@@ -56,32 +34,6 @@ func TestVerifyJWT(t *testing.T) {
 	}
 }
 
-func Test_secretFromClaims(t *testing.T) {
-	type args struct {
-		token    string
-		skipTime bool
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := secretFromClaims(tt.args.token, tt.args.skipTime)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("secretFromClaims() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("secretFromClaims() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func Test_generateClaims(t *testing.T) {
 	type args struct {
@@ -128,7 +80,8 @@ func Test_TimeOut(t *testing.T) {
 		StandardClaims: t1,
 	}
 
-	tk1, _ := GenerateJWTWithClaim("noebs", jwtKey, nToken1)
+	j := &JWTAuth{}
+	tk1, _ := j.GenerateJWTWithClaim("noebs", nToken1)
 
 	tests := []struct {
 		name string
@@ -139,7 +92,7 @@ func Test_TimeOut(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := VerifyJWT(tt.args, jwtKey)
+			got, err := j.VerifyJWT(tt.args)
 			if err != nil {
 				t.Errorf("there's an error: %v", err)
 			}
@@ -158,6 +111,7 @@ func Test_verifyWithClaim1(t *testing.T) {
 		token TokenClaims
 	}
 
+	
 	n := time.Now().Add(-10 * time.Hour).Unix()
 	eat1 := time.Now().Add(3 * time.Minute).Unix()
 	t1 := generateClaims(n, eat1, "noebs")
@@ -166,7 +120,7 @@ func Test_verifyWithClaim1(t *testing.T) {
 		StandardClaims: t1,
 	}
 
-	tk1, _ := GenerateJWTWithClaim("noebs", jwtKey, nToken1)
+	tk1, _ := jj.GenerateJWTWithClaim("noebs", nToken1)
 
 	tests := []struct {
 		name string
@@ -177,7 +131,7 @@ func Test_verifyWithClaim1(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := verifyWithClaim(tt.args, jwtKey)
+			err := jj.verifyWithClaim(tt.args)
 			if err != nil {
 				t.Errorf("there's an error: %v", err)
 			}

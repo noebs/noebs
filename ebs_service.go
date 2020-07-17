@@ -26,6 +26,14 @@ import (
 )
 
 var log = logrus.New()
+var redisClient = utils.GetRedisClient("")
+var database, _ = utils.Database("sqlite3", "test.db")
+var auth gateway.JWTAuth
+var consumerService = consumer.Service{Db: database, Redis: redisClient}
+var consumerOtherService = consumer.Other{Service: consumerService}
+var dashService = dashboard.Service{Redis: redisClient}
+var state = consumer.State{}
+
 
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
@@ -48,7 +56,7 @@ func GetMainEngine() *gin.Engine {
 
 	route.Static("/dashboard/assets", "./dashboard/template")
 
-	route.POST("/generate_api_key", gateway.GenerateAPIKey)
+	route.POST("/generate_api_key", state.GenerateAPIKey)
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/purchase", Purchase)
@@ -73,22 +81,22 @@ func GetMainEngine() *gin.Engine {
 	dashboardGroup := route.Group("/dashboard")
 	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
-		dashboardGroup.GET("/get_tid", dashboard.TransactionByTid)
-		dashboardGroup.GET("/get", dashboard.TransactionByTid)
-		dashboardGroup.GET("/create", dashboard.MakeDummyTransaction)
-		dashboardGroup.GET("/all", dashboard.GetAll)
-		dashboardGroup.GET("/count", dashboard.TransactionsCount)
-		dashboardGroup.GET("/settlement", dashboard.DailySettlement)
-		dashboardGroup.GET("/merchant", dashboard.MerchantTransactionsEndpoint)
-		dashboardGroup.GET("/merchant/:id", dashboard.MerchantViews)
+		dashboardGroup.GET("/get_tid", dashService.TransactionByTid)
+		dashboardGroup.GET("/get", dashService.TransactionByTid)
+		dashboardGroup.GET("/create", dashService.MakeDummyTransaction)
+		dashboardGroup.GET("/all", dashService.GetAll)
+		dashboardGroup.GET("/count", dashService.TransactionsCount)
+		dashboardGroup.GET("/settlement", dashService.DailySettlement)
+		dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)
+		dashboardGroup.GET("/merchant/:id", dashService.MerchantViews)
 
-		dashboardGroup.POST("/issues", dashboard.ReportIssueEndpoint)
+		dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
 
-		dashboardGroup.GET("/", dashboard.BrowserDashboard)
-		dashboardGroup.GET("/test_browser", dashboard.IndexPage)
-		dashboardGroup.Any("/hearout", dashboard.LandingPage)
-		dashboardGroup.GET("/stream", dashboard.Stream)
-		dashboardGroup.Any("/merchants", dashboard.MerchantRegistration)
+		dashboardGroup.GET("/", dashService.BrowserDashboard)
+		dashboardGroup.GET("/test_browser", dashService.IndexPage)
+		dashboardGroup.Any("/hearout", dashService.LandingPage)
+		dashboardGroup.GET("/stream", dashService.Stream)
+		dashboardGroup.Any("/merchants", dashService.MerchantRegistration)
 	}
 
 	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -99,52 +107,55 @@ func GetMainEngine() *gin.Engine {
 	// we want to use /v2 for consumer and merchant services
 	{
 		//cons.GET("/rate", gin.WrapF(consumer.Rate))
-		cons.POST("/register", gateway.CreateUser)
-		cons.POST("/refresh", gateway.RefreshHandler)
-		cons.POST("/logout", gateway.LogOut)
+		cons.POST("/register", state.CreateUser)
+		cons.POST("/refresh", state.RefreshHandler)
+		cons.POST("/logout", state.LogOut)
 
-		cons.POST("/balance", consumer.Balance)
-		cons.POST("/is_alive", consumer.IsAlive)
-		cons.POST("/bill_payment", consumer.BillPayment)
-		cons.POST("/bill_inquiry", consumer.BillInquiry)
-		cons.POST("/p2p", consumer.CardTransfer)
-		cons.POST("/purchase", consumer.Purchase)
-		cons.POST("/status", consumer.Status)
-		cons.POST("/key", consumer.WorkingKey)
-		cons.POST("/ipin", consumer.IPinChange)
-		cons.POST("/generate_qr", consumer.QRGeneration)
-		cons.POST("/qr_payment", consumer.QRPayment)
-		cons.POST("/generate_ipin", consumer.GenerateIpin)
-		cons.POST("/complete_ipin", consumer.CompleteIpin)
+		cons.POST("/balance", consumerService.Balance)
+		cons.POST("/is_alive", consumerService.IsAlive)
+		cons.POST("/bill_payment", consumerService.BillPayment)
+		cons.POST("/bill_inquiry", consumerService.BillInquiry)
+		cons.POST("/p2p", consumerService.CardTransfer)
+		cons.POST("/purchase", consumerService.Purchase)
+		cons.POST("/status", consumerService.Status)
+		cons.POST("/key", consumerService.WorkingKey)
+		cons.POST("/ipin", consumerService.IPinChange)
+		cons.POST("/generate_qr", consumerService.QRGeneration)
+		cons.POST("/qr_payment", consumerService.QRPayment)
+		cons.POST("/generate_ipin", consumerService.GenerateIpin)
+		cons.POST("/complete_ipin", consumerService.CompleteIpin)
 
-		cons.POST("/qr_refund", consumer.QRRefund)
-		cons.POST("/card_info", consumer.EbsGetCardInfo)
-		cons.POST("/pan_from_mobile", consumer.GetMSISDNFromCard)
-		cons.GET("/mobile2pan", consumer.CardFromNumber)
-		cons.GET("/nec2name", consumer.NecToName)
+		cons.POST("/qr_refund", consumerService.QRRefund)
+		cons.POST("/card_info", consumerService.EbsGetCardInfo)
+		cons.POST("/pan_from_mobile", consumerService.GetMSISDNFromCard)
+		cons.GET("/mobile2pan", consumerOtherService.CardFromNumber)
+		cons.GET("/nec2name", consumerOtherService.NecToName)
 
-		cons.POST("/login", gateway.LoginHandler)
-		cons.Use(gateway.AuthMiddleware())
-		cons.GET("/get_cards", consumer.GetCards)
-		cons.POST("/add_card", consumer.AddCards)
+		cons.POST("/login", state.LoginHandler)
+		cons.Use(auth.AuthMiddleware())
+		cons.GET("/get_cards", consumerOtherService.GetCards)
+		cons.POST("/add_card", consumerOtherService.AddCards)
 
-		cons.PUT("/edit_card", consumer.EditCard)
-		cons.DELETE("/delete_card", consumer.RemoveCard)
+		cons.PUT("/edit_card", consumerOtherService.EditCard)
+		cons.DELETE("/delete_card", consumerOtherService.RemoveCard)
 
-		cons.GET("/get_mobile", consumer.GetMobile)
-		cons.POST("/add_mobile", consumer.AddMobile)
+		cons.GET("/get_mobile", consumerOtherService.GetMobile)
+		cons.POST("/add_mobile", consumerOtherService.AddMobile)
 
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
 	}
 
-	consumer.Routes("/v1", route)
+	consumer.Routes("/v1", route, database, redisClient)
 	return route
 }
 
 func init() {
 	binding.Validator = new(ebs_fields.DefaultValidator)
+	auth := &gateway.JWTAuth{}
+	auth.Init()
+	state = consumer.State{Db: database, Redis: redisClient, Auth: auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
 }
 
 // @title noebs Example API
@@ -161,9 +172,9 @@ func init() {
 // @securityDefinitions.basic BasicAuth
 // @in header
 func main() {
-
-	go handleChan()
-	go consumer.BillerHooks("my testing url")
+	
+	go handleChan(redisClient)
+	go consumerOtherService.BillerHooks("my testing url")
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
@@ -394,7 +405,6 @@ func Purchase(c *gin.Context) {
 				"message": err.Error(),
 			}).Info("error in migrating purchase model")
 		}
-		redisClient := utils.GetRedis("localhost:6379")
 
 		uid := generateUUID()
 		redisClient.HSet(fields.TerminalID+":purchase", uid, &res)
