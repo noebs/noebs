@@ -28,9 +28,10 @@ import (
 var log = logrus.New()
 var redisClient = utils.GetRedisClient("")
 var database, _ = utils.Database("sqlite3", "test.db")
+
 var auth gateway.JWTAuth
-var consumerService = consumer.Service{Db: database, Redis: redisClient}
-var consumerOtherService = consumer.Other{Service: consumerService}
+var service = utils.Service{Db: database, Redis: redisClient}
+var consumerService = consumer.Service{Service: service}
 var dashService = dashboard.Service{Redis: redisClient}
 var state = consumer.State{}
 
@@ -128,19 +129,19 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/qr_refund", consumerService.QRRefund)
 		cons.POST("/card_info", consumerService.EbsGetCardInfo)
 		cons.POST("/pan_from_mobile", consumerService.GetMSISDNFromCard)
-		cons.GET("/mobile2pan", consumerOtherService.CardFromNumber)
-		cons.GET("/nec2name", consumerOtherService.NecToName)
+		cons.GET("/mobile2pan", consumerService.CardFromNumber)
+		cons.GET("/nec2name", consumerService.NecToName)
 
 		cons.POST("/login", state.LoginHandler)
 		cons.Use(auth.AuthMiddleware())
-		cons.GET("/get_cards", consumerOtherService.GetCards)
-		cons.POST("/add_card", consumerOtherService.AddCards)
+		cons.GET("/get_cards", consumerService.GetCards)
+		cons.POST("/add_card", consumerService.AddCards)
 
-		cons.PUT("/edit_card", consumerOtherService.EditCard)
-		cons.DELETE("/delete_card", consumerOtherService.RemoveCard)
+		cons.PUT("/edit_card", consumerService.EditCard)
+		cons.DELETE("/delete_card", consumerService.RemoveCard)
 
-		cons.GET("/get_mobile", consumerOtherService.GetMobile)
-		cons.POST("/add_mobile", consumerOtherService.AddMobile)
+		cons.GET("/get_mobile", consumerService.GetMobile)
+		cons.POST("/add_mobile", consumerService.AddMobile)
 
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
@@ -174,7 +175,7 @@ func init() {
 func main() {
 	
 	go handleChan(redisClient)
-	go consumerOtherService.BillerHooks("my testing url")
+	go consumerService.BillerHooks("my testing url")
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)

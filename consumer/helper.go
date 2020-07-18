@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
 	"github.com/jinzhu/gorm"
@@ -22,9 +23,8 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 	cv1 := route.Group(groupName)
 	cv1.Use(state.APIAuth())
 
-	s := &Service{Redis: redisClient, Db: db}
-	other := Other{Service: *s}
-
+	ss := utils.Service{Redis: redisClient, Db: db}
+	s := &Service{Service: ss}
 
 	{
 
@@ -53,19 +53,19 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.POST("card_info", s.EbsGetCardInfo)
 		cv1.POST("pan_from_mobile", s.GetMSISDNFromCard)
 
-		cv1.GET("/mobile2pan", other.CardFromNumber)
-		cv1.GET("/nec2name", other.NecToName)
+		cv1.GET("/mobile2pan", s.CardFromNumber)
+		cv1.GET("/nec2name", s.NecToName)
 
 		cv1.POST("/login", state.LoginHandler)
 		cv1.Use(auth.AuthMiddleware())
-		cv1.GET("/get_cards", other.GetCards)
-		cv1.POST("/add_card", other.AddCards)
+		cv1.GET("/get_cards", s.GetCards)
+		cv1.POST("/add_card", s.AddCards)
 
-		cv1.PUT("/edit_card", other.EditCard)
-		cv1.DELETE("/delete_card", other.RemoveCard)
+		cv1.PUT("/edit_card", s.EditCard)
+		cv1.DELETE("/delete_card", s.RemoveCard)
 
-		cv1.GET("/get_mobile", other.GetMobile)
-		cv1.POST("/add_mobile", other.AddMobile)
+		cv1.GET("/get_mobile", s.GetMobile)
+		cv1.POST("/add_mobile", s.AddMobile)
 
 		cv1.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})

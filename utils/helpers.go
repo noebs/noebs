@@ -6,6 +6,11 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+
+type Service struct {
+	Redis *redis.Client
+	Db *gorm.DB
+}
 // GetRedisClient returns a *redis.Client instance
 func GetRedisClient(addr string) *redis.Client {
 	if addr == "" {

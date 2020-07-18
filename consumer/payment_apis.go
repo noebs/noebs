@@ -87,16 +87,15 @@ import (
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
-	"github.com/go-redis/redis/v7"
-	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
 )
 
 var log = logrus.New()
+
+//Service consumer for utils.Service struct
 type Service struct {
-	Redis *redis.Client
-	Db *gorm.DB
+	utils.Service
 }
 
 //BillChan it is used to asyncronysly parses ebs response to get and assign values to the billers
