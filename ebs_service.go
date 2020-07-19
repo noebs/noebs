@@ -34,8 +34,6 @@ var service = utils.Service{Db: database, Redis: redisClient}
 var consumerService = consumer.Service{Service: service}
 var dashService = dashboard.Service{Redis: redisClient}
 var state = consumer.State{}
-var key = "121324242"
-
 
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
@@ -155,9 +153,8 @@ func GetMainEngine() *gin.Engine {
 
 func init() {
 	binding.Validator = new(ebs_fields.DefaultValidator)
-	auth := &gateway.JWTAuth{}
 	auth.Init()
-	state = consumer.State{Db: database, Redis: redisClient, Auth: auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
+	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
 }
 
 // @title noebs Example API
