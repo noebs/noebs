@@ -30,6 +30,7 @@ func (a *JWTAuth)AuthMiddleware() gin.HandlerFunc {
 		}
 		
 		claims, err := a.VerifyJWT(h)
+		log.Printf("They key is: %v", a.Key)
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
 				// in this case you might need to give it another spin
@@ -39,6 +40,8 @@ func (a *JWTAuth)AuthMiddleware() gin.HandlerFunc {
 				//c.Set("username", claims.Username)
 				//c.Next()
 			} else {
+				//FIXME #66 it this code doesn't use the same key we have
+				//jwt key is not initalized here
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
 				return
 			}

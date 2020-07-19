@@ -19,6 +19,7 @@ type GetRedisClient func(string) *redis.Client
 
 //Init initializes jwt auth
 func (j *JWTAuth)Init(){
+	//FIXME issue #66
 	key, _ := GenerateAPIKey()
 	j.Key = []byte(key)
 }
@@ -40,8 +41,10 @@ func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign and get the complete encoded token as a string using the secret
+	if j.Key == nil {
+		return "", errors.New("empty jwt key")
+	}
 	if tokenString, err := token.SignedString(j.Key); err == nil {
-		fmt.Println(tokenString)
 		return tokenString, nil
 	} else {
 		return "", err

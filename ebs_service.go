@@ -175,6 +175,7 @@ func init() {
 func main() {
 	
 	go handleChan(redisClient)
+	//FIXME #65 handle errors in go routine
 	go consumerService.BillerHooks("my testing url")
 
 	// logging and instrumentation
