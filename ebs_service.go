@@ -34,6 +34,7 @@ var service = utils.Service{Db: database, Redis: redisClient}
 var consumerService = consumer.Service{Service: service}
 var dashService = dashboard.Service{Redis: redisClient}
 var state = consumer.State{}
+var key = "121324242"
 
 
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
