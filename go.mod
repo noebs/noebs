@@ -16,7 +16,7 @@ require (
 	github.com/go-redis/redis/v7 v7.4.0
 	github.com/gomodule/redigo/redis v0.0.0-20200429221454-e14091dffc1b // indirect
 	github.com/google/uuid v1.1.1
-	github.com/jinzhu/gorm v1.9.14
+	github.com/jinzhu/gorm v1.9.15
 	github.com/mailru/easyjson v0.7.1 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/prometheus/client_golang v1.7.1
@@ -31,7 +31,7 @@ require (
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381 // indirect
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae // indirect
 	golang.org/x/text v0.3.3 // indirect
-	golang.org/x/tools v0.0.0-20200713235242-6acd2ab80ede // indirect
+	golang.org/x/tools v0.0.0-20200720162443-9cbb971a186e // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/go-playground/validator.v9 v9.31.0
 	gopkg.in/yaml.v2 v2.3.0 // indirect
