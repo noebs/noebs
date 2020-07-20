@@ -11,6 +11,13 @@ import (
 	"github.com/google/uuid"
 )
 
+
+
+type billerForm struct {
+	ebs_fields.GenericEBSResponseFields
+	id string
+}
+
 type card map[string]interface{}
 
 //cardsFromZ marshals []string to []ebs_fields.CardsRedis
