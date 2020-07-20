@@ -174,7 +174,7 @@ func main() {
 	
 	go handleChan(redisClient)
 	//FIXME #65 handle errors in go routine
-	go consumerService.BillerHooks("my testing url")
+	go consumerService.BillerHooks()
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
