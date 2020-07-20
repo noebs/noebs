@@ -1149,6 +1149,8 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	req, _ := json.Marshal(&p)
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
+	b <- billerForm{res.GenericEBSResponseFields, id} // a devil made code FIX ME
+
 	// mask the pan
 	res.MaskPAN()
 
@@ -1277,7 +1279,6 @@ func (s *Service)GetMSISDNFromCard(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		billerForm <- res.GenericEBSResponseFields // a devil made code FIX ME
 		// mask the pan
 		res.MaskPAN()
 

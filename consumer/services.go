@@ -281,21 +281,21 @@ func (s *Service) cacheKeys(c *gin.Context) {
 
 }
 
-var billerForm chan ebs_fields.GenericEBSResponseFields
+var b chan billerForm
 
 
 //BillerHooks submits results to external endpoint
-func (s *Service) BillerHooks(url string) error{
+func (s *Service) BillerHooks() error{
 	var data *bytes.Buffer
 
 	for {
 		select{
-		case b := <-billerForm:
+		case b := <-b:
 			if err := json.NewEncoder(data).Encode(b); err != nil {
 				return err
 			}
 			
-			if _, err := http.Post(url, "application/json", data); err != nil {
+			if _, err := http.Post(b.id, "application/json", data); err != nil {
 				return err
 			}
 		}
