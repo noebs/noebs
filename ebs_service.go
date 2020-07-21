@@ -203,6 +203,7 @@ func main() {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /workingKey [post]
+//FIXME #68 make all merchant routers in an Env or struct 
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
 	db, _ := utils.Database("sqlite3", "test.db")
@@ -277,7 +278,9 @@ func IsAlive(c *gin.Context) {
 
 // isAliveWrk is for testing only. We want to bypass our middleware checks and move
 // up directly to ebs
+//FIXME #68
 func isAliveWrk(c *gin.Context) {
+	//FIXME #69 make url embedded from struct
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint
 	req := strings.NewReader(`{"clientId": "ACTS", "systemTraceAuditNumber": 79, "tranDateTime": "200419085611", "terminalId": "18000377"}`)
 	b, _ := json.Marshal(&req)
@@ -297,6 +300,7 @@ func isAliveWrk(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /workingKey [post]
+//FIXME #68
 func WorkingKey(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
@@ -371,6 +375,7 @@ func WorkingKey(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /purchase [post]
+//FIXME #68
 func Purchase(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.PurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -441,6 +446,7 @@ func Purchase(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /purchase [post]
+//FIXME issue #68
 func Balance(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -514,6 +520,7 @@ func Balance(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /cardTransfer [post]
+//FIXME issue #68
 func CardTransfer(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -582,6 +589,7 @@ func CardTransfer(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /billInquiry [post]
+//FIXME issue #68
 func BillInquiry(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BillInquiryEndpoint // EBS simulator endpoint url goes here.
@@ -656,6 +664,7 @@ func BillInquiry(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /billPayment [post]
+//FIXME issue #68
 func BillPayment(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BillPaymentEndpoint // EBS simulator endpoint url goes here.
@@ -731,6 +740,7 @@ func BillPayment(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /changePin [post]
+//FIXME issue #68
 func ChangePIN(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.ChangePINEndpoint // EBS simulator endpoint url goes here.
@@ -806,6 +816,7 @@ func ChangePIN(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /cashOut [post]
+//FIXME issue #68
 func CashOut(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashOutEndpoint // EBS simulator endpoint url goes here.
@@ -874,6 +885,7 @@ func CashOut(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /cashIn [post]
+//FIXME issue #68
 func CashIn(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashInEndpoint // EBS simulator endpoint url goes here.
@@ -941,6 +953,7 @@ func CashIn(c *gin.Context) {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /miniStatement [post]
+//FIXME issue #68
 func MiniStatement(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.MiniStatementEndpoint // EBS simulator endpoint url goes here.
@@ -1064,6 +1077,7 @@ func testAPI(c *gin.Context) {
 }
 
 //Refund requests a refund for supported refund services in ebs merchant. Currnetly, it is not working
+//FIXME issue #68
 func Refund(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.RefundEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
