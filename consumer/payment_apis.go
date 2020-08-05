@@ -1163,10 +1163,12 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	s.Db.Table("transactions").Create(&transaction)
 
 	if ebsErr != nil {
+		b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id}
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
 		return
 	}
+	b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: true}
 	c.JSON(code, gin.H{"ebs_response": res})
 }
 
