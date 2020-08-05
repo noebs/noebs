@@ -14,8 +14,8 @@ import (
 
 
 type billerForm struct {
-	ebs_fields.GenericEBSResponseFields
-	id string
+	EBS ebs_fields.GenericEBSResponseFields `json:"ebs_response"`
+	ID string `json:"id"`
 }
 
 type card map[string]interface{}

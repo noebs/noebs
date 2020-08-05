@@ -295,7 +295,7 @@ func (s *Service) BillerHooks() error{
 				return err
 			}
 			
-			if _, err := http.Post(b.id, "application/json", data); err != nil {
+			if _, err := http.Post(b.ID, "application/json", data); err != nil {
 				return err
 			}
 		}
