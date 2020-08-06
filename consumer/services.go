@@ -281,7 +281,7 @@ func (s *Service) cacheKeys(c *gin.Context) {
 
 }
 
-var billerChan chan billerForm
+var billerChan = make(chan billerForm)
 
 
 //BillerHooks submits results to external endpoint
@@ -299,8 +299,6 @@ func BillerHooks(){
 			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", data); err != nil {
 				log.Printf("the error is: %v", err)
 			}
-		default:
-			log.Printf("Why always me")
 		}
 	}
 }
