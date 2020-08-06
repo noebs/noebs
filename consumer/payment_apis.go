@@ -1150,7 +1150,7 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	//FIXME id is not a url, it should be used to inquire about payeers URL
-	b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id} // a devil made code FIX ME
+	// b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id} // a devil made code FIX ME
 
 	// mask the pan
 	res.MaskPAN()
