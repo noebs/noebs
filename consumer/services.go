@@ -294,8 +294,8 @@ func (s *Service) BillerHooks() error{
 			if err := json.NewEncoder(data).Encode(b); err != nil {
 				return err
 			}
-			
-			if _, err := http.Post(b.ID, "application/json", data); err != nil {
+			// FIXME this code is dangerous
+			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", data); err != nil {
 				return err
 			}
 		}
