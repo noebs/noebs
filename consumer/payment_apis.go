@@ -1137,13 +1137,13 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 		return
 	}
 
-	var t paymentTokens
-	if ok, err := t.check(id, p.TranAmount, s.Redis); !ok {
-		c.JSON(http.StatusBadRequest, err)
-		return
-	}
-	// necessary to invalidate key after issuance
-	t.invalidate(id)
+	// var t paymentTokens
+	// if ok, err := t.check(id, p.TranAmount, s.Redis); !ok {
+	// 	c.JSON(http.StatusBadRequest, err)
+	// 	return
+	// }
+	// // necessary to invalidate key after issuance
+	// t.invalidate(id)
 
 	// perform the payment
 	req, _ := json.Marshal(&p)
