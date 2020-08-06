@@ -286,17 +286,14 @@ var billerChan = make(chan billerForm)
 
 //BillerHooks submits results to external endpoint
 func BillerHooks(){
-	var data *bytes.Buffer
 
 	for {
 		select{
 		case value := <-billerChan:
 			log.Printf("The recv is: %v", value)
-			if err := json.NewEncoder(data).Encode(value); err != nil {
-				log.Printf("the error is: %v", err)
-			}
+			data, _ := json.Marshal(&value)
 			// FIXME this code is dangerous
-			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", data); err != nil {
+			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", bytes.NewBuffer(data)); err != nil {
 				log.Printf("the error is: %v", err)
 			}
 		}
