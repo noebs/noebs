@@ -1165,11 +1165,13 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
+		b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: isSuccess}
 		return
 	}
 	isSuccess = true
-	b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: isSuccess} //THIS BLOCKS IF THE goroutin is not listening
 	c.JSON(code, gin.H{"ebs_response": res})
+	b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: isSuccess} //THIS BLOCKS IF THE goroutin is not listening
+	
 }
 
 
