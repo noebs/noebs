@@ -290,8 +290,8 @@ func (s *Service) BillerHooks() error{
 
 	for {
 		select{
-		case b := <-b:
-			if err := json.NewEncoder(data).Encode(b); err != nil {
+		case value := <-b:
+			if err := json.NewEncoder(data).Encode(value); err != nil {
 				return err
 			}
 			// FIXME this code is dangerous
