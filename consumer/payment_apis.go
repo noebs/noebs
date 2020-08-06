@@ -1147,6 +1147,7 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 
 	// perform the payment
 	req, _ := json.Marshal(&p)
+	
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	// mask the pan
@@ -1157,6 +1158,7 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	}
 
 	transaction.EBSServiceName = "special_payment"
+	//FIXME #73 attempting to write a read-only database
 	s.Db.Table("transactions").Create(&transaction)
 
 	if ebsErr != nil {

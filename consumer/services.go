@@ -285,18 +285,19 @@ var b chan billerForm
 
 
 //BillerHooks submits results to external endpoint
-func (s *Service) BillerHooks() error{
+func BillerHooks(){
 	var data *bytes.Buffer
 
 	for {
 		select{
 		case value := <-b:
+			log.Printf("The recv is: %v", value)
 			if err := json.NewEncoder(data).Encode(value); err != nil {
-				return err
+				log.Printf("the error is: %v", err)
 			}
 			// FIXME this code is dangerous
 			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", data); err != nil {
-				return err
+				log.Printf("the error is: %v", err)
 			}
 		}
 	}
