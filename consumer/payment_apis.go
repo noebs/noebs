@@ -1170,7 +1170,6 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: isSuccess} //THIS BLOCKS IF THE goroutin is not listening
-
 }
 
 

@@ -299,6 +299,8 @@ func BillerHooks(){
 			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", data); err != nil {
 				log.Printf("the error is: %v", err)
 			}
+		default:
+			log.Printf("Why always me")
 		}
 	}
 }
