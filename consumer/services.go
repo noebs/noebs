@@ -281,7 +281,7 @@ func (s *Service) cacheKeys(c *gin.Context) {
 
 }
 
-var b chan billerForm
+var billerChan chan billerForm
 
 
 //BillerHooks submits results to external endpoint
@@ -290,7 +290,7 @@ func BillerHooks(){
 
 	for {
 		select{
-		case value := <-b:
+		case value := <-billerChan:
 			log.Printf("The recv is: %v", value)
 			if err := json.NewEncoder(data).Encode(value); err != nil {
 				log.Printf("the error is: %v", err)
