@@ -152,6 +152,7 @@ func GetMainEngine() *gin.Engine {
 }
 
 func init() {
+	database.AutoMigrate(&dashboard.Transaction{})
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()
 	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
