@@ -1161,13 +1161,14 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	//FIXME #73 attempting to write a read-only database
 	s.Db.Table("transactions").Create(&transaction)
 
+	var isSuccess bool
 	if ebsErr != nil {
-		b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id}
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
 		return
 	}
-	b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: true}
+	isSuccess = true
+	b <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: isSuccess} //THIS BLOCKS IF THE goroutin is not listening
 	c.JSON(code, gin.H{"ebs_response": res})
 }
 
