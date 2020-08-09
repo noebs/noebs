@@ -295,7 +295,6 @@ func (s *Service)BillPayment(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
-			BillChan <- res
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
