@@ -152,7 +152,7 @@ func Test_paymentTokens_getFromRedis(t *testing.T) {
 				ID:     tt.fields.ID,
 				UUID:   tt.fields.UUID,
 			}
-			if err := p.getFromRedis(tt.args.id, mockRedis); (err != nil) != tt.wantErr {
+			if _, err := p.fromRedis(tt.args.id); (err != nil) != tt.wantErr {
 				t.Errorf("paymentTokens.getFromRedis() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

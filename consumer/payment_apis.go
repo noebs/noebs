@@ -1074,14 +1074,19 @@ func (s *Service)CompleteIpin(c *gin.Context) {
 
 //GeneratePaymentToken generates a token
 // BUG(adonese) we have to make it mandatory for biller id as well
+//BUG(adonese) still not fixed -- but we really should fix it
 func (s *Service)GeneratePaymentToken(c *gin.Context) {
 	var t paymentTokens
-	if err := c.ShouldBindJSON(&t); err != nil {
-		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-	if err := t.toRedis(); err != nil {
+	t.redisClient = s.Redis
+
+	// make authorization for which to make calls
+	// if err := c.ShouldBindJSON(&t); err != nil {
+	// 	ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
+	// 	c.JSON(http.StatusBadRequest, ve)
+	// 	return
+	// }
+
+	if err := t.NewToken(); err != nil {
 		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
@@ -1099,8 +1104,11 @@ func (s *Service)GetPaymentToken(c *gin.Context) {
 		return
 	}
 
+	//BUG(adonese) safe but unclean; should be fixed. As reliable as the holding handler is
 	var t paymentTokens
-	if err := t.getFromRedis(id, s.Redis); err != nil {
+	t.redisClient = s.Redis
+	
+	if ok, err := t.GetToken(id); !ok {
 		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
@@ -1127,8 +1135,14 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
+	var t paymentTokens
+	t.redisClient = s.Redis
+	if ok, err := t.GetToken(id); !ok {
+		ve := validationError{Message: "Invalid token", Code: err.Error()}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
 
-	// this should really be the final step...
 	var p ebs_fields.ConsumerPurchaseFields
 	if err := c.ShouldBindJSON(&p); err != nil {
 		ve := validationError{Message: err.Error(), Code: "validation_error"}
@@ -1136,13 +1150,9 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 		return
 	}
 
-	// var t paymentTokens
-	// if ok, err := t.check(id, p.TranAmount, s.Redis); !ok {
-	// 	c.JSON(http.StatusBadRequest, err)
-	// 	return
-	// }
-	// // necessary to invalidate key after issuance
-	// t.invalidate(id)
+
+	// necessary to invalidate key after issuance
+	t.invalidate(id)
 
 	// perform the payment
 	req, _ := json.Marshal(&p)

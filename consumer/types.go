@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
-	"strconv"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
@@ -54,17 +54,27 @@ func notEbs(pan string) bool {
 
 //FIXME #62 make sure to add redisClient here
 type paymentTokens struct {
-	Name   string  `json:"name,omitempty" validator:"required"`
-	Amount float32 `json:"amount,omitempty" validator:"required"`
+	Name   string  `json:"name,omitempty"`
+	Amount float32 `json:"amount,omitempty"`
 	ID     string  `json:"id,omitempty"`
 	UUID   string  `json:"uuid"`
 	redisClient *redis.Client
 }
 
+func (p *paymentTokens)checkUUID(id string, redisClient *redis.Client) (bool, validationError) {
+	// return true, validationError{}
+
+	if _, err := p.fromRedis(id); err != nil {
+		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
+		return false, ve
+	}
+	return true, validationError{} 
+}
+
 func (p *paymentTokens)check(id string, amount float32, redisClient *redis.Client) (bool, validationError) {
 	// return true, validationError{}
 
-	if err := p.getFromRedis(id, redisClient); err != nil {
+	if _, err := p.fromRedis(id); err != nil {
 		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
 		return false, ve
 	}
@@ -105,34 +115,112 @@ func (p *paymentTokens) fromMap(m map[string]interface{}) {
 	p.Name = m["name"].(string)
 }
 
+
+
+func (p *paymentTokens)new()error{
+	p.ID = p.getUUID()
+	return nil
+
+}
+
+func (p *paymentTokens) storeKey() (string, error) {
+	
+	// tt := 30 * time.Minute
+	tt := 30 * time.Minute
+	log.Printf("the key we are storing is: %v", p.ID)
+	
+	if err := p.redisClient.Set("key_"+p.ID, p.ID, tt).Err(); err != nil {
+
+		return "", err
+	}
+	return p.ID, nil
+
+}
+
+func (p *paymentTokens) getKey() (string, error) {
+
+	if err := p.redisClient.Get("key_"+p.ID).Err(); err != nil {
+		return "", err
+	}
+	return p.ID, nil
+
+}
+
 func (p *paymentTokens) toRedis() error {
 
-	id := p.getUUID()
 	h := p.toMap()
 
-	if _, err := p.redisClient.HMSet(id, h).Result(); err != nil {
+	if _, err := p.redisClient.HMSet(p.ID, h).Result(); err != nil {
+
 		return err
 	}
 	return nil
 
 }
 
+func (p *paymentTokens) id2owner() error {
 
-func (p *paymentTokens) getFromRedis(id string, r *redis.Client) error {
+	h := p.toMap()
 
-	res, err := r.HMGet(id, "id", "amount").Result()
-	if err != nil || res == nil{
+	if _, err := p.redisClient.SAdd("sahil_wallet", h).Result(); err != nil {
+
 		return err
 	}
+	return nil
 
-	if res[0] == nil || res[1] == nil {
-		return errors.New("nil values")
+}
+
+func (p *paymentTokens) fromRedis(id string) (string, error) {
+
+	//fixme maybe provide the user to get key
+	res, err := p.redisClient.HMGet(id, "id").Result()
+	if err != nil || res == nil{
+		return "", err
+	}
+
+	log.Printf("The response is: %v", res)
+	if res[0] == nil {
+		return "", errors.New("nil values")
 	}
 
 	p.ID = res[0].(string)
-	amount, _ := strconv.ParseFloat(res[1].(string), 32)
-	p.Amount = float32(amount)
+	return p.ID, nil
+}
+
+func (p *paymentTokens)NewToken()error{
+	if err := p.new(); err != nil {
+		return err
+	}
+
+	if _, err := p.storeKey(); err != nil {
+		return err
+	}
+	if err := p.toRedis(); err != nil {
+		return err
+	}
+	if err := p.id2owner(); err != nil {
+		return err
+	}
 	return nil
+}
+
+
+func (p *paymentTokens)newFromToken(id string){
+	p.ID = id
+}
+
+func (p *paymentTokens)GetToken(id string) (bool, error){
+	p.newFromToken(id)
+
+	if _, err := p.getKey(); err != nil {
+		// verr := validationError{Message: "Invalid token", Code: "invalid_token"}
+		return false, errors.New("invalid_token")
+	}
+
+	// if _, err := p.fromRedis(id); err != nil {
+	// 	return false, err
+	// }
+	return true, nil
 }
 
 func (p *paymentTokens) invalidate(id string) error {
