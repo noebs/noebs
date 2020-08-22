@@ -1129,10 +1129,14 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// /consumer/payment/uuid
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint
 
-	id := c.Param("uuid")
+	provider := c.Param("uuid")
+	// do check the payment provider here
+	log.Printf(provider)
+
 	refId, _ := c.GetQuery("token")
 
-	if id == "" {
+	id, ok := c.GetQuery("id")
+	if !ok || id == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
