@@ -1133,9 +1133,9 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// do check the payment provider here
 	log.Printf(provider)
 
-	refId, _ := c.GetQuery("token")
+	refId, _ := c.GetQuery("id")
 
-	id, ok := c.GetQuery("id")
+	id, ok := c.GetQuery("token")
 	if !ok || id == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		c.JSON(http.StatusBadRequest, ve)
