@@ -11,12 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
-
-
 type billerForm struct {
-	EBS ebs_fields.GenericEBSResponseFields `json:"ebs_response"`
-	ID string `json:"id"`
-	IsSuccessful bool `json:"is_successful"`
+	EBS          ebs_fields.GenericEBSResponseFields `json:"ebs_response"`
+	ID           string                              `json:"id"`
+	IsSuccessful bool                                `json:"is_successful"`
+	Token        string                              `json:"payment_token"`
 }
 
 type card map[string]interface{}
@@ -54,24 +53,24 @@ func notEbs(pan string) bool {
 
 //FIXME #62 make sure to add redisClient here
 type paymentTokens struct {
-	Name   string  `json:"name,omitempty"`
-	Amount float32 `json:"amount,omitempty"`
-	ID     string  `json:"id,omitempty"`
-	UUID   string  `json:"uuid"`
+	Name        string  `json:"name,omitempty"`
+	Amount      float32 `json:"amount,omitempty"`
+	ID          string  `json:"id,omitempty"`
+	UUID        string  `json:"uuid"`
 	redisClient *redis.Client
 }
 
-func (p *paymentTokens)checkUUID(id string, redisClient *redis.Client) (bool, validationError) {
+func (p *paymentTokens) checkUUID(id string, redisClient *redis.Client) (bool, validationError) {
 	// return true, validationError{}
 
 	if _, err := p.fromRedis(id); err != nil {
 		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
 		return false, ve
 	}
-	return true, validationError{} 
+	return true, validationError{}
 }
 
-func (p *paymentTokens)check(id string, amount float32, redisClient *redis.Client) (bool, validationError) {
+func (p *paymentTokens) check(id string, amount float32, redisClient *redis.Client) (bool, validationError) {
 	// return true, validationError{}
 
 	if _, err := p.fromRedis(id); err != nil {
@@ -83,7 +82,7 @@ func (p *paymentTokens)check(id string, amount float32, redisClient *redis.Clien
 		ve := validationError{Message: "Wrong payment info. Amount and Payment ID doesn't match existing records", Code: "mismatched_special_payment_data"}
 		return false, ve
 	}
-	return true, validationError{} 
+	return true, validationError{}
 }
 
 func (p *paymentTokens) getUUID() string {
@@ -115,20 +114,18 @@ func (p *paymentTokens) fromMap(m map[string]interface{}) {
 	p.Name = m["name"].(string)
 }
 
-
-
-func (p *paymentTokens)new()error{
+func (p *paymentTokens) new() error {
 	p.ID = p.getUUID()
 	return nil
 
 }
 
 func (p *paymentTokens) storeKey() (string, error) {
-	
+
 	// tt := 30 * time.Minute
 	tt := 30 * time.Minute
 	log.Printf("the key we are storing is: %v", p.ID)
-	
+
 	if err := p.redisClient.Set("key_"+p.ID, p.ID, tt).Err(); err != nil {
 
 		return "", err
@@ -139,7 +136,7 @@ func (p *paymentTokens) storeKey() (string, error) {
 
 func (p *paymentTokens) getKey() (string, error) {
 
-	if err := p.redisClient.Get("key_"+p.ID).Err(); err != nil {
+	if err := p.redisClient.Get("key_" + p.ID).Err(); err != nil {
 		return "", err
 	}
 	return p.ID, nil
@@ -174,7 +171,7 @@ func (p *paymentTokens) fromRedis(id string) (string, error) {
 
 	//fixme maybe provide the user to get key
 	res, err := p.redisClient.HMGet(id, "id").Result()
-	if err != nil || res == nil{
+	if err != nil || res == nil {
 		return "", err
 	}
 
@@ -187,7 +184,7 @@ func (p *paymentTokens) fromRedis(id string) (string, error) {
 	return p.ID, nil
 }
 
-func (p *paymentTokens)NewToken()error{
+func (p *paymentTokens) NewToken() error {
 	if err := p.new(); err != nil {
 		return err
 	}
@@ -204,12 +201,11 @@ func (p *paymentTokens)NewToken()error{
 	return nil
 }
 
-
-func (p *paymentTokens)newFromToken(id string){
+func (p *paymentTokens) newFromToken(id string) {
 	p.ID = id
 }
 
-func (p *paymentTokens)GetToken(id string) (bool, error){
+func (p *paymentTokens) GetToken(id string) (bool, error) {
 	p.newFromToken(id)
 
 	if _, err := p.getKey(); err != nil {

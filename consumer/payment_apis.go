@@ -105,7 +105,7 @@ var BillChan = make(chan ebs_fields.EBSParserFields)
 //Purchase performs special payment api from ebs consumer services
 // It requires: card info (src), amount fields, specialPaymentId (destination)
 // in order to complete the transaction
-func (s *Service)Purchase(c *gin.Context) {
+func (s *Service) Purchase(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -168,7 +168,7 @@ func (s *Service)Purchase(c *gin.Context) {
 }
 
 //IsAlive performs isAlive request to inquire for ebs server availability
-func (s *Service)IsAlive(c *gin.Context) {
+func (s *Service) IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -237,7 +237,7 @@ func (s *Service)IsAlive(c *gin.Context) {
 }
 
 //BillPayment is responsible for utility, telecos, e-government and other payment services
-func (s *Service)BillPayment(c *gin.Context) {
+func (s *Service) BillPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -304,7 +304,7 @@ func (s *Service)BillPayment(c *gin.Context) {
 }
 
 //BillInquiry for telecos, utility and government (billers inquiries)
-func (s *Service)BillInquiry(c *gin.Context) {
+func (s *Service) BillInquiry(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -376,7 +376,7 @@ func (s *Service)BillInquiry(c *gin.Context) {
 }
 
 //Balance gets performs get balance transaction for the provided card info
-func (s *Service)Balance(c *gin.Context) {
+func (s *Service) Balance(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -446,7 +446,7 @@ func (s *Service)Balance(c *gin.Context) {
 }
 
 //WorkingKey get ebs working key for encrypting ipin for consumer transactions
-func (s *Service)WorkingKey(c *gin.Context) {
+func (s *Service) WorkingKey(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -516,7 +516,7 @@ func (s *Service)WorkingKey(c *gin.Context) {
 }
 
 //CardTransfer performs p2p transactions
-func (s *Service)CardTransfer(c *gin.Context) {
+func (s *Service) CardTransfer(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -583,7 +583,7 @@ func (s *Service)CardTransfer(c *gin.Context) {
 }
 
 //IPinChange changes the ipin for the card holder provided card
-func (s *Service)IPinChange(c *gin.Context) {
+func (s *Service) IPinChange(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -653,7 +653,7 @@ func (s *Service)IPinChange(c *gin.Context) {
 }
 
 //Status get transactions status from ebs
-func (s *Service)Status(c *gin.Context) {
+func (s *Service) Status(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -723,7 +723,7 @@ func (s *Service)Status(c *gin.Context) {
 }
 
 //Transactions get transactions stored in our redis data store
-func (s *Service)Transactions(c *gin.Context) {
+func (s *Service) Transactions(c *gin.Context) {
 	//TODO get the transaction from Redis instanc
 
 	username := c.GetString("username")
@@ -737,7 +737,7 @@ func (s *Service)Transactions(c *gin.Context) {
 }
 
 //QRPayment performs QR payment transaction
-func (s *Service)QRPayment(c *gin.Context) {
+func (s *Service) QRPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRPaymentFields{}
@@ -803,7 +803,7 @@ func (s *Service)QRPayment(c *gin.Context) {
 }
 
 //QRRefund performs qr refund transaction
-func (s *Service)QRRefund(c *gin.Context) {
+func (s *Service) QRRefund(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRRefundEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRRefundFields{}
@@ -868,7 +868,7 @@ func (s *Service)QRRefund(c *gin.Context) {
 }
 
 //QRGeneration generates a qr token for the registered merchant
-func (s *Service)QRGeneration(c *gin.Context) {
+func (s *Service) QRGeneration(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.MerchantRegistrationFields{}
@@ -934,7 +934,7 @@ func (s *Service)QRGeneration(c *gin.Context) {
 }
 
 //GenerateIpin generates a new ipin for card holder
-func (s *Service)GenerateIpin(c *gin.Context) {
+func (s *Service) GenerateIpin(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1004,7 +1004,7 @@ func (s *Service)GenerateIpin(c *gin.Context) {
 }
 
 //CompleteIpin performs an otp check from ebs to complete ipin change transaction
-func (s *Service)CompleteIpin(c *gin.Context) {
+func (s *Service) CompleteIpin(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1075,7 +1075,7 @@ func (s *Service)CompleteIpin(c *gin.Context) {
 //GeneratePaymentToken generates a token
 // BUG(adonese) we have to make it mandatory for biller id as well
 //BUG(adonese) still not fixed -- but we really should fix it
-func (s *Service)GeneratePaymentToken(c *gin.Context) {
+func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var t paymentTokens
 	t.redisClient = s.Redis
 
@@ -1096,7 +1096,7 @@ func (s *Service)GeneratePaymentToken(c *gin.Context) {
 }
 
 //GetPaymentToken retrieves a generated payment token by ID (UUID)
-func (s *Service)GetPaymentToken(c *gin.Context) {
+func (s *Service) GetPaymentToken(c *gin.Context) {
 	id := c.Param("uuid")
 	if id == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
@@ -1107,7 +1107,7 @@ func (s *Service)GetPaymentToken(c *gin.Context) {
 	//BUG(adonese) safe but unclean; should be fixed. As reliable as the holding handler is
 	var t paymentTokens
 	t.redisClient = s.Redis
-	
+
 	if ok, err := t.GetToken(id); !ok {
 		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
 		c.JSON(http.StatusBadRequest, ve)
@@ -1122,14 +1122,16 @@ func (s *Service)GetPaymentToken(c *gin.Context) {
 // - tran amount
 // - payee id
 // later we can add more features such as expiration for the token and more.
-func (s *Service)SpecialPayment(c *gin.Context) {
+func (s *Service) SpecialPayment(c *gin.Context) {
 	// get token
 	// get token service from redis
 	// perform the payment
 	// /consumer/payment/uuid
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint
 
-	id := c.Param("uuid")
+	id := c.Param("token")
+	refId := c.Param("uuid")
+
 	if id == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		c.JSON(http.StatusBadRequest, ve)
@@ -1150,13 +1152,12 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 		return
 	}
 
-
 	// necessary to invalidate key after issuance
 	t.invalidate(id)
 
 	// perform the payment
 	req, _ := json.Marshal(&p)
-	
+
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	// mask the pan
@@ -1174,16 +1175,15 @@ func (s *Service)SpecialPayment(c *gin.Context) {
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
-	}else{
+	} else {
 		isSuccess = true
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
-	billerChan <- billerForm{EBS:res.GenericEBSResponseFields, ID:id, IsSuccessful: isSuccess} //THIS BLOCKS IF THE goroutin is not listening
+	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
 }
 
-
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
-func (s *Service)EbsGetCardInfo(c *gin.Context) {
+func (s *Service) EbsGetCardInfo(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardInfo // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1253,7 +1253,7 @@ func (s *Service)EbsGetCardInfo(c *gin.Context) {
 }
 
 //GetMSISDNFromCard for ussd to get pan info from sim card
-func (s *Service)GetMSISDNFromCard(c *gin.Context) {
+func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPANFromMobile // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
