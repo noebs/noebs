@@ -1131,6 +1131,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	provider := c.Param("uuid")
 	// do check the payment provider here
+	// TODO #75 store payment info history in here
 	log.Printf(provider)
 
 	refId, _ := c.GetQuery("id")
@@ -1162,7 +1163,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// perform the payment
 	req, _ := json.Marshal(&p)
 
-	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
+	_, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	// mask the pan
 	res.MaskPAN()
@@ -1177,11 +1178,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var isSuccess bool
 	if ebsErr != nil {
-		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		// c.JSON(code, payload)
+		c.Redirect(301, "/fail")
 	} else {
 		isSuccess = true
-		c.JSON(code, gin.H{"ebs_response": res})
+		c.Redirect(301, "/success")
+		// c.JSON(code, gin.H{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
 }
