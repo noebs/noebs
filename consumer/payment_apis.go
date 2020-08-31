@@ -1152,8 +1152,8 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var p ebs_fields.ConsumerPurchaseFields
 	if err := c.ShouldBindJSON(&p); err != nil {
-		ve := validationError{Message: err.Error(), Code: "validation_error"}
-		c.JSON(http.StatusBadRequest, ve)
+		// ve := validationError{Message: err.Error(), Code: "validation_error"}
+		// c.JSON(http.StatusBadRequest, ve)
 		return
 	}
 
