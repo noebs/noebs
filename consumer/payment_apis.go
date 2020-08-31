@@ -1138,22 +1138,25 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	id, ok := c.GetQuery("token")
 	if !ok || id == "" {
-		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
-		c.JSON(http.StatusBadRequest, ve)
+		// ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
+		// c.JSON(http.StatusBadRequest, ve)
+		c.Redirect(301, "/success")
 		return
 	}
 	var t paymentTokens
 	t.redisClient = s.Redis
-	if ok, err := t.GetToken(id); !ok {
-		ve := validationError{Message: "Invalid token", Code: err.Error()}
-		c.JSON(http.StatusBadRequest, ve)
+	if ok, _ := t.GetToken(id); !ok {
+		// ve := validationError{Message: "Invalid token", Code: err.Error()}
+		// c.JSON(http.StatusBadRequest, ve)
+		c.Redirect(301, "/success")
 		return
 	}
 
 	var p ebs_fields.ConsumerPurchaseFields
 	if err := c.ShouldBindJSON(&p); err != nil {
-		ve := validationError{Message: err.Error(), Code: "validation_error"}
-		c.JSON(http.StatusBadRequest, ve)
+		// ve := validationError{Message: err.Error(), Code: "validation_error"}
+		// c.JSON(http.StatusBadRequest, ve)
+		c.Redirect(301, "/success")
 		return
 	}
 
@@ -1163,7 +1166,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// perform the payment
 	req, _ := json.Marshal(&p)
 
-	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
+	_, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	// mask the pan
 	res.MaskPAN()
@@ -1178,13 +1181,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var isSuccess bool
 	if ebsErr != nil {
-		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		// c.JSON(code, payload)
 
 	} else {
 		isSuccess = true
-		// c.Redirect(301, "/success")
-		c.JSON(code, gin.H{"ebs_response": res})
+		c.Redirect(301, "/success")
+		// c.JSON(code, gin.H{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
 }
