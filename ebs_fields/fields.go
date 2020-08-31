@@ -191,6 +191,7 @@ func iso8601(fl validator.FieldLevel) bool {
 	return true
 }
 
+//GenericEBSResponseFields represent EBS response
 type GenericEBSResponseFields struct {
 	TerminalID             string  `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`

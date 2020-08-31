@@ -1152,8 +1152,8 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var p ebs_fields.ConsumerPurchaseFields
 	if err := c.ShouldBindJSON(&p); err != nil {
-		// ve := validationError{Message: err.Error(), Code: "validation_error"}
-		// c.JSON(http.StatusBadRequest, ve)
+		ve := validationError{Message: err.Error(), Code: "validation_error"}
+		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
 
@@ -1163,7 +1163,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// perform the payment
 	req, _ := json.Marshal(&p)
 
-	_, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	// mask the pan
 	res.MaskPAN()
@@ -1178,13 +1178,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var isSuccess bool
 	if ebsErr != nil {
-		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		// c.JSON(code, payload)
-		c.Redirect(301, "/fail")
+		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, payload)
+
 	} else {
 		isSuccess = true
-		c.Redirect(301, "/success")
-		// c.JSON(code, gin.H{"ebs_response": res})
+		// c.Redirect(301, "/success")
+		c.JSON(code, gin.H{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
 }

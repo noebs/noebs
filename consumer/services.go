@@ -283,12 +283,30 @@ func (s *Service) cacheKeys(c *gin.Context) {
 
 var billerChan = make(chan billerForm)
 
+//CancelBiller using its issued uuid
+func (s *Service) CancelBiller(c *gin.Context) {
+
+	if v, ok := c.Get("id"); !ok || v == "" {
+		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
+		c.JSON(http.StatusBadRequest, vErr)
+		return
+	} else {
+		p := paymentTokens{redisClient: s.Redis}
+		if err := p.cancelTransaction(v.(string)); err != nil {
+			vErr := validationError{Code: "internal_error", Message: err.Error()}
+			c.JSON(http.StatusBadRequest, vErr)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"result": true})
+	}
+
+}
 
 //BillerHooks submits results to external endpoint
-func BillerHooks(){
+func BillerHooks() {
 
 	for {
-		select{
+		select {
 		case value := <-billerChan:
 			log.Printf("The recv is: %v", value)
 			data, _ := json.Marshal(&value)

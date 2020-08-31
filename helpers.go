@@ -82,25 +82,6 @@ func generateDoc(e string) []map[string]interface{} {
 	return scheme
 }
 
-//func redisOrNew(key string, data []map[string]interface{}) (string, error){
-//	routes := getAllRoutes()
-//
-//	client := GetRedis()
-//
-//	v, err := client.HMGet("doc")
-//	if err == redis.Nil {
-//		for _, r := range routes {
-//			// get the particular fields for this route
-//			doc := generateDoc(r["path"])
-//			b, _ := json.Marshal(&r)
-//			client.HSet(routes["path"], b)
-//		}
-//
-//	}
-//	client.Close()
-//
-//}
-
 //getAllRoutes gets all routes for this particular engine
 // perhaps, it could better be rewritten to explicitly show that
 func getAllRoutes() []map[string]string {

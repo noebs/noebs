@@ -167,6 +167,42 @@ func (p *paymentTokens) id2owner() error {
 
 }
 
+func (p *paymentTokens) addTrans(id string, tran []byte) error {
+	if _, err := p.redisClient.Ping().Result(); err != nil {
+		panic(err)
+	}
+	if _, err := p.redisClient.SAdd(id+":trans", tran).Result(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *paymentTokens) getTrans(id string) ([]ebs_fields.GenericEBSResponseFields, error) {
+	var data []ebs_fields.GenericEBSResponseFields
+	var d ebs_fields.GenericEBSResponseFields
+
+	if res, err := p.redisClient.SMembers(id + ":trans").Result(); err != nil {
+		return nil, err
+	} else {
+		for _, v := range res {
+			err := json.Unmarshal([]byte(v), &d)
+			if err != nil {
+				return nil, err
+			}
+			data = append(data, d)
+		}
+		return data, nil
+	}
+
+}
+
+func (p *paymentTokens) cancelTransaction(uuid string) error {
+	if err := p.redisClient.Del("key_" + uuid).Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (p *paymentTokens) fromRedis(id string) (string, error) {
 
 	//fixme maybe provide the user to get key
@@ -209,13 +245,9 @@ func (p *paymentTokens) GetToken(id string) (bool, error) {
 	p.newFromToken(id)
 
 	if _, err := p.getKey(); err != nil {
-		// verr := validationError{Message: "Invalid token", Code: "invalid_token"}
 		return false, errors.New("invalid_token")
 	}
 
-	// if _, err := p.fromRedis(id); err != nil {
-	// 	return false, err
-	// }
 	return true, nil
 }
 

@@ -7,11 +7,11 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-
 type Service struct {
 	Redis *redis.Client
-	Db *gorm.DB
+	Db    *gorm.DB
 }
+
 // GetRedisClient returns a *redis.Client instance
 func GetRedisClient(addr string) *redis.Client {
 	if addr == "" {
@@ -24,8 +24,7 @@ func GetRedisClient(addr string) *redis.Client {
 	return client
 }
 
-
-//SaveRedisList
+//SaveRedisList saves to a list in redis
 func SaveRedisList(r *redis.Client, key string, value interface{}) error {
 	_, err := r.LPush(key, value).Result()
 	return err

@@ -19,7 +19,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 	auth.Init()
 	//FIXME #63 this is nul in JWTAuth
 	state := State{Db: db, Redis: redisClient, Auth: auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
-	
+
 	cv1 := route.Group(groupName)
 	cv1.Use(state.APIAuth())
 
@@ -48,6 +48,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.POST("/payment_token", s.GeneratePaymentToken)
 		cv1.POST("/payment/:uuid", s.SpecialPayment)
 		cv1.GET("/payment/:uuid", s.GetPaymentToken)
+		cv1.GET("/payment/cancel", s.CancelBiller)
 
 		cv1.POST("/qr_refund", s.QRRefund)
 		cv1.POST("card_info", s.EbsGetCardInfo)
@@ -94,7 +95,6 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 //	log.Printf("Greeting: %f", r.Message)
 //	return r.Message
 //}
-
 
 var (
 	serverError       = errors.New("unable to connect to the DB")
