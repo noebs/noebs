@@ -1140,7 +1140,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if !ok || id == "" {
 		// ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(301, "https://sahil.soluspay.net")
+		c.Redirect(301, "https://sahil.soluspay.net/fail")
 		return
 	}
 	var t paymentTokens
@@ -1148,7 +1148,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if ok, _ := t.GetToken(id); !ok {
 		// ve := validationError{Message: "Invalid token", Code: err.Error()}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(301, "https://sahil.soluspay.net")
+		c.Redirect(301, "https://sahil.soluspay.net/fail")
 		return
 	}
 
@@ -1156,7 +1156,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if err := c.ShouldBindJSON(&p); err != nil {
 		// ve := validationError{Message: err.Error(), Code: "validation_error"}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(301, "https://sahil.soluspay.net")
+		c.Redirect(301, "https://sahil.soluspay.net/fail")
 		return
 	}
 
@@ -1186,7 +1186,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	} else {
 		isSuccess = true
-		c.Redirect(301, "https://sahil.soluspay.net")
+		c.Redirect(301, "https://sahil.soluspay.net/fail")
 		// c.JSON(code, gin.H{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
