@@ -1135,12 +1135,14 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	log.Printf(provider)
 
 	refId, _ := c.GetQuery("id")
+	to := "https://sahil2.soluspay.net"
+	log.Printf("the http referrer is: %v")
 
 	id, ok := c.GetQuery("token")
 	if !ok || id == "" {
 		// ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, "https://sahil.soluspay.net/fail")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_uuid")
 		return
 	}
 	var t paymentTokens
@@ -1148,7 +1150,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if ok, _ := t.GetToken(id); !ok {
 		// ve := validationError{Message: "Invalid token", Code: err.Error()}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, "https://sahil.soluspay.net/fail")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_uuid")
 		return
 	}
 
@@ -1156,7 +1158,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if err := c.ShouldBindJSON(&p); err != nil {
 		// ve := validationError{Message: err.Error(), Code: "validation_error"}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, "https://sahil.soluspay.net/fail")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=request_empty")
 		return
 	}
 
@@ -1183,10 +1185,11 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if ebsErr != nil {
 		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		// c.JSON(code, payload)
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
 
 	} else {
 		isSuccess = true
-		c.Redirect(http.StatusMovedPermanently, "https://sahil.soluspay.net/fail")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
 		// c.JSON(code, gin.H{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening

@@ -203,6 +203,20 @@ func (p *paymentTokens) cancelTransaction(uuid string) error {
 	return nil
 }
 
+func (p *paymentTokens) getByID(uuid string) (ebs_fields.GenericEBSResponseFields, error) {
+
+	m, err := p.getTrans(uuid)
+	if err != nil {
+		return ebs_fields.GenericEBSResponseFields{}, err
+	}
+	for _, v := range m {
+		if v.UUID == uuid {
+			return v, nil
+		}
+	}
+	return ebs_fields.GenericEBSResponseFields{}, errors.New("not_found")
+}
+
 func (p *paymentTokens) fromRedis(id string) (string, error) {
 
 	//fixme maybe provide the user to get key
