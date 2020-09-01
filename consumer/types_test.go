@@ -196,7 +196,7 @@ func Test_paymentTokens_addTrans(t *testing.T) {
 		TranAmount:             500,
 		LastPAN:                "",
 	}
-	data, _ := json.Marshal(&req)
+	// data, _ := json.Marshal(&req)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379", // use default Addr
@@ -207,17 +207,12 @@ func Test_paymentTokens_addTrans(t *testing.T) {
 	pong, err := rdb.Ping().Result()
 	fmt.Println(pong, err)
 
-	type args struct {
-		id   string
-		tran []byte
-	}
 	tests := []struct {
-		name string
-
-		args    args
+		name    string
+		args    paymentResponse
 		wantErr bool
 	}{
-		{"successful_transaction", args{id: "test_ass", tran: data}, false},
+		{"successful_transaction", paymentResponse{TransactionID: "test_ass", GenericEBSResponseFields: req}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,7 +220,7 @@ func Test_paymentTokens_addTrans(t *testing.T) {
 
 				redisClient: rdb,
 			}
-			if err := p.addTrans(tt.args.id, tt.args.tran); (err != nil) != tt.wantErr {
+			if err := p.addTrans("test-rs", &tt.args); (err != nil) != tt.wantErr {
 				t.Errorf("paymentTokens.addTrans() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -241,16 +236,6 @@ func Test_paymentTokens_getTrans(t *testing.T) {
 		redisClient *redis.Client
 	}
 
-	req := ebs_fields.GenericEBSResponseFields{
-		TerminalID:             "1212121",
-		SystemTraceAuditNumber: 0,
-		ClientID:               "ACTS",
-		PAN:                    "4433",
-		ServiceID:              "",
-		TranAmount:             500,
-		LastPAN:                "",
-	}
-
 	type args struct {
 		id string
 	}
@@ -259,10 +244,10 @@ func Test_paymentTokens_getTrans(t *testing.T) {
 		name    string
 		fields  fields
 		args    args
-		want    []ebs_fields.GenericEBSResponseFields
+		want    paymentResponse
 		wantErr bool
 	}{
-		{"get_data", fields{redisClient: r}, args{"test_ass"}, []ebs_fields.GenericEBSResponseFields{req}, false},
+		{"get_data", fields{redisClient: r}, args{"test_ass"}, paymentResponse{TransactionID: "1212121", GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{ClientID: "ACTS", PAN: "4433", TranAmount: 500}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -273,7 +258,52 @@ func Test_paymentTokens_getTrans(t *testing.T) {
 				UUID:        tt.fields.UUID,
 				redisClient: tt.fields.redisClient,
 			}
-			got, err := p.getTrans(tt.args.id)
+			got, err := p.getTrans("test_rs")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("paymentTokens.getTrans() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("paymentTokens.getTrans() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_getByID(t *testing.T) {
+	type fields struct {
+		Name        string
+		Amount      float32
+		ID          string
+		UUID        string
+		redisClient *redis.Client
+	}
+
+	type args struct {
+		id string
+	}
+	r := utils.GetRedisClient("")
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    paymentResponse
+		wantErr bool
+	}{
+		{"get_data", fields{redisClient: r}, args{"test_ass"},
+			paymentResponse{TransactionID: "test_ass",
+				GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{TerminalID: "1212121", ClientID: "ACTS", PAN: "4433", TranAmount: 500}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+				Name:        tt.fields.Name,
+				Amount:      tt.fields.Amount,
+				ID:          tt.fields.ID,
+				UUID:        tt.fields.UUID,
+				redisClient: tt.fields.redisClient,
+			}
+			got, err := p.getByID("test-rs", "test_ass")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("paymentTokens.getTrans() error = %v, wantErr %v", err, tt.wantErr)
 				return

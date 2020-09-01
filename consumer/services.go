@@ -302,6 +302,35 @@ func (s *Service) CancelBiller(c *gin.Context) {
 
 }
 
+//CancelBiller using its issued uuid
+func (s *Service) info(c *gin.Context) {
+
+	b, ok := c.Get("biller")
+	if !ok || b == "" {
+		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
+		c.JSON(http.StatusBadRequest, vErr)
+		return
+	}
+
+	id, ok := c.Get("id")
+	if !ok || id == "" {
+		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
+		c.JSON(http.StatusBadRequest, vErr)
+		return
+	}
+
+	p := paymentTokens{redisClient: s.Redis}
+
+	if res, err := p.getByID(b.(string), id.(string)); err != nil {
+		vErr := validationError{Code: "internal_error", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, vErr)
+		return
+	} else {
+		c.JSON(http.StatusOK, gin.H{"result": res})
+	}
+
+}
+
 //BillerHooks submits results to external endpoint
 func BillerHooks() {
 

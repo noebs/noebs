@@ -60,6 +60,19 @@ type paymentTokens struct {
 	redisClient *redis.Client
 }
 
+type paymentResponse struct {
+	TransactionID string `json:"transaction_id"`
+	ebs_fields.GenericEBSResponseFields
+}
+
+func (pr *paymentResponse) MarshalBinary() ([]byte, error) {
+	return json.Marshal(pr)
+}
+
+func (pr *paymentResponse) UnmarshalBinary(data []byte) error {
+	// convert data to yours, let's assume its json data
+	return json.Unmarshal(data, pr)
+}
 func (p *paymentTokens) checkUUID(id string, redisClient *redis.Client) (bool, validationError) {
 	// return true, validationError{}
 
@@ -167,7 +180,7 @@ func (p *paymentTokens) id2owner() error {
 
 }
 
-func (p *paymentTokens) addTrans(id string, tran []byte) error {
+func (p *paymentTokens) addTrans(id string, tran *paymentResponse) error {
 	if _, err := p.redisClient.Ping().Result(); err != nil {
 		panic(err)
 	}
@@ -177,9 +190,9 @@ func (p *paymentTokens) addTrans(id string, tran []byte) error {
 	return nil
 }
 
-func (p *paymentTokens) getTrans(id string) ([]ebs_fields.GenericEBSResponseFields, error) {
-	var data []ebs_fields.GenericEBSResponseFields
-	var d ebs_fields.GenericEBSResponseFields
+func (p *paymentTokens) getTrans(id string) ([]paymentResponse, error) {
+	var data []paymentResponse
+	var d paymentResponse
 
 	if res, err := p.redisClient.SMembers(id + ":trans").Result(); err != nil {
 		return nil, err
@@ -203,18 +216,20 @@ func (p *paymentTokens) cancelTransaction(uuid string) error {
 	return nil
 }
 
-func (p *paymentTokens) getByID(uuid string) (ebs_fields.GenericEBSResponseFields, error) {
+func (p *paymentTokens) getByID(key, uuid string) (paymentResponse, error) {
 
-	m, err := p.getTrans(uuid)
+	m, err := p.getTrans(key)
+	// log.Printf("The data is: %#v", m)
 	if err != nil {
-		return ebs_fields.GenericEBSResponseFields{}, err
+		return paymentResponse{}, err
 	}
 	for _, v := range m {
-		if v.UUID == uuid {
+		log.Printf("The data is: %#v", v)
+		if v.TransactionID == uuid {
 			return v, nil
 		}
 	}
-	return ebs_fields.GenericEBSResponseFields{}, errors.New("not_found")
+	return paymentResponse{}, errors.New("not_found")
 }
 
 func (p *paymentTokens) fromRedis(id string) (string, error) {

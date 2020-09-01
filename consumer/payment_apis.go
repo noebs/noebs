@@ -1134,9 +1134,9 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// TODO #75 store payment info history in here
 	log.Printf(provider)
 
-	refId, _ := c.GetQuery("id")
-	to := "https://sahil2.soluspay.net"
-	log.Printf("the http referrer is: %v")
+	refId, _ := c.GetQuery("id")        //refId or ?id is from Sahil, so we don't care about it much
+	to := "https://sahil2.soluspay.net" //FIXME #77 don't hardcode the value of the referrer
+	// log.Printf("the http referrer is: %v")
 
 	id, ok := c.GetQuery("token")
 	if !ok || id == "" {
