@@ -52,8 +52,8 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.GET("/info", s.info)
 
 		cv1.POST("/qr_refund", s.QRRefund)
-		cv1.POST("card_info", s.EbsGetCardInfo)
-		cv1.POST("pan_from_mobile", s.GetMSISDNFromCard)
+		cv1.POST("/card_info", s.EbsGetCardInfo)
+		cv1.POST("/pan_from_mobile", s.GetMSISDNFromCard)
 
 		cv1.GET("/mobile2pan", s.CardFromNumber)
 		cv1.GET("/nec2name", s.NecToName)

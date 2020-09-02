@@ -261,21 +261,6 @@ func (s *Service) NecToName(c *gin.Context) {
 	}
 }
 
-//func (s *Service) Rate(w http.ResponseWriter, r *http.Request){
-//	rate := rateRpc()
-//	w.Header().Add("content-type", "application/json")
-//	ra := struct {
-//		Result float32
-//	}{rate}
-//	resBytes, err := json.Marshal(&ra)
-//	if err != nil {
-//		w.WriteHeader(http.StatusBadRequest)
-//		return
-//	}
-//	w.WriteHeader(http.StatusOK)
-//	w.Write(resBytes)
-//}
-
 func (s *Service) cacheKeys(c *gin.Context) {
 	// it should check ebs first
 
@@ -326,7 +311,7 @@ func (s *Service) info(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, vErr)
 		return
 	} else {
-		c.JSON(http.StatusOK, gin.H{"result": res})
+		c.JSON(http.StatusOK, res)
 	}
 
 }

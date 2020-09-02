@@ -209,10 +209,10 @@ func Test_paymentTokens_addTrans(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		args    paymentResponse
+		args    billerForm
 		wantErr bool
 	}{
-		{"successful_transaction", paymentResponse{TransactionID: "test_ass", GenericEBSResponseFields: req}, false},
+		{"successful_transaction", billerForm{ID: "test_ass", EBS: req}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

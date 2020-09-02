@@ -18,6 +18,15 @@ type billerForm struct {
 	Token        string                              `json:"payment_token"`
 }
 
+func (bf *billerForm) MarshalBinary() ([]byte, error) {
+	return json.Marshal(bf)
+}
+
+func (bf *billerForm) UnmarshalBinary(data []byte) error {
+	// convert data to yours, let's assume its json data
+	return json.Unmarshal(data, bf)
+}
+
 type card map[string]interface{}
 
 //cardsFromZ marshals []string to []ebs_fields.CardsRedis
@@ -73,6 +82,7 @@ func (pr *paymentResponse) UnmarshalBinary(data []byte) error {
 	// convert data to yours, let's assume its json data
 	return json.Unmarshal(data, pr)
 }
+
 func (p *paymentTokens) checkUUID(id string, redisClient *redis.Client) (bool, validationError) {
 	// return true, validationError{}
 
@@ -180,7 +190,7 @@ func (p *paymentTokens) id2owner() error {
 
 }
 
-func (p *paymentTokens) addTrans(id string, tran *paymentResponse) error {
+func (p *paymentTokens) addTrans(id string, tran *billerForm) error {
 	if _, err := p.redisClient.Ping().Result(); err != nil {
 		panic(err)
 	}
@@ -190,9 +200,9 @@ func (p *paymentTokens) addTrans(id string, tran *paymentResponse) error {
 	return nil
 }
 
-func (p *paymentTokens) getTrans(id string) ([]paymentResponse, error) {
-	var data []paymentResponse
-	var d paymentResponse
+func (p *paymentTokens) getTrans(id string) ([]billerForm, error) {
+	var data []billerForm
+	var d billerForm
 
 	if res, err := p.redisClient.SMembers(id + ":trans").Result(); err != nil {
 		return nil, err
@@ -216,20 +226,20 @@ func (p *paymentTokens) cancelTransaction(uuid string) error {
 	return nil
 }
 
-func (p *paymentTokens) getByID(key, uuid string) (paymentResponse, error) {
+func (p *paymentTokens) getByID(key, uuid string) (billerForm, error) {
 
 	m, err := p.getTrans(key)
 	// log.Printf("The data is: %#v", m)
 	if err != nil {
-		return paymentResponse{}, err
+		return billerForm{}, err
 	}
 	for _, v := range m {
 		log.Printf("The data is: %#v", v)
-		if v.TransactionID == uuid {
+		if v.ID == uuid {
 			return v, nil
 		}
 	}
-	return paymentResponse{}, errors.New("not_found")
+	return billerForm{}, errors.New("not_found")
 }
 
 func (p *paymentTokens) fromRedis(id string) (string, error) {
