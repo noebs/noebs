@@ -1172,6 +1172,9 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	// mask the pan
 	res.MaskPAN()
+	pt := &paymentResponse{TransactionID: id, GenericEBSResponseFields: res.GenericEBSResponseFields}
+
+	t.addTrans("biller:sahil", pt)
 
 	transaction := dashboard.Transaction{
 		GenericEBSResponseFields: res.GenericEBSResponseFields,
