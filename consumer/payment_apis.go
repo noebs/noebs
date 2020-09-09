@@ -1175,7 +1175,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	// mask the pan
 	res.MaskPAN()
-	pt := &billerForm{ID: id, EBS: res.GenericEBSResponseFields, Token: refID}
+	pt := &billerForm{ID: refID, EBS: res.GenericEBSResponseFields, Token: id}
 
 	t.addTrans("biller:sahil", pt)
 
