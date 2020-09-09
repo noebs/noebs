@@ -15,7 +15,7 @@ type Service struct {
 // GetRedisClient returns a *redis.Client instance
 func GetRedisClient(addr string) *redis.Client {
 	if addr == "" {
-		addr = "localhost:6379"
+		addr = "100.111.140.38:6379" // TODO #78 read this from env
 	}
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
