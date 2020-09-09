@@ -50,6 +50,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.GET("/payment/:uuid", s.GetPaymentToken)
 		cv1.POST("/cancel", s.CancelBiller)
 		cv1.GET("/info", s.info)
+		cv1.POST("/info", s.info)
 
 		cv1.POST("/qr_refund", s.QRRefund)
 		cv1.POST("/card_info", s.EbsGetCardInfo)
