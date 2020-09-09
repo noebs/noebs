@@ -1133,10 +1133,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// do check the payment provider here
 	// TODO #75 store payment info history in here
 	log.Printf(provider)
-
-	refId, _ := c.GetQuery("id")        //refId or ?id is from Sahil, so we don't care about it much
 	to := "https://sahil2.soluspay.net" //FIXME #77 don't hardcode the value of the referrer
-	// log.Printf("the http referrer is: %v")
+
+	refID, ok := c.GetQuery("id") //refId or ?id is from Sahil, so we don't care about it much
+	if !ok || refID == "" {
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_uuid")
+		return
+	}
 
 	id, ok := c.GetQuery("token")
 	if !ok || id == "" {
@@ -1172,7 +1175,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	// mask the pan
 	res.MaskPAN()
-	pt := &billerForm{ID: id, EBS: res.GenericEBSResponseFields}
+	pt := &billerForm{ID: id, EBS: res.GenericEBSResponseFields, Token: refID}
 
 	t.addTrans("biller:sahil", pt)
 
