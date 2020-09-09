@@ -239,7 +239,7 @@ func (p *paymentTokens) getByID(key, uuid string) (billerForm, error) {
 			return v, nil
 		}
 	}
-	return billerForm{}, errors.New("not_found")
+	return billerForm{}, errors.New("no_transactions")
 }
 
 func (p *paymentTokens) fromRedis(id string) (string, error) {
