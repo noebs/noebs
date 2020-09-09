@@ -1198,7 +1198,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
 		// c.JSON(code, gin.H{"ebs_response": res})
 	}
-	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refId, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
+	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refID, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
 }
 
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
