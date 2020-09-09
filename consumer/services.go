@@ -307,7 +307,7 @@ func (s *Service) info(c *gin.Context) {
 	p := paymentTokens{redisClient: s.Redis}
 
 	if res, err := p.getByID(b, id); err != nil {
-		vErr := validationError{Code: "internal_error", Message: err.Error()}
+		vErr := validationError{Code: "no_found", Message: err.Error()}
 		c.JSON(http.StatusBadRequest, vErr)
 		return
 	} else {
