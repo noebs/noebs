@@ -291,8 +291,7 @@ func (p *paymentTokens) GetToken(id string) (bool, error) {
 }
 
 func (p *paymentTokens) invalidate(id string) error {
-	_, err := p.redisClient.Del(id).Result()
-	if err != nil {
+	if _, err := p.redisClient.Del(id).Result(); err != nil {
 		return err
 	}
 	return nil

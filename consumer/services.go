@@ -271,13 +271,13 @@ var billerChan = make(chan billerForm)
 //CancelBiller using its issued uuid
 func (s *Service) CancelBiller(c *gin.Context) {
 
-	if v, ok := c.Get("id"); !ok || v == "" {
+	if v, ok := c.GetQuery("id"); !ok || v == "" {
 		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
 		c.JSON(http.StatusBadRequest, vErr)
 		return
 	} else {
 		p := paymentTokens{redisClient: s.Redis}
-		if err := p.cancelTransaction(v.(string)); err != nil {
+		if err := p.cancelTransaction(v); err != nil {
 			vErr := validationError{Code: "internal_error", Message: err.Error()}
 			c.JSON(http.StatusBadRequest, vErr)
 			return
@@ -290,14 +290,14 @@ func (s *Service) CancelBiller(c *gin.Context) {
 //CancelBiller using its issued uuid
 func (s *Service) info(c *gin.Context) {
 
-	b, ok := c.Get("biller")
+	b, ok := c.GetQuery("biller")
 	if !ok || b == "" {
 		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
 		c.JSON(http.StatusBadRequest, vErr)
 		return
 	}
 
-	id, ok := c.Get("id")
+	id, ok := c.GetQuery("id")
 	if !ok || id == "" {
 		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
 		c.JSON(http.StatusBadRequest, vErr)
@@ -306,7 +306,7 @@ func (s *Service) info(c *gin.Context) {
 
 	p := paymentTokens{redisClient: s.Redis}
 
-	if res, err := p.getByID(b.(string), id.(string)); err != nil {
+	if res, err := p.getByID(b, id); err != nil {
 		vErr := validationError{Code: "internal_error", Message: err.Error()}
 		c.JSON(http.StatusBadRequest, vErr)
 		return
