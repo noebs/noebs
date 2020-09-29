@@ -292,7 +292,7 @@ func (s *Service) info(c *gin.Context) {
 
 	b, ok := c.GetQuery("biller")
 	if !ok || b == "" {
-		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
+		vErr := validationError{Code: "missing_biller", Message: "Biller ID not presented"}
 		c.JSON(http.StatusBadRequest, vErr)
 		return
 	}

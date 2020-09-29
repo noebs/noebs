@@ -1137,7 +1137,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	refID, ok := c.GetQuery("id") //refId or ?id is from Sahil, so we don't care about it much
 	if !ok || refID == "" {
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_uuid")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_refId")
 		return
 	}
 
@@ -1145,7 +1145,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if !ok || id == "" {
 		// ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_uuid")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_token")
 		return
 	}
 	var t paymentTokens
@@ -1153,7 +1153,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if ok, _ := t.GetToken(id); !ok {
 		// ve := validationError{Message: "Invalid token", Code: err.Error()}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_uuid")
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=token_not_found")
 		return
 	}
 
@@ -1161,7 +1161,8 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if err := c.ShouldBindJSON(&p); err != nil {
 		// ve := validationError{Message: err.Error(), Code: "validation_error"}
 		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=request_empty")
+		log.Printf("error in parsing: %v", err)
+		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+err.Error())
 		return
 	}
 

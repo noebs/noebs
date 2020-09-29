@@ -148,6 +148,7 @@ func (p *paymentTokens) storeKey() (string, error) {
 	// tt := 30 * time.Minute
 	tt := 30 * time.Minute
 	log.Printf("the key we are storing is: %v", p.ID)
+	log.Printf("The key is: %v", p.ID)
 
 	if err := p.redisClient.Set("key_"+p.ID, p.ID, tt).Err(); err != nil {
 
