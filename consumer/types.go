@@ -227,7 +227,7 @@ func (p *paymentTokens) cancelTransaction(uuid string) error {
 	return nil
 }
 
-func (p *paymentTokens) getByID(key, uuid string) (billerForm, error) {
+func (p *paymentTokens) getByID(key, uuid, clientID string) (billerForm, error) {
 
 	m, err := p.getTrans(key)
 	// log.Printf("The data is: %#v", m)
@@ -235,8 +235,9 @@ func (p *paymentTokens) getByID(key, uuid string) (billerForm, error) {
 		return billerForm{}, err
 	}
 	for _, v := range m {
-		log.Printf("The data is: %#v", v)
-		if v.ID == uuid {
+		log.Printf("The data is: %#v - Token is: %v\n", v, uuid)
+		if v.Token == uuid || v.ID == clientID {
+			log.Printf("the v is: %v", v)
 			return v, nil
 		}
 	}

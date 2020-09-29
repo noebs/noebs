@@ -297,16 +297,18 @@ func (s *Service) info(c *gin.Context) {
 		return
 	}
 
-	id, ok := c.GetQuery("id")
-	if !ok || id == "" {
-		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
-		c.JSON(http.StatusBadRequest, vErr)
-		return
-	}
+	id, _ := c.GetQuery("id")
+	// if !ok || id == "" {
+	// 	vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
+	// 	c.JSON(http.StatusBadRequest, vErr)
+	// 	return
+	// }
+	clientID, _ := c.GetQuery("refID")
 
 	p := paymentTokens{redisClient: s.Redis}
 
-	if res, err := p.getByID(b, id); err != nil {
+	// how get by id works
+	if res, err := p.getByID(b, id, clientID); err != nil {
 		vErr := validationError{Code: "not_found", Message: err.Error()}
 		c.JSON(http.StatusBadRequest, vErr)
 		return
