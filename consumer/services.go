@@ -309,8 +309,8 @@ func (s *Service) info(c *gin.Context) {
 
 	// how get by id works
 	if res, err := p.getByID(b, id, clientID); err != nil {
-		vErr := validationError{Code: "not_found", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, vErr)
+		// vErr := validationError{Code: "not_found", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, billerForm{ID: clientID, IsSuccessful: false, EBS: ebs_fields.GenericEBSResponseFields{ResponseMessage: "not_completed", ResponseCode: -1}})
 		return
 	} else {
 		c.JSON(http.StatusOK, res)
