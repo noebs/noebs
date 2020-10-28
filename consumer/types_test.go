@@ -280,7 +280,7 @@ func Test_paymentTokens_getByID(t *testing.T) {
 	}
 
 	type args struct {
-		id string
+		clientID string
 	}
 	r := utils.GetRedisClient("")
 	tests := []struct {
@@ -303,7 +303,7 @@ func Test_paymentTokens_getByID(t *testing.T) {
 				UUID:        tt.fields.UUID,
 				redisClient: tt.fields.redisClient,
 			}
-			got, err := p.getByID("test-rs", "test_ass")
+			got, err := p.getByID("test-rs", "test_ass", tt.args.clientID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("paymentTokens.getTrans() error = %v, wantErr %v", err, tt.wantErr)
 				return

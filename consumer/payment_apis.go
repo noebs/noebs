@@ -81,6 +81,7 @@ package consumer
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
@@ -1086,7 +1087,12 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	// 	return
 	// }
 
-	if err := t.NewToken(); err != nil {
+	// I'm gonna need to know and check namespace
+	var namespace string
+	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
+		namespace = "sahil_wallet"
+	}
+	if err := t.NewToken(namespace); err != nil {
 		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
@@ -1135,35 +1141,52 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	log.Printf(provider)
 	to := "https://sahil2.soluspay.net" //FIXME #77 don't hardcode the value of the referrer
 
+	isJson := c.GetBool("json")
 	refID, ok := c.GetQuery("id") //refId or ?id is from Sahil, so we don't care about it much
 	if !ok || refID == "" {
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_refId")
+		if !isJson {
+			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_refId")
+			return
+		}
+		ve := validationError{Message: "Empty payment id", Code: "empty_refId"}
+		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
 
 	id, ok := c.GetQuery("token")
 	if !ok || id == "" {
-		// ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
-		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_token")
+		if !isJson {
+			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_token")
+			return
+		}
+		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
+		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
 	var t paymentTokens
 	t.redisClient = s.Redis
-	if ok, _ := t.GetToken(id); !ok {
-		// ve := validationError{Message: "Invalid token", Code: err.Error()}
-		// c.JSON(http.StatusBadRequest, ve)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=token_not_found")
+	if ok, err := t.GetToken(id); !ok {
+		if !isJson {
+			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=token_not_found")
+			return
+		}
+		ve := validationError{Message: "Invalid token", Code: err.Error()}
+		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
 
 	var p ebs_fields.ConsumerPurchaseFields
 	if err := c.ShouldBindJSON(&p); err != nil {
-		// ve := validationError{Message: err.Error(), Code: "validation_error"}
-		// c.JSON(http.StatusBadRequest, ve)
+
 		log.Printf("error in parsing: %v", err)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+err.Error())
+		if !isJson {
+			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+err.Error())
+			return
+		}
+		ve := validationError{Message: err.Error(), Code: "validation_error"}
+		c.JSON(http.StatusBadRequest, ve)
 		return
+
 	}
 
 	// necessary to invalidate key after issuance
@@ -1172,13 +1195,18 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// perform the payment
 	req, _ := json.Marshal(&p)
 
-	_, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
 	// mask the pan
 	res.MaskPAN()
 	pt := &billerForm{ID: refID, EBS: res.GenericEBSResponseFields, Token: id}
 
-	t.addTrans("biller:sahil", pt)
+	//why hardcoding it here?
+
+	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
+		provider = "biller:sahil"
+	}
+	t.addTrans(provider, pt)
 
 	transaction := dashboard.Transaction{
 		GenericEBSResponseFields: res.GenericEBSResponseFields,
@@ -1190,15 +1218,30 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var isSuccess bool
 	if ebsErr != nil {
-		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		// c.JSON(code, payload)
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
+
+		// We don't return here since we gotta send the billerForm at the end of the function?
+		//TODO
+		/*
+			could we do something like this:
+			go func(){
+				billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refID, IsSuccessful: isSuccess, Token: id}
+			}()
+		*/
+		if !isJson {
+			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
+			return
+		}
+		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, payload)
 
 	} else {
 		isSuccess = true
-		c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
-		// c.JSON(code, gin.H{"ebs_response": res})
+		if !isJson {
+			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
+		}
+		c.JSON(code, gin.H{"ebs_response": res})
 	}
+	// post request. Send the response to the handler
 	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refID, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
 }
 

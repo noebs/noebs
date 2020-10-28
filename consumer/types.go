@@ -67,6 +67,8 @@ type paymentTokens struct {
 	ID          string  `json:"id,omitempty"`
 	UUID        string  `json:"uuid"`
 	redisClient *redis.Client
+	BillerID    string `json:"-"` // account number
+	IsActive    bool   `json:"-"`
 }
 
 type paymentResponse struct {
@@ -179,11 +181,13 @@ func (p *paymentTokens) toRedis() error {
 
 }
 
-func (p *paymentTokens) id2owner() error {
+func (p *paymentTokens) id2owner(namespace string) error {
 
 	h := p.toMap()
-
-	if _, err := p.redisClient.SAdd("sahil_wallet", h).Result(); err != nil {
+	if namespace == "" {
+		namespace = "sahil_wallet"
+	}
+	if _, err := p.redisClient.SAdd(namespace, h).Result(); err != nil {
 
 		return err
 	}
@@ -227,6 +231,7 @@ func (p *paymentTokens) cancelTransaction(uuid string) error {
 	return nil
 }
 
+//getByID get transaction info to a specific clientID by its UUID
 func (p *paymentTokens) getByID(key, uuid, clientID string) (billerForm, error) {
 
 	m, err := p.getTrans(key)
@@ -261,7 +266,11 @@ func (p *paymentTokens) fromRedis(id string) (string, error) {
 	return p.ID, nil
 }
 
-func (p *paymentTokens) NewToken() error {
+//NewToken assigns a new token to an existing namespace (merchant, or biller id). It should fail for non-existing
+// ids. For now it defaults to Sahil-wallet for sahil's specific transactions
+// ID holds: Merchant name, mobile number, urls, and other info
+//
+func (p *paymentTokens) NewToken(namespace string) error {
 	if err := p.new(); err != nil {
 		return err
 	}
@@ -272,7 +281,7 @@ func (p *paymentTokens) NewToken() error {
 	if err := p.toRedis(); err != nil {
 		return err
 	}
-	if err := p.id2owner(); err != nil {
+	if err := p.id2owner(namespace); err != nil {
 		return err
 	}
 	return nil
