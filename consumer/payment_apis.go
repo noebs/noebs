@@ -1141,7 +1141,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	log.Printf(provider)
 	to := "https://sahil2.soluspay.net" //FIXME #77 don't hardcode the value of the referrer
 
-	isJson := c.GetBool("json")
+	jval, _ := c.GetQuery("json")
+	var isJson bool
+	if jval == "true" {
+		isJson = true
+	}
+
+	log.Printf("What is isJson: %v", isJson)
 	refID, ok := c.GetQuery("id") //refId or ?id is from Sahil, so we don't care about it much
 	if !ok || refID == "" {
 		if !isJson {
