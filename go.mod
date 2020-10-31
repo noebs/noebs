@@ -8,7 +8,6 @@ require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/docker/docker v1.13.1
 	github.com/gin-contrib/multitemplate v0.0.0-20200815104402-b0f455fefd87
 	github.com/gin-gonic/gin v1.6.3
 	github.com/go-openapi/spec v0.19.9 // indirect

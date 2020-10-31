@@ -7,7 +7,7 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
-	"github.com/docker/docker/pkg/namesgenerator"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
@@ -35,7 +35,7 @@ func (s *Service) NewBiller(c *gin.Context) {
 	p := paymentTokens{redisClient: s.Redis}
 	var retry int
 begin:
-	name := namesgenerator.GetRandomName(retry)
+	name := GetRandomName(retry)
 	if err := p.newBiller(name); err != nil {
 		retry++
 		goto begin
