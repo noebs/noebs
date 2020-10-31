@@ -11,6 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	SPECIAL_BILLERS = "special_billers"
+)
+
 type billerForm struct {
 	EBS          ebs_fields.GenericEBSResponseFields `json:"ebs_response"`
 	ID           string                              `json:"id"`
@@ -145,6 +149,7 @@ func (p *paymentTokens) new() error {
 
 }
 
+//storeKey stores a uuid (from a biller form) to our redis for 30 minutes.
 func (p *paymentTokens) storeKey() (string, error) {
 
 	// tt := 30 * time.Minute
@@ -160,6 +165,7 @@ func (p *paymentTokens) storeKey() (string, error) {
 
 }
 
+//getKey used to enforce timeouts. It returns nil (and error) if the key is timedout
 func (p *paymentTokens) getKey() (string, error) {
 
 	if err := p.redisClient.Get("key_" + p.ID).Err(); err != nil {
@@ -169,6 +175,7 @@ func (p *paymentTokens) getKey() (string, error) {
 
 }
 
+//toRedis stores a payment token instance to a redis store
 func (p *paymentTokens) toRedis() error {
 
 	h := p.toMap()
@@ -181,6 +188,26 @@ func (p *paymentTokens) toRedis() error {
 
 }
 
+//exists check if namespace is stored in our system
+func (p *paymentTokens) exists(namespace string) bool {
+
+	if _, err := p.redisClient.SMembers(namespace).Result(); err != nil {
+		log.Printf("Error in exists: %v", err)
+		return false
+	}
+	return true
+}
+
+//newBiller adds a new biller's namespace to our system
+func (p *paymentTokens) newBiller(namespace string) error {
+	if _, err := p.redisClient.SAdd(SPECIAL_BILLERS + namespace).Result(); err != nil {
+		log.Printf("Error in newBiller: %v", err)
+		return err
+	}
+	return nil
+}
+
+//id2owner adds a payment token to a biller's SET transactions
 func (p *paymentTokens) id2owner(namespace string) error {
 
 	h := p.toMap()
@@ -195,6 +222,7 @@ func (p *paymentTokens) id2owner(namespace string) error {
 
 }
 
+//addTrans adds a billerForm to a biller's SET transactions. We prefix biller id with `:trans`
 func (p *paymentTokens) addTrans(id string, tran *billerForm) error {
 	if _, err := p.redisClient.Ping().Result(); err != nil {
 		panic(err)
@@ -205,6 +233,7 @@ func (p *paymentTokens) addTrans(id string, tran *billerForm) error {
 	return nil
 }
 
+//getTrans gets a transaction from billers `biller:trans` SET stored in redis
 func (p *paymentTokens) getTrans(id string) ([]billerForm, error) {
 	var data []billerForm
 	var d billerForm
@@ -224,6 +253,7 @@ func (p *paymentTokens) getTrans(id string) ([]billerForm, error) {
 
 }
 
+//cancelTransaction cancel a given transaction by its UUID
 func (p *paymentTokens) cancelTransaction(uuid string) error {
 	if err := p.redisClient.Del("key_" + uuid).Err(); err != nil {
 		return err

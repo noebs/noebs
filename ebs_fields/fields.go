@@ -445,6 +445,7 @@ type Merchant struct {
 	IDNo                 string `json:"idNo" binding:"required"`
 	TerminalID           string `json:"-"`
 }
+
 type mLabel struct {
 	Value string
 	Label string

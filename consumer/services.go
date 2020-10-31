@@ -7,6 +7,7 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
@@ -18,6 +19,28 @@ func (s *Service) ResetPassword(c *gin.Context) {
 	//TODO complete me
 	//- we want to make sure that it *was* you
 	//-enter your mobile number
+
+}
+
+//NewBiller creates a new biller for system
+func (s *Service) NewBiller(c *gin.Context) {
+	var b ebs_fields.Merchant
+
+	if err := c.BindJSON(&b); err != nil {
+		verr := validationError{Message: "Empty request fields", Code: "empty_fields"}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	p := paymentTokens{redisClient: s.Redis}
+	var retry int
+begin:
+	name := namesgenerator.GetRandomName(retry)
+	if err := p.newBiller(name); err != nil {
+		retry++
+		goto begin
+	}
+	c.JSON(http.StatusCreated, gin.H{"result": "ok", "namespace": name})
 
 }
 

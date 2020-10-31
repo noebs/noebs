@@ -32,6 +32,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.POST("/refresh", state.RefreshHandler)
 		cv1.POST("/logout", state.LogOut)
 
+		cv1.POST("/billers/new", s.NewBiller)
 		cv1.POST("/balance", s.Balance)
 		cv1.POST("/is_alive", s.IsAlive)
 		cv1.POST("/bill_payment", s.BillPayment)
