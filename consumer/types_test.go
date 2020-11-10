@@ -7,7 +7,13 @@ import (
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
+	"github.com/alicebob/miniredis"
+	"github.com/go-redis/redis/v7"
 )
+
+var mr, _ = miniredis.Run()
+var mockRedis = utils.GetRedisClient(mr.Addr())
 
 func Test_cardsFromZ(t *testing.T) {
 	lcards := []ebs_fields.CardsRedis{
@@ -23,7 +29,7 @@ func Test_cardsFromZ(t *testing.T) {
 		t.Fatalf("there is an error in testing: %v\n", err)
 	}
 
-	fromRedis := []string{`{"pan": "1234", "exp_date": "2209"}`}
+	fromRedis := []string{`{"pan": "1234", "exp_date": "2209", "id": 1}`}
 
 	tests := []struct {
 		name string
@@ -47,8 +53,8 @@ func Test_cardsFromZ(t *testing.T) {
 }
 
 func Test_generateCardsIds(t *testing.T) {
-	have1 := ebs_fields.CardsRedis{PAN: "1334", Expdate: "2201"}
-	have2 := ebs_fields.CardsRedis{PAN: "1234", Expdate: "2202"}
+	have1 := ebs_fields.CardsRedis{PAN: "1334", Expdate: "2201", ID: 1}
+	have2 := ebs_fields.CardsRedis{PAN: "1234", Expdate: "2202", ID: 2}
 	have := &[]ebs_fields.CardsRedis{
 		have1, have2,
 	}
@@ -91,7 +97,7 @@ func Test_paymentTokens_toMap(t *testing.T) {
 		fields fields
 		want   map[string]interface{}
 	}{
-		{"successful test", f, w},
+		{"testing to map", f, w},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -100,8 +106,18 @@ func Test_paymentTokens_toMap(t *testing.T) {
 				Amount: tt.fields.Amount,
 				ID:     tt.fields.ID,
 			}
-			if got := p.toMap(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("paymentTokens.toMap() = %v, want %v", got, tt.want)
+			for k, v := range p.toMap() {
+
+				switch v.(type) {
+				case float32, float64:
+					continue
+				}
+
+				if tt.want[k] != v {
+					t.Errorf("paymentTokens.toMap() = %v, want %v", tt.want[k], v)
+
+				}
+
 			}
 		})
 	}
@@ -117,6 +133,7 @@ func Test_paymentTokens_getFromRedis(t *testing.T) {
 	type args struct {
 		id string
 	}
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -133,8 +150,166 @@ func Test_paymentTokens_getFromRedis(t *testing.T) {
 				ID:     tt.fields.ID,
 				UUID:   tt.fields.UUID,
 			}
-			if err := p.getFromRedis(tt.args.id); (err != nil) != tt.wantErr {
+			if _, err := p.fromRedis(tt.args.id); (err != nil) != tt.wantErr {
 				t.Errorf("paymentTokens.getFromRedis() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_check(t *testing.T) {
+
+	type args struct {
+		id     string
+		amount float32
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  bool
+		want1 validationError
+	}{
+		{"testing validation error", args{id: "my id", amount: 32}, true, validationError{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{}
+			got, got1 := p.check(tt.args.id, tt.args.amount, mockRedis)
+			if got != tt.want {
+				t.Errorf("paymentTokens.check() got = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got1, tt.want1) {
+				t.Errorf("paymentTokens.check() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_addTrans(t *testing.T) {
+
+	req := ebs_fields.GenericEBSResponseFields{
+		TerminalID:             "1212121",
+		SystemTraceAuditNumber: 0,
+		ClientID:               "ACTS",
+		PAN:                    "4433",
+		ServiceID:              "",
+		TranAmount:             500,
+		LastPAN:                "",
+	}
+	// data, _ := json.Marshal(&req)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379", // use default Addr
+		Password: "",               // no password set
+		DB:       0,                // use default DB
+	})
+
+	pong, err := rdb.Ping().Result()
+	fmt.Println(pong, err)
+
+	tests := []struct {
+		name    string
+		args    billerForm
+		wantErr bool
+	}{
+		{"successful_transaction", billerForm{ID: "test_ass", EBS: req}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+
+				redisClient: rdb,
+			}
+			if err := p.addTrans("test-rs", &tt.args); (err != nil) != tt.wantErr {
+				t.Errorf("paymentTokens.addTrans() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_getTrans(t *testing.T) {
+	type fields struct {
+		Name        string
+		Amount      float32
+		ID          string
+		UUID        string
+		redisClient *redis.Client
+	}
+
+	type args struct {
+		id string
+	}
+	r := utils.GetRedisClient("")
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    paymentResponse
+		wantErr bool
+	}{
+		{"get_data", fields{redisClient: r}, args{"test_ass"}, paymentResponse{TransactionID: "1212121", GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{ClientID: "ACTS", PAN: "4433", TranAmount: 500}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+				Name:        tt.fields.Name,
+				Amount:      tt.fields.Amount,
+				ID:          tt.fields.ID,
+				UUID:        tt.fields.UUID,
+				redisClient: tt.fields.redisClient,
+			}
+			got, err := p.getTrans("test_rs")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("paymentTokens.getTrans() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("paymentTokens.getTrans() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_paymentTokens_getByID(t *testing.T) {
+	type fields struct {
+		Name        string
+		Amount      float32
+		ID          string
+		UUID        string
+		redisClient *redis.Client
+	}
+
+	type args struct {
+		clientID string
+	}
+	r := utils.GetRedisClient("")
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    paymentResponse
+		wantErr bool
+	}{
+		{"get_data", fields{redisClient: r}, args{"test_ass"},
+			paymentResponse{TransactionID: "test_ass",
+				GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{TerminalID: "1212121", ClientID: "ACTS", PAN: "4433", TranAmount: 500}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+				Name:        tt.fields.Name,
+				Amount:      tt.fields.Amount,
+				ID:          tt.fields.ID,
+				UUID:        tt.fields.UUID,
+				redisClient: tt.fields.redisClient,
+			}
+			got, err := p.getByID("test-rs", "test_ass", tt.args.clientID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("paymentTokens.getTrans() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("paymentTokens.getTrans() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -2,20 +2,29 @@ package utils
 
 import (
 	//"github.com/adonese/noebs/dashboard"
+
 	"github.com/go-redis/redis/v7"
 	"github.com/jinzhu/gorm"
 )
 
-// GetRedis returns a *redis.Client instance
-func GetRedis() *redis.Client {
+type Service struct {
+	Redis *redis.Client
+	Db    *gorm.DB
+}
+
+// GetRedisClient returns a *redis.Client instance
+func GetRedisClient(addr string) *redis.Client {
+	if addr == "" {
+		addr = "100.114.22.117:6379" // TODO #78 read this from env
+	}
 	client := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: addr,
 		DB:   0,
 	})
 	return client
 }
 
-//SaveRedisList
+//SaveRedisList saves to a list in redis
 func SaveRedisList(r *redis.Client, key string, value interface{}) error {
 	_, err := r.LPush(key, value).Result()
 	return err
