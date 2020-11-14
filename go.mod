@@ -16,25 +16,23 @@ require (
 	github.com/gomodule/redigo/redis v0.0.0-20200429221454-e14091dffc1b // indirect
 	github.com/google/uuid v1.1.2
 	github.com/jinzhu/gorm v1.9.16
-	github.com/kr/pty v1.1.5 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/common v0.15.0 // indirect
-	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.7.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.6.1
 	github.com/swaggo/gin-swagger v1.3.0
 	github.com/swaggo/swag v1.6.9
-	github.com/yuin/gopher-lua v0.0.0-20200603152657-dc2b0ca8b37e // indirect
+	github.com/ugorji/go v1.2.0 // indirect
+	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	github.com/zsais/go-gin-prometheus v0.1.0
-	golang.org/x/crypto v0.0.0-20201016220609-9e8e0b390897
+	golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b // indirect
-	golang.org/x/sys v0.0.0-20201109165425-215b40eba54c // indirect
+	golang.org/x/sys v0.0.0-20201113233024-12cec1faf1ba // indirect
 	golang.org/x/text v0.3.4 // indirect
-	golang.org/x/tools v0.0.0-20201110124207-079ba7bd75cd // indirect
+	golang.org/x/tools v0.0.0-20201113202037-1643af1435f3 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gopkg.in/go-playground/validator.v9 v9.31.0
 )
