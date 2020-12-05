@@ -19,6 +19,7 @@ type specialPaymentQueries struct {
 	ID     string `form:"id,omitempty" binding:"required"`    //biller specific ids
 	Token  string `form:"token,omitempty" binding:"required"` //noebs payment token
 	IsJSON bool   `form:"json,omitempty"`
+	To     string `form:"to,default=https://sahil2.soluspay.net"`
 }
 
 type billerForm struct {

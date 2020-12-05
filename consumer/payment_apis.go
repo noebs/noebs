@@ -1143,11 +1143,10 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	var queries specialPaymentQueries
 
 	log.Printf(provider)
-	to := c.DefaultQuery("to", "https://sahil2.soluspay.net")
 
 	if err := c.BindQuery(&queries); err != nil {
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_refId")
+			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code=empty_refId")
 			return
 		}
 		ve := validationError{Message: "Binding error", Code: "empty_refId"}
@@ -1161,7 +1160,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	t.redisClient = s.Redis
 	if ok, err := t.GetToken(queries.Token); !ok {
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=token_not_found")
+			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code=token_not_found")
 			return
 		}
 		ve := validationError{Message: "Invalid token", Code: err.Error()}
@@ -1174,7 +1173,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 		log.Printf("error in parsing: %v", err)
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+err.Error())
+			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code="+err.Error())
 			return
 		}
 		ve := validationError{Message: err.Error(), Code: "validation_error"}
@@ -1200,6 +1199,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
 		provider = "biller:sahil"
 	}
+
 	t.addTrans(provider, pt)
 
 	transaction := dashboard.Transaction{
@@ -1222,7 +1222,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 			}()
 		*/
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
+			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code="+res.ResponseMessage)
 			return
 		}
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -1231,7 +1231,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	} else {
 		isSuccess = true
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
+			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code="+res.ResponseMessage)
 		}
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
