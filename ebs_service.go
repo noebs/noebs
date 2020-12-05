@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/cards"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
@@ -32,6 +33,7 @@ var database, _ = utils.Database("sqlite3", "test.db")
 var auth gateway.JWTAuth
 var service = utils.Service{Db: database, Redis: redisClient}
 var consumerService = consumer.Service{Service: service}
+var cardService = cards.Service{Redis: redisClient}
 var dashService = dashboard.Service{Redis: redisClient}
 var state = consumer.State{}
 
@@ -130,6 +132,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/pan_from_mobile", consumerService.GetMSISDNFromCard)
 		cons.GET("/mobile2pan", consumerService.CardFromNumber)
 		cons.GET("/nec2name", consumerService.NecToName)
+		cons.POST("/tokenize", cardService.Tokenize)
 
 		cons.POST("/login", state.LoginHandler)
 		cons.Use(auth.AuthMiddleware())

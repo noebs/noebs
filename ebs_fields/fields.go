@@ -161,12 +161,14 @@ func (c *CommonFields) sendRequest(f []byte) {
 	panic("implement me!")
 }
 
+//CardInfoFields implements a payment card info
 type CardInfoFields struct {
 	Pan     string `json:"PAN" binding:"required" form:"PAN"`
 	Pin     string `json:"PIN" binding:"required" form:"PIN"`
 	Expdate string `json:"expDate" binding:"required" form:"expDate"`
 }
 
+//AmountFields transaction amount data
 type AmountFields struct {
 	TranAmount       float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
 	TranCurrencyCode string  `json:"tranCurrencyCode" form:"tranCurrencyCode"`
@@ -647,4 +649,14 @@ func isEBS(pan string) bool {
 
 	re := regexp.MustCompile(`(^639186|^639256|^639184|^639330)`)
 	return re.Match([]byte(pan))
+}
+
+type TokenCard struct {
+	CardInfoFields
+	Fingerprint string `json:"fingerprint" binding:"required"`
+}
+
+type ValidationError struct {
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
 }

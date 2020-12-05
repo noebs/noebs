@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/cards"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
@@ -25,6 +26,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 
 	ss := utils.Service{Redis: redisClient, Db: db}
 	s := &Service{Service: ss}
+	var cardServices = cards.Service{Redis: redisClient}
 
 	{
 
@@ -64,6 +66,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.Use(auth.AuthMiddleware())
 		cv1.GET("/get_cards", s.GetCards)
 		cv1.POST("/add_card", s.AddCards)
+		cv1.POST("/tokenize", cardServices.Tokenize)
 
 		cv1.PUT("/edit_card", s.EditCard)
 		cv1.DELETE("/delete_card", s.RemoveCard)

@@ -1,4 +1,8 @@
-package main
+//Package cards implement tokenization for payment cards. Used internally by our other
+// services to securely use our endpoints in variety of applications.
+// The goal is to implement a Stripe-like tokenization system.
+
+package cards
 
 import (
 	"encoding/json"
@@ -6,6 +10,7 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/adonese/tokenization/tokenization"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
@@ -18,7 +23,7 @@ type Service struct {
 
 //GetCards returns a list of cards (default and others) associated to this
 //authorized user
-func (s *Service)GetCards(c *gin.Context) {
+func (s *Service) GetCards(c *gin.Context) {
 
 	username := c.GetString("username")
 	if username == "" {
@@ -124,7 +129,7 @@ func (s *Service) EditCard(c *gin.Context) {
 }
 
 // RemoveCard a work in progress. This function needs to be reviewed and refactored
-func (s *Service)RemoveCard(c *gin.Context) {
+func (s *Service) RemoveCard(c *gin.Context) {
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -155,7 +160,7 @@ func (s *Service)RemoveCard(c *gin.Context) {
 }
 
 //AddMobile adds a new mobile number entry to this current authorized user
-func (s *Service)AddMobile(c *gin.Context) {
+func (s *Service) AddMobile(c *gin.Context) {
 
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -181,7 +186,7 @@ func (s *Service)AddMobile(c *gin.Context) {
 }
 
 //GetMobile returns a user list of mobile numbers from redis database
-func (s *Service)GetMobile(c *gin.Context) {
+func (s *Service) GetMobile(c *gin.Context) {
 
 	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
@@ -204,4 +209,31 @@ func (s *Service)GetMobile(c *gin.Context) {
 		}
 	}
 
+}
+
+//Tokenize returns a token representations of the Card
+func (s *Service) Tokenize(c *gin.Context) {
+	var card ebs_fields.TokenCard
+
+	if err := c.ShouldBind(&card); err != nil {
+		validation := ebs_fields.ValidationError{Code: "request_error", Message: "Request empty"}
+		c.JSON(http.StatusOK, validation)
+		return
+	}
+	token, err := tokenization.NewCard()
+	if err != nil {
+		validation := ebs_fields.ValidationError{Code: "tokenization_error", Message: err.Error()}
+		c.JSON(http.StatusOK, validation)
+		return
+	}
+	token.Pan = card.Pan
+	token.Pin = card.Pin
+	token.Expdate = card.Expdate
+
+	if err := token.NewToken(); err != nil {
+		validation := ebs_fields.ValidationError{Code: "tokenization_error", Message: err.Error()}
+		c.JSON(http.StatusOK, validation)
+		return
+	}
+	c.JSON(http.StatusOK, token.GetTokenized())
 }
