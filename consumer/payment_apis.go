@@ -88,8 +88,8 @@ import (
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
-	"gopkg.in/go-playground/validator.v9"
 )
 
 var log = logrus.New()
@@ -1088,10 +1088,13 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	// }
 
 	// I'm gonna need to know and check namespace
+	// This is a workaround for sahil payment. Will deprecated in the future. And all of sahil's specifics.
+
 	var namespace string
-	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
+	if namespace = c.Param("payment"); namespace == "" {
 		namespace = "sahil_wallet"
 	}
+
 	if err := t.NewToken(namespace); err != nil {
 		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
 		c.JSON(http.StatusBadRequest, ve)
@@ -1136,43 +1139,28 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint
 
 	provider := c.Param("uuid")
-	// do check the payment provider here
-	// TODO #75 store payment info history in here
+
+	var queries specialPaymentQueries
+
 	log.Printf(provider)
-	to := "https://sahil2.soluspay.net" //FIXME #77 don't hardcode the value of the referrer
+	to := c.DefaultQuery("to", "https://sahil2.soluspay.net")
 
-	jval, _ := c.GetQuery("json")
-	var isJson bool
-	if jval == "true" {
-		isJson = true
-	}
-
-	log.Printf("What is isJson: %v", isJson)
-	refID, ok := c.GetQuery("id") //refId or ?id is from Sahil, so we don't care about it much
-	if !ok || refID == "" {
-		if !isJson {
+	if err := c.BindQuery(&queries); err != nil {
+		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_refId")
 			return
 		}
-		ve := validationError{Message: "Empty payment id", Code: "empty_refId"}
+		ve := validationError{Message: "Binding error", Code: "empty_refId"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
 
-	id, ok := c.GetQuery("token")
-	if !ok || id == "" {
-		if !isJson {
-			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=empty_token")
-			return
-		}
-		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
+	log.Printf("What is isJson: %v", queries.IsJSON)
+
 	var t paymentTokens
 	t.redisClient = s.Redis
-	if ok, err := t.GetToken(id); !ok {
-		if !isJson {
+	if ok, err := t.GetToken(queries.Token); !ok {
+		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code=token_not_found")
 			return
 		}
@@ -1185,7 +1173,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if err := c.ShouldBindJSON(&p); err != nil {
 
 		log.Printf("error in parsing: %v", err)
-		if !isJson {
+		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+err.Error())
 			return
 		}
@@ -1196,7 +1184,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	}
 
 	// necessary to invalidate key after issuance
-	t.invalidate(id)
+	t.invalidate(queries.Token)
 
 	// perform the payment
 	req, _ := json.Marshal(&p)
@@ -1205,7 +1193,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	// mask the pan
 	res.MaskPAN()
-	pt := &billerForm{ID: refID, EBS: res.GenericEBSResponseFields, Token: id}
+	pt := &billerForm{ID: queries.ID, EBS: res.GenericEBSResponseFields, Token: queries.Token}
 
 	//why hardcoding it here?
 
@@ -1233,7 +1221,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 				billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refID, IsSuccessful: isSuccess, Token: id}
 			}()
 		*/
-		if !isJson {
+		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
 			return
 		}
@@ -1242,13 +1230,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	} else {
 		isSuccess = true
-		if !isJson {
+		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, to+"?fail=true&code="+res.ResponseMessage)
 		}
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
 	// post request. Send the response to the handler
-	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refID, IsSuccessful: isSuccess, Token: id} //THIS BLOCKS IF THE goroutin is not listening
+	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: queries.ID, IsSuccessful: isSuccess, Token: queries.Token} //THIS BLOCKS IF THE goroutin is not listening
 }
 
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only

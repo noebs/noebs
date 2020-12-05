@@ -17,12 +17,12 @@ import (
 	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
-	"gopkg.in/go-playground/validator.v9"
 )
 
 var log = logrus.New()
@@ -172,11 +172,10 @@ func init() {
 // @securityDefinitions.basic BasicAuth
 // @in header
 func main() {
-	
+
 	go consumer.BillerHooks()
 	go handleChan(redisClient)
 	//FIXME #65 handle errors in go routine
-	
 
 	// logging and instrumentation
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
@@ -205,7 +204,7 @@ func main() {
 // @Failure 404 {object} http.StatusNotFound
 // @Failure 500 {object} http.InternalServerError
 // @Router /workingKey [post]
-//FIXME #68 make all merchant routers in an Env or struct 
+//FIXME #68 make all merchant routers in an Env or struct
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
 	db, _ := utils.Database("sqlite3", "test.db")

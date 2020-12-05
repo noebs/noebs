@@ -15,6 +15,12 @@ const (
 	SPECIAL_BILLERS = "special_billers"
 )
 
+type specialPaymentQueries struct {
+	ID     string `form:"id,omitempty" binding:"required"`    //biller specific ids
+	Token  string `form:"token,omitempty" binding:"required"` //noebs payment token
+	IsJSON bool   `form:"json,omitempty"`
+}
+
 type billerForm struct {
 	EBS          ebs_fields.GenericEBSResponseFields `json:"ebs_response"`
 	ID           string                              `json:"id"`

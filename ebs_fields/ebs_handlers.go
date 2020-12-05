@@ -2,9 +2,10 @@ package ebs_fields
 
 import (
 	"fmt"
-	"gopkg.in/go-playground/validator.v9"
 	"net/http"
 	"time"
+
+	"github.com/go-playground/validator/v10"
 )
 
 type ErrorResponse struct {

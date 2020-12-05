@@ -1,11 +1,12 @@
 package ebs_fields
 
 import (
-	"github.com/gin-gonic/gin/binding"
-	"gopkg.in/go-playground/validator.v9"
 	"reflect"
 	"strings"
 	"sync"
+
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 )
 
 type DefaultValidator struct {
