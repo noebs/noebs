@@ -26,7 +26,7 @@ require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.6.1
 	github.com/swaggo/gin-swagger v1.3.0
-	github.com/swaggo/swag v1.6.9
+	github.com/swaggo/swag v1.7.0
 	github.com/ugorji/go v1.2.1 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20200816102855-ee81675732da // indirect
 	github.com/zsais/go-gin-prometheus v0.1.0
