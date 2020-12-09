@@ -1,4 +1,4 @@
-[![Build Status](https://dev.azure.com/adonese/noebs/_apis/build/status/adonese.noebs?branchName=master)](https://dev.azure.com/adonese/noebs/_build/latest?definitionId=1&branchName=master)
+![CI](https://github.com/adonese/noebs/workflows/CI/badge.svg)
 **Keeping' it simple**
 
 # noebs
