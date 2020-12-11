@@ -350,7 +350,10 @@ func BillerHooks() {
 			log.Printf("The recv is: %v", value)
 			data, _ := json.Marshal(&value)
 			// FIXME this code is dangerous
-			if _, err := http.Post("http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation", "application/json", bytes.NewBuffer(data)); err != nil {
+			if value.to == "" {
+				value.to = "http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation"
+			}
+			if _, err := http.Post(value.to, "application/json", bytes.NewBuffer(data)); err != nil {
 				log.Printf("the error is: %v", err)
 			}
 		}

@@ -1146,7 +1146,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	if err := c.BindQuery(&queries); err != nil {
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code=empty_refId")
+			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=empty_refId")
 			return
 		}
 		ve := validationError{Message: "Binding error", Code: "empty_refId"}
@@ -1154,13 +1154,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 		return
 	}
 
-	log.Printf("What is isJson: %v", queries.IsJSON)
+	log.Printf("What is isJson: %v", queries)
 
 	var t paymentTokens
 	t.redisClient = s.Redis
 	if ok, err := t.GetToken(queries.Token); !ok {
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code=token_not_found")
+			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=token_not_found")
 			return
 		}
 		ve := validationError{Message: "Invalid token", Code: err.Error()}
@@ -1173,7 +1173,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 		log.Printf("error in parsing: %v", err)
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code="+err.Error())
+			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code="+err.Error())
 			return
 		}
 		ve := validationError{Message: err.Error(), Code: "validation_error"}
@@ -1222,7 +1222,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 			}()
 		*/
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code="+res.ResponseMessage)
+			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code="+res.ResponseMessage)
 			return
 		}
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -1231,12 +1231,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	} else {
 		isSuccess = true
 		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.To+"?fail=true&code="+res.ResponseMessage)
+			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code="+res.ResponseMessage)
 		}
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
 	// post request. Send the response to the handler
-	billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: queries.ID, IsSuccessful: isSuccess, Token: queries.Token} //THIS BLOCKS IF THE goroutin is not listening
+	// FIXME(adonese) #91 allow for generic use of noebs hooks.
+	billerChan <- billerForm{to: queries.HooksURL, EBS: res.GenericEBSResponseFields, ID: queries.ID, IsSuccessful: isSuccess, Token: queries.Token} //THIS BLOCKS IF THE goroutin is not listening
 }
 
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
