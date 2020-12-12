@@ -330,11 +330,12 @@ func (p *paymentTokens) newFromToken(id string) {
 	p.ID = id
 }
 
+//GetToken id is the token from url query params
 func (p *paymentTokens) GetToken(id string) (bool, error) {
 	p.newFromToken(id)
 
 	if _, err := p.getKey(); err != nil {
-		return false, errors.New("invalid_token")
+		return false, errors.New(err.Error())
 	}
 
 	return true, nil
