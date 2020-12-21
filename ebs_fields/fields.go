@@ -442,11 +442,11 @@ func (f *MerchantRegistrationFields) MustMarshal() []byte {
 //Merchant constructs ebs qualfied merchant
 type Merchant struct {
 	MerchantID           string `json:"merchant_id" gorm:"index"`
-	MerchantName         string `json:"merchantName" binding:"required" gorm:"column:name"`
-	MerchantCity         string `json:"merchantCity" binding:"required" gorm:"column:city"`
-	MerchantMobileNumber string `json:"mobileNo" binding:"required" gorm:"column:mobile"`
-	IDType               int    `json:"idType" binding:"required" gorm:"column:id_type"`
-	IDNo                 string `json:"idNo" binding:"required" gorm:"column:id_no"`
+	MerchantName         string `json:"name" binding:"required" gorm:"column:name"`
+	MerchantCity         string `json:"city" binding:"required" gorm:"column:city"`
+	MerchantMobileNumber string `json:"mobile" binding:"required" gorm:"column:mobile"`
+	IDType               int    `json:"id_type" binding:"required" gorm:"column:id_type"`
+	IDNo                 string `json:"id_no" binding:"required" gorm:"column:id_no"`
 	TerminalID           string `json:"-" gorm:"-"`
 }
 
