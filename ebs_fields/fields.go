@@ -439,13 +439,15 @@ func (f *MerchantRegistrationFields) MustMarshal() []byte {
 	return d
 }
 
+//Merchant constructs ebs qualfied merchant
 type Merchant struct {
-	MerchantName         string `json:"merchantName" binding:"required"`
-	MerchantCity         string `json:"merchantCity" binding:"required"`
-	MerchantMobileNumber string `json:"mobileNo" binding:"required"`
-	IDType               string `json:"idType" binding:"required"`
-	IDNo                 string `json:"idNo" binding:"required"`
-	TerminalID           string `json:"-"`
+	MerchantID           string `json:"merchant_id" gorm:"index"`
+	MerchantName         string `json:"merchantName" binding:"required" gorm:"column:name"`
+	MerchantCity         string `json:"merchantCity" binding:"required" gorm:"column:city"`
+	MerchantMobileNumber string `json:"mobileNo" binding:"required" gorm:"column:mobile"`
+	IDType               int    `json:"idType" binding:"required" gorm:"column:id_type"`
+	IDNo                 string `json:"idNo" binding:"required" gorm:"column:id_no"`
+	TerminalID           string `json:"-" gorm:"-"`
 }
 
 type mLabel struct {

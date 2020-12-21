@@ -14,6 +14,7 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/docs"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
 	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,7 @@ var consumerService = consumer.Service{Service: service}
 var cardService = cards.Service{Redis: redisClient}
 var dashService = dashboard.Service{Redis: redisClient}
 var state = consumer.State{}
+var merchantServices = merchant.Merchant{}
 
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
@@ -150,6 +152,10 @@ func GetMainEngine() *gin.Engine {
 		})
 	}
 
+	mGroup := route.Group("/merchant")
+	mGroup.POST("/new", merchantServices.CreateMerchant)
+	mGroup.GET("/", merchantServices.GetMerchant)
+
 	consumer.Routes("/v1", route, database, redisClient)
 	return route
 }
@@ -159,6 +165,7 @@ func init() {
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()
 	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
+	merchantServices.Init(database, log)
 }
 
 // @title noebs Example API
