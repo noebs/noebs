@@ -448,6 +448,10 @@ type Merchant struct {
 	IDType               int    `json:"id_type" binding:"required" gorm:"column:id_type"`
 	IDNo                 string `json:"id_no" binding:"required" gorm:"column:id_no"`
 	TerminalID           string `json:"-" gorm:"-"`
+	PushID               string `json:"push_id" gorm:"column:push_id"`
+	Password             string `json:"password"`
+	IsVerifed            bool   `json:"is_verified"`
+	BillerID             string `json:"biller_id"`
 }
 
 type mLabel struct {

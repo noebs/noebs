@@ -1,8 +1,11 @@
 package consumer
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"net/http"
 	"regexp"
 	"time"
 
@@ -12,7 +15,7 @@ import (
 )
 
 const (
-	SPECIAL_BILLERS = "special_billers"
+	SPECIAL_BILLERS = "noebs:billers"
 )
 
 type specialPaymentQueries struct {
@@ -98,6 +101,11 @@ func (pr *paymentResponse) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, pr)
 }
 
+//NewPayment generate a new payment token to be used by consumers
+func NewPayment(r *redis.Client) *paymentTokens {
+	return &paymentTokens{redisClient: r}
+}
+
 func (p *paymentTokens) checkUUID(id string, redisClient *redis.Client) (bool, validationError) {
 	// return true, validationError{}
 
@@ -174,6 +182,14 @@ func (p *paymentTokens) storeKey() (string, error) {
 
 }
 
+func (p *paymentTokens) billerTokens(key string) {
+
+}
+
+func (p *paymentTokens) setBillerToken(key string) {
+
+}
+
 //getKey used to enforce timeouts. It returns nil (and error) if the key is timedout
 func (p *paymentTokens) getKey() (string, error) {
 
@@ -188,9 +204,7 @@ func (p *paymentTokens) getKey() (string, error) {
 func (p *paymentTokens) toRedis() error {
 
 	h := p.toMap()
-
 	if _, err := p.redisClient.HMSet(p.ID, h).Result(); err != nil {
-
 		return err
 	}
 	return nil
@@ -198,6 +212,7 @@ func (p *paymentTokens) toRedis() error {
 }
 
 //exists check if namespace is stored in our system
+// this doesn't work
 func (p *paymentTokens) exists(namespace string) bool {
 
 	if _, err := p.redisClient.SMembers(namespace).Result(); err != nil {
@@ -207,9 +222,9 @@ func (p *paymentTokens) exists(namespace string) bool {
 	return true
 }
 
-//newBiller adds a new biller's namespace to our system
+//newBiller adds a new biller's namespace to noebs:billers `set`
 func (p *paymentTokens) newBiller(namespace string) error {
-	if _, err := p.redisClient.SAdd(SPECIAL_BILLERS + namespace).Result(); err != nil {
+	if _, err := p.redisClient.SAdd(SPECIAL_BILLERS, namespace).Result(); err != nil {
 		log.Printf("Error in newBiller: %v", err)
 		return err
 	}
@@ -231,12 +246,156 @@ func (p *paymentTokens) id2owner(namespace string) error {
 
 }
 
+func (p *paymentTokens) isAuthorized(token string) error {
+	return p.getToken(p.BillerID, token)
+}
+
+//addToken adds token to a biller ID biller_id:tokens set
+func (p *paymentTokens) addToken(provider, token string) error {
+	if err := p.redisClient.SAdd(provider+":tokens", token).Err(); err != nil {
+		log.Printf("error in adding Token: %v", err)
+		return err
+	}
+	return nil
+}
+
+//getToken checks if a token is assigned to a particular biller ID
+func (p *paymentTokens) getToken(provider, token string) error {
+	if err := p.redisClient.SIsMember(provider+":tokens", token).Err(); err != nil {
+		log.Printf("error in getting Token: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (p *paymentTokens) pushMessage(content string, pushID ...string) {
+	/*
+		curl --include --request POST --header "Content-Type: application/json; charset=utf-8"
+		 -H "Authorization: Basic NjEwNjk1YzctYzZjZC00Yzg2LTk5ZjYtMzI2ZjViZjE2ZTdi" -d
+		  '{ "app_id": "20a9520e-44fd-4657-a2d9-78f5063045aa",
+		  "include_player_ids": ["a180bc8b-6b56-405e-ae77-dc055d86a9df"],
+		  "channel_for_external_user_ids": "push",
+		"data": {"foo": "bar"},
+		  "contents": {"en": "Let us work it here!"} }'
+		 https://onesignal.com/api/v1/notifications
+	*/
+	b := map[string]interface{}{
+		"app_id":                        "20a9520e-44fd-4657-a2d9-78f5063045aa",
+		"include_player_ids":            pushID, // "a180bc8b-6b56-405e-ae77-dc055d86a9df"
+		"channel_for_external_user_ids": "push",
+		"data":                          map[string]string{"foo": "bar"},
+		"contents":                      map[string]string{"en": content},
+	}
+	data, _ := json.Marshal(&b)
+	log.Printf("the data is: %v", string(data))
+	client, err := http.NewRequest("POST", "https://onesignal.com/api/v1/notifications", bytes.NewBuffer(data))
+	if err != nil {
+		log.Printf("error in sending a request: %v", err)
+		return
+	}
+
+	client.Header.Set("Content-Type", "application/json; charset=utf-8")
+	client.Header.Set("Authorization", "Basic NjEwNjk1YzctYzZjZC00Yzg2LTk5ZjYtMzI2ZjViZjE2ZTdi")
+	res, err := http.DefaultClient.Do(client)
+	if err != nil {
+		log.Printf("Error in parse: %v", err)
+		return
+	}
+
+	d, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Printf("Error in parse: %v", err)
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		log.Printf("Response status is: %v - response is: %v", res.StatusCode, string(d))
+		return
+	}
+	log.Printf("Response status is: %v - response is: %v", res.StatusCode, string(d))
+
+}
+
 //addTrans adds a billerForm to a biller's SET transactions. We prefix biller id with `:trans`
 func (p *paymentTokens) addTrans(id string, tran *billerForm) error {
 	if _, err := p.redisClient.Ping().Result(); err != nil {
 		panic(err)
 	}
 	if _, err := p.redisClient.SAdd(id+":trans", tran).Result(); err != nil {
+		return err
+	}
+	return nil
+}
+
+//billerExists checks if a biller id is already added in noebs billers
+func (p *paymentTokens) billerExists(id string) bool {
+	res, err := p.redisClient.SIsMember("noebs:billers", id).Result()
+	if err != nil {
+		log.Printf("error in sismember: %v", err)
+		return res
+	}
+	return res
+}
+
+func (p *paymentTokens) FromMobile(id string, m ebs_fields.Merchant) error {
+	log.Printf("the id is: %v", id)
+	if ok := p.billerExists(id); ok { // ok means it does exist, we don't want exist ones
+		return errors.New("biller_exists")
+	}
+	if err := p.newBiller(id); err != nil {
+		return err
+	}
+	if _, err := p.StoreDeviceID(m); err != nil {
+		return err
+	}
+	if err := p.SetPush(m, id); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//StoreDeviceID is used to authorize merchant via device push ID
+func (p *paymentTokens) StoreDeviceID(m ebs_fields.Merchant) (string, error) {
+	// Encode me!
+	data, err := json.Marshal(&m)
+	if err != nil {
+		return "", err
+	}
+
+	if err := p.redisClient.HSet("billers:auth", m.PushID, data).Err(); err != nil {
+		return "", err
+	}
+	return m.PushID, nil
+
+}
+
+//GetAuthorization get merchant info through push id (for mobile only now)
+func (p *paymentTokens) GetAuthorization(pushID string) (ebs_fields.Merchant, error) {
+
+	var merchant ebs_fields.Merchant
+
+	if res, err := p.redisClient.HGet("billers:auth", pushID).Result(); err != nil {
+		return merchant, err
+	} else {
+		if err := json.Unmarshal([]byte(res), &merchant); err != nil {
+			return merchant, err
+		}
+		return merchant, nil
+	}
+}
+
+func (p *paymentTokens) PushToBillers(pushID string) (string, error) {
+	if res, err := p.redisClient.Get(pushID).Result(); err != nil {
+		return "", err
+	} else {
+		return res, nil
+	}
+}
+
+//SetPush assigns a device push ID to noebs:billers, maps between device id and payment token
+func (p *paymentTokens) SetPush(m ebs_fields.Merchant, id string) error {
+	if _, err := p.redisClient.Set(m.PushID, id, 0).Result(); err != nil {
 		return err
 	}
 	return nil
@@ -330,12 +489,30 @@ func (p *paymentTokens) newFromToken(id string) {
 	p.ID = id
 }
 
-//GetToken id is the token from url query params
-func (p *paymentTokens) GetToken(id string) (bool, error) {
+//ValidateToken only allow valid keys and valid transactions to be passed
+func (p *paymentTokens) ValidateToken(id string, provider string) (bool, error) {
+
+	//TODO(adonese): refactor this to a new function
+	if ok, err := p.redisClient.SIsMember(SPECIAL_BILLERS, provider).Result(); !ok {
+		log.Printf("item not found: %v", err)
+		return false, errors.New("not_found")
+	}
 	p.newFromToken(id)
 
 	if _, err := p.getKey(); err != nil {
-		return false, errors.New(err.Error())
+		return false, err
+	}
+
+	return true, nil
+}
+
+//GetToken id is the token from url query params
+func (p *paymentTokens) GetToken(id string) (bool, error) {
+
+	p.newFromToken(id)
+
+	if _, err := p.getKey(); err != nil {
+		return false, err
 	}
 
 	return true, nil

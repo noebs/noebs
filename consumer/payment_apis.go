@@ -80,16 +80,19 @@ package consumer
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var log = logrus.New()
@@ -1076,6 +1079,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 //GeneratePaymentToken generates a token
 // BUG(adonese) we have to make it mandatory for biller id as well
 //BUG(adonese) still not fixed -- but we really should fix it
+//TODO(adonese) #94 API key should be mandatory
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var t paymentTokens
 	t.redisClient = s.Redis
@@ -1096,6 +1100,13 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 
 	if err := t.NewToken(namespace); err != nil {
+		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	if err := t.addToken(namespace, t.UUID); err != nil {
+		log.Printf("Error in addToken: %v", err)
 		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
@@ -1139,6 +1150,11 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint
 
 	provider := c.Param("uuid")
+	//why hardcoding it here?
+
+	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
+		provider = "biller:sahil"
+	}
 
 	var queries specialPaymentQueries
 
@@ -1158,7 +1174,9 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	var t paymentTokens
 	t.redisClient = s.Redis
-	if ok, err := t.GetToken(queries.Token); !ok {
+
+	// TODO(adonese): perform a check here and assign token to biller id
+	if ok, err := t.ValidateToken(queries.Token, provider); !ok {
 		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=token_not_found")
 			return
@@ -1168,7 +1186,21 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 		return
 	}
 
+	m := merchant.New(s.Db)
+	data, err := m.ByID(provider)
+	if err != nil {
+		if !queries.IsJSON {
+			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=not_biller_provided")
+			return
+		}
+		ve := validationError{Message: "Biller ID not activated", Code: err.Error()}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
 	var p ebs_fields.ConsumerPurchaseFields
+	p.ServiceProviderId = data.BillerID // FUCKME
+
 	if err := c.ShouldBindJSON(&p); err != nil {
 
 		log.Printf("error in parsing: %v", err)
@@ -1194,12 +1226,6 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	res.MaskPAN()
 	pt := &billerForm{ID: queries.ID, EBS: res.GenericEBSResponseFields, Token: queries.Token}
 
-	//why hardcoding it here?
-
-	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
-		provider = "biller:sahil"
-	}
-
 	t.addTrans(provider, pt)
 
 	transaction := dashboard.Transaction{
@@ -1211,6 +1237,10 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	s.Db.Table("transactions").Create(&transaction)
 
 	var isSuccess bool
+
+	// we send a push request here...
+	// TODO(adonese): make a function to generate texts here
+	go t.pushMessage(fmt.Sprintf("Amount of: %v was added! Download Cashq!", transaction.TranAmount), m.PushID)
 	if ebsErr != nil {
 
 		// We don't return here since we gotta send the billerForm at the end of the function?
@@ -1378,4 +1408,45 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
 	}
 
+}
+
+//CreateMerchant creates new noebs merchant
+func (s *Service) CreateMerchant(c *gin.Context) {
+
+	var m merchant.Merchant // we gonna need to initialize this dude
+	if err := c.ShouldBindJSON(&m); err != nil {
+		verr := ebs_fields.ValidationError{Code: "request_error", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	m.SetDB(s.Db)
+
+	id := GetRandomName(0)
+	log.Printf("the name is: %v", id)
+	m.MerchantID = id
+
+	password, err := bcrypt.GenerateFromPassword([]byte(m.Password), 8)
+	if err != nil {
+		verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+	m.Password = string(password)
+	if err := m.Write(); err != nil {
+		verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	p := NewPayment(s.Redis) // this introduces issues...
+
+	if err := p.FromMobile(id, m.Merchant); err != nil {
+		verr := ebs_fields.ValidationError{Code: "billers_err", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	link := fmt.Sprintf("%s/%s", "https://beta.soluspay.net/api/v1/payment", id)
+	c.JSON(http.StatusCreated, gin.H{"biller_name": id, "profile": m.Merchant, "url": link, "result": "ok"})
 }

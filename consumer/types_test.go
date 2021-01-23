@@ -314,3 +314,40 @@ func Test_paymentTokens_getByID(t *testing.T) {
 		})
 	}
 }
+
+func Test_paymentTokens_pushMessage(t *testing.T) {
+	type fields struct {
+		Name        string
+		Amount      float32
+		ID          string
+		UUID        string
+		redisClient *redis.Client
+		BillerID    string
+		IsActive    bool
+	}
+	type args struct {
+		content string
+		uuid    string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{"testing push", fields{}, args{"We are testing that the transaction works!", "a180bc8b-6b56-405e-ae77-dc055d86a9df"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &paymentTokens{
+				Name:        tt.fields.Name,
+				Amount:      tt.fields.Amount,
+				ID:          tt.fields.ID,
+				UUID:        tt.fields.UUID,
+				redisClient: tt.fields.redisClient,
+				BillerID:    tt.fields.BillerID,
+				IsActive:    tt.fields.IsActive,
+			}
+			p.pushMessage(tt.args.content, tt.args.uuid)
+		})
+	}
+}

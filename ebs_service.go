@@ -153,8 +153,10 @@ func GetMainEngine() *gin.Engine {
 	}
 
 	mGroup := route.Group("/merchant")
-	mGroup.POST("/new", merchantServices.CreateMerchant)
 	mGroup.GET("/", merchantServices.GetMerchant)
+	mGroup.POST("/new", consumerService.CreateMerchant)
+	mGroup.POST("/login", merchantServices.Login)
+	mGroup.POST("/m", merchantServices.AddBilling)
 
 	consumer.Routes("/v1", route, database, redisClient)
 	return route
