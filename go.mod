@@ -16,7 +16,7 @@ require (
 	github.com/go-playground/validator/v10 v10.4.1
 	github.com/go-redis/redis/v7 v7.4.0
 	github.com/gomodule/redigo/redis v0.0.0-20200429221454-e14091dffc1b // indirect
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.2.0
 	github.com/jinzhu/gorm v1.9.16
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible // indirect
