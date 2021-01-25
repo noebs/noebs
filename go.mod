@@ -31,5 +31,5 @@ require (
 	github.com/zsais/go-gin-prometheus v0.1.0
 	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad
 	golang.org/x/tools v0.0.0-20201228185149-0661ca7ea1ee // indirect
-	google.golang.org/grpc v1.34.0
+	google.golang.org/grpc v1.35.0
 )
