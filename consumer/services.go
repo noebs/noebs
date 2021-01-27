@@ -341,6 +341,28 @@ func (s *Service) info(c *gin.Context) {
 
 }
 
+//BillerTrans to get all transaction to specific biller_id
+func (s *Service) BillerTrans(c *gin.Context) {
+
+	b, ok := c.GetQuery("biller")
+	if !ok || b == "" {
+		vErr := validationError{Code: "missing_biller", Message: "Biller ID not presented"}
+		c.JSON(http.StatusBadRequest, vErr)
+		return
+	}
+
+	p := paymentTokens{redisClient: s.Redis}
+
+	// how get by id works
+	if res, err := p.getTrans(b); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"result": res})
+		return
+	} else {
+		c.JSON(http.StatusOK, gin.H{"result": res})
+	}
+
+}
+
 //BillerHooks submits results to external endpoint
 func BillerHooks() {
 

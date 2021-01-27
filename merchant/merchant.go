@@ -27,6 +27,27 @@ func (m Merchant) AddBilling(c *gin.Context) {
 
 }
 
+//Update to a specific biller ID via `MerchantMobileNumber`
+func (m Merchant) Update(c *gin.Context) {
+	c.BindJSON(&m)
+	if m.BillerID == "" {
+		verr := ebs_fields.ValidationError{Code: "not_found", Message: "empty_biller"}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	//TODO(adonese): omit fields in update. Could be dangerous.
+	if err := m.db.Table("merchants").Where("biller_id = ?", m.BillerID).Update(&m).Error; err != nil {
+		verr := ebs_fields.ValidationError{Code: "not_found", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	return
+
+}
+
 // func (m Merchant) DummyTransaction(c *gin.Context) {
 // 	// Set up a connection to the server.
 // 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
