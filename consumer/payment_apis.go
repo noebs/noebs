@@ -614,10 +614,6 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 
 	case nil:
 
-		// save this to redis
-		if mobile := fields.Mobile; mobile != "" {
-			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
-		}
 		jsonBuffer := fields.MustMarshal()
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
