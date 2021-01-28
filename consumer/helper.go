@@ -40,6 +40,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.POST("/bill_payment", s.BillPayment)
 		cv1.POST("/bill_inquiry", s.BillInquiry)
 		cv1.POST("/p2p", s.CardTransfer)
+		cv1.POST("/account", s.AccountTransfer)
 		cv1.POST("/purchase", s.Purchase)
 		cv1.POST("/status", s.Status)
 		cv1.POST("/key", s.WorkingKey)
