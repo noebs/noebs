@@ -529,6 +529,13 @@ type ConsumerCardTransferFields struct {
 	ToCard string `json:"toCard" binding:"required"`
 }
 
+type ConsumrAccountTransferFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	ToAccount string `json:"toAccount" binding:"required"`
+}
+
 //MustMarshal panics if not able to marshal repsonse
 func (p2p *ConsumerCardTransferFields) MustMarshal() []byte {
 	d, _ := json.Marshal(p2p)
