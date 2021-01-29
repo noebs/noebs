@@ -44,8 +44,6 @@ func (m Merchant) Update(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
-	return
-
 }
 
 // func (m Merchant) DummyTransaction(c *gin.Context) {

@@ -586,7 +586,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 	}
 }
 
-//CardTransfer performs p2p transactions
+//AccountTransfer performs p2p transactions
 func (s *Service) AccountTransfer(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -1261,11 +1261,21 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 		return
 	}
 
-	var p ebs_fields.ConsumerPurchaseFields
-	p.ServiceProviderId = data.BillerID // FUCKME
+	var p interface{}
+	var bill ebs_fields.ConsumerPurchaseFields
 
+	var pp ebs_fields.ConsumerCardTransferFields
+
+	if data.CardNumber == "" {
+		bill.ServiceProviderId = data.EBSBiller
+		p = bill
+	} else {
+		pp.ToCard = data.CardNumber
+		p = pp
+	}
+
+	log.Printf("the data in p is: %#v", p)
 	if err := c.ShouldBindJSON(&p); err != nil {
-
 		log.Printf("error in parsing: %v", err)
 		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code="+err.Error())
@@ -1274,7 +1284,6 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 		ve := validationError{Message: err.Error(), Code: "validation_error"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
-
 	}
 
 	// necessary to invalidate key after issuance

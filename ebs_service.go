@@ -63,11 +63,14 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/generate_api_key", state.GenerateAPIKey)
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
+	route.POST("/voucher", GenerateVoucher)
+	route.POST("/cashout", VoucherCashOut)
 	route.POST("/purchase", Purchase)
 	route.POST("/cashIn", CashIn)
 	route.POST("/cashOut", CashOut)
 	route.POST("/billInquiry", BillInquiry)
 	route.POST("/billPayment", BillPayment)
+	route.POST("/bills", TopUpPayment)
 	route.POST("/changePin", ChangePIN)
 	route.POST("/miniStatement", MiniStatement)
 	route.POST("/isAlive", IsAlive)
@@ -744,6 +747,71 @@ func BillPayment(c *gin.Context) {
 	}
 }
 
+//TopUpPayment to perform electricity and telecos topups
+func TopUpPayment(c *gin.Context) {
+
+	url := ebs_fields.EBSMerchantIP + ebs_fields.BillPrepaymentEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.BillPaymentFields{}
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.BillPaymentTransaction
+
+		res.MaskPAN()
+
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
 // ChangePIN godoc
 // @Summary Get all transactions made by a specific terminal ID
 // @Description get accounts
@@ -839,6 +907,122 @@ func CashOut(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.CashOutFields{}
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+//VoucherCashOut for non-card based transactions
+func VoucherCashOut(c *gin.Context) {
+
+	url := ebs_fields.EBSMerchantIP + ebs_fields.VoucherCashOutWithAmountEndpoint // EBS simulator endpoint url goes here.
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.VoucherCashOutFields{}
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+//GenerateVoucher for non-card based transactions
+func GenerateVoucher(c *gin.Context) {
+
+	url := ebs_fields.EBSMerchantIP + ebs_fields.GenerateVoucherEndpoint // EBS simulator endpoint url goes here.
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.GenerateVoucherFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {

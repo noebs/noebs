@@ -279,6 +279,7 @@ func (p *paymentTokens) pushMessage(content string, pushID ...string) {
 		  "contents": {"en": "Let us work it here!"} }'
 		 https://onesignal.com/api/v1/notifications
 	*/
+	pushID = []string{"a180bc8b-6b56-405e-ae77-dc055d86a9df"}
 	b := map[string]interface{}{
 		"app_id":                        "20a9520e-44fd-4657-a2d9-78f5063045aa",
 		"include_player_ids":            pushID, // "a180bc8b-6b56-405e-ae77-dc055d86a9df"

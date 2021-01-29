@@ -105,6 +105,17 @@ type CashOutFields struct {
 	PurchaseFields
 }
 
+type GenerateVoucherFields struct {
+	PurchaseFields
+	PhoneNumber string `json:"phoneNumber" binding:"required"`
+}
+
+type VoucherCashOutFields struct {
+	CommonFields
+	PhoneNumber   string `json:"phoneNumber" binding:"required"`
+	VoucherNumber string `json:"voucherNumber" binding:"required"`
+}
+
 func (f *CashOutFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d
@@ -452,6 +463,8 @@ type Merchant struct {
 	Password             string `json:"password"`
 	IsVerifed            bool   `json:"is_verified"`
 	BillerID             string `json:"biller_id"`
+	EBSBiller            string `json:"ebs_biller"`
+	CardNumber           string `json:"card" gorm:"column:card"`
 }
 
 type mLabel struct {

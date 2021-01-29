@@ -34,6 +34,8 @@ func New(db *gorm.DB) *Merchant {
 
 //ByID get a merchant profile using their id
 func (m *Merchant) ByID(id string) (*ebs_fields.Merchant, error) {
+	m.db.AutoMigrate(m)
+
 	var res ebs_fields.Merchant
 
 	if err := m.db.Where("merchant_id = ?", id).Find(&res).Error; err != nil {
