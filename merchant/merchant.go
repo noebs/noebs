@@ -46,65 +46,6 @@ func (m Merchant) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 }
 
-// func (m Merchant) DummyTransaction(c *gin.Context) {
-// 	// Set up a connection to the server.
-// 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
-// 	if err != nil {
-// 		log.Fatalf("did not connect: %v", err)
-// 		verr := ebs_fields.ValidationError{Code: "rpc_err", Message: err.Error()}
-// 		c.JSON(http.StatusBadRequest, verr)
-// 		return
-
-// 	}
-// 	defer conn.Close()
-// 	cc := pb.NewPaymentAPIClient(conn)
-
-// 	// Contact the server and print out its response.
-
-// 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-// 	defer cancel()
-
-// 	req2 := &pb.ConsumerKeyRequest{
-// 		Datetime:      "",
-// 		UUID:          "",
-// 		ApplicationID: "",
-// 	}
-
-// 	ctx2, cancel2 := context.WithTimeout(context.Background(), 400*time.Second)
-
-// 	defer cancel2()
-// 	res1, err := cc.GetConsumerKey(ctx2, req2)
-// 	if err != nil {
-// 		log.Fatalf("did not connect: %v", err)
-// 		verr := ebs_fields.ValidationError{Code: "rpc_err", Message: err.Error()}
-// 		c.JSON(http.StatusBadRequest, verr)
-// 		return
-// 	}
-// 	print(res1)
-// 	ctx2, cancel2 = context.WithTimeout(context.Background(), 400*time.Second)
-// 	defer cancel2()
-
-// 	res, err := cc.Encrypt(ctx2, nil)
-
-// 	req1 := &pb.SpecialPaymentRequest{
-// 		TranDateTime:  "",
-// 		UUID:          "",
-// 		ApplicationID: "",
-// 		Pan:           "",
-// 		Expdate:       "",
-// 		IPin:          "",
-// 		Currency:      "",
-// 		Amount:        0.0,
-// 		BillerID:      "",
-// 	}
-// 	print(res)
-// 	res2, err := cc.GetSpecialPayment(ctx, req1)
-// 	if err != nil {
-// 		log.Fatalf("could not greet: %v", err)
-// 	}
-// 	log.Printf("grpc response is: %v", res2)
-// }
-
 //GetMerchant from existing merchants in noebs
 func (m Merchant) GetMerchant(c *gin.Context) {
 	id := c.DefaultQuery("id", "")

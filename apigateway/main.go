@@ -15,11 +15,12 @@ import (
 )
 
 var apiKey = make([]byte, 16)
+
 // var jwtKey = keyFromEnv()
 
 //AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
 //to get a username from the payload (maybe change it to mobile number at somepoint)
-func (a *JWTAuth)AuthMiddleware() gin.HandlerFunc {
+func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// just handle the simplest case, authorization is not provided.
 		h := c.GetHeader("Authorization")
@@ -28,7 +29,7 @@ func (a *JWTAuth)AuthMiddleware() gin.HandlerFunc {
 				"code": "unauthorized"})
 			return
 		}
-		
+
 		claims, err := a.VerifyJWT(h)
 		log.Printf("They key is: %v", a.Key)
 		if e, ok := err.(*jwt.ValidationError); ok {
@@ -56,7 +57,6 @@ func (a *JWTAuth)AuthMiddleware() gin.HandlerFunc {
 	}
 
 }
-
 
 //GenerateSecretKey generates secret key for jwt signing
 func GenerateSecretKey(n int) ([]byte, error) {
@@ -93,7 +93,7 @@ func OptionsMiddleware(c *gin.Context) {
 	} else {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept")
+		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, X-CSRF-TOKEN")
 		c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		c.Header("Content-Type", "application/json")
 		c.AbortWithStatus(http.StatusOK)
@@ -122,7 +122,6 @@ func getMap(key, val string, r *redis.Client) (bool, error) {
 
 	return true, nil
 }
-
 
 var (
 	serverError       = errors.New("unable to connect to the DB")

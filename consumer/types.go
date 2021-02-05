@@ -182,21 +182,18 @@ func (p *paymentTokens) storeKey() (string, error) {
 
 }
 
-func (p *paymentTokens) billerTokens(key string) {
-
-}
-
-func (p *paymentTokens) setBillerToken(key string) {
-
-}
-
 //getKey used to enforce timeouts. It returns nil (and error) if the key is timedout
-func (p *paymentTokens) getKey() (string, error) {
+func (p *paymentTokens) getKey(key string) (string, error) {
 
-	if err := p.redisClient.Get("key_" + p.ID).Err(); err != nil {
+	if r, err := p.redisClient.Get("key_" + key).Result(); err != nil {
+		log.Printf(r)
 		return "", err
+	} else {
+		if r != "" {
+			return r, nil
+		}
+		return r, errors.New("empty_res")
 	}
-	return p.ID, nil
 
 }
 
@@ -320,7 +317,7 @@ func (p *paymentTokens) pushMessage(content string, pushID ...string) {
 //addTrans adds a billerForm to a biller's SET transactions. We prefix biller id with `:trans`
 func (p *paymentTokens) addTrans(id string, tran *billerForm) error {
 	if _, err := p.redisClient.Ping().Result(); err != nil {
-		panic(err)
+		return err
 	}
 	if _, err := p.redisClient.SAdd(id+":trans", tran).Result(); err != nil {
 		return err
@@ -494,13 +491,16 @@ func (p *paymentTokens) newFromToken(id string) {
 func (p *paymentTokens) ValidateToken(id string, provider string) (bool, error) {
 
 	//TODO(adonese): refactor this to a new function
+
 	if ok, err := p.redisClient.SIsMember(SPECIAL_BILLERS, provider).Result(); !ok {
 		log.Printf("item not found: %v", err)
-		return false, errors.New("not_found")
+		return false, err
 	}
 	p.newFromToken(id)
 
-	if _, err := p.getKey(); err != nil {
+	if _, err := p.getKey(id); err != nil {
+
+		log.Printf("error in getting key: %v - id is: %v", err, id)
 		return false, err
 	}
 
@@ -512,7 +512,7 @@ func (p *paymentTokens) GetToken(id string) (bool, error) {
 
 	p.newFromToken(id)
 
-	if _, err := p.getKey(); err != nil {
+	if _, err := p.getKey(id); err != nil {
 		return false, err
 	}
 

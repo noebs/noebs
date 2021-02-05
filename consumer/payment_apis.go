@@ -1239,7 +1239,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	t.redisClient = s.Redis
 
 	// TODO(adonese): perform a check here and assign token to biller id
-	if ok, err := t.ValidateToken(queries.Token, provider); !ok {
+	if ok, err := t.ValidateToken(queries.Token, provider); !ok && err != nil {
 		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=token_not_found")
 			return
@@ -1269,6 +1269,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	if data.CardNumber == "" {
 		bill.ServiceProviderId = data.EBSBiller
 		p = bill
+		url = ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint
 	} else {
 		pp.ToCard = data.CardNumber
 		p = pp
@@ -1486,7 +1487,7 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 func (s *Service) CreateMerchant(c *gin.Context) {
 
 	var m merchant.Merchant // we gonna need to initialize this dude
-	if err := c.ShouldBindJSON(&m); err != nil {
+	if err := c.ShouldBind(&m); err != nil {
 		verr := ebs_fields.ValidationError{Code: "request_error", Message: err.Error()}
 		c.JSON(http.StatusBadRequest, verr)
 		return
@@ -1504,17 +1505,19 @@ func (s *Service) CreateMerchant(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, verr)
 		return
 	}
-	m.Password = string(password)
-	if err := m.Write(); err != nil {
-		verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, verr)
-		return
-	}
 
+	// store in redis first, then commit to DB..
 	p := NewPayment(s.Redis) // this introduces issues...
 
 	if err := p.FromMobile(id, m.Merchant); err != nil {
 		verr := ebs_fields.ValidationError{Code: "billers_err", Message: err.Error()}
+		c.JSON(http.StatusBadRequest, verr)
+		return
+	}
+
+	m.Password = string(password)
+	if err := m.Write(); err != nil {
+		verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
 		c.JSON(http.StatusBadRequest, verr)
 		return
 	}
