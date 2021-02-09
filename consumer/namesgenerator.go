@@ -3,6 +3,7 @@ package consumer // import "github.com/docker/docker/pkg/namesgenerator"
 import (
 	"fmt"
 	"math/rand"
+	"time"
 )
 
 var (
@@ -849,4 +850,8 @@ begin:
 		name = fmt.Sprintf("%s%d", name, rand.Intn(10))
 	}
 	return name
+}
+
+func init() {
+	rand.Seed(time.Now().Unix())
 }

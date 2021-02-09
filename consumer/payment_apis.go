@@ -1495,7 +1495,7 @@ func (s *Service) CreateMerchant(c *gin.Context) {
 
 	m.SetDB(s.Db)
 
-	id := GetRandomName(0)
+	id := GetRandomName(1)
 	log.Printf("the name is: %v", id)
 	m.MerchantID = id
 
