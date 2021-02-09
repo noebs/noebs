@@ -1,6 +1,8 @@
 package merchant
 
 import (
+	"log"
+
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
@@ -62,6 +64,10 @@ func (m *Merchant) authenticate(password string) error {
 }
 
 func (m *Merchant) Write() error {
+	if err := m.db.AutoMigrate(m).Error; err != nil {
+		log.Printf("error in migration: %v", err)
+		// return err
+	}
 
 	if err := m.db.DB().Ping(); err != nil {
 		m.log.Printf("Error in pinging: %v", err)
