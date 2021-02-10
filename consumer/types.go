@@ -520,7 +520,7 @@ func (p *paymentTokens) GetToken(id string) (bool, error) {
 }
 
 func (p *paymentTokens) invalidate(id string) error {
-	if _, err := p.redisClient.Del(id).Result(); err != nil {
+	if _, err := p.redisClient.Del("key_" + id).Result(); err != nil {
 		return err
 	}
 	return nil
