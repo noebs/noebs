@@ -168,6 +168,7 @@ func GetMainEngine() *gin.Engine {
 }
 
 func init() {
+	database.LogMode(true)
 	database.AutoMigrate(&dashboard.Transaction{})
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()

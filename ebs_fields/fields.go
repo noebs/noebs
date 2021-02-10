@@ -455,7 +455,7 @@ type Merchant struct {
 	MerchantID           string `json:"merchant_id" form:"merchant_id" gorm:"index"`
 	MerchantName         string `json:"name" form:"name" binding:"required" gorm:"column:name"`
 	MerchantCity         string `json:"city" form:"city" binding:"required" gorm:"column:city"`
-	MerchantMobileNumber string `json:"mobile" form:"mobile" binding:"required,max=10" gorm:"uniqueIndex,column:mobile"`
+	MerchantMobileNumber string `json:"mobile" form:"mobile" binding:"required,max=10" gorm:"column:mobile; index:,unqiue"`
 	IDType               int    `json:"id_type" form:"id_type" binding:"required" gorm:"column:id_type"`
 	IDNo                 string `json:"id_no" form:"id_no" binding:"required" gorm:"column:id_no"`
 	TerminalID           string `json:"-" gorm:"-"`

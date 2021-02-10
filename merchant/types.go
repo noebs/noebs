@@ -13,15 +13,16 @@ import (
 type Merchant struct {
 	gorm.Model
 	ebs_fields.Merchant
-	db  *gorm.DB
-	log *logrus.Logger
+
+	db  *gorm.DB       `gorm:"-`
+	log *logrus.Logger `gorm:"-`
 }
 
 //Init populates merchant with db pointer
 func (m *Merchant) Init(db *gorm.DB, log *logrus.Logger) {
 	m.db = db
 	m.log = log
-	m.db.AutoMigrate()
+	m.db.AutoMigrate(m)
 }
 
 //SetDB assigns db to merchant instance
@@ -69,17 +70,8 @@ func (m *Merchant) Write() error {
 		// return err
 	}
 
-	if err := m.db.DB().Ping(); err != nil {
-		m.log.Printf("Error in pinging: %v", err)
-		return err
-	}
-	if err := m.db.AutoMigrate(m).Error; err != nil {
-		m.log.Printf("error in writing model: :%v", err)
-		return err
-	}
-
 	if err := m.db.Create(m).Error; err != nil {
-		m.log.Printf("error in writing model: :%v", err)
+		// m.log.Printf("error in writing model: :%v", err)
 		return err
 	}
 	return nil
