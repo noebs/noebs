@@ -49,7 +49,8 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.POST("/qr_payment", s.QRPayment)
 		cv1.POST("/generate_ipin", s.GenerateIpin)
 		cv1.POST("/complete_ipin", s.CompleteIpin)
-		cv1.POST("/payment_token/*payment", s.GeneratePaymentToken)
+		cv1.POST("/payment_token/:payment", s.GeneratePaymentToken)
+		cv1.POST("/payment_token", s.GeneratePaymentToken) // specific to sahil
 		cv1.POST("/payment/:uuid", s.SpecialPayment)
 		cv1.GET("/payment/:uuid", s.GetPaymentToken)
 		cv1.GET("/merchant/i", s.BillerTrans)
