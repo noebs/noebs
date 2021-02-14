@@ -1295,9 +1295,13 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
 
+	var isSuccess bool
+	if ebsErr == nil {
+		isSuccess = true
+	}
 	// mask the pan
 	res.MaskPAN()
-	pt := &billerForm{ID: queries.ID, EBS: res.GenericEBSResponseFields, Token: queries.Token}
+	pt := &billerForm{ID: queries.ID, EBS: res.GenericEBSResponseFields, Token: queries.Token, IsSuccessful: isSuccess}
 
 	t.addTrans(provider, pt)
 
@@ -1308,8 +1312,6 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	transaction.EBSServiceName = "special_payment"
 	//FIXME #73 attempting to write a read-only database
 	s.Db.Table("transactions").Create(&transaction)
-
-	var isSuccess bool
 
 	// we send a push request here...
 	// TODO(adonese): make a function to generate texts here
