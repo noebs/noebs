@@ -1178,6 +1178,141 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"result": t, "uuid": t.UUID})
 }
 
+//UpdateCashout to register a new cashout biller in noebs
+func (s *Service) UpdateCashout(c *gin.Context) {
+
+	var t paymentTokens
+	t.redisClient = s.Redis
+
+	var csh cashoutFields
+
+	if err := c.ShouldBindJSON(&csh); err != nil {
+		ve := validationError{Message: err.Error(), Code: "csh_err"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+	log.Printf("the request is: %#v", csh)
+
+	if csh.Name == "" {
+		ve := validationError{Message: "Empty namespace", Code: "csh_err"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+	if err := t.UpdateCashOut(csh.Name, csh); err != nil {
+		ve := validationError{Message: err.Error(), Code: "csh_err"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"profile": csh})
+	return
+}
+
+//RegisterCashout to register a new cashout biller in noebs
+func (s *Service) RegisterCashout(c *gin.Context) {
+
+	var t paymentTokens
+	t.redisClient = s.Redis
+
+	var csh cashoutFields
+
+	if err := c.ShouldBindJSON(&csh); err != nil {
+		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	if err := t.AddCashOut(csh.Name, csh); err != nil {
+		ve := validationError{Message: err.Error(), Code: "csh_err"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	return
+}
+
+//GenerateCashoutClaim generates a new cashout claim. Used by merchant to issue a new claim
+func (s *Service) GenerateCashoutClaim(c *gin.Context) {
+	var t paymentTokens
+	t.redisClient = s.Redis
+
+	var csh cashout
+
+	if err := c.ShouldBindJSON(&csh); err != nil {
+		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	namespace := c.Param("biller")
+	if namespace == "" {
+		ve := validationError{Message: "namespace not provided", Code: "required_fields_missing"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	t.ID = csh.ID
+	t.Amount = float32(csh.Amount)
+
+	id, err := t.NewCashout(namespace)
+	if err != nil {
+		log.Printf("Error in addToken: %v", err)
+		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+	if err := t.setAmount(namespace, id, csh.Amount); err != nil {
+		log.Printf("Error in addToken: %v", err)
+		ve := validationError{Message: err.Error(), Code: "unable to set amount"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"result": id, "uuid": id})
+}
+
+//CashoutClaims used by merchants to make a cashout
+func (s *Service) CashoutClaims(c *gin.Context) {
+	var t paymentTokens
+	t.redisClient = s.Redis
+
+	var csh cashout
+
+	ns := c.Param("biller")
+	if err := c.ShouldBindJSON(&csh); err != nil {
+		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
+		c.JSON(http.StatusBadRequest, ve)
+		return
+	}
+
+	t.ID = csh.ID
+	t.Amount = float32(csh.Amount)
+	// this block here can be made into a func
+	{
+		if !t.cshExists(ns, csh.ID) {
+			ve := validationError{Message: "namespace/id doesn't exist", Code: "required_fields_missing"}
+			c.JSON(http.StatusBadRequest, ve)
+			return
+		}
+
+		// if t.isDone(ns, t.ID) {
+		// 	ve := validationError{Message: "payment done", Code: "duplicate_claim"}
+		// 	c.JSON(http.StatusBadRequest, ve)
+		// 	return
+		// }
+
+		t.markDone(ns, csh.ID)
+	}
+
+	// am gonna need to send in more data here
+	// i don't want to take a whopping penis with me
+	tt := paymentTokens{redisClient: t.redisClient}
+	go tt.cashOutClaims(ns, csh.ID, csh.Card) // this should work. eh?
+
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+}
+
 //GetPaymentToken retrieves a generated payment token by ID (UUID)
 func (s *Service) GetPaymentToken(c *gin.Context) {
 	id := c.Param("uuid")

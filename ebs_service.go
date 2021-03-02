@@ -162,7 +162,6 @@ func GetMainEngine() *gin.Engine {
 	mGroup.POST("/login", merchantServices.Login)
 	mGroup.POST("/m", merchantServices.AddBilling)
 	mGroup.PUT("/update", merchantServices.Update)
-
 	consumer.Routes("/v1", route, database, redisClient)
 	return route
 }
@@ -191,7 +190,11 @@ func init() {
 // @in header
 func main() {
 
+	csh := consumer.NewCashout(redisClient)
+
+	go csh.CashoutPub() // listener for noebs cashouts.
 	go consumer.BillerHooks()
+
 	go handleChan(redisClient)
 	//FIXME #65 handle errors in go routine
 

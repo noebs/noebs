@@ -58,6 +58,12 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.GET("/info", s.info)
 		cv1.POST("/info", s.info)
 
+		//cashout creation services
+		cv1.POST("/cashout/register", s.RegisterCashout) //register biller as accepting cashouts
+		cv1.POST("/cashout/profile", s.UpdateCashout)
+		cv1.POST("/cashout/generate/:biller", s.GenerateCashoutClaim) //returns uuid to be used by merchant, in /cashout/claims
+		cv1.POST("/cashout/claim/:biller", s.CashoutClaims)           // performs payment
+
 		cv1.POST("/qr_refund", s.QRRefund)
 		cv1.POST("/card_info", s.EbsGetCardInfo)
 		cv1.POST("/pan_from_mobile", s.GetMSISDNFromCard)

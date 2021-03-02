@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -24,6 +25,17 @@ type specialPaymentQueries struct {
 	IsJSON   bool   `form:"json,omitempty"`
 	Referer  string `form:"to,default=https://sahil2.soluspay.net"`
 	HooksURL string `form:"hooks,default=https://sahil2.soluspay.net"`
+}
+
+type cashoutFields struct {
+	Name     string     `json:"name" binding:"required"`
+	Endpoint string     `json:"endpoint" binding:"required"`
+	Consent  bool       `json:"consent"`
+	Pan      string     `json:"pan"`
+	ExpDate  string     `json:"expDate"`
+	Ipin     string     `json:"ipin"`
+	Amount   int        `json:"amount"`
+	Biller   billerForm `json:"detailed"` // this is to embed ebs response inside the cashout. Could be a terrible idea
 }
 
 type billerForm struct {
@@ -74,6 +86,12 @@ func notEbs(pan string) bool {
 
 	re := regexp.MustCompile(`(^639186|^639256|^639184|^639330)`)
 	return re.Match([]byte(pan))
+}
+
+type cashout struct {
+	Amount int    `json:"amount" binding:"required"`
+	ID     string `json:"id" binding:"required"`
+	Card   string `json:"pan"`
 }
 
 //FIXME #62 make sure to add redisClient here
@@ -460,6 +478,174 @@ func (p *paymentTokens) fromRedis(id string) (string, error) {
 
 	p.ID = res[0].(string)
 	return p.ID, nil
+}
+
+func (p *paymentTokens) GetCashOut(namespace string) (cashoutFields, error) {
+
+	var bill cashoutFields
+
+	if !p.nsExists(namespace) {
+		return bill, errors.New("not_found")
+	}
+	data, err := p.redisClient.HGet("cashout:billers:"+namespace, "info").Result()
+	if err != nil {
+		return bill, err
+	}
+	json.Unmarshal([]byte(data), &bill)
+
+	return bill, nil
+
+}
+
+//UpdateCashOut implements read / write over cash out data
+func (p *paymentTokens) UpdateCashOut(namespace string, f cashoutFields) error {
+
+	var bill cashoutFields
+
+	log.Printf("namespace is: %v", namespace)
+	data, err := p.redisClient.HGet("cashout:billers:"+namespace, "info").Result()
+	if err != nil {
+		log.Printf("error in getting previous results: %v", err)
+		return err
+	}
+	if err := json.Unmarshal([]byte(data), &bill); err != nil {
+		return err
+	}
+
+	if f.Pan != "" {
+		bill.Pan = f.Pan
+	}
+	if f.ExpDate != "" {
+		bill.ExpDate = f.ExpDate
+	}
+	if f.Ipin != "" {
+		bill.Ipin = f.Ipin
+	}
+	if f.Endpoint != "" {
+		bill.Endpoint = f.Endpoint
+	}
+
+	res, err := json.Marshal(&bill)
+	if err != nil {
+		log.Printf("error in remarshaling: %v", err)
+		return err
+	}
+
+	if _, err := p.redisClient.HSet("cashout:billers:"+namespace, "info", res).Result(); err != nil {
+		log.Printf("error in storing data: %v", err)
+		return err
+	}
+	return nil
+
+}
+
+func (p *paymentTokens) AddCashOut(namespace string, data cashoutFields) error {
+	if p.nsExists(namespace) {
+		return errors.New("item_exists")
+	} else {
+		p.redisClient.SAdd("noebs:cashouts", namespace)
+		d, _ := json.Marshal(&data)
+		if _, err := p.redisClient.HSet("cashout:billers:"+namespace, "info", d).Result(); err != nil {
+			log.Printf("Error in storing hash: %v", err)
+			return err
+		}
+		return nil
+	}
+}
+
+func (p *paymentTokens) nsExists(ns string) bool {
+	if found, _ := p.redisClient.SIsMember("noebs:cashouts", ns).Result(); found {
+		return true
+	}
+	return false
+}
+
+func (p *paymentTokens) cshExists(ns, token string) bool {
+	if found, _ := p.redisClient.SIsMember("cashout:"+ns, token).Result(); found {
+		return true
+	}
+	return false
+}
+
+func (p *paymentTokens) addCsh(ns, token string) error {
+	if _, err := p.redisClient.SAdd("cashout:"+ns, token).Result(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *paymentTokens) markDone(ns, id string) error {
+	if _, err := p.redisClient.SAdd("tasks:"+ns, id).Result(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *paymentTokens) isDone(ns, id string) bool {
+	if found, _ := p.redisClient.SIsMember("tasks:"+ns, id).Result(); found {
+		return true
+	}
+	return false
+}
+
+//getAmount associated with cashout claim
+func (p *paymentTokens) getAmount(ns, token string) (int, error) {
+
+	if d, err := p.redisClient.HGet("cashouts:amounts"+ns, token).Result(); err != nil {
+		return 0, err
+	} else {
+		amount, _ := strconv.ParseInt(d, 10, 0)
+		return int(amount), nil
+	}
+
+}
+
+//getAmount associated with cashout claim
+func (p *paymentTokens) setAmount(ns, token string, amount int) error {
+	if _, err := p.redisClient.HSet("cashouts:amounts"+ns, token, amount).Result(); err != nil {
+		return err
+	} else {
+		return nil
+	}
+}
+
+func (p *paymentTokens) setCash(ns, key string, card ebs_fields.CardsRedis) error {
+	id, _ := json.Marshal(&card)
+	if _, err := p.redisClient.HSet("cashouts:"+ns, key, id).Result(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *paymentTokens) getCash(ns, key string) (ebs_fields.CardsRedis, error) {
+	var cards ebs_fields.CardsRedis
+	if d, err := p.redisClient.HGet("cashouts:"+ns, key).Result(); err != nil {
+		return cards, err
+	} else {
+		json.Unmarshal([]byte(d), &cards)
+		return cards, err
+	}
+
+}
+
+func (p *paymentTokens) verifyCash() bool {
+	if p.Amount == 0 || p.Name == "" {
+		return false
+	}
+	return true
+}
+
+//NewCashout generates a new cashout item in noebs
+func (p *paymentTokens) NewCashout(namespace string) (string, error) {
+
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return "", err
+	}
+	if err := p.addCsh(namespace, id.String()); err != nil {
+		return "", err
+	}
+	return id.String(), nil
 }
 
 //NewToken assigns a new token to an existing namespace (merchant, or biller id). It should fail for non-existing

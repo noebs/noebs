@@ -3,14 +3,19 @@ package consumer
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/google/uuid"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
+	"github.com/noebs/ipin"
 	"github.com/sirupsen/logrus"
 )
 
@@ -379,5 +384,168 @@ func BillerHooks() {
 				log.Printf("the error is: %v", err)
 			}
 		}
+	}
+}
+
+//cashOutClaim used
+func (p *paymentTokens) cashOutClaims(ns, id, toCard string) error {
+
+	token, _ := uuid.NewRandom()
+	log.Printf("the ns is: %v - id is: %v", ns, id)
+	card, err := p.GetCashOut(ns)
+	log.Printf("The card info is: %#v", card)
+
+	if err != nil {
+		log.Printf("error in cashout: %v", err)
+		return err
+	}
+	ipinBlock, err := ipin.Encrypt("MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ==", card.Ipin, token.String())
+	if err != nil {
+		log.Printf("error in encryption: %v", err)
+		return err
+	}
+
+	amount, err := p.getAmount(ns, id)
+	if err != nil {
+		log.Printf("error in cashout amount: %v", err)
+		return err
+	}
+
+	data := ebs_fields.ConsumerCardTransferFields{
+		ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
+			ApplicationId: "ACTSCon",
+			TranDateTime:  "022821135300",
+			UUID:          token.String(), // this is *WRONG*
+		},
+		ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
+			Pan:     card.Pan,
+			Ipin:    ipinBlock,
+			ExpDate: card.ExpDate,
+		},
+		AmountFields: ebs_fields.AmountFields{
+			TranAmount:       float32(amount), // it should be populated
+			TranCurrencyCode: "SDG",
+		},
+		ToCard: toCard,
+	}
+
+	log.Printf("the request is: %v", data)
+	req, _ := json.Marshal(&data)
+
+	res, err := http.Post("http://localhost:8080/consumer/p2p", "application/json", bytes.NewBuffer(req))
+	if err != nil {
+		log.Printf("Error in response: %v", err)
+		return err
+	}
+	success := res.StatusCode == 200
+
+	resData, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Printf("Error in reading noebs response: %v", err)
+		return err
+	}
+
+	log.Printf("the response is: %v", string(resData))
+
+	// now we gotta marshal the response smh
+	defer res.Body.Close()
+
+	card.Biller = billerForm{IsSuccessful: success, ID: string(resData)}
+	msg, err := json.Marshal(&card)
+	if err != nil {
+		log.Printf("Error in parsing marshal: %v", err)
+		return err
+	}
+
+	// now use pub sub
+
+	{
+		pubsub := p.redisClient.Subscribe("chan_cashouts")
+
+		// Wait for confirmation that subscription is created before publishing anything.
+		_, err := pubsub.Receive()
+		if err != nil {
+			log.Printf("Error in pubsub: %v", err)
+			return err
+		}
+
+		// Publish a message.
+		err = p.redisClient.Publish("chan_cashouts", msg).Err() // So, we are currently just pushing to the data
+		if err != nil {
+			log.Printf("Error in pubsub: %v", err)
+			return err
+		}
+
+		time.AfterFunc(time.Second, func() {
+			// When pubsub is closed channel is closed too.
+			_ = pubsub.Close()
+		})
+	}
+
+	return nil
+}
+
+//NewCashout experimental interface to make cashout publicaly availabe.
+func NewCashout(r *redis.Client) paymentTokens {
+	return paymentTokens{redisClient: r}
+}
+
+//pub experimental support to add pubsub support
+// we need to make this api public
+func (p *paymentTokens) CashoutPub() {
+	pubsub := p.redisClient.Subscribe("chan_cashouts")
+
+	// Wait for confirmation that subscription is created before publishing anything.
+	_, err := pubsub.Receive()
+	if err != nil {
+		panic(err)
+	}
+
+	// // Go channel which receives messages.
+	ch := pubsub.Channel()
+
+	// Consume messages.
+	var card cashoutFields
+	for msg := range ch {
+		// So this is how we gonna do it! So great!
+		// we have to parse the payload here:
+		if err := json.Unmarshal([]byte(msg.Payload), &card); err != nil {
+			log.Printf("Error in marshaling data: %v", err)
+			continue
+		}
+
+		data, err := json.Marshal(&card)
+		if err != nil {
+			log.Printf("Error in marshaling response: %v", err)
+			continue
+		}
+		_, err = http.Post(card.Endpoint, "application/json", bytes.NewBuffer(data))
+		if err != nil {
+			log.Printf("Error in response: %v", err)
+		}
+		fmt.Println(msg.Channel, msg.Payload)
+	}
+}
+
+func (p *paymentTokens) pubSub(channel string, message interface{}) {
+	pubsub := p.redisClient.Subscribe(channel)
+
+	// Wait for confirmation that subscription is created before publishing anything.
+	_, err := pubsub.Receive()
+	if err != nil {
+		panic(err)
+	}
+
+	// // Go channel which receives messages.
+	ch := pubsub.Channel()
+
+	time.AfterFunc(time.Second, func() {
+		// When pubsub is closed channel is closed too.
+		_ = pubsub.Close()
+	})
+
+	// Consume messages.
+	for msg := range ch {
+		fmt.Println(msg.Channel, msg.Payload)
 	}
 }
