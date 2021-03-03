@@ -28,14 +28,14 @@ type specialPaymentQueries struct {
 }
 
 type cashoutFields struct {
-	Name     string   `json:"name" binding:"required"`
-	Endpoint string   `json:"endpoint" binding:"required"`
-	Consent  bool     `json:"consent"`
-	Pan      string   `json:"pan"`
-	ExpDate  string   `json:"expDate"`
-	Ipin     string   `json:"ipin"`
-	Amount   int      `json:"amount"`
-	Biller   response `json:"details"` // this is to embed ebs response inside the cashout. Could be a terrible idea
+	Name     string   `json:"name,omitempty" binding:"required"`
+	Endpoint string   `json:"endpoint,omitempty" binding:"required"`
+	Consent  bool     `json:"consent,omitempty"`
+	Pan      string   `json:"pan,omitempty"`
+	ExpDate  string   `json:"expDate,omitempty"`
+	Ipin     string   `json:"ipin,omitempty"`
+	Amount   int      `json:"amount,omitempty"`
+	Biller   response `json:"details,omitempty"` // this is to embed ebs response inside the cashout. Could be a terrible idea
 }
 
 type billerForm struct {

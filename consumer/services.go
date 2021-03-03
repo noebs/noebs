@@ -454,9 +454,9 @@ func (p *paymentTokens) cashOutClaims(ns, id, toCard string) error {
 
 	// now we gotta marshal the response smh
 	defer res.Body.Close()
+	cardRes := cashoutFields{Biller: parser, Amount: card.Amount, Name: card.Name}
 
-	card.Biller = parser
-	msg, err := json.Marshal(&card)
+	msg, err := json.Marshal(&cardRes)
 	if err != nil {
 		log.Printf("Error in parsing marshal: %v", err)
 		return err
