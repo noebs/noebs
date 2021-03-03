@@ -1286,6 +1286,7 @@ func (s *Service) CashoutClaims(c *gin.Context) {
 		return
 	}
 
+	log.Printf("the id is: %v", csh.ID)
 	t.ID = csh.ID
 	t.Amount = float32(csh.Amount)
 	// this block here can be made into a func
@@ -1296,11 +1297,11 @@ func (s *Service) CashoutClaims(c *gin.Context) {
 			return
 		}
 
-		// if t.isDone(ns, t.ID) {
-		// 	ve := validationError{Message: "payment done", Code: "duplicate_claim"}
-		// 	c.JSON(http.StatusBadRequest, ve)
-		// 	return
-		// }
+		if t.isDone(ns, t.ID) {
+			ve := validationError{Message: "payment done", Code: "duplicate_claim"}
+			c.JSON(http.StatusBadRequest, ve)
+			return
+		}
 
 		t.markDone(ns, csh.ID)
 	}

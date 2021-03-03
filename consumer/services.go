@@ -437,7 +437,6 @@ func (p *paymentTokens) cashOutClaims(ns, id, toCard string) error {
 		log.Printf("Error in response: %v", err)
 		return err
 	}
-	success := res.StatusCode == 200
 
 	resData, err := ioutil.ReadAll(res.Body)
 	if err != nil {
@@ -447,10 +446,16 @@ func (p *paymentTokens) cashOutClaims(ns, id, toCard string) error {
 
 	log.Printf("the response is: %v", string(resData))
 
+	parser, err := newFromBytes(resData, res.StatusCode)
+	if err != nil {
+		log.Printf("Error in reading noebs response: %v", err)
+		return err
+	}
+
 	// now we gotta marshal the response smh
 	defer res.Body.Close()
 
-	card.Biller = billerForm{IsSuccessful: success, ID: string(resData)}
+	card.Biller = parser
 	msg, err := json.Marshal(&card)
 	if err != nil {
 		log.Printf("Error in parsing marshal: %v", err)

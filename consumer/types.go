@@ -28,14 +28,14 @@ type specialPaymentQueries struct {
 }
 
 type cashoutFields struct {
-	Name     string     `json:"name" binding:"required"`
-	Endpoint string     `json:"endpoint" binding:"required"`
-	Consent  bool       `json:"consent"`
-	Pan      string     `json:"pan"`
-	ExpDate  string     `json:"expDate"`
-	Ipin     string     `json:"ipin"`
-	Amount   int        `json:"amount"`
-	Biller   billerForm `json:"detailed"` // this is to embed ebs response inside the cashout. Could be a terrible idea
+	Name     string   `json:"name" binding:"required"`
+	Endpoint string   `json:"endpoint" binding:"required"`
+	Consent  bool     `json:"consent"`
+	Pan      string   `json:"pan"`
+	ExpDate  string   `json:"expDate"`
+	Ipin     string   `json:"ipin"`
+	Amount   int      `json:"amount"`
+	Biller   response `json:"details"` // this is to embed ebs response inside the cashout. Could be a terrible idea
 }
 
 type billerForm struct {
@@ -720,4 +720,57 @@ type validationError struct {
 func (ve *validationError) marshal() []byte {
 	d, _ := json.Marshal(ve)
 	return d
+}
+
+type response struct {
+	Response string    `json:"response"`
+	Code     int       `json:"code"`
+	Time     time.Time `json:"time"`
+	Amount   int       `json:"amount"`
+}
+
+type genErr struct {
+	Message string                              `json:"message,omitempty"`
+	Code    int                                 `json:"code,omitempty"`
+	Status  string                              `json:"status,omitempty"`
+	Details ebs_fields.GenericEBSResponseFields `json:"details,omitempty"`
+}
+
+func newFromBytes(d []byte, code int) (response, error) {
+	// TODO add handler for 400 errors
+
+	if code == 200 {
+		var dd map[string]ebs_fields.EBSParserFields
+		if err := json.Unmarshal(d, &dd); err != nil {
+			return response{}, err
+		}
+		return response{Code: dd["ebs_response"].ResponseCode,
+			Response: dd["ebs_response"].ResponseMessage,
+			Time:     time.Time{},
+			Amount:   int(dd["ebs_response"].TranAmount),
+		}, nil
+		// now we gonna parse the response somewhere
+	} else if code == 400 {
+		return response{
+			Code:     69,
+			Response: "Generic Error",
+		}, nil
+	} else if code == 502 {
+		var dd genErr
+		if err := json.Unmarshal(d, &dd); err != nil {
+			return response{}, err
+		}
+		c := dd.Details.ResponseCode
+		m := dd.Details.ResponseMessage
+		return response{Code: c,
+			Response: m,
+			Time:     time.Time{},
+			Amount:   0}, nil
+
+	} else {
+		return response{
+			Code:     69,
+			Response: "Generic Error",
+		}, nil
+	}
 }
