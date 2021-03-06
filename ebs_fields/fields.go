@@ -465,6 +465,8 @@ type Merchant struct {
 	BillerID             string `json:"biller_id"`
 	EBSBiller            string `json:"ebs_biller"`
 	CardNumber           string `json:"card" gorm:"column:card"`
+	Hooks                string `json:"hooks" gorm:"hooks"`
+	URL                  string `json:"url" gorm:"url"`
 }
 
 type mLabel struct {

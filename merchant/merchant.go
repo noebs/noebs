@@ -1,6 +1,7 @@
 package merchant
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -29,7 +30,8 @@ func (m Merchant) AddBilling(c *gin.Context) {
 
 //Update to a specific biller ID via `MerchantMobileNumber`
 func (m Merchant) Update(c *gin.Context) {
-	c.BindJSON(&m)
+	c.ShouldBindJSON(&m)
+	log.Printf("The merchant is: %#v", m)
 	if m.BillerID == "" {
 		verr := ebs_fields.ValidationError{Code: "not_found", Message: "empty_biller"}
 		c.JSON(http.StatusBadRequest, verr)
@@ -37,13 +39,15 @@ func (m Merchant) Update(c *gin.Context) {
 	}
 
 	//TODO(adonese): omit fields in update. Could be dangerous.
-	if err := m.db.Table("merchants").Where("biller_id = ?", m.BillerID).Update(&m).Error; err != nil {
+	if err := m.db.Model(&Merchant{}).Omit("mobile", "merchant_id", "password", "biller_id").Where("biller_id = ?", m.BillerID).Updates(m).Error; err != nil {
 		verr := ebs_fields.ValidationError{Code: "not_found", Message: err.Error()}
+
 		c.JSON(http.StatusBadRequest, verr)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+
 }
 
 //GetMerchant from existing merchants in noebs

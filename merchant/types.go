@@ -1,3 +1,4 @@
+// Package merchant represents our merchant apis and especially types.
 package merchant
 
 import (
@@ -14,8 +15,8 @@ type Merchant struct {
 	gorm.Model
 	ebs_fields.Merchant
 
-	db  *gorm.DB       `gorm:"-`
-	log *logrus.Logger `gorm:"-`
+	db  *gorm.DB
+	log *logrus.Logger
 }
 
 //Init populates merchant with db pointer
