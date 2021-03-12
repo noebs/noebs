@@ -8,3 +8,4 @@ test1.db
 noebs
 *.exe
 *.db
+ebs_fields/.secrets.json
