@@ -1,6 +1,6 @@
 module github.com/adonese/noebs
 
-go 1.15
+go 1.16
 
 require (
 	github.com/adonese/tokenization v0.0.2

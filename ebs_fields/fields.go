@@ -1,12 +1,18 @@
 package ebs_fields
 
 import (
+	_ "embed"
 	"encoding/json"
 	"regexp"
 	"time"
 
+	_ "embed"
+
 	"github.com/go-playground/validator/v10"
 )
+
+//go:embed .secrets.json
+var secretsFile []byte
 
 type IsAliveFields struct {
 	CommonFields
@@ -687,4 +693,21 @@ type TokenCard struct {
 type ValidationError struct {
 	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
+}
+
+type NoebsConfig struct {
+	OneSigna string `json:"onesignal_key"`
+	SMS      string `json:"sms_key"`
+}
+
+var SecretConfig NoebsConfig
+
+func init() {
+
+	if err := json.Unmarshal(secretsFile, &SecretConfig); err != nil {
+		log.Printf("Error in parsing config files: %v", err)
+	} else {
+		log.Printf("the data is: %v", SecretConfig)
+	}
+
 }
