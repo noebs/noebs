@@ -65,10 +65,23 @@ func (m Merchant) GetMerchant(c *gin.Context) {
 
 // Login creates new noebs merchant
 func (m Merchant) Login(c *gin.Context) {
-	if err := c.ShouldBindJSON(&m); err != nil {
-		verr := ebs_fields.ValidationError{Code: "request_error", Message: err.Error()}
+	c.ShouldBindJSON(&m)
+
+	if m.Password == "" || m.MerchantID == "" || m.MerchantMobileNumber == "" {
+		verr := ebs_fields.ValidationError{Code: "request_error", Message: "missing_fields"}
 		c.JSON(http.StatusBadRequest, verr)
 		return
+	}
+
+	// FIXME
+	if m.MerchantMobileNumber != "" {
+		merchant, err := m.getMobile(m.MerchantMobileNumber)
+		if err != nil {
+			verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
+			c.JSON(http.StatusBadRequest, verr)
+			return
+		}
+		c.JSON(http.StatusCreated, merchant)
 	}
 	merchant, err := m.get(m.MerchantID)
 	if err != nil {
