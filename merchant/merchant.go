@@ -67,7 +67,7 @@ func (m Merchant) GetMerchant(c *gin.Context) {
 func (m Merchant) Login(c *gin.Context) {
 	c.ShouldBindJSON(&m)
 
-	if m.Password == "" || m.MerchantID == "" || m.MerchantMobileNumber == "" {
+	if m.Password == "" || m.MerchantID == "" && m.MerchantMobileNumber == "" {
 		verr := ebs_fields.ValidationError{Code: "request_error", Message: "missing_fields"}
 		c.JSON(http.StatusBadRequest, verr)
 		return
