@@ -81,7 +81,8 @@ func (m Merchant) Login(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, verr)
 			return
 		}
-		c.JSON(http.StatusCreated, merchant)
+		c.JSON(http.StatusOK, merchant)
+		return
 	}
 	merchant, err := m.get(m.MerchantID)
 	if err != nil {
@@ -89,5 +90,5 @@ func (m Merchant) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, verr)
 		return
 	}
-	c.JSON(http.StatusCreated, merchant)
+	c.JSON(http.StatusOK, merchant)
 }
