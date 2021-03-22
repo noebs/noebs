@@ -503,7 +503,8 @@ func (p *paymentTokens) CashoutPub() {
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive()
 	if err != nil {
-		panic(err)
+		log.Printf("There is an error in connecting to chan.")
+		return
 	}
 
 	// // Go channel which receives messages.
