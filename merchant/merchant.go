@@ -39,7 +39,7 @@ func (m Merchant) Update(c *gin.Context) {
 	}
 
 	//TODO(adonese): omit fields in update. Could be dangerous.
-	if err := m.db.Model(&Merchant{}).Omit("mobile", "merchant_id", "password", "biller_id").Where("biller_id = ?", m.BillerID).Updates(m).Error; err != nil {
+	if err := m.db.Model(&Merchant{}).Omit("mobile", "merchant_id", "password", "biller_id").Where("merchant_id = ?", m.MerchantID).Updates(m).Error; err != nil {
 		verr := ebs_fields.ValidationError{Code: "not_found", Message: err.Error()}
 
 		c.JSON(http.StatusBadRequest, verr)
