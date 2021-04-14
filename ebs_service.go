@@ -76,6 +76,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/isAlive", IsAlive)
 	route.POST("/balance", Balance)
 	route.POST("/refund", Refund)
+	route.POST("/toAccount", ToAccount)
 
 	route.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
@@ -1096,6 +1097,74 @@ func CashIn(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.CashInFields{}
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.CashInTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+// CashIn godoc
+// @Summary Get all transactions made by a specific terminal ID
+// @Description get accounts
+// @Accept  json
+// @Produce  json
+// @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
+// @Success 200 {object} ebs_fields.GenericEBSResponseFields
+// @Failure 400 {object} http.StatusBadRequest
+// @Failure 404 {object} http.StatusNotFound
+// @Failure 500 {object} http.InternalServerError
+// @Router /cashIn [post]
+//FIXME issue #68
+func ToAccount(c *gin.Context) {
+
+	url := ebs_fields.EBSMerchantIP + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.AccountTransferFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {

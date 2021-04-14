@@ -70,6 +70,13 @@ type CardTransferFields struct {
 	ToCard string `json:"toCard" binding:"required"`
 }
 
+type AccountTransferFields struct {
+	CommonFields
+	CardInfoFields
+	AmountFields
+	ToAccount string `json:"toAccount" binding:"required"`
+}
+
 func (f *CardTransferFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d
