@@ -17,11 +17,12 @@ import (
 )
 
 var log = logrus.New()
+
 type Service struct {
 	Redis *redis.Client
 }
 
-func (s *Service)MerchantViews(c *gin.Context) {
+func (s *Service) MerchantViews(c *gin.Context) {
 	db, _ := utils.Database("sqlite3", "test.db")
 	terminal := c.Param("id")
 
@@ -33,7 +34,7 @@ func (s *Service)MerchantViews(c *gin.Context) {
 	var tran []Transaction
 	db.Table("transactions").Where("id >= ? and terminal_id LIKE ? and approval_code != ?", offset, "%"+terminal+"%", "").Order("id desc").Limit(pageSize).Find(&tran)
 	// get complaints
-	
+
 	com, _ := s.Redis.LRange("complaints", 0, -1).Result()
 
 	var mC []merchantsIssues
@@ -50,7 +51,7 @@ func (s *Service)MerchantViews(c *gin.Context) {
 
 }
 
-func (s *Service)TransactionsCount(c *gin.Context) {
+func (s *Service) TransactionsCount(c *gin.Context) {
 
 	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
@@ -88,7 +89,7 @@ func (s *Service)TransactionsCount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": count})
 }
 
-func (s *Service)TransactionByTid(c *gin.Context) {
+func (s *Service) TransactionByTid(c *gin.Context) {
 
 	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
@@ -123,7 +124,7 @@ func (s *Service)TransactionByTid(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": tran, "count": len(tran)})
 }
 
-func (s *Service)MakeDummyTransaction(c *gin.Context) {
+func (s *Service) MakeDummyTransaction(c *gin.Context) {
 
 	db, _ := gorm.Open("sqlite3", "test.db")
 
@@ -161,7 +162,7 @@ func (s *Service)MakeDummyTransaction(c *gin.Context) {
 			ReferenceNumber:        "",
 			ApprovalCode:           "",
 			VoucherNumber:          0,
-			MiniStatementRecords:   "",
+			MiniStatementRecords:   nil,
 			DisputeRRN:             "",
 			AdditionalData:         "",
 			TranDateTime:           "",
@@ -177,7 +178,7 @@ func (s *Service)MakeDummyTransaction(c *gin.Context) {
 	}
 }
 
-func (s *Service)GetAll(c *gin.Context) {
+func (s *Service) GetAll(c *gin.Context) {
 	db, _ := gorm.Open("sqlite3", "test.db")
 
 	defer db.Close()
@@ -211,7 +212,7 @@ func (s *Service)GetAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
 
-func (s *Service)BrowserDashboard(c *gin.Context) {
+func (s *Service) BrowserDashboard(c *gin.Context) {
 	db, _ := gorm.Open("sqlite3", "test.db")
 
 	defer db.Close()
@@ -272,14 +273,14 @@ func (s *Service)BrowserDashboard(c *gin.Context) {
 		"terminal_fees": terminalFees, "sum_fees": sumFees})
 }
 
-func (s *Service)LandingPage(c *gin.Context) {
+func (s *Service) LandingPage(c *gin.Context) {
 	showForm := true
 	if c.Request.Method == "POST" {
 		var f form
 		err := c.ShouldBind(&f)
 		if err == nil {
 			ua := c.GetHeader("User-Agent")
-				s.Redis.LPush("voices", &f)
+			s.Redis.LPush("voices", &f)
 			s.Redis.LPush("voices:ua", ua)
 			showForm = false
 		}
@@ -288,12 +289,12 @@ func (s *Service)LandingPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
 }
 
-func (s *Service)MerchantRegistration(c *gin.Context) {
+func (s *Service) MerchantRegistration(c *gin.Context) {
 	var f ebs_fields.Merchant
 	if c.Request.Method == "POST" {
 		err := c.ShouldBind(&f)
 		if err == nil {
-				s.Redis.SAdd("merchants:all", f.MerchantName)
+			s.Redis.SAdd("merchants:all", f.MerchantName)
 			s.Redis.HMSet("merchant:"+f.MerchantName, f.ToMap())
 			c.HTML(http.StatusOK, "landing.html", gin.H{"showform": false})
 		} else {
@@ -306,11 +307,11 @@ func (s *Service)MerchantRegistration(c *gin.Context) {
 	}
 }
 
-func (s *Service)IndexPage(c *gin.Context) {
+func (s *Service) IndexPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
 }
 
-func (s *Service)Stream(c *gin.Context) {
+func (s *Service) Stream(c *gin.Context) {
 	var trans []Transaction
 	var stream bytes.Buffer
 
@@ -334,7 +335,7 @@ type purchasesSum map[string]interface{}
 // This endpoint is highly experimental. It has many security issues and it is only
 // used by us for testing and prototyping only. YOU HAVE TO USE PROPER AUTHENTICATION system
 // if you decide to go with it. See apigateway package if you are interested.
-func (s *Service)DailySettlement(c *gin.Context) {
+func (s *Service) DailySettlement(c *gin.Context) {
 	// get the results from DB
 	db, _ := gorm.Open("sqlite3", "test.db")
 	defer db.Close()
@@ -370,7 +371,7 @@ func (s *Service)DailySettlement(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"transactions": listP, "sum": sum, "count": count})
 }
 
-func (s *Service)MerchantTransactionsEndpoint(c *gin.Context) {
+func (s *Service) MerchantTransactionsEndpoint(c *gin.Context) {
 	tid := c.Query("terminal")
 	if tid == "" {
 		// the user didn't sent any id
@@ -378,7 +379,7 @@ func (s *Service)MerchantTransactionsEndpoint(c *gin.Context) {
 			"code": "terminal_id_not_present_in_request"})
 		return
 	}
-	
+
 	v, err := s.Redis.LRange(tid+":purchase", 0, -1).Result()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"result": MerchantTransactions{}})
@@ -397,7 +398,7 @@ func (s *Service)MerchantTransactionsEndpoint(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": p})
 }
 
-func (s *Service)ReportIssueEndpoint(c *gin.Context) {
+func (s *Service) ReportIssueEndpoint(c *gin.Context) {
 	var issue merchantsIssues
 	if err := c.ShouldBindJSON(&issue); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
