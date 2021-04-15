@@ -129,6 +129,14 @@ type VoucherCashOutFields struct {
 	VoucherNumber string `json:"voucherNumber" binding:"required"`
 }
 
+type VoucherCashInFields struct {
+	CommonFields
+	PhoneNumber   string `json:"phoneNumber" binding:"required"`
+	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	ApprovalCode  string `json:"approvalCode" binding:"required"`
+	CardInfoFields
+}
+
 func (f *CashOutFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d

@@ -64,6 +64,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
 	route.POST("/voucher", GenerateVoucher)
+	route.POST("/voucher/cash_in", VoucherCashIn)
 	route.POST("/cashout", VoucherCashOut)
 	route.POST("/purchase", Purchase)
 	route.POST("/cashIn", CashIn)
@@ -970,6 +971,64 @@ func VoucherCashOut(c *gin.Context) {
 	defer db.Close()
 
 	var fields = ebs_fields.VoucherCashOutFields{}
+	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		// God please make it works.
+		db.Create(&transaction)
+		db.Commit()
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+//VoucherCashOut for non-card based transactions
+func VoucherCashIn(c *gin.Context) {
+
+	url := ebs_fields.EBSMerchantIP + ebs_fields.VoucherCashInEndpoint // EBS simulator endpoint url goes here.
+	db, _ := utils.Database("sqlite3", "test.db")
+	defer db.Close()
+
+	var fields = ebs_fields.VoucherCashInFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
