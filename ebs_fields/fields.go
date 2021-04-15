@@ -247,17 +247,17 @@ type GenericEBSResponseFields struct {
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 	UUID        string `json:"UUID,omitempty" form:"UUID"`
 
-	ResponseMessage      string   `json:"responseMessage,omitempty"`
-	ResponseStatus       string   `json:"responseStatus,omitempty"`
-	ResponseCode         int      `json:"responseCode"`
-	ReferenceNumber      string   `json:"referenceNumber,omitempty"`
-	ApprovalCode         string   `json:"approvalCode,omitempty"`
-	VoucherNumber        int      `json:"voucherNumber,omitempty"`
-	MiniStatementRecords string   `json:"miniStatementRecords,omitempty"`
-	DisputeRRN           string   `json:"DisputeRRN,omitempty"`
-	AdditionalData       string   `json:"additionalData,omitempty"`
-	TranDateTime         string   `json:"tranDateTime,omitempty"`
-	TranFee              *float32 `json:"tranFee,omitempty"`
+	ResponseMessage      string                   `json:"responseMessage,omitempty"`
+	ResponseStatus       string                   `json:"responseStatus,omitempty"`
+	ResponseCode         int                      `json:"responseCode"`
+	ReferenceNumber      string                   `json:"referenceNumber,omitempty"`
+	ApprovalCode         string                   `json:"approvalCode,omitempty"`
+	VoucherNumber        int                      `json:"voucherNumber,omitempty"`
+	MiniStatementRecords []map[string]interface{} `json:"miniStatementRecords,omitempty" gorm:"-"`
+	DisputeRRN           string                   `json:"DisputeRRN,omitempty"`
+	AdditionalData       string                   `json:"additionalData,omitempty"`
+	TranDateTime         string                   `json:"tranDateTime,omitempty"`
+	TranFee              *float32                 `json:"tranFee,omitempty"`
 
 	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
 	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
