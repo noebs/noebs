@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/ebs_fields"
 	"math/rand"
+
+	"github.com/adonese/noebs/ebs_fields"
 )
 
 func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields) {
@@ -41,7 +42,7 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 
 	case mockMiniStatementResponse:
 
-		res.MiniStatementRecords = generateMiniStatement()
+		res.MiniStatementRecords = nil
 	}
 
 	//res.ImportantEBSFields = commonFields
