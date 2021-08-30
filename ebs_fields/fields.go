@@ -438,6 +438,34 @@ type ConsumerQRPaymentFields struct {
 	MerchantID string `json:"merchantID" binding:"required"`
 }
 
+type EntityFields struct {
+	EntityID    string `json:"entityId"`    // starts with 249 initials
+	EntityType  string `json:"entityType"`  //defaults to "Phone No"
+	EntityGroup string `json:"entityGroup"` // defaults to 1
+}
+
+//ConsumerRegistrationFields the first step in card issuance
+type ConsumerRegistrationFields struct {
+	ConsumerCommonFields
+	EntityFields
+	RegistrationType string `json:"registrationType"`
+	PhoneNo          string `json:"phoneNo"`
+}
+
+type ConsumerCompleteRegistrationFields struct {
+	ConsumerCommonFields
+	OTP       string `json:"otp" binding:"required"`  // encrypted for fucks sake. fuck ebs
+	IPIN      string `json:"IPIN" binding:"required"` // also encrypted fml forever
+	ExtraInfo string `json:"extraInfo,omitempty"`
+}
+
+type ConsumerGenerateVoucherFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	VoucherNumber string `json:"voucherNumber" binding:"required"`
+}
+
 func (f *ConsumerQRPaymentFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d

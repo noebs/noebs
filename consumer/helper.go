@@ -57,6 +57,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.POST("/cancel", s.CancelBiller)
 		cv1.GET("/info", s.info)
 		cv1.POST("/info", s.info)
+		cv1.POST("/vouchers/generate", s.GenerateVoucher)
 
 		//cashout creation services
 		cv1.POST("/cashout/register", s.RegisterCashout) //register biller as accepting cashouts
@@ -82,6 +83,10 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 
 		cv1.GET("/get_mobile", s.GetMobile)
 		cv1.POST("/add_mobile", s.AddMobile)
+
+		//card issuance specifics
+		cv1.POST("/cards/new", s.RegisterCard)
+		cv1.POST("/cards/complete", s.CompleteRegistration)
 
 		cv1.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})

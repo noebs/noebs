@@ -52,23 +52,28 @@ const (
 )
 
 const (
-	ConsumerIsAliveEndpoint      = "isAlive"
-	ConsumerWorkingKeyEndpoint   = "getPublicKey"
-	ConsumerBalanceEndpoint      = "getBalance"
-	ConsumerBillInquiryEndpoint  = "getBill"
-	ConsumerBillPaymentEndpoint  = "payment"
-	ConsumerCardTransferEndpoint = "doCardTransfer"
-	ConsumerPayeesListEndpoint   = "getPayeesList"
-	ConsumerChangeIPinEndpoint   = "changeIPin"
-	ConsumerPurchaseEndpoint     = "specialPayment"
-	ConsumerStatusEndpoint       = "getTransactionStatus"
-	ConsumerQRPaymentEndpoint    = "doQRPurchase"
-	ConsumerQRGenerationEndpoint = "doMerchantRegistration"
-	ConsumerQRRefundEndpoint     = "doQRRefund"
-	ConsumerPANFromMobile        = "checkMsisdnAganistPAN"
-	ConsumerCardInfo             = "getCustomerInfo"
+	ConsumerIsAliveEndpoint         = "isAlive"
+	ConsumerWorkingKeyEndpoint      = "getPublicKey"
+	ConsumerBalanceEndpoint         = "getBalance"
+	ConsumerBillInquiryEndpoint     = "getBill"
+	ConsumerBillPaymentEndpoint     = "payment"
+	ConsumerCardTransferEndpoint    = "doCardTransfer"
+	ConsumerAccountTransferEndpoint = "doAccountTransfer"
+	ConsumerPayeesListEndpoint      = "getPayeesList"
+	ConsumerChangeIPinEndpoint      = "changeIPin"
+	ConsumerPurchaseEndpoint        = "specialPayment"
+	ConsumerStatusEndpoint          = "getTransactionStatus"
+	ConsumerQRPaymentEndpoint       = "doQRPurchase"
+	ConsumerQRGenerationEndpoint    = "doMerchantRegistration"
+	ConsumerQRRefundEndpoint        = "doQRRefund"
+	ConsumerPANFromMobile           = "checkMsisdnAganistPAN"
+	ConsumerCardInfo                = "getCustomerInfo"
+	ConsumerGenerateVoucher         = "generateVoucher"
 
 	// IPIN generation
 	IPinGeneration = "doGenerateIPinRequest"
 	IPinCompletion = "doGenerateCompletionIPinRequest"
+
+	ConsumerRegister             = "register"
+	ConsumerCompleteRegistration = "completeCardRegistration"
 )
