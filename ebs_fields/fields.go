@@ -305,6 +305,9 @@ type ConsumerSpecificFields struct {
 	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
 	Mbr             string  `json:"mbr,omitempty" form:"mbr"`
 	Ipin            string  `json:"IPIN" form:"IPIN" binding:"required"`
+	PAN             string  `json:"PAN"`
+	ExpDate         string  `json:"expDate"`
+	PanCategory     string  `json:"panCategory"`
 	FromAccountType string  `json:"fromAccountType" form:"fromAccountType"`
 	ToAccountType   string  `json:"toAccountType" form:"toAccountType"`
 	AccountCurrency string  `json:"accountCurrency" form:"accountCurrency"`
@@ -340,8 +343,9 @@ type ConsumerSpecificFields struct {
 	AdminUserName          string `json:"adminUserName" form:"adminUserName"`
 
 	// other fields
-	OriginalTransaction map[string]interface{} `json:"originalTransaction" form:"originalTransaction"`
-	OriginalTranType    string                 `json:"originalTranType" form:"originalTranType"`
+	OriginalTransaction    map[string]interface{} `json:"originalTransaction" form:"originalTransaction"`
+	OriginalTranType       string                 `json:"originalTranType" form:"originalTranType"`
+	FinancialInstitutionID string                 `json:"financialInstitutionId" form:"financialInstitutionId"`
 }
 
 // MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
