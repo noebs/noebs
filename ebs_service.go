@@ -142,6 +142,17 @@ func GetMainEngine() *gin.Engine {
 		cons.GET("/mobile2pan", consumerService.CardFromNumber)
 		cons.GET("/nec2name", consumerService.NecToName)
 		cons.POST("/tokenize", cardService.Tokenize)
+		cons.POST("/account", consumerService.AccountTransfer)
+
+		cons.POST("/generate_ipin", consumerService.GenerateIpin)
+
+		cons.POST("/complete_ipin", consumerService.CompleteIpin)
+
+		cons.POST("/vouchers/generate", consumerService.GenerateVoucher)
+
+		cons.POST("/cards/new", consumerService.RegisterCard)
+
+		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 
 		cons.POST("/login", state.LoginHandler)
 		cons.Use(auth.AuthMiddleware())
