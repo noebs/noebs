@@ -197,12 +197,9 @@ func init() {
 // @securityDefinitions.basic BasicAuth
 // @in header
 func main() {
-
 	csh := consumer.NewCashout(redisClient)
-
 	go csh.CashoutPub() // listener for noebs cashouts.
 	go consumer.BillerHooks()
-
 	go handleChan(redisClient)
 	//FIXME #65 handle errors in go routine
 

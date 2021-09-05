@@ -632,11 +632,10 @@ func (gi *ConsumerGenerateIPin) MustMarshal() []byte {
 
 type ConsumerGenerateIPinCompletion struct {
 	ConsumerCommonFields
-	Pan              string `json:"pan" binding:"required"`
-	Expdate          string `json:"expDate" binding:"required"`
-	Otp              string `json:"otp"  binding:"required"`
-	Ipin             string `json:"ipin" binding:"required"`
-	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
+	Pan     string `json:"pan" binding:"required"`
+	Expdate string `json:"expDate" binding:"required"`
+	Otp     string `json:"otp"  binding:"required"`
+	Ipin    string `json:"ipin" binding:"required"`
 }
 
 type ConsumerPANFromMobileFields struct {
