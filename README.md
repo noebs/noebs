@@ -18,6 +18,9 @@ There are many reasons why I started this project. On one hand people can happil
 - having a strong e-payment ecosystem will benefit all of us.
 
 # How to use noebs
+
+You can contact us directly at [hi@noebs.dev](mailto:hi@noebs.dev) for more available hosting options.   
+
 There are different ways to use noebs:
 ## Building with `go get` command [not recommended]
 - make sure you have Go installed (Consult go website to see various ways to install go)[https://golang.org]
