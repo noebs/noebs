@@ -1,8 +1,10 @@
 package ebs_fields
 
 import (
+	"database/sql/driver"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"time"
 
@@ -247,17 +249,17 @@ type GenericEBSResponseFields struct {
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 	UUID        string `json:"UUID,omitempty" form:"UUID"`
 
-	ResponseMessage      string                   `json:"responseMessage,omitempty"`
-	ResponseStatus       string                   `json:"responseStatus,omitempty"`
-	ResponseCode         int                      `json:"responseCode"`
-	ReferenceNumber      string                   `json:"referenceNumber,omitempty"`
-	ApprovalCode         string                   `json:"approvalCode,omitempty"`
-	VoucherNumber        int                      `json:"voucherNumber,omitempty"`
-	MiniStatementRecords []map[string]interface{} `json:"miniStatementRecords,omitempty" gorm:"-"`
-	DisputeRRN           string                   `json:"DisputeRRN,omitempty"`
-	AdditionalData       string                   `json:"additionalData,omitempty"`
-	TranDateTime         string                   `json:"tranDateTime,omitempty"`
-	TranFee              *float32                 `json:"tranFee,omitempty"`
+	ResponseMessage      string          `json:"responseMessage,omitempty"`
+	ResponseStatus       string          `json:"responseStatus,omitempty"`
+	ResponseCode         int             `json:"responseCode"`
+	ReferenceNumber      string          `json:"referenceNumber,omitempty"`
+	ApprovalCode         string          `json:"approvalCode,omitempty"`
+	VoucherNumber        int             `json:"voucherNumber,omitempty"`
+	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty"` //make this gorm-able
+	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
+	AdditionalData       string          `json:"additionalData,omitempty"`
+	TranDateTime         string          `json:"tranDateTime,omitempty"`
+	TranFee              *float32        `json:"tranFee,omitempty"`
 
 	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
 	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
@@ -271,6 +273,30 @@ type GenericEBSResponseFields struct {
 	Name        string `json:"name,omitempty"`
 	CardType    string `json:"card_type,omitempty"`
 	LastPAN     string `json:"last4PANDigits,omitempty"`
+}
+
+type MinistatementDB []map[string]interface{}
+
+func (m *MinistatementDB) Scan(value interface{}) error {
+
+	b, ok := value.(string)
+	if !ok {
+		log.Printf("The type of value is: %T", value)
+		return errors.New("type assertion to []byte failed")
+	}
+	if b == "" {
+		return nil
+	}
+	return json.Unmarshal([]byte(b), m)
+}
+
+// Value return json value, implement driver.Valuer interface
+func (m MinistatementDB) Value() (driver.Value, error) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 type ImportantEBSFields struct {

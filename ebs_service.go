@@ -95,6 +95,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/get", dashService.TransactionByTid)
 		dashboardGroup.GET("/create", dashService.MakeDummyTransaction)
 		dashboardGroup.GET("/all", dashService.GetAll)
+		dashboardGroup.GET("/all/:id", dashService.GetID)
 		dashboardGroup.GET("/count", dashService.TransactionsCount)
 		dashboardGroup.GET("/settlement", dashService.DailySettlement)
 		dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)

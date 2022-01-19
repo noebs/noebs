@@ -4,9 +4,14 @@
 # noebs
 *Keepin' it simple*
 
-Open source payment gateway that implements (most of) EBS services.
+Open source payment gateway that implements all of EBS services.
 
 # About this project
+
+noebs has grown from a small side-project to a production system that is used by more than 5 payment companies in Sudan. 
+
+
+
 This is an e-payment gateway system. It implements most of EBS's services with clear emphasis on scalabilty and a maintainable code. It is written in Go, a language for building high performant systems. It is also open source, the way any serious project should be. I wrote this software while I was learning Go, I tried to write an idiomatic Go as much as possible.
 
 It is open source and it will remain open source. I will also maintain it and I welcome any contributors help me doing that as well.
@@ -77,7 +82,7 @@ If YOU are interested in other services, please reach out and we will be more th
 # Consultancy
 While everything you see here is very and open source; we don't hide any fees or charges, we expect that some might be interested in a commercial plans. We offer our consultancy services via Gndi. We have a team with variety of proficiency, from backend engineers, mobile developers to UX/UI and QA testing engineers. Some of our team members have worked at EBS, while most of the team have a huge experience in e-payment systems.
 
-Contact us: +249 925343834 (Mohamed Yousif) | +249 9023 00672 (Mohamed Gafar) | adonese@acts-sd.com (Mohamed Yousif)
+Contact us: +249 111493885 (Mohamed Yousif) | +249 9023 00672 (Mohamed Gafar) | m@noebs.dev (Mohamed Yousif)
 
 # Our simulator and EBS services
 Our team have developed an internal EBS QA test system that emulates EBS test environment. We offer our simulator as a paid service 
@@ -88,6 +93,30 @@ Our team have developed an internal EBS QA test system that emulates EBS test en
 	- we can use our EBS simulator while we do the plan for you, the exact way EBS does. Bear in mind that our testers are highly competitive and they're all ex-EBSers.
 
 **We plan on releasing our simulator very soon. Stay tuned.**
+
+## Corporate sponsorship
+
+We are extremely very gratitude to our sponsors:
+
+- ACTS 
+- SolusPay
+- G&I Engineering
+
+# Companies that are using noebs
+
+noebs powers and is used by these companies to process their payments:
+
+- ACTS
+- SolusPay
+- PACT
+- CAT
+- Sahil Ltd.
+- Tuti Tech Investment
+
+
+# Docs
+
+More documentations can be found through [Noebs Docs](https://docs.noebs.dev). Merchant documentations can be found [here](https://docs.merchant.noebs). 
 
 # FAQ
 - Why is the name?
