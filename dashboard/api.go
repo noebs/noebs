@@ -212,6 +212,7 @@ func (s *Service) GetAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
 
+//GetID gets a transaction by its database ID.
 func (s *Service) GetID(c *gin.Context) {
 	id := c.Param("id")
 	db, _ := gorm.Open("sqlite3", "test.db")
