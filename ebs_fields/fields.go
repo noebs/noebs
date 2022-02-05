@@ -767,8 +767,9 @@ type ValidationError struct {
 }
 
 type NoebsConfig struct {
-	OneSigna string `json:"onesignal_key"`
-	SMS      string `json:"sms_key"`
+	OneSignal string `json:"onesignal_key"`
+	SMS       string `json:"sms_key"`
+	RedisPort string `json:"redis_port"`
 }
 
 var SecretConfig NoebsConfig

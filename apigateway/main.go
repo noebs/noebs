@@ -35,7 +35,7 @@ func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
 				// in this case you might need to give it another spin
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Token has expired", "code": "jwt_expired"})
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Token has expired", "code": "jwt_expired"})
 				return
 				// allow for expired tokens to live...FIXME
 				//c.Set("username", claims.Username)
@@ -43,7 +43,7 @@ func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 			} else {
 				//FIXME #66 it this code doesn't use the same key we have
 				//jwt key is not initalized here
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
 				return
 			}
 		} else if err == nil {

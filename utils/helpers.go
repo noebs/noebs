@@ -3,6 +3,7 @@ package utils
 import (
 	//"github.com/adonese/noebs/dashboard"
 
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
 	"github.com/jinzhu/gorm"
 )
@@ -15,7 +16,12 @@ type Service struct {
 // GetRedisClient returns a *redis.Client instance
 func GetRedisClient(addr string) *redis.Client {
 	if addr == "" {
-		addr = "100.69.151.58:6379" // TODO #78 read this from env
+		if ebs_fields.SecretConfig.RedisPort != "" {
+			addr = ebs_fields.SecretConfig.RedisPort
+		} else {
+			addr = "localhost:6379"
+		}
+
 	}
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
