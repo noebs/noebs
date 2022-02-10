@@ -69,6 +69,8 @@ const (
 	ConsumerPANFromMobile           = "checkMsisdnAganistPAN"
 	ConsumerCardInfo                = "getCustomerInfo"
 	ConsumerGenerateVoucher         = "generateVoucher"
+	ConsumerCashInEndpoint          = "doCashIn"
+	ConsumerCashOutEndpoint         = "doCashOut"
 
 	// IPIN generation
 	IPinGeneration = "doGenerateIPinRequest"

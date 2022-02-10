@@ -10,7 +10,7 @@ This should be a very brief description about the NEP. It should not exceed a pa
 
 This is where we encourage you to tell your story! In great details, you can use this section to tell us about the change, why it is needed, mention concrete real world use cases, and show some figures and numbers regarding expected change impact, how it relates to other partners and existing users of the platform and so. 
 
-## Demo 
+## Demo
 
 One of the most important aspects of accepting any proposal is to see it in real life. A demo, even just for a very small subset of the intended features will go along to support the NEP.
 
