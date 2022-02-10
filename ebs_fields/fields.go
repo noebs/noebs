@@ -2,7 +2,6 @@ package ebs_fields
 
 import (
 	"database/sql/driver"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -219,10 +218,7 @@ func iso8601(fl validator.FieldLevel) bool {
 
 	dateLayout := time.RFC3339
 	_, err := time.Parse(dateLayout, fl.Field().String())
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 //GenericEBSResponseFields represent EBS response
@@ -614,6 +610,14 @@ type ConsumerCardTransferAndMobileFields struct {
 	Mobile string `json:"mobile_number"`
 }
 
+type ConsumerCashInFields struct {
+	ConsumerCardTransferFields
+}
+
+type ConsumerCashoOutFields struct {
+	ConsumerCardTransferFields
+}
+
 type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
@@ -667,7 +671,7 @@ type ConsumerGenerateIPinCompletion struct {
 type ConsumerPANFromMobileFields struct {
 	ConsumerCommonFields
 	EntityID string `json:"entityId" binding:"required"`
-	Last4PAN string `json:"last4PANDigits" binding:"required`
+	Last4PAN string `json:"last4PANDigits" binding:"required"`
 }
 
 type ConsumerCardInfoFields struct {
@@ -767,9 +771,13 @@ type ValidationError struct {
 }
 
 type NoebsConfig struct {
-	OneSignal string `json:"onesignal_key"`
-	SMS       string `json:"sms_key"`
-	RedisPort string `json:"redis_port"`
+	OneSignal         string `json:"onesignal_key"`
+	SMS               string `json:"sms_key"`
+	RedisPort         string `json:"redis_port"`
+	IsConsumerTesting *bool  `json:"is_consumer_testing"`
+	IsMerchantTesting *bool  `json:"is_merchant_testing"`
+	ConsumerIP        string
+	MerchantIP        string
 }
 
 var SecretConfig NoebsConfig
