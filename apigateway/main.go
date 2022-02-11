@@ -29,7 +29,6 @@ func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 				"code": "unauthorized"})
 			return
 		}
-
 		claims, err := a.VerifyJWT(h)
 		log.Printf("They key is: %v", a.Key)
 		if e, ok := err.(*jwt.ValidationError); ok {

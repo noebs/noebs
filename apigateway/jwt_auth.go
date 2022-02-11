@@ -67,8 +67,8 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 		return claims, nil
 
 	} else {
-		log.Printf("the error in validation is: %v", err)
-		return nil, err
+		// we still gonna return the claim even if it is not valid!
+		return claims, err
 	}
 }
 
