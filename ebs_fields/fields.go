@@ -250,7 +250,8 @@ type GenericEBSResponseFields struct {
 	ResponseCode         int             `json:"responseCode"`
 	ReferenceNumber      string          `json:"referenceNumber,omitempty"`
 	ApprovalCode         string          `json:"approvalCode,omitempty"`
-	VoucherNumber        int             `json:"voucherNumber,omitempty"`
+	VoucherNumber        string          `json:"voucherNumber,omitempty"`
+	VoucherCode          string          `json:"voucherCode,omitempty"`
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
 	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
 	AdditionalData       string          `json:"additionalData,omitempty"`
