@@ -61,6 +61,10 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 		}
 		return j.Key, nil
 	})
+	if token == nil {
+		log.Println(err)
+		return nil, err
+	}
 
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
 		log.Println("why am i here?")
