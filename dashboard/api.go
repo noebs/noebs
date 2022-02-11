@@ -161,7 +161,7 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 			ResponseCode:           0,
 			ReferenceNumber:        "",
 			ApprovalCode:           "",
-			VoucherNumber:          0,
+			VoucherNumber:          "0",
 			MiniStatementRecords:   nil,
 			DisputeRRN:             "",
 			AdditionalData:         "",
