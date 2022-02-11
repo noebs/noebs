@@ -6,8 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
+	"github.com/golang-jwt/jwt"
 )
 
 //JWTAuth provides an encapsulation for jwt auth
@@ -20,8 +21,7 @@ type GetRedisClient func(string) *redis.Client
 //Init initializes jwt auth
 func (j *JWTAuth) Init() {
 	//FIXME issue #66
-	key, _ := GenerateAPIKey()
-	j.Key = []byte(key)
+	j.Key = []byte(ebs_fields.SecretConfig.JWTKey)
 }
 
 // GenerateJWT generates a JWT standard token with default values hardcoded. FIXME
@@ -40,6 +40,7 @@ func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
+	log.Println("generating token")
 	// Sign and get the complete encoded token as a string using the secret
 	if j.Key == nil {
 		return "", errors.New("empty jwt key")
@@ -58,18 +59,11 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-
-		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
 		return j.Key, nil
 	})
 
-	// a user might had submitted a non-jwt token
-	// if err != nil {
-	// 	return nil, err
-
-	// }
-
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
+		log.Println("why am i here?")
 		return claims, nil
 
 	} else {
@@ -137,7 +131,7 @@ type TokenClaims struct {
 // Default populate token claims with default values
 func (t TokenClaims) Default(username string) jwt.Claims {
 	n := time.Now().Unix()
-	n3h := time.Now().Add(3 * time.Hour).Unix()
+	n3h := time.Now().Add(10 * time.Second).Unix()
 	t.StandardClaims = generateClaims(n, n3h, username)
 	t.Username = username
 	return t

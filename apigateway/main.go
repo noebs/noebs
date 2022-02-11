@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
+	"github.com/golang-jwt/jwt"
 	log "github.com/sirupsen/logrus"
 )
 
