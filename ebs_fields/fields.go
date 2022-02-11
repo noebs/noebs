@@ -778,6 +778,7 @@ type NoebsConfig struct {
 	IsMerchantTesting *bool  `json:"is_merchant_testing"`
 	ConsumerIP        string
 	MerchantIP        string
+	JWTKey            string `json:"jwt_key"`
 }
 
 var SecretConfig NoebsConfig
