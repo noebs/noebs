@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/go-redis/redis/v7"
+	"github.com/golang-jwt/jwt"
 )
 
 //JWTAuth provides an encapsulation for jwt auth
