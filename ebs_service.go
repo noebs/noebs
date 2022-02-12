@@ -132,7 +132,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/cashOut", consumerService.CashOut)
 		cons.POST("/account", consumerService.AccountTransfer)
 		cons.POST("/purchase", consumerService.Purchase)
-		cons.POST("/status", consumerService.Status)
+		cons.POST("/n/status", consumerService.Status)
 		cons.POST("/key", consumerService.WorkingKey)
 		cons.POST("/ipin", consumerService.IPinChange)
 		cons.POST("/generate_qr", consumerService.QRGeneration)
