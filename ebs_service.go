@@ -123,6 +123,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/logout", state.LogOut)
 
 		cons.POST("/balance", consumerService.Balance)
+		cons.POST("/status", consumerService.TransactionStatus)
 		cons.POST("/is_alive", consumerService.IsAlive)
 		cons.POST("/bill_payment", consumerService.BillPayment)
 		cons.POST("/bill_inquiry", consumerService.BillInquiry)
