@@ -401,6 +401,11 @@ type ConsumerBillInquiryFields struct {
 	ConsumerCardHolderFields
 }
 
+type ConsumerTransactionStatusFields struct {
+	ConsumerCommonFields
+	OriginalTranUUID string `json:"originalTranUUID" form:"originalTranUUID" binding:"required"`
+}
+
 func (f *ConsumerBillInquiryFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d
