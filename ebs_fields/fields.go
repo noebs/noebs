@@ -633,7 +633,8 @@ type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	ToCard string `json:"toCard" binding:"required"`
+	ToCard      string  `json:"toCard" binding:"required"`
+	DynamicFees float32 `json:"dynamicFees"`
 }
 
 type ConsumrAccountTransferFields struct {
