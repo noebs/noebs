@@ -303,7 +303,7 @@ type ImportantEBSFields struct {
 type EBSParserFields struct {
 	EBSMapFields
 	GenericEBSResponseFields
-	OriginalTransaction GenericEBSResponseFields `json:"originalTransaction"`
+	OriginalTransaction GenericEBSResponseFields `json:"originalTransaction,omitempty"`
 }
 
 // To allow Redis to use this struct directly in marshaling
