@@ -617,7 +617,11 @@ func (f *ConsumerIPinFields) MustMarshal() []byte {
 type ConsumerCardTransferAndMobileFields struct {
 	ConsumerCardTransferFields
 	Mobile      string  `json:"mobile_number"`
+<<<<<<< HEAD
 	DynamicFees float32 `json:"dynamicFees" binding:"required"`
+=======
+	DynamicFees float32 `json:"dynamicFees" binding:"required,min=0.30,max=50.00"`
+>>>>>>> 0d1f164d0b35a732e55f082043acf9ffd39b9789
 }
 
 type ConsumerCashInFields struct {
