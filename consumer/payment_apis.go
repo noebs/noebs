@@ -102,6 +102,8 @@ type Service struct {
 	utils.Service
 }
 
+var fees = ebs_fields.NewDynamicFees()
+
 //BillChan it is used to asyncronysly parses ebs response to get and assign values to the billers
 // such as assigning the name to utility personal payment info
 var BillChan = make(chan ebs_fields.EBSParserFields)
@@ -581,7 +583,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			c.JSON(code, gin.H{"ebs_response": res, "fees": fees})
 
 		}
 
@@ -599,7 +601,6 @@ func (s *Service) CardTransfer(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerCardTransferAndMobileFields{}
-
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
@@ -617,11 +618,13 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		//fields.DynamicFees = 10
+		fields.DynamicFees = fees.CardTransferfees
 		// save this to redis
 		if mobile := fields.Mobile; mobile != "" {
 			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
 		}
+
 		jsonBuffer := fields.MustMarshal()
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
