@@ -359,12 +359,13 @@ type ConsumerSpecificFields struct {
 	ExtraInfo   string `json:"extraInfo" form:"extraInfo"`
 	//.. omitted fields
 
-	PhoneNo                string `json:"phoneNo" form:"phoneNo"`
-	NewIpin                string `json:"newIPIN" form:"newIPIN"`
-	NewUserPassword        string `json:"newUserPassword" form:"newUserPassword"`
-	SecurityQuestion       string `json:"securityQuestion" form:"securityQuestion"`
-	SecurityQuestionAnswer string `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
-	AdminUserName          string `json:"adminUserName" form:"adminUserName"`
+	PhoneNo                string  `json:"phoneNo" form:"phoneNo"`
+	NewIpin                string  `json:"newIPIN" form:"newIPIN"`
+	NewUserPassword        string  `json:"newUserPassword" form:"newUserPassword"`
+	SecurityQuestion       string  `json:"securityQuestion" form:"securityQuestion"`
+	SecurityQuestionAnswer string  `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
+	AdminUserName          string  `json:"adminUserName" form:"adminUserName"`
+	DynamicFees            float32 `json:"dynamicFees,omitempty" form:"dynamicFees"`
 
 	// other fields
 	OriginalTransaction    map[string]interface{} `json:"originalTransaction" form:"originalTransaction"`
@@ -615,7 +616,8 @@ func (f *ConsumerIPinFields) MustMarshal() []byte {
 
 type ConsumerCardTransferAndMobileFields struct {
 	ConsumerCardTransferFields
-	Mobile string `json:"mobile_number"`
+	Mobile      string `json:"mobile_number"`
+	DynamicFees string `json:"dynamicFees" binding:"required"`
 }
 
 type ConsumerCashInFields struct {
