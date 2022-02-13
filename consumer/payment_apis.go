@@ -626,6 +626,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		}
 
 		jsonBuffer := fields.MustMarshal()
+		log.Printf("the request is: %v", jsonBuffer)
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
