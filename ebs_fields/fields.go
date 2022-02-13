@@ -304,6 +304,7 @@ type EBSParserFields struct {
 	EBSMapFields
 	GenericEBSResponseFields
 	OriginalTransaction GenericEBSResponseFields `json:"originalTransaction,omitempty"`
+	DynamicFees         float32                  `json:"dynamicFees,omitempty"`
 }
 
 // To allow Redis to use this struct directly in marshaling
