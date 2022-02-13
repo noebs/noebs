@@ -483,6 +483,7 @@ type ConsumerRegistrationFields struct {
 	EntityFields
 	RegistrationType string `json:"registrationType"`
 	PhoneNo          string `json:"phoneNo"`
+	PanCategory      string `binding:"required" json:"panCategory"`
 }
 
 type ConsumerCompleteRegistrationFields struct {
