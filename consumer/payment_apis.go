@@ -1617,7 +1617,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	var bill ebs_fields.ConsumerPurchaseFields
 
 	var pp ebs_fields.ConsumerCardTransferFields
-	var indicator int16
+	var indicator int32
 	if data.CardNumber == "" {
 		bill.ServiceProviderId = data.EBSBiller
 		p = bill
