@@ -689,7 +689,7 @@ func (s *Service) CashIn(c *gin.Context) {
 
 	case nil:
 
-		jsonBuffer := fields.MustMarshal()
+		jsonBuffer := fields.MustMarshal() // this part basically gets us into trouble
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
