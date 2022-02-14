@@ -304,6 +304,7 @@ type EBSParserFields struct {
 	EBSMapFields
 	GenericEBSResponseFields
 	OriginalTransaction GenericEBSResponseFields `json:"originalTransaction,omitempty"`
+	DynamicFees         float32                  `json:"dynamicFees,omitempty"`
 }
 
 // To allow Redis to use this struct directly in marshaling
@@ -617,8 +618,7 @@ func (f *ConsumerIPinFields) MustMarshal() []byte {
 
 type ConsumerCardTransferAndMobileFields struct {
 	ConsumerCardTransferFields
-	Mobile      string  `json:"mobile_number"`
-	DynamicFees float32 `json:"dynamicFees" binding:"required,min=0.30,max=50.00"`
+	Mobile string `json:"mobile_number"`
 }
 
 type ConsumerCashInFields struct {
@@ -633,7 +633,8 @@ type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	ToCard string `json:"toCard" binding:"required"`
+	ToCard      string  `json:"toCard" binding:"required"`
+	DynamicFees float32 `json:"dynamicFees"`
 }
 
 type ConsumrAccountTransferFields struct {
