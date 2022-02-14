@@ -457,7 +457,8 @@ type ConsumerPurchaseFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+	DynamicFees       float32 `json:"dynamicFees" binding:"required,min=0.30,max=50.00"`
+	ServiceProviderId string  `json:"serviceProviderId" binding:"required"`
 }
 
 func (f *ConsumerPurchaseFields) MustMarshal() []byte {

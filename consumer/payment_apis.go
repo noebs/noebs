@@ -1616,11 +1616,12 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	var bill ebs_fields.ConsumerPurchaseFields
 
 	var pp ebs_fields.ConsumerCardTransferFields
-
+	var indicator int16
 	if data.CardNumber == "" {
 		bill.ServiceProviderId = data.EBSBiller
 		p = bill
 		url = ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint
+		indicator = 1
 	} else {
 		pp.ToCard = data.CardNumber
 		p = pp
@@ -1628,6 +1629,11 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	log.Printf("the data in p is: %#v", p)
 	if err := c.ShouldBindJSON(&p); err != nil {
+		if indicator == 1 {
+			bill.DynamicFees = fees.SpecialPaymentFees
+			p = bill
+		}
+
 		log.Printf("error in parsing: %v", err)
 		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, referer+"?fail=true&code="+err.Error())
