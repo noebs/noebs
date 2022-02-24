@@ -479,6 +479,22 @@ type ConsumerQRPaymentFields struct {
 	MerchantID *string `json:"merchantID,omitempty" binding:"required_without=QRCode"`
 }
 
+type QRMerchantFields struct {
+	MerchantAccountType      string `json:"merchantAccountType" form:"merchantAccountType" binding:"required"`
+	MerchantAccountReference string `json:"merchantAccountReference" form:"merchantAccountReference" binding:"required"`
+	MerchantName             string `json:"merchantName" form:"merchantName" binding:"required"`
+	MerchantCity             string `json:"merchantCity" form:"merchantCity" binding:"required"`
+	MobileNo                 string `json:"mobileNo" form:"mobileNo" binding:"required"`
+	IDType                   string `json:"idType" form:"idType" binding:"required"`
+	IdNo                     string `json:"idNo" form:"idNo" binding:"required"`
+	ExpDate                  string `json:"expDate" form:"expDate" binding:"required_if=MerchantAccountType CARD"`
+}
+
+type ConsumerQRRegistration struct {
+	ConsumerCommonFields
+	QRMerchantFields
+}
+
 type EntityFields struct {
 	EntityID    string `json:"entityId"`    // starts with 249 initials
 	EntityType  string `json:"entityType"`  //defaults to "Phone No"
