@@ -470,7 +470,8 @@ type ConsumerQRPaymentFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	MerchantID string `json:"merchantID" binding:"required"`
+	QRCode     *string `json:"QRCode,omitempty" form:"QRCode" binding:"required_without=MerchantID"`
+	MerchantID *string `json:"merchantID,omitempty" binding:"required_without=QRCode"`
 }
 
 type EntityFields struct {
