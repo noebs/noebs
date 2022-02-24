@@ -205,6 +205,11 @@ type AmountFields struct {
 	TranCurrencyCode string  `json:"tranCurrencyCode" form:"tranCurrencyCode"`
 }
 
+type ConsumerAmountFields struct {
+	TranAmount       float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
+	TranCurrencyCode string  `json:"tranCurrency" form:"tranCurrency"`
+}
+
 type BillerFields struct {
 	PersonalPaymentInfo string `json:"personalPaymentInfo" binding:"required" form:"personalPaymentInfo"`
 	PayeeID             string `json:"payeeId" binding:"required" form:"payeeId"`
@@ -469,7 +474,7 @@ func (f *ConsumerPurchaseFields) MustMarshal() []byte {
 type ConsumerQRPaymentFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
-	AmountFields
+	ConsumerAmountFields
 	QRCode     *string `json:"QRCode,omitempty" form:"QRCode" binding:"required_without=MerchantID"`
 	MerchantID *string `json:"merchantID,omitempty" binding:"required_without=QRCode"`
 }
