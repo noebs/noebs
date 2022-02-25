@@ -683,6 +683,8 @@ func (f *ConsumerStatusFields) MustMarshal() []byte {
 
 type ConsumerGenerateIPin struct {
 	ConsumerCommonFields
+	Username     string `json:"userName" binding:"required"`
+	Password     string `json:"password" binding:"required"`
 	Pan          string `json:"pan"`
 	MobileNumber string `json:"phoneNumber" binding:"required"`
 	Expdate      string `json:"expDate"`
