@@ -512,7 +512,7 @@ type ConsumerRegistrationFields struct {
 
 type ConsumerCompleteRegistrationFields struct {
 	ConsumerCommonFields
-	OTP              string `json:"OTP" binding:"required"`  // encrypted for fucks sake. fuck ebs
+	// OTP              string `json:"OTP" binding:"required"`  // encrypted for fucks sake. fuck ebs
 	IPIN             string `json:"IPIN" binding:"required"` // also encrypted fml forever
 	ExtraInfo        string `json:"extraInfo,omitempty"`
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
