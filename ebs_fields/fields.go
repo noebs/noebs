@@ -516,6 +516,7 @@ type ConsumerCompleteRegistrationFields struct {
 	IPIN             string `json:"IPIN" binding:"required"` // also encrypted fml forever
 	ExtraInfo        string `json:"extraInfo,omitempty"`
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
+	Password         string `json:"userPassword" binding:"required"`
 }
 
 type ConsumerGenerateVoucherFields struct {
