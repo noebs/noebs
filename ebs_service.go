@@ -149,9 +149,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/vouchers/generate", consumerService.GenerateVoucher)
 
 		cons.POST("/cards/new", consumerService.RegisterCard)
-
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
-
 		cons.POST("/login", state.LoginHandler)
 		cons.Use(auth.AuthMiddleware())
 		cons.GET("/get_cards", consumerService.GetCards)
