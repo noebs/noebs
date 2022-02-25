@@ -515,6 +515,7 @@ type ConsumerCompleteRegistrationFields struct {
 	OTP       string `json:"otp" binding:"required"`  // encrypted for fucks sake. fuck ebs
 	IPIN      string `json:"IPIN" binding:"required"` // also encrypted fml forever
 	ExtraInfo string `json:"extraInfo,omitempty"`
+	PhoneNo   string `json:"phoneNo,omitempty" binding:"required"`
 }
 
 type ConsumerGenerateVoucherFields struct {
