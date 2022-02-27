@@ -260,7 +260,7 @@ type GenericEBSResponseFields struct {
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
 	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
 	AdditionalData       string          `json:"additionalData,omitempty"`
-	TranDateTime         string          `json:"tranDateTime,omitempty"`
+	TranDateTime         string          `json:"tranDateTime,string"`
 	TranFee              *float32        `json:"tranFee,omitempty"`
 
 	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
