@@ -269,13 +269,12 @@ type GenericEBSResponseFields struct {
 	TranCurrency     string   `json:"tranCurrency,omitempty"`
 
 	// QR payment fields
-	MerchantID   string `json:"merchantID,omitempty"`
-	GeneratedQR  string `json:"generatedQR,omitempty"`
-	Bank         string `json:"bank,omitempty"`
-	Name         string `json:"name,omitempty"`
-	CardType     string `json:"card_type,omitempty"`
-	LastPAN      string `json:"last4PANDigits,omitempty"`
-	IpinTranDate int64  `json:"tran_datetime,omitempty"`
+	MerchantID  string `json:"merchantID,omitempty"`
+	GeneratedQR string `json:"generatedQR,omitempty"`
+	Bank        string `json:"bank,omitempty"`
+	Name        string `json:"name,omitempty"`
+	CardType    string `json:"card_type,omitempty"`
+	LastPAN     string `json:"last4PANDigits,omitempty"`
 }
 
 type MinistatementDB []map[string]interface{}
