@@ -852,6 +852,7 @@ func (s *Service) CashOut(c *gin.Context) {
 
 //AccountTransfer performs p2p transactions
 func (s *Service) AccountTransfer(c *gin.Context) {
+
 	url := ebs_fields.EBSIp + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -878,7 +879,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 
 	case nil:
 
-		jsonBuffer := fields.MustMarshal()
+		jsonBuffer, _ := json.Marshal(fields)
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
