@@ -260,7 +260,7 @@ type GenericEBSResponseFields struct {
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
 	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
 	AdditionalData       string          `json:"additionalData,omitempty"`
-	TranDateTime         string          `json:"tranDateTime,string"`
+	TranDateTime         int64           `json:"tranDateTime,string"`
 	TranFee              *float32        `json:"tranFee,omitempty"`
 
 	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
@@ -741,7 +741,7 @@ func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
 	d.Amount = f.TranAmount
 	d.Service = f.EBSServiceName
 	d.UUID = f.UUID
-	d.Time = f.TranDateTime
+	// d.Time = f.TranDateTime
 	return d
 }
 
