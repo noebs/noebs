@@ -118,5 +118,6 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	res.PubKeyValue = i.PubKeyValue
 	res.TranDateTime = strconv.Itoa(i.TranDateTime)
 	res.UUID = i.UUID
+	res.IpinTranDate = int64(i.TranDateTime)
 	return EBSParserFields{GenericEBSResponseFields: res}
 }
