@@ -1266,7 +1266,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 
 //GenerateIpin generates a new ipin for card holder
 func (s *Service) GenerateIpin(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSQR + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1336,13 +1336,82 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 //CompleteIpin performs an otp check from ebs to complete ipin change transaction
 func (s *Service) CompleteIpin(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
+	url := ebs_fields.EBSQR + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerGenerateIPinCompletion{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+
+		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+//CompleteIpin performs an otp check from ebs to complete ipin change transaction
+func (s *Service) IPINKey(c *gin.Context) {
+	url := ebs_fields.EBSQR + ebs_fields.QRPublicKey // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var fields = ebs_fields.ConsumerQRPublicKey{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 

@@ -365,6 +365,8 @@ type ConsumerSpecificFields struct {
 	ExtraInfo   string `json:"extraInfo" form:"extraInfo"`
 	//.. omitted fields
 
+	OriginalTransactionId string `json:"originalTransactionId" form:"originalTransactionId"` // for QR, sometimes
+
 	PhoneNo                string  `json:"phoneNo" form:"phoneNo"`
 	NewIpin                string  `json:"newIPIN" form:"newIPIN"`
 	NewUserPassword        string  `json:"newUserPassword" form:"newUserPassword"`
@@ -395,6 +397,12 @@ func (res *GenericEBSResponseFields) MaskPAN() {
 		length := len(res.FromCard)
 		res.FromCard = res.FromCard[length-4 : length]
 	}
+}
+
+type ConsumerQRPublicKey struct {
+	Username     string `json:"userName" binding:"required"`
+	TranDateTime string `json:"tranDateTime" binding:"required"`
+	UUID         string `json:"UUID" binding:"required"`
 }
 
 type ConsumerCommonFields struct {
@@ -684,7 +692,7 @@ func (f *ConsumerStatusFields) MustMarshal() []byte {
 }
 
 type ConsumerGenerateIPin struct {
-	Username     string `json:"userName" binding:"required"`
+	ConsumerQRPublicKey
 	Password     string `json:"password" binding:"required"`
 	Pan          string `json:"pan"`
 	MobileNumber string `json:"phoneNumber" binding:"required"`
@@ -697,14 +705,12 @@ func (gi *ConsumerGenerateIPin) MustMarshal() []byte {
 }
 
 type ConsumerGenerateIPinCompletion struct {
-	Username     string `json:"userName" binding:"required"`
-	Password     string `json:"password" binding:"required"`
-	UUID         string `json:"UUID" binding:"required"`
-	TranDateTime string `json:"tranDateTime" binding:"required"`
-	Pan          string `json:"pan" binding:"required"`
-	Expdate      string `json:"expDate" binding:"required"`
-	Otp          string `json:"otp"  binding:"required"`
-	Ipin         string `json:"ipin" binding:"required"`
+	ConsumerQRPublicKey
+	Password string `json:"password" binding:"required"`
+	Pan      string `json:"pan" binding:"required"`
+	Expdate  string `json:"expDate" binding:"required"`
+	Otp      string `json:"otp"  binding:"required"`
+	Ipin     string `json:"ipin" binding:"required"`
 }
 
 type ConsumerPANFromMobileFields struct {

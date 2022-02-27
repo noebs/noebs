@@ -47,8 +47,9 @@ const (
 )
 
 const (
-	EBSIp = "https://172.16.199.1:8877/QAConsumer/"
-	EBSIpConsumerTesting                = "https://172.24.160.30:8443/Consumer/"
+	EBSIpConsumerTesting = "https://172.16.199.1:8877/QAConsumer/"
+	EBSIp                = "https://172.24.160.30:8443/Consumer/"
+	EBSQR                = "https://172.16.199.1:8877/IPinGeneration/"
 )
 
 const (
@@ -76,6 +77,7 @@ const (
 	// IPIN generation
 	IPinGeneration = "doGenerateIPinRequest"
 	IPinCompletion = "doGenerateCompletionIPinRequest"
+	QRPublicKey    = "getPublicKey"
 
 	ConsumerRegister             = "register"
 	ConsumerCompleteRegistration = "completeCardRegistration"
