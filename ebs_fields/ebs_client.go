@@ -88,7 +88,8 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		// there is an error in handling the incoming EBS's ebsResponse
 		// log the err here please
 		log.WithFields(logrus.Fields{
-			"error": err.Error(),
+			"error":      err.Error(),
+			"ebs_fields": ebsGenericResponse,
 		}).Info("ebs response transaction")
 
 		return http.StatusInternalServerError, ebsGenericResponse, err
