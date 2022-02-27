@@ -60,7 +60,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		log.WithFields(logrus.Fields{
 			"error": err.Error(),
 		}).Error("Error reading ebs response")
-
 		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
 
@@ -72,30 +71,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			"details": ebsResponse.Header.Get("Content-Type"),
 		}).Error("ebs response content type is not application/json")
 		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
-	}
-	if strings.Contains(url, "IPINGeneration") {
-		var res IPINResponse
-		if err := json.Unmarshal(responseBody, &res); err == nil {
-			log.Printf("error in marshalling ebs: %v", err)
-			// there's no problem in Unmarshalling
-			if res.ResponseCode == 0 || res.ResponseMessage == "Success" {
-				return http.StatusOK, res.newResponse(), nil
-			} else {
-				// the error here should be nil!
-				// we don't actually have any errors!
-				return http.StatusBadGateway, res.newResponse(), errors.New(res.ResponseMessage)
-			}
-
-		} else {
-			// there is an error in handling the incoming EBS's ebsResponse
-			// log the err here please
-			log.WithFields(logrus.Fields{
-				"error":      err.Error(),
-				"ebs_fields": res,
-			}).Info("ebs response transaction")
-
-			return http.StatusInternalServerError, res.newResponse(), err
-		}
 	}
 
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
@@ -113,9 +88,14 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		// there is an error in handling the incoming EBS's ebsResponse
 		// log the err here please
 		log.WithFields(logrus.Fields{
-			"error":      err.Error(),
-			"ebs_fields": ebsGenericResponse,
+			"error":        err.Error(),
+			"all_response": string(responseBody),
+			"ebs_fields":   ebsGenericResponse,
 		}).Info("ebs response transaction")
+		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") { // fuck me
+
+			return http.StatusOK, ebsGenericResponse, nil
+		}
 
 		return http.StatusInternalServerError, ebsGenericResponse, err
 	}
