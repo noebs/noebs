@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -63,13 +64,15 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	}
 
 	// check Content-type is application json, if not, panic!
-	if ebsResponse.Header.Get("Content-Type") != "application/json" {
+	// check if content type includes application/json
+	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
 		log.WithFields(logrus.Fields{
 			"error":   "wrong content type parsed",
 			"details": ebsResponse.Header.Get("Content-Type"),
 		}).Error("ebs response content type is not application/json")
 		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
 	}
+
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling
 		if ebsGenericResponse.ResponseCode == 0 {
