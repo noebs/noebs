@@ -1411,6 +1411,8 @@ func (s *Service) IPINKey(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
+	log.Printf("EBS url is: %v", url)
+
 	var fields = ebs_fields.ConsumerQRPublicKey{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
