@@ -741,7 +741,7 @@ func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
 	d.Amount = f.TranAmount
 	d.Service = f.EBSServiceName
 	d.UUID = f.UUID
-	d.Time = f.TranDateTime
+	// d.Time = f.TranDateTime
 	return d
 }
 
