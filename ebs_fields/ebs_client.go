@@ -73,6 +73,8 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
 	}
 
+	var tmpRes IPINResponse
+
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		log.Printf("error in marshalling ebs: %v", err)
 		// there's no problem in Unmarshalling
@@ -93,8 +95,8 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			"ebs_fields":   ebsGenericResponse,
 		}).Info("ebs response transaction")
 		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") { // fuck me
-
-			return http.StatusOK, ebsGenericResponse, nil
+			json.Unmarshal(responseBody, &tmpRes)
+			return http.StatusOK, tmpRes.newResponse(), nil
 		}
 
 		return http.StatusInternalServerError, ebsGenericResponse, err
