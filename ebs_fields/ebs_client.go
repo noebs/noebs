@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +73,30 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		}).Error("ebs response content type is not application/json")
 		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
 	}
+	if strings.Contains(url, "IPINGeneration") {
+		var res IPINResponse
+		if err := json.Unmarshal(responseBody, &res); err == nil {
+			log.Printf("error in marshalling ebs: %v", err)
+			// there's no problem in Unmarshalling
+			if res.ResponseCode == 0 || res.ResponseMessage == "Success" {
+				return http.StatusOK, res.newResponse(), nil
+			} else {
+				// the error here should be nil!
+				// we don't actually have any errors!
+				return http.StatusBadGateway, res.newResponse(), errors.New(res.ResponseMessage)
+			}
+
+		} else {
+			// there is an error in handling the incoming EBS's ebsResponse
+			// log the err here please
+			log.WithFields(logrus.Fields{
+				"error":      err.Error(),
+				"ebs_fields": res,
+			}).Info("ebs response transaction")
+
+			return http.StatusInternalServerError, res.newResponse(), err
+		}
+	}
 
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		log.Printf("error in marshalling ebs: %v", err)
@@ -95,4 +120,23 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		return http.StatusInternalServerError, ebsGenericResponse, err
 	}
 
+}
+
+type IPINResponse struct {
+	UUID            string `json:"UUID"`
+	TranDateTime    int    `json:"tranDateTime"`
+	ResponseMessage string `json:"responseMessage"`
+	ResponseStatus  string `json:"responseStatus"`
+	PubKeyValue     string `json:"pubKeyValue"`
+	ResponseCode    int64  `json:"responseCode"`
+}
+
+func (i IPINResponse) newResponse() EBSParserFields {
+	var res GenericEBSResponseFields
+	res.ResponseCode = int(i.ResponseCode)
+	res.ResponseMessage = i.ResponseMessage
+	res.PubKeyValue = i.PubKeyValue
+	res.TranDateTime = strconv.Itoa(i.TranDateTime)
+	res.UUID = i.UUID
+	return EBSParserFields{GenericEBSResponseFields: res}
 }
