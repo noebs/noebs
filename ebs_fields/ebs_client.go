@@ -74,8 +74,9 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	}
 
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
+		log.Printf("error in marshalling ebs: %v", err)
 		// there's no problem in Unmarshalling
-		if ebsGenericResponse.ResponseCode == 0 {
+		if ebsGenericResponse.ResponseCode == 0 || ebsGenericResponse.ResponseMessage == "Success" {
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
 			// the error here should be nil!
