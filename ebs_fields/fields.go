@@ -269,12 +269,22 @@ type GenericEBSResponseFields struct {
 	TranCurrency     string   `json:"tranCurrency,omitempty"`
 
 	// QR payment fields
-	MerchantID  string `json:"merchantID,omitempty"`
-	GeneratedQR string `json:"generatedQR,omitempty"`
-	Bank        string `json:"bank,omitempty"`
-	Name        string `json:"name,omitempty"`
-	CardType    string `json:"card_type,omitempty"`
-	LastPAN     string `json:"last4PANDigits,omitempty"`
+	MerchantID         string  `json:"merchantID,omitempty"`
+	GeneratedQR        string  `json:"generatedQR,omitempty"`
+	Bank               string  `json:"bank,omitempty"`
+	Name               string  `json:"name,omitempty"`
+	CardType           string  `json:"card_type,omitempty"`
+	LastPAN            string  `json:"last4PANDigits,omitempty"`
+	TransactionID      string  `json:"transactionId,omitempty"`
+	CheckDuplicate     string  `json:"checkDuplicate,omitempty"`
+	AuthenticationType string  `json:"authenticationType,omitempty"`
+	AccountCurrency    string  `json:"accountCurrency,omitempty"`
+	ToAccountType      string  `json:"toAccountType,omitempty"`
+	FromAccountType    string  `json:"fromAccountType,omitempty"`
+	EntityID           string  `json:"entityId,omitempty"`
+	EntityType         string  `json:"entityType,omitempty"`
+	Username           string  `json:"userName,omitempty"`
+	DynamicFees        float64 `json:"dynamicFees,omitempty"`
 }
 
 type MinistatementDB []map[string]interface{}
