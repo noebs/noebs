@@ -285,6 +285,7 @@ type GenericEBSResponseFields struct {
 	EntityType         string  `json:"entityType,omitempty"`
 	Username           string  `json:"userName,omitempty"`
 	DynamicFees        float64 `json:"dynamicFees,omitempty"`
+	QRCode             string  `json:"QRCode,omitempty"`
 }
 
 type MinistatementDB []map[string]interface{}
