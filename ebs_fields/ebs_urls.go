@@ -75,9 +75,10 @@ const (
 	ConsumerTransactionStatusEndpoint = "getTransactionStatus"
 
 	// IPIN generation
-	IPinGeneration = "doGenerateIPinRequest"
-	IPinCompletion = "doGenerateCompletionIPinRequest"
-	QRPublicKey    = "getPublicKey"
+	IPinGeneration            = "doGenerateIPinRequest"
+	IPinCompletion            = "doGenerateCompletionIPinRequest"
+	QRPublicKey               = "getPublicKey"
+	MerchantTransactionStatus = "getMerchantTransactions"
 
 	ConsumerRegister             = "register"
 	ConsumerCompleteRegistration = "completeCardRegistration"

@@ -568,6 +568,14 @@ type ConsumerQRRefundFields struct {
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
 }
 
+type ConsumerQRStatus struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	Last4PAN   string `json:"last4PANDigits,omitempty"`
+	MerchantID string `json:"merchantID,omitempty" binding:"required"`
+	ListSize   int    `json:"listSize,omitempty"`
+}
+
 func (f *ConsumerQRRefundFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d
