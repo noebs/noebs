@@ -79,7 +79,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		log.Printf("error in marshalling ebs: %v", err)
 		// there's no problem in Unmarshalling
-		if ebsGenericResponse.ResponseCode == 0 || ebsGenericResponse.ResponseMessage == "Success" {
+		if ebsGenericResponse.ResponseCode == 0 || ebsGenericResponse.ResponseStatus == "Successful" {
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
 			// the error here should be nil!
@@ -99,8 +99,20 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			// we have TWO cases here:
 			// fuck ebs
 			json.Unmarshal(responseBody, &tmpRes)
-			if tmpRes.ResponseCode == 0 || tmpRes.ResponseMessage == "Success" {
+			if tmpRes.ResponseCode == 0 || tmpRes.ResponseStatus == "Successful" {
 				return http.StatusOK, tmpRes.newResponse(), nil
+			} else if tmpRes.ResponseCode == 51 {
+				// this is a special case just to mock ebs
+				data := tmpRes.newResponse()
+				data.GenericEBSResponseFields.PAN = "7222061020105617937"
+				data.GenericEBSResponseFields.ExpDate = "2308"
+				data.GenericEBSResponseFields.FinancialInstitutionID = "ESSD"
+				data.GenericEBSResponseFields.EntityID = "249912141679"
+				data.GenericEBSResponseFields.EntityType = "Phone No"
+				data.GenericEBSResponseFields.PhoneNumber = "0912141679"
+				data.GenericEBSResponseFields.CreationDate = "0714"
+				data.GenericEBSResponseFields.EntityGroup = "0"
+				data.GenericEBSResponseFields.PanCategory = "Standard"
 			} else {
 				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 			}
