@@ -2117,7 +2117,8 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
-		res.MaskPAN()
+		// except for this api, don't mask the card!
+		// res.MaskPAN()
 
 		transaction := dashboard.Transaction{
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
