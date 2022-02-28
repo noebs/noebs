@@ -96,8 +96,14 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			"ebs_fields":   ebsGenericResponse,
 		}).Info("ebs response transaction")
 		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") { // fuck me
+			// we have TWO cases here:
+			// fuck ebs
 			json.Unmarshal(responseBody, &tmpRes)
-			return http.StatusOK, tmpRes.newResponse(), nil
+			if tmpRes.ResponseCode == 0 || tmpRes.ResponseMessage == "Success" {
+				return http.StatusOK, tmpRes.newResponse(), nil
+			} else {
+				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
+			}
 		}
 
 		return http.StatusInternalServerError, ebsGenericResponse, err
