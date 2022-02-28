@@ -77,11 +77,10 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	var tmpRes IPINResponse
 
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
-		log.Printf("error in marshalling ebs: %v", err)
 		// there's no problem in Unmarshalling
 		if ebsGenericResponse.ResponseCode == 0 || ebsGenericResponse.ResponseStatus == "Successful" {
 			return http.StatusOK, ebsGenericResponse, nil
-		} else if tmpRes.ResponseCode == 51 {
+		} else if ebsGenericResponse.ResponseCode == 51 {
 			// this is a special case just to mock ebs
 			data := tmpRes.newResponse()
 			data.GenericEBSResponseFields.PAN = "7222061020105617937"
