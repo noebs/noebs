@@ -78,7 +78,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling
-		if ebsGenericResponse.ResponseCode == 0 || ebsGenericResponse.ResponseStatus == "Successful" {
+		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
 			// if ebsGenericResponse.ResponseCode == 51 {
