@@ -269,23 +269,28 @@ type GenericEBSResponseFields struct {
 	TranCurrency     string   `json:"tranCurrency,omitempty"`
 
 	// QR payment fields
-	MerchantID         string  `json:"merchantID,omitempty"`
-	GeneratedQR        string  `json:"generatedQR,omitempty"`
-	Bank               string  `json:"bank,omitempty"`
-	Name               string  `json:"name,omitempty"`
-	CardType           string  `json:"card_type,omitempty"`
-	LastPAN            string  `json:"last4PANDigits,omitempty"`
-	TransactionID      string  `json:"transactionId,omitempty"`
-	CheckDuplicate     string  `json:"checkDuplicate,omitempty"`
-	AuthenticationType string  `json:"authenticationType,omitempty"`
-	AccountCurrency    string  `json:"accountCurrency,omitempty"`
-	ToAccountType      string  `json:"toAccountType,omitempty"`
-	FromAccountType    string  `json:"fromAccountType,omitempty"`
-	EntityID           string  `json:"entityId,omitempty"`
-	EntityType         string  `json:"entityType,omitempty"`
-	Username           string  `json:"userName,omitempty"`
-	DynamicFees        float64 `json:"dynamicFees,omitempty"`
-	QRCode             string  `json:"QRCode,omitempty"`
+	MerchantID             string  `json:"merchantID,omitempty"`
+	GeneratedQR            string  `json:"generatedQR,omitempty"`
+	Bank                   string  `json:"bank,omitempty"`
+	Name                   string  `json:"name,omitempty"`
+	CardType               string  `json:"card_type,omitempty"`
+	LastPAN                string  `json:"last4PANDigits,omitempty"`
+	TransactionID          string  `json:"transactionId,omitempty"`
+	CheckDuplicate         string  `json:"checkDuplicate,omitempty"`
+	AuthenticationType     string  `json:"authenticationType,omitempty"`
+	AccountCurrency        string  `json:"accountCurrency,omitempty"`
+	ToAccountType          string  `json:"toAccountType,omitempty"`
+	FromAccountType        string  `json:"fromAccountType,omitempty"`
+	EntityID               string  `json:"entityId,omitempty"`
+	EntityType             string  `json:"entityType,omitempty"`
+	Username               string  `json:"userName,omitempty"`
+	DynamicFees            float64 `json:"dynamicFees,omitempty"`
+	QRCode                 string  `json:"QRCode,omitempty"`
+	ExpDate                string  `json:"expDate,omitempty"` // FIXME(adonese): don't store it in database
+	FinancialInstitutionID string  `json:"financialInstitutionId,omitempty"`
+	CreationDate           string  `json:"creationDate,omitempty"`
+	PanCategory            string  `json:"panCategory,omitempty"`
+	EntityGroup            string  `json:"entityGroup,omitempty"`
 }
 
 type MinistatementDB []map[string]interface{}
