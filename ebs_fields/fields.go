@@ -349,9 +349,33 @@ func (p *EBSParserFields) UnmarshalBinary(data []byte) error {
 // special case to handle ebs non-DB-able fields e.g., hashmaps and other complex types
 type EBSMapFields struct {
 	// these
-	Balance     map[string]interface{} `json:"balance,omitempty"`
-	PaymentInfo string                 `json:"paymentInfo,omitempty"`
-	BillInfo    map[string]interface{} `json:"billInfo,omitempty"`
+	Balance          map[string]interface{} `json:"balance,omitempty"`
+	PaymentInfo      string                 `json:"paymentInfo,omitempty"`
+	BillInfo         map[string]interface{} `json:"billInfo,omitempty"`
+	LastTransactions []QRPurchase           `json:"lastTransactions,omitempty"`
+}
+
+type QRPurchase struct {
+	AcqTranFee               string `json:"acqTranFee,omitempty"`
+	ApplicationID            string `json:"applicationId,omitempty"`
+	AuthenticationType       string `json:"authenticationType,omitempty"`
+	IssuerTranFee            string `json:"issuerTranFee,omitempty"`
+	MerchantAccountExpDate   string `json:"merchantAccountExpDate,omitempty"`
+	MerchantAccountReference string `json:"merchantAccountReference,omitempty"`
+	MerchantAccountType      string `json:"merchantAccountType,omitempty"`
+	MerchantCity             string `json:"merchantCity,omitempty"`
+	MerchantID               string `json:"merchantID,omitempty"`
+	MerchantMobileNo         string `json:"merchantMobileNo,omitempty"`
+	MerchantName             string `json:"merchantName,omitempty"`
+	Pan                      string `json:"pan,omitempty"`
+	ResponseCode             int64  `json:"responseCode,omitempty"`
+	ResponseMessage          string `json:"responseMessage,omitempty"`
+	ResponseStatus           string `json:"responseStatus,omitempty"`
+	TranAmount               int64  `json:"tranAmount,omitempty"`
+	TranDateTime             string `json:"tranDateTime,omitempty"`
+	TranType                 string `json:"tranType,omitempty"`
+	TransactionID            string `json:"transactionId,omitempty"`
+	UUID                     string `json:"uuid,omitempty"`
 }
 
 type ConsumerSpecificFields struct {
