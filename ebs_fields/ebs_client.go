@@ -112,7 +112,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			// we have TWO cases here:
 			// fuck ebs
 			json.Unmarshal(responseBody, &tmpRes)
-			if tmpRes.ResponseCode == 0 || tmpRes.ResponseStatus == "Successful" {
+			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
 				return http.StatusOK, tmpRes.newResponse(), nil
 			} else {
 				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
