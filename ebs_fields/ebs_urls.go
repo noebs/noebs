@@ -65,7 +65,7 @@ const (
 	ConsumerPurchaseEndpoint          = "specialPayment"
 	ConsumerStatusEndpoint            = "getTransactionStatus"
 	ConsumerQRPaymentEndpoint         = "doQRPurchase"
-	ConsumerQRGenerationEndpoint      = "doMerchantRegistration"
+	ConsumerQRGenerationEndpoint      = "doMerchantsRegistration" // the fuck is wrong with you guys
 	ConsumerQRRefundEndpoint          = "doQRRefund"
 	ConsumerPANFromMobile             = "checkMsisdnAganistPAN"
 	ConsumerCardInfo                  = "getCustomerInfo"
