@@ -300,7 +300,7 @@ func (s *Service) QRStatus(c *gin.Context) {
 
 	data, err := s.getLastTransactions(q)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, errors.New("id is required"))
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
