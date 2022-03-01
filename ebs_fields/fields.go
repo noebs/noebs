@@ -589,7 +589,7 @@ func (f *ConsumerQRPaymentFields) MustMarshal() []byte {
 type ConsumerQRRefundFields struct {
 	ConsumerCommonFields
 	Pan                   string `json:"PAN,omitempty" form:"PAN""`
-	Ipin                  string `json:"IPIN" form:"IPIN""`
+	Ipin                  string `json:"IPIN,omitempty" form:"IPIN""`
 	ExpDate               string `json:"expDate,omitempty" form:"expDate""`
 	OriginalTranUUID      string `json:"originalTranUUID" binding:"required"`
 	AuthenticationType    string `json:"authenticationType,omitempty"`
