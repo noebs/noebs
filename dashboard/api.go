@@ -304,7 +304,7 @@ func (s *Service) QRStatus(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": data})
+	c.HTML(http.StatusOK, "qr_status.html", gin.H{"transactions": data})
 }
 
 func (s *Service) getLastTransactions(merchantID string) ([]ebs_fields.QRPurchase, error) {
