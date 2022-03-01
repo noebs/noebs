@@ -414,15 +414,16 @@ type ConsumerSpecificFields struct {
 
 	OriginalTransactionId string `json:"originalTransactionId" form:"originalTransactionId"` // for QR, sometimes
 
-	PhoneNo                string  `json:"phoneNo" form:"phoneNo"`
-	NewIpin                string  `json:"newIPIN" form:"newIPIN"`
-	NewUserPassword        string  `json:"newUserPassword" form:"newUserPassword"`
-	SecurityQuestion       string  `json:"securityQuestion" form:"securityQuestion"`
-	SecurityQuestionAnswer string  `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
-	AdminUserName          string  `json:"adminUserName" form:"adminUserName"`
-	DynamicFees            float32 `json:"dynamicFees,omitempty" form:"dynamicFees"`
-
-	// other fields
+	PhoneNo                string                 `json:"phoneNo" form:"phoneNo"`
+	NewIpin                string                 `json:"newIPIN" form:"newIPIN"`
+	NewUserPassword        string                 `json:"newUserPassword" form:"newUserPassword"`
+	SecurityQuestion       string                 `json:"securityQuestion" form:"securityQuestion"`
+	SecurityQuestionAnswer string                 `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
+	AdminUserName          string                 `json:"adminUserName" form:"adminUserName"`
+	DynamicFees            float32                `json:"dynamicFees,omitempty" form:"dynamicFees"`
+	TransactionID          string                 `json:"transactionId,omitempty" form:"transactionId"`
+	MerchantID             string                 `json:"merchantID,omitempty" form:"merchantID"`
+	AuthenticationType     string                 `json:"authenticationType,omitempty" form:"authenticationType"`
 	OriginalTransaction    map[string]interface{} `json:"originalTransaction" form:"originalTransaction"`
 	OriginalTranType       string                 `json:"originalTranType" form:"originalTranType"`
 	FinancialInstitutionID string                 `json:"financialInstitutionId" form:"financialInstitutionId"`
