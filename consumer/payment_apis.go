@@ -1211,10 +1211,11 @@ func (s *Service) QRTransactions(c *gin.Context) {
 
 		if ebsErr != nil {
 			// also store value to redis
-			s.storeLastTransactions(fields.MerchantID, &res)
+
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
+			s.storeLastTransactions(fields.MerchantID, &res)
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
