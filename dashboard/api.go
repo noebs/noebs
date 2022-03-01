@@ -3,6 +3,7 @@ package dashboard
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -287,6 +288,39 @@ func (s *Service) BrowserDashboard(c *gin.Context) {
 	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1,
 		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants,
 		"terminal_fees": terminalFees, "sum_fees": sumFees})
+}
+
+func (s *Service) QRStatus(c *gin.Context) {
+
+	q := c.Query("id")
+	if q == "" {
+		c.AbortWithError(http.StatusBadRequest, errors.New("id is required"))
+		return
+	}
+
+	data, err := s.getLastTransactions(q)
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, errors.New("id is required"))
+		return
+	}
+
+	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": data})
+}
+
+func (s *Service) getLastTransactions(merchantID string) ([]ebs_fields.QRPurchase, error) {
+	var transactions []ebs_fields.QRPurchase
+
+	data, err := s.Redis.HGet(merchantID, "data").Result()
+	if err != nil {
+		log.Printf("erorr in redis: %v", err)
+		return transactions, err
+	}
+	if err := json.Unmarshal([]byte(data), &transactions); err != nil {
+		log.Printf("erorr in redis: %v", err)
+		return transactions, err
+	}
+	log.Printf("the result is: %v", transactions)
+	return transactions, nil
 }
 
 func (s *Service) LandingPage(c *gin.Context) {

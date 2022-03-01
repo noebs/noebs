@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <link rel="stylesheet" href="/dashboard/assets/style.css">
+</head>
+
+<body>
+    <nav class="navbar navbar-dark fixed-top bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="">2T Merchant</a>
+            <ul class="navbar-nav mr-auto"></ul>
+        </div>
+    </nav>
+
+    <main role="main">
+        <div class="container">
+
+
+            <!--Transactions Table-->
+            <div class="row">
+                <div class="col">
+                    <table class="table table-striped table-sm">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th scope="col">Merchant ID</th>
+                                <th scope="col">Date Time</th>
+                                <th scope="col">Amount</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">QR Transaction ID</th>
+                                
+                            </tr>
+                        </thead>
+                        {{range .transactions}}
+                        <tr>
+                           <td>{{.MerchantID}}</td>
+                           <td>{{.TranDateTime}}</td>
+                            <td>{{.TranAmount}}</td>
+                            <td>{{.ResponseMessage}}</td>
+                            <td>{{.TransactionID}}</td>
+                        
+                        </tr>
+                        {{end}}
+                    </table>
+                </div>
+            </div>
+
+            <!--paginator-->
+            <div class="row">
+
+                <div class="col-sm">
+                    <ul class="pagination pagination-sm">
+                        {{range $i, $_ := N .count}}
+                        <li class="page-item"><a class="page-link" href="?page={{$i}}">{{$i}}</a></li>
+                        {{end}}
+                    </ul>
+                </div>
+                <div class="col-sm">
+                    
+                </div>
+            </div>
+            <hr>
+        </div>
+
+    </main>
+
+    <script>
+        var currentPage = 1;
+        function paginate(index, items) {
+            for (i = index; i <= items; i++) {
+                document.getElementById("custom-pagination").innerHTML += `<li class="page-item"><a class="page-link" href="?page=$i">$i</a></li>`
+            }
+        }
+
+        function updateId(id) {
+            currentPage = id;
+        }
+
+    </script>
+</body>
+
+</html>

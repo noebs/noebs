@@ -80,6 +80,7 @@ package consumer
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -510,6 +511,7 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
+
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
@@ -520,6 +522,26 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
 	}
+}
+
+func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSParserFields) error {
+	// this stores LastTransactions to redis
+	// marshall the lastTransactions
+	// store them into redis
+	// store the lastTransactions into the database
+	if res == nil {
+		return errors.New("empty response")
+	}
+	// parse the last transactions
+	data, err := json.Marshal(res.LastTransactions)
+	if err != nil {
+		return err
+	}
+	if _, err := s.Redis.HSet(merchantID, "data", data).Result(); err != nil {
+		log.Printf("erorr in redis: %v", err)
+		return err
+	}
+	return nil
 }
 
 //WorkingKey get ebs working key for encrypting ipin for consumer transactions
@@ -1187,6 +1209,8 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
+			// also store value to redis
+			s.storeLastTransactions(fields.MerchantID, &res)
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
