@@ -104,6 +104,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
 
 		dashboardGroup.GET("/", dashService.BrowserDashboard)
+		dashboardGroup.GET("/status", dashService.QRStatus)
 		dashboardGroup.GET("/test_browser", dashService.IndexPage)
 		dashboardGroup.Any("/hearout", dashService.LandingPage)
 		dashboardGroup.GET("/stream", dashService.Stream)
