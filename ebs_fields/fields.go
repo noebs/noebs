@@ -592,6 +592,7 @@ type ConsumerQRRefundFields struct {
 	Ipin                  string `json:"IPIN" form:"IPIN""`
 	ExpDate               string `json:"expDate,omitempty" form:"expDate""`
 	OriginalTranUUID      string `json:"originalTranUUID" binding:"required"`
+	AuthenticationType    string `json:"authenticationType,omitempty"`
 	OriginalTransactionId string `json:"originalTransactionId,omitempty"`
 	MerchantID            string `json:"merchantID,omitempty"`
 	Last4PAN              string `json:"last4PANDigits,omitempty"`
