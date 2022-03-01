@@ -595,6 +595,12 @@ type ConsumerQRRefundFields struct {
 	Last4PAN              string `json:"last4PANDigits,omitempty"`
 }
 
+type ConsumerQRCompleteFields struct {
+	ConsumerCommonFields
+	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
+	OTP              string `json:"OTP,omitempty"`
+}
+
 type ConsumerQRStatus struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
