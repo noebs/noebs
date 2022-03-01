@@ -73,6 +73,7 @@ const (
 	ConsumerCashInEndpoint            = "doCashIn"
 	ConsumerCashOutEndpoint           = "doCashOut"
 	ConsumerTransactionStatusEndpoint = "getTransactionStatus"
+	ConsumerComplete                  = "completeTransaction"
 
 	// IPIN generation
 	IPinGeneration            = "doGenerateIPinRequest"
