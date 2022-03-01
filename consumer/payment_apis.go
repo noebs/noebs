@@ -529,6 +529,7 @@ func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSPa
 	// marshall the lastTransactions
 	// store them into redis
 	// store the lastTransactions into the database
+	log.Printf("merchantID is: %s", merchantID)
 	if res == nil {
 		return errors.New("empty response")
 	}
