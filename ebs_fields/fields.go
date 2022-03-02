@@ -519,7 +519,14 @@ type ConsumerPurchaseFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
+	PaymentDetails []PaymentDetails `json:"paymentDetails,omitempty" form:"paymentDetails"`
 	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+}
+
+type PaymentDetails struct {
+	Account string `json:"account,omitempty" form:"account"
+	Amount  float64 `json:"amount,omitempty" form:"amount"`
+	Description string `json:"description,omitempty" form:"description"`
 }
 
 func (f *ConsumerPurchaseFields) MustMarshal() []byte {
