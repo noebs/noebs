@@ -519,14 +519,14 @@ type ConsumerPurchaseFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	PaymentDetails []PaymentDetails `json:"paymentDetails,omitempty" form:"paymentDetails"`
-	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+	PaymentDetails    []PaymentDetails `json:"paymentDetails,omitempty" form:"paymentDetails"`
+	ServiceProviderId string           `json:"serviceProviderId" binding:"required"`
 }
 
 type PaymentDetails struct {
-	Account string `json:"account,omitempty" form:"account"
-	Amount  float64 `json:"amount,omitempty" form:"amount"`
-	Description string `json:"description,omitempty" form:"description"`
+	Account     string  `json:"account,omitempty" form:"account"`
+	Amount      float64 `json:"amount,omitempty" form:"amount"`
+	Description string  `json:"description,omitempty" form:"description"`
 }
 
 func (f *ConsumerPurchaseFields) MustMarshal() []byte {
@@ -596,9 +596,9 @@ func (f *ConsumerQRPaymentFields) MustMarshal() []byte {
 
 type ConsumerQRRefundFields struct {
 	ConsumerCommonFields
-	Pan                   string `json:"PAN,omitempty" form:"PAN""`
-	Ipin                  string `json:"IPIN,omitempty" form:"IPIN""`
-	ExpDate               string `json:"expDate,omitempty" form:"expDate""`
+	Pan                   string `json:"PAN,omitempty" form:"PAN"`
+	Ipin                  string `json:"IPIN,omitempty" form:"IPIN"`
+	ExpDate               string `json:"expDate,omitempty" form:"expDate"`
 	OriginalTranUUID      string `json:"originalTranUUID" binding:"required"`
 	AuthenticationType    string `json:"authenticationType,omitempty"`
 	OriginalTransactionId string `json:"originalTransactionId,omitempty"`
