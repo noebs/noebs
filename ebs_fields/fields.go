@@ -608,9 +608,9 @@ type ConsumerQRRefundFields struct {
 
 type ConsumerQRCompleteFields struct {
 	ConsumerCommonFields
-	OriginalTranUUID      string `json:"origUUID" binding:"required"`
-	OriginalTransactionID string `json:"origTranID,omitempty"`
-	OTP                   string `json:"OTP,omitempty"`
+	OrigUUID   string `json:"origUUID" binding:"required"`
+	OrigTranID string `json:"origTranID,omitempty"`
+	OTP        string `json:"OTP,omitempty"`
 }
 
 type ConsumerQRStatus struct {
