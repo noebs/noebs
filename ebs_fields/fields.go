@@ -604,6 +604,7 @@ type ConsumerQRRefundFields struct {
 	OriginalTransactionId string `json:"originalTransactionId,omitempty"`
 	MerchantID            string `json:"merchantID,omitempty"`
 	Last4PAN              string `json:"last4PANDigits,omitempty"`
+	OTP                   string `json:"OTP,omitempty"`
 }
 
 type ConsumerQRCompleteFields struct {
