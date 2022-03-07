@@ -255,6 +255,13 @@ func (s *State) CreateUser(c *gin.Context) {
 		return
 	}
 
+	// validate u.Password to include at least one capital letter, one symbol and one number
+	// and that it is at least 8 characters long
+	if !validatePassword(u.Password) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Password must be at least 8 characters long, and must include at least one capital letter, one symbol and one number", "code": "password_invalid"})
+		return
+	}
+
 	// make sure that the user doesn't exist in the database
 
 	err = u.HashPassword()

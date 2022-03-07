@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"errors"
+	"unicode"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/cards"
@@ -128,4 +129,25 @@ var (
 func isMember(key, val string, r *redis.Client) bool {
 	b, _ := r.SIsMember(key, val).Result()
 	return b
+}
+
+// validatePassword to include at least one capital letter, one symbol and one number
+// and that it is at least 8 characters long
+func validatePassword(password string) bool {
+	if len(password) < 8 {
+		return false
+	}
+	var hasUpper, hasSymbol, hasNumber bool
+	for _, c := range password {
+		if unicode.IsUpper(c) {
+			hasUpper = true
+		}
+		if unicode.IsSymbol(c) {
+			hasSymbol = true
+		}
+		if unicode.IsNumber(c) {
+			hasNumber = true
+		}
+	}
+	return hasUpper && hasSymbol && hasNumber
 }
