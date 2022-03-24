@@ -431,20 +431,20 @@ type ConsumerSpecificFields struct {
 
 // MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
 func (res *GenericEBSResponseFields) MaskPAN() {
-	if res.PAN != "" {
-		length := len(res.PAN)
-		res.PAN = res.PAN[length-4 : length]
-	}
+	// if res.PAN != "" {
+	// 	length := len(res.PAN)
+	// 	res.PAN = res.PAN[length-4 : length]
+	// }
 
-	if res.ToCard != "" {
-		length := len(res.ToCard)
-		res.ToCard = res.ToCard[length-4 : length]
-	}
+	// if res.ToCard != "" {
+	// 	length := len(res.ToCard)
+	// 	res.ToCard = res.ToCard[length-4 : length]
+	// }
 
-	if res.FromCard != "" {
-		length := len(res.FromCard)
-		res.FromCard = res.FromCard[length-4 : length]
-	}
+	// if res.FromCard != "" {
+	// 	length := len(res.FromCard)
+	// 	res.FromCard = res.FromCard[length-4 : length]
+	// }
 }
 
 type ConsumerQRPublicKey struct {
