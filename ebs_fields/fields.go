@@ -519,8 +519,8 @@ type ConsumerPurchaseFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	PaymentDetails    []PaymentDetails `json:"paymentDetails,omitempty" form:"paymentDetails"`
-	ServiceProviderId string           `json:"serviceProviderId" binding:"required"`
+	// PaymentDetails    []PaymentDetails `json:"paymentDetails,omitempty" form:"paymentDetails"`
+	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
 }
 
 type PaymentDetails struct {
