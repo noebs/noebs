@@ -412,8 +412,8 @@ type ConsumerSpecificFields struct {
 	ExtraInfo   string `json:"extraInfo" form:"extraInfo"`
 	//.. omitted fields
 
-	OriginalTransactionId string `json:"originalTransactionId" form:"originalTransactionId"` // for QR, sometimes
-
+	OriginalTransactionId  string                 `json:"originalTransactionId" form:"originalTransactionId"` // for QR, sometimes
+	MBR                    string                 `json:"mbr" form:"mbr"`
 	PhoneNo                string                 `json:"phoneNo" form:"phoneNo"`
 	NewIpin                string                 `json:"newIPIN" form:"newIPIN"`
 	NewUserPassword        string                 `json:"newUserPassword" form:"newUserPassword"`
