@@ -63,7 +63,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
 
-	log.Printf("ebs_raw", string(responseBody))
+	log.Printf("ebs_raw: %s", string(responseBody))
 	// check Content-type is application json, if not, panic!
 	// check if content type includes application/json
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {

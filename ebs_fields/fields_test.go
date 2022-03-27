@@ -104,3 +104,154 @@ func TestMinistatementDB_Scan(t *testing.T) {
 		})
 	}
 }
+
+func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
+	type fields struct {
+		TerminalID               string
+		SystemTraceAuditNumber   int
+		ClientID                 string
+		PAN                      string
+		ServiceID                string
+		TranAmount               float32
+		PhoneNumber              string
+		FromAccount              string
+		ToAccount                string
+		FromCard                 string
+		ToCard                   string
+		OTP                      string
+		OTPID                    string
+		TranCurrencyCode         string
+		EBSServiceName           string
+		WorkingKey               string
+		PayeeID                  string
+		PubKeyValue              string
+		UUID                     string
+		ResponseMessage          string
+		ResponseStatus           string
+		ResponseCode             int
+		ReferenceNumber          string
+		ApprovalCode             string
+		VoucherNumber            string
+		VoucherCode              string
+		MiniStatementRecords     MinistatementDB
+		DisputeRRN               string
+		AdditionalData           string
+		TranDateTime             string
+		TranFee                  *float32
+		AdditionalAmount         *float32
+		AcqTranFee               *float32
+		IssTranFee               *float32
+		TranCurrency             string
+		MerchantID               string
+		GeneratedQR              string
+		Bank                     string
+		Name                     string
+		CardType                 string
+		LastPAN                  string
+		TransactionID            string
+		CheckDuplicate           string
+		AuthenticationType       string
+		AccountCurrency          string
+		ToAccountType            string
+		FromAccountType          string
+		EntityID                 string
+		EntityType               string
+		Username                 string
+		DynamicFees              float64
+		QRCode                   string
+		ExpDate                  string
+		FinancialInstitutionID   string
+		CreationDate             string
+		PanCategory              string
+		EntityGroup              string
+		MerchantAccountType      string
+		MerchantAccountReference string
+		MerchantName             string
+		MerchantCity             string
+		MobileNo                 string
+		MerchantCategoryCode     string
+		PostalCode               string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		result string
+	}{
+		{"test-1", fields{PAN: "1234567890123456"}, "123456*****3456"},
+		{"test-1", fields{PAN: "1234567890123456"}, "12345612345678901234563456"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &GenericEBSResponseFields{
+				TerminalID:               tt.fields.TerminalID,
+				SystemTraceAuditNumber:   tt.fields.SystemTraceAuditNumber,
+				ClientID:                 tt.fields.ClientID,
+				PAN:                      tt.fields.PAN,
+				ServiceID:                tt.fields.ServiceID,
+				TranAmount:               tt.fields.TranAmount,
+				PhoneNumber:              tt.fields.PhoneNumber,
+				FromAccount:              tt.fields.FromAccount,
+				ToAccount:                tt.fields.ToAccount,
+				FromCard:                 tt.fields.FromCard,
+				ToCard:                   tt.fields.ToCard,
+				OTP:                      tt.fields.OTP,
+				OTPID:                    tt.fields.OTPID,
+				TranCurrencyCode:         tt.fields.TranCurrencyCode,
+				EBSServiceName:           tt.fields.EBSServiceName,
+				WorkingKey:               tt.fields.WorkingKey,
+				PayeeID:                  tt.fields.PayeeID,
+				PubKeyValue:              tt.fields.PubKeyValue,
+				UUID:                     tt.fields.UUID,
+				ResponseMessage:          tt.fields.ResponseMessage,
+				ResponseStatus:           tt.fields.ResponseStatus,
+				ResponseCode:             tt.fields.ResponseCode,
+				ReferenceNumber:          tt.fields.ReferenceNumber,
+				ApprovalCode:             tt.fields.ApprovalCode,
+				VoucherNumber:            tt.fields.VoucherNumber,
+				VoucherCode:              tt.fields.VoucherCode,
+				MiniStatementRecords:     tt.fields.MiniStatementRecords,
+				DisputeRRN:               tt.fields.DisputeRRN,
+				AdditionalData:           tt.fields.AdditionalData,
+				TranDateTime:             tt.fields.TranDateTime,
+				TranFee:                  tt.fields.TranFee,
+				AdditionalAmount:         tt.fields.AdditionalAmount,
+				AcqTranFee:               tt.fields.AcqTranFee,
+				IssTranFee:               tt.fields.IssTranFee,
+				TranCurrency:             tt.fields.TranCurrency,
+				MerchantID:               tt.fields.MerchantID,
+				GeneratedQR:              tt.fields.GeneratedQR,
+				Bank:                     tt.fields.Bank,
+				Name:                     tt.fields.Name,
+				CardType:                 tt.fields.CardType,
+				LastPAN:                  tt.fields.LastPAN,
+				TransactionID:            tt.fields.TransactionID,
+				CheckDuplicate:           tt.fields.CheckDuplicate,
+				AuthenticationType:       tt.fields.AuthenticationType,
+				AccountCurrency:          tt.fields.AccountCurrency,
+				ToAccountType:            tt.fields.ToAccountType,
+				FromAccountType:          tt.fields.FromAccountType,
+				EntityID:                 tt.fields.EntityID,
+				EntityType:               tt.fields.EntityType,
+				Username:                 tt.fields.Username,
+				DynamicFees:              tt.fields.DynamicFees,
+				QRCode:                   tt.fields.QRCode,
+				ExpDate:                  tt.fields.ExpDate,
+				FinancialInstitutionID:   tt.fields.FinancialInstitutionID,
+				CreationDate:             tt.fields.CreationDate,
+				PanCategory:              tt.fields.PanCategory,
+				EntityGroup:              tt.fields.EntityGroup,
+				MerchantAccountType:      tt.fields.MerchantAccountType,
+				MerchantAccountReference: tt.fields.MerchantAccountReference,
+				MerchantName:             tt.fields.MerchantName,
+				MerchantCity:             tt.fields.MerchantCity,
+				MobileNo:                 tt.fields.MobileNo,
+				MerchantCategoryCode:     tt.fields.MerchantCategoryCode,
+				PostalCode:               tt.fields.PostalCode,
+			}
+			res.MaskPAN()
+			if res.PAN != tt.result {
+				t.Errorf("PAN Masking failed: Expected %s, got %s", tt.result, res.PAN)
+			}
+		})
+	}
+}
