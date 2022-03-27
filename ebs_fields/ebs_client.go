@@ -136,6 +136,7 @@ type IPINResponse struct {
 	Username        string `json:"userName"`
 }
 
+//newResponse the
 func (i IPINResponse) newResponse() EBSParserFields {
 	var res GenericEBSResponseFields
 	res.ResponseCode = int(i.ResponseCode)

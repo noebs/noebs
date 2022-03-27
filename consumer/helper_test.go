@@ -13,12 +13,12 @@ func Test_validatePassword(t *testing.T) {
 	}{
 		{"regular_password", args{"12345678"}, false},
 		{"s dollar", args{"MY$SuperPassword11"}, true},
-		{"asterisk", args{"MY*SuperPassword11"}, false},
+		{"asterisk", args{"MY*SuperPassword11"}, true},
 		{"plus", args{"MY+SuperPassword11"}, true},
-		{"minus", args{"MY-SuperPassword11"}, false},
+		{"minus", args{"MY-SuperPassword11"}, true},
 		{"=", args{"MY=SuperPassword11"}, true},
 		{"<", args{"MY>SuperPassword11"}, true},
-		{"&", args{"MY&SuperPassword11"}, false},
+		{"&", args{"MY&SuperPassword11"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
