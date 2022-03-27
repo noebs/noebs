@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"errors"
+	"strings"
 	"unicode"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -138,6 +139,10 @@ func validatePassword(password string) bool {
 		return false
 	}
 	var hasUpper, hasSymbol, hasNumber bool
+	// check if password contains @, &, #, $, %, ^, *, (, ), _, -, +, =, !, ?, ., /, <, >, [, ], {, }, |, \, ;, :, "
+	if strings.ContainsAny(password, "@&#$%^*()_-+=!.?/<>[]:{}|\\;:\"") {
+		hasSymbol = true
+	}
 	for _, c := range password {
 		if unicode.IsUpper(c) {
 			hasUpper = true
@@ -145,6 +150,7 @@ func validatePassword(password string) bool {
 		if unicode.IsSymbol(c) {
 			hasSymbol = true
 		}
+
 		if unicode.IsNumber(c) {
 			hasNumber = true
 		}
