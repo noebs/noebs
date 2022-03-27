@@ -131,6 +131,9 @@ type IPINResponse struct {
 	ResponseStatus  string `json:"responseStatus"`
 	PubKeyValue     string `json:"pubKeyValue"`
 	ResponseCode    int64  `json:"responseCode"`
+	Pan             string `json:"pan"`
+	ExpDate         string `json:"expDate"`
+	Username        string `json:"userName"`
 }
 
 func (i IPINResponse) newResponse() EBSParserFields {
@@ -140,5 +143,7 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	res.PubKeyValue = i.PubKeyValue
 	res.TranDateTime = strconv.Itoa(i.TranDateTime)
 	res.UUID = i.UUID
+	res.PAN = i.Pan
+	res.ExpDate = i.ExpDate
 	return EBSParserFields{GenericEBSResponseFields: res}
 }
