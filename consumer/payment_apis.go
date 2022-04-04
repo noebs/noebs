@@ -133,6 +133,7 @@ func (s *Service) Purchase(c *gin.Context) {
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
+		fields.DynamicFees = fees.SpecialPaymentFees
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
