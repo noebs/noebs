@@ -520,7 +520,8 @@ type ConsumerPurchaseFields struct {
 	ConsumerCardHolderFields
 	AmountFields
 	// PaymentDetails    []PaymentDetails `json:"paymentDetails,omitempty" form:"paymentDetails"`
-	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+	ServiceProviderId string  `json:"serviceProviderId" binding:"required"`
+	DynamicFees       float32 `json:"dynamicFees,omitempty"`
 }
 
 type PaymentDetails struct {
