@@ -97,7 +97,7 @@ func NewDynamicFees() DynamicFeesFields {
 	return DynamicFeesFields{
 		CardTransferfees:   10, // ebs QA server returns error for 1 fees
 		MoheFees:           25,
-		SpecialPaymentFees: 1,
+		SpecialPaymentFees: 10,
 		CustomFees:         1,
 	}
 }
