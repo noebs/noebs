@@ -1449,10 +1449,10 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 	case nil:
 
-		// if fields.PhoneNumber has 00 add a third 0 to them
-		if strings.ContainsAny(fields.MobileNumber, "00") {
-			fields.MobileNumber = strings.Replace(fields.MobileNumber, "00", "000", 1)
-		}
+		// // if fields.PhoneNumber has 00 add a third 0 to them
+		// if strings.ContainsAny(fields.MobileNumber, "00") {
+		// 	fields.MobileNumber = strings.Replace(fields.MobileNumber, "00", "000", 1)
+		// }
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
