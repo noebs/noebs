@@ -97,3 +97,29 @@ func NewDynamicFees() DynamicFeesFields {
 		CustomFees:         1,
 	}
 }
+
+type Fees struct {
+	//ConsumerCommonFields
+	//Service     string  `json:"service" binding:"required"`
+	//Fees        float32 `json:"static_fees,omitempty"`//static fees for pos
+	//Iscustomer  bool    `json:"is_customer"`
+	Cashin_static_fees     float32 `json:"cashin_static_fees,omitempty"`
+	Cashout_static_fees    float32 `json:"cashout_static_fees,omitempty"`
+	Purchase_static_fees   float32 `json:"purchase_static_fees,omitempty"`
+	Electricty_static_fees float32 `json:"electricty_static_fees,omitempty"`
+	custom_static_fees     float32 `json:"custom_static_fees,omitempty"`
+	MoheSud_static_fees    float32 `json:"mohe_sud_static_fees,omitempty"`
+	MoheArab_static_fees   float32 `json:"mohe_arab_static_fees,omitempty"`
+}
+
+func NewStaticFees() Fees {
+	return Fees{
+		Cashin_static_fees:     0,
+		Cashout_static_fees:    1,
+		Purchase_static_fees:   5,
+		Electricty_static_fees: 5,
+		custom_static_fees:     1,
+		MoheSud_static_fees:    25,
+		MoheArab_static_fees:   25,
+	}
+}

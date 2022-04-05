@@ -103,6 +103,7 @@ type Service struct {
 }
 
 var fees = ebs_fields.NewDynamicFees()
+var static_fees = ebs_fields.NewStaticFees()
 
 //BillChan it is used to asyncronysly parses ebs response to get and assign values to the billers
 // such as assigning the name to utility personal payment info
@@ -583,7 +584,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res, "fees": fees})
+			c.JSON(code, gin.H{"ebs_response": res, "fees": fees, "static_fees": static_fees})
 
 		}
 
