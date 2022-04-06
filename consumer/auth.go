@@ -8,10 +8,10 @@ import (
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
+	"github.com/golang-jwt/jwt"
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
 )

@@ -3,10 +3,12 @@ package gateway
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
+	"github.com/golang-jwt/jwt"
 )
 
 //JWTAuth provides an encapsulation for jwt auth
@@ -16,19 +18,17 @@ type JWTAuth struct {
 
 type GetRedisClient func(string) *redis.Client
 
-
 //Init initializes jwt auth
-func (j *JWTAuth)Init(){
+func (j *JWTAuth) Init() {
 	//FIXME issue #66
-	key, _ := GenerateAPIKey()
-	j.Key = []byte(key)
+	j.Key = []byte(ebs_fields.SecretConfig.JWTKey)
 }
 
 // GenerateJWT generates a JWT standard token with default values hardcoded. FIXME
 func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
-	expiresAt := time.Now().Add(time.Hour * 1000).UTC().Unix()
+	expiresAt := time.Now().Add(time.Minute * 10).UTC().Unix()
 
 	claims := TokenClaims{
 		serviceID,
@@ -40,6 +40,7 @@ func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
+	log.Println("generating token")
 	// Sign and get the complete encoded token as a string using the secret
 	if j.Key == nil {
 		return "", errors.New("empty jwt key")
@@ -58,26 +59,24 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-
-		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
 		return j.Key, nil
 	})
-
-	// a user might had submitted a non-jwt token
-	// if err != nil {
-	// 	return nil, err
-
-	// }
+	if token == nil {
+		log.Println(err)
+		return nil, err
+	}
 
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
+		log.Println("why am i here?")
 		return claims, nil
 
 	} else {
-		return nil, err
+		// we still gonna return the claim even if it is not valid!
+		return claims, err
 	}
 }
 
-func (j *JWTAuth)verifyWithClaim(tokenString string) error {
+func (j *JWTAuth) verifyWithClaim(tokenString string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return j.Key, nil
 	})
@@ -99,10 +98,8 @@ func (j *JWTAuth)verifyWithClaim(tokenString string) error {
 	return nil
 }
 
-
-
 // GenerateJWTWithClaim generates a JWT standard token with default values hardcoded. FIXME
-func (j *JWTAuth)GenerateJWTWithClaim(username string, tk TokenClaims) (string, error) {
+func (j *JWTAuth) GenerateJWTWithClaim(username string, tk TokenClaims) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 
@@ -138,14 +135,14 @@ type TokenClaims struct {
 // Default populate token claims with default values
 func (t TokenClaims) Default(username string) jwt.Claims {
 	n := time.Now().Unix()
-	n3h := time.Now().Add(3 * time.Hour).Unix()
+	n3h := time.Now().Add(10 * time.Second).Unix()
 	t.StandardClaims = generateClaims(n, n3h, username)
 	t.Username = username
 	return t
 }
 
 //secretFromClaims returns the claim's secret. in this case it is a user name
-func (j *JWTAuth)secretFromClaims(token string, skipTime bool) (string, error) {
+func (j *JWTAuth) secretFromClaims(token string, skipTime bool) (string, error) {
 	claims, err := j.VerifyJWT(token)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired > 0 && skipTime {

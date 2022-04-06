@@ -161,7 +161,7 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 			ResponseCode:           0,
 			ReferenceNumber:        "",
 			ApprovalCode:           "",
-			VoucherNumber:          0,
+			VoucherNumber:          "0",
 			MiniStatementRecords:   nil,
 			DisputeRRN:             "",
 			AdditionalData:         "",
@@ -210,6 +210,22 @@ func (s *Service) GetAll(c *gin.Context) {
 		"count":    count,
 	}
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
+}
+
+//GetID gets a transaction by its database ID.
+func (s *Service) GetID(c *gin.Context) {
+	id := c.Param("id")
+	db, _ := gorm.Open("sqlite3", "test.db")
+	defer db.Close()
+
+	db.AutoMigrate(&Transaction{})
+
+	var tran Transaction
+	if err := db.Where("id = ?", id).First(&tran).Error; err != nil {
+		c.AbortWithStatus(404)
+	} else {
+		c.JSON(http.StatusOK, gin.H{"result": tran})
+	}
 }
 
 func (s *Service) BrowserDashboard(c *gin.Context) {

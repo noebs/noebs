@@ -1,8 +1,9 @@
 package ebs_fields
 
 import (
-	_ "embed"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"time"
 
@@ -217,10 +218,7 @@ func iso8601(fl validator.FieldLevel) bool {
 
 	dateLayout := time.RFC3339
 	_, err := time.Parse(dateLayout, fl.Field().String())
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 //GenericEBSResponseFields represent EBS response
@@ -247,17 +245,18 @@ type GenericEBSResponseFields struct {
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 	UUID        string `json:"UUID,omitempty" form:"UUID"`
 
-	ResponseMessage      string                   `json:"responseMessage,omitempty"`
-	ResponseStatus       string                   `json:"responseStatus,omitempty"`
-	ResponseCode         int                      `json:"responseCode"`
-	ReferenceNumber      string                   `json:"referenceNumber,omitempty"`
-	ApprovalCode         string                   `json:"approvalCode,omitempty"`
-	VoucherNumber        int                      `json:"voucherNumber,omitempty"`
-	MiniStatementRecords []map[string]interface{} `json:"miniStatementRecords,omitempty" gorm:"-"`
-	DisputeRRN           string                   `json:"DisputeRRN,omitempty"`
-	AdditionalData       string                   `json:"additionalData,omitempty"`
-	TranDateTime         string                   `json:"tranDateTime,omitempty"`
-	TranFee              *float32                 `json:"tranFee,omitempty"`
+	ResponseMessage      string          `json:"responseMessage,omitempty"`
+	ResponseStatus       string          `json:"responseStatus,omitempty"`
+	ResponseCode         int             `json:"responseCode"`
+	ReferenceNumber      string          `json:"referenceNumber,omitempty"`
+	ApprovalCode         string          `json:"approvalCode,omitempty"`
+	VoucherNumber        string          `json:"voucherNumber,omitempty"`
+	VoucherCode          string          `json:"voucherCode,omitempty"`
+	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
+	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
+	AdditionalData       string          `json:"additionalData,omitempty"`
+	TranDateTime         string          `json:"tranDateTime,omitempty"`
+	TranFee              *float32        `json:"tranFee,omitempty"`
 
 	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
 	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
@@ -273,6 +272,30 @@ type GenericEBSResponseFields struct {
 	LastPAN     string `json:"last4PANDigits,omitempty"`
 }
 
+type MinistatementDB []map[string]interface{}
+
+func (m *MinistatementDB) Scan(value interface{}) error {
+
+	b, ok := value.(string)
+	if !ok {
+		log.Printf("The type of value is: %T", value)
+		return errors.New("type assertion to []byte failed")
+	}
+	if b == "" {
+		return nil
+	}
+	return json.Unmarshal([]byte(b), m)
+}
+
+// Value return json value, implement driver.Valuer interface
+func (m MinistatementDB) Value() (driver.Value, error) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
 type ImportantEBSFields struct {
 }
 
@@ -280,6 +303,8 @@ type ImportantEBSFields struct {
 type EBSParserFields struct {
 	EBSMapFields
 	GenericEBSResponseFields
+	OriginalTransaction GenericEBSResponseFields `json:"originalTransaction,omitempty"`
+	DynamicFees         float32                  `json:"dynamicFees,omitempty"`
 }
 
 // To allow Redis to use this struct directly in marshaling
@@ -335,12 +360,13 @@ type ConsumerSpecificFields struct {
 	ExtraInfo   string `json:"extraInfo" form:"extraInfo"`
 	//.. omitted fields
 
-	PhoneNo                string `json:"phoneNo" form:"phoneNo"`
-	NewIpin                string `json:"newIPIN" form:"newIPIN"`
-	NewUserPassword        string `json:"newUserPassword" form:"newUserPassword"`
-	SecurityQuestion       string `json:"securityQuestion" form:"securityQuestion"`
-	SecurityQuestionAnswer string `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
-	AdminUserName          string `json:"adminUserName" form:"adminUserName"`
+	PhoneNo                string  `json:"phoneNo" form:"phoneNo"`
+	NewIpin                string  `json:"newIPIN" form:"newIPIN"`
+	NewUserPassword        string  `json:"newUserPassword" form:"newUserPassword"`
+	SecurityQuestion       string  `json:"securityQuestion" form:"securityQuestion"`
+	SecurityQuestionAnswer string  `json:"securityQuestionAnswer" form:"securityQuestionAnswer"`
+	AdminUserName          string  `json:"adminUserName" form:"adminUserName"`
+	DynamicFees            float32 `json:"dynamicFees,omitempty" form:"dynamicFees"`
 
 	// other fields
 	OriginalTransaction    map[string]interface{} `json:"originalTransaction" form:"originalTransaction"`
@@ -376,6 +402,11 @@ type ConsumerBillInquiryFields struct {
 	ConsumerCommonFields
 	ConsumersBillersFields
 	ConsumerCardHolderFields
+}
+
+type ConsumerTransactionStatusFields struct {
+	ConsumerCommonFields
+	OriginalTranUUID string `json:"originalTranUUID" form:"originalTranUUID" binding:"required"`
 }
 
 func (f *ConsumerBillInquiryFields) MustMarshal() []byte {
@@ -427,7 +458,8 @@ type ConsumerPurchaseFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	ServiceProviderId string `json:"serviceProviderId" binding:"required"`
+	DynamicFees       float32 `json:"dynamicFees" binding:"required,min=0.30,max=50.00"`
+	ServiceProviderId string  `json:"serviceProviderId" binding:"required"`
 }
 
 func (f *ConsumerPurchaseFields) MustMarshal() []byte {
@@ -454,6 +486,7 @@ type ConsumerRegistrationFields struct {
 	EntityFields
 	RegistrationType string `json:"registrationType"`
 	PhoneNo          string `json:"phoneNo"`
+	PanCategory      string `binding:"required" json:"panCategory"`
 }
 
 type ConsumerCompleteRegistrationFields struct {
@@ -588,11 +621,20 @@ type ConsumerCardTransferAndMobileFields struct {
 	Mobile string `json:"mobile_number"`
 }
 
+type ConsumerCashInFields struct {
+	ConsumerCardTransferFields
+}
+
+type ConsumerCashoOutFields struct {
+	ConsumerCardTransferFields
+}
+
 type ConsumerCardTransferFields struct {
 	ConsumerCommonFields
 	ConsumerCardHolderFields
 	AmountFields
-	ToCard string `json:"toCard" binding:"required"`
+	ToCard      string  `json:"toCard" binding:"required"`
+	DynamicFees float32 `json:"dynamicFees"`
 }
 
 type ConsumrAccountTransferFields struct {
@@ -641,7 +683,7 @@ type ConsumerGenerateIPinCompletion struct {
 type ConsumerPANFromMobileFields struct {
 	ConsumerCommonFields
 	EntityID string `json:"entityId" binding:"required"`
-	Last4PAN string `json:"last4PANDigits" binding:"required`
+	Last4PAN string `json:"last4PANDigits" binding:"required"`
 }
 
 type ConsumerCardInfoFields struct {
@@ -741,8 +783,14 @@ type ValidationError struct {
 }
 
 type NoebsConfig struct {
-	OneSigna string `json:"onesignal_key"`
-	SMS      string `json:"sms_key"`
+	OneSignal         string `json:"onesignal_key"`
+	SMS               string `json:"sms_key"`
+	RedisPort         string `json:"redis_port"`
+	IsConsumerTesting *bool  `json:"is_consumer_testing"`
+	IsMerchantTesting *bool  `json:"is_merchant_testing"`
+	ConsumerIP        string
+	MerchantIP        string
+	JWTKey            string `json:"jwt_key"`
 }
 
 var SecretConfig NoebsConfig

@@ -52,23 +52,26 @@ const (
 )
 
 const (
-	ConsumerIsAliveEndpoint         = "isAlive"
-	ConsumerWorkingKeyEndpoint      = "getPublicKey"
-	ConsumerBalanceEndpoint         = "getBalance"
-	ConsumerBillInquiryEndpoint     = "getBill"
-	ConsumerBillPaymentEndpoint     = "payment"
-	ConsumerCardTransferEndpoint    = "doCardTransfer"
-	ConsumerAccountTransferEndpoint = "doAccountTransfer"
-	ConsumerPayeesListEndpoint      = "getPayeesList"
-	ConsumerChangeIPinEndpoint      = "changeIPin"
-	ConsumerPurchaseEndpoint        = "specialPayment"
-	ConsumerStatusEndpoint          = "getTransactionStatus"
-	ConsumerQRPaymentEndpoint       = "doQRPurchase"
-	ConsumerQRGenerationEndpoint    = "doMerchantRegistration"
-	ConsumerQRRefundEndpoint        = "doQRRefund"
-	ConsumerPANFromMobile           = "checkMsisdnAganistPAN"
-	ConsumerCardInfo                = "getCustomerInfo"
-	ConsumerGenerateVoucher         = "generateVoucher"
+	ConsumerIsAliveEndpoint           = "isAlive"
+	ConsumerWorkingKeyEndpoint        = "getPublicKey"
+	ConsumerBalanceEndpoint           = "getBalance"
+	ConsumerBillInquiryEndpoint       = "getBill"
+	ConsumerBillPaymentEndpoint       = "payment"
+	ConsumerCardTransferEndpoint      = "doCardTransfer"
+	ConsumerAccountTransferEndpoint   = "doAccountTransfer"
+	ConsumerPayeesListEndpoint        = "getPayeesList"
+	ConsumerChangeIPinEndpoint        = "changeIPin"
+	ConsumerPurchaseEndpoint          = "specialPayment"
+	ConsumerStatusEndpoint            = "getTransactionStatus"
+	ConsumerQRPaymentEndpoint         = "doQRPurchase"
+	ConsumerQRGenerationEndpoint      = "doMerchantRegistration"
+	ConsumerQRRefundEndpoint          = "doQRRefund"
+	ConsumerPANFromMobile             = "checkMsisdnAganistPAN"
+	ConsumerCardInfo                  = "getCustomerInfo"
+	ConsumerGenerateVoucher           = "generateVoucher"
+	ConsumerCashInEndpoint            = "doCashIn"
+	ConsumerCashOutEndpoint           = "doCashOut"
+	ConsumerTransactionStatusEndpoint = "getTransactionStatus"
 
 	// IPIN generation
 	IPinGeneration = "doGenerateIPinRequest"
@@ -77,3 +80,46 @@ const (
 	ConsumerRegister             = "register"
 	ConsumerCompleteRegistration = "completeCardRegistration"
 )
+
+// DynamicFeesFields for p2p and mohe dynamic fees case
+type DynamicFeesFields struct {
+	CardTransferfees   float32 `json:"p2p_fees"`
+	MoheFees           float32 `json:"mohe_fees"`
+	CustomFees         float32 `json:"custom_fees"`
+	SpecialPaymentFees float32 `json:"special_payment_fees"`
+}
+
+func NewDynamicFees() DynamicFeesFields {
+	return DynamicFeesFields{
+		CardTransferfees:   10, // ebs QA server returns error for 1 fees
+		MoheFees:           25,
+		SpecialPaymentFees: 1,
+		CustomFees:         1,
+	}
+}
+
+type Fees struct {
+	//ConsumerCommonFields
+	//Service     string  `json:"service" binding:"required"`
+	//Fees        float32 `json:"static_fees,omitempty"`//static fees for pos
+	//Iscustomer  bool    `json:"is_customer"`
+	Cashin_static_fees     float32 `json:"cashin_static_fees,omitempty"`
+	Cashout_static_fees    float32 `json:"cashout_static_fees,omitempty"`
+	Purchase_static_fees   float32 `json:"purchase_static_fees,omitempty"`
+	Electricty_static_fees float32 `json:"electricty_static_fees,omitempty"`
+	Custom_static_fees     float32 `json:"custom_static_fees,omitempty"`
+	MoheSud_static_fees    float32 `json:"mohe_sud_static_fees,omitempty"`
+	MoheArab_static_fees   float32 `json:"mohe_arab_static_fees,omitempty"`
+}
+
+func NewStaticFees() Fees {
+	return Fees{
+		Cashin_static_fees:     0,
+		Cashout_static_fees:    1,
+		Purchase_static_fees:   5,
+		Electricty_static_fees: 5,
+		Custom_static_fees:     1,
+		MoheSud_static_fees:    25,
+		MoheArab_static_fees:   25,
+	}
+}

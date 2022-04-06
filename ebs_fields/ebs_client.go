@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.New()
@@ -26,6 +27,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		Transport: verifyTLS,
 	}
 
+	log.Printf("our request to EBS: %v", string(req))
 	reqBuffer := bytes.NewBuffer(req)
 
 	var ebsGenericResponse EBSParserFields

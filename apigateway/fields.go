@@ -9,15 +9,14 @@ import (
 
 type UserModel struct {
 	gorm.Model
-	Username  string `binding:"min=3" json:"username"`
-	Password  string `binding:"required,min=8,max=20" json:"password"`
-	jwt       JWT
-	jwtId     int
-	Fullname  string `json:"fullname"`
-	Birthday  string `json:"birthday"`
-	Mobile    string `json:"mobile" binding:"required,len=10" gorm:"unique_index"`
-	Email     string `json:"email"`
-	Password2 string `binding:"required,eqfield=Password,min=8,max=20" json:"password2"`
+	Username   string `binding:"min=3" json:"username"`
+	Password   string `binding:"required,min=8,max=20" json:"password"`
+	Fullname   string `json:"fullname"`
+	Birthday   string `json:"birthday"`
+	Mobile     string `json:"mobile" binding:"required,len=10" gorm:"unique_index"`
+	Email      string `json:"email"`
+	Password2  string `binding:"required,eqfield=Password,min=8,max=20" json:"password2"`
+	IsMerchant bool   `json:"is_merchant" gorm:"default:false"`
 
 	Card []Cards
 }

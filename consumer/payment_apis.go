@@ -102,6 +102,9 @@ type Service struct {
 	utils.Service
 }
 
+var fees = ebs_fields.NewDynamicFees()
+var static_fees = ebs_fields.NewStaticFees()
+
 //BillChan it is used to asyncronysly parses ebs response to get and assign values to the billers
 // such as assigning the name to utility personal payment info
 var BillChan = make(chan ebs_fields.EBSParserFields)
@@ -449,6 +452,77 @@ func (s *Service) Balance(c *gin.Context) {
 	}
 }
 
+//Balance gets performs get balance transaction for the provided card info
+func (s *Service) TransactionStatus(c *gin.Context) {
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerTransactionStatusEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var fields = ebs_fields.ConsumerTransactionStatusFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		// this is really extremely a complex case
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+
+		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res.OriginalTransaction})
+
+		}
+
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+	}
+}
+
 //WorkingKey get ebs working key for encrypting ipin for consumer transactions
 func (s *Service) WorkingKey(c *gin.Context) {
 	url := ebs_fields.EBSIp + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
@@ -510,7 +584,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			c.JSON(code, gin.H{"ebs_response": res, "fees": fees, "static_fees": static_fees})
 
 		}
 
@@ -528,6 +602,75 @@ func (s *Service) CardTransfer(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerCardTransferAndMobileFields{}
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+		//fields.DynamicFees = 10
+		fields.DynamicFees = fees.CardTransferfees
+		// save this to redis
+		if mobile := fields.Mobile; mobile != "" {
+			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
+		}
+
+		jsonBuffer := fields.MustMarshal()
+		log.Printf("the request is: %v", string(jsonBuffer))
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+
+		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+//CashIn performs cash in transactions
+func (s *Service) CashIn(c *gin.Context) {
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerCashInEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var fields = ebs_fields.ConsumerCashInFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -547,10 +690,6 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 	case nil:
 
-		// save this to redis
-		if mobile := fields.Mobile; mobile != "" {
-			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
-		}
 		jsonBuffer := fields.MustMarshal()
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
@@ -564,6 +703,69 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		}
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+
+		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err.Error(),
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+	}
+}
+
+//CashOut performs cashout transactions
+func (s *Service) CashOut(c *gin.Context) {
+	url := ebs_fields.EBSIp + ebs_fields.ConsumerCashOutEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var fields = ebs_fields.ConsumerCashoOutFields{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+
+		jsonBuffer := fields.MustMarshal()
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		transaction := dashboard.Transaction{
+			GenericEBSResponseFields: res.GenericEBSResponseFields,
+		}
+
+		transaction.EBSServiceName = ebs_fields.PurchaseTransaction // rename me to cashin transaction
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -781,7 +983,6 @@ func (s *Service) Status(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
 
 	default:
@@ -1417,11 +1618,12 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	var bill ebs_fields.ConsumerPurchaseFields
 
 	var pp ebs_fields.ConsumerCardTransferFields
-
+	var indicator int32
 	if data.CardNumber == "" {
 		bill.ServiceProviderId = data.EBSBiller
 		p = bill
 		url = ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint
+		indicator = 1
 	} else {
 		pp.ToCard = data.CardNumber
 		p = pp
@@ -1429,6 +1631,11 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 	log.Printf("the data in p is: %#v", p)
 	if err := c.ShouldBindJSON(&p); err != nil {
+		if indicator == 1 {
+			bill.DynamicFees = fees.SpecialPaymentFees
+			p = bill
+		}
+
 		log.Printf("error in parsing: %v", err)
 		if !queries.IsJSON {
 			c.Redirect(http.StatusMovedPermanently, referer+"?fail=true&code="+err.Error())
