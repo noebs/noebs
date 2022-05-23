@@ -102,7 +102,7 @@ func (s *State) LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	u := s.UserModel
 
-	if notFound := s.Db.Preload("jwt").Where("username = ?", strings.ToLower(req.Username)).First(&u).RecordNotFound(); notFound {
+	if notFound := s.Db.Preload("jwt").Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).RecordNotFound(); notFound {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
@@ -166,7 +166,6 @@ func (s *State) LoginHandler(c *gin.Context) {
 	s.Redis.Incr(req.Username + ":logged_in_devices")
 
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
-
 }
 
 //FIXME #61 refactor some of these apis for consumer services only
