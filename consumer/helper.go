@@ -2,7 +2,9 @@ package consumer
 
 import (
 	"errors"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -156,4 +158,47 @@ func validatePassword(password string) bool {
 		}
 	}
 	return hasUpper && hasSymbol && hasNumber
+}
+
+//userHasSessions is a handy function we can use to check if a user has any active sessions e.g., esp
+// when we don't want our users to use our app in new devices.
+// we have to implement a way to:
+// - identify user's devices
+// - allow them to use the app in other devices in case their original device was lost
+func userHasSessions(s *State, username string) bool {
+	// Make sure the user doesn't have any active sessions!
+	lCount, err := s.Redis.Get(username + ":logged_in_devices").Result()
+
+	num, _ := strconv.Atoi(lCount)
+	// Allow for the user to be logged in -- add allowance through someway
+	if err != redis.Nil && num > 1 {
+		// The user is already logged in somewhere else. Communicate that to them, clearly!
+		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
+		//	"error": "You are logging from another device. You can only have one valid session"})
+		//return
+		log.Print("The user is logging from a different location")
+		return true
+	}
+	return false
+}
+
+//userExceedMaxSessions keep track of many login-attempts a user has made
+func userExceededMaxSessions(s *State, username string) bool {
+	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
+	res, err := s.Redis.Get(username + ":login_counts").Result()
+	if err == redis.Nil {
+		// the has just logged in
+		s.Redis.Set(username+":login_counts", 0, time.Hour)
+	} else if err == nil {
+		count, _ := strconv.Atoi(res)
+		if count >= 5 {
+			// Allow users to use another login method (e.g., totp, or they should reset their password)
+			// Lock their account
+			//s.Redis.HSet(username, "suspecious_behavior", 1)
+			s.Redis.HIncrBy(username, "suspicious_behavior", 1)
+			ttl, _ := s.Redis.TTL(username + ":login_counts").Result()
+			log.Printf("user exceeded max sessions", ttl)
+			return true
+		}
+	}
 }

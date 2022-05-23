@@ -3,9 +3,7 @@ package consumer
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/gin-gonic/gin"
@@ -86,6 +84,7 @@ func (s *State) IpFilterMiddleware(c *gin.Context) {
 }
 
 //FIXME #60 make LoginHandler in consumer apis #61
+//FIXME(adonese): #160 make login flow simpler. The code is rubbish
 func (s *State) LoginHandler(c *gin.Context) {
 
 	req := s.UserLogin
@@ -109,62 +108,17 @@ func (s *State) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Make sure the user doesn't have any active sessions!
-	lCount, err := s.Redis.Get(req.Username + ":logged_in_devices").Result()
-
-	num, _ := strconv.Atoi(lCount)
-	// Allow for the user to be logged in -- add allowance through someway
-	if err != redis.Nil && num > 1 {
-		// The user is already logged in somewhere else. Communicate that to them, clearly!
-		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
-		//	"error": "You are logging from another device. You can only have one valid session"})
-		//return
-		log.Print("The user is logging from a different location")
-	}
-
-	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
-	res, err := s.Redis.Get(req.Username + ":login_counts").Result()
-	if err == redis.Nil {
-		// the has just logged in
-		s.Redis.Set(req.Username+":login_counts", 0, time.Hour)
-	} else if err == nil {
-		count, _ := strconv.Atoi(res)
-		if count >= 5 {
-			// Allow users to use another login method (e.g., totp, or they should reset their password)
-			// Lock their account
-			//s.Redis.HSet(req.Username, "suspecious_behavior", 1)
-			s.Redis.HIncrBy(req.Username, "suspicious_behavior", 1)
-			ttl, _ := s.Redis.TTL(req.Username + ":login_counts").Result()
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts",
-				"code": "maximum_login", "ttl_minutes": ttl.Minutes()})
-			return
-		}
-	}
-
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
-		log.Printf("there is an error in the password %v", err)
-		s.Redis.Incr(req.Username + ":login_counts")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		return
 	}
-	// it is a successful login attempt
-	s.Redis.Del(req.Username + ":login_counts")
+
 	token, err := s.Auth.GenerateJWT(u.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
-
-	err = s.Db.Save(&u).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
 	c.Writer.Header().Set("Authorization", token)
-
-	// Redis add The user is now logged in -- and has active session
-	s.Redis.Incr(req.Username + ":logged_in_devices")
-
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
