@@ -201,4 +201,5 @@ func userExceededMaxSessions(s *State, username string) bool {
 			return true
 		}
 	}
+	return false
 }
