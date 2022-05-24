@@ -12,7 +12,7 @@ import (
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 
 	"net/http"
 )

@@ -3,8 +3,8 @@ package gateway
 import (
 	"strings"
 
-	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type UserModel struct {
@@ -17,8 +17,6 @@ type UserModel struct {
 	Email      string `json:"email"`
 	Password2  string `json:"password2"`
 	IsMerchant bool   `json:"is_merchant" gorm:"default:false"`
-
-	Card []Cards
 }
 
 func (u *UserModel) SanitizeName() {

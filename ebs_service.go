@@ -20,16 +20,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
+	_ "gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 var log = logrus.New()
 var redisClient = utils.GetRedisClient("")
-var database, _ = utils.Database("sqlite3", "test.db")
+var database *gorm.DB
 
 var auth gateway.JWTAuth
 var service = utils.Service{Db: database, Redis: redisClient}
@@ -181,7 +183,12 @@ func GetMainEngine() *gin.Engine {
 }
 
 func init() {
-	database.LogMode(true)
+	var err error
+	database, err = utils.Database("test.db")
+	if err != nil {
+		log.Fatalf("error in connecting to db: %v", err)
+	}
+	database.Logger.LogMode(logger.Info)
 	database.AutoMigrate(&dashboard.Transaction{})
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()
@@ -239,8 +246,7 @@ func main() {
 //FIXME #68 make all merchant routers in an Env or struct
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.IsAliveFields{}
 
@@ -338,8 +344,7 @@ func WorkingKey(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.WorkingKeyFields{}
 
@@ -416,8 +421,7 @@ func Purchase(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.PurchaseFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -487,8 +491,7 @@ func Balance(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.BalanceFields{}
 
@@ -561,8 +564,7 @@ func CardTransfer(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.CardTransferFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -631,8 +633,7 @@ func BillInquiry(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.BillInquiryFields{}
 
@@ -706,8 +707,7 @@ func BillPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.BillPaymentFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -771,8 +771,7 @@ func TopUpPayment(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.BillPaymentFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -847,8 +846,7 @@ func ChangePIN(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.ChangePINFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -918,8 +916,7 @@ func ChangePIN(c *gin.Context) {
 func CashOut(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashOutEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.CashOutFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -976,8 +973,7 @@ func CashOut(c *gin.Context) {
 func VoucherCashOut(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.VoucherCashOutWithAmountEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.VoucherCashOutFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1034,8 +1030,7 @@ func VoucherCashOut(c *gin.Context) {
 func VoucherCashIn(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.VoucherCashInEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.VoucherCashInFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1092,8 +1087,7 @@ func VoucherCashIn(c *gin.Context) {
 func Statement(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.MiniStatementEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.MiniStatementFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1150,8 +1144,7 @@ func Statement(c *gin.Context) {
 func GenerateVoucher(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.GenerateVoucherEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.GenerateVoucherFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1219,8 +1212,7 @@ func GenerateVoucher(c *gin.Context) {
 func CashIn(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashInEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.CashInFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1287,8 +1279,7 @@ func CashIn(c *gin.Context) {
 func ToAccount(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.AccountTransferFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1360,8 +1351,7 @@ func MiniStatement(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.MiniStatementFields{}
 
@@ -1420,8 +1410,7 @@ func testAPI(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
 
 	// create Database function
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.WorkingKeyFields{}
 
@@ -1483,8 +1472,7 @@ func Refund(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.RefundFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
@@ -1546,8 +1534,7 @@ func EBS(c *gin.Context) {
 	ebsURL := ebs_fields.EBSMerchantIP + endpoint
 	log.Printf("the url is: %v", url)
 
-	db, _ := utils.Database("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := utils.Database("test.db")
 
 	jsonBuffer, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {

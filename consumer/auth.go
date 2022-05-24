@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,8 +11,9 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
-	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type State struct {
@@ -101,10 +103,10 @@ func (s *State) LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	u := s.UserModel
 
-	if notFound := s.Db.Preload("jwt").Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).RecordNotFound(); notFound {
+	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
 
@@ -186,28 +188,21 @@ func (s *State) LogOut(c *gin.Context) {
 
 //FIXME issue #61
 func (s *State) CreateUser(c *gin.Context) {
-	db, err := gorm.Open("sqlite3", "test.db")
-	if err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": serverError.Error()})
-		return
-	}
-
-	defer db.Close()
-
 	u := s.UserModel
-	if err := s.Db.AutoMigrate(&u).Error; err != nil {
-		// log the error, but don't quit.
+	if s.Db == nil {
+		panic("wtf")
+	}
+	if err := s.Db.AutoMigrate(&gateway.UserModel{}); err != nil {
+		log.Print("the error is: %v", err)
+	}
+	// 	// log the error, but don't quit.
+	// 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "dsds"})
+	// 	return
+	// }
+	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
-
-	err = c.ShouldBindBodyWith(&u, binding.JSON)
-	// make the errors insane
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-		return
-	}
-
 	// validate u.Password to include at least one capital letter, one symbol and one number
 	// and that it is at least 8 characters long
 	if !validatePassword(u.Password) {
@@ -217,14 +212,13 @@ func (s *State) CreateUser(c *gin.Context) {
 
 	// make sure that the user doesn't exist in the database
 
-	err = u.HashPassword()
-	if err != nil {
+	if err := u.HashPassword(); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
 
 	// make the user capital - small
 	u.SanitizeName()
-	if err := db.Create(&u).Error; err != nil {
+	if err := s.Db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
@@ -239,11 +233,10 @@ func (s *State) CreateUser(c *gin.Context) {
 
 //FIXME issue #61
 func GetServiceID(c *gin.Context) {
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
 	}
-	defer db.Close()
 
 	db.AutoMigrate(&Service{})
 

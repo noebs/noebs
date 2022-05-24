@@ -3,9 +3,12 @@ package utils
 import (
 	//"github.com/adonese/noebs/dashboard"
 
+	"log"
+
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
-	"github.com/jinzhu/gorm"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -57,9 +60,10 @@ func PanfromMobile(username string, r *redis.Client) (string, bool) {
 	return "", false
 }
 
-func Database(dialect, fname string) (*gorm.DB, error) {
-	db, err := gorm.Open(dialect, fname)
+func Database(fname string) (*gorm.DB, error) {
+	db, err := gorm.Open(sqlite.Open(fname), &gorm.Config{})
 	if err != nil {
+		log.Printf("error in opening db: %v", err)
 		return nil, err
 	}
 	return db, nil

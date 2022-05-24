@@ -2,13 +2,14 @@ package dashboard
 
 import (
 	"encoding/json"
-	"github.com/adonese/noebs/ebs_fields"
-	"github.com/gin-contrib/multitemplate"
-	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/gin-contrib/multitemplate"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Transaction struct {
@@ -33,7 +34,6 @@ func (e *Env) GetTransactionbyID(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"result": tran.ID})
 
-	defer e.Db.Close()
 }
 
 type MerchantTransactions struct {
@@ -153,46 +153,46 @@ func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
 func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase string, offset, pageSize int) ([]Transaction, int) {
 
 	var tran []Transaction
-	var count int
+	var count int64
 
 	searchField = mapSearchField(searchField)
 	sortField = mapSearchField(sortField)
 	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
 
-	if searchField != "" || search != ""{
+	if searchField != "" || search != "" {
 		// where can you search?
 		// terminal_id
 		// date time range TODO
 		// systemTraceAuditNumber
-		switch searchField{
+		switch searchField {
 		case "created_at":
 			db.Table("transactions").Where("id >= ? AND created_at in (?)", offset, search).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
 		case "system_trace_audit_number": // exact match
-			db.Table("transactions").Where("id >= ? AND system_trace_audit_number = ?", offset, search).Count(&count).Limit(pageSize).Order(sortField +" "+ sortCase).Find(&tran)
+			db.Table("transactions").Where("id >= ? AND system_trace_audit_number = ?", offset, search).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
 		default:
-			db.Table("transactions").Where("id >= ? AND terminal_id LIKE ?", offset, "%"+search+"%").Count(&count).Limit(pageSize).Order(sortField+" " + sortCase).Find(&tran)
+			db.Table("transactions").Where("id >= ? AND terminal_id LIKE ?", offset, "%"+search+"%").Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
 		}
-	}else{
+	} else {
 		// we only want to sort, no searching required
 		db.Table("transactions").Where("id >= ?", offset).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
 	}
-	return tran, count
+	return tran, int(count)
 
 }
 
-func mapSearchField(f string) string{
+func mapSearchField(f string) string {
 	/*
-	terminalId: terminal_id
-	tranDateTime: tran_date_time
-	approvalCode: approval_code
-	 */
+		terminalId: terminal_id
+		tranDateTime: tran_date_time
+		approvalCode: approval_code
+	*/
 	var result = f
-	for i, v := range []rune(f){
+	for i, v := range []rune(f) {
 		if i == 0 {
 			continue
 		}
-		if unicode.IsUpper(v){
-			if !unicode.IsUpper(rune(f[i-1])){
+		if unicode.IsUpper(v) {
+			if !unicode.IsUpper(rune(f[i-1])) {
 				result = result[:i] + "_" + strings.ToLower(string(v)) + f[i+1:]
 				break
 			}

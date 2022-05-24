@@ -7,13 +7,13 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/go-redis/redis/v7"
-	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 func TestMerchant_ByID(t *testing.T) {
 
-	var db, _ = utils.Database("sqlite3", "test.db")
+	var db, _ = utils.Database("test.db")
 
 	type fields struct {
 		Model       gorm.Model
