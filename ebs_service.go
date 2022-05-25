@@ -295,9 +295,9 @@ func IsAlive(c *gin.Context) {
 		transaction.MaskPAN()
 
 		// God please make it works.
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := db.Table("transactions").Create(&transaction); err != nil {
 			log.WithFields(logrus.Fields{
-				"error":   err.Error(),
+				"error":   err,
 				"details": "Error in writing to Database",
 			}).Info("Problem in transaction table committing")
 		}
@@ -441,10 +441,10 @@ func Purchase(c *gin.Context) {
 			GenericEBSResponseFields: res.GenericEBSResponseFields,
 		}
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-		if err := db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 

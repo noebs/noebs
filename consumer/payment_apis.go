@@ -156,10 +156,10 @@ func (s *Service) Purchase(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -225,10 +225,10 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -292,10 +292,10 @@ func (s *Service) BillPayment(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -359,10 +359,10 @@ func (s *Service) BillInquiry(c *gin.Context) {
 
 		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -433,10 +433,10 @@ func (s *Service) Balance(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -504,10 +504,10 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -596,10 +596,10 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -666,10 +666,10 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -729,10 +729,10 @@ func (s *Service) CashIn(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -792,10 +792,10 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -855,10 +855,10 @@ func (s *Service) CashOut(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -919,10 +919,10 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -988,10 +988,10 @@ func (s *Service) IPinChange(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1058,10 +1058,10 @@ func (s *Service) Status(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1137,10 +1137,10 @@ func (s *Service) QRPayment(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1203,10 +1203,10 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1271,10 +1271,10 @@ func (s *Service) QRRefund(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1336,10 +1336,10 @@ func (s *Service) QRComplete(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1401,10 +1401,10 @@ func (s *Service) QRGeneration(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1475,10 +1475,10 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1544,10 +1544,10 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -1615,10 +1615,10 @@ func (s *Service) IPINKey(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -2042,10 +2042,10 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -2112,10 +2112,10 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -2221,10 +2221,10 @@ func (s *Service) RegisterCard(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -2288,10 +2288,10 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
@@ -2354,10 +2354,10 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction).Error; err != nil {
+		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
-				"message": err.Error(),
+				"message": err,
 			}).Info("error in migrating purchase model")
 		}
 
