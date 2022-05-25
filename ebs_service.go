@@ -32,10 +32,11 @@ import (
 var log = logrus.New()
 var redisClient = utils.GetRedisClient("")
 var database *gorm.DB
+var consumerService consumer.Service
+var service utils.Service
 
 var auth gateway.JWTAuth
-var service = utils.Service{Db: database, Redis: redisClient}
-var consumerService = consumer.Service{Service: service}
+
 var cardService = cards.Service{Redis: redisClient}
 var dashService = dashboard.Service{Redis: redisClient}
 var state = consumer.State{}
@@ -192,6 +193,8 @@ func init() {
 	database.AutoMigrate(&dashboard.Transaction{})
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()
+	service = utils.Service{Db: database, Redis: redisClient}
+	consumerService = consumer.Service{Service: service}
 	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
 	merchantServices.Init(database, log)
 }
