@@ -5,9 +5,9 @@ import (
 	"log"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 //Merchant is a fully qualified noebs merchant
@@ -66,8 +66,8 @@ func (m *Merchant) authenticate(password string) error {
 }
 
 func (m *Merchant) Write() error {
-	if err := m.db.AutoMigrate(m).Error; err != nil {
-		log.Printf("error in migration: %v", err)
+	if err := m.db.AutoMigrate(m); err != nil {
+		log.Printf("error in migration: %v", err.Error())
 		// return err
 	}
 

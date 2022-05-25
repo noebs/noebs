@@ -13,8 +13,9 @@ import (
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
-	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 var log = logrus.New()
@@ -24,7 +25,7 @@ type Service struct {
 }
 
 func (s *Service) MerchantViews(c *gin.Context) {
-	db, _ := utils.Database("sqlite3", "test.db")
+	db, _ := utils.Database("test.db")
 	terminal := c.Param("id")
 
 	pageSize := 50
@@ -54,7 +55,7 @@ func (s *Service) MerchantViews(c *gin.Context) {
 
 func (s *Service) TransactionsCount(c *gin.Context) {
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		log.WithFields(
 			logrus.Fields{
@@ -65,9 +66,7 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 
 	env := &Env{Db: db}
 
-	defer env.Db.Close()
-
-	if err := db.AutoMigrate(&Transaction{}).Error; err != nil {
+	if err := db.AutoMigrate(&Transaction{}); err != nil {
 		log.WithFields(
 			logrus.Fields{
 				"error":   err.Error(),
@@ -76,7 +75,7 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 	}
 
 	var tran Transaction
-	var count interface{}
+	var count int64
 
 	if err := env.Db.Model(&tran).Count(&count).Error; err != nil {
 		log.WithFields(
@@ -92,7 +91,7 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 
 func (s *Service) TransactionByTid(c *gin.Context) {
 
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		log.WithFields(
 			logrus.Fields{
@@ -101,9 +100,7 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 			}).Info("error in database")
 	}
 
-	defer db.Close()
-
-	if err := db.AutoMigrate(&Transaction{}).Error; err != nil {
+	if err := db.AutoMigrate(&Transaction{}); err != nil {
 		log.WithFields(
 			logrus.Fields{
 				"error":   err.Error(),
@@ -127,11 +124,11 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 
 func (s *Service) MakeDummyTransaction(c *gin.Context) {
 
-	db, _ := gorm.Open("sqlite3", "test.db")
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	env := &Env{Db: db}
 
-	if err := env.Db.AutoMigrate(&Transaction{}).Error; err != nil {
+	if err := env.Db.AutoMigrate(&Transaction{}); err != nil {
 		log.Fatalf("unable to automigrate: %s", err.Error())
 	}
 
@@ -180,9 +177,7 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 }
 
 func (s *Service) GetAll(c *gin.Context) {
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	defer db.Close()
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	db.AutoMigrate(&Transaction{})
 
@@ -216,8 +211,7 @@ func (s *Service) GetAll(c *gin.Context) {
 //GetID gets a transaction by its database ID.
 func (s *Service) GetID(c *gin.Context) {
 	id := c.Param("id")
-	db, _ := gorm.Open("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	db.AutoMigrate(&Transaction{})
 
@@ -230,9 +224,7 @@ func (s *Service) GetID(c *gin.Context) {
 }
 
 func (s *Service) BrowserDashboard(c *gin.Context) {
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	defer db.Close()
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	db.AutoMigrate(&Transaction{})
 
@@ -247,7 +239,7 @@ func (s *Service) BrowserDashboard(c *gin.Context) {
 	log.Printf("The offset is: %v", offset)
 	var tran []Transaction
 
-	var count int
+	var count int64
 
 	var search SearchModel
 	var totAmount dashboardStats
@@ -276,11 +268,11 @@ func (s *Service) BrowserDashboard(c *gin.Context) {
 
 	log.Printf("the least merchats are: %v", leastMerchants)
 
-	pager := pagination(count, 50)
+	pager := pagination(int(count), 50)
 	errors := errorsCounter(tran)
 	stats := map[string]int{
-		"NumberTransactions":     count,
-		"SuccessfulTransactions": count - errors,
+		"NumberTransactions":     int(count),
+		"SuccessfulTransactions": int(count) - errors,
 		"FailedTransactions":     errors,
 	}
 
@@ -365,9 +357,7 @@ func (s *Service) Stream(c *gin.Context) {
 	var trans []Transaction
 	var stream bytes.Buffer
 
-	db, _ := gorm.Open("sqlite3", "test.db")
-
-	defer db.Close()
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	db.AutoMigrate(&Transaction{})
 	db.Table("transactions").Find(&trans)
@@ -387,8 +377,7 @@ type purchasesSum map[string]interface{}
 // if you decide to go with it. See apigateway package if you are interested.
 func (s *Service) DailySettlement(c *gin.Context) {
 	// get the results from DB
-	db, _ := gorm.Open("sqlite3", "test.db")
-	defer db.Close()
+	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	db.AutoMigrate(&PurchaseModel{})
 	var tran []PurchaseModel

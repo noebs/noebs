@@ -1,19 +1,19 @@
 package consumer
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
-	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type State struct {
@@ -86,6 +86,7 @@ func (s *State) IpFilterMiddleware(c *gin.Context) {
 }
 
 //FIXME #60 make LoginHandler in consumer apis #61
+//FIXME(adonese): #160 make login flow simpler. The code is rubbish
 func (s *State) LoginHandler(c *gin.Context) {
 
 	req := s.UserLogin
@@ -102,69 +103,24 @@ func (s *State) LoginHandler(c *gin.Context) {
 	log.Printf("the processed request is: %v\n", req)
 	u := s.UserModel
 
-	if notFound := s.Db.Preload("jwt").Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).RecordNotFound(); notFound {
+	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound, "code": "not_found"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
-	}
-
-	// Make sure the user doesn't have any active sessions!
-	lCount, err := s.Redis.Get(req.Username + ":logged_in_devices").Result()
-
-	num, _ := strconv.Atoi(lCount)
-	// Allow for the user to be logged in -- add allowance through someway
-	if err != redis.Nil && num > 1 {
-		// The user is already logged in somewhere else. Communicate that to them, clearly!
-		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
-		//	"error": "You are logging from another device. You can only have one valid session"})
-		//return
-		log.Print("The user is logging from a different location")
-	}
-
-	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
-	res, err := s.Redis.Get(req.Username + ":login_counts").Result()
-	if err == redis.Nil {
-		// the has just logged in
-		s.Redis.Set(req.Username+":login_counts", 0, time.Hour)
-	} else if err == nil {
-		count, _ := strconv.Atoi(res)
-		if count >= 5 {
-			// Allow users to use another login method (e.g., totp, or they should reset their password)
-			// Lock their account
-			//s.Redis.HSet(req.Username, "suspecious_behavior", 1)
-			s.Redis.HIncrBy(req.Username, "suspicious_behavior", 1)
-			ttl, _ := s.Redis.TTL(req.Username + ":login_counts").Result()
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Too many wrong login attempts",
-				"code": "maximum_login", "ttl_minutes": ttl.Minutes()})
-			return
-		}
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
-		log.Printf("there is an error in the password %v", err)
-		s.Redis.Incr(req.Username + ":login_counts")
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		return
 	}
-	// it is a successful login attempt
-	s.Redis.Del(req.Username + ":login_counts")
+
 	token, err := s.Auth.GenerateJWT(u.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
-
-	err = s.Db.Save(&u).Error
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-		return
-	}
 	c.Writer.Header().Set("Authorization", token)
-
-	// Redis add The user is now logged in -- and has active session
-	s.Redis.Incr(req.Username + ":logged_in_devices")
-
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
@@ -232,28 +188,21 @@ func (s *State) LogOut(c *gin.Context) {
 
 //FIXME issue #61
 func (s *State) CreateUser(c *gin.Context) {
-	db, err := gorm.Open("sqlite3", "test.db")
-	if err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": serverError.Error()})
-		return
-	}
-
-	defer db.Close()
-
 	u := s.UserModel
-	if err := s.Db.AutoMigrate(&u).Error; err != nil {
-		// log the error, but don't quit.
+	if s.Db == nil {
+		panic("wtf")
+	}
+	if err := s.Db.AutoMigrate(&gateway.UserModel{}); err != nil {
+		log.Print("the error is: %v", err)
+	}
+	// 	// log the error, but don't quit.
+	// 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "dsds"})
+	// 	return
+	// }
+	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
-
-	err = c.ShouldBindBodyWith(&u, binding.JSON)
-	// make the errors insane
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-		return
-	}
-
 	// validate u.Password to include at least one capital letter, one symbol and one number
 	// and that it is at least 8 characters long
 	if !validatePassword(u.Password) {
@@ -263,14 +212,13 @@ func (s *State) CreateUser(c *gin.Context) {
 
 	// make sure that the user doesn't exist in the database
 
-	err = u.HashPassword()
-	if err != nil {
+	if err := u.HashPassword(); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
 
 	// make the user capital - small
 	u.SanitizeName()
-	if err := db.Create(&u).Error; err != nil {
+	if err := s.Db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
@@ -285,11 +233,10 @@ func (s *State) CreateUser(c *gin.Context) {
 
 //FIXME issue #61
 func GetServiceID(c *gin.Context) {
-	db, err := gorm.Open("sqlite3", "test.db")
+	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
 	}
-	defer db.Close()
 
 	db.AutoMigrate(&Service{})
 
