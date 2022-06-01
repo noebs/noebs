@@ -28,7 +28,7 @@ const (
 
 var (
 	EBSIpConsumerTesting = SecretConfig.GetConsumerQA()
-	EBSIp                = SecretConfig.GetConsumer()
+	EBSIp                = SecretConfig.GetConsumerQA()
 	EBSQR                = SecretConfig.GetQRTest()
 	EBSMerchantIPTesting = SecretConfig.GetMerchantQA()
 	EBSMerchantIP        = SecretConfig.GetMerchant()
