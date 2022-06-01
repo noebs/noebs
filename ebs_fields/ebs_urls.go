@@ -26,8 +26,13 @@ const (
 	ChangePINEndpoint                = "changePin"
 )
 
-const EBSMerchantIPTesting = "https://172.16.199.1:8181/QAEBSGateway/"
-const EBSMerchantIP = "https://172.16.198.14:8888/EBSGateway/"
+var (
+	EBSIpConsumerTesting = SecretConfig.GetConsumerQA()
+	EBSIp                = SecretConfig.GetConsumer()
+	EBSQR                = SecretConfig.GetQRTest()
+	EBSMerchantIPTesting = SecretConfig.GetMerchantQA()
+	EBSMerchantIP        = SecretConfig.GetMerchant()
+)
 
 const (
 	PurchaseTransaction             = "PurchaseTransaction"
@@ -44,12 +49,6 @@ const (
 	IsAliveTransaction              = "IsAliveTransaction"
 	BalanceTransaction              = "BalanceTransaction"
 	PayeesListTransaction           = "PayeesListTransaction"
-)
-
-const (
-	EBSIpConsumerTesting = "https://172.16.199.1:8877/QAConsumer/"
-	EBSIp                = "https://172.24.160.30:8443/Consumer/"
-	EBSQR                = "https://172.16.199.1:8877/IPinGeneration/"
 )
 
 const (

@@ -894,14 +894,69 @@ type ValidationError struct {
 }
 
 type NoebsConfig struct {
-	OneSignal         string `json:"onesignal_key"`
-	SMS               string `json:"sms_key"`
-	RedisPort         string `json:"redis_port"`
-	IsConsumerTesting *bool  `json:"is_consumer_testing"`
-	IsMerchantTesting *bool  `json:"is_merchant_testing"`
-	ConsumerIP        string
-	MerchantIP        string
-	JWTKey            string `json:"jwt_key"`
+	OneSignal      string `json:"onesignal_key"`
+	SMS            string `json:"sms_key"`
+	RedisPort      string `json:"redis_port"`
+	IsConsumerProd *bool  `json:"is_consumer_testing"`
+	IsMerchantProd *bool  `json:"is_merchant_testing"`
+	ConsumerIP     string `json:"consumer_qa"`
+	MerchantIP     string `json:"merchant_qa"`
+	Merchant       string `json:"merchant"`
+	Consumer       string `json:"consumer"`
+	JWTKey         string `json:"jwt_key"`
+	QRIP           string `json:"qr_ip"`
+	QR             string `json:"qr"`
+}
+
+func (n *NoebsConfig) GetQRTest() string {
+	if n.IsConsumerProd != nil && *n.IsConsumerProd {
+		return n.GetConsumer() // we are prod
+	}
+	if n.ConsumerIP == "" {
+		return "https://172.16.199.1:8877/IPinGeneration/"
+	}
+	return n.QRIP
+}
+
+func (n *NoebsConfig) GetQR() string {
+	if n.IsConsumerProd != nil && *n.IsConsumerProd {
+		return n.GetConsumer() // we are prod
+	}
+	if n.ConsumerIP == "" {
+		return "https://10.139.2.200:8443/IPinGeneration/"
+	}
+	return n.QRIP
+}
+
+func (n *NoebsConfig) GetConsumerQA() string {
+	if n.ConsumerIP == "" {
+		return "https://172.16.199.1:8877/QAConsumer/"
+	}
+	return n.ConsumerIP
+}
+
+func (n *NoebsConfig) GetConsumer() string {
+	if n.Consumer == "" {
+		return "https://10.139.2.200:8443/Consumer/"
+	}
+	return n.Consumer
+}
+
+func (n *NoebsConfig) GetMerchantQA() string {
+	if n.IsMerchantProd != nil && *n.IsMerchantProd {
+		return n.GetMerchant() // we are prod
+	}
+	if n.MerchantIP == "" {
+		return "https://172.16.199.1:8181/QAEBSGateway/"
+	}
+	return n.MerchantIP
+}
+
+func (n *NoebsConfig) GetMerchant() string {
+	if n.Merchant == "" {
+		return "https://172.16.198.14:8888/EBSGateway/"
+	}
+	return n.Merchant
 }
 
 var SecretConfig NoebsConfig
