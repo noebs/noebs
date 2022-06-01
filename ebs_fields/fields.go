@@ -897,8 +897,8 @@ type NoebsConfig struct {
 	OneSignal      string `json:"onesignal_key"`
 	SMS            string `json:"sms_key"`
 	RedisPort      string `json:"redis_port"`
-	IsConsumerProd *bool  `json:"is_consumer_testing"`
-	IsMerchantProd *bool  `json:"is_merchant_testing"`
+	IsConsumerProd *bool  `json:"is_consumer_prod"`
+	IsMerchantProd *bool  `json:"is_merchant_prod"`
 	ConsumerIP     string `json:"consumer_qa"`
 	MerchantIP     string `json:"merchant_qa"`
 	Merchant       string `json:"merchant"`
