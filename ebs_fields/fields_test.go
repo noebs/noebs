@@ -255,3 +255,22 @@ func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 		})
 	}
 }
+
+func TestNoebsConfig_GetConsumerQA(t *testing.T) {
+	type fields struct {
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{"test-1", fields{}, "https://10.139.2.200:8443/Consumer/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SecretConfig.GetConsumer(); got != tt.want {
+				t.Errorf("NoebsConfig.GetConsumerQA() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

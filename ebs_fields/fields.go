@@ -928,8 +928,9 @@ func (n *NoebsConfig) GetQR() string {
 	return n.QRIP
 }
 
+//FIXME(adonese): Why this function is not using the right configurations?
 func (n *NoebsConfig) GetConsumerQA() string {
-	return "https://10.139.2.200:8443/Consumer/"
+	// return "https://10.139.2.200:8443/Consumer/"
 	if n.IsConsumerProd != nil && *n.IsConsumerProd {
 		return n.GetConsumer() // we are prod
 	}
@@ -970,7 +971,7 @@ func init() {
 	if err := json.Unmarshal(secretsFile, &SecretConfig); err != nil {
 		log.Printf("Error in parsing config files: %v", err)
 	} else {
-		log.Printf("the data is: %v", SecretConfig)
+		log.Printf("the data is: %#v", SecretConfig)
 	}
 
 }
