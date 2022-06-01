@@ -929,6 +929,7 @@ func (n *NoebsConfig) GetQR() string {
 }
 
 func (n *NoebsConfig) GetConsumerQA() string {
+	return "https://10.139.2.200:8443/Consumer/"
 	if n.IsConsumerProd != nil && *n.IsConsumerProd {
 		return n.GetConsumer() // we are prod
 	}
