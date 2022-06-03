@@ -194,7 +194,7 @@ func init() {
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()
 	service = utils.Service{Db: database, Redis: redisClient}
-	consumerService = consumer.Service{Service: service}
+	consumerService = consumer.Service{Service: service, ConsumerIP: ebs_fields.SecretConfig.GetConsumerQA()}
 	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
 	merchantServices.Init(database, log)
 }

@@ -101,6 +101,7 @@ var log = logrus.New()
 //Service consumer for utils.Service struct
 type Service struct {
 	utils.Service
+	ConsumerIP string
 }
 
 var fees = ebs_fields.NewDynamicFees()
@@ -113,7 +114,7 @@ var BillChan = make(chan ebs_fields.EBSParserFields)
 // It requires: card info (src), amount fields, specialPaymentId (destination)
 // in order to complete the transaction
 func (s *Service) Purchase(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -177,7 +178,7 @@ func (s *Service) Purchase(c *gin.Context) {
 
 //IsAlive performs isAlive request to inquire for ebs server availability
 func (s *Service) IsAlive(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -246,7 +247,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 //BillPayment is responsible for utility, telecos, e-government and other payment services
 func (s *Service) BillPayment(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -313,7 +314,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 //BillInquiry for telecos, utility and government (billers inquiries)
 func (s *Service) BillInquiry(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -385,7 +386,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 
 //Balance gets performs get balance transaction for the provided card info
 func (s *Service) Balance(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -455,7 +456,7 @@ func (s *Service) Balance(c *gin.Context) {
 
 //Balance gets performs get balance transaction for the provided card info
 func (s *Service) TransactionStatus(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerTransactionStatusEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerTransactionStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -548,7 +549,7 @@ func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSPa
 
 //WorkingKey get ebs working key for encrypting ipin for consumer transactions
 func (s *Service) WorkingKey(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -618,7 +619,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 
 //CardTransfer performs p2p transactions
 func (s *Service) CardTransfer(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -687,7 +688,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 //CashIn performs cash in transactions
 func (s *Service) CashIn(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerCashInEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerCashInEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -750,7 +751,7 @@ func (s *Service) CashIn(c *gin.Context) {
 
 //CashIn performs cash in transactions
 func (s *Service) QRMerchantRegistration(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -813,7 +814,7 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 
 //CashOut performs cashout transactions
 func (s *Service) CashOut(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerCashOutEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerCashOutEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -877,7 +878,7 @@ func (s *Service) CashOut(c *gin.Context) {
 //AccountTransfer performs p2p transactions
 func (s *Service) AccountTransfer(c *gin.Context) {
 
-	url := ebs_fields.EBSIp + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -940,7 +941,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 
 //IPinChange changes the ipin for the card holder provided card
 func (s *Service) IPinChange(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1010,7 +1011,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 
 //Status get transactions status from ebs
 func (s *Service) Status(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1093,7 +1094,7 @@ func (s *Service) Transactions(c *gin.Context) {
 
 //QRPayment performs QR payment transaction
 func (s *Service) QRPayment(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRPaymentFields{}
 
@@ -1159,7 +1160,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 
 //QRRefund performs qr refund transaction
 func (s *Service) QRTransactions(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.MerchantTransactionStatus // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.MerchantTransactionStatus // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRStatus{}
 
@@ -1227,7 +1228,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 
 //QRRefund performs qr refund transaction
 func (s *Service) QRRefund(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRRefundEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerQRRefundEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRRefundFields{}
 
@@ -1292,7 +1293,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 
 //QRRefund performs qr refund transaction
 func (s *Service) QRComplete(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerComplete // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerComplete // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRCompleteFields{}
 
@@ -1357,7 +1358,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 
 //QRGeneration generates a qr token for the registered merchant
 func (s *Service) QRGeneration(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.MerchantRegistrationFields{}
 
@@ -1843,7 +1844,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 	// /consumer/payment/uuid
 
 	// BUG(adonese) find a way to get hooks and to from here.
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerPurchaseEndpoint
+	url := s.ConsumerIP + ebs_fields.ConsumerPurchaseEndpoint
 
 	provider := c.Param("uuid")
 	//why hardcoding it here?
@@ -1994,7 +1995,7 @@ func (s *Service) SpecialPayment(c *gin.Context) {
 
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
 func (s *Service) EbsGetCardInfo(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerCardInfo // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerCardInfo // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -2064,7 +2065,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 
 //GetMSISDNFromCard for ussd to get pan info from sim card
 func (s *Service) GetMSISDNFromCard(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerPANFromMobile // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerPANFromMobile // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -2177,7 +2178,7 @@ func (s *Service) CreateMerchant(c *gin.Context) {
 
 //QRPayment performs QR payment transaction
 func (s *Service) RegisterCard(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerRegister // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerRegister // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerRegistrationFields{}
 
@@ -2243,7 +2244,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 
 //CompleteRegistration step 2 in card issuance process
 func (s *Service) CompleteRegistration(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerCompleteRegistration // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerCompleteRegistration // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerCompleteRegistrationFields{}
 
@@ -2310,7 +2311,7 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 
 //QRPayment performs QR payment transaction
 func (s *Service) GenerateVoucher(c *gin.Context) {
-	url := ebs_fields.EBSIp + ebs_fields.ConsumerGenerateVoucher // EBS simulator endpoint url goes here.
+	url := s.ConsumerIP + ebs_fields.ConsumerGenerateVoucher // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerGenerateVoucherFields{}
 
