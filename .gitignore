@@ -9,3 +9,4 @@ noebs
 *.exe
 *.db
 ebs_fields/.secrets.json
+__debug_bin
