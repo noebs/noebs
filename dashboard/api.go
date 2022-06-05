@@ -22,6 +22,7 @@ var log = logrus.New()
 
 type Service struct {
 	Redis *redis.Client
+	Db    *gorm.DB
 }
 
 func (s *Service) MerchantViews(c *gin.Context) {
@@ -134,39 +135,8 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 
 	tran := Transaction{
 
-		Model: gorm.Model{},
-		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{
-			TerminalID:             "",
-			SystemTraceAuditNumber: 0,
-			ClientID:               "",
-			PAN:                    "",
-			ServiceID:              "",
-			TranAmount:             0,
-			PhoneNumber:            "",
-			FromAccount:            "",
-			ToAccount:              "",
-			FromCard:               "",
-			ToCard:                 "",
-			OTP:                    "",
-			OTPID:                  "",
-			TranCurrencyCode:       "",
-			EBSServiceName:         "",
-			WorkingKey:             "",
-			PubKeyValue:            "",
-			UUID:                   "",
-			ResponseMessage:        "",
-			ResponseStatus:         "",
-			ResponseCode:           0,
-			ReferenceNumber:        "",
-			ApprovalCode:           "",
-			VoucherNumber:          "0",
-			MiniStatementRecords:   nil,
-			DisputeRRN:             "",
-			AdditionalData:         "",
-			TranDateTime:           "",
-			TranFee:                nil,
-			AdditionalAmount:       nil,
-		},
+		Model:                    gorm.Model{},
+		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{},
 	}
 
 	if err := env.Db.Create(&tran).Error; err != nil {
@@ -177,9 +147,7 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 }
 
 func (s *Service) GetAll(c *gin.Context) {
-	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-
-	db.AutoMigrate(&Transaction{})
+	s.Db.AutoMigrate(&Transaction{})
 
 	p := c.DefaultQuery("page", "0")
 	size := c.DefaultQuery("size", "50")
@@ -198,9 +166,9 @@ func (s *Service) GetAll(c *gin.Context) {
 
 	offset := page*(pageSize+1) - pageSize
 	fmt.Printf("%+v,%+v,%+v,%+v,%+v,%+v\n", searchField, search, sortField, sortCase, offset, pageSize)
-	tran, count := sortTable(db, searchField, search, sortField, sortCase, offset, pageSize)
+	tran, count := sortTable(s.Db, searchField, search, sortField, sortCase, offset, pageSize)
 
-	paging := map[string]interface{}{
+	paging := map[string]int{
 		"previous": page - 1,
 		"after":    page + 1,
 		"count":    count,

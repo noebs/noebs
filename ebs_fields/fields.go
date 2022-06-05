@@ -250,13 +250,14 @@ type GenericEBSResponseFields struct {
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
 	UUID        string `json:"UUID,omitempty" form:"UUID"`
 
-	ResponseMessage      string          `json:"responseMessage,omitempty"`
-	ResponseStatus       string          `json:"responseStatus,omitempty"`
-	ResponseCode         int             `json:"responseCode"`
-	ReferenceNumber      string          `json:"referenceNumber,omitempty"`
-	ApprovalCode         string          `json:"approvalCode,omitempty"`
-	VoucherNumber        string          `json:"voucherNumber,omitempty"`
-	VoucherCode          string          `json:"voucherCode,omitempty"`
+	ResponseMessage string `json:"responseMessage,omitempty"`
+	ResponseStatus  string `json:"responseStatus,omitempty"`
+	ResponseCode    int    `json:"responseCode"`
+	ReferenceNumber string `json:"referenceNumber,omitempty"`
+	ApprovalCode    string `json:"approvalCode,omitempty"`
+	VoucherNumber   string `json:"voucherNumber,omitempty"`
+	VoucherCode     string `json:"voucherCode,omitempty"`
+	//FIXME(adonese): #166 ministatement records need to be properly parsed to sqlite compatible type
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
 	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
 	AdditionalData       string          `json:"additionalData,omitempty"`
@@ -304,15 +305,13 @@ type MinistatementDB []map[string]interface{}
 
 func (m *MinistatementDB) Scan(value interface{}) error {
 
-	b, ok := value.(string)
+	b, ok := value.([]byte)
 	if !ok {
 		log.Printf("The type of value is: %T", value)
 		return errors.New("type assertion to []byte failed")
 	}
-	if b == "" {
-		return nil
-	}
-	return json.Unmarshal([]byte(b), m)
+
+	return json.Unmarshal(b, m)
 }
 
 // Value return json value, implement driver.Valuer interface

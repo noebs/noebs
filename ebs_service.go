@@ -38,7 +38,7 @@ var service utils.Service
 var auth gateway.JWTAuth
 
 var cardService = cards.Service{Redis: redisClient}
-var dashService = dashboard.Service{Redis: redisClient}
+var dashService dashboard.Service
 var state = consumer.State{}
 var merchantServices = merchant.Merchant{}
 
@@ -196,6 +196,7 @@ func init() {
 	service = utils.Service{Db: database, Redis: redisClient}
 	consumerService = consumer.Service{Service: service, ConsumerIP: ebs_fields.SecretConfig.GetConsumerQA()}
 	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
+	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices.Init(database, log)
 }
 
