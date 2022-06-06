@@ -25,6 +25,13 @@ type Service struct {
 	Db    *gorm.DB
 }
 
+func (s Service) calculateOffset(page, pageSize int) uint {
+	if page == 0 {
+		page++
+	}
+	return uint((page - 1) * pageSize)
+}
+
 func (s *Service) MerchantViews(c *gin.Context) {
 	db, _ := utils.Database("test.db")
 	terminal := c.Param("id")
@@ -164,9 +171,8 @@ func (s *Service) GetAll(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(size)
 	page, _ := strconv.Atoi(p)
 
-	offset := page*(pageSize+1) - pageSize
-	fmt.Printf("%+v,%+v,%+v,%+v,%+v,%+v\n", searchField, search, sortField, sortCase, offset, pageSize)
-	tran, count := sortTable(s.Db, searchField, search, sortField, sortCase, offset, pageSize)
+	offset := s.calculateOffset(page, pageSize)
+	tran, count := sortTable(s.Db, searchField, search, sortField, sortCase, int(offset), pageSize)
 
 	paging := map[string]int{
 		"previous": page - 1,
