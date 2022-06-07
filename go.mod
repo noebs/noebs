@@ -31,7 +31,7 @@ require (
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.2
 	github.com/swaggo/gin-swagger v1.3.1
 	github.com/swaggo/swag v1.7.1
 	github.com/ugorji/go v1.2.6 // indirect
