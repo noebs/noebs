@@ -197,7 +197,7 @@ func userExceededMaxSessions(s *State, username string) bool {
 			//s.Redis.HSet(username, "suspecious_behavior", 1)
 			s.Redis.HIncrBy(username, "suspicious_behavior", 1)
 			ttl, _ := s.Redis.TTL(username + ":login_counts").Result()
-			log.Printf("user exceeded max sessions", ttl)
+			log.Printf("user exceeded max sessions %v", ttl)
 			return true
 		}
 	}

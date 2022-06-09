@@ -179,6 +179,7 @@ func GetMainEngine() *gin.Engine {
 	mGroup.POST("/login", merchantServices.Login)
 	mGroup.POST("/m", merchantServices.AddBilling)
 	mGroup.PUT("/update", merchantServices.Update)
+	mGroup.POST("/sms", consumerService.SendSMS)
 	consumer.Routes("/v1", route, database, redisClient)
 	return route
 }

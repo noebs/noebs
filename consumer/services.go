@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -17,6 +19,10 @@ import (
 	"github.com/go-redis/redis/v7"
 	"github.com/noebs/ipin"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	SMS_GATEWAY = "https://mazinhost.com/smsv1/sms/api?action=send-sms"
 )
 
 //ResetPassword reset user password after passing some check
@@ -554,4 +560,54 @@ func (p *paymentTokens) pubSub(channel string, message interface{}) {
 	for msg := range ch {
 		fmt.Println(msg.Channel, msg.Payload)
 	}
+}
+
+//send sms to the user
+func (s *Service) SendSMS(c *gin.Context) {
+	// from gin, you read the request body (api documentations TODO)
+	var fields SMS
+	//var fields ebs_fields.MobileRedis
+	err := c.ShouldBindWith(&fields, binding.JSON)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+	}
+	var message string
+	phone := c.GetString("phone")
+	message = c.GetString("message")
+	if (phone == "") && (message == "") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid values"})
+	}
+	fields.MobileNo = phone
+	fields.message = message
+	if err := sendSMS(fields); err != nil {
+		// return successful response
+		c.JSON(http.StatusOK, gin.H{"phone": phone, "message": message})
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "Provider Error"})
+}
+
+func sendSMS(sms SMS) error {
+	/*
+	 https://mazinhost.com/smsv1/sms/api?action=send-sms&
+	 api_key=bW1idXNpZkBnbWFpbC5jb206bURTMVJQc2d1JA==
+	 &to=249111493885
+	 &from=COOP
+	 &sms="you here"
+	*/
+	v := url.Values{}
+	v.Add("api_key", os.Getenv("SMS_API_KEY")) // supply it in ENV
+	v.Add(("action"), "send-sms")
+	v.Add("from", "Cashq") //change to tutipay?, do vendors need to change this from their side ?
+	v.Add("numbers", sms.MobileNo)
+	v.Add("message", sms.message) //contains the bill details (time/status/service-name/...)
+
+	url := SMS_GATEWAY + v.Encode()
+	res, err := http.Get(url)
+	if err != nil {
+		log.Printf("The error is: %v", err)
+
+	}
+	log.Printf("The response body is: %v", res)
+	return nil
 }
