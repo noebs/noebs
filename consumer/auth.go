@@ -193,7 +193,7 @@ func (s *State) CreateUser(c *gin.Context) {
 		panic("wtf")
 	}
 	if err := s.Db.AutoMigrate(&gateway.UserModel{}); err != nil {
-		log.Print("the error is: %v", err)
+		log.Printf("the error is: %v", err)
 	}
 	// 	// log the error, but don't quit.
 	// 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "dsds"})

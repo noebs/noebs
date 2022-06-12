@@ -562,13 +562,11 @@ func (p *paymentTokens) pubSub(channel string, message interface{}) {
 	}
 }
 
-//send sms to the user
+//SendSMS api endpoint to send SMS.Message to a user (SMS.Mobile)
 func (s *Service) SendSMS(c *gin.Context) {
 	// from gin, you read the request body (api documentations TODO)
 	var fields SMS
-
 	if err := c.ShouldBindWith(&fields, binding.JSON); err != nil {
-
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	}
 
@@ -576,7 +574,7 @@ func (s *Service) SendSMS(c *gin.Context) {
 		// return successful response
 		c.JSON(http.StatusOK, gin.H{"phone": fields.Mobile, "message": fields.Message})
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "Provider Error"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "gateway_error"})
 	}
 }
 
@@ -589,7 +587,7 @@ func sendSMS(sms SMS) error {
 	 &sms="you here"
 	*/
 	v := url.Values{}
-	v.Add("api_key", os.Getenv("SMS_API_KEY")) // supply it in ENV
+	v.Add("api_key", os.Getenv("bW1idXNpZkBnbWFpbC5jb206bURTMVJQc2d1JA==")) // supply it in ENV
 	v.Add(("action"), "send-sms")
 	v.Add("from", "Cashq") //change to tutipay?, do vendors need to change this from their side ?
 	v.Add("numbers", sms.Mobile)
@@ -600,7 +598,6 @@ func sendSMS(sms SMS) error {
 	if err != nil {
 		log.Printf("The error is: %v", err)
 		return err
-
 	}
 	log.Printf("The response body is: %v", res)
 	return nil
