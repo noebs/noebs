@@ -776,12 +776,6 @@ func newFromBytes(d []byte, code int) (response, error) {
 }
 
 type SMS struct {
-	MobileNo string `json:"mobileNo,omitempty"`
-	message  string `json:"message,omitempty"`
-
-	//	TranDateTime string `json:"tranDateTime,omitempty"` // i will embed all these dtails in the front-end
-	//  TranAmount   string `json:"tranAmount,omitempty"`
-	//	PAN          string `json:"PAN,omitempty"`
-	//	FromAccount  string `json:"fromAccount,omitempty"`
-	//	ToAccount    string `json:"toAccount,omitempty"`
+	Mobile  string `json:"mobile,omitempty"`
+	Message string `json:"message,omitempty"`
 }

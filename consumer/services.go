@@ -562,29 +562,20 @@ func (p *paymentTokens) pubSub(channel string, message interface{}) {
 	}
 }
 
-//send sms to the user
+//SendSMS api endpoint to send SMS.Message to a user (SMS.Mobile)
 func (s *Service) SendSMS(c *gin.Context) {
 	// from gin, you read the request body (api documentations TODO)
 	var fields SMS
-	//var fields ebs_fields.MobileRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-
-	if err != nil {
+	if err := c.ShouldBindWith(&fields, binding.JSON); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	}
-	var message string
-	phone := c.GetString("phone")
-	message = c.GetString("message")
-	if (phone == "") && (message == "") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid values"})
-	}
-	fields.MobileNo = phone
-	fields.message = message
+
 	if err := sendSMS(fields); err != nil {
 		// return successful response
-		c.JSON(http.StatusOK, gin.H{"phone": phone, "message": message})
+		c.JSON(http.StatusOK, gin.H{"phone": fields.Mobile, "message": fields.Message})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "gateway_error"})
 	}
-	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "Provider Error"})
 }
 
 func sendSMS(sms SMS) error {
@@ -596,17 +587,17 @@ func sendSMS(sms SMS) error {
 	 &sms="you here"
 	*/
 	v := url.Values{}
-	v.Add("api_key", os.Getenv("SMS_API_KEY")) // supply it in ENV
+	v.Add("api_key", os.Getenv("bW1idXNpZkBnbWFpbC5jb206bURTMVJQc2d1JA==")) // supply it in ENV
 	v.Add(("action"), "send-sms")
 	v.Add("from", "Cashq") //change to tutipay?, do vendors need to change this from their side ?
-	v.Add("numbers", sms.MobileNo)
-	v.Add("message", sms.message) //contains the bill details (time/status/service-name/...)
+	v.Add("numbers", sms.Mobile)
+	v.Add("message", sms.Message) //contains the bill details (time/status/service-name/...)
 
 	url := SMS_GATEWAY + v.Encode()
 	res, err := http.Get(url)
 	if err != nil {
 		log.Printf("The error is: %v", err)
-
+		return err
 	}
 	log.Printf("The response body is: %v", res)
 	return nil

@@ -25,19 +25,17 @@ func TestService_SendSMS(t *testing.T) {
 }
 
 func Test_sendSMS(t *testing.T) {
-	type args struct {
-		sms SMS
-	}
+
 	tests := []struct {
 		name    string
-		args    args
+		args    SMS
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{"test sms", SMS{Mobile: "0111493885", Message: "test sms"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := sendSMS(tt.args.sms); (err != nil) != tt.wantErr {
+			if err := sendSMS(tt.args); (err != nil) != tt.wantErr {
 				t.Errorf("sendSMS() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
