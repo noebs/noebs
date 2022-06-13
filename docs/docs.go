@@ -8,7 +8,6 @@ import (
 	"bytes"
 
 	"github.com/alecthomas/template"
-	"github.com/swaggo/swag"
 )
 
 var doc = `{
@@ -944,5 +943,5 @@ func (s *s) ReadDoc() string {
 }
 
 func init() {
-	swag.Register(swag.Name, &s{})
+	// swag.Register(swag.Name, &s{})
 }

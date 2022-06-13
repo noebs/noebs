@@ -23,8 +23,6 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	ginSwagger "github.com/swaggo/gin-swagger"
-	"github.com/swaggo/gin-swagger/swaggerFiles"
 )
 
 var log = logrus.New()
@@ -109,10 +107,7 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.Any("/merchants", dashService.MerchantRegistration)
 	}
 
-	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-
 	cons := route.Group("/consumer")
-
 	//cons.Use(gateway.OptionsMiddleware)
 	// we want to use /v2 for consumer and merchant services
 	{
@@ -183,19 +178,6 @@ func init() {
 	merchantServices.Init(database, log)
 }
 
-// @title noebs Example API
-// @version 1.0
-// @description This is a sample server celler server.
-// @termsOfService http://soluspay.net/terms
-// @contact.name API Support
-// @contact.url https://soluspay.net/support
-// @contact.email adonese@soluspay.net
-// @license.name Apache 2.0
-// @license.url https://github.com/adonese/noebs/LICENSE
-// @host beta.soluspay.net
-// @BasePath /api/
-// @securityDefinitions.basic BasicAuth
-// @in header
 func main() {
 	csh := consumer.NewCashout(redisClient)
 	go csh.CashoutPub() // listener for noebs cashouts.
@@ -219,18 +201,6 @@ func main() {
 
 }
 
-// IsAlive godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept json
-// @Produce json
-// @Param workingKey body ebs_fields.IsAliveFields true "Working Key Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /workingKey [post]
-//FIXME #68 make all merchant routers in an Env or struct
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
 	db, _ := utils.Database("sqlite3", "test.db")
@@ -316,18 +286,6 @@ func isAliveWrk(c *gin.Context) {
 
 }
 
-// WorkingKey godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param workingKey body ebs_fields.WorkingKeyFields true "Working Key Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /workingKey [post]
-//FIXME #68
 func WorkingKey(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
@@ -391,18 +349,6 @@ func WorkingKey(c *gin.Context) {
 	}
 }
 
-// Purchase godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /purchase [post]
-//FIXME #68
 func Purchase(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.PurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -462,18 +408,6 @@ func Purchase(c *gin.Context) {
 	}
 }
 
-// Balance godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /purchase [post]
-//FIXME issue #68
 func Balance(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BalanceEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -536,18 +470,6 @@ func Balance(c *gin.Context) {
 	}
 }
 
-// CardTransfer godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cardTransfer body ebs_fields.CardTransferFields true "Card Transfer Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cardTransfer [post]
-//FIXME issue #68
 func CardTransfer(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -605,18 +527,6 @@ func CardTransfer(c *gin.Context) {
 
 }
 
-// BillInquiry godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param billInquiry body ebs_fields.BillInquiryFields true "Bill Inquiry Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /billInquiry [post]
-//FIXME issue #68
 func BillInquiry(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BillInquiryEndpoint // EBS simulator endpoint url goes here.
@@ -680,18 +590,6 @@ func BillInquiry(c *gin.Context) {
 	}
 }
 
-// BillPayment godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param billPayment body ebs_fields.BillPaymentFields true "Bill Payment Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /billPayment [post]
-//FIXME issue #68
 func BillPayment(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BillPaymentEndpoint // EBS simulator endpoint url goes here.
@@ -821,18 +719,6 @@ func TopUpPayment(c *gin.Context) {
 	}
 }
 
-// ChangePIN godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param changePIN body ebs_fields.ChangePINFields true "Change PIN Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /changePin [post]
-//FIXME issue #68
 func ChangePIN(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.ChangePINEndpoint // EBS simulator endpoint url goes here.
@@ -897,18 +783,6 @@ func ChangePIN(c *gin.Context) {
 	}
 }
 
-// CashOut godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cashOut body ebs_fields.CashOutFields true "Cash Out Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cashOut [post]
-//FIXME issue #68
 func CashOut(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashOutEndpoint // EBS simulator endpoint url goes here.
@@ -1198,18 +1072,6 @@ func GenerateVoucher(c *gin.Context) {
 	}
 }
 
-// CashIn godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cashIn [post]
-//FIXME issue #68
 func CashIn(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashInEndpoint // EBS simulator endpoint url goes here.
@@ -1266,18 +1128,6 @@ func CashIn(c *gin.Context) {
 	}
 }
 
-// CashIn godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cashIn [post]
-//FIXME issue #68
 func ToAccount(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
@@ -1334,18 +1184,6 @@ func ToAccount(c *gin.Context) {
 	}
 }
 
-// MiniStatement godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param miniStatement body ebs_fields.MiniStatementFields true "Mini Statement Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /miniStatement [post]
-//FIXME issue #68
 func MiniStatement(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.MiniStatementEndpoint // EBS simulator endpoint url goes here.
