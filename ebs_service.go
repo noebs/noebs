@@ -22,8 +22,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	ginSwagger "github.com/swaggo/gin-swagger"
-	"github.com/swaggo/gin-swagger/swaggerFiles"
 	_ "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -113,8 +111,6 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/stream", dashService.Stream)
 		dashboardGroup.Any("/merchants", dashService.MerchantRegistration)
 	}
-
-	route.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	cons := route.Group("/consumer")
 
