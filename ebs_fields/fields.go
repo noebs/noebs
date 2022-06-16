@@ -830,34 +830,6 @@ type CardsRedis struct {
 	Name    string `json:"name"`
 }
 
-//
-//func (c *CardsRedis) AddCard(username string) error {
-//	buf, err := json.Marshal(c)
-//
-//	rC := utils.GetRedis("localhost:6379")
-//	if err != nil {
-//		return err
-//	}
-//
-//	z := &redis.Z{
-//		Member: buf,
-//	}
-//	rC.ZAdd(username+":cards", z)
-//	if c.IsMain {
-//		rC.HSet(username, "main_card", buf)
-//	}
-//	return nil
-//}
-
-//func (c CardsRedis) RmCard(username string, id int) {
-//	rC := utils.GetRedis("localhost:6379")
-//	if c.IsMain {
-//		rC.HDel(username+":cards", "main_card")
-//	} else {
-//		rC.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1))
-//	}
-//}
-
 type MobileRedis struct {
 	Mobile   string `json:"mobile" binding:"required"`
 	Provider string `json:"provider"`

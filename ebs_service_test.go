@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/adonese/noebs/ebs_fields"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +11,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/gin-gonic/gin"
 )
 
 func TestEnv(t *testing.T) {
@@ -50,7 +50,10 @@ func TestWorkingKey(t *testing.T) {
 	req := httptest.NewRequest("POST", "/test", bytes.NewBuffer(payload))
 
 	route.ServeHTTP(w, req)
-	assert.Equal(t, 200, w.Code)
+
+	if w.Code != 200 {
+		t.Errorf("expected: %d, got: %d", 200, w.Code)
+	}
 	// I'm really not sure why this would ever work.
 	// suddenly, things starting to make sense.
 }

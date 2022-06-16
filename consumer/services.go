@@ -112,47 +112,29 @@ func (s *Service) GetCards(c *gin.Context) {
 // it will remove the previously selected one FIXME
 func (s *Service) AddCards(c *gin.Context) {
 	var fields ebs_fields.CardsRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	//check if the card is not from non EBS affiliated banks
-	//TODO make sure that the card is not from private switch
-	// checkCardIsWorking(fields.PAN)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-		return
-	}
-	// check isEbs
-	if notEbs(fields.PAN) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Card not supported (not compatible with EBS)", "code": "card_not_supported"})
-		return
-	}
-	buf, _ := json.Marshal(fields)
+	var listCards []ebs_fields.CardsRedis
+	var resError error
 	username := c.GetString("username")
-	if username == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		return
+	if err := c.ShouldBindWith(&fields, binding.JSON); err != nil {
+		resError = err
+	} else {
+		if err := s.storeCards(fields, username); err == nil {
+			// reply first
+			c.Status(http.StatusCreated)
+			return
+		}
 	}
-	// make sure the length of the card and expDate is valid
-	z := &redis.Z{
-		Member: buf,
-	}
-	if fields.IsMain {
-		// refactor me, please!
-		ucard := card{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
-		s.Redis.HMSet(username, ucard)
-		s.Redis.ZAdd(username+":cards", z)
-		return
-	}
-	_, err = s.Redis.ZAdd(username+":cards", z).Result()
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
-	}
-	// also it is necessary to add it into a list of user's pans
-	//FIXME better handle this error smh
-	s.Redis.RPush(username+":pans", fields.PAN)
+	if err := c.ShouldBindJSON(&listCards); err != nil {
+		resError = err
+	} else {
+		if err := s.storeCards(fields, username); err == nil {
+			// reply first
+			c.Status(http.StatusCreated)
+			return
+		}
 
-	c.JSON(http.StatusCreated, gin.H{"username": username, "cards": fields})
-
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": resError})
 }
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)

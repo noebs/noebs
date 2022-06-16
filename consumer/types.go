@@ -55,7 +55,7 @@ func (bf *billerForm) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, bf)
 }
 
-type card map[string]interface{}
+type redisCard map[string]interface{}
 
 //cardsFromZ marshals []string to []ebs_fields.CardsRedis
 func cardsFromZ(cards []string) []ebs_fields.CardsRedis {

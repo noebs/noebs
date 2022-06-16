@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/cards"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
@@ -202,4 +204,56 @@ func userExceededMaxSessions(s *State, username string) bool {
 		}
 	}
 	return false
+}
+
+// storeCards accepts either ebs_fields.CardRedis or []ebs_fields.CardRedis
+// and depending on the input, it stores it in Redis
+func (s *Service) storeCards(cards any, username string) error {
+	var err error
+	buf, _ := json.Marshal(&cards)
+
+	if username == "" {
+		return errors.New("unauthorized_access")
+	}
+
+	switch fields := cards.(type) {
+	case ebs_fields.CardsRedis:
+		// make sure the length of the card and expDate is valid
+		z := &redis.Z{
+			Member: buf,
+		}
+		if fields.IsMain {
+			// refactor me, please!
+			ucard := redisCard{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
+			s.Redis.HMSet(username, ucard)
+			s.Redis.ZAdd(username+":cards", z)
+		}
+		_, err = s.Redis.ZAdd(username+":cards", z).Result()
+		if err != nil {
+			return err
+		}
+		s.Redis.RPush(username+":pans", fields.PAN)
+
+	case []ebs_fields.CardsRedis:
+		for _, card := range fields {
+			z := &redis.Z{
+				Member: buf,
+			}
+			if card.IsMain {
+				// refactor me, please!
+				ucard := redisCard{"main_card": buf, "pan": card.PAN, "exp_date": card.Expdate}
+				s.Redis.HMSet(username, ucard)
+				s.Redis.ZAdd(username+":cards", z)
+			}
+			_, err = s.Redis.ZAdd(username+":cards", z).Result()
+			if err != nil {
+				return err
+			}
+			s.Redis.RPush(username+":pans", card.PAN)
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
