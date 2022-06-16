@@ -1,3 +1,13 @@
+//Package consumer contains all of apis regarding EBS Consumer Web services
+// the package is structured in such a way that separetes between the payment apis
+// and the [services] apis.
+//
+// Payment APIs
+// All of the payment apis are in [payment_apis.go] file, they include basically all of
+// EBS Consumer web service docs [v3.0.0].
+//
+// Helper APIs
+// We also have help apis in [services.go]
 package consumer
 
 import (

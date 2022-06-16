@@ -10,3 +10,4 @@ noebs
 *.db
 ebs_fields/.secrets.json
 __debug_bin
+test.db-*
