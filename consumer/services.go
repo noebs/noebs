@@ -115,8 +115,9 @@ func (s *Service) AddCards(c *gin.Context) {
 	var listCards []ebs_fields.CardsRedis
 	var resError error
 	username := c.GetString("username")
-	if err := c.ShouldBindWith(&fields, binding.JSON); err != nil {
-		resError = err
+
+	if err := c.ShouldBindBodyWith(&fields, binding.JSON); err != nil {
+		log.Printf("the error in fields: %v", err)
 	} else {
 		if err := s.storeCards(fields, username); err == nil {
 			// reply first
@@ -124,10 +125,11 @@ func (s *Service) AddCards(c *gin.Context) {
 			return
 		}
 	}
-	if err := c.ShouldBindJSON(&listCards); err != nil {
+	if err := c.ShouldBindBodyWith(&listCards, binding.JSON); err != nil {
+		log.Printf("the error is: %v", err)
 		resError = err
 	} else {
-		if err := s.storeCards(fields, username); err == nil {
+		if err := s.storeCards(listCards, username); err == nil {
 			// reply first
 			c.Status(http.StatusCreated)
 			return

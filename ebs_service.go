@@ -186,7 +186,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("error in connecting to db: %v", err)
 	}
-	database.Logger.LogMode(logger.Info)
+	database.Logger.LogMode(logger.Warn)
 	database.AutoMigrate(&dashboard.Transaction{})
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()

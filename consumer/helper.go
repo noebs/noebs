@@ -210,7 +210,6 @@ func userExceededMaxSessions(s *State, username string) bool {
 // and depending on the input, it stores it in Redis
 func (s *Service) storeCards(cards any, username string) error {
 	var err error
-	buf, _ := json.Marshal(&cards)
 
 	if username == "" {
 		return errors.New("unauthorized_access")
@@ -218,42 +217,36 @@ func (s *Service) storeCards(cards any, username string) error {
 
 	switch fields := cards.(type) {
 	case ebs_fields.CardsRedis:
+		buf, _ := json.Marshal(&cards)
 		// make sure the length of the card and expDate is valid
-		z := &redis.Z{
-			Member: buf,
-		}
-		if fields.IsMain {
-			// refactor me, please!
-			ucard := redisCard{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
-			s.Redis.HMSet(username, ucard)
-			s.Redis.ZAdd(username+":cards", z)
-		}
-		_, err = s.Redis.ZAdd(username+":cards", z).Result()
-		if err != nil {
-			return err
-		}
-		s.Redis.RPush(username+":pans", fields.PAN)
-
+		s.store(buf, fields, username)
 	case []ebs_fields.CardsRedis:
 		for _, card := range fields {
-			z := &redis.Z{
-				Member: buf,
-			}
-			if card.IsMain {
-				// refactor me, please!
-				ucard := redisCard{"main_card": buf, "pan": card.PAN, "exp_date": card.Expdate}
-				s.Redis.HMSet(username, ucard)
-				s.Redis.ZAdd(username+":cards", z)
-			}
-			_, err = s.Redis.ZAdd(username+":cards", z).Result()
-			if err != nil {
-				return err
-			}
-			s.Redis.RPush(username+":pans", card.PAN)
+			buf, _ := json.Marshal(&card)
+			log.Printf("the current card is: %v - field is: %v", card, fields)
+			s.store(buf, card, username)
 		}
 	}
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *Service) store(buf []byte, fields ebs_fields.CardsRedis, username string) error {
+	z := &redis.Z{
+		Member: buf,
+	}
+	if fields.IsMain {
+		// refactor me, please!
+		ucard := redisCard{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
+		s.Redis.HMSet(username, ucard)
+		s.Redis.ZAdd(username+":cards", z)
+	}
+	_, err := s.Redis.ZAdd(username+":cards", z).Result()
+	if err != nil {
+		return err
+	}
+	s.Redis.RPush(username+":pans", fields.PAN)
 	return nil
 }
