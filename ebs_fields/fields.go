@@ -175,7 +175,6 @@ func (f *ReverseFields) MustMarshal() []byte {
 type BillInquiryFields struct {
 	CommonFields
 	CardInfoFields
-	//AmountFields
 	BillerFields
 }
 
