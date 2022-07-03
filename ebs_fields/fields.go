@@ -126,16 +126,16 @@ type GenerateVoucherFields struct {
 
 type VoucherCashOutFields struct {
 	CommonFields
-	PhoneNumber   string  `json:"phoneNumber" binding:"required"`
-	VoucherNumber string  `json:"voucherNumber" binding:"required"`
-	TranAmount    float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
+	PhoneNumber   string `json:"phoneNumber" binding:"required"`
+	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	AmountFields
 }
 
 type VoucherCashInFields struct {
 	CommonFields
-	VoucherNumber string  `json:"voucherNumber" binding:"required"`
-	TranAmount    float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
-	ApprovalCode  string  `json:"approvalCode,omitempty"`
+	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	AmountFields
+	ApprovalCode string `json:"approvalCode,omitempty"`
 	CardInfoFields
 }
 
