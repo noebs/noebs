@@ -17,6 +17,7 @@ import (
 
 const (
 	SPECIAL_BILLERS = "noebs:billers"
+	KEY             = "publickey_"
 )
 
 type specialPaymentQueries struct {

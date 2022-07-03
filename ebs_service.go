@@ -250,7 +250,6 @@ func IsAlive(c *gin.Context) {
 	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.IsAliveFields{}
-
 	// use bind to get free Form support rendering!
 	// there is no practical need of using c.ShouldBindBodyWith;
 	// Bind is more performant than ShouldBindBodyWith; the later copies the request body and reuse it
