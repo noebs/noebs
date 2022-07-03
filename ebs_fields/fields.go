@@ -128,11 +128,14 @@ type VoucherCashOutFields struct {
 	CommonFields
 	PhoneNumber   string `json:"phoneNumber" binding:"required"`
 	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	AmountFields
 }
 
 type VoucherCashInFields struct {
 	CommonFields
 	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	AmountFields
+	ApprovalCode string `json:"approvalCode,omitempty"`
 	CardInfoFields
 }
 
@@ -172,7 +175,6 @@ func (f *ReverseFields) MustMarshal() []byte {
 type BillInquiryFields struct {
 	CommonFields
 	CardInfoFields
-	AmountFields
 	BillerFields
 }
 
