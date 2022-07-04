@@ -260,3 +260,19 @@ func (s *Service) store(buf []byte, fields ebs_fields.CardsRedis, username strin
 	s.Redis.RPush(username+":pans", fields.PAN)
 	return nil
 }
+
+//verifyPubKey: we read the request from gin context and marshall it onto json
+// {"pubkey": "pub_key_value", "username": "username", "device_id"}
+// we then grab from redis a value with the key pubkey+username
+// and match it against what we have
+// then we
+func (s *Service) verifyPubkey(username, message, signature string) (bool, error) {
+	return true, nil
+}
+
+func (s *Service) savePubKey(key string, username string) error {
+	if _, err := s.Redis.Set(KEY+username, key, 0).Result(); err != nil {
+		return err
+	}
+	return nil
+}
