@@ -127,13 +127,13 @@ type GenerateVoucherFields struct {
 type VoucherCashOutFields struct {
 	CommonFields
 	PhoneNumber   string `json:"phoneNumber" binding:"required"`
-	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	VoucherNumber int    `json:"voucherNumber" binding:"required"`
 	AmountFields
 }
 
 type VoucherCashInFields struct {
 	CommonFields
-	VoucherNumber string `json:"voucherNumber" binding:"required"`
+	VoucherNumber int `json:"voucherNumber" binding:"required"`
 	AmountFields
 	ApprovalCode string `json:"approvalCode,omitempty"`
 	CardInfoFields
@@ -257,7 +257,7 @@ type GenericEBSResponseFields struct {
 	ResponseCode    int    `json:"responseCode"`
 	ReferenceNumber string `json:"referenceNumber,omitempty"`
 	ApprovalCode    string `json:"approvalCode,omitempty"`
-	VoucherNumber   string `json:"voucherNumber,omitempty"`
+	VoucherNumber   int    `json:"voucherNumber,omitempty"`
 	VoucherCode     string `json:"voucherCode,omitempty"`
 	//FIXME(adonese): #166 ministatement records need to be properly parsed to sqlite compatible type
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
