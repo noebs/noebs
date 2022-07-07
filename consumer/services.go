@@ -131,7 +131,7 @@ func (s *Service) AddCards(c *gin.Context) {
 	} else {
 		if err := s.storeCards(listCards, username); err == nil {
 			// reply first
-			c.Status(http.StatusCreated)
+			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
 			return
 		}
 
