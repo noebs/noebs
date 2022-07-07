@@ -116,26 +116,26 @@ func (s *Service) AddCards(c *gin.Context) {
 	var resError error
 	username := c.GetString("username")
 
-	if err := c.ShouldBindBodyWith(&fields, binding.JSON); err != nil {
-		log.Printf("the error in fields: %v", err)
-	} else {
-		if err := s.storeCards(fields, username); err == nil {
-			// reply first
-			c.Status(http.StatusCreated)
-			return
-		}
+	err := c.ShouldBindBodyWith(&fields, binding.JSON)
+	listErr := c.ShouldBindBodyWith(&listCards, binding.JSON)
+	if err != nil && listErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Marshalling error", "code": "card_err"})
+		return
 	}
-	if err := c.ShouldBindBodyWith(&listCards, binding.JSON); err != nil {
-		log.Printf("the error is: %v", err)
-		resError = err
-	} else {
-		if err := s.storeCards(listCards, username); err == nil {
-			// reply first
+
+	if err == nil {
+		if err := s.storeCards(fields, username); err == nil {
 			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
 			return
 		}
-
 	}
+	if listErr == nil {
+		if err := s.storeCards(listCards, username); err == nil {
+			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
+			return
+		}
+	}
+
 	c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": resError})
 }
 
