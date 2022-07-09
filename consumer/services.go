@@ -196,7 +196,8 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
 	} else {
-		if _, err := s.Redis.ZRem(username+":cards", fields).Result(); err != nil {
+		data, _ := json.Marshal(fields)
+		if _, err := s.Redis.ZRem(username+":cards", data).Result(); err != nil {
 			log.Printf("error in zrem: %v", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 			return
