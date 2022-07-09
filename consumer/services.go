@@ -184,31 +184,22 @@ func (s *Service) EditCard(c *gin.Context) {
 //RemoveCard allow authorized users to remove their card
 // when the send the card id (from its list in app view)
 func (s *Service) RemoveCard(c *gin.Context) {
+	username := c.GetString("username")
+	if username == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
+		return
+	}
 
-	var fields ebs_fields.ItemID
+	var fields ebs_fields.CardsRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-		// there is no error in the request body
+		return
 	} else {
-		username := c.GetString("username")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else if fields.ID <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
+		if _, err := s.Redis.ZRem(username+":cards", fields).Result(); err != nil {
+			log.Printf("error in zrem: %v", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 			return
-		}
-		// core functionality
-		id := fields.ID
-
-		if fields.IsMain {
-			s.Redis.HDel(username+":cards", "main_card")
-		} else {
-			_, err := s.Redis.ZRemRangeByRank(username+":cards", int64(id-1), int64(id-1)).Result()
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_delete"})
-				return
-			}
 		}
 		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
 	}
