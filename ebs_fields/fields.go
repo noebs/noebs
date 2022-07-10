@@ -832,7 +832,7 @@ type CardsRedis struct {
 	Name    string `json:"name"`
 }
 
-func (c *CardsRedis) MarshalBinary() ([]byte, error) {
+func (c CardsRedis) MarshalBinary() ([]byte, error) {
 	return json.Marshal(c)
 }
 
