@@ -185,7 +185,18 @@ func (s *Service) EditCard(c *gin.Context) {
 			newCards = append(newCards, c)
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"cards": data})
+	if _, err := s.Redis.ZRem(username+":cards", newCards).Result(); err != nil {
+		log.Printf("the error in removing: %v", err)
+
+	}
+	// add cards
+	if err := s.storeCards(newCards, username); err == nil {
+		c.JSON(http.StatusCreated, gin.H{"status": "ok"})
+		return
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		return
+	}
 
 }
 
