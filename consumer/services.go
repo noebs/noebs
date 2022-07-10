@@ -182,9 +182,11 @@ func (s *Service) EditCard(c *gin.Context) {
 			log.Printf("the data is: %v", c)
 			newCards = append(newCards, c)
 		} else {
+			log.Printf("the data is: %v", c)
 			newCards = append(newCards, c)
 		}
 	}
+
 	if _, err := s.Redis.ZRem(username+":cards", newCards).Result(); err != nil {
 		log.Printf("the error in removing: %v", err)
 
