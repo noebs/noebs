@@ -832,6 +832,14 @@ type CardsRedis struct {
 	Name    string `json:"name"`
 }
 
+func (c *CardsRedis) MarshalBinary() ([]byte, error) {
+	return json.Marshal(c)
+}
+
+func (c *CardsRedis) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, c)
+}
+
 type MobileRedis struct {
 	Mobile   string `json:"mobile" binding:"required"`
 	Provider string `json:"provider"`
