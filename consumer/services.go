@@ -157,26 +157,26 @@ func (s *Service) EditCard(c *gin.Context) {
 		return
 	}
 
-	// rm card
-	if editedCard.IsMain {
-		s.Redis.HDel(username+":cards", "main_card")
-		return
-	}
-
 	// get redis zrange cards for username
 	// marshall them onto []ebs_fields.CardRedis
 	// remove the card with the same id
 	// add the new card
 	// set the new card to main
-	var cardRedis []ebs_fields.CardsRedis
 	var newCards []ebs_fields.CardsRedis
+
 	cards, err := s.Redis.ZRange(username+":cards", 0, -1).Result()
 	if err != nil {
-		log.Printf("there's an error")
+		// handle the error somehow
+		logrus.WithFields(logrus.Fields{
+			"error":   "unable to get results from redis",
+			"message": err.Error(),
+		}).Info("unable to get results from redis")
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
+		return
 	}
-	data, _ := utils.StringsToBytes(cards)
-	json.Unmarshal([]byte(data.String()), &cardRedis)
-	for _, c := range cardRedis {
+	cardBytes := cardsFromZ(cards)
+
+	for _, c := range cardBytes {
 		log.Printf("the card from redis: %v", c)
 		if c.PAN == editedCard.PAN {
 			c.UpdateCard(editedCard.PAN, editedCard.Expdate, editedCard.Name)
