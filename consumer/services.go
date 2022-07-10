@@ -175,7 +175,7 @@ func (s *Service) EditCard(c *gin.Context) {
 		log.Printf("there's an error")
 	}
 	data, _ := utils.StringsToBytes(cards)
-	json.Unmarshal(data.Bytes(), &cardRedis)
+	json.Unmarshal([]byte(data.String()), &cardRedis)
 	for _, c := range cardRedis {
 		if c.PAN == editedCard.PAN {
 			c.UpdateCard(editedCard.PAN, editedCard.Expdate, editedCard.Name)
