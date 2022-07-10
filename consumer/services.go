@@ -141,9 +141,9 @@ func (s *Service) AddCards(c *gin.Context) {
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func (s *Service) EditCard(c *gin.Context) {
-	var card ebs_fields.CardsRedis
+	var editedCard ebs_fields.CardsRedis
 
-	err := c.ShouldBindWith(&card, binding.JSON)
+	err := c.ShouldBindWith(&editedCard, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
@@ -152,33 +152,41 @@ func (s *Service) EditCard(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
-	} else if card.ID <= 0 {
+	} else if editedCard.ID <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
 		return
 	}
 
 	// rm card
-	if card.IsMain {
+	if editedCard.IsMain {
 		s.Redis.HDel(username+":cards", "main_card")
-	} else {
-		s.Redis.ZRemRangeByRank(username+":cards", int64(card.ID-1), int64(card.ID-1))
-	}
-	//card.RmCard(username, card.ID)
-	buf, err := json.Marshal(card)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
 	}
 
-	z := &redis.Z{
-		Member: buf,
+	// get redis zrange cards for username
+	// marshall them onto []ebs_fields.CardRedis
+	// remove the card with the same id
+	// add the new card
+	// set the new card to main
+	var cardRedis []ebs_fields.CardsRedis
+	var newCards []ebs_fields.CardsRedis
+	cards, err := s.Redis.ZRange(username+":cards", 0, -1).Result()
+	if err != nil {
+		log.Printf("there's an error")
 	}
-	s.Redis.ZAdd(username+":cards", z)
-	if card.IsMain {
-		s.Redis.HSet(username, "main_card", buf)
+	data, _ := utils.StringsToBytes(cards)
+	json.Unmarshal(data.Bytes(), &cardRedis)
+	for _, c := range cardRedis {
+		if c.PAN == editedCard.PAN {
+			c.UpdateCard(editedCard.PAN, editedCard.Expdate, editedCard.Name)
+			log.Printf("the data is: %v", c)
+			newCards = append(newCards, c)
+		} else {
+			newCards = append(newCards, c)
+		}
 	}
+	c.JSON(http.StatusOK, gin.H{"cards": data})
 
-	c.JSON(http.StatusOK, gin.H{"username": username, "cards": card})
 }
 
 //RemoveCard allow authorized users to remove their card
@@ -196,15 +204,23 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
 	} else {
-		data, _ := json.Marshal(fields)
-		if _, err := s.Redis.ZRem(username+":cards", string(data)).Result(); err != nil {
-			log.Printf("error in zrem: %v", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		shouldReturn := s.ssetDelete(fields, username)
+		if shouldReturn {
+			c.JSON(http.StatusOK, gin.H{"cards": fields})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
+		c.JSON(http.StatusBadRequest, gin.H{"username": username, "cards": fields})
 	}
+}
 
+//ssetDelete sorted set delete helper methods. Deletes card assigned to a user via username
+func (s *Service) ssetDelete(fields ebs_fields.CardsRedis, username string) bool {
+	data, _ := json.Marshal(fields)
+	if _, err := s.Redis.ZRem(username+":cards", string(data)).Result(); err != nil {
+		log.Printf("error in zrem: %v", err)
+		return true
+	}
+	return false
 }
 
 //AddMobile adds a mobile number to the current authorized user

@@ -825,11 +825,14 @@ func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
 }
 
 type CardsRedis struct {
-	ID      int    `json:"id,omitempty"`
-	PAN     string `json:"pan" binding:"required"`
-	Expdate string `json:"exp_date" binding:"required,len=4"`
-	IsMain  bool   `json:"is_main"`
-	Name    string `json:"name"`
+	ID         int    `json:"id,omitempty"`
+	PAN        string `json:"pan" binding:"required"`
+	Expdate    string `json:"exp_date" binding:"required,len=4"`
+	IsMain     bool   `json:"is_main"`
+	Name       string `json:"name"`
+	NewPan     string `json:"new_pan"`
+	NewExpDate string `json:"new_expdate"`
+	NewName    string `json:"new_name"`
 }
 
 func (c CardsRedis) MarshalBinary() ([]byte, error) {
@@ -838,6 +841,19 @@ func (c CardsRedis) MarshalBinary() ([]byte, error) {
 
 func (c *CardsRedis) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, c)
+}
+
+func (c *CardsRedis) UpdateCard(pan, expDate, name string) error {
+	if pan != "" {
+		c.PAN = pan
+	}
+	if expDate != "" {
+		c.Expdate = expDate
+	}
+	if name != "" {
+		c.Name = ""
+	}
+	return nil
 }
 
 type MobileRedis struct {
