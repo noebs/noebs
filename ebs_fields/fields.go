@@ -257,7 +257,7 @@ type GenericEBSResponseFields struct {
 	ResponseCode    int    `json:"responseCode"`
 	ReferenceNumber string `json:"referenceNumber,omitempty"`
 	ApprovalCode    string `json:"approvalCode,omitempty"`
-	VoucherNumber   int    `json:"voucherNumber,omitempty"`
+	VoucherNumber   string `json:"voucherNumber,omitempty"`
 	VoucherCode     string `json:"voucherCode,omitempty"`
 	//FIXME(adonese): #166 ministatement records need to be properly parsed to sqlite compatible type
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
