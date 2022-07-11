@@ -124,13 +124,13 @@ func (s *Service) AddCards(c *gin.Context) {
 	}
 
 	if err == nil {
-		if err := s.storeCards(fields, username); err == nil {
+		if err := s.storeCards(fields, username, false); err == nil {
 			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
 			return
 		}
 	}
 	if listErr == nil {
-		if err := s.storeCards(listCards, username); err == nil {
+		if err := s.storeCards(listCards, username, false); err == nil {
 			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
 			return
 		}
@@ -141,9 +141,9 @@ func (s *Service) AddCards(c *gin.Context) {
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func (s *Service) EditCard(c *gin.Context) {
-	var editedCard ebs_fields.CardsRedis
+	var oldCard ebs_fields.CardsRedis
 
-	err := c.ShouldBindWith(&editedCard, binding.JSON)
+	err := c.ShouldBindWith(&oldCard, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
@@ -152,18 +152,9 @@ func (s *Service) EditCard(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
-	} else if editedCard.ID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "card id not provided", "code": "card_id_not_provided"})
-		return
 	}
-
-	// get redis zrange cards for username
-	// marshall them onto []ebs_fields.CardRedis
-	// remove the card with the same id
-	// add the new card
-	// set the new card to main
 	var newCards []ebs_fields.CardsRedis
-
+	var matchingCards ebs_fields.CardsRedis
 	cards, err := s.Redis.ZRange(username+":cards", 0, -1).Result()
 	if err != nil {
 		// handle the error somehow
@@ -174,26 +165,27 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
 		return
 	}
-	cardBytes := cardsFromZ(cards)
+	cardBytes := cardsFromZNoIDS(cards)
 
 	for _, c := range cardBytes {
 		log.Printf("the card from redis: %v", c)
-		if c.PAN == editedCard.PAN {
-			c.UpdateCard(editedCard.PAN, editedCard.Expdate, editedCard.Name)
-			log.Printf("the data is: %v", c)
+		log.Printf("the old card: %v", oldCard)
+		if c.PAN == oldCard.PAN {
+			matchingCards = c
+			c.UpdateCard(oldCard.NewPan, oldCard.NewExpDate, oldCard.NewName)
+			log.Printf("we are editing a card: %v", c)
 			newCards = append(newCards, c)
 		} else {
-			log.Printf("the data is: %v", c)
-			newCards = append(newCards, c)
+			log.Printf("the data not matching: %v", c)
+			if c.Name != "" && c.Expdate != "" && c.PAN != "" {
+				newCards = append(newCards, c)
+			}
 		}
 	}
+	delCard, _ := json.Marshal(matchingCards)
+	s.Redis.ZRem(username+":cards", string(delCard)) // there's only ONE card to edit
 
-	if _, err := s.Redis.ZRem(username+":cards", newCards).Result(); err != nil {
-		log.Printf("the error in removing: %v", err)
-
-	}
-	// add cards
-	if err := s.storeCards(newCards, username); err == nil {
+	if err := s.storeCards(newCards, username, true); err == nil {
 		c.JSON(http.StatusCreated, gin.H{"status": "ok"})
 		return
 	} else {
@@ -218,18 +210,19 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
 	} else {
-		shouldReturn := s.ssetDelete(fields, username)
-		if shouldReturn {
-			c.JSON(http.StatusOK, gin.H{"cards": fields})
-			return
-		}
-		c.JSON(http.StatusBadRequest, gin.H{"username": username, "cards": fields})
+		s.ssetDelete(fields, username)
+		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
 	}
 }
 
 //ssetDelete sorted set delete helper methods. Deletes card assigned to a user via username
 func (s *Service) ssetDelete(fields ebs_fields.CardsRedis, username string) bool {
+	fields.NewExpDate = ""
+	fields.NewName = ""
+	fields.NewPan = ""
+	log.Printf("the data in ssDelete: %v", fields)
 	data, _ := json.Marshal(fields)
+	log.Printf("the data in ssDelete: %s", string(data))
 	if _, err := s.Redis.ZRem(username+":cards", string(data)).Result(); err != nil {
 		log.Printf("error in zrem: %v", err)
 		return true

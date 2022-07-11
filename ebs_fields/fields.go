@@ -829,10 +829,10 @@ type CardsRedis struct {
 	PAN        string `json:"pan" binding:"required"`
 	Expdate    string `json:"exp_date" binding:"required,len=4"`
 	IsMain     bool   `json:"is_main"`
-	Name       string `json:"name"`
-	NewPan     string `json:"new_pan"`
-	NewExpDate string `json:"new_expdate"`
-	NewName    string `json:"new_name"`
+	Name       string `json:"name,omitempty"`
+	NewPan     string `json:"new_pan,omitempty"`
+	NewExpDate string `json:"new_expdate,omitempty"`
+	NewName    string `json:"new_name,omitempty"`
 }
 
 func (c CardsRedis) MarshalBinary() ([]byte, error) {
@@ -851,8 +851,11 @@ func (c *CardsRedis) UpdateCard(pan, expDate, name string) error {
 		c.Expdate = expDate
 	}
 	if name != "" {
-		c.Name = ""
+		c.Name = name
 	}
+	c.NewExpDate = ""
+	c.NewName = ""
+	c.NewPan = ""
 	return nil
 }
 

@@ -70,6 +70,18 @@ func cardsFromZ(cards []string) []ebs_fields.CardsRedis {
 	return cardBytes
 }
 
+//cardsFromZ marshals []string to []ebs_fields.CardsRedis
+func cardsFromZNoIDS(cards []string) []ebs_fields.CardsRedis {
+	var cb ebs_fields.CardsRedis
+	var cardBytes []ebs_fields.CardsRedis
+	for _, v := range cards {
+		json.Unmarshal([]byte(v), &cb)
+		cb.ID = 0
+		cardBytes = append(cardBytes, cb)
+	}
+	return cardBytes
+}
+
 func generateCardsIds(c *[]ebs_fields.CardsRedis) {
 	for id, card := range *c {
 		card.ID = id + 1

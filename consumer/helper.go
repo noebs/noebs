@@ -218,7 +218,7 @@ func userExceededMaxSessions(s *State, username string) bool {
 
 // storeCards accepts either ebs_fields.CardRedis or []ebs_fields.CardRedis
 // and depending on the input, it stores it in Redis
-func (s *Service) storeCards(cards any, username string) error {
+func (s *Service) storeCards(cards any, username string, edit bool) error {
 	var err error
 
 	if username == "" {
@@ -227,14 +227,21 @@ func (s *Service) storeCards(cards any, username string) error {
 
 	switch fields := cards.(type) {
 	case ebs_fields.CardsRedis:
-		buf, _ := json.Marshal(&cards)
-		// make sure the length of the card and expDate is valid
-		s.store(buf, fields, username)
+		fields.NewExpDate = ""
+		fields.NewName = ""
+		fields.NewPan = ""
+		fields.ID = 0
+		buf, _ := json.Marshal(&fields)
+		s.store(buf, username, edit)
 	case []ebs_fields.CardsRedis:
 		for _, card := range fields {
+			card.NewExpDate = ""
+			card.NewName = ""
+			card.NewPan = ""
+			card.ID = 0
 			buf, _ := json.Marshal(&card)
-			log.Printf("the current card is: %v - field is: %v", card, fields)
-			s.store(buf, card, username)
+			log.Printf("the current card is: %v", card)
+			s.store(buf, username, edit)
 		}
 	}
 	if err != nil {
@@ -243,21 +250,21 @@ func (s *Service) storeCards(cards any, username string) error {
 	return nil
 }
 
-func (s *Service) store(buf []byte, fields ebs_fields.CardsRedis, username string) error {
+func (s *Service) store(buf []byte, username string, edit bool) error {
 	z := &redis.Z{
 		Member: buf,
 	}
-	if fields.IsMain {
-		// refactor me, please!
-		ucard := redisCard{"main_card": buf, "pan": fields.PAN, "exp_date": fields.Expdate}
-		s.Redis.HMSet(username, ucard)
-		s.Redis.ZAdd(username+":cards", z)
+	if edit {
+		_, err := s.Redis.ZAdd(username+":cards", z).Result()
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := s.Redis.ZAdd(username+":cards", z).Result()
+		if err != nil {
+			return err
+		}
 	}
-	_, err := s.Redis.ZAdd(username+":cards", z).Result()
-	if err != nil {
-		return err
-	}
-	s.Redis.RPush(username+":pans", fields.PAN)
 	return nil
 }
 
