@@ -17,6 +17,8 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
 	"github.com/bradfitz/iter"
+	"github.com/getsentry/sentry-go"
+	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -49,6 +51,7 @@ func GetMainEngine() *gin.Engine {
 	instrument := gateway.Instrumentation()
 
 	route.Use(instrument)
+	route.Use(sentrygin.New(sentrygin.Options{}))
 
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", EBS)
@@ -181,6 +184,13 @@ func GetMainEngine() *gin.Engine {
 }
 
 func init() {
+	sentry.Init(sentry.ClientOptions{
+		Dsn: "https://55c5f1be5b1040cebbbeab96322f6290@o1022989.ingest.sentry.io/6592991",
+		// Set TracesSampleRate to 1.0 to capture 100%
+		// of transactions for performance monitoring.
+		// We recommend adjusting this value in production,
+		TracesSampleRate: 1.0,
+	})
 	var err error
 	database, err = utils.Database("test.db")
 	if err != nil {

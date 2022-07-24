@@ -28,7 +28,7 @@ func (j *JWTAuth) Init() {
 func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
-	expiresAt := time.Now().Add(time.Minute * 10).UTC().Unix()
+	expiresAt := time.Now().Add(10 * time.Hour).UTC().Unix()
 
 	claims := TokenClaims{
 		serviceID,
