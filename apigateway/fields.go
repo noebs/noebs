@@ -16,7 +16,7 @@ type UserModel struct {
 	Birthday   string `json:"birthday"`
 	Mobile     string `json:"mobile" binding:"required,len=10" gorm:"index:idx_mobile,unique"`
 	Email      string `json:"email"`
-	Password2  string `json:"password2"`
+	Password2  string `json:"password2" gorm:"-"`
 	IsMerchant bool   `json:"is_merchant" gorm:"default:false"`
 	PublicKey  string `json:"user_pubkey"`
 	DeviceID   string `json:"device_id"`
