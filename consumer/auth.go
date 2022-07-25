@@ -192,6 +192,10 @@ func (s *State) CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
+	// default username to mobile, in case username was not provided
+	if u.Username == "" {
+		u.Username = u.Mobile
+	}
 	// validate u.Password to include at least one capital letter, one symbol and one number
 	// and that it is at least 8 characters long
 	if !validatePassword(u.Password) {
