@@ -196,13 +196,13 @@ func init() {
 	if err != nil {
 		log.Fatalf("error in connecting to db: %v", err)
 	}
-	database.Logger.LogMode(logger.Warn)
-	database.AutoMigrate(&dashboard.Transaction{})
+	database.Logger.LogMode(logger.Info)
+	database.AutoMigrate(&gateway.UserModel{})
 	binding.Validator = new(ebs_fields.DefaultValidator)
 	auth.Init()
 	service = utils.Service{Db: database, Redis: redisClient}
 	consumerService = consumer.Service{Service: service, ConsumerIP: ebs_fields.SecretConfig.GetConsumerQA()}
-	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
+	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices.Init(database, log)
 }

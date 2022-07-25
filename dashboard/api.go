@@ -74,14 +74,6 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 
 	env := &Env{Db: db}
 
-	if err := db.AutoMigrate(&Transaction{}); err != nil {
-		log.WithFields(
-			logrus.Fields{
-				"error":   err.Error(),
-				"details": "error in database",
-			}).Info("error in database")
-	}
-
 	var tran Transaction
 	var count int64
 
@@ -101,14 +93,6 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
-		log.WithFields(
-			logrus.Fields{
-				"error":   err.Error(),
-				"details": "error in database",
-			}).Info("error in database")
-	}
-
-	if err := db.AutoMigrate(&Transaction{}); err != nil {
 		log.WithFields(
 			logrus.Fields{
 				"error":   err.Error(),
@@ -136,10 +120,6 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 
 	env := &Env{Db: db}
 
-	if err := env.Db.AutoMigrate(&Transaction{}); err != nil {
-		log.Fatalf("unable to automigrate: %s", err.Error())
-	}
-
 	tran := Transaction{
 
 		Model:                    gorm.Model{},
@@ -154,8 +134,6 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 }
 
 func (s *Service) GetAll(c *gin.Context) {
-	s.Db.AutoMigrate(&Transaction{})
-
 	p := c.DefaultQuery("page", "0")
 	size := c.DefaultQuery("size", "50")
 	perPage := c.DefaultQuery("perPage", "")
@@ -187,8 +165,6 @@ func (s *Service) GetID(c *gin.Context) {
 	id := c.Param("id")
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
-	db.AutoMigrate(&Transaction{})
-
 	var tran Transaction
 	if err := db.Where("id = ?", id).First(&tran).Error; err != nil {
 		c.AbortWithStatus(404)
@@ -199,8 +175,6 @@ func (s *Service) GetID(c *gin.Context) {
 
 func (s *Service) BrowserDashboard(c *gin.Context) {
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-
-	db.AutoMigrate(&Transaction{})
 
 	var page int
 
@@ -332,8 +306,6 @@ func (s *Service) Stream(c *gin.Context) {
 	var stream bytes.Buffer
 
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-
-	db.AutoMigrate(&Transaction{})
 	db.Table("transactions").Find(&trans)
 	json.NewEncoder(&stream).Encode(trans)
 
@@ -352,8 +324,6 @@ type purchasesSum map[string]interface{}
 func (s *Service) DailySettlement(c *gin.Context) {
 	// get the results from DB
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-
-	db.AutoMigrate(&PurchaseModel{})
 	var tran []PurchaseModel
 
 	q, _ := c.GetQuery("terminal")

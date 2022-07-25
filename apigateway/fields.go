@@ -7,25 +7,23 @@ import (
 	"gorm.io/gorm"
 )
 
+//UserModel contains User table in noebs. It should be kept simple and only contain the fields that are needed.
 type UserModel struct {
 	gorm.Model
-	Username   string `json:"username"`
+	Username   string `json:"username" gorm:"index:idx_username,unique"`
 	Password   string `binding:"required,min=8,max=20" json:"password"`
 	Fullname   string `json:"fullname"`
 	Birthday   string `json:"birthday"`
-	Mobile     string `json:"mobile" binding:"required,len=10" gorm:"unique_index"`
+	Mobile     string `json:"mobile" binding:"required,len=10" gorm:"index:idx_mobile,unique"`
 	Email      string `json:"email"`
 	Password2  string `json:"password2"`
 	IsMerchant bool   `json:"is_merchant" gorm:"default:false"`
+	PublicKey  string `json:"user_pubkey"`
+	DeviceID   string `json:"device_id"`
 }
 
 func (u *UserModel) SanitizeName() {
 	u.Username = strings.ToLower(u.Username)
-}
-
-type UserLogin struct {
-	Username string `binding:"required" json:"username"`
-	Password string `binding:"required" json:"password"`
 }
 
 func (u *UserModel) HashPassword() error {

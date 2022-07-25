@@ -2,8 +2,6 @@
 package merchant
 
 import (
-	"log"
-
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
@@ -38,8 +36,6 @@ func New(db *gorm.DB) *Merchant {
 
 //ByID get a merchant profile using their id
 func (m *Merchant) ByID(id string) (*ebs_fields.Merchant, error) {
-	m.db.AutoMigrate(m)
-
 	var res ebs_fields.Merchant
 
 	if err := m.db.Where("merchant_id = ?", id).Find(&res).Error; err != nil {
@@ -66,11 +62,6 @@ func (m *Merchant) authenticate(password string) error {
 }
 
 func (m *Merchant) Write() error {
-	if err := m.db.AutoMigrate(m); err != nil {
-		log.Printf("error in migration: %v", err.Error())
-		// return err
-	}
-
 	if err := m.db.Create(m).Error; err != nil {
 		// m.log.Printf("error in writing model: :%v", err)
 		return err

@@ -35,7 +35,7 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 	auth := &gateway.JWTAuth{}
 	auth.Init()
 	//FIXME #63 this is nul in JWTAuth
-	state := State{Db: db, Redis: redisClient, Auth: auth, UserModel: gateway.UserModel{}, UserLogin: gateway.UserLogin{}}
+	state := State{Db: db, Redis: redisClient, Auth: auth, UserModel: gateway.UserModel{}}
 
 	cv1 := route.Group(groupName)
 	cv1.Use(state.APIAuth())

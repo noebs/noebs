@@ -21,7 +21,6 @@ type State struct {
 	Redis     *redis.Client
 	Auth      Auther
 	UserModel gateway.UserModel
-	UserLogin gateway.UserLogin
 }
 
 type Auther interface {
@@ -89,16 +88,13 @@ func (s *State) IpFilterMiddleware(c *gin.Context) {
 //FIXME(adonese): #160 make login flow simpler. The code is rubbish
 func (s *State) LoginHandler(c *gin.Context) {
 
-	req := s.UserLogin
-
+	var req gateway.UserModel
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-
-	s.Db.AutoMigrate(&gateway.Service{}, &gateway.UserModel{}, &gateway.UserLogin{})
 
 	log.Printf("the processed request is: %v\n", req)
 	u := s.UserModel
@@ -192,13 +188,6 @@ func (s *State) CreateUser(c *gin.Context) {
 	if s.Db == nil {
 		panic("wtf")
 	}
-	if err := s.Db.AutoMigrate(&gateway.UserModel{}); err != nil {
-		log.Printf("the error is: %v", err)
-	}
-	// 	// log the error, but don't quit.
-	// 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "dsds"})
-	// 	return
-	// }
 	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
@@ -237,8 +226,6 @@ func GetServiceID(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
 	}
-
-	db.AutoMigrate(&Service{})
 
 	id := c.Query("id")
 	if id == "" {
