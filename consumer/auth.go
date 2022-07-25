@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -122,19 +123,26 @@ func (s *State) LoginHandler(c *gin.Context) {
 
 //FIXME #61 refactor some of these apis for consumer services only
 func (s *State) RefreshHandler(c *gin.Context) {
-
-	// just handle the simplest case, authorization is not provided.
-	h := c.GetHeader("Authorization")
-	if h == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent", "code": "unauthorized"})
+	var req gateway.Token
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
+		// The request is wrong
+		log.Printf("The request is wrong. %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
 
-	claims, err := s.Auth.VerifyJWT(h)
+	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
 			log.Printf("the username is: %s", claims.Username)
-
+			user := s.getTableFromUsername(claims.Username)
+			// should verify signature here...
+			log.Printf("grabbed user is: %#v", user)
+			if _, encErr := noebsCrypto.Verify(user.PublicKey, req.Signature, req.Message); encErr != nil {
+				log.Printf("invalid signature in refresh: %v", encErr)
+				c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
+				return
+			}
 			auth, _ := s.Auth.GenerateJWT(claims.Username)
 			c.Writer.Header().Set("Authorization", auth)
 			c.JSON(http.StatusOK, gin.H{"authorization": auth})

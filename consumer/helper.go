@@ -283,3 +283,9 @@ func (s *Service) savePubKey(key string, username string) error {
 	}
 	return nil
 }
+
+func (s *State) getTableFromUsername(username string) gateway.UserModel {
+	var user gateway.UserModel
+	s.Db.Where(&gateway.UserModel{Username: username}, username).First(&user)
+	return user
+}

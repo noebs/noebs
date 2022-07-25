@@ -22,6 +22,14 @@ type UserModel struct {
 	DeviceID   string `json:"device_id"`
 }
 
+//Token used by noebs client to refresh an existing token, that is Token.JWT
+// Signature is the signed Message (username), and Message is just the username
+type Token struct {
+	JWT       string `json:"authorization"`
+	Signature string `json:"signature"`
+	Message   string `json:"message"`
+}
+
 func (u *UserModel) SanitizeName() {
 	u.Username = strings.ToLower(u.Username)
 }
