@@ -14,7 +14,7 @@ type UserModel struct {
 	Password   string `binding:"required,min=8,max=20" json:"password"`
 	Fullname   string `json:"fullname"`
 	Birthday   string `json:"birthday"`
-	Mobile     string `json:"mobile" binding:"required,len=10" gorm:"index:idx_mobile,unique"`
+	Mobile     string `json:"mobile" binding:"required,min=10" gorm:"index:idx_mobile,unique"`
 	Email      string `json:"email"`
 	Password2  string `json:"password2" gorm:"-"`
 	IsMerchant bool   `json:"is_merchant" gorm:"default:false"`
