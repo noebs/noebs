@@ -98,6 +98,9 @@ func (s *State) LoginHandler(c *gin.Context) {
 	}
 
 	log.Printf("the processed request is: %v\n", req)
+	if req.Mobile == "" {
+		req.Mobile = req.Username
+	}
 	req.Username = req.Mobile // making username a mobile
 	u := s.UserModel
 
