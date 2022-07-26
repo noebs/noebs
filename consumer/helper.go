@@ -38,18 +38,16 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 	state := State{Db: db, Redis: redisClient, Auth: auth, UserModel: gateway.UserModel{}}
 
 	cv1 := route.Group(groupName)
-	cv1.Use(state.APIAuth())
+	// cv1.Use(state.APIAuth())
 
 	ss := utils.Service{Redis: redisClient, Db: db}
 	s := &Service{Service: ss}
 	var cardServices = cards.Service{Redis: redisClient}
 
 	{
-
 		cv1.POST("/register", state.CreateUser)
 		cv1.POST("/refresh", state.RefreshHandler)
 		cv1.POST("/logout", state.LogOut)
-
 		cv1.POST("/billers/new", s.NewBiller)
 		cv1.POST("/balance", s.Balance)
 		cv1.POST("/is_alive", s.IsAlive)
@@ -76,39 +74,31 @@ func Routes(groupName string, route *gin.Engine, db *gorm.DB, redisClient *redis
 		cv1.GET("/info", s.info)
 		cv1.POST("/info", s.info)
 		cv1.POST("/vouchers/generate", s.GenerateVoucher)
-
 		//cashout creation services
 		cv1.POST("/cashout/register", s.RegisterCashout) //register biller as accepting cashouts
 		cv1.POST("/cashout/profile", s.UpdateCashout)
 		cv1.POST("/cashout/generate/:biller", s.GenerateCashoutClaim) //returns uuid to be used by merchant, in /cashout/claims
 		cv1.POST("/cashout/claim/:biller", s.CashoutClaims)           // performs payment
-
 		cv1.POST("/qr_refund", s.QRRefund)
 		cv1.POST("/card_info", s.EbsGetCardInfo)
 		cv1.POST("/pan_from_mobile", s.GetMSISDNFromCard)
-
 		cv1.GET("/mobile2pan", s.CardFromNumber)
 		cv1.GET("/nec2name", s.NecToName)
-
 		cv1.POST("/login", state.LoginHandler)
+		cv1.PUT("/edit_card", s.EditCard)
+		cv1.DELETE("/delete_card", s.RemoveCard)
+		cv1.GET("/get_mobile", s.GetMobile)
+		cv1.POST("/add_mobile", s.AddMobile)
+		//card issuance specifics
+		cv1.POST("/cards/new", s.RegisterCard)
+		cv1.POST("/cards/complete", s.CompleteRegistration)
+		cv1.POST("/test", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"message": true})
+		})
 		cv1.Use(auth.AuthMiddleware())
 		cv1.GET("/get_cards", s.GetCards)
 		cv1.POST("/add_card", s.AddCards)
 		cv1.POST("/tokenize", cardServices.Tokenize)
-
-		cv1.PUT("/edit_card", s.EditCard)
-		cv1.DELETE("/delete_card", s.RemoveCard)
-
-		cv1.GET("/get_mobile", s.GetMobile)
-		cv1.POST("/add_mobile", s.AddMobile)
-
-		//card issuance specifics
-		cv1.POST("/cards/new", s.RegisterCard)
-		cv1.POST("/cards/complete", s.CompleteRegistration)
-
-		cv1.POST("/test", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"message": true})
-		})
 
 	}
 }
@@ -286,6 +276,6 @@ func (s *Service) savePubKey(key string, username string) error {
 
 func (s *State) getTableFromUsername(username string) gateway.UserModel {
 	var user gateway.UserModel
-	s.Db.Where(&gateway.UserModel{Username: username}, username).First(&user)
+	s.Db.First(&user, "username = ?", username)
 	return user
 }

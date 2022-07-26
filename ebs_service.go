@@ -157,12 +157,6 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 		cons.POST("/login", state.LoginHandler)
-		cons.Use(auth.AuthMiddleware())
-		cons.GET("/get_cards", consumerService.GetCards)
-		cons.POST("/add_card", consumerService.AddCards)
-
-		cons.PUT("/edit_card", consumerService.EditCard)
-		cons.DELETE("/delete_card", consumerService.RemoveCard)
 
 		cons.GET("/get_mobile", consumerService.GetMobile)
 		cons.POST("/add_mobile", consumerService.AddMobile)
@@ -170,6 +164,11 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
+		cons.Use(auth.AuthMiddleware())
+		cons.GET("/get_cards", consumerService.GetCards)
+		cons.POST("/add_card", consumerService.AddCards)
+		cons.PUT("/edit_card", consumerService.EditCard)
+		cons.DELETE("/delete_card", consumerService.RemoveCard)
 	}
 
 	mGroup := route.Group("/merchant")

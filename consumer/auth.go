@@ -134,15 +134,14 @@ func (s *State) RefreshHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			log.Printf("the username is: %s", claims.Username)
+			log.Printf("refresh: auth username is: %s", claims.Username)
 			user := s.getTableFromUsername(claims.Username)
 			// should verify signature here...
-			log.Printf("grabbed user is: %#v", user)
-			if _, encErr := noebsCrypto.Verify(user.PublicKey, req.Signature, req.Message); encErr != nil {
+			log.Printf("grabbed user is: %#v", user.Mobile)
+			if _, encErr := noebsCrypto.VerifyWithHeaders(user.PublicKey, req.Signature, req.Message); encErr != nil {
 				log.Printf("invalid signature in refresh: %v", encErr)
 				c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
 				return
