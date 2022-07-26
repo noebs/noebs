@@ -98,6 +98,7 @@ func (s *State) LoginHandler(c *gin.Context) {
 	}
 
 	log.Printf("the processed request is: %v\n", req)
+	req.Username = req.Mobile // making username a mobile
 	u := s.UserModel
 
 	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
