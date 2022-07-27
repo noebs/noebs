@@ -137,9 +137,12 @@ func (s *State) RefreshHandler(c *gin.Context) {
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			log.Printf("refresh: auth username is: %s", claims.Username)
+			log.Info("refresh: auth username is: %s", claims.Username)
 			user := s.getTableFromUsername(claims.Username)
 			// should verify signature here...
+			if user.PublicKey == "" {
+				log.Printf("user: %s has no registered pubkey", user.Mobile)
+			}
 			log.Printf("grabbed user is: %#v", user.Mobile)
 			if _, encErr := noebsCrypto.VerifyWithHeaders(user.PublicKey, req.Signature, req.Message); encErr != nil {
 				log.Printf("invalid signature in refresh: %v", encErr)
