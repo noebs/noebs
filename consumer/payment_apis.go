@@ -83,24 +83,23 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+	"github.com/go-redis/redis/v7"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 var log = logrus.New()
 
 //Service consumer for utils.Service struct
 type Service struct {
-	utils.Service
+	Redis      *redis.Client
+	Db         *gorm.DB
 	ConsumerIP string
 }
 
@@ -148,15 +147,11 @@ func (s *Service) Purchase(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -164,7 +159,7 @@ func (s *Service) Purchase(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -217,15 +212,12 @@ func (s *Service) IsAlive(c *gin.Context) {
 		//// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -284,15 +276,11 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -353,13 +341,9 @@ func (s *Service) BillInquiry(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
+		res.Name = "change me"
 
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -425,15 +409,11 @@ func (s *Service) Balance(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -496,15 +476,11 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -588,15 +564,11 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -658,15 +630,11 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -721,15 +689,11 @@ func (s *Service) CashIn(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -784,15 +748,11 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -847,15 +807,11 @@ func (s *Service) CashOut(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction // rename me to cashin transaction
+		res.Name = "change me" // rename me to cashin transaction
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -911,15 +867,11 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -980,15 +932,11 @@ func (s *Service) IPinChange(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1050,15 +998,11 @@ func (s *Service) Status(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1129,15 +1073,11 @@ func (s *Service) QRPayment(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1195,15 +1135,11 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1263,15 +1199,11 @@ func (s *Service) QRRefund(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1328,15 +1260,11 @@ func (s *Service) QRComplete(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1393,15 +1321,11 @@ func (s *Service) QRGeneration(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1467,15 +1391,11 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1536,15 +1456,11 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1607,15 +1523,11 @@ func (s *Service) IPINKey(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -1635,361 +1547,84 @@ func (s *Service) IPINKey(c *gin.Context) {
 }
 
 //GeneratePaymentToken generates a token
-// BUG(adonese) we have to make it mandatory for biller id as well
-//BUG(adonese) still not fixed -- but we really should fix it
-//TODO(adonese) #94 API key should be mandatory
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	// make authorization for which to make calls
-	// if err := c.ShouldBindJSON(&t); err != nil {
-	// 	ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
-	// 	c.JSON(http.StatusBadRequest, ve)
-	// 	return
-	// }
-
-	// I'm gonna need to know and check namespace
-	// This is a workaround for sahil payment. Will deprecated in the future. And all of sahil's specifics.
-
-	var namespace string
-	if namespace = c.Param("payment"); namespace == "" {
-		namespace = "sahil_wallet"
-	}
-
-	if err := t.NewToken(namespace); err != nil {
-		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
-		c.JSON(http.StatusBadRequest, ve)
+	var token ebs_fields.PaymentToken
+	mobile := c.GetString("username")
+	user, _ := ebs_fields.NewUserByMobile(mobile, s.Db)
+	if err := c.ShouldBindWith(&token, binding.JSON); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid request"})
 		return
 	}
-
-	if err := t.addToken(namespace, t.UUID); err != nil {
-		log.Printf("Error in addToken: %v", err)
-		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
-		c.JSON(http.StatusBadRequest, ve)
+	token.UserID = user.ID
+	if err := token.SavePaymentToken(); err != nil {
+		log.Printf("error in saving payment token: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Unable to save payment token"})
 		return
 	}
-
-	c.JSON(http.StatusCreated, gin.H{"result": t, "uuid": t.UUID})
+	encoded, _ := ebs_fields.Encode(&token)
+	c.JSON(http.StatusCreated, gin.H{"result": token, "token": encoded})
 }
 
-//UpdateCashout to register a new cashout biller in noebs
-func (s *Service) UpdateCashout(c *gin.Context) {
-
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	var csh cashoutFields
-
-	if err := c.ShouldBindJSON(&csh); err != nil {
-		ve := validationError{Message: err.Error(), Code: "csh_err"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-	log.Printf("the request is: %#v", csh)
-
-	if csh.Name == "" {
-		ve := validationError{Message: "Empty namespace", Code: "csh_err"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-	if err := t.UpdateCashOut(csh.Name, csh); err != nil {
-		ve := validationError{Message: err.Error(), Code: "csh_err"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"profile": csh})
-	return
-}
-
-//RegisterCashout to register a new cashout biller in noebs
-func (s *Service) RegisterCashout(c *gin.Context) {
-
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	var csh cashoutFields
-
-	if err := c.ShouldBindJSON(&csh); err != nil {
-		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	if err := t.AddCashOut(csh.Name, csh); err != nil {
-		ve := validationError{Message: err.Error(), Code: "csh_err"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
-	return
-}
-
-//GenerateCashoutClaim generates a new cashout claim. Used by merchant to issue a new claim
-func (s *Service) GenerateCashoutClaim(c *gin.Context) {
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	var csh cashout
-
-	if err := c.ShouldBindJSON(&csh); err != nil {
-		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	namespace := c.Param("biller")
-	if namespace == "" {
-		ve := validationError{Message: "namespace not provided", Code: "required_fields_missing"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	t.ID = csh.ID
-	t.Amount = float32(csh.Amount)
-
-	id, err := t.NewCashout(namespace)
-	if err != nil {
-		log.Printf("Error in addToken: %v", err)
-		ve := validationError{Message: err.Error(), Code: "unable to get the result"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-	if err := t.setAmount(namespace, id, csh.Amount); err != nil {
-		log.Printf("Error in addToken: %v", err)
-		ve := validationError{Message: err.Error(), Code: "unable to set amount"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"result": id, "uuid": id})
-}
-
-//CashoutClaims used by merchants to make a cashout
-func (s *Service) CashoutClaims(c *gin.Context) {
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	var csh cashout
-
-	ns := c.Param("biller")
-	if err := c.ShouldBindJSON(&csh); err != nil {
-		ve := validationError{Message: err.Error(), Code: "required_fields_missing"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	log.Printf("the id is: %v", csh.ID)
-	t.ID = csh.ID
-	t.Amount = float32(csh.Amount)
-	// this block here can be made into a func
-	{
-		if !t.cshExists(ns, csh.ID) {
-			ve := validationError{Message: "namespace/id doesn't exist", Code: "required_fields_missing"}
-			c.JSON(http.StatusBadRequest, ve)
-			return
-		}
-
-		if t.isDone(ns, t.ID) {
-			ve := validationError{Message: "payment done", Code: "duplicate_claim"}
-			c.JSON(http.StatusBadRequest, ve)
-			return
-		}
-
-		t.markDone(ns, csh.ID)
-	}
-
-	// am gonna need to send in more data here
-	// i don't want to take a whopping penis with me
-	tt := paymentTokens{redisClient: t.redisClient}
-	go tt.cashOutClaims(ns, csh.ID, csh.Card) // this should work. eh?
-
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
-}
-
-//GetPaymentToken retrieves a generated payment token by ID (UUID)
+//GetPaymentToken retrieves a generated payment token by UUID
+// This service should be accessed via an authorization header
 func (s *Service) GetPaymentToken(c *gin.Context) {
-	id := c.Param("uuid")
-	if id == "" {
+	username := c.GetString("username")
+	if username == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
-
-	//BUG(adonese) safe but unclean; should be fixed. As reliable as the holding handler is
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	if ok, err := t.GetToken(id); !ok {
-		ve := validationError{Message: err.Error(), Code: "payment_token_not_found"}
+	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	if err != nil {
+		ve := validationError{Message: "user doesn't exist", Code: "record_not_found"}
 		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"result": []paymentTokens{t}})
-
+	uuid, _ := c.GetQuery("uuid")
+	if uuid == "" { // the user wants to enlist *all* tokens generated for them
+		c.JSON(http.StatusBadRequest, gin.H{"result": user.PaymentTokens, "count": 0})
+		return
+	}
+	result, _ := ebs_fields.GetTokenByUUID(uuid, s.Db)
+	c.JSON(http.StatusOK, gin.H{"result": result, "count": 1})
 }
 
-// SpecialPayment is a new api to allow for site users to securely request payment
-// it is really just a payment request with:
-// - tran amount
-// - payee id
-// later we can add more features such as expiration for the token and more.
-func (s *Service) SpecialPayment(c *gin.Context) {
-	// get token
-	// get token service from redis
-	// perform the payment
-	// /consumer/payment/uuid
+func (s *Service) NoebsQuickPayment(c *gin.Context) {
+	url := s.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
 
-	// BUG(adonese) find a way to get hooks and to from here.
-	url := s.ConsumerIP + ebs_fields.ConsumerPurchaseEndpoint
-
-	provider := c.Param("uuid")
-	//why hardcoding it here?
-
-	if strings.Contains(c.Request.URL.Host, "sahil.soluspay.net") {
-		provider = "biller:sahil"
-	}
-
-	var queries specialPaymentQueries
-
-	log.Printf(provider)
-
-	if err := c.BindQuery(&queries); err != nil {
-		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=empty_refId")
-			return
-		}
-		ve := validationError{Message: "Binding error", Code: "empty_refId"}
-		c.JSON(http.StatusBadRequest, ve)
+	var data ebs_fields.QuickPaymentFields
+	if err := c.ShouldBindWith(&data, binding.JSON); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "bad_request"})
 		return
 	}
-
-	log.Printf("What is isJson: %v", queries)
-
-	var t paymentTokens
-	t.redisClient = s.Redis
-
-	// TODO(adonese): perform a check here and assign token to biller id
-	if ok, err := t.ValidateToken(queries.Token, provider); !ok && err != nil {
-		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=token_not_found")
-			return
-		}
-		ve := validationError{Message: "Invalid token", Code: err.Error()}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	m := merchant.New(s.Db)
-	data, err := m.ByID(provider)
+	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
 	if err != nil {
-		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, queries.Referer+"?fail=true&code=not_biller_provided")
-			return
-		}
-		ve := validationError{Message: "Biller ID not activated", Code: err.Error()}
-		c.JSON(http.StatusBadRequest, ve)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "bad_request"})
+		return
+	}
+	storedToken, err := ebs_fields.GetTokenByUUID(paymentToken.UUID, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "token_not_found"})
+		return
+	}
+	if storedToken.Amount != 0 && storedToken.Amount != paymentToken.Amount {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "amount_mismatch", "message": "amount_mismatch"})
 		return
 	}
 
-	var hooks, referer string
-
-	if m.Hooks != "" {
-		hooks = m.Hooks
-	} else {
-		hooks = queries.HooksURL
-	}
-
-	if m.URL != "" {
-		referer = m.URL
-	} else {
-		referer = queries.Referer
-	}
-
-	var p interface{}
-	var bill ebs_fields.ConsumerPurchaseFields
-
-	var pp ebs_fields.ConsumerCardTransferFields
-
-	if data.CardNumber == "" {
-		bill.ServiceProviderId = data.EBSBiller
-		p = bill
-		url = ebs_fields.EBSIp + ebs_fields.ConsumerCardTransferEndpoint
-	} else {
-		pp.ToCard = data.CardNumber
-		p = pp
-	}
-
-	log.Printf("the data in p is: %#v", p)
-	if err := c.ShouldBindJSON(&p); err != nil {
-		log.Printf("error in parsing: %v", err)
-		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, referer+"?fail=true&code="+err.Error())
-			return
-		}
-		ve := validationError{Message: err.Error(), Code: "validation_error"}
-		c.JSON(http.StatusBadRequest, ve)
-		return
-	}
-
-	// necessary to invalidate key after issuance
-	t.invalidate(queries.Token)
-
-	// perform the payment
-	req, _ := json.Marshal(&p)
-
-	code, res, ebsErr := ebs_fields.EBSHttpClient(url, req)
-
-	var isSuccess bool
-	if ebsErr == nil {
-		isSuccess = true
-	}
-	// mask the pan
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
+	s.Db.Model(&storedToken).Where("uuid", storedToken.UUID).Updates(&ebs_fields.PaymentToken{IsPaid: ebsErr != nil})
 	res.MaskPAN()
-	pt := &billerForm{ID: queries.ID, EBS: res.GenericEBSResponseFields, Token: queries.Token, IsSuccessful: isSuccess}
 
-	t.addTrans(provider, pt)
-
-	transaction := dashboard.Transaction{
-		GenericEBSResponseFields: res.GenericEBSResponseFields,
-	}
-
-	transaction.EBSServiceName = "special_payment"
-	//FIXME #73 attempting to write a read-only database
-	s.Db.Table("transactions").Create(&transaction)
-
-	// we send a push request here...
-	// TODO(adonese): make a function to generate texts here
-	go t.pushMessage(fmt.Sprintf("Amount of: %v was added! Download Cashq!", transaction.TranAmount), m.PushID)
+	s.Db.Table("transactions").Create(&res.EBSResponse)
+	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download Cashq!", res.EBSResponse.TranAmount))
 	if ebsErr != nil {
-
-		// We don't return here since we gotta send the billerForm at the end of the function?
-		//TODO
-		/*
-			could we do something like this:
-			go func(){
-				billerChan <- billerForm{EBS: res.GenericEBSResponseFields, ID: refID, IsSuccessful: isSuccess, Token: id}
-			}()
-		*/
-		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, referer+"?fail=true&code="+res.ResponseMessage)
-			return
-		}
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
-
 	} else {
-		isSuccess = true
-		if !queries.IsJSON {
-			c.Redirect(http.StatusMovedPermanently, referer+"?fail=true&code="+res.ResponseMessage)
-		}
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
-	// post request. Send the response to the handler
-	// FIXME(adonese) #91 allow for generic use of noebs hooks.
-	billerChan <- billerForm{to: hooks, EBS: res.GenericEBSResponseFields, ID: queries.ID, IsSuccessful: isSuccess, Token: queries.Token} //THIS BLOCKS IF THE goroutin is not listening
+	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.EncodedPaymentToken}
 }
 
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
@@ -2034,15 +1669,11 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -2104,15 +1735,11 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -2130,49 +1757,6 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
 	}
 
-}
-
-//CreateMerchant creates new noebs merchant
-func (s *Service) CreateMerchant(c *gin.Context) {
-
-	var m merchant.Merchant // we gonna need to initialize this dude
-	if err := c.ShouldBind(&m); err != nil {
-		verr := ebs_fields.ValidationError{Code: "request_error", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, verr)
-		return
-	}
-
-	m.SetDB(s.Db)
-
-	id := GetRandomName(0)
-	log.Printf("the name is: %v", id)
-	m.MerchantID = id
-
-	password, err := bcrypt.GenerateFromPassword([]byte(m.Password), 8)
-	if err != nil {
-		verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, verr)
-		return
-	}
-
-	// store in redis first, then commit to DB..
-	p := NewPayment(s.Redis) // this introduces issues...
-
-	if err := p.FromMobile(id, m.Merchant); err != nil {
-		verr := ebs_fields.ValidationError{Code: "billers_err", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, verr)
-		return
-	}
-
-	m.Password = string(password)
-	if err := m.Write(); err != nil {
-		verr := ebs_fields.ValidationError{Code: "db_err", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, verr)
-		return
-	}
-
-	link := fmt.Sprintf("%s/%s", "https://beta.soluspay.net/api/v1/payment", id)
-	c.JSON(http.StatusCreated, gin.H{"biller_name": id, "profile": m.Merchant, "url": link, "result": "ok"})
 }
 
 //QRPayment performs QR payment transaction
@@ -2213,15 +1797,11 @@ func (s *Service) RegisterCard(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -2280,15 +1860,11 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		// except for this api, don't mask the card!
 		// res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -2346,15 +1922,11 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
+		res.Name = "change me"
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&transaction); err != nil {
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,

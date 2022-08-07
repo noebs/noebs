@@ -8,20 +8,21 @@ import (
 
 	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 type State struct {
-	Db        *gorm.DB
-	Redis     *redis.Client
-	Auth      Auther
-	UserModel gateway.UserModel
+	Db    *gorm.DB
+	Redis *redis.Client
+	Auth  Auther
 }
 
 type Auther interface {
@@ -85,32 +86,27 @@ func (s *State) IpFilterMiddleware(c *gin.Context) {
 	}
 }
 
-//FIXME #60 make LoginHandler in consumer apis #61
-//FIXME(adonese): #160 make login flow simpler. The code is rubbish
 func (s *State) LoginHandler(c *gin.Context) {
 
-	var req gateway.UserModel
+	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
 		log.Printf("The request is wrong. %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-
 	log.Printf("the processed request is: %v\n", req)
 	if req.Mobile == "" {
 		req.Mobile = req.Username
 	}
 	req.Username = req.Mobile // making username a mobile
-	u := s.UserModel
-
+	u := ebs_fields.User{}
 	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
 		log.Printf("User with service_id %s is not found.", req.Username)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
-
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		return
@@ -125,7 +121,45 @@ func (s *State) LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
-//FIXME #61 refactor some of these apis for consumer services only
+//SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
+// the user's credentials (user's stored public key)
+func (s *State) SingleLoginHandler(c *gin.Context) {
+
+	var req gateway.Token
+	c.ShouldBindWith(&req, binding.JSON)
+	log.Printf("the processed request is: %v\n", req)
+
+	u := ebs_fields.User{}
+	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
+		log.Printf("User with service_id %s is not found.", req.Mobile)
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
+		return
+	}
+
+	if _, encErr := noebsCrypto.VerifyWithHeaders(u.PublicKey, req.Signature, req.Message); encErr != nil {
+		log.Printf("invalid signature in refresh: %v", encErr)
+		c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
+		return
+	}
+
+	// Validate the otp using user's stored public key
+	if totp.Validate(req.Message, u.EncodePublickey()) == false {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong otp entered", "code": "wrong_otp"})
+		return
+	}
+	token, err := s.Auth.GenerateJWT(u.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	c.Writer.Header().Set("Authorization", token)
+	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
+}
+
+//RefreshHandler generates a new access token to the user using
+// their signed public key.
+// the user will sign their username with their private key, and noebs will verify
+// the signature using the stored public key for the user
 func (s *State) RefreshHandler(c *gin.Context) {
 	var req gateway.Token
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
@@ -138,7 +172,7 @@ func (s *State) RefreshHandler(c *gin.Context) {
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
 			log.Info("refresh: auth username is: %s", claims.Username)
-			user := s.getTableFromUsername(claims.Username)
+			user, _ := ebs_fields.NewUserByMobile(claims.Username, s.Db)
 			// should verify signature here...
 			if user.PublicKey == "" {
 				log.Printf("user: %s has no registered pubkey", user.Mobile)
@@ -168,37 +202,9 @@ func (s *State) RefreshHandler(c *gin.Context) {
 	}
 }
 
-//FIXME issue #61
-func (s *State) LogOut(c *gin.Context) {
-	//TODO implement logout API to limit the number of currently logged in devices
-	// just handle the simplest case, authorization is not provided.
-	h := c.GetHeader("Authorization")
-	if h == "" {
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
-			"code": "unauthorized"})
-		return
-	}
-
-	claims, err := s.Auth.VerifyJWT(h)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error(), "code": "malformed_jwt_token"})
-		return
-	}
-
-	username := claims.Username
-	if username != "" {
-		s.Redis.Decr(username + ":logged_in_devices")
-		c.JSON(http.StatusNoContent, gin.H{"message": "Device Successfully Logged Out"})
-		return
-	} else {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized", "code": "unauthorized"})
-		return
-	}
-}
-
-//FIXME issue #61
+//CreateUser to register a new user to noebs
 func (s *State) CreateUser(c *gin.Context) {
-	u := s.UserModel
+	u := ebs_fields.User{}
 	if s.Db == nil {
 		panic("wtf")
 	}
@@ -238,6 +244,31 @@ func (s *State) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
+func (s *State) GenerateSignInCode(c *gin.Context) {
+
+	var req gateway.Token
+	c.ShouldBindWith(&req, binding.JSON)
+	// default username to mobile, in case username was not provided
+	if req.Mobile == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
+		return
+	}
+	user, _ := ebs_fields.NewUserByMobile(req.Mobile, s.Db)
+	if user.PublicKey == "" {
+		// user has no public key
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
+		return
+	}
+	key, err := generateOtp(user.EncodePublickey())
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
+		return
+	}
+	// this function doesn't have to be blocking.
+	go sendSMS(SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
+	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
+}
+
 //FIXME issue #61
 func GetServiceID(c *gin.Context) {
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
@@ -263,7 +294,6 @@ func GetServiceID(c *gin.Context) {
 //APIAuth API-Key middleware. Currently is used by consumer services
 //FIXME issue #61
 func (s *State) APIAuth() gin.HandlerFunc {
-
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
 			if !isMember("apikeys", key, s.Redis) {

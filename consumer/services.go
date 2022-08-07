@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
-	"os"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -24,36 +22,6 @@ import (
 const (
 	SMS_GATEWAY = "https://mazinhost.com/smsv1/sms/api?action=send-sms"
 )
-
-//ResetPassword reset user password after passing some check
-func (s *Service) ResetPassword(c *gin.Context) {
-	//TODO complete me
-	//- we want to make sure that it *was* you
-	//-enter your mobile number
-
-}
-
-//NewBiller creates a new biller for system
-func (s *Service) NewBiller(c *gin.Context) {
-	var b ebs_fields.Merchant
-
-	if err := c.BindJSON(&b); err != nil {
-		verr := validationError{Message: "Empty request fields", Code: "empty_fields"}
-		c.JSON(http.StatusBadRequest, verr)
-		return
-	}
-
-	p := paymentTokens{redisClient: s.Redis}
-	var retry int
-begin:
-	name := GetRandomName(retry)
-	if err := p.newBiller(name); err != nil {
-		retry++
-		goto begin
-	}
-	c.JSON(http.StatusCreated, gin.H{"result": "ok", "namespace": name})
-
-}
 
 //CardFromNumber gets the gussesed associated mobile number to this pan
 func (s *Service) CardFromNumber(c *gin.Context) {
@@ -294,84 +262,7 @@ func (s *Service) NecToName(c *gin.Context) {
 	}
 }
 
-func (s *Service) cacheKeys(c *gin.Context) {
-	// it should check ebs first
-
-}
-
 var billerChan = make(chan billerForm)
-
-//CancelBiller using its issued uuid
-func (s *Service) CancelBiller(c *gin.Context) {
-
-	if v, ok := c.GetQuery("id"); !ok || v == "" {
-		vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
-		c.JSON(http.StatusBadRequest, vErr)
-		return
-	} else {
-		p := paymentTokens{redisClient: s.Redis}
-		if err := p.cancelTransaction(v); err != nil {
-			vErr := validationError{Code: "internal_error", Message: err.Error()}
-			c.JSON(http.StatusBadRequest, vErr)
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"result": true})
-	}
-
-}
-
-//CancelBiller using its issued uuid
-func (s *Service) info(c *gin.Context) {
-
-	b, ok := c.GetQuery("biller")
-	if !ok || b == "" {
-		vErr := validationError{Code: "missing_biller", Message: "Biller ID not presented"}
-		c.JSON(http.StatusBadRequest, vErr)
-		return
-	}
-
-	id, _ := c.GetQuery("id")
-	// if !ok || id == "" {
-	// 	vErr := validationError{Code: "missing_uuid", Message: "UUID not presented"}
-	// 	c.JSON(http.StatusBadRequest, vErr)
-	// 	return
-	// }
-	clientID, _ := c.GetQuery("refID")
-
-	p := paymentTokens{redisClient: s.Redis}
-
-	// how get by id works
-	if res, err := p.getByID(b, id, clientID); err != nil {
-		// vErr := validationError{Code: "not_found", Message: err.Error()}
-		c.JSON(http.StatusBadRequest, billerForm{ID: clientID, IsSuccessful: false, EBS: ebs_fields.GenericEBSResponseFields{ResponseMessage: "not_completed", ResponseCode: -1}})
-		return
-	} else {
-		c.JSON(http.StatusOK, res)
-	}
-
-}
-
-//BillerTrans to get all transaction to specific biller_id
-func (s *Service) BillerTrans(c *gin.Context) {
-
-	b, ok := c.GetQuery("biller")
-	if !ok || b == "" {
-		vErr := validationError{Code: "missing_biller", Message: "Biller ID not presented"}
-		c.JSON(http.StatusBadRequest, vErr)
-		return
-	}
-
-	p := paymentTokens{redisClient: s.Redis}
-
-	// how get by id works
-	if res, err := p.getTrans(b); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"result": res})
-		return
-	} else {
-		c.JSON(http.StatusOK, gin.H{"result": res})
-	}
-
-}
 
 //BillerHooks submits results to external endpoint
 func BillerHooks() {
@@ -392,118 +283,89 @@ func BillerHooks() {
 	}
 }
 
-//cashOutClaim used
-func (p *paymentTokens) cashOutClaims(ns, id, toCard string) error {
-
-	token, _ := uuid.NewRandom()
-	log.Printf("the ns is: %v - id is: %v", ns, id)
-	card, err := p.GetCashOut(ns)
-	log.Printf("The card info is: %#v", card)
-
-	if err != nil {
-		log.Printf("error in cashout: %v", err)
-		return err
-	}
-	ipinBlock, err := ipin.Encrypt("MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ==", card.Ipin, token.String())
-	if err != nil {
-		log.Printf("error in encryption: %v", err)
-		return err
-	}
-
-	amount, err := p.getAmount(ns, id)
-	if err != nil {
-		log.Printf("error in cashout amount: %v", err)
-		return err
-	}
-
-	data := ebs_fields.ConsumerCardTransferFields{
-		ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
-			ApplicationId: "ACTSCon",
-			TranDateTime:  "022821135300",
-			UUID:          token.String(), // this is *WRONG*
-		},
-		ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
-			Pan:     card.Pan,
-			Ipin:    ipinBlock,
-			ExpDate: card.ExpDate,
-		},
-		AmountFields: ebs_fields.AmountFields{
-			TranAmount:       float32(amount), // it should be populated
-			TranCurrencyCode: "SDG",
-		},
-		ToCard: toCard,
-	}
-
-	log.Printf("the request is: %v", data)
-	req, _ := json.Marshal(&data)
-
-	res, err := http.Post("http://localhost:8080/consumer/p2p", "application/json", bytes.NewBuffer(req))
-	if err != nil {
-		log.Printf("Error in response: %v", err)
-		return err
-	}
-
-	resData, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		log.Printf("Error in reading noebs response: %v", err)
-		return err
-	}
-
-	log.Printf("the response is: %v", string(resData))
-
-	parser, err := newFromBytes(resData, res.StatusCode)
-	if err != nil {
-		log.Printf("Error in reading noebs response: %v", err)
-		return err
-	}
-
-	// now we gotta marshal the response smh
-	defer res.Body.Close()
-	cardRes := cashoutFields{Biller: parser, Amount: card.Amount, Name: card.Name}
-
-	msg, err := json.Marshal(&cardRes)
-	if err != nil {
-		log.Printf("Error in parsing marshal: %v", err)
-		return err
-	}
-
-	// now use pub sub
-
-	{
-		pubsub := p.redisClient.Subscribe("chan_cashouts")
-
-		// Wait for confirmation that subscription is created before publishing anything.
-		_, err := pubsub.Receive()
+//PaymentOrder used to perform a transaction on behalf of a noebs user. This api should be used behind an authorization middleware
+// The goal of this api is to allow our customers to perform certain types of transactions (recurred ones) without having to worry about it.
+// For example, if a user wants to make saving, or in case they want to they want to pay for their rent. Recurring payment scenarios are a lot.
+// The current proposal is to use a _wallet_. Simply, a user will put a money into noebs bank account. Whenever a user want to perform a recurred payment, noebs can then
+// use their wallet to perform the transaction.
+//
+// ## Problems we have so far
+// - We are not allowed to store value, we cannot save users money in our account
+// - We cannot store user's payment information (pan, ipin, exp date) in our system
+// - And we don't want the user to everytime login into the app and key in their payment information
+func (s *Service) PaymentOrder() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mobile := c.GetString("username")
+		var req ebs_fields.PaymentToken
+		token, _ := uuid.NewRandom()
+		user, err := ebs_fields.GetUserCard(mobile, s.Db)
 		if err != nil {
-			log.Printf("Error in pubsub: %v", err)
-			return err
+			log.Printf("error in retrieving card: %v", err)
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
 
-		// Publish a message.
-		err = p.redisClient.Publish("chan_cashouts", msg).Err() // So, we are currently just pushing to the data
-		if err != nil {
-			log.Printf("Error in pubsub: %v", err)
-			return err
+		// there shouldn't be any error here, but still
+		if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+			log.Printf("error in retrieving card: %v", err)
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
+		ipinBlock, err := ipin.Encrypt("MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ==", user.Cards[0].IPIN, token.String())
+		if err != nil {
+			log.Printf("error in encryption: %v", err)
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+		}
+		data := ebs_fields.ConsumerCardTransferFields{
+			ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
+				ApplicationId: "ACTSCon",
+				TranDateTime:  "022821135300",
+				UUID:          token.String(),
+			},
+			// user.Cards[0] won't error, since we:
+			// query the result in [ebs_fields.GetUserCard] and order them by is_main and first created
+			// if no card was added to the user, the [ebs_fields.GetUserCard] will error and we handle it
+			ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
+				Pan:     user.Cards[0].Pan,
+				Ipin:    ipinBlock,
+				ExpDate: user.Cards[0].Expiry,
+			},
+			AmountFields: ebs_fields.AmountFields{
+				TranAmount:       float32(req.Amount), // it should be populated
+				TranCurrencyCode: "SDG",
+			},
+			ToCard: req.ToCard,
+		}
+		updatedRequest, _ := json.Marshal(&data)
+		// Modify gin's context to update the request body
+		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(updatedRequest))
+		c.Request.ContentLength = int64(len(updatedRequest))
+		c.Request.Header.Set("Content-Type", "application/json")
 
-		time.AfterFunc(time.Second, func() {
-			// When pubsub is closed channel is closed too.
-			_ = pubsub.Close()
-		})
+		// Call the next handler
+		c.Next()
+
+		// pubsub := s.Redis.Subscribe("chan_cashouts")
+		// // Wait for confirmation that subscription is created before publishing anything.
+		// _, err := pubsub.Receive()
+		// if err != nil {
+		// 	log.Printf("Error in pubsub: %v", err)
+
+		// }
+		// // Publish a message.
+		// err = s.Redis.Publish("chan_cashouts", msg).Err() // So, we are currently just pushing to the data
+		// if err != nil {
+		// 	log.Printf("Error in pubsub: %v", err)
+		// }
+		// time.AfterFunc(time.Second, func() {
+		// 	// When pubsub is closed channel is closed too.
+		// 	_ = pubsub.Close()
+		// })
 	}
-
-	return nil
 }
 
-//NewCashout experimental interface to make cashout publicaly availabe.
-func NewCashout(r *redis.Client) paymentTokens {
-	return paymentTokens{redisClient: r}
-}
-
-//pub experimental support to add pubsub support
+//CashoutPub experimental support to add pubsub support
 // we need to make this api public
-func (p *paymentTokens) CashoutPub() {
-	pubsub := p.redisClient.Subscribe("chan_cashouts")
+func (s *Service) CashoutPub() {
+	pubsub := s.Redis.Subscribe("chan_cashouts")
 
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive()
@@ -538,8 +400,8 @@ func (p *paymentTokens) CashoutPub() {
 	}
 }
 
-func (p *paymentTokens) pubSub(channel string, message interface{}) {
-	pubsub := p.redisClient.Subscribe(channel)
+func (s *Service) pubSub(channel string, message interface{}) {
+	pubsub := s.Redis.Subscribe(channel)
 
 	// Wait for confirmation that subscription is created before publishing anything.
 	_, err := pubsub.Receive()
@@ -559,45 +421,4 @@ func (p *paymentTokens) pubSub(channel string, message interface{}) {
 	for msg := range ch {
 		fmt.Println(msg.Channel, msg.Payload)
 	}
-}
-
-//SendSMS api endpoint to send SMS.Message to a user (SMS.Mobile)
-func (s *Service) SendSMS(c *gin.Context) {
-	// from gin, you read the request body (api documentations TODO)
-	var fields SMS
-	if err := c.ShouldBindWith(&fields, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	}
-
-	if err := sendSMS(fields); err != nil {
-		// return successful response
-		c.JSON(http.StatusOK, gin.H{"phone": fields.Mobile, "message": fields.Message})
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "gateway_error"})
-	}
-}
-
-func sendSMS(sms SMS) error {
-	/*
-	 https://mazinhost.com/smsv1/sms/api?action=send-sms&
-	 api_key=bW1idXNpZkBnbWFpbC5jb206bURTMVJQc2d1JA==
-	 &to=249111493885
-	 &from=COOP
-	 &sms="you here"
-	*/
-	v := url.Values{}
-	v.Add("api_key", os.Getenv("bW1idXNpZkBnbWFpbC5jb206bURTMVJQc2d1JA==")) // supply it in ENV
-	v.Add(("action"), "send-sms")
-	v.Add("from", "Cashq") //change to tutipay?, do vendors need to change this from their side ?
-	v.Add("numbers", sms.Mobile)
-	v.Add("message", sms.Message) //contains the bill details (time/status/service-name/...)
-
-	url := SMS_GATEWAY + v.Encode()
-	res, err := http.Get(url)
-	if err != nil {
-		log.Printf("The error is: %v", err)
-		return err
-	}
-	log.Printf("The response body is: %v", res)
-	return nil
 }

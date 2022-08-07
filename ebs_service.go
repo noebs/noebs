@@ -33,10 +33,8 @@ var log = logrus.New()
 var redisClient = utils.GetRedisClient("")
 var database *gorm.DB
 var consumerService consumer.Service
-var service utils.Service
-
+var service consumer.Service
 var auth gateway.JWTAuth
-
 var cardService = cards.Service{Redis: redisClient}
 var dashService dashboard.Service
 var state = consumer.State{}
@@ -46,24 +44,15 @@ var merchantServices = merchant.Merchant{}
 func GetMainEngine() *gin.Engine {
 
 	route := gin.Default()
-	//metrics := Metrics()
-	//p := ginprometheus.NewPrometheus("gin")
 	instrument := gateway.Instrumentation()
-
 	route.Use(instrument)
 	route.Use(sentrygin.New(sentrygin.Options{}))
-
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", EBS)
-
 	route.Use(gateway.OptionsMiddleware)
-
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
-
 	route.LoadHTMLGlob("./dashboard/template/*")
-
 	route.Static("/dashboard/assets", "./dashboard/template")
-
 	route.POST("/generate_api_key", state.GenerateAPIKey)
 	route.POST("/workingKey", WorkingKey)
 	route.POST("/cardTransfer", CardTransfer)
@@ -83,17 +72,13 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/refund", Refund)
 	route.POST("/toAccount", ToAccount)
 	route.POST("/statement", Statement)
-
 	route.GET("/test", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": true})
 	})
 
 	route.GET("/wrk", isAliveWrk)
-
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
-
 	dashboardGroup := route.Group("/dashboard")
-	//dashboardGroup.Use(gateway.CORSMiddleware())
 	{
 		dashboardGroup.GET("/get_tid", dashService.TransactionByTid)
 		dashboardGroup.GET("/get", dashService.TransactionByTid)
@@ -104,27 +89,18 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/settlement", dashService.DailySettlement)
 		dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)
 		dashboardGroup.GET("/merchant/:id", dashService.MerchantViews)
-
 		dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
-
 		dashboardGroup.GET("/", dashService.BrowserDashboard)
 		dashboardGroup.GET("/status", dashService.QRStatus)
 		dashboardGroup.GET("/test_browser", dashService.IndexPage)
-		dashboardGroup.Any("/hearout", dashService.LandingPage)
 		dashboardGroup.GET("/stream", dashService.Stream)
-		dashboardGroup.Any("/merchants", dashService.MerchantRegistration)
 	}
 
 	cons := route.Group("/consumer")
 
-	//cons.Use(gateway.OptionsMiddleware)
-	// we want to use /v2 for consumer and merchant services
 	{
-		//cons.GET("/rate", gin.WrapF(consumer.Rate))
 		cons.POST("/register", state.CreateUser)
 		cons.POST("/refresh", state.RefreshHandler)
-		cons.POST("/logout", state.LogOut)
-
 		cons.POST("/balance", consumerService.Balance)
 		cons.POST("/status", consumerService.TransactionStatus)
 		cons.POST("/is_alive", consumerService.IsAlive)
@@ -144,7 +120,6 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/ipin_key", consumerService.IPINKey)
 		cons.POST("/generate_ipin", consumerService.GenerateIpin)
 		cons.POST("/complete_ipin", consumerService.CompleteIpin)
-
 		cons.POST("/qr_refund", consumerService.QRRefund)
 		cons.POST("/qr_complete", consumerService.QRComplete)
 		cons.POST("/card_info", consumerService.EbsGetCardInfo)
@@ -153,14 +128,13 @@ func GetMainEngine() *gin.Engine {
 		cons.GET("/nec2name", consumerService.NecToName)
 		cons.POST("/tokenize", cardService.Tokenize)
 		cons.POST("/vouchers/generate", consumerService.GenerateVoucher)
-
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 		cons.POST("/login", state.LoginHandler)
-
+		cons.POST("/otp", state.GenerateSignInCode)
+		cons.POST("/otp_login", state.SingleLoginHandler)
 		cons.GET("/get_mobile", consumerService.GetMobile)
 		cons.POST("/add_mobile", consumerService.AddMobile)
-
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
@@ -169,16 +143,17 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/add_card", consumerService.AddCards)
 		cons.PUT("/edit_card", consumerService.EditCard)
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
+
+		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
+		cons.POST("/payment/quick_pay", consumerService.NoebsQuickPayment)
+		cons.GET("/payment/", consumerService.GetPaymentToken)
 	}
 
 	mGroup := route.Group("/merchant")
 	mGroup.GET("/", merchantServices.GetMerchant)
-	mGroup.POST("/new", consumerService.CreateMerchant)
 	mGroup.POST("/login", merchantServices.Login)
 	mGroup.POST("/m", merchantServices.AddBilling)
 	mGroup.PUT("/update", merchantServices.Update)
-	mGroup.POST("/sms", consumerService.SendSMS)
-	consumer.Routes("/v1", route, database, redisClient)
 	return route
 }
 
@@ -196,37 +171,23 @@ func init() {
 		log.Fatalf("error in connecting to db: %v", err)
 	}
 	database.Logger.LogMode(logger.Info)
-	database.AutoMigrate(&gateway.UserModel{})
-	binding.Validator = new(ebs_fields.DefaultValidator)
+	database.AutoMigrate(&ebs_fields.User{})
 	auth.Init()
-	service = utils.Service{Db: database, Redis: redisClient}
-	consumerService = consumer.Service{Service: service, ConsumerIP: ebs_fields.SecretConfig.GetConsumerQA()}
-	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, UserModel: gateway.UserModel{}}
+	binding.Validator = new(ebs_fields.DefaultValidator)
+	consumerService = consumer.Service{Db: database, Redis: redisClient, ConsumerIP: ebs_fields.SecretConfig.GetConsumerQA()}
+	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices.Init(database, log)
 }
 
-// @title noebs Example API
-// @version 1.0
-// @description This is a sample server celler server.
-// @termsOfService http://soluspay.net/terms
-// @contact.name API Support
-// @contact.url https://soluspay.net/support
-// @contact.email adonese@soluspay.net
-// @license.name Apache 2.0
-// @license.url https://github.com/adonese/noebs/LICENSE
-// @host beta.soluspay.net
-// @BasePath /api/
-// @securityDefinitions.basic BasicAuth
-// @in header
 func main() {
-	csh := consumer.NewCashout(redisClient)
-	go csh.CashoutPub() // listener for noebs cashouts.
+	// csh := consumer.NewCashout(redisClient)
+	// go csh.CashoutPub() // listener for noebs cashouts.
 	go consumer.BillerHooks()
 	go handleChan(redisClient)
 	//FIXME #65 handle errors in go routine
-
 	// logging and instrumentation
+	// FIXME #187 Create only one instance of logger and hook it to every service
 	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
 	if err == nil {
 		log.Out = file
@@ -237,23 +198,11 @@ func main() {
 	log.SetReportCaller(true) // get the method/function where the logging occured
 
 	docs.SwaggerInfo.Title = "noebs Docs"
-	//gin.SetMode(gin.ReleaseMode)
+	// gin.SetMode(gin.ReleaseMode)
 	log.Fatal(GetMainEngine().Run(":8080"))
 
 }
 
-// IsAlive godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept json
-// @Produce json
-// @Param workingKey body ebs_fields.IsAliveFields true "Working Key Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /workingKey [post]
-//FIXME #68 make all merchant routers in an Env or struct
 func IsAlive(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.IsAliveEndpoint // EBS simulator endpoint url goes here.
 	db, _ := utils.Database("test.db")
@@ -294,17 +243,13 @@ func IsAlive(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.IsAliveTransaction
+		res.Name = "change me"
 
 		// return a masked pan
-		transaction.MaskPAN()
+		res.MaskPAN()
 
 		// God please make it works.
-		if err := db.Table("transactions").Create(&transaction); err != nil {
+		if err := db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			log.WithFields(logrus.Fields{
 				"error":   err,
 				"details": "Error in writing to Database",
@@ -313,7 +258,7 @@ func IsAlive(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -337,18 +282,6 @@ func isAliveWrk(c *gin.Context) {
 
 }
 
-// WorkingKey godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param workingKey body ebs_fields.WorkingKeyFields true "Working Key Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /workingKey [post]
-//FIXME #68
 func WorkingKey(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.WorkingKeyEndpoint // EBS simulator endpoint url goes here.
@@ -384,13 +317,9 @@ func WorkingKey(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.WorkingKeyTransaction
+		res.Name = "change me"
 		// God please make it works.
-		if err := db.Create(&transaction).Error; err != nil {
+		if err := db.Create(&res.EBSResponse).Error; err != nil {
 			log.WithFields(logrus.Fields{
 				"error":   err.Error(),
 				"details": "Error in writing to Database",
@@ -400,7 +329,7 @@ func WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			// convert ebs res code to int
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -411,18 +340,6 @@ func WorkingKey(c *gin.Context) {
 	}
 }
 
-// Purchase godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /purchase [post]
-//FIXME #68
 func Purchase(c *gin.Context) {
 	url := ebs_fields.EBSMerchantIP + ebs_fields.PurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -446,11 +363,9 @@ func Purchase(c *gin.Context) {
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		// mask the pan
 		res.MaskPAN()
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-		transaction.EBSServiceName = ebs_fields.PurchaseTransaction
-		if err := db.Table("transactions").Create(&transaction); err != nil {
+
+		res.Name = "change me"
+		if err := db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"error":   "unable to migrate purchase model",
 				"message": err,
@@ -463,7 +378,7 @@ func Purchase(c *gin.Context) {
 		redisClient.Incr(fields.TerminalID + ":number_purchase_transactions")
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			redisClient.Incr(fields.TerminalID + ":failed_transactions")
 			c.JSON(code, payload)
 		} else {
@@ -481,39 +396,18 @@ func Purchase(c *gin.Context) {
 	}
 }
 
-// Balance godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param purchase body ebs_fields.PurchaseFields true "Purchase Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /purchase [post]
-//FIXME issue #68
 func Balance(c *gin.Context) {
-	url := ebs_fields.EBSMerchantIP + ebs_fields.BalanceEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := ebs_fields.EBSMerchantIP + ebs_fields.BalanceEndpoint
 	db, _ := utils.Database("test.db")
-
 	var fields = ebs_fields.BalanceFields{}
-
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: 400, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
@@ -532,18 +426,14 @@ func Balance(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.BalanceTransaction
+		res.Name = "change me"
 		// return a masked pan
 
 		// God please make it works.
-		db.Table("transactions").Create(&transaction)
+		db.Table("transactions").Create(&res.EBSResponse)
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -554,25 +444,8 @@ func Balance(c *gin.Context) {
 	}
 }
 
-// CardTransfer godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cardTransfer body ebs_fields.CardTransferFields true "Card Transfer Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cardTransfer [post]
-//FIXME issue #68
 func CardTransfer(c *gin.Context) {
-	url := ebs_fields.EBSMerchantIP + ebs_fields.CardTransferEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := ebs_fields.EBSMerchantIP + ebs_fields.CardTransferEndpoint
 	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.CardTransferFields{}
@@ -601,16 +474,12 @@ func CardTransfer(c *gin.Context) {
 
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CardTransferTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Table("transactions").Create(&transaction)
+		db.Table("transactions").Create(&res.EBSResponse)
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -622,26 +491,9 @@ func CardTransfer(c *gin.Context) {
 
 }
 
-// BillInquiry godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param billInquiry body ebs_fields.BillInquiryFields true "Bill Inquiry Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /billInquiry [post]
-//FIXME issue #68
 func BillInquiry(c *gin.Context) {
 
-	url := ebs_fields.EBSMerchantIP + ebs_fields.BillInquiryEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := ebs_fields.EBSMerchantIP + ebs_fields.BillInquiryEndpoint
 	db, _ := utils.Database("test.db")
 
 	var fields = ebs_fields.BillInquiryFields{}
@@ -675,13 +527,9 @@ func BillInquiry(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.BillInquiryTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
@@ -696,18 +544,6 @@ func BillInquiry(c *gin.Context) {
 	}
 }
 
-// BillPayment godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param billPayment body ebs_fields.BillPaymentFields true "Bill Payment Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /billPayment [post]
-//FIXME issue #68
 func BillPayment(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.BillPaymentEndpoint // EBS simulator endpoint url goes here.
@@ -748,19 +584,15 @@ func BillPayment(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.BillPaymentTransaction
+		res.Name = "change me"
 
 		res.MaskPAN()
 
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -812,19 +644,15 @@ func TopUpPayment(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.BillPaymentTransaction
+		res.Name = "change me"
 
 		res.MaskPAN()
 
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -835,25 +663,9 @@ func TopUpPayment(c *gin.Context) {
 	}
 }
 
-// ChangePIN godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param changePIN body ebs_fields.ChangePINFields true "Change PIN Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /changePin [post]
-//FIXME issue #68
 func ChangePIN(c *gin.Context) {
 
-	url := ebs_fields.EBSMerchantIP + ebs_fields.ChangePINEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.ChangePINEndpoint
 
 	db, _ := utils.Database("test.db")
 
@@ -889,17 +701,13 @@ func ChangePIN(c *gin.Context) {
 
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.ChangePINTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -910,18 +718,6 @@ func ChangePIN(c *gin.Context) {
 	}
 }
 
-// CashOut godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cashOut body ebs_fields.CashOutFields true "Cash Out Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cashOut [post]
-//FIXME issue #68
 func CashOut(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashOutEndpoint // EBS simulator endpoint url goes here.
@@ -957,17 +753,13 @@ func CashOut(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1014,17 +806,13 @@ func VoucherCashOut(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1071,17 +859,13 @@ func VoucherCashIn(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1128,17 +912,13 @@ func Statement(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1185,17 +965,13 @@ func GenerateVoucher(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashOutTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1206,18 +982,6 @@ func GenerateVoucher(c *gin.Context) {
 	}
 }
 
-// CashIn godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cashIn [post]
-//FIXME issue #68
 func CashIn(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.CashInEndpoint // EBS simulator endpoint url goes here.
@@ -1253,17 +1017,13 @@ func CashIn(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashInTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1273,18 +1033,6 @@ func CashIn(c *gin.Context) {
 	}
 }
 
-// CashIn godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param cashOut body ebs_fields.CashInFields true "Cash In Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /cashIn [post]
-//FIXME issue #68
 func ToAccount(c *gin.Context) {
 
 	url := ebs_fields.EBSMerchantIP + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
@@ -1320,17 +1068,13 @@ func ToAccount(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.CashInTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1340,25 +1084,9 @@ func ToAccount(c *gin.Context) {
 	}
 }
 
-// MiniStatement godoc
-// @Summary Get all transactions made by a specific terminal ID
-// @Description get accounts
-// @Accept  json
-// @Produce  json
-// @Param miniStatement body ebs_fields.MiniStatementFields true "Mini Statement Request Fields"
-// @Success 200 {object} ebs_fields.GenericEBSResponseFields
-// @Failure 400 {object} http.StatusBadRequest
-// @Failure 404 {object} http.StatusNotFound
-// @Failure 500 {object} http.InternalServerError
-// @Router /miniStatement [post]
-//FIXME issue #68
 func MiniStatement(c *gin.Context) {
 
-	url := ebs_fields.EBSMerchantIP + ebs_fields.MiniStatementEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
+	url := ebs_fields.EBSMerchantIP + ebs_fields.MiniStatementEndpoint
 
 	db, _ := utils.Database("test.db")
 
@@ -1393,13 +1121,9 @@ func MiniStatement(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.MiniStatementTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
@@ -1449,13 +1173,9 @@ func testAPI(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.WorkingKeyTransaction
+		res.Name = "change me"
 		// God please make it works.
-		db.Create(&transaction)
+		db.Create(&res.EBSResponse)
 		db.Commit()
 
 		if ebsErr != nil {
@@ -1475,17 +1195,10 @@ func testAPI(c *gin.Context) {
 //Refund requests a refund for supported refund services in ebs merchant. Currnetly, it is not working
 //FIXME issue #68
 func Refund(c *gin.Context) {
-	url := ebs_fields.EBSMerchantIP + ebs_fields.RefundEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := ebs_fields.EBSMerchantIP + ebs_fields.RefundEndpoint
 	db, _ := utils.Database("test.db")
-
 	var fields = ebs_fields.RefundFields{}
 	bindingErr := c.ShouldBindWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -1513,18 +1226,14 @@ func Refund(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 
-		transaction := dashboard.Transaction{
-			GenericEBSResponseFields: res.GenericEBSResponseFields,
-		}
-
-		transaction.EBSServiceName = ebs_fields.BalanceTransaction
+		res.Name = "change me"
 		// return a masked pan
 
 		// God please make it works.
-		db.Table("transactions").Create(&transaction)
+		db.Table("transactions").Create(&res.EBSResponse)
 
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1550,13 +1259,9 @@ func EBS(c *gin.Context) {
 		panic(err)
 	}
 	_, res, _ := ebs_fields.EBSHttpClient(ebsURL, jsonBuffer)
-	// now write it to the DB :)
-	transaction := dashboard.Transaction{
-		GenericEBSResponseFields: res.GenericEBSResponseFields,
-	}
 
-	transaction.EBSServiceName = endpoint
+	res.Name = "change me"
 	// God please make it works.
-	db.Create(&transaction)
+	db.Create(&res.EBSResponse)
 	c.JSON(http.StatusOK, res)
 }

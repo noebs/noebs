@@ -8,7 +8,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 )
 
-func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields) {
+func MockEbsResponse(field interface{}, res *ebs_fields.EBSResponse) {
 	//code := getEbsErrorCodes()
 	n := getCodesNumber()
 	chosen := rand.Intn(len(n))
@@ -21,7 +21,7 @@ func MockEbsResponse(field interface{}, res *ebs_fields.GenericEBSResponseFields
 		status = "Failed"
 	}
 
-	commonFields := ebs_fields.GenericEBSResponseFields{
+	commonFields := ebs_fields.EBSResponse{
 		ResponseMessage: "Successful",
 		ResponseStatus:  status,
 		ResponseCode:    0,
@@ -126,20 +126,20 @@ func generateDate() string {
 
 type mockPurchaseResponse struct {
 	ebs_fields.ImportantEBSFields
-	ebs_fields.GenericEBSResponseFields
+	ebs_fields.EBSResponse
 }
 
 type mockWorkingKeyResponse struct {
 	ebs_fields.ImportantEBSFields
-	ebs_fields.GenericEBSResponseFields
+	ebs_fields.EBSResponse
 }
 
 type mockMiniStatementResponse struct {
 	ebs_fields.ImportantEBSFields
-	ebs_fields.GenericEBSResponseFields
+	ebs_fields.EBSResponse
 }
 
 type mockCardTransferResponse struct {
 	ebs_fields.ImportantEBSFields
-	ebs_fields.GenericEBSResponseFields
+	ebs_fields.EBSResponse
 }

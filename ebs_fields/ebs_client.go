@@ -138,7 +138,7 @@ type IPINResponse struct {
 
 //newResponse the
 func (i IPINResponse) newResponse() EBSParserFields {
-	var res GenericEBSResponseFields
+	var res EBSResponse
 	res.ResponseCode = int(i.ResponseCode)
 	res.ResponseMessage = i.ResponseMessage
 	res.PubKeyValue = i.PubKeyValue
@@ -146,5 +146,5 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	res.UUID = i.UUID
 	res.PAN = i.Pan
 	res.ExpDate = i.ExpDate
-	return EBSParserFields{GenericEBSResponseFields: res}
+	return EBSParserFields{EBSResponse: res}
 }

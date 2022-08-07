@@ -1,3 +1,7 @@
+// Package ebs_fields include all of ebs fields data for both consumer and merchant web services
+// channels. ebs_fields package also includes endpoints and IPs for all EBS payment services.
+// The package uses embed to embed secret file that includes configuration and info
+// we don't like (read: legally obligated) to share, e.g., EBS IPs.
 package ebs_fields
 
 import (
@@ -10,6 +14,7 @@ import (
 	_ "embed"
 
 	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
 )
 
 //go:embed .secrets.json
@@ -228,8 +233,11 @@ func iso8601(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
-//GenericEBSResponseFields represent EBS response
-type GenericEBSResponseFields struct {
+//EBSResponse represent a struct that captures all of EBS response fields and map them into Transaction table
+// We should really split this up between consumer and merchant. It is just too complicated to manage now
+type EBSResponse struct {
+	gorm.Model
+	UserID                 uint    // userID that is associated to this transaction
 	TerminalID             string  `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string  `json:"clientId,omitempty"`
@@ -247,11 +255,9 @@ type GenericEBSResponseFields struct {
 	EBSServiceName         string  `json:"-,omitempty"`
 	WorkingKey             string  `json:"workingKey,omitempty" gorm:"-"`
 	PayeeID                string  `json:"payeeId,omitempty"`
-
 	// Consumer fields
-	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
-	UUID        string `json:"UUID,omitempty" form:"UUID"`
-
+	PubKeyValue     string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
+	UUID            string `json:"UUID,omitempty" form:"UUID"`
 	ResponseMessage string `json:"responseMessage,omitempty"`
 	ResponseStatus  string `json:"responseStatus,omitempty"`
 	ResponseCode    int    `json:"responseCode"`
@@ -331,9 +337,9 @@ type ImportantEBSFields struct {
 // you have to update this to account for the non-db-able fields
 type EBSParserFields struct {
 	EBSMapFields
-	GenericEBSResponseFields
-	OriginalTransaction GenericEBSResponseFields `json:"originalTransaction,omitempty"`
-	DynamicFees         float32                  `json:"dynamicFees,omitempty"`
+	EBSResponse
+	OriginalTransaction EBSResponse `json:"originalTransaction,omitempty"`
+	DynamicFees         float32     `json:"dynamicFees,omitempty"`
 }
 
 // To allow Redis to use this struct directly in marshaling
@@ -381,7 +387,6 @@ type QRPurchase struct {
 
 type ConsumerSpecificFields struct {
 	UUID            string  `json:"UUID" form:"UUID" binding:"required,len=36"`
-	Mbr             string  `json:"mbr,omitempty" form:"mbr"`
 	Ipin            string  `json:"IPIN" form:"IPIN" binding:"required"`
 	PAN             string  `json:"PAN"`
 	ExpDate         string  `json:"expDate"`
@@ -431,7 +436,7 @@ type ConsumerSpecificFields struct {
 }
 
 // MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
-func (res *GenericEBSResponseFields) MaskPAN() {
+func (res *EBSResponse) MaskPAN() {
 	if res.PAN != "" {
 		length := len(res.PAN)
 		res.PAN = res.PAN[:6] + "*****" + res.PAN[length-4:]
@@ -893,9 +898,16 @@ type ValidationError struct {
 	Message string `json:"message,omitempty"`
 }
 
+// NoebsConfig contains all about noebs configuration, including ebs ips and ports,
+// redis ips, and so on.
+// The file currently reads from `ebs_fields/.secrets.json` using go embedding fs.
+// NoebsConfig can be accessed via [NoebsSecrets] which is initialized in the
+// [ebs_fields] package in the init method.
 type NoebsConfig struct {
 	OneSignal      string `json:"onesignal_key"`
-	SMS            string `json:"sms_key"`
+	SMSAPIKey      string `json:"sms_key"`
+	SMSSender      string `json:"sms_sender"`
+	SMSGateway     string `json:"sms_gateway"`
 	RedisPort      string `json:"redis_port"`
 	IsConsumerProd *bool  `json:"is_consumer_prod"`
 	IsMerchantProd *bool  `json:"is_merchant_prod"`
@@ -903,7 +915,7 @@ type NoebsConfig struct {
 	MerchantIP     string `json:"merchant_qa"`
 	Merchant       string `json:"merchant"`
 	Consumer       string `json:"consumer"`
-	JWTKey         string `json:"jwt_key"`
+	JWTKey         string `json:"jwt_secret"`
 	QRIP           string `json:"qr_ip"`
 	QR             string `json:"qr"`
 }
@@ -974,4 +986,20 @@ func init() {
 		log.Printf("the data is: %#v", SecretConfig)
 	}
 
+}
+
+type QuickPaymentFields struct {
+	EncodedPaymentToken string `json:"token"`
+	ConsumerCardTransferFields
+}
+
+func (q QuickPaymentFields) MarshallP2pFields() []byte {
+	d := ConsumerCardTransferFields{
+		ConsumerCommonFields:     q.ConsumerCommonFields,
+		AmountFields:             q.AmountFields,
+		ConsumerCardHolderFields: q.ConsumerCardHolderFields,
+		ToCard:                   q.ToCard,
+	}
+	data, _ := json.Marshal(&d)
+	return data
 }

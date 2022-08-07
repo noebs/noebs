@@ -20,7 +20,7 @@ type GetRedisClient func(string) *redis.Client
 
 //Init initializes jwt auth
 func (j *JWTAuth) Init() {
-	//FIXME issue #66
+	log.Printf("jwt_key: %s", ebs_fields.SecretConfig.JWTKey)
 	j.Key = []byte(ebs_fields.SecretConfig.JWTKey)
 }
 
@@ -45,6 +45,7 @@ func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 	if j.Key == nil {
 		return "", errors.New("empty jwt key")
 	}
+	log.Printf("jwt_key: %s", j.Key)
 	if tokenString, err := token.SignedString(j.Key); err == nil {
 		return tokenString, nil
 	} else {
@@ -69,13 +70,12 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
 		log.Println("why am i here?")
 		return claims, nil
-
 	} else {
-		// we still gonna return the claim even if it is not valid!
 		return claims, err
 	}
 }
 
+//verifyWithClaim deprecated it shouldn't be used.
 func (j *JWTAuth) verifyWithClaim(tokenString string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return j.Key, nil

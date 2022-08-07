@@ -70,7 +70,7 @@ func endpointToFields(e string) interface{} {
 	if strings.Contains(e, "purchase") {
 		return ebs_fields.PurchaseFields{}
 	}
-	return ebs_fields.GenericEBSResponseFields{}
+	return ebs_fields.EBSResponse{}
 }
 
 //generateDoc generates API doc for this particular field
@@ -99,7 +99,7 @@ func getAllRoutes() []map[string]string {
 	return allRoutes
 }
 
-var response = ebs_fields.GenericEBSResponseFields{
+var response = ebs_fields.EBSResponse{
 	ResponseMessage: "Successful",
 	ResponseStatus:  "Successful",
 	ResponseCode:    0,
@@ -337,8 +337,8 @@ func idToInterface(id string) (interface{}, bool) {
 	return "", false
 }
 
-func generateFields() *ebs_fields.GenericEBSResponseFields {
-	f := &ebs_fields.GenericEBSResponseFields{}
+func generateFields() *ebs_fields.EBSResponse {
+	f := &ebs_fields.EBSResponse{}
 	f.AdditionalData = "SalesAmount=10.3;FixedFee=22.3;Token=23232;MeterNumber=12345;CustomerName=mohamed"
 	f.PayeeID = "0010020001"
 	return f

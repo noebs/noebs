@@ -1,4 +1,4 @@
-package consumer // import "github.com/docker/docker/pkg/namesgenerator"
+package consumer
 
 import (
 	"fmt"

@@ -32,6 +32,7 @@ func (s Service) calculateOffset(page, pageSize int) uint {
 	return uint((page - 1) * pageSize)
 }
 
+//MerchantViews deprecated in favor of using the react-based dashboard features.
 func (s *Service) MerchantViews(c *gin.Context) {
 	db, _ := utils.Database("test.db")
 	terminal := c.Param("id")
@@ -41,7 +42,7 @@ func (s *Service) MerchantViews(c *gin.Context) {
 	p, _ := strconv.Atoi(page)
 	offset := p*pageSize - pageSize
 
-	var tran []Transaction
+	var tran []ebs_fields.EBSResponse
 	db.Table("transactions").Where("id >= ? and terminal_id LIKE ? and approval_code != ?", offset, "%"+terminal+"%", "").Order("id desc").Limit(pageSize).Find(&tran)
 	// get complaints
 
@@ -74,7 +75,7 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 
 	env := &Env{Db: db}
 
-	var tran Transaction
+	var tran ebs_fields.EBSResponse
 	var count int64
 
 	if err := env.Db.Model(&tran).Count(&count).Error; err != nil {
@@ -102,7 +103,7 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 
 	tid, _ := c.GetQuery("tid")
 
-	var tran []Transaction
+	var tran []ebs_fields.EBSResponse
 	if err := db.Where("terminal_id LIKE ?", tid+"%").Find(&tran).Error; err != nil {
 		log.WithFields(logrus.Fields{
 			"error":   err.Error(),
@@ -120,11 +121,7 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 
 	env := &Env{Db: db}
 
-	tran := Transaction{
-
-		Model:                    gorm.Model{},
-		GenericEBSResponseFields: ebs_fields.GenericEBSResponseFields{},
-	}
+	tran := ebs_fields.EBSResponse{}
 
 	if err := env.Db.Create(&tran).Error; err != nil {
 		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
@@ -165,7 +162,7 @@ func (s *Service) GetID(c *gin.Context) {
 	id := c.Param("id")
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
-	var tran Transaction
+	var tran ebs_fields.EBSResponse
 	if err := db.Where("id = ?", id).First(&tran).Error; err != nil {
 		c.AbortWithStatus(404)
 	} else {
@@ -185,7 +182,7 @@ func (s *Service) BrowserDashboard(c *gin.Context) {
 	pageSize := 50
 	offset := page*pageSize - pageSize
 	log.Printf("The offset is: %v", offset)
-	var tran []Transaction
+	var tran []ebs_fields.EBSResponse
 
 	var count int64
 
@@ -263,46 +260,12 @@ func (s *Service) getLastTransactions(merchantID string) ([]ebs_fields.QRPurchas
 	return transactions, nil
 }
 
-func (s *Service) LandingPage(c *gin.Context) {
-	showForm := true
-	if c.Request.Method == "POST" {
-		var f form
-		err := c.ShouldBind(&f)
-		if err == nil {
-			ua := c.GetHeader("User-Agent")
-			s.Redis.LPush("voices", &f)
-			s.Redis.LPush("voices:ua", ua)
-			showForm = false
-		}
-	}
-
-	c.HTML(http.StatusOK, "landing.html", gin.H{"showform": showForm})
-}
-
-func (s *Service) MerchantRegistration(c *gin.Context) {
-	var f ebs_fields.Merchant
-	if c.Request.Method == "POST" {
-		err := c.ShouldBind(&f)
-		if err == nil {
-			s.Redis.SAdd("merchants:all", f.MerchantName)
-			s.Redis.HMSet("merchant:"+f.MerchantName, f.ToMap())
-			c.HTML(http.StatusOK, "landing.html", gin.H{"showform": false})
-		} else {
-			er, _ := c.Errors.MarshalJSON()
-			log.Printf("Errors are: %s, and the binding err: %v", string(er), err.Error())
-		}
-	} else if c.Request.Method == "GET" {
-		fields := f.Details()
-		c.HTML(http.StatusOK, "merchant_registration.html", gin.H{"showform": true, "fields": fields})
-	}
-}
-
 func (s *Service) IndexPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", nil)
 }
 
 func (s *Service) Stream(c *gin.Context) {
-	var trans []Transaction
+	var trans []ebs_fields.EBSResponse
 	var stream bytes.Buffer
 
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
@@ -321,37 +284,9 @@ type purchasesSum map[string]interface{}
 // This endpoint is highly experimental. It has many security issues and it is only
 // used by us for testing and prototyping only. YOU HAVE TO USE PROPER AUTHENTICATION system
 // if you decide to go with it. See apigateway package if you are interested.
+// DEPRECATED as it is not being used and needs proper maintainance
 func (s *Service) DailySettlement(c *gin.Context) {
 	// get the results from DB
-	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-	var tran []PurchaseModel
-
-	q, _ := c.GetQuery("terminal")
-	if q == "" {
-		// case of empty terminal
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "empty terminal ID", "code": "empty_terminal_id"})
-		return
-	}
-	format := "2006-10-12"
-	today := time.Now().Format(format)
-	t, _ := time.Parse(format, today)
-	yesterday := t.Add(-23 * time.Hour).Add(-59 * time.Minute).Add(-59 * time.Second)
-
-	db.Where("created_at BETWEEN ? AND ? AND terminal_id = ?", yesterday, t, q).Find(&tran)
-
-	p := make(purchasesSum)
-	var listP []purchasesSum
-	var sum float32
-	count := len(tran)
-	for _, v := range tran {
-		p["date"] = v.TranDateTime
-		p["Amount"] = v.TranAmount
-		p["human_readable_time"] = v.CreatedAt
-
-		listP = append(listP, p)
-		sum += v.TranAmount
-	}
-	c.JSON(http.StatusOK, gin.H{"transactions": listP, "sum": sum, "count": count})
 }
 
 func (s *Service) MerchantTransactionsEndpoint(c *gin.Context) {

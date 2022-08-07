@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"testing"
+
+	"github.com/adonese/noebs/ebs_fields"
 )
 
 func TestUserModel_sanitizeName(t *testing.T) {
@@ -16,7 +18,7 @@ func TestUserModel_sanitizeName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UserModel{
+			u := &ebs_fields.User{
 				Username: have,
 			}
 			u.SanitizeName()

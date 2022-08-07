@@ -941,7 +941,3 @@ func (s *s) ReadDoc() string {
 
 	return tpl.String()
 }
-
-func init() {
-	// swag.Register(swag.Name, &s{})
-}

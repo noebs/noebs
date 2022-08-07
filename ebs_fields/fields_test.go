@@ -182,7 +182,7 @@ func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := &GenericEBSResponseFields{
+			res := &EBSResponse{
 				TerminalID:               tt.fields.TerminalID,
 				SystemTraceAuditNumber:   tt.fields.SystemTraceAuditNumber,
 				ClientID:                 tt.fields.ClientID,

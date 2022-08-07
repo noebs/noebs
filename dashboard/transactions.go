@@ -12,21 +12,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type Transaction struct {
-	gorm.Model
-	ebs_fields.GenericEBSResponseFields
-}
-
-type PurchaseModel struct {
-	gorm.Model
-	ebs_fields.PurchaseFields
-}
 type Env struct {
 	Db *gorm.DB
 }
 
 func (e *Env) GetTransactionbyID(c *gin.Context) {
-	var tran Transaction
+	var tran ebs_fields.EBSResponse
 	//id := c.Params.ByName("id")
 	err := e.Db.Find(&tran).Error
 	if err != nil {
@@ -88,7 +79,7 @@ func pagination(num int, page int) int {
 	return num/page + 1
 }
 
-func errorsCounter(t []Transaction) int {
+func errorsCounter(t []ebs_fields.EBSResponse) int {
 	var errors int
 	for _, v := range t {
 		if v.ResponseCode != 0 && v.ResponseStatus == "Successful" {
@@ -108,7 +99,7 @@ type merchantStats struct {
 	TerminalID string
 }
 
-func structToSlice(t []Transaction) []string {
+func structToSlice(t []ebs_fields.EBSResponse) []string {
 	var s []string
 	for _, v := range t {
 		d, _ := json.Marshal(v)
@@ -128,17 +119,6 @@ func GenerateMultiTemplate() multitemplate.Renderer {
 	return r
 }
 
-type form struct {
-	Text      string `form:"vote" binding:"required"`
-	Android   string `form:"android"`
-	Ios       string `form:"ios"`
-	Subscribe bool   `form:"newsletter"`
-}
-
-func (f *form) MarshalBinary() ([]byte, error) {
-	return json.Marshal(f)
-}
-
 type merchantsIssues struct {
 	TerminalID string    `json:"terminalId" binding:"required"`
 	Latitude   float32   `json:"lat"`
@@ -150,9 +130,9 @@ func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase string, offset, pageSize int) ([]Transaction, int) {
+func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase string, offset, pageSize int) ([]ebs_fields.EBSResponse, int) {
 
-	var tran []Transaction
+	var tran []ebs_fields.EBSResponse
 	var count int64
 
 	searchField = mapSearchField(searchField)
@@ -160,9 +140,6 @@ func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase stri
 	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
 
 	if searchField != "" || search != "" {
-		// where can you search?
-		// terminal_id
-		// date time range TODO
 		// systemTraceAuditNumber
 		switch searchField {
 		case "created_at":
