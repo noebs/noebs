@@ -79,7 +79,7 @@ func (u *User) HashPassword() error {
 
 //AddCards to an existing noebs user. It uses gorm' relation to amends a user cards
 func (u *User) AddCards() error {
-	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
+	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(u).Error
 }
 
 // PaymentToken a struct to represent a noebs payment order
