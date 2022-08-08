@@ -49,7 +49,12 @@ func NewUserByMobile(mobile string, db *gorm.DB) (*User, error) {
 // NewUserByMobile Retrieves a user from the database by mobile (username)
 func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 	var user User
-	result := db.Model(&User{}).Preload("Cards").Order("is_main desc, created_at").First(&user, "mobile = ?", mobile)
+	// Get user model and preload Cards and order the model relation Cards.is_main
+
+	result := db.Model(&User{}).Preload("Cards", func(db *gorm.DB) *gorm.DB {
+		db = db.Order("is_main desc")
+		return db
+	}).First(&user, "mobile = ?", mobile)
 	return &user, result.Error
 }
 
