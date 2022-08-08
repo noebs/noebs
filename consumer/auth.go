@@ -9,6 +9,7 @@ import (
 	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
@@ -20,9 +21,10 @@ import (
 )
 
 type State struct {
-	Db    *gorm.DB
-	Redis *redis.Client
-	Auth  Auther
+	Db          *gorm.DB
+	Redis       *redis.Client
+	Auth        Auther
+	NoebsConfig ebs_fields.NoebsConfig
 }
 
 type Auther interface {
@@ -244,8 +246,8 @@ func (s *State) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
+//GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
 func (s *State) GenerateSignInCode(c *gin.Context) {
-
 	var req gateway.Token
 	c.ShouldBindWith(&req, binding.JSON)
 	// default username to mobile, in case username was not provided
@@ -265,7 +267,7 @@ func (s *State) GenerateSignInCode(c *gin.Context) {
 		return
 	}
 	// this function doesn't have to be blocking.
-	go sendSMS(SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
+	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 

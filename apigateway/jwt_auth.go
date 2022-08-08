@@ -13,15 +13,16 @@ import (
 
 //JWTAuth provides an encapsulation for jwt auth
 type JWTAuth struct {
-	Key []byte
+	Key         []byte
+	NoebsConfig ebs_fields.NoebsConfig
 }
 
 type GetRedisClient func(string) *redis.Client
 
 //Init initializes jwt auth
 func (j *JWTAuth) Init() {
-	log.Printf("jwt_key: %s", ebs_fields.SecretConfig.JWTKey)
-	j.Key = []byte(ebs_fields.SecretConfig.JWTKey)
+	log.Printf("jwt_key: %s", j.NoebsConfig.JWTKey)
+	j.Key = []byte(j.NoebsConfig.JWTKey)
 }
 
 // GenerateJWT generates a JWT standard token with default values hardcoded. FIXME

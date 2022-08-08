@@ -21,9 +21,6 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
 	"github.com/pquerna/otp/totp"
-
-	"net/http"
-	"net/url"
 )
 
 var (
@@ -157,23 +154,6 @@ func (s *Service) store(buf []byte, username string, edit bool) error {
 			return err
 		}
 	}
-	return nil
-}
-
-func sendSMS(sms SMS) error {
-	v := url.Values{}
-	v.Add("api_key", ebs_fields.SecretConfig.SMSAPIKey)
-	v.Add(("action"), "send-sms")
-	v.Add("from", ebs_fields.SecretConfig.SMSSender)
-	v.Add("numbers", sms.Mobile)
-	v.Add("message", sms.Message)
-	url := SMS_GATEWAY + v.Encode()
-	res, err := http.Get(url)
-	if err != nil {
-		log.Printf("The error is: %v", err)
-		return err
-	}
-	log.Printf("The response body is: %v", res)
 	return nil
 }
 

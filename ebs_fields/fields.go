@@ -17,9 +17,6 @@ import (
 	"gorm.io/gorm"
 )
 
-//go:embed .secrets.json
-var secretsFile []byte
-
 type IsAliveFields struct {
 	CommonFields
 }
@@ -918,6 +915,8 @@ type NoebsConfig struct {
 	JWTKey         string `json:"jwt_secret"`
 	QRIP           string `json:"qr_ip"`
 	QR             string `json:"qr"`
+	Sentry         string `json:"sentry"`
+	Port           string `json:"port"`
 }
 
 func (n *NoebsConfig) GetQRTest() string {
@@ -974,18 +973,6 @@ func (n *NoebsConfig) GetMerchant() string {
 		return "https://172.16.198.14:8888/EBSGateway/"
 	}
 	return n.Merchant
-}
-
-var SecretConfig NoebsConfig
-
-func init() {
-
-	if err := json.Unmarshal(secretsFile, &SecretConfig); err != nil {
-		log.Printf("Error in parsing config files: %v", err)
-	} else {
-		log.Printf("the data is: %#v", SecretConfig)
-	}
-
 }
 
 type QuickPaymentFields struct {

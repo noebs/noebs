@@ -182,72 +182,7 @@ func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := &EBSResponse{
-				TerminalID:               tt.fields.TerminalID,
-				SystemTraceAuditNumber:   tt.fields.SystemTraceAuditNumber,
-				ClientID:                 tt.fields.ClientID,
-				PAN:                      tt.fields.PAN,
-				ServiceID:                tt.fields.ServiceID,
-				TranAmount:               tt.fields.TranAmount,
-				PhoneNumber:              tt.fields.PhoneNumber,
-				FromAccount:              tt.fields.FromAccount,
-				ToAccount:                tt.fields.ToAccount,
-				FromCard:                 tt.fields.FromCard,
-				ToCard:                   tt.fields.ToCard,
-				OTP:                      tt.fields.OTP,
-				OTPID:                    tt.fields.OTPID,
-				TranCurrencyCode:         tt.fields.TranCurrencyCode,
-				EBSServiceName:           tt.fields.EBSServiceName,
-				WorkingKey:               tt.fields.WorkingKey,
-				PayeeID:                  tt.fields.PayeeID,
-				PubKeyValue:              tt.fields.PubKeyValue,
-				UUID:                     tt.fields.UUID,
-				ResponseMessage:          tt.fields.ResponseMessage,
-				ResponseStatus:           tt.fields.ResponseStatus,
-				ResponseCode:             tt.fields.ResponseCode,
-				ReferenceNumber:          tt.fields.ReferenceNumber,
-				ApprovalCode:             tt.fields.ApprovalCode,
-				VoucherNumber:            tt.fields.VoucherNumber,
-				VoucherCode:              tt.fields.VoucherCode,
-				MiniStatementRecords:     tt.fields.MiniStatementRecords,
-				DisputeRRN:               tt.fields.DisputeRRN,
-				AdditionalData:           tt.fields.AdditionalData,
-				TranDateTime:             tt.fields.TranDateTime,
-				TranFee:                  tt.fields.TranFee,
-				AdditionalAmount:         tt.fields.AdditionalAmount,
-				AcqTranFee:               tt.fields.AcqTranFee,
-				IssTranFee:               tt.fields.IssTranFee,
-				TranCurrency:             tt.fields.TranCurrency,
-				MerchantID:               tt.fields.MerchantID,
-				GeneratedQR:              tt.fields.GeneratedQR,
-				Bank:                     tt.fields.Bank,
-				Name:                     tt.fields.Name,
-				CardType:                 tt.fields.CardType,
-				LastPAN:                  tt.fields.LastPAN,
-				TransactionID:            tt.fields.TransactionID,
-				CheckDuplicate:           tt.fields.CheckDuplicate,
-				AuthenticationType:       tt.fields.AuthenticationType,
-				AccountCurrency:          tt.fields.AccountCurrency,
-				ToAccountType:            tt.fields.ToAccountType,
-				FromAccountType:          tt.fields.FromAccountType,
-				EntityID:                 tt.fields.EntityID,
-				EntityType:               tt.fields.EntityType,
-				Username:                 tt.fields.Username,
-				DynamicFees:              tt.fields.DynamicFees,
-				QRCode:                   tt.fields.QRCode,
-				ExpDate:                  tt.fields.ExpDate,
-				FinancialInstitutionID:   tt.fields.FinancialInstitutionID,
-				CreationDate:             tt.fields.CreationDate,
-				PanCategory:              tt.fields.PanCategory,
-				EntityGroup:              tt.fields.EntityGroup,
-				MerchantAccountType:      tt.fields.MerchantAccountType,
-				MerchantAccountReference: tt.fields.MerchantAccountReference,
-				MerchantName:             tt.fields.MerchantName,
-				MerchantCity:             tt.fields.MerchantCity,
-				MobileNo:                 tt.fields.MobileNo,
-				MerchantCategoryCode:     tt.fields.MerchantCategoryCode,
-				PostalCode:               tt.fields.PostalCode,
-			}
+			res := &EBSResponse{}
 			res.MaskPAN()
 			if res.PAN != tt.result {
 				t.Errorf("PAN Masking failed: Expected %s, got %s", tt.result, res.PAN)
@@ -257,18 +192,16 @@ func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 }
 
 func TestNoebsConfig_GetConsumerQA(t *testing.T) {
-	type fields struct {
-	}
+
 	tests := []struct {
-		name   string
-		fields fields
-		want   string
+		name string
+		want string
 	}{
-		{"test-1", fields{}, "https://10.139.2.200:8443/Consumer/"},
+		{"test-1", "https://10.139.2.200:8443/Consumer/"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := SecretConfig.GetConsumer(); got != tt.want {
+			if got := (&NoebsConfig{}).GetConsumer(); got != tt.want {
 				t.Errorf("NoebsConfig.GetConsumerQA() = %v, want %v", got, tt.want)
 			}
 		})

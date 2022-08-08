@@ -26,14 +26,14 @@ const (
 	ChangePINEndpoint                = "changePin"
 )
 
-var (
-	EBSIpConsumerTesting = SecretConfig.GetConsumerQA()
-	EBSIp                = SecretConfig.GetConsumerQA()
-	EBSQR                = SecretConfig.GetQRTest()
-	EBSMerchantIPTesting = SecretConfig.GetMerchantQA()
-	//EBSMerchantIP        = SecretConfig.GetMerchant()//
-	EBSMerchantIP = SecretConfig.GetMerchantQA()
-)
+// var (
+// 	EBSIpConsumerTesting = SecretConfig.GetConsumerQA()
+// 	EBSIp                = SecretConfig.GetConsumerQA()
+// 	EBSQR                = SecretConfig.GetQRTest()
+// 	EBSMerchantIPTesting = SecretConfig.GetMerchantQA()
+// 	//EBSMerchantIP        = SecretConfig.GetMerchant()//
+// 	EBSMerchantIP = SecretConfig.GetMerchantQA()
+// )
 
 const (
 	PurchaseTransaction             = "PurchaseTransaction"

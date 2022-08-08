@@ -226,8 +226,3 @@ func newFromBytes(d []byte, code int) (response, error) {
 		}, nil
 	}
 }
-
-type SMS struct {
-	Mobile  string `json:"mobile,omitempty"`
-	Message string `json:"message,omitempty"`
-}

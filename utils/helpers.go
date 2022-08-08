@@ -2,6 +2,8 @@ package utils
 
 import (
 	"log"
+	"net/http"
+	"net/url"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
@@ -12,12 +14,7 @@ import (
 // GetRedisClient returns a *redis.Client instance
 func GetRedisClient(addr string) *redis.Client {
 	if addr == "" {
-		if ebs_fields.SecretConfig.RedisPort != "" {
-			addr = ebs_fields.SecretConfig.RedisPort
-		} else {
-			addr = "localhost:6379"
-		}
-
+		addr = "localhost:6379"
 	}
 	client := redis.NewClient(&redis.Options{
 		Addr: addr,
@@ -60,4 +57,22 @@ func Database(fname string) (*gorm.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+// SendSMS a generic function to send sms to any user
+func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
+	v := url.Values{}
+	v.Add("api_key", noebsConfig.SMSAPIKey)
+	v.Add(("action"), "send-sms")
+	v.Add("from", noebsConfig.SMSSender)
+	v.Add("numbers", sms.Mobile)
+	v.Add("message", sms.Message)
+	url := noebsConfig.SMSGateway + v.Encode()
+	res, err := http.Get(url)
+	if err != nil {
+		log.Printf("The error is: %v", err)
+		return err
+	}
+	log.Printf("The response body is: %v", res)
+	return nil
 }

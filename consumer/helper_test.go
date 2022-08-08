@@ -30,24 +30,3 @@ func Test_validatePassword(t *testing.T) {
 		})
 	}
 }
-
-func TestState_sendSMS(t *testing.T) {
-
-	type args struct {
-		sms SMS
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{"test-sms", args{SMS{Mobile: "0912222222", Message: "welcome"}}, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := sendSMS(tt.args.sms); (err != nil) != tt.wantErr {
-				t.Errorf("State.sendSMS() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
