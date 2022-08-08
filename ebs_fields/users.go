@@ -204,7 +204,7 @@ type Card struct {
 	Pan    string `json:"pan"`
 	Expiry string `json:"exp_date"`
 	Name   string `json:"name"`
-	IPIN   string `json:"ipin"` // user's card ipin, THIS SHOULDN'T BE USED AT ALL!
+	IPIN   string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
 	UserID uint
 	IsMain bool
 }

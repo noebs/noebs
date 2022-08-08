@@ -180,7 +180,7 @@ func init() {
 	})
 
 	database.Logger.LogMode(logger.Info)
-	database.AutoMigrate(&ebs_fields.User{})
+	database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{})
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 
 	auth.Init()
@@ -196,7 +196,7 @@ func main() {
 	// go csh.CashoutPub() // listener for noebs cashouts.
 	go consumer.BillerHooks()
 	if noebsConfig.Port == "" {
-		noebsConfig.Port = "8080"
+		noebsConfig.Port = ":8080"
 	}
 	logrusLogger.Fatal(GetMainEngine().Run(noebsConfig.Port))
 }

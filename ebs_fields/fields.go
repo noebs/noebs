@@ -306,6 +306,11 @@ type EBSResponse struct {
 	PostalCode               string  `json:"postalCode,omitempty"`
 }
 
+//TableName overrides the default table name for gorm
+func (EBSResponse) TableName() string {
+	return "transactions"
+}
+
 type MinistatementDB []map[string]interface{}
 
 func (m *MinistatementDB) Scan(value interface{}) error {
