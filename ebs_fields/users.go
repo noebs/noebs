@@ -206,5 +206,5 @@ type Card struct {
 	Name   string `json:"name"`
 	IPIN   string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
 	UserID uint
-	IsMain bool
+	IsMain bool `json:"is_main" gorm:"default:false"`
 }
