@@ -76,7 +76,7 @@ func (s *Service) GetCards(c *gin.Context) {
 // if main_card was set to true, then it will be their main card AND
 // it will remove the previously selected one FIXME
 func (s *Service) AddCards(c *gin.Context) {
-	var listCards []ebs_fields.CardsRedis
+	var listCards []ebs_fields.Card
 	username := c.GetString("username")
 	if err := c.ShouldBindBodyWith(&listCards, binding.JSON); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
