@@ -58,7 +58,7 @@ func (s *Service) GetCards(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
 	}
-	cards, err := s.Redis.ZRange(username+":cards", 0, -1).Result()
+	userCards, err := ebs_fields.GetUserCards(username, s.Db)
 	if err != nil {
 		// handle the error somehow
 		logrus.WithFields(logrus.Fields{
@@ -68,10 +68,7 @@ func (s *Service) GetCards(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
 		return
 	}
-	cardBytes := cardsFromZ(cards)
-	m, _ := s.Redis.HGet(username+":cards", "main_card").Result()
-	mCard := cardsFromZ([]string{m})
-	c.JSON(http.StatusOK, gin.H{"cards": cardBytes, "main_card": mCard[0]})
+	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
 
 }
 
@@ -79,32 +76,22 @@ func (s *Service) GetCards(c *gin.Context) {
 // if main_card was set to true, then it will be their main card AND
 // it will remove the previously selected one FIXME
 func (s *Service) AddCards(c *gin.Context) {
-	var fields ebs_fields.CardsRedis
 	var listCards []ebs_fields.CardsRedis
-	var resError error
 	username := c.GetString("username")
-
-	err := c.ShouldBindBodyWith(&fields, binding.JSON)
-	listErr := c.ShouldBindBodyWith(&listCards, binding.JSON)
-	if err != nil && listErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Marshalling error", "code": "card_err"})
+	if err := c.ShouldBindBodyWith(&listCards, binding.JSON); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
 	}
-
-	if err == nil {
-		if err := s.storeCards(fields, username, false); err == nil {
-			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
-			return
-		}
+	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
+		return
 	}
-	if listErr == nil {
-		if err := s.storeCards(listCards, username, false); err == nil {
-			c.JSON(http.StatusCreated, gin.H{"status": "ok"})
-			return
-		}
+	if err := user.AddCards(); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
+		return
 	}
-
-	c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": resError})
+	c.JSON(http.StatusOK, gin.H{"code": "ok", "message": "cards added"})
 }
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
@@ -298,7 +285,7 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 		mobile := c.GetString("username")
 		var req ebs_fields.PaymentToken
 		token, _ := uuid.NewRandom()
-		user, err := ebs_fields.GetUserCard(mobile, s.Db)
+		user, err := ebs_fields.GetUserCards(mobile, s.Db)
 		if err != nil {
 			log.Printf("error in retrieving card: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})

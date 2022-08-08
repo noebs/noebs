@@ -47,9 +47,9 @@ func NewUserByMobile(mobile string, db *gorm.DB) (*User, error) {
 }
 
 // NewUserByMobile Retrieves a user from the database by mobile (username)
-func GetUserCard(mobile string, db *gorm.DB) (*User, error) {
+func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 	var user User
-	result := db.Model(&User{}).Preload("Card").Order("is_main desc, created_at").First(&user, "mobile = ?", mobile)
+	result := db.Model(&User{}).Preload("Cards").Order("is_main desc, created_at").First(&user, "mobile = ?", mobile)
 	return &user, result.Error
 }
 
@@ -70,6 +70,11 @@ func (u *User) HashPassword() error {
 	u.Password = string(hashedPassword)
 	u.Password2 = string(hashedPassword)
 	return nil
+}
+
+//AddCards to an existing noebs user. It uses gorm' relation to amends a user cards
+func (u *User) AddCards() error {
+	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
 
 // PaymentToken a struct to represent a noebs payment order

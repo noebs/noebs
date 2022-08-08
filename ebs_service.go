@@ -195,5 +195,8 @@ func main() {
 	// csh := consumer.NewCashout(redisClient)
 	// go csh.CashoutPub() // listener for noebs cashouts.
 	go consumer.BillerHooks()
+	if noebsConfig.Port == "" {
+		noebsConfig.Port = "8080"
+	}
 	logrusLogger.Fatal(GetMainEngine().Run(noebsConfig.Port))
 }

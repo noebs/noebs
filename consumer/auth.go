@@ -16,7 +16,6 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -51,7 +50,6 @@ func (s *State) GenerateAPIKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "error in email"})
 
 	}
-
 }
 
 //ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
@@ -63,7 +61,6 @@ func (s *State) ApiKeyMiddleware(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
 		return
 	}
-
 	res, err := s.Redis.HGet("api_keys", email).Result()
 	if err != redis.Nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
@@ -88,8 +85,8 @@ func (s *State) IpFilterMiddleware(c *gin.Context) {
 	}
 }
 
+//LoginHandler noebs signin page
 func (s *State) LoginHandler(c *gin.Context) {
-
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
@@ -226,11 +223,9 @@ func (s *State) CreateUser(c *gin.Context) {
 	}
 
 	// make sure that the user doesn't exist in the database
-
 	if err := u.HashPassword(); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
-
 	// make the user capital - small
 	u.SanitizeName()
 	if err := s.Db.Create(&u).Error; err != nil {
@@ -271,30 +266,7 @@ func (s *State) GenerateSignInCode(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 
-//FIXME issue #61
-func GetServiceID(c *gin.Context) {
-	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
-	if err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"message": err.Error()})
-	}
-
-	id := c.Query("id")
-	if id == "" {
-		c.AbortWithStatusJSON(400, gin.H{"message": errNoServiceID.Error()})
-	}
-
-	fmt.Printf("the qparam is: %v\n", id)
-	var res Service
-
-	if err := db.Where("username = ?", id).First(&res).Error; err != nil {
-		c.AbortWithStatusJSON(404, gin.H{"message": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": "this object is available"})
-}
-
 //APIAuth API-Key middleware. Currently is used by consumer services
-//FIXME issue #61
 func (s *State) APIAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
