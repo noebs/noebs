@@ -88,6 +88,11 @@ func (s *Service) AddCards(c *gin.Context) {
 		return
 	}
 
+	// manually zero-valueing card ID to avoid gorm upserting it
+	for idx := range listCards {
+		listCards[idx].ID = 0
+		listCards[idx].UserID = user.ID
+	}
 	if err := user.UpsertCards(listCards); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
@@ -97,14 +102,12 @@ func (s *Service) AddCards(c *gin.Context) {
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func (s *Service) EditCard(c *gin.Context) {
-	var card ebs_fields.Card
-
-	err := c.ShouldBindWith(&card, binding.JSON)
+	var req []ebs_fields.Card
+	err := c.ShouldBindWith(&req, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
-
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
@@ -112,11 +115,10 @@ func (s *Service) EditCard(c *gin.Context) {
 	}
 	user, err := ebs_fields.NewUserByMobile(username, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
 		return
 	}
-
-	if err := user.UpsertCards([]ebs_fields.Card{card}); err != nil {
+	if err := user.UpsertCards(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {

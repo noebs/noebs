@@ -171,6 +171,7 @@ func init() {
 		TracesSampleRate: 1.0,
 	})
 
+	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
 	database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{})
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}

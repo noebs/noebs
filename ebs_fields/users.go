@@ -8,6 +8,7 @@ import (
 	"github.com/goccy/go-json"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 //User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
@@ -78,17 +79,18 @@ func (u *User) HashPassword() error {
 }
 
 //UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// When adding a card, make sure the card.ID is set to zero value so that
+// gorm wouldn't confuse it for an update
 func (u User) UpsertCards(cards []Card) error {
-	for idx, card := range cards {
-		cards[idx].PanExpDate = card.Pan + card.Expiry
-	}
 	u.Cards = cards
-	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
+	return u.db.Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
 
 //DeleteCards soft-deletes a card of list of cards associated to a user
 func (u User) DeleteCards(cards []Card) error {
-	for idx, _ := range cards {
+	for idx := range cards {
 		cards[idx].UserID = u.ID
 	}
 	log.Printf("the user card model is: %v", u)
@@ -219,11 +221,10 @@ func Decode(data string) (PaymentToken, error) {
 //Card represents a single card in noebs.
 type Card struct {
 	gorm.Model
-	Pan        string `json:"pan"`
-	Expiry     string `json:"exp_date"`
-	Name       string `json:"name"`
-	IPIN       string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
-	UserID     uint
-	IsMain     bool   `json:"is_main" gorm:"default:false"`
-	PanExpDate string `json:"pan_exp_date" gorm:"unique"`
+	Pan    string `json:"pan"`
+	Expiry string `json:"exp_date"`
+	Name   string `json:"name"`
+	IPIN   string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
+	UserID uint
+	IsMain bool `json:"is_main" gorm:"default:false"`
 }
