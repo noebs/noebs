@@ -102,7 +102,7 @@ func (s *Service) AddCards(c *gin.Context) {
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func (s *Service) EditCard(c *gin.Context) {
-	var req []ebs_fields.Card
+	var req ebs_fields.Card
 	err := c.ShouldBindWith(&req, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
@@ -113,12 +113,17 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
 	}
+	// If no ID was provided that means we are adding a new card. We don't want that!
+	if req.ID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "card id is empty", "code": "card_id_empty"})
+		return
+	}
 	user, err := ebs_fields.NewUserByMobile(username, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
 		return
 	}
-	if err := user.UpsertCards(req); err != nil {
+	if err := user.UpsertCards([]ebs_fields.Card{req}); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {
