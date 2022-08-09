@@ -30,7 +30,6 @@ func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 	expiresAt := time.Now().Add(10 * time.Hour).UTC().Unix()
-
 	claims := TokenClaims{
 		serviceID,
 		jwt.StandardClaims{
@@ -38,9 +37,7 @@ func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
 			Issuer:    "noebs",
 		},
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	log.Println("generating token")
 	// Sign and get the complete encoded token as a string using the secret
 	if j.Key == nil {
@@ -99,47 +96,10 @@ func (j *JWTAuth) verifyWithClaim(tokenString string) error {
 	return nil
 }
 
-// GenerateJWTWithClaim generates a JWT standard token with default values hardcoded. FIXME
-func (j *JWTAuth) GenerateJWTWithClaim(username string, tk TokenClaims) (string, error) {
-	// Create a new token object, specifying signing method and the claims
-	// you would like it to contain.
-
-	t := tk.Default(username)
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, t)
-
-	// Sign and get the complete encoded token as a string using the secret
-	if tokenString, err := token.SignedString(j.Key); err == nil {
-		fmt.Println(tokenString)
-		return tokenString, nil
-	} else {
-		return "", err
-	}
-}
-
-func generateClaims(iat, eat int64, issuer string) jwt.StandardClaims {
-	claims := jwt.StandardClaims{
-		IssuedAt:  iat,
-		ExpiresAt: eat,
-		Issuer:    issuer,
-	}
-
-	return claims
-}
-
 // TokenClaims noebs standard claim
 type TokenClaims struct {
-	Username string `json:"username"`
+	Mobile string `json:"mobile"`
 	jwt.StandardClaims
-}
-
-// Default populate token claims with default values
-func (t TokenClaims) Default(username string) jwt.Claims {
-	n := time.Now().Unix()
-	n3h := time.Now().Add(10 * time.Second).Unix()
-	t.StandardClaims = generateClaims(n, n3h, username)
-	t.Username = username
-	return t
 }
 
 //secretFromClaims returns the claim's secret. in this case it is a user name
@@ -147,7 +107,7 @@ func (j *JWTAuth) secretFromClaims(token string, skipTime bool) (string, error) 
 	claims, err := j.VerifyJWT(token)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired > 0 && skipTime {
-			return claims.Username, nil
+			return claims.Mobile, nil
 		} else {
 			return "", errors.New("token is invalid")
 		}

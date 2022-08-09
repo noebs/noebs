@@ -19,13 +19,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type State struct {
-	Db          *gorm.DB
-	Redis       *redis.Client
-	Auth        Auther
-	NoebsConfig ebs_fields.NoebsConfig
-}
-
 type Auther interface {
 	VerifyJWT(token string) (*gateway.TokenClaims, error)
 	GenerateJWT(token string) (string, error)
@@ -34,7 +27,7 @@ type Auther interface {
 //GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
 // the user must submit their email to generate a unique token per email.
 // FIXME #59 #58 #61 api generation should be decoupled from apigateway package
-func (s *State) GenerateAPIKey(c *gin.Context) {
+func (s *Service) GenerateAPIKey(c *gin.Context) {
 	var m map[string]string
 	if err := c.ShouldBindJSON(&m); err != nil {
 		if _, ok := m["email"]; ok {
@@ -54,7 +47,7 @@ func (s *State) GenerateAPIKey(c *gin.Context) {
 
 //ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
 //FIXME issue #58 #61
-func (s *State) ApiKeyMiddleware(c *gin.Context) {
+func (s *Service) ApiKeyMiddleware(c *gin.Context) {
 	email := c.GetHeader("X-Email")
 	key := c.GetHeader("X-API-Key")
 	if email == "" || key == "" {
@@ -75,9 +68,9 @@ func (s *State) ApiKeyMiddleware(c *gin.Context) {
 }
 
 //FIXME issue #58 #61
-func (s *State) IpFilterMiddleware(c *gin.Context) {
+func (s *Service) IpFilterMiddleware(c *gin.Context) {
 	ip := c.ClientIP()
-	if u := c.GetString("username"); u != "" {
+	if u := c.GetString("mobile"); u != "" {
 		s.Redis.HIncrBy(u+":ips_count", ip, 1)
 		c.Next()
 	} else {
@@ -86,7 +79,7 @@ func (s *State) IpFilterMiddleware(c *gin.Context) {
 }
 
 //LoginHandler noebs signin page
-func (s *State) LoginHandler(c *gin.Context) {
+func (s *Service) LoginHandler(c *gin.Context) {
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
@@ -95,14 +88,10 @@ func (s *State) LoginHandler(c *gin.Context) {
 		return
 	}
 	log.Printf("the processed request is: %v\n", req)
-	if req.Mobile == "" {
-		req.Mobile = req.Username
-	}
-	req.Username = req.Mobile // making username a mobile
 	u := ebs_fields.User{}
-	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Username), strings.ToLower(req.Username), strings.ToLower(req.Username)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
+	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
-		log.Printf("User with service_id %s is not found.", req.Username)
+		log.Printf("User with service_id %s is not found.", req.Mobile)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
@@ -111,7 +100,7 @@ func (s *State) LoginHandler(c *gin.Context) {
 		return
 	}
 
-	token, err := s.Auth.GenerateJWT(u.Username)
+	token, err := s.Auth.GenerateJWT(u.Mobile)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
@@ -122,7 +111,7 @@ func (s *State) LoginHandler(c *gin.Context) {
 
 //SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
 // the user's credentials (user's stored public key)
-func (s *State) SingleLoginHandler(c *gin.Context) {
+func (s *Service) SingleLoginHandler(c *gin.Context) {
 
 	var req gateway.Token
 	c.ShouldBindWith(&req, binding.JSON)
@@ -146,7 +135,7 @@ func (s *State) SingleLoginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong otp entered", "code": "wrong_otp"})
 		return
 	}
-	token, err := s.Auth.GenerateJWT(u.Username)
+	token, err := s.Auth.GenerateJWT(u.Mobile)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
@@ -159,7 +148,7 @@ func (s *State) SingleLoginHandler(c *gin.Context) {
 // their signed public key.
 // the user will sign their username with their private key, and noebs will verify
 // the signature using the stored public key for the user
-func (s *State) RefreshHandler(c *gin.Context) {
+func (s *Service) RefreshHandler(c *gin.Context) {
 	var req gateway.Token
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
@@ -170,8 +159,8 @@ func (s *State) RefreshHandler(c *gin.Context) {
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			log.Info("refresh: auth username is: %s", claims.Username)
-			user, _ := ebs_fields.NewUserByMobile(claims.Username, s.Db)
+			log.Info("refresh: auth username is: %s", claims.Mobile)
+			user, _ := ebs_fields.NewUserByMobile(claims.Mobile, s.Db)
 			// should verify signature here...
 			if user.PublicKey == "" {
 				log.Printf("user: %s has no registered pubkey", user.Mobile)
@@ -182,7 +171,7 @@ func (s *State) RefreshHandler(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
 				return
 			}
-			auth, _ := s.Auth.GenerateJWT(claims.Username)
+			auth, _ := s.Auth.GenerateJWT(claims.Mobile)
 			c.Writer.Header().Set("Authorization", auth)
 			c.JSON(http.StatusOK, gin.H{"authorization": auth})
 
@@ -193,16 +182,16 @@ func (s *State) RefreshHandler(c *gin.Context) {
 	} else if err == nil {
 		// FIXME it is better to let the endpoint explicitly Get the claim off the user
 		//  as we will assume the auth server will reside in a different domain!
-		log.Printf("the username is: %s", claims.Username)
+		log.Printf("the username is: %s", claims.Mobile)
 
-		auth, _ := s.Auth.GenerateJWT(claims.Username)
+		auth, _ := s.Auth.GenerateJWT(claims.Mobile)
 		c.Writer.Header().Set("Authorization", auth)
 		c.JSON(http.StatusOK, gin.H{"authorization": auth})
 	}
 }
 
 //CreateUser to register a new user to noebs
-func (s *State) CreateUser(c *gin.Context) {
+func (s *Service) CreateUser(c *gin.Context) {
 	u := ebs_fields.User{}
 	if s.Db == nil {
 		panic("wtf")
@@ -210,10 +199,6 @@ func (s *State) CreateUser(c *gin.Context) {
 	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
-	}
-	// default username to mobile, in case username was not provided
-	if u.Username == "" {
-		u.Username = u.Mobile
 	}
 	// validate u.Password to include at least one capital letter, one symbol and one number
 	// and that it is at least 8 characters long
@@ -233,16 +218,11 @@ func (s *State) CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
 		return
 	}
-
-	s.Redis.Set(u.Mobile, u.Username, 0)
-	ip := c.ClientIP()
-	s.Redis.HSet(u.Username+":ips_count", "first_ip", ip)
-
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
 //GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
-func (s *State) GenerateSignInCode(c *gin.Context) {
+func (s *Service) GenerateSignInCode(c *gin.Context) {
 	var req gateway.Token
 	c.ShouldBindWith(&req, binding.JSON)
 	// default username to mobile, in case username was not provided
@@ -267,7 +247,7 @@ func (s *State) GenerateSignInCode(c *gin.Context) {
 }
 
 //APIAuth API-Key middleware. Currently is used by consumer services
-func (s *State) APIAuth() gin.HandlerFunc {
+func (s *Service) APIAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
 			if !isMember("apikeys", key, s.Redis) {

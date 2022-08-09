@@ -66,7 +66,7 @@ func validatePassword(password string) bool {
 // we have to implement a way to:
 // - identify user's devices
 // - allow them to use the app in other devices in case their original device was lost
-func userHasSessions(s *State, username string) bool {
+func userHasSessions(s *Service, username string) bool {
 	// Make sure the user doesn't have any active sessions!
 	lCount, err := s.Redis.Get(username + ":logged_in_devices").Result()
 
@@ -84,7 +84,7 @@ func userHasSessions(s *State, username string) bool {
 }
 
 //userExceedMaxSessions keep track of many login-attempts a user has made
-func userExceededMaxSessions(s *State, username string) bool {
+func userExceededMaxSessions(s *Service, username string) bool {
 	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
 	res, err := s.Redis.Get(username + ":login_counts").Result()
 	if err == redis.Nil {

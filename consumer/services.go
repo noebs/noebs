@@ -53,7 +53,7 @@ func (s *Service) CardFromNumber(c *gin.Context) {
 
 //GetCards Get all cards for the currently authorized user
 func (s *Service) GetCards(c *gin.Context) {
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
@@ -77,7 +77,7 @@ func (s *Service) GetCards(c *gin.Context) {
 // it will remove the previously selected one FIXME
 func (s *Service) AddCards(c *gin.Context) {
 	var listCards []ebs_fields.Card
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if err := c.ShouldBindBodyWith(&listCards, binding.JSON); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
@@ -108,7 +108,7 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
@@ -130,13 +130,12 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusCreated, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
-
 }
 
 //RemoveCard allow authorized users to remove their card
 // when the send the card id (from its list in app view)
 func (s *Service) RemoveCard(c *gin.Context) {
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
@@ -152,7 +151,6 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
-
 	if err := user.DeleteCards([]ebs_fields.Card{card}); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
@@ -162,31 +160,15 @@ func (s *Service) RemoveCard(c *gin.Context) {
 	}
 }
 
-//ssetDelete sorted set delete helper methods. Deletes card assigned to a user via username
-func (s *Service) ssetDelete(fields ebs_fields.CardsRedis, username string) bool {
-	fields.NewExpDate = ""
-	fields.NewName = ""
-	fields.NewPan = ""
-	log.Printf("the data in ssDelete: %v", fields)
-	data, _ := json.Marshal(fields)
-	log.Printf("the data in ssDelete: %s", string(data))
-	if _, err := s.Redis.ZRem(username+":cards", string(data)).Result(); err != nil {
-		log.Printf("error in zrem: %v", err)
-		return true
-	}
-	return false
-}
-
 //AddMobile adds a mobile number to the current authorized user
 func (s *Service) AddMobile(c *gin.Context) {
-
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
@@ -212,7 +194,7 @@ func (s *Service) GetMobile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
@@ -274,7 +256,7 @@ func BillerHooks() {
 // - And we don't want the user to everytime login into the app and key in their payment information
 func (s *Service) PaymentOrder() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mobile := c.GetString("username")
+		mobile := c.GetString("mobile")
 		var req ebs_fields.PaymentToken
 		token, _ := uuid.NewRandom()
 		user, err := ebs_fields.GetUserCards(mobile, s.Db)

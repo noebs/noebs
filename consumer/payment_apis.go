@@ -84,6 +84,7 @@ import (
 	"fmt"
 	"net/http"
 
+	firebase "firebase.google.com/go/v4"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
@@ -102,6 +103,8 @@ type Service struct {
 	Db          *gorm.DB
 	NoebsConfig ebs_fields.NoebsConfig
 	Logger      *logrus.Logger
+	FirebaseApp *firebase.App
+	Auth        Auther
 }
 
 var fees = ebs_fields.NewDynamicFees()
@@ -1022,7 +1025,7 @@ func (s *Service) Status(c *gin.Context) {
 func (s *Service) Transactions(c *gin.Context) {
 	//TODO get the transaction from Redis instanc
 
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if username == "" {
 		username = "invalid_key"
 	}
@@ -1546,7 +1549,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 //GeneratePaymentToken generates a token
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.PaymentToken
-	mobile := c.GetString("username")
+	mobile := c.GetString("mobile")
 	user, _ := ebs_fields.NewUserByMobile(mobile, s.Db)
 	if err := c.ShouldBindWith(&token, binding.JSON); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid request"})
@@ -1565,7 +1568,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 //GetPaymentToken retrieves a generated payment token by UUID
 // This service should be accessed via an authorization header
 func (s *Service) GetPaymentToken(c *gin.Context) {
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if username == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
 		c.JSON(http.StatusBadRequest, ve)

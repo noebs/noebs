@@ -32,7 +32,6 @@ var service consumer.Service
 var auth gateway.JWTAuth
 var cardService = cards.Service{Redis: redisClient}
 var dashService dashboard.Service
-var state = consumer.State{}
 var merchantServices = merchant.Service{}
 
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
@@ -48,7 +47,7 @@ func GetMainEngine() *gin.Engine {
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
 	route.LoadHTMLGlob("./dashboard/template/*")
 	route.Static("/dashboard/assets", "./dashboard/template")
-	route.POST("/generate_api_key", state.GenerateAPIKey)
+	route.POST("/generate_api_key", consumerService.GenerateAPIKey)
 	route.POST("/workingKey", merchantServices.WorkingKey)
 	route.POST("/cardTransfer", merchantServices.CardTransfer)
 	route.POST("/voucher", merchantServices.GenerateVoucher)
@@ -94,8 +93,8 @@ func GetMainEngine() *gin.Engine {
 	cons := route.Group("/consumer")
 
 	{
-		cons.POST("/register", state.CreateUser)
-		cons.POST("/refresh", state.RefreshHandler)
+		cons.POST("/register", consumerService.CreateUser)
+		cons.POST("/refresh", consumerService.RefreshHandler)
 		cons.POST("/balance", consumerService.Balance)
 		cons.POST("/status", consumerService.TransactionStatus)
 		cons.POST("/is_alive", consumerService.IsAlive)
@@ -125,9 +124,9 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/vouchers/generate", consumerService.GenerateVoucher)
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
-		cons.POST("/login", state.LoginHandler)
-		cons.POST("/otp", state.GenerateSignInCode)
-		cons.POST("/otp_login", state.SingleLoginHandler)
+		cons.POST("/login", consumerService.LoginHandler)
+		cons.POST("/otp", consumerService.GenerateSignInCode)
+		cons.POST("/otp_login", consumerService.SingleLoginHandler)
 		cons.GET("/get_mobile", consumerService.GetMobile)
 		cons.POST("/add_mobile", consumerService.AddMobile)
 		cons.POST("/test", func(c *gin.Context) {
@@ -171,6 +170,7 @@ func init() {
 		TracesSampleRate: 1.0,
 	})
 
+	firebaseApp, err := getFirebase()
 	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
 	database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{})
@@ -178,8 +178,7 @@ func init() {
 
 	auth.Init()
 	binding.Validator = new(ebs_fields.DefaultValidator)
-	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger}
-	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, NoebsConfig: noebsConfig}
+	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger, FirebaseApp: firebaseApp, Auth: &auth}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
 }

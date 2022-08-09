@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
@@ -15,8 +14,6 @@ import (
 )
 
 var apiKey = make([]byte, 16)
-
-// var jwtKey = keyFromEnv()
 
 //AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
 //to get a username from the payload (maybe change it to mobile number at somepoint)
@@ -36,21 +33,15 @@ func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 				// in this case you might need to give it another spin
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Token has expired", "code": "jwt_expired"})
 				return
-				// allow for expired tokens to live...FIXME
-				//c.Set("username", claims.Username)
-				//c.Next()
 			} else {
-				//FIXME #66 it this code doesn't use the same key we have
-				//jwt key is not initalized here
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
 				return
 			}
 		} else if err == nil {
 			// FIXME it is better to let the endpoint explicitly Get the claim off the user
 			//  as we will assume the auth server will reside in a different domain!
-
-			c.Set("username", claims.Username)
-			log.Printf("the username is: %s", claims.Username)
+			c.Set("mobile", claims.Mobile)
+			log.Printf("the username is: %s", claims.Mobile)
 			c.Next()
 		}
 	}
@@ -64,24 +55,6 @@ func GenerateSecretKey(n int) ([]byte, error) {
 		return nil, err
 	}
 	return key, nil
-}
-
-// keyFromEnv either generates or retrieve a jwt which will be used to generate a secret key
-//FIXME issue #61
-func keyFromEnv(redisClient *redis.Client) []byte {
-	// it either checks for environment for the specific key, or generates and saves a one
-	if key := os.Getenv("noebs_jwt"); key != "" {
-		return []byte(key)
-	}
-
-	if key := redisClient.Get("jwt").String(); key != "" {
-		return []byte(key)
-	}
-	key, _ := GenerateSecretKey(50)
-	redisClient.Set("jwt", key, 0)
-	err := os.Setenv("noebs_jwt", string(key))
-	log.Printf("the error in env is: %v", err)
-	return key
 }
 
 //OptionsMiddleware for cors headers

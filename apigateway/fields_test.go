@@ -19,11 +19,11 @@ func TestUserModel_sanitizeName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			u := &ebs_fields.User{
-				Username: have,
+				Mobile: have,
 			}
 			u.SanitizeName()
-			if u.Username != want {
-				t.Errorf("Want: %v, Have: %v", want, u.Username)
+			if u.Mobile != want {
+				t.Errorf("Want: %v, Have: %v", want, u.Mobile)
 			}
 		})
 	}

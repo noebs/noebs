@@ -14,7 +14,6 @@ import (
 //User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
 type User struct {
 	gorm.Model
-	Username      string `json:"username" gorm:"index:idx_username,unique"`
 	Password      string `binding:"required,min=8,max=20" json:"password"`
 	Fullname      string `json:"fullname"`
 	Birthday      string `json:"birthday"`
@@ -51,7 +50,8 @@ func NewUserByMobile(mobile string, db *gorm.DB) (User, error) {
 func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main
-
+	// This trick is really super important: it will allow us to get a user's main card
+	// with ease, without having to do a second fetch and then filter the main card
 	result := db.Model(&User{}).Preload("Cards", func(db *gorm.DB) *gorm.DB {
 		db = db.Order("is_main desc")
 		return db
@@ -65,7 +65,7 @@ func (u User) EncodePublickey() string {
 }
 
 func (u *User) SanitizeName() {
-	u.Username = strings.ToLower(u.Username)
+	u.Mobile = strings.ToLower(u.Mobile)
 }
 
 func (u *User) HashPassword() error {

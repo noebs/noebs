@@ -25,7 +25,7 @@ type Service struct {
 //authorized user
 func (s *Service) GetCards(c *gin.Context) {
 
-	username := c.GetString("username")
+	username := c.GetString("mobile")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 	} else {
@@ -65,7 +65,7 @@ func (s *Service) AddCards(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
@@ -95,7 +95,7 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access", "code": "empty_card_id"})
 		} else if fields.ID <= 0 {
@@ -138,7 +138,7 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		// there is no error in the request body
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else if fields.ID <= 0 {
@@ -168,7 +168,7 @@ func (s *Service) AddMobile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {
@@ -194,7 +194,7 @@ func (s *Service) GetMobile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
-		username := c.GetString("username")
+		username := c.GetString("mobile")
 		if username == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		} else {

@@ -13,3 +13,4 @@ __debug_bin
 test.db-*
 *.test.db*
 .secrets.json
+firebase-sdk.json
