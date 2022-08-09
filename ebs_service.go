@@ -3,7 +3,6 @@ package main
 import (
 	"html/template"
 	"net/http"
-	"os"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/cards"
@@ -155,13 +154,6 @@ func init() {
 		logrusLogger.Fatalf("error in connecting to db: %v", err)
 	}
 
-	// Initialize logger instance
-	file, err := os.OpenFile("logrus.log", os.O_CREATE|os.O_WRONLY, 0666)
-	if err == nil {
-		logrusLogger.Out = file
-	} else {
-		logrusLogger.Out = os.Stderr
-	}
 	logrusLogger.Level = logrus.DebugLevel
 	logrusLogger.SetReportCaller(true)
 
@@ -185,7 +177,7 @@ func init() {
 
 	auth.Init()
 	binding.Validator = new(ebs_fields.DefaultValidator)
-	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig}
+	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger}
 	state = consumer.State{Db: database, Redis: redisClient, Auth: &auth, NoebsConfig: noebsConfig}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}

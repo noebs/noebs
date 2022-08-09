@@ -101,6 +101,7 @@ type Service struct {
 	Redis       *redis.Client
 	Db          *gorm.DB
 	NoebsConfig ebs_fields.NoebsConfig
+	Logger      *logrus.Logger
 }
 
 var fees = ebs_fields.NewDynamicFees()

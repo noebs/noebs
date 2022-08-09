@@ -37,13 +37,13 @@ func NewUser(db *gorm.DB) *User {
 }
 
 // NewUserByMobile Retrieves a user from the database by mobile (username)
-func NewUserByMobile(mobile string, db *gorm.DB) (*User, error) {
+func NewUserByMobile(mobile string, db *gorm.DB) (User, error) {
 	var user User
 	if result := db.First(&user, "mobile = ?", mobile); errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, errors.New("user not found")
+		return user, errors.New("user not found")
 	}
 	user.db = db
-	return &user, nil
+	return user, nil
 }
 
 // NewUserByMobile Retrieves a user from the database by mobile (username)
@@ -77,9 +77,22 @@ func (u *User) HashPassword() error {
 	return nil
 }
 
-//AddCards to an existing noebs user. It uses gorm' relation to amends a user cards
-func (u *User) AddCards() error {
-	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(u).Error
+//UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+func (u User) UpsertCards(cards []Card) error {
+	for idx, card := range cards {
+		cards[idx].PanExpDate = card.Pan + card.Expiry
+	}
+	u.Cards = cards
+	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
+}
+
+//DeleteCards soft-deletes a card of list of cards associated to a user
+func (u User) DeleteCards(cards []Card) error {
+	for idx, _ := range cards {
+		cards[idx].UserID = u.ID
+	}
+	log.Printf("the user card model is: %v", u)
+	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Delete(&cards).Error
 }
 
 // PaymentToken a struct to represent a noebs payment order
@@ -206,10 +219,11 @@ func Decode(data string) (PaymentToken, error) {
 //Card represents a single card in noebs.
 type Card struct {
 	gorm.Model
-	Pan    string `json:"pan"`
-	Expiry string `json:"exp_date"`
-	Name   string `json:"name"`
-	IPIN   string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
-	UserID uint
-	IsMain bool `json:"is_main" gorm:"default:false"`
+	Pan        string `json:"pan"`
+	Expiry     string `json:"exp_date"`
+	Name       string `json:"name"`
+	IPIN       string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
+	UserID     uint
+	IsMain     bool   `json:"is_main" gorm:"default:false"`
+	PanExpDate string `json:"pan_exp_date" gorm:"unique"`
 }

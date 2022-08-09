@@ -87,7 +87,8 @@ func (s *Service) AddCards(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
 	}
-	if err := user.AddCards(); err != nil {
+
+	if err := user.UpsertCards(listCards); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
 	}
@@ -96,55 +97,30 @@ func (s *Service) AddCards(c *gin.Context) {
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 func (s *Service) EditCard(c *gin.Context) {
-	var oldCard ebs_fields.CardsRedis
+	var card ebs_fields.Card
 
-	err := c.ShouldBindWith(&oldCard, binding.JSON)
+	err := c.ShouldBindWith(&card, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
+
 	username := c.GetString("username")
 	if username == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
 	}
-	var newCards []ebs_fields.CardsRedis
-	var matchingCards ebs_fields.CardsRedis
-	cards, err := s.Redis.ZRange(username+":cards", 0, -1).Result()
+	user, err := ebs_fields.NewUserByMobile(username, s.Db)
 	if err != nil {
-		// handle the error somehow
-		logrus.WithFields(logrus.Fields{
-			"error":   "unable to get results from redis",
-			"message": err.Error(),
-		}).Info("unable to get results from redis")
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
-	cardBytes := cardsFromZNoIDS(cards)
 
-	for _, c := range cardBytes {
-		log.Printf("the card from redis: %v", c)
-		log.Printf("the old card: %v", oldCard)
-		if c.PAN == oldCard.PAN {
-			matchingCards = c
-			c.UpdateCard(oldCard.NewPan, oldCard.NewExpDate, oldCard.NewName)
-			log.Printf("we are editing a card: %v", c)
-			newCards = append(newCards, c)
-		} else {
-			log.Printf("the data not matching: %v", c)
-			if c.Name != "" && c.Expdate != "" && c.PAN != "" {
-				newCards = append(newCards, c)
-			}
-		}
-	}
-	delCard, _ := json.Marshal(matchingCards)
-	s.Redis.ZRem(username+":cards", string(delCard)) // there's only ONE card to edit
-
-	if err := s.storeCards(newCards, username, true); err == nil {
-		c.JSON(http.StatusCreated, gin.H{"status": "ok"})
+	if err := user.UpsertCards([]ebs_fields.Card{card}); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		c.JSON(http.StatusCreated, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
 
@@ -158,15 +134,24 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
 	}
-
-	var fields ebs_fields.CardsRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
+	var card ebs_fields.Card
+	err := c.ShouldBindWith(&card, binding.JSON)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
 		return
+	}
+	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		return
+	}
+
+	if err := user.DeleteCards([]ebs_fields.Card{card}); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
+		return
 	} else {
-		s.ssetDelete(fields, username)
-		c.JSON(http.StatusOK, gin.H{"username": username, "cards": fields})
+		c.JSON(http.StatusCreated, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		return
 	}
 }
 
