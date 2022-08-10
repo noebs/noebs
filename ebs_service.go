@@ -127,6 +127,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/login", consumerService.LoginHandler)
 		cons.POST("/otp", consumerService.GenerateSignInCode)
 		cons.POST("/otp_login", consumerService.SingleLoginHandler)
+		cons.POST("/verify_otp", consumerService.VerifyFirebase)
 		cons.GET("/get_mobile", consumerService.GetMobile)
 		cons.POST("/add_mobile", consumerService.AddMobile)
 		cons.POST("/test", func(c *gin.Context) {

@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -183,7 +184,6 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 		// FIXME it is better to let the endpoint explicitly Get the claim off the user
 		//  as we will assume the auth server will reside in a different domain!
 		log.Printf("the username is: %s", claims.Mobile)
-
 		auth, _ := s.Auth.GenerateJWT(claims.Mobile)
 		c.Writer.Header().Set("Authorization", auth)
 		c.JSON(http.StatusOK, gin.H{"authorization": auth})
@@ -219,6 +219,27 @@ func (s *Service) CreateUser(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
+}
+
+//VerifyFirebase used to confirm that the user's token is valid
+func (s *Service) VerifyFirebase(c *gin.Context) {
+	var req ebs_fields.User
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		return
+	}
+	ctx := context.Background()
+	fb, err := s.FirebaseApp.Auth(ctx)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "internal_error"})
+		return
+	}
+	token, err := fb.VerifyIDToken(ctx, req.FirebaseIDToken)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "internal_error"})
+		return
+	}
+	log.Printf("Verified ID token: %v\n", token)
 }
 
 //GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords

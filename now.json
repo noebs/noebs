@@ -1,5 +1,0 @@
-{
-"version": 2,
-"builds": [{ "src": "ebs_service.go", "use": "@now/go" }]
-}
-

@@ -14,20 +14,21 @@ import (
 //User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
 type User struct {
 	gorm.Model
-	Password      string `binding:"required,min=8,max=20" json:"password"`
-	Fullname      string `json:"fullname"`
-	Birthday      string `json:"birthday"`
-	Mobile        string `json:"mobile" gorm:"index:idx_mobile,unique"`
-	Email         string `json:"email"`
-	Password2     string `json:"password2" gorm:"-"`
-	IsMerchant    bool   `json:"is_merchant" gorm:"default:false"`
-	PublicKey     string `json:"user_pubkey"`
-	DeviceID      string `json:"device_id"`
-	OTP           string `json:"otp"`
-	SignedOTP     string `json:"signed_otp"`
-	PaymentTokens []PaymentToken
-	db            *gorm.DB
-	Cards         []Card
+	Password        string `binding:"required,min=8,max=20" json:"password"`
+	Fullname        string `json:"fullname"`
+	Birthday        string `json:"birthday"`
+	Mobile          string `json:"mobile" gorm:"index:idx_mobile,unique"`
+	Email           string `json:"email"`
+	Password2       string `json:"password2" gorm:"-"`
+	IsMerchant      bool   `json:"is_merchant" gorm:"default:false"`
+	PublicKey       string `json:"user_pubkey"`
+	DeviceID        string `json:"device_id"`
+	OTP             string `json:"otp"`
+	SignedOTP       string `json:"signed_otp"`
+	PaymentTokens   []PaymentToken
+	db              *gorm.DB
+	Cards           []Card
+	FirebaseIDToken string `json:"firebase_token" gorm:"-"`
 }
 
 func NewUser(db *gorm.DB) *User {
