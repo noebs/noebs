@@ -112,6 +112,9 @@ func (s *Service) LoginHandler(c *gin.Context) {
 
 //SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
 // the user's credentials (user's stored public key)
+//
+// NOTES
+// This function only allows one-time authentication VIA the same device that the user originally has signed up with.
 func (s *Service) SingleLoginHandler(c *gin.Context) {
 
 	var req gateway.Token
