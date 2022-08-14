@@ -1562,7 +1562,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 		return
 	}
 	encoded, _ := ebs_fields.Encode(&token)
-	c.JSON(http.StatusCreated, gin.H{"result": token, "token": encoded})
+	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded})
 }
 
 //GetPaymentToken retrieves a generated payment token by UUID
@@ -1582,11 +1582,11 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 	}
 	uuid, _ := c.GetQuery("uuid")
 	if uuid == "" { // the user wants to enlist *all* tokens generated for them
-		c.JSON(http.StatusBadRequest, gin.H{"result": user.PaymentTokens, "count": 0})
+		c.JSON(http.StatusBadRequest, gin.H{"token": user.PaymentTokens, "count": len(user.PaymentTokens)})
 		return
 	}
 	result, _ := ebs_fields.GetTokenByUUID(uuid, s.Db)
-	c.JSON(http.StatusOK, gin.H{"result": result, "count": 1})
+	c.JSON(http.StatusOK, gin.H{"token": result, "count": 1})
 }
 
 func (s *Service) NoebsQuickPayment(c *gin.Context) {
