@@ -66,7 +66,7 @@ func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
 	v.Add(("action"), "send-sms")
 	v.Add("from", noebsConfig.SMSSender)
 	v.Add("numbers", sms.Mobile)
-	v.Add("message", sms.Message)
+	v.Add("message", sms.Message+"\n -tutipay")
 	url := noebsConfig.SMSGateway + v.Encode()
 	res, err := http.Get(url)
 	if err != nil {
