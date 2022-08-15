@@ -1640,7 +1640,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	storedToken.Transaction = res.EBSResponse
 	storedToken.IsPaid = ebsErr == nil
-	if err := storedToken.UpsertTransaction(res.EBSResponse); err != nil {
+	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
 		log.Printf("error in saving transaction: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_save_transaction"})
 		return

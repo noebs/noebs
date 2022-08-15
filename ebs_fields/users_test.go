@@ -29,11 +29,10 @@ func TestPaymentToken_UpsertTransaction(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := PaymentToken{
-				Model:       gorm.Model{ID: 6},
 				db:          tt.args.db,
 				Transaction: tt.args.transaction,
 			}
-			if err := p.UpsertTransaction(tt.args.transaction); err != nil {
+			if err := p.UpsertTransaction(tt.args.transaction, tt.args.uuid); err != nil {
 				t.Errorf("PaymentToken.UpsertTransaction() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			newToken, err := GetTokenWithTransaction(tt.args.uuid, tt.args.db)
