@@ -215,6 +215,7 @@ func NewPaymentToken(mobile string, db *gorm.DB) (*PaymentToken, error) {
 func GetTokenByUUID(uuid string, db *gorm.DB) (PaymentToken, error) {
 	var token PaymentToken
 	result := db.Model(&PaymentToken{}).Preload("Transaction").First(&token, "uuid = ?", uuid)
+	token.db = db
 	return token, result.Error
 }
 

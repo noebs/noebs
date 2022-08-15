@@ -1636,18 +1636,20 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	}
 
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
-	s.Db.Model(&storedToken).Where("uuid", storedToken.UUID).Updates(&ebs_fields.PaymentToken{IsPaid: ebsErr != nil})
-	res.MaskPAN()
 
 	storedToken.Transaction = res.EBSResponse
 	storedToken.IsPaid = ebsErr == nil
-	s.Db.Table("transactions").Create(&res.EBSResponse)
-	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download Cashq!", res.EBSResponse.TranAmount))
+	if err := storedToken.UpsertTransaction(res.EBSResponse); err != nil {
+		log.Printf("error in saving transaction: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_save_transaction"})
+		return
+	}
+	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
 	} else {
-		c.JSON(code, gin.H{"ebs_response": res})
+		c.JSON(code, storedToken)
 	}
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
