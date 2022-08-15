@@ -161,6 +161,24 @@ func GetAllTokens(db *gorm.DB) ([]PaymentToken, error) {
 	return tokens, result.Error
 }
 
+//UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// When adding a card, make sure the card.ID is set to zero value so that
+// gorm wouldn't confuse it for an update
+func (p PaymentToken) UpsertTransaction(transaction EBSResponse) error {
+	p.Transaction = transaction
+	return p.db.Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&p).Error
+}
+
+//GetTokenWithTransaction preloads a token with its transaction
+func GetTokenWithTransaction(uuid string, db *gorm.DB) (PaymentToken, error) {
+	var paymentToken PaymentToken
+	result := db.Model(&PaymentToken{}).Preload("Transaction").First(&paymentToken, "uuid = ?", uuid)
+	paymentToken.db = db
+	return paymentToken, result.Error
+}
+
 // GetAllTokens associated to a user.
 func GetAllTokensByUserID(userID uint, db *gorm.DB) ([]PaymentToken, error) {
 	var tokens []PaymentToken

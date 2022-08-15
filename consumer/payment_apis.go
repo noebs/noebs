@@ -1639,6 +1639,8 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	s.Db.Model(&storedToken).Where("uuid", storedToken.UUID).Updates(&ebs_fields.PaymentToken{IsPaid: ebsErr != nil})
 	res.MaskPAN()
 
+	storedToken.Transaction = res.EBSResponse
+	storedToken.IsPaid = ebsErr == nil
 	s.Db.Table("transactions").Create(&res.EBSResponse)
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download Cashq!", res.EBSResponse.TranAmount))
 	if ebsErr != nil {
