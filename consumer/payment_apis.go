@@ -1552,7 +1552,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.PaymentToken
 	mobile := c.GetString("mobile")
 	user, err := ebs_fields.GetUserCards(mobile, s.Db)
-	if user.Cards[0].Pan == "" {
+	if user.Cards == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no card found"})
 		return
 	}
