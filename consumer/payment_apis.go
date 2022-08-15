@@ -91,6 +91,7 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v7"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -1550,19 +1551,26 @@ func (s *Service) IPINKey(c *gin.Context) {
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.PaymentToken
 	mobile := c.GetString("mobile")
-	user, _ := ebs_fields.NewUserByMobile(mobile, s.Db)
+	user, err := ebs_fields.NewUserByMobile(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	if err := c.ShouldBindWith(&token, binding.JSON); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid request"})
 		return
 	}
+
+	token.UUID = uuid.New().String()
 	token.UserID = user.ID
-	if err := token.SavePaymentToken(); err != nil {
+	if err := user.SavePaymentToken(&token); err != nil {
 		log.Printf("error in saving payment token: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Unable to save payment token"})
 		return
 	}
 	encoded, _ := ebs_fields.Encode(&token)
-	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded})
+	s.Logger.Printf("token is: %v", encoded)
+	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID})
 }
 
 //GetPaymentToken retrieves a generated payment token by UUID
@@ -1582,7 +1590,13 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 	}
 	uuid, _ := c.GetQuery("uuid")
 	if uuid == "" { // the user wants to enlist *all* tokens generated for them
-		c.JSON(http.StatusBadRequest, gin.H{"token": user.PaymentTokens, "count": len(user.PaymentTokens)})
+		tokens, err := ebs_fields.GetUserTokens(user.Mobile, s.Db)
+		if err != nil {
+			ve := validationError{Message: "error in retrieving tokens", Code: "error_retrieving_tokens"}
+			c.JSON(http.StatusBadRequest, ve)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"token": tokens, "count": len(tokens)})
 		return
 	}
 	result, _ := ebs_fields.GetTokenByUUID(uuid, s.Db)
@@ -1624,7 +1638,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	} else {
 		c.JSON(code, gin.H{"ebs_response": res})
 	}
-	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.EncodedPaymentToken}
+	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
 
 //EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only

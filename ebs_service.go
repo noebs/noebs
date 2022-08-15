@@ -8,7 +8,6 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
-	"github.com/getsentry/sentry-go"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/sirupsen/logrus"
 	_ "gorm.io/driver/sqlite"
@@ -45,13 +44,13 @@ func init() {
 	}
 
 	// Initialize sentry
-	sentry.Init(sentry.ClientOptions{
-		Dsn: noebsConfig.Sentry,
-		// Set TracesSampleRate to 1.0 to capture 100%
-		// of transactions for performance monitoring.
-		// We recommend adjusting this value in production,
-		TracesSampleRate: 1.0,
-	})
+	// sentry.Init(sentry.ClientOptions{
+	// 	Dsn: noebsConfig.Sentry,
+	// 	// Set TracesSampleRate to 1.0 to capture 100%
+	// 	// of transactions for performance monitoring.
+	// 	// We recommend adjusting this value in production,
+	// 	TracesSampleRate: 1.0,
+	// })
 
 	firebaseApp, err := getFirebase()
 	// gorm debug-level logger

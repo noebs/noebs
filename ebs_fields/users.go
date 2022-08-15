@@ -60,6 +60,16 @@ func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 	return &user, result.Error
 }
 
+// NewUserByMobile Retrieves a user from the database by mobile (username)
+func GetUserTokens(mobile string, db *gorm.DB) ([]PaymentToken, error) {
+	var user User
+	// Get user model and preload Cards and order the model relation Cards.is_main
+	// This trick is really super important: it will allow us to get a user's main card
+	// with ease, without having to do a second fetch and then filter the main card
+	result := db.Model(&User{}).Preload("PaymentTokens").First(&user, "mobile = ?", mobile)
+	return user.PaymentTokens, result.Error
+}
+
 //EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
 func (u User) EncodePublickey() string {
 	return base64.StdEncoding.EncodeToString([]byte(u.PublicKey))
@@ -115,12 +125,12 @@ func (u User) DeleteCards(cards []Card) error {
 type PaymentToken struct {
 	gorm.Model
 	UserID uint
-	Amount int    `json:"amount,omitempty"`
-	CartID string `json:"cart_id,omitempty"`
-	UUID   string `json:"uuid"`
-	Note   string `json:"note,omitempty"`
-	db     *gorm.DB
-	ToCard string `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
+	Amount int      `json:"amount,omitempty"`
+	CartID string   `json:"cart_id,omitempty"`
+	UUID   string   `json:"uuid"`
+	Note   string   `json:"note,omitempty"`
+	db     *gorm.DB `gorm:"-"`
+	ToCard string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
 	// Transaction the transaction associated with the payment token
 	Transaction   EBSResponse `json:"transaction" gorm:"foreignkey:TransactionID"`
 	TransactionID uint
@@ -139,8 +149,8 @@ func (u *User) NewPaymentToken(amount int, note string, cartID string) (*Payment
 }
 
 // SavePaymentToken saves the payment token to the database
-func (p *PaymentToken) SavePaymentToken() error {
-	return p.db.Create(p).Error
+func (u *User) SavePaymentToken(pt *PaymentToken) error {
+	return u.db.Model(&PaymentToken{}).Create(pt).Error
 }
 
 // GetAllTokens associated to a user.

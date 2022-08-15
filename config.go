@@ -13,7 +13,6 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/bradfitz/iter"
-	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -62,7 +61,7 @@ func GetMainEngine() *gin.Engine {
 	route := gin.Default()
 	instrument := gateway.Instrumentation()
 	route.Use(instrument)
-	route.Use(sentrygin.New(sentrygin.Options{}))
+	// route.Use(sentrygin.New(sentrygin.Options{}))
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", merchantServices.EBS)
 	route.Use(gateway.OptionsMiddleware)
@@ -162,7 +161,7 @@ func GetMainEngine() *gin.Engine {
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
 
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
-		cons.POST("/payment/quick_pay", consumerService.NoebsQuickPayment)
+		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 		cons.GET("/payment_token/", consumerService.GetPaymentToken)
 	}
 	return route
