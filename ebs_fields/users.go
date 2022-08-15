@@ -57,6 +57,7 @@ func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 		db = db.Order("is_main desc")
 		return db
 	}).First(&user, "mobile = ?", mobile)
+	user.db = db
 	return &user, result.Error
 }
 

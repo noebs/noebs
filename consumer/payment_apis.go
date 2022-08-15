@@ -1551,7 +1551,11 @@ func (s *Service) IPINKey(c *gin.Context) {
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.PaymentToken
 	mobile := c.GetString("mobile")
-	user, err := ebs_fields.NewUserByMobile(mobile, s.Db)
+	user, err := ebs_fields.GetUserCards(mobile, s.Db)
+	if user.Cards[0].Pan == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no card found"})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -1563,6 +1567,11 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 
 	token.UUID = uuid.New().String()
 	token.UserID = user.ID
+	if token.ToCard == "" {
+		// Only override card if the user didn't explicity specify a card
+		token.ToCard = user.Cards[0].Pan
+	}
+
 	if err := user.SavePaymentToken(&token); err != nil {
 		log.Printf("error in saving payment token: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Unable to save payment token"})
