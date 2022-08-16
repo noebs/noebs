@@ -161,57 +161,6 @@ func (s *Service) RemoveCard(c *gin.Context) {
 	}
 }
 
-//AddMobile adds a mobile number to the current authorized user
-func (s *Service) AddMobile(c *gin.Context) {
-	var fields ebs_fields.MobileRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	} else {
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("mobile")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
-			if fields.IsMain {
-				s.Redis.HSet(username, "main_mobile", buf)
-				s.Redis.SAdd(username+":cards", buf)
-			} else {
-				s.Redis.SAdd(username+":mobile_numbers", buf)
-			}
-
-			c.JSON(http.StatusCreated, gin.H{"username": username, "cards": string(buf)})
-		}
-	}
-
-}
-
-//GetMobile gets list of mobile numbers to this user
-func (s *Service) GetMobile(c *gin.Context) {
-
-	var fields ebs_fields.CardsRedis
-	err := c.ShouldBindWith(&fields, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
-	} else {
-		buf, _ := json.Marshal(fields)
-		username := c.GetString("mobile")
-		if username == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		} else {
-			if fields.IsMain {
-				s.Redis.HSet(username, "main_mobile", buf)
-				s.Redis.SAdd(username+":mobile_numbers", buf)
-			} else {
-				s.Redis.SAdd(username+":mobile_numbers", buf)
-			}
-
-			c.JSON(http.StatusCreated, gin.H{"username": username, "mobile_numbers": string(buf)})
-		}
-	}
-
-}
-
 //NecToName gets an nec number from the context and maps it to its meter number
 func (s *Service) NecToName(c *gin.Context) {
 	if nec := c.Query("nec"); nec != "" {

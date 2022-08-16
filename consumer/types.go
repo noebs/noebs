@@ -53,38 +53,6 @@ func (bf *billerForm) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, bf)
 }
 
-type redisCard map[string]interface{}
-
-//cardsFromZ marshals []string to []ebs_fields.CardsRedis
-func cardsFromZ(cards []string) []ebs_fields.CardsRedis {
-	var cb ebs_fields.CardsRedis
-	var cardBytes []ebs_fields.CardsRedis
-	for k, v := range cards {
-		json.Unmarshal([]byte(v), &cb)
-		cb.ID = k + 1
-		cardBytes = append(cardBytes, cb)
-	}
-	return cardBytes
-}
-
-//cardsFromZ marshals []string to []ebs_fields.CardsRedis
-func cardsFromZNoIDS(cards []string) []ebs_fields.CardsRedis {
-	var cb ebs_fields.CardsRedis
-	var cardBytes []ebs_fields.CardsRedis
-	for _, v := range cards {
-		json.Unmarshal([]byte(v), &cb)
-		cb.ID = 0
-		cardBytes = append(cardBytes, cb)
-	}
-	return cardBytes
-}
-
-func generateCardsIds(c *[]ebs_fields.CardsRedis) {
-	for id, card := range *c {
-		card.ID = id + 1
-	}
-}
-
 func notEbs(pan string) bool {
 	/*
 		Bank Code        Bank Card PREFIX        Bank Short Name        Bank Full name

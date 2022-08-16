@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
 
 	"crypto/x509"
@@ -43,16 +42,6 @@ func StringsToBytes(s []string) (bytes.Buffer, error) {
 	b := bytes.Buffer{}
 	err := json.NewEncoder(&b).Encode(s)
 	return b, err
-}
-
-func RedisHelper(s []string) ebs_fields.CardsRedis {
-	var c ebs_fields.CardsRedis
-	if len(s) == 1 {
-		for _, v := range s {
-			json.Unmarshal([]byte(v), &c)
-		}
-	}
-	return c
 }
 
 // MarshalIntoRedis marshals a type interface{} into a redis data

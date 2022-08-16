@@ -11,7 +11,6 @@
 package consumer
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"strconv"
@@ -104,40 +103,6 @@ func userExceededMaxSessions(s *Service, username string) bool {
 		}
 	}
 	return false
-}
-
-// storeCards accepts either ebs_fields.CardRedis or []ebs_fields.CardRedis
-// and depending on the input, it stores it in Redis
-func (s *Service) storeCards(cards any, username string, edit bool) error {
-	var err error
-
-	if username == "" {
-		return errors.New("unauthorized_access")
-	}
-
-	switch fields := cards.(type) {
-	case ebs_fields.CardsRedis:
-		fields.NewExpDate = ""
-		fields.NewName = ""
-		fields.NewPan = ""
-		fields.ID = 0
-		buf, _ := json.Marshal(&fields)
-		s.store(buf, username, edit)
-	case []ebs_fields.CardsRedis:
-		for _, card := range fields {
-			card.NewExpDate = ""
-			card.NewName = ""
-			card.NewPan = ""
-			card.ID = 0
-			buf, _ := json.Marshal(&card)
-			log.Printf("the current card is: %v", card)
-			s.store(buf, username, edit)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *Service) store(buf []byte, username string, edit bool) error {

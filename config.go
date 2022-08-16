@@ -149,8 +149,6 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/otp/generate", consumerService.GenerateSignInCode)
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/verify_firebase", consumerService.VerifyFirebase)
-		cons.GET("/get_mobile", consumerService.GetMobile)
-		cons.POST("/add_mobile", consumerService.AddMobile)
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
