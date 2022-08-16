@@ -96,8 +96,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var log = logrus.New()
-
 //Service consumer for utils.Service struct
 type Service struct {
 	Redis       *redis.Client
@@ -121,11 +119,8 @@ func (s *Service) Purchase(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerPurchaseFields{}
-
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
 		for _, err := range bindingErr {
@@ -134,6 +129,7 @@ func (s *Service) Purchase(c *gin.Context) {
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.DynamicFees = fees.SpecialPaymentFees
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
@@ -143,12 +139,8 @@ func (s *Service) Purchase(c *gin.Context) {
 		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-
-		// mask the pan
-		res.MaskPAN()
-
-		res.Name = "change me"
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -198,7 +190,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -208,15 +200,13 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		//// mask the pan
 		res.MaskPAN()
-
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
-
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -264,6 +254,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -273,11 +264,11 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -327,7 +318,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -337,12 +328,12 @@ func (s *Service) BillInquiry(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -395,7 +386,7 @@ func (s *Service) Balance(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -405,12 +396,12 @@ func (s *Service) Balance(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -461,7 +452,7 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		// this is really extremely a complex case
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
@@ -472,12 +463,12 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -507,7 +498,7 @@ func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSPa
 	// marshall the lastTransactions
 	// store them into redis
 	// store the lastTransactions into the database
-	log.Printf("merchantID is: %s", merchantID)
+	s.Logger.Printf("merchantID is: %s", merchantID)
 	if res == nil {
 		return errors.New("empty response")
 	}
@@ -517,7 +508,7 @@ func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSPa
 		return err
 	}
 	if _, err := s.Redis.HSet(merchantID, "data", data).Result(); err != nil {
-		log.Printf("erorr in redis: %v", err)
+		s.Logger.Printf("erorr in redis: %v", err)
 		return err
 	}
 	return nil
@@ -550,7 +541,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -560,12 +551,12 @@ func (s *Service) WorkingKey(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -615,7 +606,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-		//fields.DynamicFees = 10
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.DynamicFees = fees.CardTransferfees
 		// save this to redis
 		if mobile := fields.Mobile; mobile != "" {
@@ -623,15 +614,15 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		}
 
 		jsonBuffer := fields.MustMarshal()
-		log.Printf("the request is: %v", string(jsonBuffer))
+		s.Logger.Printf("the request is: %v", string(jsonBuffer))
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -681,16 +672,16 @@ func (s *Service) CashIn(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer := fields.MustMarshal() // this part basically gets us into trouble
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -740,16 +731,16 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, _ := json.Marshal(fields) // this part basically gets us into trouble
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -799,16 +790,16 @@ func (s *Service) CashOut(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer := fields.MustMarshal()
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me" // rename me to cashin transaction
+		res.Name = s.ToDatabasename(url) // rename me to cashin transaction
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -859,16 +850,16 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, _ := json.Marshal(fields)
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -918,7 +909,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -928,12 +919,12 @@ func (s *Service) IPinChange(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -984,7 +975,7 @@ func (s *Service) Status(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -994,12 +985,12 @@ func (s *Service) Status(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1059,7 +1050,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1069,12 +1060,12 @@ func (s *Service) QRPayment(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1121,7 +1112,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1131,12 +1122,12 @@ func (s *Service) QRTransactions(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1185,7 +1176,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1195,12 +1186,12 @@ func (s *Service) QRRefund(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1246,7 +1237,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1256,12 +1247,12 @@ func (s *Service) QRComplete(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1307,7 +1298,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1317,12 +1308,12 @@ func (s *Service) QRGeneration(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1374,10 +1365,6 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 	case nil:
 
-		// // if fields.PhoneNumber has 00 add a third 0 to them
-		// if strings.ContainsAny(fields.MobileNumber, "00") {
-		// 	fields.MobileNumber = strings.Replace(fields.MobileNumber, "00", "000", 1)
-		// }
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1387,12 +1374,12 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1442,7 +1429,6 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1452,12 +1438,12 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1488,7 +1474,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	log.Printf("EBS url is: %v", url)
+	s.Logger.Printf("EBS url is: %v", url)
 
 	var fields = ebs_fields.ConsumerQRPublicKey{}
 
@@ -1509,7 +1495,6 @@ func (s *Service) IPINKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1519,12 +1504,12 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1574,7 +1559,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 
 	if err := user.SavePaymentToken(&token); err != nil {
-		log.Printf("error in saving payment token: %v", err)
+		s.Logger.Printf("error in saving payment token: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Unable to save payment token"})
 		return
 	}
@@ -1641,7 +1626,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	storedToken.Transaction = res.EBSResponse
 	storedToken.IsPaid = ebsErr == nil
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
-		log.Printf("error in saving transaction: %v", err)
+		s.Logger.Printf("error in saving transaction: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_save_transaction"})
 		return
 	}
@@ -1682,7 +1667,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1692,12 +1677,12 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1748,7 +1733,7 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1758,12 +1743,12 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1810,7 +1795,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1820,12 +1805,12 @@ func (s *Service) RegisterCard(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1872,7 +1857,7 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1882,13 +1867,13 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		// except for this api, don't mask the card!
 		// res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
@@ -1935,7 +1920,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -1945,12 +1930,12 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		log.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// mask the pan
 		res.MaskPAN()
 
-		res.Name = "change me"
+		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 

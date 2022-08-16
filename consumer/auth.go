@@ -84,15 +84,15 @@ func (s *Service) LoginHandler(c *gin.Context) {
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
-		log.Printf("The request is wrong. %v", err)
+		s.Logger.Printf("The request is wrong. %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-	log.Printf("the processed request is: %v\n", req)
+	s.Logger.Printf("the processed request is: %v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
-		log.Printf("User with service_id %s is not found.", req.Mobile)
+		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
@@ -119,17 +119,17 @@ func (s *Service) SingleLoginHandler(c *gin.Context) {
 
 	var req gateway.Token
 	c.ShouldBindWith(&req, binding.JSON)
-	log.Printf("the processed request is: %v\n", req)
+	s.Logger.Printf("the processed request is: %v\n", req)
 
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		log.Printf("User with service_id %s is not found.", req.Mobile)
+		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
 
 	if _, encErr := noebsCrypto.VerifyWithHeaders(u.PublicKey, req.Signature, req.Message); encErr != nil {
-		log.Printf("invalid signature in refresh: %v", encErr)
+		s.Logger.Printf("invalid signature in refresh: %v", encErr)
 		c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
 		return
 	}
@@ -156,22 +156,22 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 	var req gateway.Token
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
 		// The request is wrong
-		log.Printf("The request is wrong. %v", err)
+		s.Logger.Printf("The request is wrong. %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			log.Info("refresh: auth username is: %s", claims.Mobile)
+			s.Logger.Info("refresh: auth username is: %s", claims.Mobile)
 			user, _ := ebs_fields.NewUserByMobile(claims.Mobile, s.Db)
 			// should verify signature here...
 			if user.PublicKey == "" {
-				log.Printf("user: %s has no registered pubkey", user.Mobile)
+				s.Logger.Printf("user: %s has no registered pubkey", user.Mobile)
 			}
-			log.Printf("grabbed user is: %#v", user.Mobile)
+			s.Logger.Printf("grabbed user is: %#v", user.Mobile)
 			if _, encErr := noebsCrypto.VerifyWithHeaders(user.PublicKey, req.Signature, req.Message); encErr != nil {
-				log.Printf("invalid signature in refresh: %v", encErr)
+				s.Logger.Printf("invalid signature in refresh: %v", encErr)
 				c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
 				return
 			}
@@ -186,7 +186,7 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 	} else if err == nil {
 		// FIXME it is better to let the endpoint explicitly Get the claim off the user
 		//  as we will assume the auth server will reside in a different domain!
-		log.Printf("the username is: %s", claims.Mobile)
+		s.Logger.Printf("the username is: %s", claims.Mobile)
 		auth, _ := s.Auth.GenerateJWT(claims.Mobile)
 		c.Writer.Header().Set("Authorization", auth)
 		c.JSON(http.StatusOK, gin.H{"authorization": auth})
@@ -242,7 +242,7 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "internal_error"})
 		return
 	}
-	log.Printf("Verified ID token: %v\n", token)
+	s.Logger.Printf("Verified ID token: %v\n", token)
 }
 
 //GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords

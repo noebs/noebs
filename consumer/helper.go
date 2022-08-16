@@ -13,6 +13,7 @@ package consumer
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -163,4 +164,34 @@ func generateOtp(secret string) (string, error) {
 		return "", err
 	}
 	return passcode, nil
+}
+
+func (s *Service) ToDatabasename(url string) string {
+	data := map[string]string{
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerIsAliveEndpoint:         "alive",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerWorkingKeyEndpoint:      "public_key",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint:         "balance",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint:     "bill_inquiry",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillPaymentEndpoint:     "bill_payment",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint:    "card_transfer",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerAccountTransferEndpoint: "account_transfer",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPayeesListEndpoint:      "payees_list",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerChangeIPinEndpoint:      "change_ipin",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPurchaseEndpoint:        "purchase",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerStatusEndpoint:          "status",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint:       "qr_purchase", // the fuck is wrong with you guys
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRRefundEndpoint:        "qr_refund",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPANFromMobile:           "msisdn_pan",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardInfo:                "customer_info",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerGenerateVoucher:         "generate_voucher",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashInEndpoint:          "cashin",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashOutEndpoint:         "cashout",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerComplete:                "complete_tran",
+		s.NoebsConfig.ConsumerIP + ebs_fields.IPinGeneration:                  "generate_ipin",
+		s.NoebsConfig.ConsumerIP + ebs_fields.IPinCompletion:                  "ipin_completion",
+		s.NoebsConfig.ConsumerIP + ebs_fields.MerchantTransactionStatus:       "merchant_status",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerRegister:                "register",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration:    "complete_card_issuance",
+	}
+	return data[url]
 }

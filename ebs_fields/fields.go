@@ -922,6 +922,8 @@ type NoebsConfig struct {
 	QR             string `json:"qr"`
 	Sentry         string `json:"sentry"`
 	Port           string `json:"port"`
+	ConsumerID     string `json:"consumer_id"`
+	MerchantID     string `json:"merchant_id"`
 }
 
 func (n *NoebsConfig) GetQRTest() string {
