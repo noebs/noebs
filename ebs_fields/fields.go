@@ -455,7 +455,7 @@ func (res *EBSResponse) MaskPAN() {
 	}
 }
 
-type ConsumerQRPublicKey struct {
+type ConsumerGenerateIPINFields struct {
 	Username     string `json:"userName" binding:"required"`
 	TranDateTime string `json:"tranDateTime" binding:"required"`
 	UUID         string `json:"UUID" binding:"required"`
@@ -778,7 +778,7 @@ func (f *ConsumerStatusFields) MustMarshal() []byte {
 }
 
 type ConsumerGenerateIPin struct {
-	ConsumerQRPublicKey
+	ConsumerGenerateIPINFields
 	Password     string `json:"password" binding:"required"`
 	Pan          string `json:"pan"`
 	MobileNumber string `json:"phoneNumber" binding:"required"`
@@ -791,7 +791,7 @@ func (gi *ConsumerGenerateIPin) MustMarshal() []byte {
 }
 
 type ConsumerGenerateIPinCompletion struct {
-	ConsumerQRPublicKey
+	ConsumerGenerateIPINFields
 	Password string `json:"password" binding:"required"`
 	Pan      string `json:"pan" binding:"required"`
 	Expdate  string `json:"expDate" binding:"required"`
@@ -830,8 +830,6 @@ func (d *DisputeFields) New(f EBSParserFields) *DisputeFields {
 	d.Time = f.TranDateTime
 	return d
 }
-
-
 
 type MobileRedis struct {
 	Mobile   string `json:"mobile" binding:"required"`

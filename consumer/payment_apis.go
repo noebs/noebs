@@ -1476,7 +1476,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 	s.Logger.Printf("EBS url is: %v", url)
 
-	var fields = ebs_fields.ConsumerQRPublicKey{}
+	var fields = ebs_fields.ConsumerGenerateIPINFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
@@ -1532,7 +1532,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 	}
 }
 
-//GeneratePaymentToken generates a token
+//GeneratePaymentToken is used by noebs user to charge their customers.
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.PaymentToken
 	mobile := c.GetString("mobile")

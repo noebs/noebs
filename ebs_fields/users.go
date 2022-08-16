@@ -29,6 +29,7 @@ type User struct {
 	db              *gorm.DB
 	Cards           []Card
 	FirebaseIDToken string `json:"firebase_token" gorm:"-"`
+	NewPassword     string `json:"new_password" gorm:"-"`
 }
 
 func NewUser(db *gorm.DB) *User {

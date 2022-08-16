@@ -95,6 +95,7 @@ func GetMainEngine() *gin.Engine {
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	dashboardGroup := route.Group("/dashboard")
 	{
+		dashboardGroup.GET("/", dashService.BrowserDashboard)
 		dashboardGroup.GET("/get_tid", dashService.TransactionByTid)
 		dashboardGroup.GET("/get", dashService.TransactionByTid)
 		dashboardGroup.GET("/create", dashService.MakeDummyTransaction)
@@ -105,7 +106,6 @@ func GetMainEngine() *gin.Engine {
 		dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)
 		dashboardGroup.GET("/merchant/:id", dashService.MerchantViews)
 		dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
-		dashboardGroup.GET("/", dashService.BrowserDashboard)
 		dashboardGroup.GET("/status", dashService.QRStatus)
 		dashboardGroup.GET("/test_browser", dashService.IndexPage)
 		dashboardGroup.GET("/stream", dashService.Stream)
@@ -146,6 +146,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 		cons.POST("/login", consumerService.LoginHandler)
+		cons.POST("/change_password", consumerService.ChangePassword)
 		cons.POST("/otp/generate", consumerService.GenerateSignInCode)
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/verify_firebase", consumerService.VerifyFirebase)

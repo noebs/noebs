@@ -110,6 +110,41 @@ func (s *Service) LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
+//ChangePassword noebs signin page
+func (s *Service) ChangePassword(c *gin.Context) {
+	var req ebs_fields.User
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.NewPassword == "" {
+		s.Logger.Printf("The request is wrong. %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+		return
+	}
+	s.Logger.Printf("the processed request is: %v\n", req)
+	u := ebs_fields.User{}
+	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
+		// service id is not found
+		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
+		return
+	}
+
+	// Create and update the user's password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 8)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	if err := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", u.Mobile).Update("password", string(hashedPassword)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
+}
+
 //SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
 // the user's credentials (user's stored public key)
 //
