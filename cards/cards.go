@@ -25,7 +25,7 @@ func (s *Service) AddMobile(c *gin.Context) {
 	var fields ebs_fields.MobileRedis
 	err := c.ShouldBindWith(&fields, binding.JSON)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 	} else {
 		buf, _ := json.Marshal(fields)
 		username := c.GetString("mobile")

@@ -124,7 +124,7 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 	tran := ebs_fields.EBSResponse{}
 
 	if err := env.Db.Create(&tran).Error; err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(500, gin.H{"code": err.Error()})
 	} else {
 		c.JSON(200, gin.H{"message": "object create successfully."})
 	}

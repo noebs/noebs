@@ -66,7 +66,7 @@ func (s *Service) GetCards(c *gin.Context) {
 			"error":   "unable to get results from redis",
 			"message": err.Error(),
 		}).Info("unable to get results from redis")
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "error in redis"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "error in redis"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
@@ -144,7 +144,7 @@ func (s *Service) RemoveCard(c *gin.Context) {
 	var card ebs_fields.Card
 	err := c.ShouldBindWith(&card, binding.JSON)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "unmarshalling_error"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
 	user, err := ebs_fields.NewUserByMobile(username, s.Db)

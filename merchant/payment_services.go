@@ -65,7 +65,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -122,7 +122,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -218,7 +218,7 @@ func (s *Service) Balance(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -263,7 +263,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 
 }
@@ -314,7 +314,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -356,7 +356,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -399,7 +399,7 @@ func (s *Service) TopUpPayment(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -451,7 +451,7 @@ func (s *Service) ChangePIN(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -501,7 +501,7 @@ func (s *Service) CashOut(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -552,7 +552,7 @@ func (s *Service) VoucherCashOut(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -603,7 +603,7 @@ func (s *Service) VoucherCashIn(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -654,7 +654,7 @@ func (s *Service) Statement(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -692,7 +692,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -731,7 +731,7 @@ func (s *Service) CashIn(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -769,7 +769,7 @@ func (s *Service) ToAccount(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -811,7 +811,7 @@ func (s *Service) MiniStatement(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -850,7 +850,7 @@ func (s *Service) testAPI(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -896,7 +896,7 @@ func (s *Service) Refund(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(400, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(400, gin.H{"code": bindingErr.Error()})
 	}
 }
 

@@ -159,7 +159,7 @@ func (s *Service) Purchase(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -223,7 +223,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -287,7 +287,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -355,7 +355,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -421,7 +421,7 @@ func (s *Service) Balance(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -489,7 +489,7 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -576,7 +576,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -641,7 +641,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -700,7 +700,7 @@ func (s *Service) CashIn(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -759,7 +759,7 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -818,7 +818,7 @@ func (s *Service) CashOut(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -878,7 +878,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -944,7 +944,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1009,7 +1009,7 @@ func (s *Service) Status(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1085,7 +1085,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1149,7 +1149,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1210,7 +1210,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1271,7 +1271,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1333,7 +1333,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1399,7 +1399,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1462,7 +1462,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1528,7 +1528,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1538,16 +1538,16 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	mobile := c.GetString("mobile")
 	user, err := ebs_fields.GetUserCards(mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
 		return
 	}
 	if err := c.ShouldBindWith(&token, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Invalid request"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Invalid request"})
 		return
 	}
 
 	if len(user.Cards) < 1 && token.ToCard == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no card found"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
 		return
 	}
 
@@ -1560,7 +1560,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 
 	if err := user.SavePaymentToken(&token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Unable to save payment token"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})
 		return
 	}
 	encoded, _ := ebs_fields.Encode(&token)
@@ -1603,21 +1603,21 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	var data ebs_fields.QuickPaymentFields
 	if err := c.ShouldBindWith(&data, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "bad_request"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "bad_request"})
 		return
 	}
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "bad_request"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "bad_request"})
 		return
 	}
 	storedToken, err := ebs_fields.GetTokenByUUID(paymentToken.UUID, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "token_not_found"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "token_not_found"})
 		return
 	}
 	if storedToken.Amount != 0 && storedToken.Amount != paymentToken.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "amount_mismatch", "message": "amount_mismatch"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "amount_mismatch", "message": "amount_mismatch"})
 		return
 	}
 
@@ -1627,7 +1627,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	storedToken.IsPaid = ebsErr == nil
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
 		s.Logger.Printf("error in saving transaction: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "unable_to_save_transaction"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "unable_to_save_transaction"})
 		return
 	}
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
@@ -1701,7 +1701,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 
 }
@@ -1767,7 +1767,7 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 
 }
@@ -1830,7 +1830,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1893,7 +1893,7 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
@@ -1955,6 +1955,6 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": bindingErr.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
