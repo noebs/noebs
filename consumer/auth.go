@@ -110,7 +110,7 @@ func (s *Service) LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
-//ChangePassword noebs signin page
+//ChangePassword used to change a user's password using their old one
 func (s *Service) ChangePassword(c *gin.Context) {
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.NewPassword == "" {
