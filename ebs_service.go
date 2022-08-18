@@ -43,6 +43,7 @@ func init() {
 		logrusLogger.Printf("error in parsing file: %v", err)
 	}
 	noebsConfig.Defaults()
+	logrusLogger.Printf("The final config file is: %#v", noebsConfig)
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{

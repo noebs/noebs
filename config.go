@@ -29,7 +29,6 @@ func parseConfig(data *ebs_fields.NoebsConfig) error {
 		return err
 	} else {
 		logrusLogger.Printf("the data is: %#v", data)
-
 		return nil
 	}
 }
