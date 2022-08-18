@@ -135,7 +135,7 @@ type PaymentToken struct {
 	ToCard string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
 	// Transaction the transaction associated with the payment token
 	Transaction   EBSResponse `json:"transaction" gorm:"foreignkey:TransactionID"`
-	User          User        `json:"-"` // we shouldn't send back the data to the user
+	User          User        `json:"-" binding:"-"` // we shouldn't send back the data to the user
 	TransactionID uint
 	IsPaid        bool `json:"is_paid"`
 }

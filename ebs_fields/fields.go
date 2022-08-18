@@ -880,8 +880,8 @@ type NoebsConfig struct {
 	Sentry     string `json:"sentry"`
 	Port       string `json:"port"`
 
-	IsConsumerProd *bool `json:"is_consumer_prod"`
-	IsMerchantProd *bool `json:"is_merchant_prod"`
+	IsConsumerProd bool `json:"is_consumer_prod"`
+	IsMerchantProd bool `json:"is_merchant_prod"`
 
 	ConsumerQAIP string `json:"consumer_qa"`
 	MerchantQAIP string `json:"merchant_qa"`
@@ -902,14 +902,14 @@ type NoebsConfig struct {
 }
 
 func (n *NoebsConfig) Defaults() {
-	if *n.IsConsumerProd {
+	if n.IsConsumerProd {
 		n.ConsumerIP = n.ConsumerProd
 		n.IPINIp = n.IPIN
 	} else {
 		n.ConsumerIP = n.ConsumerQAIP
 		n.IPINIp = n.IPINQA
 	}
-	if *n.IsMerchantProd {
+	if n.IsMerchantProd {
 		n.MerchantIP = n.MerchantProd
 	} else {
 		n.MerchantIP = n.MerchantQAIP
