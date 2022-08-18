@@ -135,6 +135,7 @@ type PaymentToken struct {
 	ToCard string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
 	// Transaction the transaction associated with the payment token
 	Transaction   EBSResponse `json:"transaction" gorm:"foreignkey:TransactionID"`
+	User          User        `json:"-"` // we shouldn't send back the data to the user
 	TransactionID uint
 	IsPaid        bool `json:"is_paid"`
 }
@@ -213,12 +214,15 @@ func NewPaymentToken(mobile string, db *gorm.DB) (*PaymentToken, error) {
 	return token, nil
 }
 
-// GetAllTokens associated to a user.
+// GetTokenByUUID gets a preloaded token with the user's ID and their cards
 func GetTokenByUUID(uuid string, db *gorm.DB) (PaymentToken, error) {
-	var token PaymentToken
-	result := db.Model(&PaymentToken{}).Preload("Transaction").First(&token, "uuid = ?", uuid)
-	token.db = db
-	return token, result.Error
+	var payment PaymentToken
+	result := db.Debug().Preload("User").Preload("User.Cards", func(db *gorm.DB) *gorm.DB {
+		db = db.Order("is_main desc, id desc")
+		return db
+	}).First(&payment, "uuid = ?", uuid)
+	payment.db = db
+	return payment, result.Error
 }
 
 // GetAllTokens associated to a user. This requires a populated model (u.Mobile != "")

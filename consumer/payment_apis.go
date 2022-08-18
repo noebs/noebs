@@ -1608,6 +1608,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "bad_request"})
 		return
 	}
+
 	storedToken, err := ebs_fields.GetTokenByUUID(paymentToken.UUID, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "token_not_found"})
@@ -1618,6 +1619,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		return
 	}
 
+	data.ToCard = storedToken.ToCard
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 
 	storedToken.Transaction = res.EBSResponse
