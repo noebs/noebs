@@ -29,6 +29,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		Transport: verifyTLS,
 	}
 
+	log.Printf("EBS url is: %v", url)
 	log.Printf("our request to EBS: %v", string(req))
 	reqBuffer := bytes.NewBuffer(req)
 
