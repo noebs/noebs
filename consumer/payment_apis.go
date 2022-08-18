@@ -1602,10 +1602,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
 
 	var data ebs_fields.QuickPaymentFields
-	if err := c.ShouldBindWith(&data, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "bad_request"})
-		return
-	}
+	c.ShouldBindWith(&data, binding.JSON) // ignore the errors
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "bad_request"})
