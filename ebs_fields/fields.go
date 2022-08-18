@@ -895,8 +895,14 @@ type NoebsConfig struct {
 	IPIN   string `json:"ipin_prod"`
 	IPINQA string `json:"ipin_qa"`
 
-	ConsumerID string `json:"consumer_id"`
-	MerchantID string `json:"merchant_id"`
+	ConsumerID string `json:"-"` // The ID that will be used within noebs to identify the consumer
+	MerchantID string `json:"-"` // The ID that will be used within noebs to identify the merchant
+
+	ConsumerQAID string `json:"consumer_qa_id"` // EBS application ID for mobile and card not present services prod)
+	MerchantQAID string `json:"merchant_qa_id"` // EBS client ID for pos and merchant services (prod)
+
+	ConsumerProdID string `json:"consumer_prod_id"` // EBS application ID for mobile and card not present services prod)
+	MerchantProdID string `json:"merchant_prod_id"` // EBS client ID for pos and merchant services (prod)
 
 	EBSIPINUsername string `json:"ipin_username"`
 }
@@ -905,14 +911,18 @@ func (n *NoebsConfig) Defaults() {
 	if n.IsConsumerProd {
 		n.ConsumerIP = n.ConsumerProd
 		n.IPINIp = n.IPIN
+		n.ConsumerID = n.ConsumerProdID
 	} else {
 		n.ConsumerIP = n.ConsumerQAIP
 		n.IPINIp = n.IPINQA
+		n.ConsumerID = n.ConsumerQAID
 	}
 	if n.IsMerchantProd {
 		n.MerchantIP = n.MerchantProd
+		n.MerchantID = n.MerchantProdID
 	} else {
 		n.MerchantIP = n.MerchantQAIP
+		n.MerchantID = n.MerchantQAID
 	}
 }
 
