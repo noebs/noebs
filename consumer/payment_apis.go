@@ -1339,7 +1339,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 
 //GenerateIpin generates a new ipin for card holder
 func (s *Service) GenerateIpin(c *gin.Context) {
-	url := s.NoebsConfig.QRIP + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
+	url := s.NoebsConfig.IPIN + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1405,7 +1405,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 //CompleteIpin performs an otp check from ebs to complete ipin change transaction
 func (s *Service) CompleteIpin(c *gin.Context) {
-	url := s.NoebsConfig.QRIP + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
+	url := s.NoebsConfig.IPIN + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request
@@ -1468,7 +1468,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 //CompleteIpin performs an otp check from ebs to complete ipin change transaction
 func (s *Service) IPINKey(c *gin.Context) {
-	url := s.NoebsConfig.QRIP + ebs_fields.QRPublicKey // EBS simulator endpoint url goes here.
+	url := s.NoebsConfig.IPIN + ebs_fields.QRPublicKey // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
 	// marshal the request

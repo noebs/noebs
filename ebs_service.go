@@ -42,6 +42,7 @@ func init() {
 	if err = parseConfig(&noebsConfig); err != nil {
 		logrusLogger.Printf("error in parsing file: %v", err)
 	}
+	noebsConfig.Defaults()
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{

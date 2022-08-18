@@ -871,80 +871,49 @@ type ValidationError struct {
 // NoebsConfig can be accessed via [NoebsSecrets] which is initialized in the
 // [ebs_fields] package in the init method.
 type NoebsConfig struct {
-	OneSignal      string `json:"onesignal_key"`
-	SMSAPIKey      string `json:"sms_key"`
-	SMSSender      string `json:"sms_sender"`
-	SMSGateway     string `json:"sms_gateway"`
-	RedisPort      string `json:"redis_port"`
-	IsConsumerProd *bool  `json:"is_consumer_prod"`
-	IsMerchantProd *bool  `json:"is_merchant_prod"`
-	ConsumerIP     string `json:"consumer_qa"`
-	MerchantIP     string `json:"merchant_qa"`
-	Merchant       string `json:"merchant"`
-	Consumer       string `json:"consumer"`
-	JWTKey         string `json:"jwt_secret"`
-	QRIP           string `json:"qr_ip"`
-	QR             string `json:"qr"`
-	Sentry         string `json:"sentry"`
-	Port           string `json:"port"`
-	ConsumerID     string `json:"consumer_id"`
-	MerchantID     string `json:"merchant_id"`
+	OneSignal  string `json:"onesignal_key"`
+	SMSAPIKey  string `json:"sms_key"`
+	SMSSender  string `json:"sms_sender"`
+	SMSGateway string `json:"sms_gateway"`
+	RedisPort  string `json:"redis_port"`
+	JWTKey     string `json:"jwt_secret"`
+	Sentry     string `json:"sentry"`
+	Port       string `json:"port"`
+
+	IsConsumerProd *bool `json:"is_consumer_prod"`
+	IsMerchantProd *bool `json:"is_merchant_prod"`
+
+	ConsumerQAIP string `json:"consumer_qa"`
+	MerchantQAIP string `json:"merchant_qa"`
+	ConsumerProd string `json:"consumer_prod"`
+	MerchantProd string `json:"merchant_prod"`
+
+	ConsumerIP string
+	MerchantIP string
+	IPINIp     string
+
+	IPIN   string `json:"ipin_prod"`
+	IPINQA string `json:"ipin_qa"`
+
+	ConsumerID string `json:"consumer_id"`
+	MerchantID string `json:"merchant_id"`
+
+	EBSIPINUsername string `json:"ipin_username"`
 }
 
-func (n *NoebsConfig) GetQRTest() string {
-	if n.IsConsumerProd != nil && *n.IsConsumerProd {
-		return n.GetConsumer() // we are prod
+func (n *NoebsConfig) Defaults() {
+	if *n.IsConsumerProd {
+		n.ConsumerIP = n.ConsumerProd
+		n.IPINIp = n.IPIN
+	} else {
+		n.ConsumerIP = n.ConsumerQAIP
+		n.IPINIp = n.IPINQA
 	}
-	if n.ConsumerIP == "" {
-		return "https://172.16.199.1:8877/IPinGeneration/"
+	if *n.IsMerchantProd {
+		n.MerchantIP = n.MerchantProd
+	} else {
+		n.MerchantIP = n.MerchantQAIP
 	}
-	return n.QRIP
-}
-
-func (n *NoebsConfig) GetQR() string {
-	if n.IsConsumerProd != nil && *n.IsConsumerProd {
-		return n.GetConsumer() // we are prod
-	}
-	if n.ConsumerIP == "" {
-		return "https://10.139.2.200:8443/IPinGeneration/"
-	}
-	return n.QRIP
-}
-
-//FIXME(adonese): Why this function is not using the right configurations?
-func (n *NoebsConfig) GetConsumerQA() string {
-	// return "https://10.139.2.200:8443/Consumer/"
-	if n.IsConsumerProd != nil && *n.IsConsumerProd {
-		return n.GetConsumer() // we are prod
-	}
-	if n.ConsumerIP == "" {
-		return "https://172.16.199.1:8877/QAConsumer/"
-	}
-	return n.ConsumerIP
-}
-
-func (n *NoebsConfig) GetConsumer() string {
-	if n.Consumer == "" {
-		return "https://10.139.2.200:8443/Consumer/"
-	}
-	return n.Consumer
-}
-
-func (n *NoebsConfig) GetMerchantQA() string {
-	if n.IsMerchantProd != nil && *n.IsMerchantProd {
-		return n.GetMerchant() // we are prod
-	}
-	if n.MerchantIP == "" {
-		return "https://172.16.199.1:8181/QAEBSGateway/"
-	}
-	return n.MerchantIP
-}
-
-func (n *NoebsConfig) GetMerchant() string {
-	if n.Merchant == "" {
-		return "https://172.16.198.14:8888/EBSGateway/"
-	}
-	return n.Merchant
 }
 
 type QuickPaymentFields struct {

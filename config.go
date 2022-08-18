@@ -12,6 +12,7 @@ import (
 	firebase "firebase.google.com/go/v4"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -22,12 +23,13 @@ import (
 //go:embed .secrets.json
 var secretsFile []byte
 
-func parseConfig(data any) error {
+func parseConfig(data *ebs_fields.NoebsConfig) error {
 	if err := json.Unmarshal(secretsFile, data); err != nil {
 		logrusLogger.Printf("Error in parsing config files: %v", err)
 		return err
 	} else {
 		logrusLogger.Printf("the data is: %#v", data)
+
 		return nil
 	}
 }
