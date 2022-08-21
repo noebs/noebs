@@ -1619,6 +1619,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		return
 	}
 
+	data.ApplicationId = s.NoebsConfig.ConsumerID
 	data.ToCard = storedToken.ToCard
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 
