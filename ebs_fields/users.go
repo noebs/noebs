@@ -101,6 +101,13 @@ func (u User) UpsertCards(cards []Card) error {
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
 
+//UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// When adding a card, make sure the card.ID is set to zero value so that
+// gorm wouldn't confuse it for an update
+func UpdateCard(card Card, db *gorm.DB) error {
+	return db.Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Updates(&card).Error
+}
+
 //DeleteCards soft-deletes a card of list of cards associated to a user
 func (u User) DeleteCards(cards []Card) error {
 	for idx := range cards {
@@ -258,10 +265,12 @@ func Decode(data string) (PaymentToken, error) {
 //Card represents a single card in noebs.
 type Card struct {
 	gorm.Model
-	Pan    string `json:"pan"`
-	Expiry string `json:"exp_date"`
-	Name   string `json:"name"`
-	IPIN   string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
-	UserID uint
-	IsMain bool `json:"is_main" gorm:"default:false"`
+	Pan     string `json:"pan"`
+	Expiry  string `json:"exp_date"`
+	Name    string `json:"name"`
+	IPIN    string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
+	UserID  uint
+	IsMain  bool   `json:"is_main" gorm:"default:false"`
+	CardIdx string `json:"card_index" gorm:"-:all"`
+	db      *gorm.DB
 }

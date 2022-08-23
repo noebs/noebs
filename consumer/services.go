@@ -102,6 +102,7 @@ func (s *Service) AddCards(c *gin.Context) {
 }
 
 //EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
+// this updates any card via
 func (s *Service) EditCard(c *gin.Context) {
 	var req ebs_fields.Card
 	err := c.ShouldBindWith(&req, binding.JSON)
@@ -115,8 +116,8 @@ func (s *Service) EditCard(c *gin.Context) {
 		return
 	}
 	// If no ID was provided that means we are adding a new card. We don't want that!
-	if req.ID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "card id is empty", "code": "card_id_empty"})
+	if req.CardIdx == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "card idx is empty", "code": "card_idx_empty"})
 		return
 	}
 	user, err := ebs_fields.NewUserByMobile(username, s.Db)
@@ -124,7 +125,8 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
 		return
 	}
-	if err := user.UpsertCards([]ebs_fields.Card{req}); err != nil {
+	req.UserID = user.ID
+	if err := ebs_fields.UpdateCard(req, s.Db); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {

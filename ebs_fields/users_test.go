@@ -77,3 +77,29 @@ func TestGetTokenByUUID(t *testing.T) {
 		})
 	}
 }
+
+func TestCard_UpdateCard(t *testing.T) {
+
+	type args struct {
+		card   Card
+		db     *gorm.DB
+		expiry string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"update card", args{card: Card{CardIdx: "1111", Expiry: "1234", UserID: 1}, db: db, expiry: "6969"}, "1234"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := UpdateCard(tt.args.card, tt.args.db); err != nil {
+				t.Errorf("Card.UpdateCard() error = %v", err)
+			}
+			if tt.args.card.Expiry != tt.want {
+				t.Errorf("Old card is not updated: old: %v, new: %v", tt.args.expiry, tt.want)
+			}
+		})
+	}
+}
