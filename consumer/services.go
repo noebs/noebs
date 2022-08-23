@@ -24,7 +24,7 @@ const (
 	SMS_GATEWAY = "https://mazinhost.com/smsv1/sms/api?action=send-sms"
 )
 
-//CardFromNumber gets the gussesed associated mobile number to this pan
+// CardFromNumber gets the gussesed associated mobile number to this pan
 func (s *Service) CardFromNumber(c *gin.Context) {
 	// the user must submit in their mobile number *ONLY*, and it is get
 	q, ok := c.GetQuery("mobile_number")
@@ -52,7 +52,7 @@ func (s *Service) CardFromNumber(c *gin.Context) {
 
 }
 
-//GetCards Get all cards for the currently authorized user
+// GetCards Get all cards for the currently authorized user
 func (s *Service) GetCards(c *gin.Context) {
 	username := c.GetString("mobile")
 	if username == "" {
@@ -73,7 +73,7 @@ func (s *Service) GetCards(c *gin.Context) {
 
 }
 
-//AddCards Allow users to add card to their profile
+// AddCards Allow users to add card to their profile
 // if main_card was set to true, then it will be their main card AND
 // it will remove the previously selected one FIXME
 func (s *Service) AddCards(c *gin.Context) {
@@ -101,7 +101,7 @@ func (s *Service) AddCards(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": "ok", "message": "cards added"})
 }
 
-//EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
+// EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 // this updates any card via
 func (s *Service) EditCard(c *gin.Context) {
 	var req ebs_fields.Card
@@ -130,12 +130,12 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {
-		c.JSON(http.StatusCreated, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
+		c.JSON(http.StatusCreated, gin.H{"result": "ok"})
 		return
 	}
 }
 
-//RemoveCard allow authorized users to remove their card
+// RemoveCard allow authorized users to remove their card
 // when the send the card id (from its list in app view)
 func (s *Service) RemoveCard(c *gin.Context) {
 	username := c.GetString("mobile")
@@ -163,7 +163,7 @@ func (s *Service) RemoveCard(c *gin.Context) {
 	}
 }
 
-//NecToName gets an nec number from the context and maps it to its meter number
+// NecToName gets an nec number from the context and maps it to its meter number
 func (s *Service) NecToName(c *gin.Context) {
 	if nec := c.Query("nec"); nec != "" {
 		name, err := s.Redis.HGet("meters", nec).Result()
@@ -177,7 +177,7 @@ func (s *Service) NecToName(c *gin.Context) {
 
 var billerChan = make(chan billerForm)
 
-//BillerHooks submits results to external endpoint
+// BillerHooks submits results to external endpoint
 func BillerHooks() {
 
 	for {
@@ -196,7 +196,7 @@ func BillerHooks() {
 	}
 }
 
-//PaymentOrder used to perform a transaction on behalf of a noebs user. This api should be used behind an authorization middleware
+// PaymentOrder used to perform a transaction on behalf of a noebs user. This api should be used behind an authorization middleware
 // The goal of this api is to allow our customers to perform certain types of transactions (recurred ones) without having to worry about it.
 // For example, if a user wants to make saving, or in case they want to they want to pay for their rent. Recurring payment scenarios are a lot.
 // The current proposal is to use a _wallet_. Simply, a user will put a money into noebs bank account. Whenever a user want to perform a recurred payment, noebs can then
@@ -275,7 +275,7 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 	}
 }
 
-//CashoutPub experimental support to add pubsub support
+// CashoutPub experimental support to add pubsub support
 // we need to make this api public
 func (s *Service) CashoutPub() {
 	pubsub := s.Redis.Subscribe("chan_cashouts")
