@@ -103,3 +103,25 @@ func TestCard_UpdateCard(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteCard(t *testing.T) {
+	type args struct {
+		card   Card
+		db     *gorm.DB
+		expiry string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"delete card", args{card: Card{CardIdx: "1111", Expiry: "1234", UserID: 1}, db: db, expiry: "6969"}, "1234"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := DeleteCard(tt.args.card, tt.args.db); err != nil {
+				t.Errorf("DeleteCard() error = %v", err)
+			}
+		})
+	}
+}

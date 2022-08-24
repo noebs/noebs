@@ -90,8 +90,7 @@ func TestMinistatementDB_Scan(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MinistatementDB.Scan() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			var data []map[string]interface{}
-			data = *tt.m
+			data := *tt.m
 			// i think it might be better to just work around that...
 			if len(data) == 0 {
 				return

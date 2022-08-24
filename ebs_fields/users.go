@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-//User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
+// User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
 type User struct {
 	gorm.Model
 	Password        string `binding:"required,min=8,max=20" json:"password"`
@@ -72,7 +72,7 @@ func GetUserTokens(mobile string, db *gorm.DB) ([]PaymentToken, error) {
 	return user.PaymentTokens, result.Error
 }
 
-//EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
+// EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
 func (u User) EncodePublickey() string {
 	return base64.StdEncoding.EncodeToString([]byte(u.PublicKey))
 }
@@ -91,7 +91,7 @@ func (u *User) HashPassword() error {
 	return nil
 }
 
-//UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
 // When adding a card, make sure the card.ID is set to zero value so that
 // gorm wouldn't confuse it for an update
 func (u User) UpsertCards(cards []Card) error {
@@ -101,20 +101,27 @@ func (u User) UpsertCards(cards []Card) error {
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
 
-//UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
 // When adding a card, make sure the card.ID is set to zero value so that
 // gorm wouldn't confuse it for an update
 func UpdateCard(card Card, db *gorm.DB) error {
 	return db.Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Updates(&card).Error
 }
 
-//DeleteCards soft-deletes a card of list of cards associated to a user
+// DeleteCards soft-deletes a card of list of cards associated to a user
 func (u User) DeleteCards(cards []Card) error {
 	for idx := range cards {
 		cards[idx].UserID = u.ID
 	}
 	log.Printf("the user card model is: %v", u)
 	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Delete(&cards).Error
+}
+
+// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// When adding a card, make sure the card.ID is set to zero value so that
+// gorm wouldn't confuse it for an update
+func DeleteCard(card Card, db *gorm.DB) error {
+	return db.Debug().Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Delete(&card).Error
 }
 
 // PaymentToken a struct to represent a noebs payment order
@@ -124,13 +131,13 @@ func (u User) DeleteCards(cards []Card) error {
 // from noebs companioned apps and then proceed with payment. Another method is to generate a QR code
 // which can be scanned by the other end to transfer money.
 // A payment token includes the following information, more to come later:
-// 1. UUID a unique UUID v4 per each operation, this is requested from ebs via [POST]/payment_token
-// 2. ID a unique ID per each payment token, this is an optional field left for the user to supply. In e-commerce cases, an ID represent
-//   the order ID.
-// 3. Amount the amount to be transferred. Amount is required. A zero amount denotes a free payment.
-// 4. UserID the user ID of the user who is making the payment. UserID is required.
-// 5. Mobile: the receipient of the payment mobile. This is an optional field
-// 6. Note: an optional text note to be sent to the recipient.
+//  1. UUID a unique UUID v4 per each operation, this is requested from ebs via [POST]/payment_token
+//  2. ID a unique ID per each payment token, this is an optional field left for the user to supply. In e-commerce cases, an ID represent
+//     the order ID.
+//  3. Amount the amount to be transferred. Amount is required. A zero amount denotes a free payment.
+//  4. UserID the user ID of the user who is making the payment. UserID is required.
+//  5. Mobile: the receipient of the payment mobile. This is an optional field
+//  6. Note: an optional text note to be sent to the recipient.
 type PaymentToken struct {
 	gorm.Model
 	UserID uint
@@ -170,7 +177,7 @@ func GetAllTokens(db *gorm.DB) ([]PaymentToken, error) {
 	return tokens, result.Error
 }
 
-//UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
+// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
 // When adding a card, make sure the card.ID is set to zero value so that
 // gorm wouldn't confuse it for an update
 func (p PaymentToken) UpsertTransaction(transaction EBSResponse, uuid string) error {
@@ -181,7 +188,7 @@ func (p PaymentToken) UpsertTransaction(transaction EBSResponse, uuid string) er
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Where("uuid = ?", uuid).Updates(&p).Error
 }
 
-//GetTokenWithTransaction preloads a token with its transaction
+// GetTokenWithTransaction preloads a token with its transaction
 func GetTokenWithTransaction(uuid string, db *gorm.DB) (PaymentToken, error) {
 	var paymentToken PaymentToken
 	result := db.Model(&PaymentToken{}).Preload("Transaction").First(&paymentToken, "uuid = ?", uuid)
@@ -202,7 +209,7 @@ func GetAllTokensByUserIDAndCartID(userID uint, cartID string, db *gorm.DB) ([]P
 	return nil, nil
 }
 
-//NewToken creates a new paymenttoken struct and populate it with a database
+// NewToken creates a new paymenttoken struct and populate it with a database
 func NewToken(db *gorm.DB) *PaymentToken {
 	return &PaymentToken{
 		db: db,
@@ -239,7 +246,7 @@ func (u *User) GetAllTokens() ([]PaymentToken, error) {
 	return user.PaymentTokens, result.Error
 }
 
-//Encode PaymentToken to a URL safe link that can be used for online purchases
+// Encode PaymentToken to a URL safe link that can be used for online purchases
 func Encode(p *PaymentToken) (string, error) {
 	data, err := json.Marshal(p)
 	if err != nil {
@@ -248,7 +255,7 @@ func Encode(p *PaymentToken) (string, error) {
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
-//Decode a noebs payment token to an internal PaymentToken that we understand
+// Decode a noebs payment token to an internal PaymentToken that we understand
 func Decode(data string) (PaymentToken, error) {
 	var p PaymentToken
 	decoded, err := base64.StdEncoding.DecodeString(data)
@@ -262,7 +269,7 @@ func Decode(data string) (PaymentToken, error) {
 
 }
 
-//Card represents a single card in noebs.
+// Card represents a single card in noebs.
 type Card struct {
 	gorm.Model
 	Pan     string `json:"pan"`
@@ -272,5 +279,4 @@ type Card struct {
 	UserID  uint
 	IsMain  bool   `json:"is_main" gorm:"default:false"`
 	CardIdx string `json:"card_index" gorm:"-:all"`
-	db      *gorm.DB
 }

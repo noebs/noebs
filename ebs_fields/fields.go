@@ -192,18 +192,14 @@ type CommonFields struct {
 	ClientID               string `json:"clientId,omitempty" binding:"required" form:"clientId"`
 }
 
-func (c *CommonFields) sendRequest(f []byte) {
-	panic("implement me!")
-}
-
-//CardInfoFields implements a payment card info
+// CardInfoFields implements a payment card info
 type CardInfoFields struct {
 	Pan     string `json:"PAN" binding:"required" form:"PAN"`
 	Pin     string `json:"PIN" binding:"required" form:"PIN"`
 	Expdate string `json:"expDate" binding:"required" form:"expDate"`
 }
 
-//AmountFields transaction amount data
+// AmountFields transaction amount data
 type AmountFields struct {
 	TranAmount       float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
 	TranCurrencyCode string  `json:"tranCurrencyCode" form:"tranCurrencyCode"`
@@ -230,7 +226,7 @@ func iso8601(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
-//EBSResponse represent a struct that captures all of EBS response fields and map them into Transaction table
+// EBSResponse represent a struct that captures all of EBS response fields and map them into Transaction table
 // We should really split this up between consumer and merchant. It is just too complicated to manage now
 type EBSResponse struct {
 	gorm.Model
@@ -306,7 +302,7 @@ type EBSResponse struct {
 	PostalCode               string  `json:"postalCode,omitempty"`
 }
 
-//TableName overrides the default table name for gorm
+// TableName overrides the default table name for gorm
 func (EBSResponse) TableName() string {
 	return "transactions"
 }
@@ -573,7 +569,7 @@ type EntityFields struct {
 	EntityGroup string `json:"entityGroup"` // defaults to 1
 }
 
-//ConsumerRegistrationFields the first step in card issuance
+// ConsumerRegistrationFields the first step in card issuance
 type ConsumerRegistrationFields struct {
 	ConsumerCommonFields
 	EntityFields
@@ -651,7 +647,7 @@ func (f *MerchantRegistrationFields) MustMarshal() []byte {
 	return d
 }
 
-//Merchant constructs ebs qualfied merchant
+// Merchant constructs ebs qualfied merchant
 type Merchant struct {
 	MerchantID           string `json:"merchant_id" form:"merchant_id" gorm:"index"`
 	MerchantName         string `json:"name" form:"name" binding:"required" gorm:"column:name"`
@@ -761,7 +757,7 @@ type ConsumrAccountTransferFields struct {
 	ToAccount string `json:"toAccount" binding:"required"`
 }
 
-//MustMarshal panics if not able to marshal repsonse
+// MustMarshal panics if not able to marshal repsonse
 func (p2p *ConsumerCardTransferFields) MustMarshal() []byte {
 	d, _ := json.Marshal(p2p)
 	return d

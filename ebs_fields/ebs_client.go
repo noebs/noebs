@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,7 +17,7 @@ import (
 
 var log = logrus.New()
 
-//EBSHttpClient the client to interact with EBS
+// EBSHttpClient the client to interact with EBS
 func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 
 	verifyTLS := &http.Transport{
@@ -56,7 +56,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 
 	defer ebsResponse.Body.Close()
 
-	responseBody, err := ioutil.ReadAll(ebsResponse.Body)
+	responseBody, err := io.ReadAll(ebsResponse.Body)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"error": err.Error(),
@@ -137,7 +137,7 @@ type IPINResponse struct {
 	Username        string `json:"userName"`
 }
 
-//newResponse the
+// newResponse the
 func (i IPINResponse) newResponse() EBSParserFields {
 	var res EBSResponse
 	res.ResponseCode = int(i.ResponseCode)

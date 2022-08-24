@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"strconv"
@@ -119,7 +118,7 @@ func (r *Response) LowLevelResponse() *http.Response {
 	}
 
 	resp := *r.resp
-	resp.Body = ioutil.NopCloser(bytes.NewBuffer(r.Body))
+	resp.Body = io.NopCloser(bytes.NewBuffer(r.Body))
 	return &resp
 }
 
@@ -308,7 +307,7 @@ func (e *jsonEntity) Mime() string {
 
 func newResponse(resp *http.Response) (*Response, error) {
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
