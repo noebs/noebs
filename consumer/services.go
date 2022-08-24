@@ -154,7 +154,8 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
-	if err := user.DeleteCards([]ebs_fields.Card{card}); err != nil {
+	card.UserID = user.ID
+	if err := ebs_fields.DeleteCard(card, s.Db); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {
