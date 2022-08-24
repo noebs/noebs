@@ -149,6 +149,13 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return
 	}
+	s.Logger.Printf("the card is: %v+#", card)
+	// If no ID was provided that means we are adding a new card. We don't want that!
+	if card.CardIdx == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "card idx is empty", "code": "card_idx_empty"})
+		return
+	}
+
 	user, err := ebs_fields.NewUserByMobile(username, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
