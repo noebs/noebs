@@ -1,6 +1,7 @@
 package ebs_fields
 
 import (
+	"reflect"
 	"testing"
 
 	"gorm.io/driver/sqlite"
@@ -121,6 +122,33 @@ func TestDeleteCard(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := DeleteCard(tt.args.card, tt.args.db); err != nil {
 				t.Errorf("DeleteCard() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestGetTokenWithResult(t *testing.T) {
+	type args struct {
+		uuid string
+		db   *gorm.DB
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    PaymentToken
+		wantErr bool
+	}{
+		{"Test_to_card", args{"015b88da-1203-4a69-a3ef-e447b6df4ccc", db}, PaymentToken{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetTokenWithResult(tt.args.uuid, tt.args.db)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetTokenWithResult() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetTokenWithResult() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -1703,7 +1703,6 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
-
 }
 
 // GetMSISDNFromCard for ussd to get pan info from sim card

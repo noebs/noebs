@@ -229,6 +229,14 @@ func NewPaymentToken(mobile string, db *gorm.DB) (*PaymentToken, error) {
 }
 
 // GetTokenByUUID gets a preloaded token with the user's ID and their cards
+func GetTokenWithResult(uuid string, db *gorm.DB) (PaymentToken, error) {
+	var payment PaymentToken
+	result := db.Debug().Preload("Transaction").First(&payment, "uuid = ?", uuid)
+	payment.db = db
+	return payment, result.Error
+}
+
+// GetTokenByUUID gets a preloaded token with the user's ID and their cards
 func GetTokenByUUID(uuid string, db *gorm.DB) (PaymentToken, error) {
 	var payment PaymentToken
 	result := db.Debug().Preload("User").Preload("User.Cards", func(db *gorm.DB) *gorm.DB {
