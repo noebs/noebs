@@ -148,8 +148,8 @@ type PaymentToken struct {
 	db     *gorm.DB `gorm:"-"`
 	ToCard string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
 	// Transaction the transaction associated with the payment token
-	Transaction   EBSResponse `json:"transaction" gorm:"foreignkey:TransactionID"`
-	User          User        `json:"-" binding:"-"` // we shouldn't send back the data to the user
+	Transaction   EBSResponse `json:"transaction,omitempty" gorm:"foreignkey:TransactionID"`
+	User          User        `json:"-,omitempty" binding:"-"` // we shouldn't send back the data to the user
 	TransactionID uint
 	IsPaid        bool `json:"is_paid"`
 }
@@ -256,6 +256,8 @@ func (u *User) GetAllTokens() ([]PaymentToken, error) {
 
 // Encode PaymentToken to a URL safe link that can be used for online purchases
 func Encode(p *PaymentToken) (string, error) {
+	p.User = User{}
+	p.Transaction = EBSResponse{}
 	data, err := json.Marshal(p)
 	if err != nil {
 		return "", err
