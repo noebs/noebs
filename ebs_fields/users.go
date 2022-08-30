@@ -139,19 +139,19 @@ func DeleteCard(card Card, db *gorm.DB) error {
 //  5. Mobile: the receipient of the payment mobile. This is an optional field
 //  6. Note: an optional text note to be sent to the recipient.
 type PaymentToken struct {
-	gorm.Model
-	UserID uint
-	Amount int      `json:"amount,omitempty"`
-	CartID string   `json:"cart_id,omitempty"`
-	UUID   string   `json:"uuid"`
-	Note   string   `json:"note,omitempty"`
-	db     *gorm.DB `gorm:"-"`
-	ToCard string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
+	gorm.Model `json:",omitempty"`
+	UserID     uint     `json:",omitempty"`
+	Amount     int      `json:"amount,omitempty"`
+	CartID     string   `json:"cart_id,omitempty"`
+	UUID       string   `json:"uuid,omitempty"`
+	Note       string   `json:"note,omitempty"`
+	db         *gorm.DB `gorm:"-"`
+	ToCard     string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
 	// Transaction the transaction associated with the payment token
 	Transaction   EBSResponse `json:"transaction,omitempty" gorm:"foreignkey:TransactionID"`
-	User          User        `json:"-,omitempty" binding:"-"` // we shouldn't send back the data to the user
-	TransactionID uint
-	IsPaid        bool `json:"is_paid"`
+	User          User        `json:",omitempty" binding:"-"` // we shouldn't send back the data to the user
+	TransactionID uint        `json:",omitempty"`
+	IsPaid        bool        `json:"is_paid"`
 }
 
 // NewPaymentToken creates a new payment token and assign it to a user
