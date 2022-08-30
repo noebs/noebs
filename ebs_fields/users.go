@@ -154,6 +154,12 @@ type PaymentToken struct {
 	IsPaid        bool        `json:"is_paid"`
 }
 
+type qrData struct {
+	UUID   string `json:"uuid"`
+	ToCard string `json:"toCard,omitempty"`
+	Amount int    `json:"amount,omitempty"`
+}
+
 // NewPaymentToken creates a new payment token and assign it to a user
 func (u *User) NewPaymentToken(amount int, note string, cartID string) (*PaymentToken, error) {
 	token := &PaymentToken{
@@ -256,9 +262,11 @@ func (u *User) GetAllTokens() ([]PaymentToken, error) {
 
 // Encode PaymentToken to a URL safe link that can be used for online purchases
 func Encode(p *PaymentToken) (string, error) {
-	p.User = User{}
-	p.Transaction = EBSResponse{}
-	data, err := json.Marshal(p)
+	var qr qrData
+	qr.Amount = p.Amount
+	qr.ToCard = p.ToCard
+	qr.UUID = p.UUID
+	data, err := json.Marshal(qr)
 	if err != nil {
 		return "", err
 	}
