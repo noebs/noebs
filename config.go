@@ -11,11 +11,17 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/merchant"
+	"github.com/adonese/noebs/utils"
 	"github.com/bradfitz/iter"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm/logger"
 
 	"google.golang.org/api/option"
 )
@@ -142,7 +148,6 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/pan_from_mobile", consumerService.GetMSISDNFromCard)
 		cons.GET("/mobile2pan", consumerService.CardFromNumber)
 		cons.GET("/nec2name", consumerService.NecToName)
-		cons.POST("/tokenize", cardService.Tokenize)
 		cons.POST("/vouchers/generate", consumerService.GenerateVoucher)
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
@@ -165,4 +170,45 @@ func GetMainEngine() *gin.Engine {
 		cons.GET("/payment_token/", consumerService.GetPaymentToken)
 	}
 	return route
+}
+
+func init() {
+	var err error
+
+	// Initialize database
+	database, err = utils.Database("test.db")
+	if err != nil {
+		logrusLogger.Fatalf("error in connecting to db: %v", err)
+	}
+
+	logrusLogger.Level = logrus.DebugLevel
+	logrusLogger.SetReportCaller(true)
+
+	// Parse noebs system-level configurations
+	if err = parseConfig(&noebsConfig); err != nil {
+		logrusLogger.Printf("error in parsing file: %v", err)
+	}
+	noebsConfig.Defaults()
+	logrusLogger.Printf("The final config file is: %#v", noebsConfig)
+
+	// Initialize sentry
+	// sentry.Init(sentry.ClientOptions{
+	// 	Dsn: noebsConfig.Sentry,
+	// 	// Set TracesSampleRate to 1.0 to capture 100%
+	// 	// of transactions for performance monitoring.
+	// 	// We recommend adjusting this value in production,
+	// 	TracesSampleRate: 1.0,
+	// })
+
+	firebaseApp, err := getFirebase()
+	// gorm debug-level logger
+	database.Logger.LogMode(logger.Info)
+	database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{})
+	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
+
+	auth.Init()
+	binding.Validator = new(ebs_fields.DefaultValidator)
+	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger, FirebaseApp: firebaseApp, Auth: &auth}
+	dashService = dashboard.Service{Redis: redisClient, Db: database}
+	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
 }

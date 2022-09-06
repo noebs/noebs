@@ -133,6 +133,7 @@ func generateOtp(secret string) (string, error) {
 
 func (s *Service) ToDatabasename(url string) string {
 	data := map[string]string{
+		// url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardInfo
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerIsAliveEndpoint:         "alive",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerWorkingKeyEndpoint:      "public_key",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint:         "balance",

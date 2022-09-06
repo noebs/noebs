@@ -1013,20 +1013,6 @@ func (s *Service) Status(c *gin.Context) {
 	}
 }
 
-// Transactions get transactions stored in our redis data store
-func (s *Service) Transactions(c *gin.Context) {
-	//TODO get the transaction from Redis instanc
-
-	username := c.GetString("mobile")
-	if username == "" {
-		username = "invalid_key"
-	}
-	s.Redis.Get(username)
-
-	// you should probably marshal these data
-	c.JSON(http.StatusOK, gin.H{"transactions": username})
-}
-
 // QRPayment performs QR payment transaction
 func (s *Service) QRPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
@@ -1630,7 +1616,9 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "unable_to_save_transaction"})
 		return
 	}
+
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
+
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
