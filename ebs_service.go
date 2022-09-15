@@ -8,6 +8,7 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
 	"github.com/sirupsen/logrus"
+	chat "github.com/tutipay/ws"
 	_ "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -21,10 +22,11 @@ var service consumer.Service
 var auth gateway.JWTAuth
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
+var hub chat.Hub
 
 func main() {
-	// csh := consumer.NewCashout(redisClient)
-	// go csh.CashoutPub() // listener for noebs cashouts.
+
+	go hub.Run()
 	go consumer.BillerHooks()
 	if noebsConfig.Port == "" {
 		noebsConfig.Port = ":8080"

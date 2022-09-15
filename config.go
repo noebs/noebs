@@ -23,6 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm/logger"
 
+	chat "github.com/tutipay/ws"
 	"google.golang.org/api/option"
 )
 
@@ -71,6 +72,8 @@ func GetMainEngine() *gin.Engine {
 	// route.Use(sentrygin.New(sentrygin.Options{}))
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", merchantServices.EBS)
+	route.GET("/ws", wsAdapter(hub))
+	route.POST("/chat/previous", previousMessagesAdapter(hub))
 	route.Use(gateway.OptionsMiddleware)
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
 	route.LoadHTMLGlob("./dashboard/template/*")
@@ -200,6 +203,8 @@ func init() {
 	// 	TracesSampleRate: 1.0,
 	// })
 
+	hub = *chat.NewHub(nil)
+
 	firebaseApp, err := getFirebase()
 	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
@@ -211,4 +216,16 @@ func init() {
 	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger, FirebaseApp: firebaseApp, Auth: &auth}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
+}
+
+func wsAdapter(msg chat.Hub) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		chat.ServeWs(&msg, c.Writer, c.Request)
+	}
+}
+
+func previousMessagesAdapter(msg chat.Hub) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		chat.PreviousMessages(msg, c.Writer, c.Request)
+	}
 }
