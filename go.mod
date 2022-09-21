@@ -5,11 +5,9 @@ go 1.18
 require (
 	firebase.google.com/go/v4 v4.8.0
 	github.com/adonese/crypto v1.1.0
-	github.com/adonese/tokenization v0.0.2
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
-	github.com/getsentry/sentry-go v0.13.0
 	github.com/gin-contrib/multitemplate v0.0.0-20220705015713-e21a0ba39de3
 	github.com/gin-gonic/gin v1.8.1
 	github.com/go-playground/validator/v10 v10.11.0
@@ -19,7 +17,7 @@ require (
 	github.com/noebs/ipin v0.0.0-20210301180224-78c1bef582f2
 	github.com/prometheus/client_golang v1.13.0
 	github.com/sirupsen/logrus v1.9.0
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	github.com/tutipay/ws v0.0.8
 	github.com/zsais/go-gin-prometheus v0.1.0
 	golang.org/x/crypto v0.0.0-20220817201139-bc19a97f63c8
 	gorm.io/driver/sqlite v1.3.6
@@ -37,9 +35,7 @@ require (
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.1.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.5.1 // indirect
-	github.com/googleapis/go-type-adapters v1.0.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/tutipay/ws v0.0.5 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20220822191816-0ebed06d0094 // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
@@ -74,7 +70,6 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
-	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/ugorji/go/codec v1.2.7 // indirect
 	github.com/yuin/gopher-lua v0.0.0-20220504180219-658193537a64 // indirect
 	golang.org/x/net v0.0.0-20220822230855-b0a4917ee28c // indirect

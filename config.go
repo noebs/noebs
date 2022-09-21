@@ -73,7 +73,7 @@ func GetMainEngine() *gin.Engine {
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", merchantServices.EBS)
 	route.GET("/ws", wsAdapter(hub))
-	route.POST("/chat/previous", previousMessagesAdapter(hub))
+	route.GET("/chat/previous", previousMessagesAdapter(hub))
 	route.Use(gateway.OptionsMiddleware)
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
 	route.LoadHTMLGlob("./dashboard/template/*")
@@ -202,8 +202,12 @@ func init() {
 	// 	// We recommend adjusting this value in production,
 	// 	TracesSampleRate: 1.0,
 	// })
+	chatDb, err := chat.OpenDb("test.db")
+	if err != nil {
+		logrusLogger.Printf("The final config file is: %#v", err)
+	}
 
-	hub = *chat.NewHub(nil)
+	hub = *chat.NewHub(chatDb)
 
 	firebaseApp, err := getFirebase()
 	// gorm debug-level logger
