@@ -59,6 +59,10 @@ func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 		return db
 	}).First(&user, "mobile = ?", mobile)
 	user.db = db
+
+	if len(user.Cards) == 0 {
+		return nil, errors.New("empty records")
+	}
 	return &user, result.Error
 }
 

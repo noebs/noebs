@@ -66,7 +66,7 @@ func (s *Service) GetCards(c *gin.Context) {
 			"error":   "unable to get results from redis",
 			"message": err.Error(),
 		}).Info("unable to get results from redis")
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "error in redis"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "empty record"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
