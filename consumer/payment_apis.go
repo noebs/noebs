@@ -325,6 +325,7 @@ func (s *Service) GetBills(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
 		fields.ConsumerCardHolderFields.ExpDate = ipinBlock
+
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
