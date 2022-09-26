@@ -92,6 +92,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v7"
 	"github.com/google/uuid"
+	"github.com/noebs/ipin"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -286,6 +287,67 @@ func (s *Service) BillPayment(c *gin.Context) {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+	}
+}
+
+func (s *Service) GetBills(c *gin.Context) {
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var f = ebs_fields.ConsumersBillersFields{}
+	bindingErr := c.ShouldBindBodyWith(&f, binding.JSON)
+	switch bindingErr := bindingErr.(type) {
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+		for _, err := range bindingErr {
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+	case nil:
+		uid, _ := uuid.NewRandom()
+		var fields ebs_fields.ConsumerBillInquiryFields
+		fields.ConsumersBillersFields = f
+		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPIN
+		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
+		fields.UUID = uid.String()
+
+		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
+		if err != nil {
+			s.Logger.Printf("error in encryption: %v", err)
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+		}
+		fields.ConsumerCardHolderFields.ExpDate = ipinBlock
+		jsonBuffer, err := json.Marshal(f)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		// mask the pan
+		res.MaskPAN()
+		res.Name = s.ToDatabasename(url)
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"error":   "unable to migrate purchase model",
+				"message": err,
+			}).Info("error in migrating purchase model")
+		}
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res, "due_amount": parseDueAmounts(fields.PayeeId, res.BillInfo)})
+		}
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}

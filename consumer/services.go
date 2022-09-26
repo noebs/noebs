@@ -342,3 +342,26 @@ func (s *Service) pubSub(channel string, message interface{}) {
 		fmt.Println(msg.Channel, msg.Payload)
 	}
 }
+
+func parseDueAmounts(payeeId string, paymentInfo map[string]any) string {
+	switch payeeId {
+	case "0010010002": // zain
+		return paymentInfo["totalAmount"].(string) // FIXME(adonese): Zain also has an `unbilledAmount` field like mtn but we are using totalAmount here just for testing
+	case "0010010004": // mtn
+		return paymentInfo["unbilledAmount"].(string) // FIXME(adonese): This doesn't seem to be correct..
+	case "0010010006": //sudani
+		return paymentInfo["billAmount"].(string)
+	case "0055555555": // e-invoice
+		return paymentInfo["amount_due"].(string)
+	case "0010030002": // mohe
+	case "0010030004": // mohe-arab
+		return paymentInfo["dueAmount"].(string)
+	case "0010030003": // Customs
+		return paymentInfo["AmountToBePaid"].(string)
+	case "0010050001": // e-15
+		return paymentInfo["TotalAmount"].(string)
+	default:
+		return ""
+	}
+	return ""
+}

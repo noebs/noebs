@@ -130,6 +130,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/status", consumerService.TransactionStatus)
 		cons.POST("/is_alive", consumerService.IsAlive)
 		cons.POST("/bill_payment", consumerService.BillPayment)
+		cons.POST("/bills", consumerService.GetBills)
 		cons.POST("/bill_inquiry", consumerService.BillInquiry)
 		cons.POST("/p2p", consumerService.CardTransfer)
 		cons.POST("/cashIn", consumerService.CashIn)
@@ -167,7 +168,6 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/add_card", consumerService.AddCards)
 		cons.PUT("/edit_card", consumerService.EditCard)
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
-
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 		cons.GET("/payment_token/", consumerService.GetPaymentToken)

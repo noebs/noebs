@@ -3,13 +3,7 @@ package consumer
 import (
 	"reflect"
 	"testing"
-
-	"github.com/adonese/noebs/utils"
-	"github.com/alicebob/miniredis"
 )
-
-var mr, _ = miniredis.Run()
-var mockRedis = utils.GetRedisClient(mr.Addr())
 
 func Test_newFromBytes(t *testing.T) {
 	type args struct {

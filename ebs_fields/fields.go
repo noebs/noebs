@@ -469,6 +469,10 @@ type ConsumerBillInquiryFields struct {
 	ConsumerCardHolderFields
 }
 
+func (c *ConsumerBillInquiryFields) PopulateFields() {
+
+}
+
 type ConsumerTransactionStatusFields struct {
 	ConsumerCommonFields
 	OriginalTranUUID string `json:"originalTranUUID" form:"originalTranUUID" binding:"required"`
@@ -901,6 +905,14 @@ type NoebsConfig struct {
 	MerchantProdID string `json:"merchant_prod_id"` // EBS client ID for pos and merchant services (prod)
 
 	EBSIPINUsername string `json:"ipin_username"`
+
+	// Bill inquiry specific hard-coded card holder information
+	// We highly don't recommend to store data, but this can be an exception
+	BillInquiryPAN     string `json:"pan"`
+	BillInquiryPIN     string `json:"pin"`
+	BillInquiryIPIN    string `json:"ipin"`
+	BillInquiryExpDate string `json:"exp_date"`
+	EBSConsumerKey     string `json:"pub_key"`
 }
 
 func (n *NoebsConfig) Defaults() {
