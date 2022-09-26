@@ -299,8 +299,8 @@ func (s *Service) GetBills(c *gin.Context) {
 	// marshal the request
 	// fuck. This shouldn't be here at all.
 
-	var f = ebs_fields.ConsumersBillersFields{}
-	bindingErr := c.ShouldBindBodyWith(&f, binding.JSON)
+	var b bills
+	bindingErr := c.ShouldBindBodyWith(&b, binding.JSON)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -312,19 +312,20 @@ func (s *Service) GetBills(c *gin.Context) {
 	case nil:
 		uid, _ := uuid.NewRandom()
 		var fields ebs_fields.ConsumerBillInquiryFields
-		fields.ConsumersBillersFields = f
 		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPIN
 		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.UUID = uid.String()
 
+		updatePaymentInfo(&fields, b)
+		fields.PayeeId = b.PayeeID
 		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
 		if err != nil {
 			s.Logger.Printf("error in encryption: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
 		fields.ConsumerCardHolderFields.ExpDate = ipinBlock
-		jsonBuffer, err := json.Marshal(f)
+		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}

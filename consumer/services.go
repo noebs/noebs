@@ -343,6 +343,45 @@ func (s *Service) pubSub(channel string, message interface{}) {
 	}
 }
 
+func updatePaymentInfo(ebsBills *ebs_fields.ConsumerBillInquiryFields, b bills) {
+	switch b.PayeeID {
+	case "0010010002": // zain
+	case "0010010004": // mtn
+	case "0010010006": //sudani
+		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
+	case "0055555555": // e-invoice
+		// ("customerBillerRef="
+		ebsBills.PaymentInfo = "customerBillerRef=" + b.Ref
+	case "0010030002": // mohe
+		// "SETNUMBER=$seatNumber/STUDCOURSEID=${id.courseID}/STUDFORMKIND=${type.id}"
+		ebsBills.PaymentInfo = fmt.Sprintf("SETNUMBER=%s/STUDCOURSEID=%s/STUDFORMKIND=%s", b.SeatNumber, b.CourseID, b.FormKind)
+	case "0010030004": // mohe-arab
+		// "STUCNAME=$name/STUCPHONE=$phone/STUDCOURSEID=${id.courseID}/STUDFORMKIND=${type.id}"
+		ebsBills.PaymentInfo = fmt.Sprintf("STUCNAME=%s/STUCPHONE=%s/STUDCOURSEID=%s/STUDFORMKIND=%s", b.Name, b.Phone, b.CourseID, b.FormKind)
+	case "0010030003": // Customs
+		// return "BANKCODE=$bank/DECLARANTCODE=$id"
+		ebsBills.PaymentInfo = "BANKCODE=$bank/DECLARANTCODE=" + ebsBills.PaymentInfo
+	case "0010050001": // e-15
+		// return "SERVICEID=$id/INVOICENUMBER=$invoice/PHONENUMBER=$p"
+		ebsBills.PaymentInfo = fmt.Sprintf("SERVICEID=%s/INVOICENUMBER=%s/PHONENUMBER=%s", b.ServiceID, b.InvoiceNumber, b.Phone)
+	}
+}
+
+// bills represents a json object for all of ebs bills
+type bills struct {
+	Phone         string `json:"phone"`
+	Ref           string `json:"ref"`
+	SeatNumber    string `json:"seat_number"`
+	CourseID      string `json:"course_id"`
+	FormKind      string `json:"form_kind"`
+	Name          string `json:"name"`
+	Bank          string `json:"bank"`
+	DeclarantCode string `json:"code"`
+	InvoiceNumber string `json:"invoice"`
+	PayeeID       string `json:"payee_id"`
+	ServiceID     string `json:"service_id"`
+}
+
 func parseDueAmounts(payeeId string, paymentInfo map[string]any) string {
 	switch payeeId {
 	case "0010010002": // zain
