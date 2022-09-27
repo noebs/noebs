@@ -376,7 +376,7 @@ type bills struct {
 	FormKind      string `json:"form_kind"`
 	Name          string `json:"name"`
 	Bank          string `json:"bank"`
-	DeclarantCode string `json:"code"`
+	DeclarantCode string `json:"declarant_code"` // declarant code
 	InvoiceNumber string `json:"invoice"`
 	PayeeID       string `json:"payee_id"`
 	ServiceID     string `json:"service_id"`
