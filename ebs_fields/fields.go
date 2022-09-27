@@ -194,14 +194,14 @@ func (c *CommonFields) sendRequest(f []byte) {
 	panic("implement me!")
 }
 
-//CardInfoFields implements a payment card info
+// CardInfoFields implements a payment card info
 type CardInfoFields struct {
 	Pan     string `json:"PAN" binding:"required" form:"PAN"`
 	Pin     string `json:"PIN" binding:"required" form:"PIN"`
 	Expdate string `json:"expDate" binding:"required" form:"expDate"`
 }
 
-//AmountFields transaction amount data
+// AmountFields transaction amount data
 type AmountFields struct {
 	TranAmount       float32 `json:"tranAmount" binding:"required" form:"tranAmount"`
 	TranCurrencyCode string  `json:"tranCurrencyCode" form:"tranCurrencyCode"`
@@ -228,12 +228,12 @@ func iso8601(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
-//GenericEBSResponseFields represent EBS response
+// GenericEBSResponseFields represent EBS response
 type GenericEBSResponseFields struct {
 	TerminalID             string  `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string  `json:"clientId,omitempty"`
-	PAN                    string  `json:"PAN,omitempty"`
+	PAN                    string  `json:"PAN,omitempty" gorm:"-"`
 	ServiceID              string  `json:"serviceId,omitempty"`
 	TranAmount             float32 `json:"tranAmount,omitempty"`
 	PhoneNumber            string  `json:"phoneNumber,omitempty"`
@@ -566,7 +566,7 @@ type EntityFields struct {
 	EntityGroup string `json:"entityGroup"` // defaults to 1
 }
 
-//ConsumerRegistrationFields the first step in card issuance
+// ConsumerRegistrationFields the first step in card issuance
 type ConsumerRegistrationFields struct {
 	ConsumerCommonFields
 	EntityFields
@@ -644,7 +644,7 @@ func (f *MerchantRegistrationFields) MustMarshal() []byte {
 	return d
 }
 
-//Merchant constructs ebs qualfied merchant
+// Merchant constructs ebs qualfied merchant
 type Merchant struct {
 	MerchantID           string `json:"merchant_id" form:"merchant_id" gorm:"index"`
 	MerchantName         string `json:"name" form:"name" binding:"required" gorm:"column:name"`
@@ -754,7 +754,7 @@ type ConsumrAccountTransferFields struct {
 	ToAccount string `json:"toAccount" binding:"required"`
 }
 
-//MustMarshal panics if not able to marshal repsonse
+// MustMarshal panics if not able to marshal repsonse
 func (p2p *ConsumerCardTransferFields) MustMarshal() []byte {
 	d, _ := json.Marshal(p2p)
 	return d
@@ -928,7 +928,7 @@ func (n *NoebsConfig) GetQR() string {
 	return n.QRIP
 }
 
-//FIXME(adonese): Why this function is not using the right configurations?
+// FIXME(adonese): Why this function is not using the right configurations?
 func (n *NoebsConfig) GetConsumerQA() string {
 	// return "https://10.139.2.200:8443/Consumer/"
 	if n.IsConsumerProd != nil && *n.IsConsumerProd {
