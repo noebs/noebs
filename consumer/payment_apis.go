@@ -312,8 +312,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	case nil:
 		uid, _ := uuid.NewRandom()
 		var fields ebs_fields.ConsumerBillInquiryFields
-		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPIN
-		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
+
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.UUID = uid.String()
 
@@ -324,7 +323,9 @@ func (s *Service) GetBills(c *gin.Context) {
 			s.Logger.Printf("error in encryption: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
-		fields.ConsumerCardHolderFields.ExpDate = ipinBlock
+		fields.ConsumerCardHolderFields.Ipin = ipinBlock
+		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
+		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
