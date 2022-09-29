@@ -326,6 +326,7 @@ func (s *Service) GetBills(c *gin.Context) {
 		fields.ConsumerCardHolderFields.Ipin = ipinBlock
 		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
 		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
+		fields.ConsumerCommonFields.TranDateTime = "300922001449"
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
