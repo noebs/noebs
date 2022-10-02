@@ -389,7 +389,7 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) string {
 	case "0010010002": // zain
 		return paymentInfo["totalAmount"].(string) // FIXME(adonese): Zain also has an `unbilledAmount` field like mtn but we are using totalAmount here just for testing
 	case "0010010004": // mtn
-		return paymentInfo["unbilledAmount"].(string) // FIXME(adonese): This doesn't seem to be correct..
+		return paymentInfo["BillAmount"].(string) // FIXME(adonese): This doesn't seem to be correct..
 	case "0010010006": //sudani
 		return paymentInfo["billAmount"].(string)
 	case "0055555555": // e-invoice
