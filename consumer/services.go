@@ -346,7 +346,9 @@ func (s *Service) pubSub(channel string, message interface{}) {
 func updatePaymentInfo(ebsBills *ebs_fields.ConsumerBillInquiryFields, b bills) {
 	switch b.PayeeID {
 	case "0010010002": // zain
+		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
 	case "0010010004": // mtn
+		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
 	case "0010010006": //sudani
 		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
 	case "0055555555": // e-invoice
