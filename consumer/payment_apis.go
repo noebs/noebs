@@ -315,7 +315,6 @@ func (s *Service) GetBills(c *gin.Context) {
 
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.UUID = uid.String()
-
 		updatePaymentInfo(&fields, b)
 		fields.PayeeId = b.PayeeID
 		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
@@ -327,7 +326,6 @@ func (s *Service) GetBills(c *gin.Context) {
 		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
 		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
 		fields.ConsumerCommonFields.TranDateTime = "300922001449"
-
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
