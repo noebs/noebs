@@ -404,18 +404,24 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (billAmounts, e
 		return b, nil
 	case "0010010006": //sudani
 		b.Amount = paymentInfo["billAmount"].(string)
+		b.DueAmount = paymentInfo["billAmount"].(string)
 		return b, nil
 	case "0055555555": // e-invoice
 		b.Amount = paymentInfo["amount_due"].(string)
+		b.DueAmount = paymentInfo["amount_due"].(string)
 		b.MinAmount = paymentInfo["minAmount"].(string)
 	case "0010030002": // mohe
 		b.Amount = paymentInfo["dueAmount"].(string)
+		b.DueAmount = paymentInfo["dueAmount"].(string)
 		return b, nil
 	case "0010030004": // mohe-arab
 		b.Amount = paymentInfo["dueAmount"].(string)
+		b.DueAmount = paymentInfo["dueAmount"].(string)
 		return b, nil
 	case "0010030003": // Customs
 		b.Amount = paymentInfo["AmountToBePaid"].(string)
+		b.DueAmount = paymentInfo["AmountToBePaid"].(string)
+
 		return b, nil
 	case "0010050001": // e-15
 		b.Amount = paymentInfo["TotalAmount"].(string)
