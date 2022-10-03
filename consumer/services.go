@@ -399,12 +399,17 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (billAmounts, e
 		b.PaidAmount = paymentInfo["billedAmount"].(string)
 		return b, nil // FIXME(adonese): Zain also has an `unbilledAmount` field like mtn but we are using totalAmount here just for testing
 	case "0010010004": // mtn
-		b.Amount = paymentInfo["total"].(string)
-		b.DueAmount = paymentInfo["total"].(string)
+		if t, ok := paymentInfo["total"].(string); ok {
+			b.Amount = t
+			b.DueAmount = t
+		}
 		return b, nil
 	case "0010010006": //sudani
-		b.Amount = paymentInfo["billAmount"].(string)
-		b.DueAmount = paymentInfo["billAmount"].(string)
+		if t, ok := paymentInfo["billAmount"].(string); ok {
+			b.Amount = t
+			b.DueAmount = t
+		}
+
 		return b, nil
 	case "0055555555": // e-invoice
 		b.Amount = paymentInfo["amount_due"].(string)
