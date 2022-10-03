@@ -3,10 +3,13 @@ package consumer
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -384,25 +387,59 @@ type bills struct {
 	ServiceID     string `json:"service_id"`
 }
 
-func parseDueAmounts(payeeId string, paymentInfo map[string]any) string {
+func parseDueAmounts(payeeId string, paymentInfo map[string]any) (billAmounts, error) {
+	var b billAmounts
+	if paymentInfo == nil {
+		return b, errors.New("not a biller")
+	}
 	switch payeeId {
 	case "0010010002": // zain
-		return paymentInfo["totalAmount"].(string) // FIXME(adonese): Zain also has an `unbilledAmount` field like mtn but we are using totalAmount here just for testing
+		b.Amount = paymentInfo["totalAmount"].(string)
+		b.DueAmount = paymentInfo["unbilledAmount"].(string)
+		b.PaidAmount = paymentInfo["billedAmount"].(string)
+		return b, nil // FIXME(adonese): Zain also has an `unbilledAmount` field like mtn but we are using totalAmount here just for testing
 	case "0010010004": // mtn
-		return paymentInfo["BillAmount"].(string) // FIXME(adonese): This doesn't seem to be correct..
+		b.Amount = paymentInfo["total"].(string)
+		b.DueAmount = paymentInfo["unbilledAmount"].(string)
+		return b, nil
 	case "0010010006": //sudani
-		return paymentInfo["billAmount"].(string)
+		b.Amount = paymentInfo["billAmount"].(string)
+		return b, nil
 	case "0055555555": // e-invoice
-		return paymentInfo["amount_due"].(string)
+		b.Amount = paymentInfo["amount_due"].(string)
+		b.MinAmount = paymentInfo["minAmount"].(string)
 	case "0010030002": // mohe
+		b.Amount = paymentInfo["dueAmount"].(string)
+		return b, nil
 	case "0010030004": // mohe-arab
-		return paymentInfo["dueAmount"].(string)
+		b.Amount = paymentInfo["dueAmount"].(string)
+		return b, nil
 	case "0010030003": // Customs
-		return paymentInfo["AmountToBePaid"].(string)
+		b.Amount = paymentInfo["AmountToBePaid"].(string)
+		return b, nil
 	case "0010050001": // e-15
-		return paymentInfo["TotalAmount"].(string)
+		b.Amount = paymentInfo["TotalAmount"].(string)
+		b.DueAmount = paymentInfo["DueAmount"].(string)
+		return b, nil
 	default:
-		return ""
+		return b, nil
 	}
-	return ""
+	return b, nil
+
+}
+
+type billAmounts struct {
+	Amount     string `json:"amount,omitempty"`
+	DueAmount  string `json:"due_amount,omitempty"`
+	MinAmount  string `json:"min_amount"`
+	PaidAmount string `json:"paid_amount"`
+}
+
+func removeComma(amount string) string {
+	return strings.ReplaceAll(amount, ",", "")
+}
+
+func toInt(amount string) int {
+	d, _ := strconv.Atoi(amount)
+	return d
 }

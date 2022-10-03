@@ -344,11 +344,13 @@ func (s *Service) GetBills(c *gin.Context) {
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
-		if ebsErr != nil {
+		due, err := parseDueAmounts(fields.PayeeId, res.BillInfo)
+		if ebsErr != nil || err != nil {
+			// it fails gracefully here..
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res, "due_amount": parseDueAmounts(fields.PayeeId, res.BillInfo)})
+			c.JSON(code, gin.H{"ebs_response": res, "due_amount": due})
 		}
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
