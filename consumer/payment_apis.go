@@ -352,7 +352,8 @@ func (s *Service) GetBills(c *gin.Context) {
 		} else {
 			due, err := parseDueAmounts(fields.PayeeId, res.BillInfo)
 			if err != nil {
-				payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+				// hardcoded
+				payload := ebs_fields.ErrorDetails{Code: 502, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 				c.JSON(code, payload)
 				return
 			}
