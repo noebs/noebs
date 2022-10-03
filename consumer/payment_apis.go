@@ -354,7 +354,7 @@ func (s *Service) GetBills(c *gin.Context) {
 			if err != nil {
 				// hardcoded
 				payload := ebs_fields.ErrorDetails{Code: 502, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-				c.JSON(code, payload)
+				c.JSON(502, payload)
 				return
 			}
 			c.JSON(code, gin.H{"ebs_response": res, "due_amount": due})
