@@ -402,30 +402,38 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (billAmounts, e
 		if t, ok := paymentInfo["total"].(string); ok {
 			b.Amount = t
 			b.DueAmount = t
+			return b, nil
 		}
-		return b, nil
+		return b, errors.New("not a biller")
+
 	case "0010010006": //sudani
 		if t, ok := paymentInfo["billAmount"].(string); ok {
 			b.Amount = t
 			b.DueAmount = t
 		}
-
 		return b, nil
 	case "0055555555": // e-invoice
-		b.Amount = paymentInfo["amount_due"].(string)
-		b.DueAmount = paymentInfo["amount_due"].(string)
+		if t, ok := paymentInfo["amount_due"].(string); ok {
+			b.Amount = t
+			b.DueAmount = t
+		}
 		b.MinAmount = paymentInfo["minAmount"].(string)
 	case "0010030002": // mohe
-		b.Amount = paymentInfo["dueAmount"].(string)
-		b.DueAmount = paymentInfo["dueAmount"].(string)
+		if t, ok := paymentInfo["dueAmount"].(string); ok {
+			b.Amount = t
+			b.DueAmount = t
+		}
 		return b, nil
 	case "0010030004": // mohe-arab
-		b.Amount = paymentInfo["dueAmount"].(string)
-		b.DueAmount = paymentInfo["dueAmount"].(string)
-		return b, nil
+		if t, ok := paymentInfo["dueAmount"].(string); ok {
+			b.Amount = t
+			b.DueAmount = t
+		}
 	case "0010030003": // Customs
-		b.Amount = paymentInfo["AmountToBePaid"].(string)
-		b.DueAmount = paymentInfo["AmountToBePaid"].(string)
+		if t, ok := paymentInfo["AmountToBePaid"].(string); ok {
+			b.Amount = t
+			b.DueAmount = t
+		}
 		return b, nil
 	case "0010050001": // e-15
 		b.Amount = paymentInfo["TotalAmount"].(string)
