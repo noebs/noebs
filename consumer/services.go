@@ -466,6 +466,7 @@ func (s *Service) billerID(mobile string) (string, error) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b bills
 	b.PayeeID = guessMobile(mobile)
+	b.Phone = mobile
 	uid, _ := uuid.NewRandom()
 	var fields ebs_fields.ConsumerBillInquiryFields
 	fields.ApplicationId = s.NoebsConfig.ConsumerID
