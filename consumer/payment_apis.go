@@ -326,6 +326,12 @@ func (s *Service) GetBills(c *gin.Context) {
 		fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
 		fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
 		fields.ConsumerCommonFields.TranDateTime = "300922001449"
+
+		cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
+		// Get our cache results before hand
+		if oldCache, err := ebs_fields.GetBillerInfo(b.Phone, s.Db); err == nil { // we have stored this phone number before
+			fields.PayeeId = oldCache.BillerID // use the data we stored previously
+		}
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -347,17 +353,21 @@ func (s *Service) GetBills(c *gin.Context) {
 
 		if ebsErr != nil {
 			// it fails gracefully here..
+			cacheBills.Save(s.Db, true)
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			due, err := parseDueAmounts(fields.PayeeId, res.BillInfo)
 			if err != nil {
 				// hardcoded
+				cacheBills.Save(s.Db, true)
 				payload := ebs_fields.ErrorDetails{Code: 502, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 				c.JSON(502, payload)
+
 				return
 			}
 			c.JSON(code, gin.H{"ebs_response": res, "due_amount": due})
+			cacheBills.Save(s.Db, false)
 		}
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})

@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type IsAliveFields struct {
@@ -948,4 +949,51 @@ func (q QuickPaymentFields) MarshallP2pFields() []byte {
 	}
 	data, _ := json.Marshal(&d)
 	return data
+}
+
+type CacheBillers struct {
+	Mobile   string `gorm:"primaryKey"`
+	BillerID string
+}
+
+func (c CacheBillers) Save(db *gorm.DB, flipBiller bool) error {
+	newId := c.BillerID
+	if flipBiller {
+		switch c.BillerID {
+		case "0010010002": // zain bill payment
+			newId = "0010010001" // zain top up
+		case "0010010001":
+			newId = "0010010002"
+		case "0010010004": // mtn bill payment
+			newId = "0010010003" // mtn top up
+		case "0010010003":
+			newId = "0010010004"
+		case "0010010006": // sudani bill payment
+			newId = "0010010005" // sudani top up
+		case "0010010005":
+			newId = "0010010006"
+		}
+		c.BillerID = newId
+	}
+	return db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "mobile"}}, DoUpdates: clause.Assignments(map[string]any{"biller_id": c.BillerID}),
+	}).Create(&c).Error
+}
+
+func GetBillerInfo(mobile string, db *gorm.DB) (CacheBillers, error) {
+	c := CacheBillers{Mobile: mobile}
+	res := db.First(&c)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		return c, res.Error
+	}
+	return c, nil
+}
+
+func UpdateBiller(mobile, biller string, db *gorm.DB) (CacheBillers, error) {
+	c := CacheBillers{Mobile: mobile}
+	res := db.Model(&c).Where("mobile = ?", mobile).Update("biller_id", biller)
+	if res.Error != nil {
+		return c, res.Error
+	}
+	return c, nil
 }

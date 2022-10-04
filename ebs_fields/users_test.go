@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var db, err = gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
+var testDB, err = gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
 
 func TestPaymentToken_UpsertTransaction(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
@@ -62,7 +62,7 @@ func TestGetTokenByUUID(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"Test_to_card", args{"015b88da-1203-4a69-a3ef-e447b6df4ccc", "0912141665", db}, "working", false},
+		{"Test_to_card", args{"015b88da-1203-4a69-a3ef-e447b6df4ccc", "0912141665", testDB}, "working", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -91,7 +91,7 @@ func TestCard_UpdateCard(t *testing.T) {
 		args args
 		want string
 	}{
-		{"update card", args{card: Card{CardIdx: "1111", Expiry: "1234", UserID: 1}, db: db, expiry: "6969"}, "1234"},
+		{"update card", args{card: Card{CardIdx: "1111", Expiry: "1234", UserID: 1}, db: testDB, expiry: "6969"}, "1234"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestDeleteCard(t *testing.T) {
 		args args
 		want string
 	}{
-		{"delete card", args{card: Card{CardIdx: "1111", Expiry: "1234", UserID: 1}, db: db, expiry: "6969"}, "1234"},
+		{"delete card", args{card: Card{CardIdx: "1111", Expiry: "1234", UserID: 1}, db: testDB, expiry: "6969"}, "1234"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestGetTokenWithResult(t *testing.T) {
 		want    PaymentToken
 		wantErr bool
 	}{
-		{"Test_to_card", args{"015b88da-1203-4a69-a3ef-e447b6df4ccc", db}, PaymentToken{}, false},
+		{"Test_to_card", args{"015b88da-1203-4a69-a3ef-e447b6df4ccc", testDB}, PaymentToken{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"reflect"
 	"testing"
+
+	"gorm.io/gorm"
 )
 
 func Test_isEBS(t *testing.T) {
@@ -106,70 +108,7 @@ func TestMinistatementDB_Scan(t *testing.T) {
 
 func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 	type fields struct {
-		TerminalID               string
-		SystemTraceAuditNumber   int
-		ClientID                 string
-		PAN                      string
-		ServiceID                string
-		TranAmount               float32
-		PhoneNumber              string
-		FromAccount              string
-		ToAccount                string
-		FromCard                 string
-		ToCard                   string
-		OTP                      string
-		OTPID                    string
-		TranCurrencyCode         string
-		EBSServiceName           string
-		WorkingKey               string
-		PayeeID                  string
-		PubKeyValue              string
-		UUID                     string
-		ResponseMessage          string
-		ResponseStatus           string
-		ResponseCode             int
-		ReferenceNumber          string
-		ApprovalCode             string
-		VoucherNumber            string
-		VoucherCode              string
-		MiniStatementRecords     MinistatementDB
-		DisputeRRN               string
-		AdditionalData           string
-		TranDateTime             string
-		TranFee                  *float32
-		AdditionalAmount         *float32
-		AcqTranFee               *float32
-		IssTranFee               *float32
-		TranCurrency             string
-		MerchantID               string
-		GeneratedQR              string
-		Bank                     string
-		Name                     string
-		CardType                 string
-		LastPAN                  string
-		TransactionID            string
-		CheckDuplicate           string
-		AuthenticationType       string
-		AccountCurrency          string
-		ToAccountType            string
-		FromAccountType          string
-		EntityID                 string
-		EntityType               string
-		Username                 string
-		DynamicFees              float64
-		QRCode                   string
-		ExpDate                  string
-		FinancialInstitutionID   string
-		CreationDate             string
-		PanCategory              string
-		EntityGroup              string
-		MerchantAccountType      string
-		MerchantAccountReference string
-		MerchantName             string
-		MerchantCity             string
-		MobileNo                 string
-		MerchantCategoryCode     string
-		PostalCode               string
+		PAN string
 	}
 	tests := []struct {
 		name   string
@@ -185,6 +124,93 @@ func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 			res.MaskPAN()
 			if res.PAN != tt.result {
 				t.Errorf("PAN Masking failed: Expected %s, got %s", tt.result, res.PAN)
+			}
+		})
+	}
+}
+
+func TestCacheBillers_Save(t *testing.T) {
+
+	testDB.AutoMigrate(&CacheBillers{})
+
+	type fields struct {
+		Mobile   string
+		BillerID string
+	}
+	type args struct {
+		db *gorm.DB
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{"test saving phone number", fields{Mobile: "0912141679", BillerID: "0010010004"}, args{testDB}, true},
+		{"test saving phone number", fields{Mobile: "0912141655", BillerID: "0010010004"}, args{testDB}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := CacheBillers{
+				Mobile:   tt.fields.Mobile,
+				BillerID: tt.fields.BillerID,
+			}
+			if err := c.Save(tt.args.db, false); (err != nil) != tt.wantErr {
+				t.Errorf("CacheBillers.Save() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGetBillerInfo(t *testing.T) {
+	type args struct {
+		mobile string
+		db     *gorm.DB
+	}
+	tests := []struct {
+		name string
+		args args
+		want CacheBillers
+	}{
+		{name: "test saving phone number", args: args{mobile: "0912141679", db: testDB}, want: CacheBillers{BillerID: "0010010002"}},
+		{name: "err phone no", args: args{mobile: "0912141679", db: testDB}, want: CacheBillers{BillerID: "0010010005"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetBillerInfo(tt.args.mobile, tt.args.db)
+			if err != nil {
+				t.Errorf("the error is: %v", err)
+			}
+			if !reflect.DeepEqual(got.BillerID, tt.want.BillerID) {
+				t.Errorf("GetBillerInfo() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestUpdateBiller(t *testing.T) {
+	type args struct {
+		mobile string
+		biller string
+		db     *gorm.DB
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    CacheBillers
+		wantErr bool
+	}{
+		{"test update", args{mobile: "0912141679", biller: "000111222", db: testDB}, CacheBillers{}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := UpdateBiller(tt.args.mobile, tt.args.biller, tt.args.db)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UpdateBiller() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("UpdateBiller() = %v, want %v", got, tt.want)
 			}
 		})
 	}
