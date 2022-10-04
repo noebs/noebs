@@ -130,24 +130,24 @@ func TestGenericEBSResponseFields_MaskPAN(t *testing.T) {
 }
 
 func TestCacheBillers_Save(t *testing.T) {
-
 	testDB.AutoMigrate(&CacheBillers{})
-
 	type fields struct {
 		Mobile   string
 		BillerID string
 	}
 	type args struct {
-		db *gorm.DB
+		db   *gorm.DB
+		flip bool
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
+		name   string
+		fields fields
+		args   args
+		want   string
 	}{
-		{"test saving phone number", fields{Mobile: "0912141679", BillerID: "0010010004"}, args{testDB}, true},
-		{"test saving phone number", fields{Mobile: "0912141655", BillerID: "0010010004"}, args{testDB}, true},
+		{"test saving phone number", fields{Mobile: "0912141679", BillerID: "0010010004"}, args{testDB, false}, "0010010004"},
+		{"test saving phone number", fields{Mobile: "0912141655", BillerID: "0010010004"}, args{testDB, false}, "0010010004"},
+		{"test saving phone number", fields{Mobile: "01112345678", BillerID: "0010010002"}, args{testDB, true}, "0010010001"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -155,8 +155,8 @@ func TestCacheBillers_Save(t *testing.T) {
 				Mobile:   tt.fields.Mobile,
 				BillerID: tt.fields.BillerID,
 			}
-			if err := c.Save(tt.args.db, false); (err != nil) != tt.wantErr {
-				t.Errorf("CacheBillers.Save() error = %v, wantErr %v", err, tt.wantErr)
+			if err := c.Save(tt.args.db, tt.args.flip); (err == nil) && c.BillerID != tt.want {
+				t.Errorf("CacheBillers.Save() error = %v, wantErr %v", c.BillerID, tt.want)
 			}
 		})
 	}

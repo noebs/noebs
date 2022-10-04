@@ -131,6 +131,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/is_alive", consumerService.IsAlive)
 		cons.POST("/bill_payment", consumerService.BillPayment)
 		cons.POST("/bills", consumerService.GetBills)
+		cons.GET("/guess_biller", consumerService.GetBiller)
 		cons.POST("/bill_inquiry", consumerService.BillInquiry)
 		cons.POST("/p2p", consumerService.CardTransfer)
 		cons.POST("/cashIn", consumerService.CashIn)

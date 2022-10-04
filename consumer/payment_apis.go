@@ -293,12 +293,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 }
 
 func (s *Service) GetBills(c *gin.Context) {
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b bills
 	bindingErr := c.ShouldBindBodyWith(&b, binding.JSON)
 	switch bindingErr := bindingErr.(type) {
@@ -372,6 +367,26 @@ func (s *Service) GetBills(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
+}
+
+//BillerID retrieves a billerID from noebs and performs an ebs request
+// if a phone number doesn't exist in our system
+func (s *Service) GetBiller(c *gin.Context) {
+	var mobile string
+	mobile, _ = c.GetQuery("mobile")
+	if mobile == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "empty_mobile", "code": "empty_mobile"})
+		return
+	}
+	guessed, err := ebs_fields.GetBillerInfo(mobile, s.Db)
+	if err != nil {
+		// we don't know about this
+		// what if we go CRAZY here and launch a new request to EBS!
+		c.JSON(http.StatusBadRequest, gin.H{"message": "no record", "code": "empty_mobile"})
+		go s.billerID(mobile) // we are launching a go routine here to update this query for future reference
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"biller_id": guessed.BillerID})
 }
 
 // BillInquiry for telecos, utility and government (billers inquiries)

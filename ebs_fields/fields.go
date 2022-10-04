@@ -956,7 +956,7 @@ type CacheBillers struct {
 	BillerID string
 }
 
-func (c CacheBillers) Save(db *gorm.DB, flipBiller bool) error {
+func (c *CacheBillers) Save(db *gorm.DB, flipBiller bool) error {
 	newId := c.BillerID
 	if flipBiller {
 		switch c.BillerID {

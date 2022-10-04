@@ -461,3 +461,69 @@ func toInt(amount string) int {
 	d, _ := strconv.Atoi(amount)
 	return d
 }
+
+func (s *Service) billerID(mobile string) (string, error) {
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
+	var b bills
+	b.PayeeID = guessMobile(mobile)
+	uid, _ := uuid.NewRandom()
+	var fields ebs_fields.ConsumerBillInquiryFields
+	fields.ApplicationId = s.NoebsConfig.ConsumerID
+	fields.UUID = uid.String()
+	updatePaymentInfo(&fields, b)
+	fields.PayeeId = b.PayeeID
+	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
+	if err != nil {
+		s.Logger.Printf("error in encryption: %v", err)
+		return "", err
+	}
+	fields.ConsumerCardHolderFields.Ipin = ipinBlock
+	fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
+	fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
+	fields.ConsumerCommonFields.TranDateTime = "300922001449"
+	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
+	// Get our cache results before hand
+	if oldCache, err := ebs_fields.GetBillerInfo(b.Phone, s.Db); err == nil { // we have stored this phone number before
+		fields.PayeeId = oldCache.BillerID // use the data we stored previously
+	}
+	jsonBuffer, err := json.Marshal(fields)
+	if err != nil {
+		// there's an error in parsing the struct. Server error.
+		s.Logger.Printf("the error is: %v", err)
+		return "", err
+	}
+	// the only part left is fixing EBS errors. Formalizing them per se.
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+	// mask the pan
+	res.MaskPAN()
+	res.Name = s.ToDatabasename(url)
+	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"error":   "unable to migrate purchase model",
+			"message": err,
+		}).Info("error in migrating purchase model")
+	}
+	if ebsErr != nil {
+		// it fails gracefully here..
+		cacheBills.Save(s.Db, true)
+		return cacheBills.BillerID, nil
+	} else {
+		cacheBills.Save(s.Db, false)
+		return cacheBills.BillerID, nil
+	}
+}
+
+func guessMobile(mobile string) string {
+	if strings.HasPrefix("091", mobile) {
+		return "0010010002" // zain bills
+	} else if strings.HasPrefix("096", mobile) {
+		return "0010010002" // zain bills
+	} else if strings.HasPrefix("099", mobile) {
+		return "0010010004" // mtn bills
+	} else if strings.HasPrefix("092", mobile) {
+		return "0010010004" // mtn bills
+	} else {
+		return "0010010006" // sudani
+	}
+}
