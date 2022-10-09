@@ -198,7 +198,7 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
-			s.Logger.Info("refresh: auth username is: %s", claims.Mobile)
+			s.Logger.Info("refresh: auth username is: ", claims.Mobile)
 			user, _ := ebs_fields.NewUserByMobile(claims.Mobile, s.Db)
 			// should verify signature here...
 			if user.PublicKey == "" {

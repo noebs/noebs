@@ -30,3 +30,19 @@ func Test_validatePassword(t *testing.T) {
 		})
 	}
 }
+
+func Test_parseTime(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"parse time", "301112121212"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := parseTime(); got != tt.want {
+				t.Errorf("parseTime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
