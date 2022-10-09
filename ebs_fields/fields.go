@@ -964,10 +964,12 @@ func (c *CacheBillers) Save(db *gorm.DB, flipBiller bool) error {
 			newId = "0010010001" // zain top up
 		case "0010010001":
 			newId = "0010010002"
+
 		case "0010010004": // mtn bill payment
 			newId = "0010010003" // mtn top up
 		case "0010010003":
 			newId = "0010010004"
+
 		case "0010010006": // sudani bill payment
 			newId = "0010010005" // sudani top up
 		case "0010010005":
