@@ -597,6 +597,9 @@ type ConsumerCompleteRegistrationFields struct {
 	ExtraInfo        string `json:"extraInfo,omitempty"`
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
 	Password         string `json:"userPassword" binding:"required"`
+	// Those are noebs-specific fields and shouldn't go to EBS
+	NoebsPassword    string `json:"password,omitempty"`
+	Mobile           string `json:"mobile,omitempty"`
 }
 
 type ConsumerGenerateVoucherFields struct {

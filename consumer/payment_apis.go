@@ -1945,14 +1945,10 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
@@ -1964,17 +1960,22 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
+		// if no errors, then proceed to creating a new user
+		var user ebs_fields.User
+		user.Mobile = fields.Mobile
+		user.Password = fields.NoebsPassword
+		user.HashPassword()
+		user.SanitizeName()
+		s.Db.Create(&user)
+
+		fields.NoebsPassword = ""
+		fields.Mobile = ""
+
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		// mask the pan
-		// except for this api, don't mask the card!
-		// res.MaskPAN()
-
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
