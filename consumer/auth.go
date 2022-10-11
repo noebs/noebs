@@ -231,9 +231,6 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 //CreateUser to register a new user to noebs
 func (s *Service) CreateUser(c *gin.Context) {
 	u := ebs_fields.User{}
-	if s.Db == nil {
-		panic("wtf")
-	}
 	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
