@@ -125,6 +125,7 @@ func GetMainEngine() *gin.Engine {
 
 	{
 		cons.POST("/register", consumerService.CreateUser)
+		cons.POST("/register_with_card", consumerService.RegisterWithCard)
 		cons.POST("/refresh", consumerService.RefreshHandler)
 		cons.POST("/balance", consumerService.Balance)
 		cons.POST("/status", consumerService.TransactionStatus)
@@ -213,7 +214,9 @@ func init() {
 	firebaseApp, err := getFirebase()
 	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
-	database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{}, &ebs_fields.CacheBillers{})
+	if err := database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{}, &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}); err != nil {
+		logrusLogger.Fatalf("error in migration: %v", err)
+	}
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 
 	auth.Init()

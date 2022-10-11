@@ -294,11 +294,37 @@ func Decode(data string) (PaymentToken, error) {
 // Card represents a single card in noebs.
 type Card struct {
 	gorm.Model
-	Pan     string `json:"pan"`
+	Pan     string `json:"pan" gorm:"uniqueIndex"`
 	Expiry  string `json:"exp_date"`
 	Name    string `json:"name"`
 	IPIN    string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
 	UserID  uint
 	IsMain  bool   `json:"is_main" gorm:"default:false"`
 	CardIdx string `json:"card_index" gorm:"-:all"`
+	IsValid *bool  `json:"is_valid"`
+}
+
+type CacheCards struct {
+	gorm.Model
+	Pan     string `json:"pan" gorm:"uniqueIndex"`
+	Expiry  string `json:"exp_date"`
+	Name    string `json:"name"`
+	Mobile  string `json:"mobile" gorm:"-:all"`
+	IsValid *bool  `json:"is_valid"`
+}
+
+func (c CacheCards) OverrideField() string {
+	return "is_valid"
+}
+
+func (c CacheCards) GetPk() string {
+	return "pan"
+}
+
+func (c CacheCards) NewCardFromCached(id int) Card {
+	return Card{
+		Pan:    c.Pan,
+		Expiry: c.Expiry,
+		UserID: uint(id),
+	}
 }

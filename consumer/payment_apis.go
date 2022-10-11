@@ -361,6 +361,28 @@ func (s *Service) GetBills(c *gin.Context) {
 	}
 }
 
+func (s *Service) RegisterWithCard(c *gin.Context) {
+	var card ebs_fields.CacheCards
+	c.ShouldBindJSON(&card)
+	if ok, err := s.isValidCard(card); !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "not_valid_card"})
+		return
+	}
+
+	user := ebs_fields.User{Mobile: card.Mobile}
+	var userId int
+	if res := s.Db.Create(&user); res.Error == nil {
+		userId = int(res.RowsAffected)
+		user.ID = uint(userId)
+		ucard := card.NewCardFromCached(userId)
+		ucard.ID = 0
+		user.Cards = append(user.Cards, ucard)
+		user.UpsertCards([]ebs_fields.Card{ucard})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+}
+
 //BillerID retrieves a billerID from noebs and performs an ebs request
 // if a phone number doesn't exist in our system
 func (s *Service) GetBiller(c *gin.Context) {

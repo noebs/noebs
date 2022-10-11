@@ -462,6 +462,8 @@ func toInt(amount string) int {
 	return d
 }
 
+//billerID retrieves the type of a mobile number (the operator and the type with prepaid or postpaid) using
+// some heuristics -- it fallback to making a request to ebs as a last resort to get the type of phone number (by making a free transaction, that is bill inquiry)
 func (s *Service) billerID(mobile string) (string, error) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b bills
@@ -512,6 +514,66 @@ func (s *Service) billerID(mobile string) (string, error) {
 	} else {
 		cacheBills.Save(s.Db, false)
 		return cacheBills.BillerID, nil
+	}
+}
+
+//isValidCard checks noebs database first and fallback to making an actual payment request
+// to ensure that a card is actually valid
+func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
+	var dbCard ebs_fields.Card
+	if res := s.Db.Where("pan = ?", card.Pan).First(&dbCard); res.Error == nil {
+		if dbCard.IsValid != nil {
+			if *dbCard.IsValid {
+				return true, nil
+			}
+			return false, errors.New("invalid card")
+		}
+	}
+
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
+	var fields ebs_fields.ConsumerBalanceFields
+	uid, _ := uuid.NewRandom()
+	fields.UUID = uid.String()
+	fields.ConsumerCommonFields.TranDateTime = parseTime()
+	fields.ApplicationId = s.NoebsConfig.ConsumerID
+
+	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
+	if err != nil {
+		s.Logger.Printf("error in encryption: %v", err)
+		return false, err
+	}
+	fields.ConsumerCardHolderFields.Ipin = ipinBlock
+	fields.ConsumerCardHolderFields.Pan = card.Pan
+	fields.ConsumerCardHolderFields.ExpDate = card.Expiry
+
+	jsonBuffer, err := json.Marshal(fields)
+	if err != nil {
+		s.Logger.Printf("error in encryption: %v", err)
+		return false, err
+	}
+
+	// the only part left is fixing EBS errors. Formalizing them per se.
+	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+
+	if err := ebs_fields.SaveOrUpdates(s.Db, card, ebsErr == nil); err != nil {
+		s.Logger.Printf("error in encryption: %v", err)
+	}
+
+	// s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+	// mask the pan
+	res.MaskPAN()
+	res.Name = s.ToDatabasename(url)
+	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		logrus.WithFields(logrus.Fields{
+			"error":   "unable to migrate purchase model",
+			"message": err,
+		}).Info("error in migrating purchase model")
+	}
+	if ebsErr != nil {
+		s.Logger.Printf("error in encryption: %v", err)
+		return false, err
+	} else {
+		return true, nil
 	}
 }
 

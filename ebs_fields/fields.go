@@ -18,6 +18,13 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// NoebsDatabase is an interface that can be used throughout the codebase to make the process of many sql operations
+// more seamless
+type NoebsDatabase interface {
+	OverrideField() string
+	GetPk() string
+}
+
 type IsAliveFields struct {
 	CommonFields
 }
@@ -998,4 +1005,13 @@ func UpdateBiller(mobile, biller string, db *gorm.DB) (CacheBillers, error) {
 		return c, res.Error
 	}
 	return c, nil
+}
+
+// Saves or updates any type that implements noebsdatabase. Currently it works best when the case is to only update one field (flag in db e.g., is_valid)
+// In case of no conflicts, it writes to db directly
+func SaveOrUpdates(db *gorm.DB, entity NoebsDatabase, newVal any) error {
+	card := entity.(CacheCards)
+	return db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: entity.GetPk()}}, DoUpdates: clause.Assignments(map[string]any{entity.OverrideField(): newVal}),
+	}).Create(&card).Error
 }
