@@ -1962,11 +1962,15 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 
 		// if no errors, then proceed to creating a new user
 		var user ebs_fields.User
+		var userID int
 		user.Mobile = fields.Mobile
 		user.Password = fields.NoebsPassword
 		user.HashPassword()
 		user.SanitizeName()
-		s.Db.Create(&user)
+		if res := s.Db.Create(&user); res.Error == nil {
+			userID = int(res.RowsAffected)
+		}
+		user.ID = uint(userID)
 
 		fields.NoebsPassword = ""
 		fields.Mobile = ""
@@ -1989,7 +1993,15 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
+			// Associate the card to that user
+			// create a card here
+			card := ebs_fields.CacheCards{Pan: res.PAN, Expiry: res.ExpDate}
 
+			// now, it is better to store this card as a cached card
+			ebs_fields.SaveOrUpdates(s.Db, card, true)
+
+			// we associated the newly created card to its owner
+			user.UpsertCards([]ebs_fields.Card{card.NewCardFromCached(userID)})
 		}
 
 	default:
