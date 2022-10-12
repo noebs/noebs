@@ -598,8 +598,8 @@ type ConsumerCompleteRegistrationFields struct {
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
 	Password         string `json:"userPassword" binding:"required"`
 	// Those are noebs-specific fields and shouldn't go to EBS
-	NoebsPassword    string `json:"password,omitempty"`
-	Mobile           string `json:"mobile,omitempty"`
+	NoebsPassword string `json:"password,omitempty"`
+	Mobile        string `json:"mobile,omitempty"`
 }
 
 type ConsumerGenerateVoucherFields struct {
@@ -924,6 +924,10 @@ type NoebsConfig struct {
 	BillInquiryIPIN    string `json:"ipin"`
 	BillInquiryExpDate string `json:"exp_date"`
 	EBSConsumerKey     string `json:"pub_key"`
+
+	// server config
+	Cors    []string `json:"cors"`
+	IsDebug bool     `json:"is_debug"` // set as true if you want to have more debug options
 }
 
 func (n *NoebsConfig) Defaults() {

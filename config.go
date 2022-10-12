@@ -66,6 +66,9 @@ func verifyToken(f *firebase.App, token string) (string, error) {
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
 
+	if !noebsConfig.IsDebug {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	route := gin.Default()
 	instrument := gateway.Instrumentation()
 	route.Use(instrument)
@@ -74,7 +77,7 @@ func GetMainEngine() *gin.Engine {
 	route.POST("/ebs/*all", merchantServices.EBS)
 	route.GET("/ws", wsAdapter(hub))
 	route.GET("/chat/previous", previousMessagesAdapter(hub))
-	route.Use(gateway.OptionsMiddleware)
+	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
 	route.LoadHTMLGlob("./dashboard/template/*")
 	route.Static("/dashboard/assets", "./dashboard/template")

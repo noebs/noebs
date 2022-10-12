@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
@@ -57,18 +58,21 @@ func GenerateSecretKey(n int) ([]byte, error) {
 	return key, nil
 }
 
-//OptionsMiddleware for cors headers
-func OptionsMiddleware(c *gin.Context) {
-	if c.Request.Method != "OPTIONS" {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Next()
-	} else {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, X-CSRF-TOKEN")
-		c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		c.Header("Content-Type", "application/json")
-		c.AbortWithStatus(http.StatusOK)
+//NoebsCors reads from noebs config to setup cors headers for the server
+func NoebsCors(headers []string) func(c *gin.Context) {
+	cors := strings.Join(headers, ",")
+	return func(c *gin.Context) {
+		if c.Request.Method != "OPTIONS" {
+			c.Header("Access-Control-Allow-Origin", cors)
+			c.Next()
+		} else {
+			c.Header("Access-Control-Allow-Origin", cors)
+			c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, X-CSRF-TOKEN")
+			c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
+			c.Header("Content-Type", "application/json")
+			c.AbortWithStatus(http.StatusOK)
+		}
 	}
 }
 
