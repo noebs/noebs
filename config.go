@@ -76,7 +76,6 @@ func GetMainEngine() *gin.Engine {
 	route.HandleMethodNotAllowed = true
 	route.POST("/ebs/*all", merchantServices.EBS)
 	route.GET("/ws", wsAdapter(hub))
-	route.GET("/chat/previous", previousMessagesAdapter(hub))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
 	route.LoadHTMLGlob("./dashboard/template/*")
@@ -232,11 +231,5 @@ func init() {
 func wsAdapter(msg chat.Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		chat.ServeWs(&msg, c.Writer, c.Request)
-	}
-}
-
-func previousMessagesAdapter(msg chat.Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		chat.PreviousMessages(msg, c.Writer, c.Request)
 	}
 }
