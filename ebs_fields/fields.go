@@ -460,7 +460,7 @@ func (res *EBSResponse) MaskPAN() {
 }
 
 type ConsumerGenerateIPINFields struct {
-	Username     string `json:"userName" binding:"required"`
+	Username     string `json:"userName"`
 	TranDateTime string `json:"tranDateTime" binding:"required"`
 	UUID         string `json:"UUID" binding:"required"`
 }
@@ -790,7 +790,7 @@ func (f *ConsumerStatusFields) MustMarshal() []byte {
 
 type ConsumerGenerateIPin struct {
 	ConsumerGenerateIPINFields
-	Password     string `json:"password" binding:"required"`
+	Password     string `json:"password"`
 	Pan          string `json:"pan"`
 	MobileNumber string `json:"phoneNumber" binding:"required"`
 	Expdate      string `json:"expDate"`
@@ -903,6 +903,7 @@ type NoebsConfig struct {
 	MerchantIP string
 	IPINIp     string
 
+	// Those should be depricated they are confusing with no good use case
 	IPIN   string `json:"ipin_prod"`
 	IPINQA string `json:"ipin_qa"`
 
@@ -915,7 +916,9 @@ type NoebsConfig struct {
 	ConsumerProdID string `json:"consumer_prod_id"` // EBS application ID for mobile and card not present services prod)
 	MerchantProdID string `json:"merchant_prod_id"` // EBS client ID for pos and merchant services (prod)
 
+	// IPIN generation configs
 	EBSIPINUsername string `json:"ipin_username"`
+	EBSIPINPassword string `json:"ipin_password"`
 
 	// Bill inquiry specific hard-coded card holder information
 	// We highly don't recommend to store data, but this can be an exception
