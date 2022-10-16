@@ -1503,6 +1503,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
+			ipinKey = ""
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
@@ -1576,6 +1577,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
+			ipinKey = ""
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
