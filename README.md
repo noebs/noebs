@@ -44,7 +44,7 @@ We provide an easier way to build and run noebs using Docker.
 - Fork this repository (e.g., `git clone https://github.com/adonese/noebs`)
 - `cd` to noebs root directory (E.g., $HOME/src/noebs)
 - `docker build -t noebs .`  # -t for giving it a name
-- `docker run -it -p 8000:8000 noebs:latest`
+- `docker run -v /home/adonese/src/noebs:/database -p 8080:8080 -it noebs:latest` # This is recommended to mount the sqlite3 database
 - Open `localhost:8000/test` in your broswer to interact with noebs
 
 ## Notes on installation
