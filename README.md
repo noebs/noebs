@@ -130,3 +130,30 @@ I was trying to learn it for awhile and I never get to actually do something use
 I opted to the second one. Go is cool!
 - Commitment to this project?
 I'm very committed to this project.
+
+
+## Sample for .secrets
+
+```json
+{
+    "jwt_secret": "my_top_secret",
+    "db_path": "/database/test.db",
+    "is_consumer_prod": false,
+    "redis_port": "100.89.231.117:6379",
+    "sms_gateway": "endpoint",
+    "sms_key": "key==",
+    "sms_sender": "tutipay",
+    "sentry": "",
+    "port": ":8080",
+    "consumer_qa_id": "YourConsumerID",
+    "merchant_qa_id": "YourConsumerID",
+    "consumer_prod_id": "",
+    "merchant_prod_id": "",
+    "pan": "",
+    "exp_date": "",
+    "pin": "",
+    "ipin": "",
+    "cors": ["noebs.dev", "api.2t.sd", "staging.app.2t.sd", "beta.app.2t.sd"],
+    "is_debug": false
+}
+```
