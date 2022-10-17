@@ -182,12 +182,6 @@ func GetMainEngine() *gin.Engine {
 func init() {
 	var err error
 
-	// Initialize database
-	database, err = utils.Database("test.db")
-	if err != nil {
-		logrusLogger.Fatalf("error in connecting to db: %v", err)
-	}
-
 	logrusLogger.Level = logrus.DebugLevel
 	logrusLogger.SetReportCaller(true)
 
@@ -196,6 +190,17 @@ func init() {
 		logrusLogger.Printf("error in parsing file: %v", err)
 	}
 	noebsConfig.Defaults()
+	path := "test.db"
+	if noebsConfig.DatabasePath != "" {
+		path = noebsConfig.DatabasePath
+	}
+
+	// Initialize database
+	database, err = utils.Database(path)
+	if err != nil {
+		logrusLogger.Fatalf("error in connecting to db: %v", err)
+	}
+
 	logrusLogger.Printf("The final config file is: %#v", noebsConfig)
 
 	// Initialize sentry

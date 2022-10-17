@@ -1,15 +1,17 @@
-FROM golang:alpine 
+FROM golang:alpine
+
+COPY . /app
+
 
 # install git
 RUN apk update && apk add --no-cache git
 
 RUN apk add build-base
 
-ADD https://api.github.com/repos/adonese/noebs/git/refs/heads/master version.json
-RUN go get -u -v github.com/adonese/noebs
+WORKDIR /app
 
-RUN go install github.com/adonese/noebs
+RUN go build
 
-ENTRYPOINT /go/bin/noebs
+ENTRYPOINT /app/noebs
 
 EXPOSE 8080

@@ -883,6 +883,7 @@ type ValidationError struct {
 // [ebs_fields] package in the init method.
 type NoebsConfig struct {
 	OneSignal  string `json:"onesignal_key"`
+	DatabasePath string `json:"db_path"`
 	SMSAPIKey  string `json:"sms_key"`
 	SMSSender  string `json:"sms_sender"`
 	SMSGateway string `json:"sms_gateway"`
