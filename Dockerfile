@@ -4,7 +4,7 @@ COPY . /app
 
 
 # install git
-RUN apk update && apk add --no-cache git
+RUN apk update && apk add git
 
 RUN apk add build-base
 
