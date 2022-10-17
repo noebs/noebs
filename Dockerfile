@@ -2,7 +2,6 @@ FROM golang:alpine
 
 COPY . /app
 
-
 # install git
 RUN apk update && apk add git
 
