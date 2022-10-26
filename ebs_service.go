@@ -438,6 +438,7 @@ func Purchase(c *gin.Context) {
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
+			log.Printf("error is: request was: %+v, %+v", err, fields)
 			er := ebs_fields.ErrorDetails{Details: nil, Code: 400, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
 			c.AbortWithStatusJSON(400, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
