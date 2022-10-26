@@ -12,3 +12,5 @@ ebs_fields/.secrets.json
 __debug_bin
 test.db-*
 *.test.db*
+.secrets.json
+firebase-sdk.json

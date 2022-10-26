@@ -2,10 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/adonese/noebs/ebs_fields"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/adonese/noebs/ebs_fields"
 )
 
 func populatePurchaseFields(missing bool) ebs_fields.PurchaseFields {
@@ -16,8 +17,8 @@ func populatePurchaseFields(missing bool) ebs_fields.PurchaseFields {
 	// it should also respects each struct types
 	// lets test populating purchase fields
 	fields := ebs_fields.PurchaseFields{
-		populateWorkingKeyFields(), populateCardInfoFields(),
-		populateAmountFields(),
+		WorkingKeyFields: populateWorkingKeyFields(), CardInfoFields: populateCardInfoFields(),
+		AmountFields: populateAmountFields(),
 	}
 
 	if missing {
