@@ -20,6 +20,6 @@ func TestService_VerifyFirebase(t *testing.T) {
 	router := setupRouter()
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/firebase", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/firebase", nil)
 	router.ServeHTTP(w, req)
 }

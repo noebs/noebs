@@ -161,7 +161,14 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 		cons.POST("/login", consumerService.LoginHandler)
 		cons.POST("/change_password", consumerService.ChangePassword)
-		cons.POST("/otp/generate", consumerService.GenerateSignInCode)
+		cons.POST("/otp/generate",
+			gin.HandlerFunc(func(c *gin.Context) {
+				consumerService.GenerateSignInCode(c, false)
+			}))
+		cons.POST("/otp/generate_insecure",
+			gin.HandlerFunc(func(c *gin.Context) {
+				consumerService.GenerateSignInCode(c, true)
+			}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/verify_firebase", consumerService.VerifyFirebase)
 		cons.POST("/test", func(c *gin.Context) {

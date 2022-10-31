@@ -278,7 +278,7 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 }
 
 //GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
-func (s *Service) GenerateSignInCode(c *gin.Context) {
+func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	var req gateway.Token
 	c.ShouldBindWith(&req, binding.JSON)
 	// default username to mobile, in case username was not provided
@@ -292,7 +292,11 @@ func (s *Service) GenerateSignInCode(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
 		return
 	}
-	key, err := generateOtp(user.EncodePublickey())
+	secure := user.EncodePublickey()
+	if allowInsecure {
+		secure = s.NoebsConfig.JWTKey
+	}
+	key, err := generateOtp(secure)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
 		return
