@@ -2,15 +2,15 @@ package consumer
 
 import (
 	"context"
+	"encoding/base32"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
 	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
@@ -256,6 +256,40 @@ func (s *Service) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
+func (s *Service) VerifyOTPAndResetPassword(c *gin.Context) {
+	var req ebs_fields.User
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.OTP == "" {
+		s.Logger.Printf("The request is wrong. %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+		return
+	}
+	s.Logger.Printf("the processed request is: %v\n", req)
+	u := ebs_fields.User{}
+	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
+		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
+		return
+	}
+
+	if valid := totp.Validate(req.OTP, base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))); !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
+		return
+	}
+
+	// Create and update the user's password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), 8)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	if err := s.Db.Model(&u).Update("password", string(hashedPassword)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
+}
+
 //VerifyFirebase used to confirm that the user's token is valid
 func (s *Service) VerifyFirebase(c *gin.Context) {
 	var req ebs_fields.User
@@ -280,29 +314,35 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 //GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
 func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	var req gateway.Token
-	c.ShouldBindWith(&req, binding.JSON)
+	if err := c.MustBindWith(&req, binding.JSON); err != nil {
+		panic(err)
+	}
+	s.Logger.Printf("the req is: %+v", req)
 	// default username to mobile, in case username was not provided
 	if req.Mobile == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
 		return
 	}
 	user, _ := ebs_fields.NewUserByMobile(req.Mobile, s.Db)
-	if user.PublicKey == "" {
+	if user.PublicKey == "" && !allowInsecure {
 		// user has no public key
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "no pubkey was found", "code": "bad_request"})
 		return
 	}
 	secure := user.EncodePublickey()
 	if allowInsecure {
-		secure = s.NoebsConfig.JWTKey
+		secure = base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))
 	}
+	log.Printf("the code is: %s", secure)
 	key, err := generateOtp(secure)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
+	log.Printf("the key is: %s", key)
 	// this function doesn't have to be blocking.
-	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
+	// go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
+	s.Db.Model(&user).Update("is_password_otp", true)
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 

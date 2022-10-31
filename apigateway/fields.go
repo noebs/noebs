@@ -11,7 +11,7 @@ type Token struct {
 	JWT       string `json:"authorization"`
 	Signature string `json:"signature"`
 	Message   string `json:"message"`
-	Mobile    string `json:"mobile"`
+	Mobile    string `json:"mobile" binding:"required,len=10"`
 }
 
 type ErrorResponse struct {

@@ -170,6 +170,7 @@ func GetMainEngine() *gin.Engine {
 				consumerService.GenerateSignInCode(c, true)
 			}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
+		cons.POST("/otp/verify", consumerService.VerifyOTPAndResetPassword)
 		cons.POST("/verify_firebase", consumerService.VerifyFirebase)
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})

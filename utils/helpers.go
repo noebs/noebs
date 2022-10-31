@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-redis/redis/v7"
@@ -61,16 +62,17 @@ func Database(fname string) (*gorm.DB, error) {
 
 // SendSMS a generic function to send sms to any user
 func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
+	log.Printf("the message is: %+v", sms)
 	v := url.Values{}
 	v.Add("api_key", noebsConfig.SMSAPIKey)
-	v.Add(("action"), "send-sms")
 	v.Add("from", noebsConfig.SMSSender)
-	v.Add("numbers", sms.Mobile)
-	v.Add("message", sms.Message+"\n -tutipay")
+	v.Add("to", "249"+strings.TrimPrefix(sms.Mobile, "0"))
+	v.Add("sms", sms.Message+"\n\n~tutipay <3")
 	url := noebsConfig.SMSGateway + v.Encode()
+	log.Printf("the url is: %+v", url)
 	res, err := http.Get(url)
 	if err != nil {
-		log.Printf("The error is: %v", err)
+		log.Printf("The error is: %+v", err)
 		return err
 	}
 	log.Printf("The response body is: %v", res)
