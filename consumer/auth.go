@@ -224,11 +224,11 @@ func (s *Service) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
 }
 
-func (s *Service) VerifyOTPAndResetPassword(c *gin.Context) {
+func (s *Service) VerifyOTP(c *gin.Context) {
 	var req ebs_fields.User
-	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.OTP == "" {
-		s.Logger.Printf("The request is wrong. %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+	c.ShouldBindWith(&req, binding.JSON)
+	if req.OTP == "" || req.Mobile == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "otp was not sent", "code": "empty_otp"})
 		return
 	}
 	s.Logger.Printf("the processed request is: %v\n", req)
@@ -238,7 +238,7 @@ func (s *Service) VerifyOTPAndResetPassword(c *gin.Context) {
 		return
 	}
 
-	if valid := totp.Validate(req.OTP, base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))); !valid {
+	if valid := totp.Validate(req.OTP, base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey+req.Mobile))); !valid {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
 		return
 	}
@@ -362,9 +362,7 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 //GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
 func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	var req gateway.Token
-	if err := c.MustBindWith(&req, binding.JSON); err != nil {
-		panic(err)
-	}
+	c.ShouldBindWith(&req, binding.JSON)
 	s.Logger.Printf("the req is: %+v", req)
 	// default username to mobile, in case username was not provided
 	if req.Mobile == "" {
@@ -379,7 +377,7 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	}
 	secure := user.EncodePublickey()
 	if allowInsecure {
-		secure = base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))
+		secure = base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey + req.Mobile))
 	}
 	log.Printf("the code is: %s", secure)
 	key, err := generateOtp(secure)
