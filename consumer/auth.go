@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"encoding/base32"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -108,41 +109,6 @@ func (s *Service) LoginHandler(c *gin.Context) {
 	}
 	c.Writer.Header().Set("Authorization", token)
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
-}
-
-//ChangePassword used to change a user's password using their old one
-func (s *Service) ChangePassword(c *gin.Context) {
-	var req ebs_fields.User
-	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.NewPassword == "" {
-		s.Logger.Printf("The request is wrong. %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
-		return
-	}
-	s.Logger.Printf("the processed request is: %v\n", req)
-	u := ebs_fields.User{}
-	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		// service id is not found
-		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
-		return
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
-		return
-	}
-
-	// Create and update the user's password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 8)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
-	}
-	if err := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", u.Mobile).Update("password", string(hashedPassword)).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
 }
 
 //SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
@@ -266,7 +232,6 @@ func (s *Service) VerifyOTPAndResetPassword(c *gin.Context) {
 	s.Logger.Printf("the processed request is: %v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
@@ -275,14 +240,87 @@ func (s *Service) VerifyOTPAndResetPassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
 		return
 	}
+	s.Db.Model(&req).Update("is_password_otp", true)
 
-	// Create and update the user's password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), 8)
+	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
+}
+
+//BalanceStep part of our 2fa steps for account recovery
+func (s *Service) BalanceStep(c *gin.Context) {
+	// perform balance transaction
+	// if passes, then create a
+	mobile := c.GetString("mobile")
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
+
+	var req ebs_fields.ConsumerBalanceFields
+	c.ShouldBindWith(&req, binding.JSON)
+	user, err := ebs_fields.GetUserCards(mobile, s.Db)
+	var isMatched bool
+	for _, card := range user.Cards {
+		if req.Pan == card.Pan {
+			isMatched = true
+		}
+	}
+	if !isMatched {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "no matching card was found", "code": "card_not_matched"})
+		return
+	}
+
+	// make transaction to ebs here
+	jsonBuffer, err := json.Marshal(req)
+	if err != nil {
+		// there's an error in parsing the struct. Server error.
+		er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+		c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		return
+	}
+
+	// the only part left is fixing EBS errors. Formalizing them per se.
+	_, _, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	if ebsErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid credentials", "code": "transaction_failed"})
+		return
+	}
+
+	// generate a jwt here
+	token, err := s.Auth.GenerateJWT(mobile)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
-	if err := s.Db.Model(&u).Update("password", string(hashedPassword)).Error; err != nil {
+	c.Writer.Header().Set("Authorization", token)
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+
+}
+
+//ChangePassword used to change a user's password using their old one
+func (s *Service) ChangePassword(c *gin.Context) {
+	var req ebs_fields.User
+	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.NewPassword == "" {
+		s.Logger.Printf("The request is wrong. %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+		return
+	}
+	s.Logger.Printf("the processed request is: %v\n", req)
+	u := ebs_fields.User{}
+	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
+		// service id is not found
+		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
+		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
+		return
+	}
+
+	// Create and update the user's password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 8)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err)
+		return
+	}
+	if err := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", u.Mobile).Update("password", string(hashedPassword)).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, err)
 		return
 	}
@@ -342,7 +380,7 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	log.Printf("the key is: %s", key)
 	// this function doesn't have to be blocking.
 	// go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
-	s.Db.Model(&user).Update("is_password_otp", true)
+
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 
