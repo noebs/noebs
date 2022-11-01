@@ -171,13 +171,13 @@ func GetMainEngine() *gin.Engine {
 			}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/otp/verify", consumerService.VerifyOTPAndResetPassword)
-
+		cons.POST("/otp/balance", consumerService.BalanceStep)
 		cons.POST("/verify_firebase", consumerService.VerifyFirebase)
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
 		cons.Use(auth.AuthMiddleware())
-		cons.POST("/otp/balance", consumerService.BalanceStep)
+
 		cons.POST("/change_password", consumerService.ChangePassword)
 		cons.GET("/get_cards", consumerService.GetCards)
 		cons.POST("/add_card", consumerService.AddCards)

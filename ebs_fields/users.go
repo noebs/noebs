@@ -49,6 +49,19 @@ func NewUserByMobile(mobile string, db *gorm.DB) (User, error) {
 	return user, nil
 }
 
+func NewUserWithCards(mobile string, db *gorm.DB) (*User, error) {
+	var user User
+	// Get user model and preload Cards and order the model relation Cards.is_main
+	// This trick is really super important: it will allow us to get a user's main card
+	// with ease, without having to do a second fetch and then filter the main card
+	result := db.Model(&User{}).Preload("Cards", func(db *gorm.DB) *gorm.DB {
+		db = db.Order("is_main desc")
+		return db
+	}).First(&user, "mobile = ?", mobile)
+	user.db = db
+	return &user, result.Error
+}
+
 // NewUserByMobile Retrieves a user from the database by mobile (username)
 func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 	var user User

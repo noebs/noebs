@@ -247,15 +247,21 @@ func (s *Service) VerifyOTPAndResetPassword(c *gin.Context) {
 
 //BalanceStep part of our 2fa steps for account recovery
 func (s *Service) BalanceStep(c *gin.Context) {
-	// perform balance transaction
-	// if passes, then create a
-	mobile := c.GetString("mobile")
+
+	type data struct {
+		ebs_fields.ConsumerBalanceFields
+		Mobile string `json:"mobile,omitempty"`
+	}
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 
-	var req ebs_fields.ConsumerBalanceFields
+	var req data
 	c.ShouldBindWith(&req, binding.JSON)
-	user, err := ebs_fields.GetUserCards(mobile, s.Db)
+	user, _ := ebs_fields.NewUserWithCards(req.Mobile, s.Db)
 	var isMatched bool
+	if user.Cards == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "no matching card was found", "code": "card_not_matched"})
+		return
+	}
 	for _, card := range user.Cards {
 		if req.Pan == card.Pan {
 			isMatched = true
@@ -267,6 +273,8 @@ func (s *Service) BalanceStep(c *gin.Context) {
 	}
 
 	// make transaction to ebs here
+	mobile := req.Mobile
+	req.Mobile = ""
 	jsonBuffer, err := json.Marshal(req)
 	if err != nil {
 		// there's an error in parsing the struct. Server error.
