@@ -1660,7 +1660,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.PaymentToken
 	mobile := c.GetString("mobile")
-	user, err := ebs_fields.GetUserCards(mobile, s.Db)
+	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
 		return

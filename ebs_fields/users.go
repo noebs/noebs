@@ -26,6 +26,7 @@ type User struct {
 	OTP             string `json:"otp"`
 	SignedOTP       string `json:"signed_otp"`
 	PaymentTokens   []PaymentToken
+	Beneficiaries   []Beneficiary
 	db              *gorm.DB
 	Cards           []Card
 	FirebaseIDToken string `json:"firebase_token" gorm:"-"`
@@ -62,8 +63,18 @@ func NewUserWithCards(mobile string, db *gorm.DB) (*User, error) {
 	return &user, result.Error
 }
 
+func NewUserWithBeneficiaries(mobile string, db *gorm.DB) (*User, error) {
+	var user User
+	// Get user model and preload Beneficiaries and order the model relation
+	// This trick is really super important: it will allow us to get a user's main card
+	// with ease, without having to do a second fetch and then filter the main card
+	result := db.Model(&User{}).Preload("Beneficiaries").First(&user, "mobile = ?", mobile)
+	user.db = db
+	return &user, result.Error
+}
+
 // NewUserByMobile Retrieves a user from the database by mobile (username)
-func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
+func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main
 	// This trick is really super important: it will allow us to get a user's main card
@@ -73,7 +84,6 @@ func GetUserCards(mobile string, db *gorm.DB) (*User, error) {
 		return db
 	}).First(&user, "mobile = ?", mobile)
 	user.db = db
-
 	if len(user.Cards) == 0 {
 		return nil, errors.New("empty records")
 	}
@@ -112,6 +122,9 @@ func (u *User) HashPassword() error {
 // UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
 // When adding a card, make sure the card.ID is set to zero value so that
 // gorm wouldn't confuse it for an update
+//
+// FIXME(adonese): since we are using gorm.Model in Card table, gorm thinks
+// it is an ID for the card (a primary key) and as a result will do an update instead of insert
 func (u User) UpsertCards(cards []Card) error {
 	u.Cards = cards
 	return u.db.Clauses(clause.OnConflict{
@@ -119,9 +132,15 @@ func (u User) UpsertCards(cards []Card) error {
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
 
-// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
-// When adding a card, make sure the card.ID is set to zero value so that
-// gorm wouldn't confuse it for an update
+//UpsertBeneficiary adds or updates a beneficiary to a user
+func (u User) UpsertBeneficiary(beneficiary []Beneficiary) error {
+	u.Beneficiaries = beneficiary
+	return u.db.Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
+}
+
+// UpdateCard only changes a card pan number
 func UpdateCard(card Card, db *gorm.DB) error {
 	return db.Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Updates(&card).Error
 }
@@ -135,11 +154,62 @@ func (u User) DeleteCards(cards []Card) error {
 	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Delete(&cards).Error
 }
 
-// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
-// When adding a card, make sure the card.ID is set to zero value so that
-// gorm wouldn't confuse it for an update
+// DeleteCard with a user_id
 func DeleteCard(card Card, db *gorm.DB) error {
 	return db.Debug().Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Delete(&card).Error
+}
+
+// DeleteBeneficiary with a user_id
+func DeleteBeneficiary(card Beneficiary, db *gorm.DB) error {
+	return db.Debug().Where("data = ? AND user_id = ?", card.Data, card.UserID).Delete(&card).Error
+}
+
+type Beneficiary struct {
+	Data     string `json:"data"`
+	BillType string `json:"bill_type"`
+	UserID   uint
+}
+
+func NewBeneficiary(number string, billType int, carrier, operator int) Beneficiary {
+	var b Beneficiary
+	b.Data = number
+	switch billType {
+	case 0: // it is a telecom
+		if operator == 0 { // zain
+			if carrier == 0 {
+				b.BillType = "0010010001" // prepaid
+			} else {
+				b.BillType = "0010010002" // postpaid
+			}
+		} else if operator == 1 { // sudani
+			if carrier == 0 {
+				b.BillType = "0010010005" // prepaid
+			} else {
+				b.BillType = "0010010006" // postpaid
+			}
+		} else { // mtn
+			if carrier == 0 {
+				b.BillType = "0010010003" // prepaid
+			} else {
+				b.BillType = "0010010004" // postpaid
+			}
+		}
+	case 1: // nec
+		b.BillType = "0010020001"
+	case 2: //p2p transfers
+		b.BillType = "p2p"
+	case 3: // E15
+		b.BillType = "0010050001"
+	case 4: // bashair
+		b.BillType = "0010060002"
+	case 5: // mohe Sudan FIXME: we're using the same label for sd and non-sd
+		b.BillType = "0010030002"
+	case 6: // customs
+		b.BillType = "0010030003"
+	case 7: // voucher
+		b.BillType = "voucher"
+	}
+	return b
 }
 
 // PaymentToken a struct to represent a noebs payment order

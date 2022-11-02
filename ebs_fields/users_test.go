@@ -153,3 +153,82 @@ func TestGetTokenWithResult(t *testing.T) {
 		})
 	}
 }
+
+func TestUser_UpsertBeneficiary(t *testing.T) {
+
+	type args struct {
+		beneficiary []Beneficiary
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"test upserting a card", args{beneficiary: []Beneficiary{{Data: "0912141679", BillType: "001001001"}, {Data: "012114141", BillType: "001001001"}, {Data: "012112142", BillType: "001001001"}}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := User{}
+			u.db = testDB
+			u.ID = 1
+			if err := u.UpsertBeneficiary(tt.args.beneficiary); (err != nil) != tt.wantErr {
+				t.Errorf("User.UpsertBeneficiary() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDeleteBeneficiary(t *testing.T) {
+	type args struct {
+		beneficiary Beneficiary
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"test deleting a beneficiary", args{beneficiary: Beneficiary{Data: "0912141679", BillType: "001001001", UserID: 1}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := DeleteBeneficiary(tt.args.beneficiary, testDB); (err != nil) != tt.wantErr {
+				t.Errorf("User.UpsertBeneficiary() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestNewUserWithBeneficiaries(t *testing.T) {
+	type args struct {
+		mobile string
+		db     *gorm.DB
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *User
+		wantErr bool
+	}{
+		{"test getting beneficiaries", args{mobile: "0111493885", db: testDB}, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewUserWithBeneficiaries(tt.args.mobile, tt.args.db)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewUserWithBeneficiaries() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			var match bool
+			log.Printf("the beneficiaries are: %+v", got.Beneficiaries)
+			for _, ben := range got.Beneficiaries {
+				if "0912141679" == ben.Data {
+					match = true
+				}
+
+			}
+			if !match {
+				t.Errorf("no matching data was found")
+			}
+		})
+	}
+}

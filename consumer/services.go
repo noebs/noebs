@@ -62,7 +62,7 @@ func (s *Service) GetCards(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
 		return
 	}
-	userCards, err := ebs_fields.GetUserCards(username, s.Db)
+	userCards, err := ebs_fields.GetCardsOrFail(username, s.Db)
 	if err != nil {
 		// handle the error somehow
 		logrus.WithFields(logrus.Fields{
@@ -73,6 +73,29 @@ func (s *Service) GetCards(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
+}
+
+// Beneficiaries manage all of beneficiaries data
+func (s *Service) Beneficiaries(c *gin.Context) {
+	mobile := c.GetString("mobile")
+	var req ebs_fields.Beneficiary
+	c.ShouldBindWith(&req, binding.JSON)
+	beneficiary, err := ebs_fields.NewUserWithBeneficiaries(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		return
+	}
+	if c.Request.Method == "POST" {
+		beneficiary.UpsertBeneficiary([]ebs_fields.Beneficiary{req})
+		c.JSON(http.StatusCreated, nil)
+		return
+	} else if c.Request.Method == "GET" {
+		c.JSON(http.StatusOK, beneficiary.Beneficiaries)
+		return
+	} else if c.Request.Method == "DELETE" {
+		ebs_fields.DeleteBeneficiary(req, s.Db)
+		c.JSON(http.StatusNoContent, nil)
+	}
 }
 
 // AddCards Allow users to add card to their profile
@@ -221,7 +244,7 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 		mobile := c.GetString("mobile")
 		var req ebs_fields.PaymentToken
 		token, _ := uuid.NewRandom()
-		user, err := ebs_fields.GetUserCards(mobile, s.Db)
+		user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 		if err != nil {
 			log.Printf("error in retrieving card: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})

@@ -186,6 +186,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 		cons.GET("/payment_token/", consumerService.GetPaymentToken)
+		cons.Any("/beneficiary", consumerService.Beneficiaries)
 	}
 	return route
 }
@@ -232,7 +233,7 @@ func init() {
 	firebaseApp, err := getFirebase()
 	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
-	if err := database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{}, &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}); err != nil {
+	if err := database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{}, &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
 		logrusLogger.Fatalf("error in migration: %v", err)
 	}
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
