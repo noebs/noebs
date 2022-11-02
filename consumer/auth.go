@@ -28,7 +28,7 @@ type Auther interface {
 	GenerateJWT(token string) (string, error)
 }
 
-//GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
+// GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
 // the user must submit their email to generate a unique token per email.
 // FIXME #59 #58 #61 api generation should be decoupled from apigateway package
 func (s *Service) GenerateAPIKey(c *gin.Context) {
@@ -49,8 +49,8 @@ func (s *Service) GenerateAPIKey(c *gin.Context) {
 	}
 }
 
-//ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
-//FIXME issue #58 #61
+// ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
+// FIXME issue #58 #61
 func (s *Service) ApiKeyMiddleware(c *gin.Context) {
 	email := c.GetHeader("X-Email")
 	key := c.GetHeader("X-API-Key")
@@ -71,7 +71,7 @@ func (s *Service) ApiKeyMiddleware(c *gin.Context) {
 	}
 }
 
-//FIXME issue #58 #61
+// FIXME issue #58 #61
 func (s *Service) IpFilterMiddleware(c *gin.Context) {
 	ip := c.ClientIP()
 	if u := c.GetString("mobile"); u != "" {
@@ -82,7 +82,7 @@ func (s *Service) IpFilterMiddleware(c *gin.Context) {
 	}
 }
 
-//LoginHandler noebs signin page
+// LoginHandler noebs signin page
 func (s *Service) LoginHandler(c *gin.Context) {
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
@@ -113,7 +113,7 @@ func (s *Service) LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
-//SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
+// SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
 // the user's credentials (user's stored public key)
 //
 // NOTES
@@ -151,7 +151,7 @@ func (s *Service) SingleLoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
 }
 
-//RefreshHandler generates a new access token to the user using
+// RefreshHandler generates a new access token to the user using
 // their signed public key.
 // the user will sign their username with their private key, and noebs will verify
 // the signature using the stored public key for the user
@@ -196,13 +196,22 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 	}
 }
 
-//CreateUser to register a new user to noebs
+// CreateUser to register a new user to noebs
 func (s *Service) CreateUser(c *gin.Context) {
 	u := ebs_fields.User{}
 	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
+
+	// Make sure user is unique
+	var tmpUser ebs_fields.User
+	if res := s.Db.Where("mobile = ?", u.Mobile).First(&tmpUser); res.Error == nil {
+		// User already exists
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
+		return
+	}
+
 	// validate u.Password to include at least one capital letter, one symbol and one number
 	// and that it is at least 8 characters long
 	if !validatePassword(u.Password) {
@@ -214,8 +223,6 @@ func (s *Service) CreateUser(c *gin.Context) {
 	if err := u.HashPassword(); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 	}
-	// make the user capital - small
-	u.SanitizeName()
 	if err := s.Db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
@@ -248,7 +255,7 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
-//BalanceStep part of our 2fa steps for account recovery
+// BalanceStep part of our 2fa steps for account recovery
 func (s *Service) BalanceStep(c *gin.Context) {
 
 	// FIXME(adonese): we need to check for `is_password_otp` = true
@@ -307,7 +314,7 @@ func (s *Service) BalanceStep(c *gin.Context) {
 
 }
 
-//ChangePassword used to change a user's password using their old one
+// ChangePassword used to change a user's password using their old one
 func (s *Service) ChangePassword(c *gin.Context) {
 	mobile := c.GetString("mobile")
 	var req ebs_fields.User
@@ -339,7 +346,7 @@ func (s *Service) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
 }
 
-//VerifyFirebase used to confirm that the user's token is valid
+// VerifyFirebase used to confirm that the user's token is valid
 func (s *Service) VerifyFirebase(c *gin.Context) {
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
@@ -360,7 +367,7 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 	s.Logger.Printf("Verified ID token: %v\n", token)
 }
 
-//GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
+// GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
 func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	var req gateway.Token
 	c.ShouldBindWith(&req, binding.JSON)
@@ -393,7 +400,7 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 
-//APIAuth API-Key middleware. Currently is used by consumer services
+// APIAuth API-Key middleware. Currently is used by consumer services
 func (s *Service) APIAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if key := c.GetHeader("api-key"); key != "" {
