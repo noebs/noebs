@@ -26,6 +26,18 @@ func (f *IsAliveFields) MustMarshal() []byte {
 
 type WorkingKeyFields struct {
 	CommonFields
+	TerminalParameters
+}
+type TerminalParameters struct {
+	TMK          string `json:"tmk" binding:"required"`
+	TutiCLientId string `json:"tuticlientid" binding:"required"`
+}
+
+func TerminalParametersValues() TerminalParameters {
+	return TerminalParameters{
+		TMK:          "ABCDEF0123456789",
+		TutiCLientId: "TutiPay",
+	}
 }
 
 func (f *WorkingKeyFields) MustMarshal() []byte {
