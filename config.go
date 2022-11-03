@@ -176,8 +176,8 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
+		cons.Any("/beneficiary", consumerService.Beneficiaries)
 		cons.Use(auth.AuthMiddleware())
-
 		cons.POST("/change_password", consumerService.ChangePassword)
 		cons.GET("/get_cards", consumerService.GetCards)
 		cons.POST("/add_card", consumerService.AddCards)
@@ -186,7 +186,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 		cons.GET("/payment_token/", consumerService.GetPaymentToken)
-		cons.Any("/beneficiary", consumerService.Beneficiaries)
+
 	}
 	return route
 }

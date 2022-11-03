@@ -238,7 +238,7 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	if valid := totp.Validate(req.OTP, base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey+req.Mobile))); !valid {
+	if valid := totp.Validate(req.OTP, base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))); !valid {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
 		return
 	}
@@ -377,7 +377,7 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	}
 	secure := user.EncodePublickey()
 	if allowInsecure {
-		secure = base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey + req.Mobile))
+		secure = base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))
 	}
 	log.Printf("the code is: %s", secure)
 	key, err := generateOtp(secure)
