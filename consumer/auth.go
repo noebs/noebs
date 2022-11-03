@@ -277,6 +277,7 @@ func (s *Service) BalanceStep(c *gin.Context) {
 	// make transaction to ebs here
 	mobile := req.Mobile
 	req.Mobile = ""
+	req.ApplicationId = s.NoebsConfig.ConsumerID
 	jsonBuffer, err := json.Marshal(req)
 	if err != nil {
 		// there's an error in parsing the struct. Server error.
