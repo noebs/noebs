@@ -244,7 +244,7 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 	}
 	s.Db.Model(&req).Update("is_password_otp", true)
 
-	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
+	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
 //BalanceStep part of our 2fa steps for account recovery
