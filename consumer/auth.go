@@ -321,10 +321,6 @@ func (s *Service) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
-		return
-	}
 
 	// Create and update the user's password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 8)
