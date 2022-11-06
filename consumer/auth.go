@@ -267,6 +267,7 @@ func (s *Service) BalanceStep(c *gin.Context) {
 	for _, card := range user.Cards {
 		if req.Pan == card.Pan {
 			isMatched = true
+			req.ExpDate = card.Expiry
 		}
 	}
 	if !isMatched {
