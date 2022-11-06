@@ -177,8 +177,9 @@ func GetMainEngine() *gin.Engine {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
 		cons.Any("/beneficiary", consumerService.Beneficiaries)
-		cons.Use(auth.AuthMiddleware())
 		cons.POST("/change_password", consumerService.ChangePassword)
+		cons.Use(auth.AuthMiddleware())
+
 		cons.GET("/get_cards", consumerService.GetCards)
 		cons.POST("/add_card", consumerService.AddCards)
 		cons.PUT("/edit_card", consumerService.EditCard)
