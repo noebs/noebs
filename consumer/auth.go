@@ -301,7 +301,7 @@ func (s *Service) BalanceStep(c *gin.Context) {
 		return
 	}
 	c.Writer.Header().Set("Authorization", token)
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	c.JSON(http.StatusOK, gin.H{"result": "ok", "authorization": token})
 
 }
 
