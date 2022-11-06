@@ -309,6 +309,7 @@ func (s *Service) BalanceStep(c *gin.Context) {
 
 //ChangePassword used to change a user's password using their old one
 func (s *Service) ChangePassword(c *gin.Context) {
+	mobile := c.GetString("mobile")
 	var req ebs_fields.User
 	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.NewPassword == "" {
 		s.Logger.Printf("The request is wrong. %v", err)
@@ -317,7 +318,7 @@ func (s *Service) ChangePassword(c *gin.Context) {
 	}
 	s.Logger.Printf("the processed request is: %+v\n", req)
 	u := ebs_fields.User{}
-	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
+	if notFound := s.Db.Where("mobile = ?", strings.ToLower(mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
 		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
