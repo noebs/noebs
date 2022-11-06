@@ -242,6 +242,7 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
 		return
 	}
+	// FIXME(adonese): we have a bug here! no where condition!
 	s.Db.Model(&req).Update("is_password_otp", true)
 
 	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
@@ -250,6 +251,7 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 //BalanceStep part of our 2fa steps for account recovery
 func (s *Service) BalanceStep(c *gin.Context) {
 
+	// FIXME(adonese): we need to check for `is_password_otp` = true
 	type data struct {
 		ebs_fields.ConsumerBalanceFields
 		Mobile string `json:"mobile,omitempty"`
@@ -313,7 +315,7 @@ func (s *Service) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
 		return
 	}
-	s.Logger.Printf("the processed request is: %v\n", req)
+	s.Logger.Printf("the processed request is: %+v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
