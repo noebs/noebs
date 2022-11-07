@@ -41,7 +41,8 @@ var cardService = cards.Service{Redis: redisClient}
 var dashService dashboard.Service
 var state = consumer.State{}
 var merchantServices = merchant.Merchant{}
-var TerminalParam = ebs_fields.TerminalParametersValues()
+
+//var TerminalParam = ebs_fields.TerminalParametersValues()
 
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
@@ -373,8 +374,9 @@ func WorkingKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-		fields.TerminalParameters.TMK = TerminalParam.TMK
-		fields.TerminalParameters.TutiCLientId = TerminalParam.TutiCLientId
+		//fields.TerminalParameters.TMK = TerminalParam.TMK
+		//fields.TerminalParameters.TutiCLientId = TerminalParam.TutiCLientId
+
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.

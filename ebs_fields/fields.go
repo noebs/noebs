@@ -26,19 +26,20 @@ func (f *IsAliveFields) MustMarshal() []byte {
 
 type WorkingKeyFields struct {
 	CommonFields
-	TerminalParameters
-}
-type TerminalParameters struct {
-	TMK          string `json:"tmk" binding:"required"`
-	TutiCLientId string `json:"tuticlientid" binding:"required"`
+	NoebsConfig
 }
 
-func TerminalParametersValues() TerminalParameters {
-	return TerminalParameters{
-		TMK:          "ABCDEF0123456789",
-		TutiCLientId: "TutiPay",
-	}
-}
+//type TerminalParameters struct {
+//	TMK          string `json:"tmk" binding:"required"`
+//	TutiCLientId string `json:"tuticlientid" binding:"required"`
+//}
+
+//func TerminalParametersValues() TerminalParameters {
+//	return TerminalParameters{
+//		TMK:          "",
+//		TutiCLientId: "",
+//	}
+//}
 
 func (f *WorkingKeyFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
@@ -918,6 +919,8 @@ type NoebsConfig struct {
 	JWTKey         string `json:"jwt_key"`
 	QRIP           string `json:"qr_ip"`
 	QR             string `json:"qr"`
+	TMK            string `json:"tmk"`
+	TutiCLientId   string `json:"tuticlientid"`
 }
 
 func (n *NoebsConfig) GetQRTest() string {
