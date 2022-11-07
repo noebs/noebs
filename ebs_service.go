@@ -377,6 +377,8 @@ func WorkingKey(c *gin.Context) {
 		//fields.TerminalParameters.TMK = TerminalParam.TMK
 		//fields.TerminalParameters.TutiCLientId = TerminalParam.TutiCLientId
 
+		fields.ClientID = "TutiPay"
+
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -408,6 +410,7 @@ func WorkingKey(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
+			res.TMK = "ABCDEF0123456789"
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 

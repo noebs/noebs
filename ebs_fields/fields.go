@@ -26,7 +26,6 @@ func (f *IsAliveFields) MustMarshal() []byte {
 
 type WorkingKeyFields struct {
 	CommonFields
-	NoebsConfig
 }
 
 //type TerminalParameters struct {
@@ -260,6 +259,7 @@ type GenericEBSResponseFields struct {
 	EBSServiceName         string  `json:"-,omitempty"`
 	WorkingKey             string  `json:"workingKey,omitempty" gorm:"-"`
 	PayeeID                string  `json:"payeeId,omitempty"`
+	TMK                    string  `json:"tmk,omitempty"`
 
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
@@ -919,8 +919,6 @@ type NoebsConfig struct {
 	JWTKey         string `json:"jwt_key"`
 	QRIP           string `json:"qr_ip"`
 	QR             string `json:"qr"`
-	TMK            string `json:"tmk"`
-	TutiCLientId   string `json:"tuticlientid"`
 }
 
 func (n *NoebsConfig) GetQRTest() string {
