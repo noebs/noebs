@@ -42,6 +42,8 @@ var dashService dashboard.Service
 var state = consumer.State{}
 var merchantServices = merchant.Merchant{}
 
+//var TerminalParam = ebs_fields.TerminalParametersValues()
+
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
 
@@ -92,29 +94,29 @@ func GetMainEngine() *gin.Engine {
 
 	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	dashboardGroup := route.Group("/dashboard")
-	//dashboardGroup.Use(gateway.CORSMiddleware())
-	{
-		dashboardGroup.GET("/get_tid", dashService.TransactionByTid)
-		dashboardGroup.GET("/get", dashService.TransactionByTid)
-		dashboardGroup.GET("/create", dashService.MakeDummyTransaction)
-		dashboardGroup.GET("/all", dashService.GetAll)
-		dashboardGroup.GET("/all/:id", dashService.GetID)
-		dashboardGroup.GET("/count", dashService.TransactionsCount)
-		dashboardGroup.GET("/settlement", dashService.DailySettlement)
-		dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)
-		dashboardGroup.GET("/merchant/:id", dashService.MerchantViews)
+	/*	dashboardGroup := route.Group("/dashboard")
+		//dashboardGroup.Use(gateway.CORSMiddleware())
+		{
+			dashboardGroup.GET("/get_tid", dashService.TransactionByTid)
+			dashboardGroup.GET("/get", dashService.TransactionByTid)
+			dashboardGroup.GET("/create", dashService.MakeDummyTransaction)
+			dashboardGroup.GET("/all", dashService.GetAll)
+			dashboardGroup.GET("/all/:id", dashService.GetID)
+			dashboardGroup.GET("/count", dashService.TransactionsCount)
+			dashboardGroup.GET("/settlement", dashService.DailySettlement)
+			dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)
+			dashboardGroup.GET("/merchant/:id", dashService.MerchantViews)
 
-		dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
+			dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
 
-		dashboardGroup.GET("/", dashService.BrowserDashboard)
-		dashboardGroup.GET("/status", dashService.QRStatus)
-		dashboardGroup.GET("/test_browser", dashService.IndexPage)
-		dashboardGroup.Any("/hearout", dashService.LandingPage)
-		dashboardGroup.GET("/stream", dashService.Stream)
-		dashboardGroup.Any("/merchants", dashService.MerchantRegistration)
-	}
-
+			dashboardGroup.GET("/", dashService.BrowserDashboard)
+			dashboardGroup.GET("/status", dashService.QRStatus)
+			dashboardGroup.GET("/test_browser", dashService.IndexPage)
+			dashboardGroup.Any("/hearout", dashService.LandingPage)
+			dashboardGroup.GET("/stream", dashService.Stream)
+			dashboardGroup.Any("/merchants", dashService.MerchantRegistration)
+		}
+	*/
 	cons := route.Group("/consumer")
 
 	//cons.Use(gateway.OptionsMiddleware)
@@ -372,6 +374,11 @@ func WorkingKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
+		//fields.TerminalParameters.TMK = TerminalParam.TMK
+		//fields.TerminalParameters.TutiCLientId = TerminalParam.TutiCLientId
+
+		fields.ClientID = "TutiPay"
+
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -403,6 +410,7 @@ func WorkingKey(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.GenericEBSResponseFields, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
+			res.TMK = "ABCDEF0123456789"
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 

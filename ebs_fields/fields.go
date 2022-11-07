@@ -28,6 +28,18 @@ type WorkingKeyFields struct {
 	CommonFields
 }
 
+//type TerminalParameters struct {
+//	TMK          string `json:"tmk" binding:"required"`
+//	TutiCLientId string `json:"tuticlientid" binding:"required"`
+//}
+
+//func TerminalParametersValues() TerminalParameters {
+//	return TerminalParameters{
+//		TMK:          "",
+//		TutiCLientId: "",
+//	}
+//}
+
 func (f *WorkingKeyFields) MustMarshal() []byte {
 	d, _ := json.Marshal(f)
 	return d
@@ -247,6 +259,7 @@ type GenericEBSResponseFields struct {
 	EBSServiceName         string  `json:"-,omitempty"`
 	WorkingKey             string  `json:"workingKey,omitempty" gorm:"-"`
 	PayeeID                string  `json:"payeeId,omitempty"`
+	TMK                    string  `json:"tmk,omitempty"`
 
 	// Consumer fields
 	PubKeyValue string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
