@@ -44,8 +44,8 @@ We provide an easier way to build and run noebs using Docker.
 - Fork this repository (e.g., `git clone https://github.com/adonese/noebs`)
 - `cd` to noebs root directory (E.g., $HOME/src/noebs)
 - `docker build -t noebs .`  # -t for giving it a name
-- `docker run -it -p 8000:8000 noebs:latest`
-- Open `localhost:8000/test` in your broswer to interact with noebs
+- docker run -v $PATH/TO/NOEBS/DIR:/database -d -p 8080:8080 -t noebs:latest
+- Open `localhost:8000/test` in your browser to interact with noebs
 
 ## Notes on installation
 noebs needs to be connected with EBS merchant server in order to get useful responses. *However, you can run our embedded server that mocks EBS responses in cases where you cannot reach EBS server*. To do that, you need to enable the development mode using a special env var, `EBS_LOCAL_DEV`. You need to set `EBS_LOCAL_DEV=1` in order to use the mocking functionality.

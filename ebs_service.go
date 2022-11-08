@@ -42,8 +42,6 @@ var dashService dashboard.Service
 var state = consumer.State{}
 var merchantServices = merchant.Merchant{}
 
-//var TerminalParam = ebs_fields.TerminalParametersValues()
-
 //GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
 
