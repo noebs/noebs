@@ -168,6 +168,7 @@ type Beneficiary struct {
 	Data     string `json:"data"`
 	BillType string `json:"bill_type"`
 	UserID   uint
+	Name     string `json:"name"` // a beneficiary name
 }
 
 func NewBeneficiary(number string, billType int, carrier, operator int) Beneficiary {

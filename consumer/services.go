@@ -80,7 +80,7 @@ func (s *Service) Beneficiaries(c *gin.Context) {
 	mobile := c.GetString("mobile")
 	var req ebs_fields.Beneficiary
 	c.ShouldBindWith(&req, binding.JSON)
-	s.Logger.Printf("the data in beneficiary is: +v", req)
+	s.Logger.Printf("the data in beneficiary is: %+v", req)
 	beneficiary, err := ebs_fields.NewUserWithBeneficiaries(mobile, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
