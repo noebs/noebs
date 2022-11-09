@@ -1028,6 +1028,7 @@ func SaveOrUpdates(db *gorm.DB, entity NoebsDatabase, newVal any) error {
 	}).Create(&card).Error
 }
 
+// EbsDate generates an ebs compliant date format ("ddMMYYhhmmss")
 func EbsDate() string {
 	t := time.Now()
 	yr := fmt.Sprintf("%d", t.Year())[2:]

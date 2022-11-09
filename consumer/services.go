@@ -264,7 +264,7 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 		data := ebs_fields.ConsumerCardTransferFields{
 			ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
 				ApplicationId: s.NoebsConfig.ConsumerID,
-				TranDateTime:  "022821135300",
+				TranDateTime:  ebs_fields.EbsDate(),
 				UUID:          token.String(),
 			},
 			// user.Cards[0] won't error, since we:
