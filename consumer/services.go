@@ -78,22 +78,24 @@ func (s *Service) GetCards(c *gin.Context) {
 // Beneficiaries manage all of beneficiaries data
 func (s *Service) Beneficiaries(c *gin.Context) {
 	mobile := c.GetString("mobile")
+
 	var req ebs_fields.Beneficiary
 	c.ShouldBindWith(&req, binding.JSON)
 	s.Logger.Printf("the data in beneficiary is: %+v", req)
-	beneficiary, err := ebs_fields.NewUserWithBeneficiaries(mobile, s.Db)
+	user, err := ebs_fields.NewUserWithBeneficiaries(mobile, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
 	if c.Request.Method == "POST" {
-		beneficiary.UpsertBeneficiary([]ebs_fields.Beneficiary{req})
+		user.UpsertBeneficiary([]ebs_fields.Beneficiary{req})
 		c.JSON(http.StatusCreated, nil)
 		return
 	} else if c.Request.Method == "GET" {
-		c.JSON(http.StatusOK, beneficiary.Beneficiaries)
+		c.JSON(http.StatusOK, user.Beneficiaries)
 		return
 	} else if c.Request.Method == "DELETE" {
+		req.UserID = user.ID
 		ebs_fields.DeleteBeneficiary(req, s.Db)
 		c.JSON(http.StatusNoContent, nil)
 	}
