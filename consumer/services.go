@@ -263,7 +263,7 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 		}
 		data := ebs_fields.ConsumerCardTransferFields{
 			ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
-				ApplicationId: "ACTSCon",
+				ApplicationId: s.NoebsConfig.ConsumerID,
 				TranDateTime:  "022821135300",
 				UUID:          token.String(),
 			},
