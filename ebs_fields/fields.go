@@ -8,6 +8,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 
@@ -882,15 +883,15 @@ type ValidationError struct {
 // NoebsConfig can be accessed via [NoebsSecrets] which is initialized in the
 // [ebs_fields] package in the init method.
 type NoebsConfig struct {
-	OneSignal  string `json:"onesignal_key"`
+	OneSignal    string `json:"onesignal_key"`
 	DatabasePath string `json:"db_path"`
-	SMSAPIKey  string `json:"sms_key"`
-	SMSSender  string `json:"sms_sender"`
-	SMSGateway string `json:"sms_gateway"`
-	RedisPort  string `json:"redis_port"`
-	JWTKey     string `json:"jwt_secret"`
-	Sentry     string `json:"sentry"`
-	Port       string `json:"port"`
+	SMSAPIKey    string `json:"sms_key"`
+	SMSSender    string `json:"sms_sender"`
+	SMSGateway   string `json:"sms_gateway"`
+	RedisPort    string `json:"redis_port"`
+	JWTKey       string `json:"jwt_secret"`
+	Sentry       string `json:"sentry"`
+	Port         string `json:"port"`
 
 	IsConsumerProd bool `json:"is_consumer_prod"`
 	IsMerchantProd bool `json:"is_merchant_prod"`
@@ -1025,4 +1026,12 @@ func SaveOrUpdates(db *gorm.DB, entity NoebsDatabase, newVal any) error {
 	return db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: entity.GetPk()}}, DoUpdates: clause.Assignments(map[string]any{entity.OverrideField(): newVal}),
 	}).Create(&card).Error
+}
+
+func EbsDate() string {
+	t := time.Now()
+	yr := fmt.Sprintf("%d", t.Year())[2:]
+
+	tt := fmt.Sprintf("%02d", t.Day()) + fmt.Sprintf("%02d", t.Month()) + yr + fmt.Sprintf("%02d", t.Hour()) + fmt.Sprintf("%02d", t.Minute()) + fmt.Sprintf("%02d", t.Second())
+	return tt
 }

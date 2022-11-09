@@ -256,7 +256,7 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 			log.Printf("error in retrieving card: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
-		ipinBlock, err := ipin.Encrypt("MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ==", user.Cards[0].IPIN, token.String())
+		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, user.Cards[0].IPIN, token.String())
 		if err != nil {
 			log.Printf("error in encryption: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
@@ -558,7 +558,7 @@ func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 	var fields ebs_fields.ConsumerBalanceFields
 	uid, _ := uuid.NewRandom()
 	fields.UUID = uid.String()
-	fields.ConsumerCommonFields.TranDateTime = parseTime()
+	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	fields.ApplicationId = s.NoebsConfig.ConsumerID
 
 	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())

@@ -2,6 +2,8 @@ package consumer
 
 import (
 	"testing"
+
+	"github.com/adonese/noebs/ebs_fields"
 )
 
 func Test_validatePassword(t *testing.T) {
@@ -40,7 +42,7 @@ func Test_parseTime(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := parseTime(); got != tt.want {
+			if got := ebs_fields.EbsDate(); got != tt.want {
 				t.Errorf("parseTime() = %v, want %v", got, tt.want)
 			}
 		})

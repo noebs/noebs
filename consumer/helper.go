@@ -12,7 +12,6 @@ package consumer
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -161,12 +160,4 @@ func (s *Service) ToDatabasename(url string) string {
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration:    "complete_card_issuance",
 	}
 	return data[url]
-}
-
-func parseTime() string {
-	t := time.Now()
-	yr := fmt.Sprintf("%d", t.Year())[2:]
-
-	tt := fmt.Sprintf("%02d", t.Day()) + fmt.Sprintf("%02d", t.Month()) + yr + fmt.Sprintf("%02d", t.Hour()) + fmt.Sprintf("%02d", t.Minute()) + fmt.Sprintf("%02d", t.Second())
-	return tt
 }

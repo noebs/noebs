@@ -318,7 +318,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
 	fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
 
-	fields.ConsumerCommonFields.TranDateTime = parseTime()
+	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
 	// Get our cache results before hand
 	if oldCache, err := ebs_fields.GetBillerInfo(b.Phone, s.Db); err == nil { // we have stored this phone number before
