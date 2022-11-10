@@ -176,9 +176,10 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
-		cons.Any("/beneficiary", consumerService.Beneficiaries)
 
 		cons.Use(auth.AuthMiddleware())
+		cons.POST("/user/firebase", consumerService.AddFirebaseID)
+		cons.Any("/beneficiary", consumerService.Beneficiaries)
 		cons.POST("/change_password", consumerService.ChangePassword)
 		cons.GET("/get_cards", consumerService.GetCards)
 		cons.POST("/add_card", consumerService.AddCards)
@@ -234,7 +235,8 @@ func init() {
 	firebaseApp, err := getFirebase()
 	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
-	if err := database.AutoMigrate(&ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{}, &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
+	database.Debug().AutoMigrate(&ebs_fields.User{})
+	if err := database.AutoMigrate(&ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.PaymentToken{}, &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
 		logrusLogger.Fatalf("error in migration: %v", err)
 	}
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}

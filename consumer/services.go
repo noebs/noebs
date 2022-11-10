@@ -15,6 +15,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/google/uuid"
+	"gorm.io/gorm/clause"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -73,6 +74,25 @@ func (s *Service) GetCards(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
+}
+
+func (s *Service) AddFirebaseID(c *gin.Context) {
+	username := c.GetString("mobile")
+	type data struct {
+		Token string `json:"token"`
+	}
+
+	var req data
+	c.MustBindWith(&req, binding.JSON)
+	if res := s.Db.Debug().Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "mobile"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{"device_id": req.Token}),
+	}).Create(&ebs_fields.User{Mobile: username, DeviceID: req.Token}); res.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": res.Error, "code": "db_error"})
+		return
+	} else {
+		c.JSON(http.StatusOK, nil)
+	}
 }
 
 // Beneficiaries manage all of beneficiaries data

@@ -17,7 +17,7 @@ type User struct {
 	Password        string `binding:"required,min=8,max=20" json:"password"`
 	Fullname        string `json:"fullname"`
 	Birthday        string `json:"birthday"`
-	Mobile          string `json:"mobile" gorm:"primaryKey,index:idx_mobile,unique"`
+	Mobile          string `json:"mobile" gorm:"primaryKey;not null;unique;uniqueIndex"`
 	Email           string `json:"email"`
 	Password2       string `json:"password2" gorm:"-"`
 	IsMerchant      bool   `json:"is_merchant" gorm:"default:false"`
@@ -29,7 +29,7 @@ type User struct {
 	Beneficiaries   []Beneficiary
 	db              *gorm.DB
 	Cards           []Card
-	FirebaseIDToken string `json:"firebase_token" gorm:"-"`
+	FirebaseIDToken string `json:"firebase_token"`
 	NewPassword     string `json:"new_password" gorm:"-"`
 	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
 }
