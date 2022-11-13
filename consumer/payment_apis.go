@@ -98,7 +98,7 @@ import (
 )
 
 // we use a simple string to store the ipin key and reuse it across noebs.
-var ipinKey string
+var ebsIpinEncryptionKey string
 
 // Service consumer for utils.Service struct
 type Service struct {
@@ -1468,14 +1468,17 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 		uid, _ := uuid.NewRandom()
 		// encrypt the password here
-		if ipinKey != "" {
-			ipinBlock, err := ipin.Encrypt(ipinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
+		if ebsIpinEncryptionKey != "" {
+			ipinBlock, err := ipin.Encrypt(ebsIpinEncryptionKey, s.NoebsConfig.EBSIPINPassword, uid.String())
 			if err != nil {
 				s.Logger.Printf("error in encryption: %v", err)
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 			}
 			fields.Username = s.NoebsConfig.EBSIPINUsername
 			fields.Password = ipinBlock
+		} else {
+			// you should get EBS ipin key here
+			go s.GetIpinPubKey()
 		}
 
 		jsonBuffer, err := json.Marshal(fields)
@@ -1504,7 +1507,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			ipinKey = ""
+			ebsIpinEncryptionKey = ""
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
@@ -1545,9 +1548,9 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 		uid, _ := uuid.NewRandom()
 		// encrypt the password and the ipin here
-		if ipinKey != "" {
-			passwordBlock, _ := ipin.Encrypt(ipinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
-			ipinBlock, _ := ipin.Encrypt(ipinKey, fields.Ipin, uid.String())
+		if ebsIpinEncryptionKey != "" {
+			passwordBlock, _ := ipin.Encrypt(ebsIpinEncryptionKey, s.NoebsConfig.EBSIPINPassword, uid.String())
+			ipinBlock, _ := ipin.Encrypt(ebsIpinEncryptionKey, fields.Ipin, uid.String())
 			fields.Password = passwordBlock
 			fields.Ipin = ipinBlock
 		}
@@ -1577,7 +1580,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		}
 
 		if ebsErr != nil {
-			ipinKey = ""
+			ebsIpinEncryptionKey = ""
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
@@ -1648,7 +1651,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 			c.JSON(code, payload)
 		} else {
 			// store the key somewhere
-			ipinKey = res.PubKeyValue
+			ebsIpinEncryptionKey = res.PubKeyValue
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 

@@ -636,3 +636,27 @@ func guessMobile(mobile string) string {
 		return "0010010006" // sudani
 	}
 }
+
+func (s *Service) GetIpinPubKey() error {
+	url := s.NoebsConfig.IPIN + ebs_fields.QRPublicKey
+	s.Logger.Printf("EBS url is: %v", url)
+	id, _ := uuid.NewRandom()
+	fields := ebs_fields.ConsumerGenerateIPINFields{Username: s.NoebsConfig.EBSIPINUsername, TranDateTime: ebs_fields.EbsDate(), UUID: id.String()}
+	jsonBuffer, err := json.Marshal(fields)
+	if err != nil {
+		return errors.New("missing fields")
+	}
+	// the only part left is fixing EBS errors. Formalizing them per se.
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+	res.Name = s.ToDatabasename(url)
+	s.Db.Table("transactions").Create(&res.EBSResponse)
+	if ebsErr != nil {
+		return errors.New("error in transaction: ebs")
+	} else {
+		// store the key somewhere
+		// this may potentially introduces a race condition!
+		ebsIpinEncryptionKey = res.PubKeyValue
+		return nil
+	}
+}
