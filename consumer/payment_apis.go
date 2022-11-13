@@ -1468,6 +1468,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 		uid, _ := uuid.NewRandom()
 		// encrypt the password here
+		s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
 		if ebsIpinEncryptionKey != "" {
 			ipinBlock, err := ipin.Encrypt(ebsIpinEncryptionKey, s.NoebsConfig.EBSIPINPassword, uid.String())
 			if err != nil {
