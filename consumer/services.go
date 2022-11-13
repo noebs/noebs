@@ -638,6 +638,7 @@ func guessMobile(mobile string) string {
 }
 
 func (s *Service) GetIpinPubKey() error {
+	s.Logger.Printf("someone launched getipin goroutine")
 	url := s.NoebsConfig.IPIN + ebs_fields.QRPublicKey
 	s.Logger.Printf("EBS url is: %v", url)
 	id, _ := uuid.NewRandom()
