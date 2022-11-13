@@ -929,6 +929,7 @@ type NoebsConfig struct {
 	BillInquiryIPIN    string `json:"ipin"`
 	BillInquiryExpDate string `json:"exp_date"`
 	EBSConsumerKey     string `json:"pub_key"`
+	EBSIpinKey         string `json:"ipin_key"`
 
 	// server config
 	Cors    []string `json:"cors"`
