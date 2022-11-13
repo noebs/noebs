@@ -1474,6 +1474,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 				s.Logger.Printf("error in encryption: %v", err)
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 			}
+			fields.Username = s.NoebsConfig.EBSIPINUsername
 			fields.Password = ipinBlock
 		}
 
