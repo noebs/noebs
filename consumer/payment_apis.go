@@ -1544,14 +1544,18 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 	case nil:
 
+		s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
 		uid, _ := uuid.NewRandom()
-		// encrypt the password and the ipin here
-		if ebsIpinEncryptionKey != "" {
-			passwordBlock, _ := ipin.Encrypt(ebsIpinEncryptionKey, s.NoebsConfig.EBSIPINPassword, uid.String())
-			ipinBlock, _ := ipin.Encrypt(ebsIpinEncryptionKey, fields.Ipin, uid.String())
-			fields.Password = passwordBlock
-			fields.Ipin = ipinBlock
-		}
+		passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
+		ipinBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
+		otp, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
+		fields.Password = passwordBlock
+		fields.Ipin = ipinBlock
+		fields.Otp = otp
+		fields.UUID = uid.String()
+
+		fields.Username = s.NoebsConfig.EBSIPINUsername
+
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
