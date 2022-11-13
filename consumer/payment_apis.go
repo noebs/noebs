@@ -1527,69 +1527,43 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerGenerateIPinCompletion{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	c.ShouldBindBodyWith(&fields, binding.JSON)
+	s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
+	uid, _ := uuid.NewRandom()
+	passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
+	ipinBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
+	otp, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
+	fields.Password = passwordBlock
+	fields.Ipin = ipinBlock
+	fields.Otp = otp
+	fields.UUID = uid.String()
 
-	switch bindingErr := bindingErr.(type) {
+	fields.Username = s.NoebsConfig.EBSIPINUsername
 
-	case validator.ValidationErrors:
-		var details []ebs_fields.ErrDetails
+	jsonBuffer, err := json.Marshal(fields)
+	if err != nil {
+		// there's an error in parsing the struct. Server error.
+		er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+		c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+	}
 
-		for _, err := range bindingErr {
+	// the only part left is fixing EBS errors. Formalizing them per se.
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+	// mask the pan
+	res.MaskPAN()
 
-			details = append(details, ebs_fields.ErrorToString(err))
-		}
+	res.Name = s.ToDatabasename(url)
+	username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+	utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+	s.Db.Table("transactions")
 
-		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
-
-	case nil:
-
-		s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
-		uid, _ := uuid.NewRandom()
-		passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
-		ipinBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
-		otp, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
-		fields.Password = passwordBlock
-		fields.Ipin = ipinBlock
-		fields.Otp = otp
-		fields.UUID = uid.String()
-
-		fields.Username = s.NoebsConfig.EBSIPINUsername
-
-		jsonBuffer, err := json.Marshal(fields)
-		if err != nil {
-			// there's an error in parsing the struct. Server error.
-			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
-		}
-
-		// the only part left is fixing EBS errors. Formalizing them per se.
-		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-		// mask the pan
-		res.MaskPAN()
-
-		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
-
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err,
-			}).Info("error in migrating purchase model")
-		}
-
-		if ebsErr != nil {
-			ebsIpinEncryptionKey = ""
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
-		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
-		}
-
-	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+	if ebsErr != nil {
+		ebsIpinEncryptionKey = ""
+		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, payload)
+	} else {
+		c.JSON(code, gin.H{"ebs_response": res})
 	}
 }
 
