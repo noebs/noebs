@@ -1566,7 +1566,6 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-
 		// mask the pan
 		res.MaskPAN()
 
