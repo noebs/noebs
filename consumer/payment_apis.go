@@ -1477,6 +1477,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		}
 		fields.Username = s.NoebsConfig.EBSIPINUsername
 		fields.Password = ipinBlock
+		fields.UUID = uid.String()
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
