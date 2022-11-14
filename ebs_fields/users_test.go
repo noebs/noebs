@@ -232,3 +232,29 @@ func TestNewUserWithBeneficiaries(t *testing.T) {
 		})
 	}
 }
+
+func TestGetUserByCard(t *testing.T) {
+	type args struct {
+		pan string
+		db  *gorm.DB
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    User
+		wantErr bool
+	}{
+		{"get user with cards", args{pan: "23232", db: testDB}, User{}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetUserByCard(tt.args.pan, tt.args.db)
+			if err != nil {
+				t.FailNow()
+			}
+			if got.ID != 1 {
+				t.Errorf("GetUserByCard() = %v, want %v", got.ID, tt.want.ID)
+			}
+		})
+	}
+}

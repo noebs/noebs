@@ -28,6 +28,7 @@ func main() {
 
 	go hub.Run()
 	go consumer.BillerHooks()
+	go consumerService.Pusher()
 	if noebsConfig.Port == "" {
 		noebsConfig.Port = ":8080"
 	}

@@ -512,6 +512,9 @@ func (s *Service) Balance(c *gin.Context) {
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+		data := res
+		data.PAN = fields.Pan
+		tranData <- data // remember pan here is masked
 
 		// mask the pan
 		res.MaskPAN()

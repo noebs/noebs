@@ -73,6 +73,19 @@ func NewUserWithBeneficiaries(mobile string, db *gorm.DB) (*User, error) {
 	return &user, result.Error
 }
 
+// GetUserByCard retrieves a noebs user by their PAN
+func GetUserByCard(pan string, db *gorm.DB) (User, error) {
+	var card Card
+	var user User
+	if err := db.Model(&Card{}).Where("pan = ?", pan).First(&card); errors.Is(err.Error, gorm.ErrRecordNotFound) {
+		return User{}, err.Error
+	}
+	if err := db.Model(&User{}).Where("id = ?", card.UserID).First(&user); errors.Is(err.Error, gorm.ErrRecordNotFound) {
+		return User{}, err.Error
+	}
+	return user, nil
+}
+
 // NewUserByMobile Retrieves a user from the database by mobile (username)
 func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	var user User

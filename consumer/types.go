@@ -195,3 +195,9 @@ func newFromBytes(d []byte, code int) (response, error) {
 		}, nil
 	}
 }
+
+type pushData struct {
+	To    string `json:"to"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"firebase.google.com/go/v4/messaging"
 	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
@@ -365,6 +366,40 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 		return
 	}
 	s.Logger.Printf("Verified ID token: %v\n", token)
+}
+
+func (s *Service) SendPush(m pushData) error {
+	// Obtain a messaging.Client from the App.
+	ctx := context.Background()
+
+	client, err := s.FirebaseApp.Messaging(ctx)
+	if err != nil {
+		s.Logger.Printf("error getting Messaging clientsf: %v\n", err)
+	}
+
+	// This registration token comes from the client FCM SDKs.
+	registrationToken := m.To
+
+	// See documentation on defining a message payload.
+	message := &messaging.Message{
+		Data: map[string]string{
+			"score": "850",
+			"time":  "2:45",
+		},
+		Notification: &messaging.Notification{Title: "Successful transaction", Body: "it works!"},
+		Token:        registrationToken,
+	}
+
+	// Send a message to the device corresponding to the provided
+	// registration token.
+	response, err := client.Send(ctx, message)
+	if err != nil {
+		s.Logger.Printf("the error is: %v", err)
+		return err
+	}
+	// Response is a message ID string.
+	log.Print(response)
+	return nil
 }
 
 // GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
