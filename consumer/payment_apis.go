@@ -514,7 +514,7 @@ func (s *Service) Balance(c *gin.Context) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		data := res
 		data.PAN = fields.Pan
-		tranData <- data // remember pan here is masked
+		// tranData <- data // remember pan here is masked
 
 		// mask the pan
 		res.MaskPAN()
