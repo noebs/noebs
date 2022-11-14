@@ -30,8 +30,6 @@ var (
 	errObjectNotFound = errors.New("object not found")
 )
 
-var tranData = make(chan ebs_fields.EBSParserFields)
-
 func isMember(key, val string, r *redis.Client) bool {
 	b, _ := r.SIsMember(key, val).Result()
 	return b
@@ -164,16 +162,21 @@ func (s *Service) ToDatabasename(url string) string {
 	return data[url]
 }
 
+var tranData = make(chan ebs_fields.EBSParserFields)
+
 func (s *Service) Pusher() {
-	select {
-	case data := <-tranData:
-		// Read the pan from the payload
-		user, err := ebs_fields.GetUserByCard(data.PAN, s.Db)
-		if err != nil {
-			s.Logger.Printf("error in Pusher service: %s", err)
-		} else {
-			content := pushData{To: user.DeviceID}
-			s.SendPush(content)
+	for {
+		select {
+		case data := <-tranData:
+			// Read the pan from the payload
+			user, err := ebs_fields.GetUserByCard(data.PAN, s.Db)
+			if err != nil {
+				s.Logger.Printf("error in Pusher service: %s", err)
+			} else {
+				content := pushData{To: user.DeviceID}
+				s.SendPush(content)
+			}
 		}
 	}
+
 }
