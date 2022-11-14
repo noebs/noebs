@@ -171,7 +171,6 @@ func (s *Service) Pusher() {
 		user, err := ebs_fields.GetUserByCard(data.PAN, s.Db)
 		if err != nil {
 			s.Logger.Printf("error in Pusher service: %s", err)
-			break
 		} else {
 			content := pushData{To: user.DeviceID}
 			s.SendPush(content)
