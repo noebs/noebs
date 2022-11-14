@@ -1466,18 +1466,18 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 	case nil:
 
-		uid := "5371176e-a4ed-4082-b10d-4591d948cd7e"
+		uid, _ := uuid.NewRandom()
 		// encrypt the password here
 		s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
 
-		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid)
+		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
 		if err != nil {
 			s.Logger.Printf("error in encryption: %v", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
 		}
 		fields.Username = s.NoebsConfig.EBSIPINUsername
 		fields.Password = ipinBlock
-		fields.UUID = uid
+		fields.UUID = uid.String()
 
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
@@ -1529,14 +1529,14 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 	c.ShouldBindBodyWith(&fields, binding.JSON)
 	s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
-	uid := "5371176e-a4ed-4082-b10d-4591d948cd7e"
-	passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid)
-	ipinBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid)
-	otp, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid)
+	uid, _ := uuid.NewRandom()
+	passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
+	ipinBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
+	otp, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Otp, uid.String())
 	fields.Password = passwordBlock
 	fields.Ipin = ipinBlock
 	fields.Otp = otp
-	fields.UUID = uid
+	fields.UUID = uid.String()
 
 	fields.Username = s.NoebsConfig.EBSIPINUsername
 
