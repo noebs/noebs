@@ -476,30 +476,17 @@ func (s *Service) BillInquiry(c *gin.Context) {
 
 // Balance gets performs get balance transaction for the provided card info
 func (s *Service) Balance(c *gin.Context) {
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
 	var fields = ebs_fields.ConsumerBalanceFields{}
-
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
-
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
@@ -516,34 +503,23 @@ func (s *Service) Balance(c *gin.Context) {
 		data.PAN = fields.Pan
 		tranData <- data // remember pan here is masked
 
-		// mask the pan
-		res.MaskPAN()
-
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
-
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
-			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
-				"message": err,
-			}).Info("error in migrating purchase model")
-		}
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
-
 		}
-
+		s.Db.Table("transactions").Create(&res.EBSResponse)
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
 
-// Balance gets performs get balance transaction for the provided card info
+// TransactionStatus queries EBS to get the status of the transaction
 func (s *Service) TransactionStatus(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerTransactionStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.

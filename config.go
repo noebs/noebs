@@ -160,7 +160,16 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 		cons.POST("/login", consumerService.LoginHandler)
-
+		cons.GET("/transaction", gin.HandlerFunc(func(ctx *gin.Context) {
+			var res ebs_fields.EBSResponse
+			id := ctx.Query("uuid")
+			if response, err := res.GetByUUID(id, database); err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
+				return
+			} else {
+				ctx.JSON(http.StatusOK, response)
+			}
+		}))
 		cons.POST("/otp/generate",
 			gin.HandlerFunc(func(c *gin.Context) {
 				consumerService.GenerateSignInCode(c, false)
