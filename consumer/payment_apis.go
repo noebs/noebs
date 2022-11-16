@@ -150,7 +150,7 @@ func (s *Service) Purchase(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -214,7 +214,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -278,7 +278,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -339,7 +339,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	res.Name = s.ToDatabasename(url)
 	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"error":   "unable to migrate purchase model",
+			"code":    "unable to migrate purchase model",
 			"message": err,
 		}).Info("error in migrating purchase model")
 	}
@@ -452,7 +452,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -568,7 +568,7 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -656,7 +656,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -722,7 +722,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -781,7 +781,7 @@ func (s *Service) CashIn(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -840,7 +840,7 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -899,7 +899,7 @@ func (s *Service) CashOut(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -959,7 +959,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1024,7 +1024,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1090,7 +1090,7 @@ func (s *Service) Status(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1151,7 +1151,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1213,7 +1213,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1277,7 +1277,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1338,7 +1338,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1399,7 +1399,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1478,7 +1478,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1595,7 +1595,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1772,7 +1772,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1792,29 +1792,16 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 // GetMSISDNFromCard for ussd to get pan info from sim card
 func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPANFromMobile // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
 	var fields = ebs_fields.ConsumerPANFromMobileFields{}
-
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
-
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
@@ -1823,36 +1810,29 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
 			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
-
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-
 		// mask the pan
 		res.MaskPAN()
-
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
-
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
-
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
-
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
-
 }
 
 // QRPayment performs QR payment transaction
@@ -1899,7 +1879,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -1967,7 +1947,7 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
@@ -2037,7 +2017,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}

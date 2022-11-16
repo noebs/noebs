@@ -27,7 +27,7 @@ func TestPaymentToken_UpsertTransaction(t *testing.T) {
 		args    args
 		wantErr string
 	}{
-		{"test_upsert_transaction", args{transaction: res, uuid: "015b88da-1203-4a69-a3ef-e447b6df4ccc", db: db}, "Successful"},
+		{"test_upsert_transaction", args{transaction: res, uuid: "461f5bb8-f9e8-42eb-9b15-2195e2e30101", db: db}, "Successful"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

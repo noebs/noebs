@@ -68,7 +68,7 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 	if err != nil {
 		log.WithFields(
 			logrus.Fields{
-				"error":   err.Error(),
+				"code":    err.Error(),
 				"details": "error in database",
 			}).Info("error in database")
 	}
@@ -81,7 +81,7 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 	if err := env.Db.Model(&tran).Count(&count).Error; err != nil {
 		log.WithFields(
 			logrus.Fields{
-				"error":   err.Error(),
+				"code":    err.Error(),
 				"details": "error in database",
 			}).Info("error in database")
 		c.AbortWithStatus(404)
@@ -96,7 +96,7 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 	if err != nil {
 		log.WithFields(
 			logrus.Fields{
-				"error":   err.Error(),
+				"code":    err.Error(),
 				"details": "error in database",
 			}).Info("error in database")
 	}
@@ -106,7 +106,7 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 	var tran []ebs_fields.EBSResponse
 	if err := db.Where("terminal_id LIKE ?", tid+"%").Find(&tran).Error; err != nil {
 		log.WithFields(logrus.Fields{
-			"error":   err.Error(),
+			"code":    err.Error(),
 			"details": tran,
 		}).Info("no transaction with this ID")
 		c.AbortWithStatus(404)

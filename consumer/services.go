@@ -67,7 +67,7 @@ func (s *Service) GetCards(c *gin.Context) {
 	if err != nil {
 		// handle the error somehow
 		logrus.WithFields(logrus.Fields{
-			"error":   "unable to get results from redis",
+			"code":    "unable to get results from redis",
 			"message": err.Error(),
 		}).Info("unable to get results from redis")
 		c.JSON(http.StatusOK, gin.H{"cards": nil, "main_card": nil})
@@ -549,7 +549,7 @@ func (s *Service) billerID(mobile string) (string, error) {
 	res.Name = s.ToDatabasename(url)
 	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"error":   "unable to migrate purchase model",
+			"code":    "unable to migrate purchase model",
 			"message": err,
 		}).Info("error in migrating purchase model")
 	}
@@ -611,7 +611,7 @@ func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 	res.Name = s.ToDatabasename(url)
 	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
-			"error":   "unable to migrate purchase model",
+			"code":    "unable to migrate purchase model",
 			"message": err,
 		}).Info("error in migrating purchase model")
 	}

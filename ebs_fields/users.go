@@ -245,7 +245,7 @@ type PaymentToken struct {
 	UserID     uint     `json:",omitempty"`
 	Amount     int      `json:"amount,omitempty"`
 	CartID     string   `json:"cart_id,omitempty"`
-	UUID       string   `json:"uuid,omitempty"`
+	UUID       string   `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
 	Note       string   `json:"note,omitempty"`
 	db         *gorm.DB `gorm:"-"`
 	ToCard     string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
@@ -291,7 +291,9 @@ func GetAllTokens(db *gorm.DB) ([]PaymentToken, error) {
 func (p PaymentToken) UpsertTransaction(transaction EBSResponse, uuid string) error {
 	p.Transaction = transaction
 
-	return p.db.Clauses(clause.OnConflict{
+	// FIXME(adonese): THERE's a bug here
+	// ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint                                                                           Nov 16 10:19:00 tuti noebs[251020]: [0.140ms] [rows:0] INSERT INTO `users` (`created_at`,`updated_at`,`deleted_at`,`password`,`fullname`,`birthday`,`mobile`,`email`,`is_merchant`,`public_key`,`device_id`,`otp`,`signed_otp`,`firebase_id_token`,`is_password_otp`,`id`) VALUES ("2022-08-10 12:25:43.672","2022-11-16 10:19:00.236",NULL,"$2a$08$T7DFFXzndRwZnzYSHSrQPesxr52aWOG76NGw.TdxMKg1jrxq5A2cy","","","0111493885","",false,"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAteM6IQBAUK4Lsb42zgr13YRHoBWyiQHuifjHvxxI7QHnOlQGRYU0xqgplV+Gumers6c3vH5xtlPsy6lHFJ7VQnTPHlZIcRefy7rKsVC+D1cjA6H3W6jWAdKDslxEb8sMfnatWI1PO0MNDz4Nh7KHS3V51nDqlx7I+TggtKZU8zq/epeVb+pqCKQphGd36J9KqZzaobDKxY6ObrLQDncKtF74UerJjmQxFd52VM/XDwOjmWS7shpQZx2HaLzFq6IOpTnKE+nySZqoXZVDB5j6llctinSs9E+HAOmN2r32B6zthYvMIO8gQjSZNyRp0E/GKhlPgfF8r55upszm7qIUZQIDAQAB","this is my firebase token","","","",false,2) ON CONFLICT (`id`,`mobile`) DO UPDATE SET `updated_at`="2022-11-16 10:19:00.236",`deleted_at`=`excluded`.`deleted_at`,`password`=`excluded`.`password`,`fullname`=`excluded`.`fullname`,`birthday`=`excluded`.`birthday`,`email`=`excluded`.`email`,`is_merchant`=`excluded`.`is_merchant`,`public_key`=`excluded`.`public_key`,`device_id`=`excluded`.`device_id`,`otp`=`excluded`.`otp`,`signed_otp`=`excluded`.`signed_otp`,`firebase_id_token`=`excluded`.`firebase_id_token`,`is_password_otp`=`excluded`.`is_password_otp` RETURNING `id`
+	return p.db.Debug().Clauses(clause.OnConflict{
 		UpdateAll: true,
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Where("uuid = ?", uuid).Updates(&p).Error
 }

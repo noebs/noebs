@@ -75,7 +75,7 @@ func userHasSessions(s *Service, username string) bool {
 	if err != redis.Nil && num > 1 {
 		// The user is already logged in somewhere else. Communicate that to them, clearly!
 		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
-		//	"error": "You are logging from another device. You can only have one valid session"})
+		//	"code": "You are logging from another device. You can only have one valid session"})
 		//return
 		log.Print("The user is logging from a different location")
 		return true
@@ -174,6 +174,7 @@ func (s *Service) Pusher() {
 				s.Logger.Printf("error in Pusher service: %s", err)
 			} else {
 				content := pushData{To: user.DeviceID}
+				// Store to database first
 				s.SendPush(content)
 			}
 		}

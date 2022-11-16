@@ -40,7 +40,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	if err != nil {
 		fmt.Println(err.Error())
 		log.WithFields(logrus.Fields{
-			"error": err.Error(),
+			"code": err.Error(),
 		}).Error("Error in establishing connection to the host")
 		return 500, ebsGenericResponse, err
 	}
@@ -49,7 +49,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	ebsResponse, err := ebsClient.Do(reqHandler)
 	if err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error(),
+			"code": err.Error(),
 		}).Error("Error in establishing connection to the host")
 		return http.StatusGatewayTimeout, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
@@ -59,7 +59,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	responseBody, err := io.ReadAll(ebsResponse.Body)
 	if err != nil {
 		log.WithFields(logrus.Fields{
-			"error": err.Error(),
+			"code": err.Error(),
 		}).Error("Error reading ebs response")
 		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
@@ -69,7 +69,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	// check if content type includes application/json
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
 		log.WithFields(logrus.Fields{
-			"error":   "wrong content type parsed",
+			"code":    "wrong content type parsed",
 			"details": ebsResponse.Header.Get("Content-Type"),
 		}).Error("ebs response content type is not application/json")
 		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
@@ -105,7 +105,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		// there is an error in handling the incoming EBS's ebsResponse
 		// log the err here please
 		log.WithFields(logrus.Fields{
-			"error":        err.Error(),
+			"code":         err.Error(),
 			"all_response": string(responseBody),
 			"ebs_fields":   ebsGenericResponse,
 		}).Info("ebs response transaction")

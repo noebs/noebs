@@ -53,7 +53,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 		// God please make it works.
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			s.Logger.WithFields(logrus.Fields{
-				"error":   err,
+				"code":    err,
 				"details": "Error in writing to Database",
 			}).Info("Problem in transaction table committing")
 		}
@@ -109,7 +109,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		// God please make it works.
 		if err := s.Db.Create(&res.EBSResponse).Error; err != nil {
 			s.Logger.WithFields(logrus.Fields{
-				"error":   err.Error(),
+				"code":    err.Error(),
 				"details": "Error in writing to Database",
 			}).Info("Problem in transaction table committing")
 		}
@@ -150,7 +150,7 @@ func (s *Service) Purchase(c *gin.Context) {
 		res.Name = "change me"
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
-				"error":   "unable to migrate purchase model",
+				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
