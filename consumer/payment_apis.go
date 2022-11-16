@@ -1706,6 +1706,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 
 	storedToken.Transaction = res.EBSResponse
+	res.UUID = ""
 	storedToken.IsPaid = ebsErr == nil
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
 		s.Logger.Printf("error in saving transaction: %v - the token: %+v", err, storedToken)
