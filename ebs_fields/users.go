@@ -245,7 +245,7 @@ type PaymentToken struct {
 	UserID     uint     `json:",omitempty"`
 	Amount     int      `json:"amount,omitempty"`
 	CartID     string   `json:"cart_id,omitempty"`
-	UUID       string   `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
+	UUID       string   `json:"uuid,omitempty" gorm:"primaryKey;not null;unique;uniqueIndex"`
 	Note       string   `json:"note,omitempty"`
 	db         *gorm.DB `gorm:"-"`
 	ToCard     string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
