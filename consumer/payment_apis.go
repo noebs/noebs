@@ -1683,6 +1683,7 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
 
+	print(url)
 	var data ebs_fields.QuickPaymentFields
 	c.ShouldBindWith(&data, binding.JSON) // ignore the errors
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
@@ -1708,6 +1709,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	var res ebs_fields.EBSParserFields
 	storedToken.Transaction = res.EBSResponse
 	res.UUID = ""
+	var code int
 	var ebsErr error
 	storedToken.IsPaid = ebsErr == nil
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
@@ -1720,9 +1722,9 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(400, payload)
+		c.JSON(code, payload)
 	} else {
-		c.JSON(200, storedToken)
+		c.JSON(code, storedToken)
 	}
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
