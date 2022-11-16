@@ -86,7 +86,7 @@ type DynamicFeesFields struct {
 
 func NewDynamicFees() DynamicFeesFields {
 	return DynamicFeesFields{
-		CardTransferfees:   10, // ebs QA server returns error for 1 fees
+		CardTransferfees:   0.3, // ebs QA server returns error for 1 fees
 		MoheFees:           25,
 		SpecialPaymentFees: 10,
 		CustomFees:         1,
