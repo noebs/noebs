@@ -40,7 +40,7 @@ func TestPaymentToken_UpsertTransaction(t *testing.T) {
 			}
 			newToken, err := GetTokenWithTransaction(tt.args.uuid, tt.args.db)
 			if err != nil {
-				t.Errorf("PaymentToken.UpsertTransaction() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetTokenWithTransaction() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if newToken.Transaction.TranAmount != tt.args.transaction.TranAmount {
 				t.Errorf("PaymentToken.UpsertTransaction() = %v, want %v", newToken.Transaction.TranAmount, tt.args.transaction.TranAmount)

@@ -84,9 +84,9 @@ type DynamicFeesFields struct {
 	SpecialPaymentFees float32 `json:"special_payment_fees"`
 }
 
-func NewDynamicFees() DynamicFeesFields {
+func NewDynamicFeesWithDefaults() DynamicFeesFields {
 	return DynamicFeesFields{
-		CardTransferfees:   0.3, // ebs QA server returns error for 1 fees
+		CardTransferfees:   10, // ebs QA server returns error for 1 fees
 		MoheFees:           25,
 		SpecialPaymentFees: 10,
 		CustomFees:         1,

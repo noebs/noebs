@@ -110,7 +110,7 @@ type Service struct {
 	Auth        Auther
 }
 
-var fees = ebs_fields.NewDynamicFees()
+var fees = ebs_fields.NewDynamicFeesWithDefaults()
 
 // Purchase performs special payment api from ebs consumer services
 // It requires: card info (src), amount fields, specialPaymentId (destination)
@@ -1703,10 +1703,12 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	data.ApplicationId = s.NoebsConfig.ConsumerID
 	data.ToCard = storedToken.ToCard
-	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
+	// code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 
+	var res ebs_fields.EBSParserFields
 	storedToken.Transaction = res.EBSResponse
 	res.UUID = ""
+	var ebsErr error
 	storedToken.IsPaid = ebsErr == nil
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
 		s.Logger.Printf("error in saving transaction: %v - the token: %+v", err, storedToken)
@@ -1718,9 +1720,9 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		c.JSON(400, payload)
 	} else {
-		c.JSON(code, storedToken)
+		c.JSON(200, storedToken)
 	}
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
