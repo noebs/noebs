@@ -25,7 +25,7 @@ type User struct {
 	DeviceID        string `json:"device_id"`
 	OTP             string `json:"otp"`
 	SignedOTP       string `json:"signed_otp"`
-	PaymentTokens   []PaymentToken
+	Tokens          []Token
 	Beneficiaries   []Beneficiary
 	db              *gorm.DB
 	Cards           []Card
@@ -104,13 +104,13 @@ func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 }
 
 // NewUserByMobile Retrieves a user from the database by mobile (username)
-func GetUserTokens(mobile string, db *gorm.DB) ([]PaymentToken, error) {
+func GetUserTokens(mobile string, db *gorm.DB) ([]Token, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main
 	// This trick is really super important: it will allow us to get a user's main card
 	// with ease, without having to do a second fetch and then filter the main card
-	result := db.Model(&User{}).Preload("PaymentTokens").First(&user, "mobile = ?", mobile)
-	return user.PaymentTokens, result.Error
+	result := db.Model(&User{}).Preload("Tokens").First(&user, "mobile = ?", mobile)
+	return user.Tokens, result.Error
 }
 
 // EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
@@ -226,7 +226,7 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 	return b
 }
 
-// PaymentToken a struct to represent a noebs payment order
+// Token a struct to represent a noebs payment order
 // Noebs payment order is an abstraction layer built on top of EBS card transfer
 // the idea is to allow noebs users to freely accept and transfer funds, without much of hassle
 // that is needed when trying to register as a merchant. Any user can simply generate a payment token
@@ -240,20 +240,17 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 //  4. UserID the user ID of the user who is making the payment. UserID is required.
 //  5. Mobile: the receipient of the payment mobile. This is an optional field
 //  6. Note: an optional text note to be sent to the recipient.
-type PaymentToken struct {
-	gorm.Model `json:",omitempty"`
-	UserID     uint     `json:",omitempty"`
-	Amount     int      `json:"amount,omitempty"`
-	CartID     string   `json:"cart_id,omitempty"`
-	UUID       string   `json:"uuid,omitempty" gorm:"primaryKey;not null;unique;uniqueIndex"`
-	Note       string   `json:"note,omitempty"`
-	db         *gorm.DB `gorm:"-"`
-	ToCard     string   `json:"toCard,omitempty"` // An optional field to specify the card to be used for payment. Will be updated upon completing the payment.
-	// Transaction the transaction associated with the payment token
-	Transaction   EBSResponse `json:"transaction,omitempty" gorm:"foreignkey:TransactionID"`
-	User          User        `json:",omitempty" binding:"-"` // we shouldn't send back the data to the user
-	TransactionID uint        `json:",omitempty"`
-	IsPaid        bool        `json:"is_paid"`
+type Token struct {
+	gorm.Model
+	UserID       uint
+	Amount       int           `json:"amount,omitempty"`
+	CartID       string        `json:"cart_id,omitempty"`
+	UUID         string        `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
+	Note         string        `json:"note,omitempty"`
+	db           *gorm.DB      `gorm:"-"`
+	ToCard       string        `json:"toCard,omitempty"`
+	EBSResponses []EBSResponse `json:"transaction,omitempty"`
+	IsPaid       bool          `json:"is_paid"`
 }
 
 type qrData struct {
@@ -263,9 +260,9 @@ type qrData struct {
 }
 
 // NewPaymentToken creates a new payment token and assign it to a user
-func (u *User) NewPaymentToken(amount int, note string, cartID string) (*PaymentToken, error) {
-	token := &PaymentToken{
-		UserID: u.ID,
+func (u *User) NewPaymentToken(amount int, note string, cartID string) (*Token, error) {
+	token := &Token{
+
 		Amount: amount,
 		Note:   note,
 		CartID: cartID,
@@ -274,81 +271,82 @@ func (u *User) NewPaymentToken(amount int, note string, cartID string) (*Payment
 }
 
 // SavePaymentToken saves the payment token to the database
-func (u *User) SavePaymentToken(pt *PaymentToken) error {
-	return u.db.Model(&PaymentToken{}).Create(pt).Error
+func (u *User) SavePaymentToken(pt *Token) error {
+	return u.db.Model(&Token{}).Create(pt).Error
 }
 
 // GetAllTokens associated to a user.
-func GetAllTokens(db *gorm.DB) ([]PaymentToken, error) {
-	var tokens []PaymentToken
-	result := db.Model(&PaymentToken{}).Preload("Transaction").Find(&tokens)
+func GetAllTokens(db *gorm.DB) ([]Token, error) {
+	var tokens []Token
+	result := db.Model(&Token{}).Preload("Transaction").Find(&tokens)
 	return tokens, result.Error
 }
 
 // UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
 // When adding a card, make sure the card.ID is set to zero value so that
 // gorm wouldn't confuse it for an update
-func (p PaymentToken) UpsertTransaction(transaction EBSResponse, uuid string) error {
-	p.Transaction = transaction
+func (p Token) UpsertTransaction(transaction EBSResponse, uuid string) error {
+	var trans []EBSResponse
+	trans = append(trans, transaction)
+	p.EBSResponses = trans
+	p.UUID = uuid
 
-	// FIXME(adonese): THERE's a bug here
-	// ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint                                                                           Nov 16 10:19:00 tuti noebs[251020]: [0.140ms] [rows:0] INSERT INTO `users` (`created_at`,`updated_at`,`deleted_at`,`password`,`fullname`,`birthday`,`mobile`,`email`,`is_merchant`,`public_key`,`device_id`,`otp`,`signed_otp`,`firebase_id_token`,`is_password_otp`,`id`) VALUES ("2022-08-10 12:25:43.672","2022-11-16 10:19:00.236",NULL,"$2a$08$T7DFFXzndRwZnzYSHSrQPesxr52aWOG76NGw.TdxMKg1jrxq5A2cy","","","0111493885","",false,"MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAteM6IQBAUK4Lsb42zgr13YRHoBWyiQHuifjHvxxI7QHnOlQGRYU0xqgplV+Gumers6c3vH5xtlPsy6lHFJ7VQnTPHlZIcRefy7rKsVC+D1cjA6H3W6jWAdKDslxEb8sMfnatWI1PO0MNDz4Nh7KHS3V51nDqlx7I+TggtKZU8zq/epeVb+pqCKQphGd36J9KqZzaobDKxY6ObrLQDncKtF74UerJjmQxFd52VM/XDwOjmWS7shpQZx2HaLzFq6IOpTnKE+nySZqoXZVDB5j6llctinSs9E+HAOmN2r32B6zthYvMIO8gQjSZNyRp0E/GKhlPgfF8r55upszm7qIUZQIDAQAB","this is my firebase token","","","",false,2) ON CONFLICT (`id`,`mobile`) DO UPDATE SET `updated_at`="2022-11-16 10:19:00.236",`deleted_at`=`excluded`.`deleted_at`,`password`=`excluded`.`password`,`fullname`=`excluded`.`fullname`,`birthday`=`excluded`.`birthday`,`email`=`excluded`.`email`,`is_merchant`=`excluded`.`is_merchant`,`public_key`=`excluded`.`public_key`,`device_id`=`excluded`.`device_id`,`otp`=`excluded`.`otp`,`signed_otp`=`excluded`.`signed_otp`,`firebase_id_token`=`excluded`.`firebase_id_token`,`is_password_otp`=`excluded`.`is_password_otp` RETURNING `id`
-	return p.db.Debug().Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "uuid"}},
-		UpdateAll: true,
-	}).Session(&gorm.Session{FullSaveAssociations: true}).Where("uuid = ?", uuid).Updates(&p).Error
+	p.db.Debug().Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "uuid"}},
+	}).Create(&p)
+	return p.db.Debug().Session(&gorm.Session{FullSaveAssociations: true}).Where("uuid = ?", uuid).Updates(&p).Error
 }
 
 // GetTokenWithTransaction preloads a token with its transaction
-func GetTokenWithTransaction(uuid string, db *gorm.DB) (PaymentToken, error) {
-	var paymentToken PaymentToken
-	result := db.Model(&PaymentToken{}).Preload("Transaction").First(&paymentToken, "uuid = ?", uuid)
+func GetTokenWithTransaction(uuid string, db *gorm.DB) (Token, error) {
+	var paymentToken Token
+	result := db.Model(&Token{}).Preload("Transaction").First(&paymentToken, "uuid = ?", uuid)
 	paymentToken.db = db
 	return paymentToken, result.Error
 }
 
 // GetAllTokens associated to a user.
-func GetAllTokensByUserID(userID uint, db *gorm.DB) ([]PaymentToken, error) {
-	var tokens []PaymentToken
-	result := db.Model(&PaymentToken{}).Preload("Transaction").Where("user_id = ?", userID).Find(&tokens)
+func GetAllTokensByUserID(userID uint, db *gorm.DB) ([]Token, error) {
+	var tokens []Token
+	result := db.Model(&Token{}).Preload("Transaction").Where("user_id = ?", userID).Find(&tokens)
 	return tokens, result.Error
 }
 
 // GetAllTokens associated to a user.
-func GetAllTokensByUserIDAndCartID(userID uint, cartID string, db *gorm.DB) ([]PaymentToken, error) {
+func GetAllTokensByUserIDAndCartID(userID uint, cartID string, db *gorm.DB) ([]Token, error) {
 	// var tokens []PaymentToken
 	return nil, nil
 }
 
 // NewToken creates a new paymenttoken struct and populate it with a database
-func NewToken(db *gorm.DB) *PaymentToken {
-	return &PaymentToken{
+func NewToken(db *gorm.DB) *Token {
+	return &Token{
 		db: db,
 	}
 }
 
 // NewPaymentToken creates a new payment token and assign it to a user
-func NewPaymentToken(mobile string, db *gorm.DB) (*PaymentToken, error) {
+func NewPaymentToken(mobile string, db *gorm.DB) (*Token, error) {
 	user, err := NewUserByMobile(mobile, db)
+	print(user.ID)
 	if err != nil {
 		return nil, err
 	}
-	token := &PaymentToken{
-		UserID: user.ID,
-	}
+	token := &Token{}
 	return token, nil
 }
 
 // GetTokenByUUID gets a preloaded token with the user's ID and their cards
-func GetTokenWithResult(uuid string, db *gorm.DB) (PaymentToken, error) {
-	var payment PaymentToken
+func GetTokenWithResult(uuid string, db *gorm.DB) (Token, error) {
+	var payment Token
 	result := db.Debug().Preload("Transaction").First(&payment, "uuid = ?", uuid)
 	payment.db = db
 	return payment, result.Error
 }
 
 // GetTokenByUUID gets a preloaded token with the user's ID and their cards
-func GetTokenByUUID(uuid string, db *gorm.DB) (PaymentToken, error) {
-	var payment PaymentToken
+func GetTokenByUUID(uuid string, db *gorm.DB) (Token, error) {
+	var payment Token
 	result := db.Debug().Preload("User").Preload("User.Cards", func(db *gorm.DB) *gorm.DB {
 		db = db.Order("is_main desc, id desc")
 		return db
@@ -358,14 +356,14 @@ func GetTokenByUUID(uuid string, db *gorm.DB) (PaymentToken, error) {
 }
 
 // GetAllTokens associated to a user. This requires a populated model (u.Mobile != "")
-func (u *User) GetAllTokens() ([]PaymentToken, error) {
+func (u *User) GetAllTokens() ([]Token, error) {
 	var user User
-	result := u.db.Model(&User{}).Preload("PaymentTokens").Find(&user, "mobile = ?", u.Mobile)
-	return user.PaymentTokens, result.Error
+	result := u.db.Model(&User{}).Preload("Tokens").Find(&user, "mobile = ?", u.Mobile)
+	return user.Tokens, result.Error
 }
 
 // Encode PaymentToken to a URL safe link that can be used for online purchases
-func Encode(p *PaymentToken) (string, error) {
+func Encode(p *Token) (string, error) {
 	var qr qrData
 	qr.Amount = p.Amount
 	qr.ToCard = p.ToCard
@@ -378,8 +376,8 @@ func Encode(p *PaymentToken) (string, error) {
 }
 
 // Decode a noebs payment token to an internal PaymentToken that we understand
-func Decode(data string) (PaymentToken, error) {
-	var p PaymentToken
+func Decode(data string) (Token, error) {
+	var p Token
 	decoded, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return p, err

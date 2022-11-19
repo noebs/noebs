@@ -265,7 +265,7 @@ func BillerHooks() {
 func (s *Service) PaymentOrder() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mobile := c.GetString("mobile")
-		var req ebs_fields.PaymentToken
+		var req ebs_fields.Token
 		token, _ := uuid.NewRandom()
 		user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 		if err != nil {

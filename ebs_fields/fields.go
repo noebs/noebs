@@ -239,7 +239,7 @@ func iso8601(fl validator.FieldLevel) bool {
 // We should really split this up between consumer and merchant. It is just too complicated to manage now
 type EBSResponse struct {
 	gorm.Model
-	UserID                 uint    // userID that is associated to this transaction
+	TokenID                uint
 	TerminalID             string  `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string  `json:"clientId,omitempty"`
