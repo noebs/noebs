@@ -68,19 +68,18 @@ func TestGetTokenByUUID(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"Test_to_card", args{"015b88da-1203-4a69-a3ef-e447b6df4ccc", "0912141665", testDB}, "working", false},
+		{"Test_to_card", args{"cbd7688f-2a60-439d-b53a-66eb04c060f1", "0912141666", testDB}, "working", false},
+	}
+	if err := testDB.AutoMigrate(&User{}, &Token{}); err != nil {
+		t.FailNow()
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := GetTokenByUUID(tt.args.uuid, tt.args.db)
+			got, err := GetTokenByUUID(tt.args.uuid, tt.args.db)
 			if err != nil {
 				t.Errorf("the error is: %v", err)
 			}
-			// test that the card is:
-			// if got.User.Cards[0].Name != tt.want {
-			// 	t.Errorf("the error is: %v", err)
-			// }
-
+			t.Logf("the token we got is: %+v", got)
 		})
 	}
 }

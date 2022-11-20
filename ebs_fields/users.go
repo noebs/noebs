@@ -243,6 +243,7 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 type Token struct {
 	gorm.Model
 	UserID       uint
+	User         User
 	Amount       int           `json:"amount,omitempty"`
 	CartID       string        `json:"cart_id,omitempty"`
 	UUID         string        `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
@@ -347,11 +348,17 @@ func GetTokenWithResult(uuid string, db *gorm.DB) (Token, error) {
 // GetTokenByUUID gets a preloaded token with the user's ID and their cards
 func GetTokenByUUID(uuid string, db *gorm.DB) (Token, error) {
 	var payment Token
-	result := db.Debug().Preload("User").Preload("User.Cards", func(db *gorm.DB) *gorm.DB {
-		db = db.Order("is_main desc, id desc")
-		return db
-	}).First(&payment, "uuid = ?", uuid)
+	result := db.Debug().Where("uuid = ?", uuid).First(&payment)
+	if result.Error != nil {
+		return payment, result.Error
+	}
+	var user User
+	user.ID = payment.UserID
+	if result := db.Debug().Preload("Cards").First(&user); result.Error != nil {
+		return payment, result.Error
+	}
 	payment.db = db
+	payment.User = user
 	return payment, result.Error
 }
 
