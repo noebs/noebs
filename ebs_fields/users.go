@@ -243,7 +243,7 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 type Token struct {
 	gorm.Model
 	UserID       uint
-	User         User
+	User         User          `gorm:"-"`
 	Amount       int           `json:"amount,omitempty"`
 	CartID       string        `json:"cart_id,omitempty"`
 	UUID         string        `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
