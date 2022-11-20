@@ -44,7 +44,7 @@ func TestPaymentToken_UpsertTransaction(t *testing.T) {
 				EBSResponses: trans,
 			}
 			// p.UserID = 1
-			p.User = User{Mobile: "0912141679", Model: gorm.Model{ID: 1}}
+			// p.User = User{Mobile: "0912141679", Model: gorm.Model{ID: 1}}
 			if err := p.UpsertTransaction(tt.args.transaction, tt.args.uuid); err != nil {
 				t.Errorf("PaymentToken.UpsertTransaction() error = %v, wantErr %v", err, tt.wantErr)
 			}

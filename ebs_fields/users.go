@@ -295,7 +295,7 @@ func (p Token) UpsertTransaction(transaction EBSResponse, uuid string) error {
 	p.db.Debug().Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "uuid"}},
 	}).Create(&p)
-	return p.db.Debug().Session(&gorm.Session{FullSaveAssociations: true}).Where("uuid = ?", uuid).Updates(&p).Error
+	return p.db.Debug().Omit("User").Session(&gorm.Session{FullSaveAssociations: true}).Where("uuid = ?", uuid).Updates(&p).Error
 }
 
 // GetTokenWithTransaction preloads a token with its transaction
