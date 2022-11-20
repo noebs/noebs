@@ -1618,13 +1618,10 @@ func (s *Service) IPINKey(c *gin.Context) {
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.Token
 	mobile := c.GetString("mobile")
+	c.ShouldBindWith(&token, binding.JSON)
 	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
-		return
-	}
-	if err := c.ShouldBindWith(&token, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Invalid request"})
 		return
 	}
 

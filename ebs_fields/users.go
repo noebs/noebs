@@ -242,8 +242,9 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 //  6. Note: an optional text note to be sent to the recipient.
 type Token struct {
 	gorm.Model
-	UserID       uint
-	User         User          `gorm:"-"`
+	UserID uint
+
+	User         User          `gorm:"-" json:",-"`
 	Amount       int           `json:"amount,omitempty"`
 	CartID       string        `json:"cart_id,omitempty"`
 	UUID         string        `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
