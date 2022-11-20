@@ -1704,12 +1704,8 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	data.ApplicationId = s.NoebsConfig.ConsumerID
 	data.ToCard = storedToken.ToCard
-	// code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 
-	var res ebs_fields.EBSParserFields
-	res.UUID = ""
-	var code int
-	var ebsErr error
 	storedToken.IsPaid = ebsErr == nil
 
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
