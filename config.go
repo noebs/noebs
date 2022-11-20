@@ -196,7 +196,7 @@ func GetMainEngine() *gin.Engine {
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
-		cons.GET("/payment_token/", consumerService.GetPaymentToken)
+		cons.GET("/payment_token", consumerService.GetPaymentToken)
 
 	}
 	return route
