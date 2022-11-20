@@ -1717,8 +1717,8 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
 
 	if ebsErr != nil {
-		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, storedToken)
 	} else {
 		c.JSON(code, storedToken)
 	}
