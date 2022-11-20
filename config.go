@@ -126,7 +126,6 @@ func GetMainEngine() *gin.Engine {
 	cons := route.Group("/consumer")
 
 	{
-		cons.GET("/payment_token", consumerService.GetPaymentToken)
 		cons.POST("/register", consumerService.CreateUser)
 		cons.POST("/register_with_card", consumerService.RegisterWithCard)
 		cons.POST("/refresh", consumerService.RefreshHandler)
@@ -195,7 +194,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/add_card", consumerService.AddCards)
 		cons.PUT("/edit_card", consumerService.EditCard)
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
-
+		cons.GET("/payment_token", consumerService.GetPaymentToken)
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 	}
