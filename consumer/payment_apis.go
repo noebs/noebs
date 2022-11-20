@@ -1616,7 +1616,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 // GeneratePaymentToken is used by noebs user to charge their customers.
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
-	var token ebs_fields.PaymentToken
+	var token ebs_fields.Token
 	mobile := c.GetString("mobile")
 	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
@@ -1634,7 +1634,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 
 	token.UUID = uuid.New().String()
-	token.UserID = user.ID
+	// token.UserID = user.ID
 	if token.ToCard == "" {
 		// Only override card if the user didn't explicity specify a card
 		token.ToCard = user.Cards[0].Pan
@@ -1707,7 +1707,6 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	// code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 
 	var res ebs_fields.EBSParserFields
-	storedToken.Transaction = res.EBSResponse
 	res.UUID = ""
 	var code int
 	var ebsErr error

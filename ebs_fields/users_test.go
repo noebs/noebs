@@ -250,7 +250,7 @@ func TestGetUserByCard(t *testing.T) {
 		want    User
 		wantErr bool
 	}{
-		{"get user with cards", args{pan: "23232", db: testDB}, User{}, true},
+		{"get user with cards", args{pan: "3289329839829832983", db: testDB}, User{}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
