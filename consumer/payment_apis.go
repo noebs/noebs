@@ -1713,14 +1713,19 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "unable_to_save_transaction"})
 		return
 	}
-
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
-
 	if ebsErr != nil {
-		// payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, storedToken)
+		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, payload)
 	} else {
-		c.JSON(code, storedToken)
+
+		type qrres struct {
+			ebs_fields.Token
+			Transaction ebs_fields.EBSResponse `json:"transaction"`
+		}
+		d := qrres{Token: storedToken, Transaction: res.EBSResponse}
+
+		c.JSON(code, d)
 	}
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
