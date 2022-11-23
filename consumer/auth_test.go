@@ -12,19 +12,31 @@ import (
 	"github.com/go-redis/redis/v7"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-func setupRouter() *gin.Engine {
+var testDB, err = gorm.Open(sqlite.Open("../local_test.db"), &gorm.Config{})
+var testLogger = logrus.New()
+var noebsConfig = ebs_fields.NoebsConfig{BillInquiryIPIN: "0000", EBSConsumerKey: "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ=="}
+
+func testSetupRouter() *gin.Engine {
+
+	testLogger.SetReportCaller(true)
+	testLogger.SetLevel(logrus.DebugLevel)
 	r := gin.Default()
 	var service Service
+	service.Logger = testLogger
+	service.Db = testDB
+	service.NoebsConfig = noebsConfig
 
 	r.GET("/firebase", service.VerifyFirebase)
+	r.POST("/register_with_card", service.RegisterWithCard)
 	return r
 }
 
 func TestService_VerifyFirebase(t *testing.T) {
-	router := setupRouter()
+	router := testSetupRouter()
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/firebase", nil)

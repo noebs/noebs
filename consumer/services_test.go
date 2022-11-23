@@ -4,11 +4,7 @@ import (
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
-
-var testDB, err = gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
 
 func TestService_isValidCard(t *testing.T) {
 

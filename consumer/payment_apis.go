@@ -364,6 +364,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	}
 }
 
+//Register with card allow a user to register through noebs and assigning a card to them
 func (s *Service) RegisterWithCard(c *gin.Context) {
 	var card ebs_fields.CacheCards
 	c.ShouldBindJSON(&card)
@@ -372,17 +373,15 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 		return
 	}
 
-	user := ebs_fields.User{Mobile: card.Mobile}
+	user := ebs_fields.NewUser(s.Db)
+	user.Mobile = card.Mobile
 	var userId int
 	if res := s.Db.Create(&user); res.Error == nil {
-		userId = int(res.RowsAffected)
-		user.ID = uint(userId)
 		ucard := card.NewCardFromCached(userId)
 		ucard.ID = 0
 		user.Cards = append(user.Cards, ucard)
 		user.UpsertCards([]ebs_fields.Card{ucard})
 	}
-
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 }
 

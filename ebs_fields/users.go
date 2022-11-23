@@ -140,7 +140,7 @@ func (u *User) HashPassword() error {
 // it is an ID for the card (a primary key) and as a result will do an update instead of insert
 func (u User) UpsertCards(cards []Card) error {
 	u.Cards = cards
-	return u.db.Clauses(clause.OnConflict{
+	return u.db.Debug().Clauses(clause.OnConflict{
 		UpdateAll: true,
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
