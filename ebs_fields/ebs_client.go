@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 var log = logrus.New()
@@ -65,8 +67,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	}
 
 	log.Printf("ebs_raw: %s", string(responseBody))
-	// check Content-type is application json, if not, panic!
-	// check if content type includes application/json
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
 		log.WithFields(logrus.Fields{
 			"code":    "wrong content type parsed",
@@ -74,33 +74,15 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		}).Error("ebs response content type is not application/json")
 		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
 	}
-
 	var tmpRes IPINResponse
-
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
+			go updateCardValidity(req)
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
-			// if ebsGenericResponse.ResponseCode == 51 {
-			// 	// this is a special case just to mock ebs
-			// 	data := tmpRes.newResponse()
-			// 	data.GenericEBSResponseFields.PAN = "7222061020105617937"
-			// 	data.GenericEBSResponseFields.ExpDate = "2308"
-			// 	data.GenericEBSResponseFields.FinancialInstitutionID = "ESSD"
-			// 	data.GenericEBSResponseFields.EntityID = "249912141679"
-			// 	data.GenericEBSResponseFields.EntityType = "Phone No"
-			// 	data.GenericEBSResponseFields.PhoneNumber = "0912141679"
-			// 	data.GenericEBSResponseFields.CreationDate = "0714"
-			// 	data.GenericEBSResponseFields.EntityGroup = "0"
-			// 	data.GenericEBSResponseFields.PanCategory = "Standard"
-			// 	return http.StatusOK, data, nil
-			// } else
-			// the error here should be nil!
-			// we don't actually have any errors!
 			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 		}
-
 	} else {
 		// there is an error in handling the incoming EBS's ebsResponse
 		// log the err here please
@@ -148,4 +130,15 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	res.PAN = i.Pan
 	res.ExpDate = i.ExpDate
 	return EBSParserFields{EBSResponse: res}
+}
+
+func updateCardValidity(req []byte) {
+	testDB, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
+	if err != nil {
+		log.Printf("error in gorm: %v", err)
+		return
+	}
+	var tmp map[string]string
+	json.Unmarshal(req, &tmp)
+	testDB.Table("cache_cards").Where("pan = ?", tmp["PAN"]).Update("is_valid", true)
 }
