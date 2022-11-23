@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	firebase "firebase.google.com/go/v4"
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v7"
@@ -18,9 +19,12 @@ import (
 
 var testDB, err = gorm.Open(sqlite.Open("../local_test.db"), &gorm.Config{})
 var testLogger = logrus.New()
-var noebsConfig = ebs_fields.NoebsConfig{BillInquiryIPIN: "0000", EBSConsumerKey: "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ=="}
+var noebsConfig = ebs_fields.NoebsConfig{JWTKey: "testme", BillInquiryIPIN: "0000", EBSConsumerKey: "MFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBANx4gKYSMv3CrWWsxdPfxDxFvl+Is/0kc1dvMI1yNWDXI3AgdI4127KMUOv7gmwZ6SnRsHX/KAM0IPRe0+Sa0vMCAwEAAQ=="}
+
+var auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 
 func testSetupRouter() *gin.Engine {
+	auth.Init()
 
 	testLogger.SetReportCaller(true)
 	testLogger.SetLevel(logrus.DebugLevel)
@@ -28,9 +32,13 @@ func testSetupRouter() *gin.Engine {
 	var service Service
 	service.Logger = testLogger
 	service.Db = testDB
+	service.Db = testDB.Debug()
 	service.NoebsConfig = noebsConfig
+	service.Auth = &auth
 
 	r.GET("/firebase", service.VerifyFirebase)
+	r.POST("/register", service.CreateUser)
+	r.POST("/login", service.LoginHandler)
 	r.POST("/register_with_card", service.RegisterWithCard)
 	return r
 }

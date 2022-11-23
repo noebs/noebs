@@ -92,7 +92,7 @@ func (s *Service) LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-	s.Logger.Printf("the processed request is: %v\n", req)
+	s.Logger.Printf("the processed request is: %+v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found

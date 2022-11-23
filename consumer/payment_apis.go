@@ -370,14 +370,14 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	c.ShouldBindJSON(&card)
 	if ok, err := s.isValidCard(card); !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "not_valid_card"})
-		return
+		// return
 	}
-
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
-	var userId int
+	user.Fullname = card.Name
+	user.Password = card.Password
 	if res := s.Db.Create(&user); res.Error == nil {
-		ucard := card.NewCardFromCached(userId)
+		ucard := card.NewCardFromCached(int(user.ID))
 		ucard.ID = 0
 		user.Cards = append(user.Cards, ucard)
 		user.UpsertCards([]ebs_fields.Card{ucard})

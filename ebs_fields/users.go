@@ -34,6 +34,18 @@ type User struct {
 	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
 }
 
+// func (user *User) BeforeSave(tx *gorm.DB) (err error) {
+// 	if user.Password == "" {
+// 		return errors.New("password is empty")
+// 	}
+// 	if err := user.HashPassword(); err == nil {
+// 		tx.Statement.SetColumn("password", user.Password)
+// 		return nil
+// 	} else {
+// 		return err
+// 	}
+// }
+
 func NewUser(db *gorm.DB) *User {
 	return &User{
 		db: db,
@@ -412,11 +424,12 @@ type Card struct {
 
 type CacheCards struct {
 	gorm.Model
-	Pan     string `json:"pan" gorm:"uniqueIndex"`
-	Expiry  string `json:"exp_date"`
-	Name    string `json:"name"`
-	Mobile  string `json:"mobile" gorm:"-:all"`
-	IsValid *bool  `json:"is_valid"`
+	Pan      string `json:"pan" gorm:"uniqueIndex"`
+	Expiry   string `json:"exp_date"`
+	Name     string `json:"name"`
+	Mobile   string `json:"mobile" gorm:"-:all"`
+	Password string `json:"password" gorm:"-:all"`
+	IsValid  *bool  `json:"is_valid"`
 }
 
 func (c CacheCards) OverrideField() string {
