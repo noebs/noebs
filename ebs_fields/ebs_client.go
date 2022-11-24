@@ -133,6 +133,7 @@ func (i IPINResponse) newResponse() EBSParserFields {
 }
 
 func updateCardValidity(req []byte) {
+	// this might be a little bit tricky in that we are opening too many database instances
 	testDB, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
 	if err != nil {
 		log.Printf("error in gorm: %v", err)
