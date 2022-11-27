@@ -57,7 +57,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	}
 
 	defer ebsResponse.Body.Close()
-
 	responseBody, err := io.ReadAll(ebsResponse.Body)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -65,7 +64,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		}).Error("Error reading ebs response")
 		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
-
 	log.Printf("ebs_raw: %s", string(responseBody))
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
 		log.WithFields(logrus.Fields{
@@ -78,7 +76,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
-			go updateCardValidity(req)
+			go updateCardValidity(req, ebsGenericResponse.ResponseCode)
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
 			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
@@ -101,7 +99,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 			}
 		}
-
 		return http.StatusInternalServerError, ebsGenericResponse, err
 	}
 
@@ -132,8 +129,12 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	return EBSParserFields{EBSResponse: res}
 }
 
-func updateCardValidity(req []byte) {
+func updateCardValidity(req []byte, ebsCode int) {
 	// this might be a little bit tricky in that we are opening too many database instances
+	isValid := true
+	if ebsCode == INVALIDCARD {
+		isValid = false
+	}
 	testDB, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
 	if err != nil {
 		log.Printf("error in gorm: %v", err)
@@ -141,5 +142,11 @@ func updateCardValidity(req []byte) {
 	}
 	var tmp map[string]string
 	json.Unmarshal(req, &tmp)
-	testDB.Table("cache_cards").Where("pan = ?", tmp["PAN"]).Update("is_valid", true)
+	testDB.Debug().Table("cache_cards").Where("pan = ?", tmp["PAN"]).Update("is_valid", isValid)
 }
+
+var (
+	INVALIDPIN  = 53
+	SUCCESS     = 0
+	INVALIDCARD = 52
+)
