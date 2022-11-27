@@ -197,17 +197,23 @@ func newFromBytes(d []byte, code int) (response, error) {
 }
 
 /*
-{
-	type: EBS | noebs,
-	date,
-	uuid: String?,
-	message: {"title", "body", "pics": "url"}?,
-	payment_request: PaymentToke?,
-	"call_to_action": "/a router"
-}
+	{
+		type: EBS | noebs,
+		date,
+		uuid: String?,
+		message: {"title", "body", "pics": "url"}?,
+		payment_request: PaymentToke?,
+		"call_to_action": "/a router"
+	}
 */
+
 type pushData struct {
-	To    string `json:"to"`
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	Type           string                     `json:"type"`
+	Date           time.Time                  `json:"date"`
+	To             string                     `json:"to"`
+	Title          string                     `json:"title"`
+	Body           string                     `json:"body"`
+	EBSData        ebs_fields.EBSParserFields `json:"data"`
+	PaymentRequest ebs_fields.Token           `json:"payment_request"`
+	CallToAction   string                     `json:"call_to_action"`
 }

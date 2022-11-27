@@ -364,7 +364,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	}
 }
 
-//Register with card allow a user to register through noebs and assigning a card to them
+// Register with card allow a user to register through noebs and assigning a card to them
 func (s *Service) RegisterWithCard(c *gin.Context) {
 	var card ebs_fields.CacheCards
 	c.ShouldBindJSON(&card)
@@ -385,7 +385,7 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 }
 
-//BillerID retrieves a billerID from noebs and performs an ebs request
+// BillerID retrieves a billerID from noebs and performs an ebs request
 // if a phone number doesn't exist in our system
 func (s *Service) GetBiller(c *gin.Context) {
 	var mobile string
@@ -498,9 +498,20 @@ func (s *Service) Balance(c *gin.Context) {
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-		data := res
-		data.PAN = fields.Pan
-		tranData <- data // remember pan here is masked
+
+		// This is for push notifications
+		var data pushData
+
+		data.Type = "EBS"
+		data.Date = res.CreatedAt
+		data.Title = "Check Balance Success"
+		data.CallToAction = "balance"
+
+		data.EBSData = res
+		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+		data.Body = fmt.Sprintf("Your balance is %v", res.Balance["available"])
+
+		tranData <- data
 
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")

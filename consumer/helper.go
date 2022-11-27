@@ -1,4 +1,4 @@
-//Package consumer contains all of apis regarding EBS Consumer Web services
+// Package consumer contains all of apis regarding EBS Consumer Web services
 // the package is structured in such a way that separetes between the payment apis
 // and the [services] apis.
 //
@@ -61,7 +61,7 @@ func validatePassword(password string) bool {
 	return hasUpper && hasSymbol && hasNumber
 }
 
-//userHasSessions is a handy function we can use to check if a user has any active sessions e.g., esp
+// userHasSessions is a handy function we can use to check if a user has any active sessions e.g., esp
 // when we don't want our users to use our app in new devices.
 // we have to implement a way to:
 // - identify user's devices
@@ -83,7 +83,7 @@ func userHasSessions(s *Service, username string) bool {
 	return false
 }
 
-//userExceedMaxSessions keep track of many login-attempts a user has made
+// userExceedMaxSessions keep track of many login-attempts a user has made
 func userExceededMaxSessions(s *Service, username string) bool {
 	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
 	res, err := s.Redis.Get(username + ":login_counts").Result()
@@ -162,20 +162,20 @@ func (s *Service) ToDatabasename(url string) string {
 	return data[url]
 }
 
-var tranData = make(chan ebs_fields.EBSParserFields)
+var tranData = make(chan pushData)
 
 func (s *Service) Pusher() {
 	for {
 		select {
 		case data := <-tranData:
 			// Read the pan from the payload
-			user, err := ebs_fields.GetUserByCard(data.PAN, s.Db)
+			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
 			if err != nil {
 				s.Logger.Printf("error in Pusher service: %s", err)
 			} else {
-				content := pushData{To: user.DeviceID}
+				data.To = user.DeviceID
 				// Store to database first
-				s.SendPush(content)
+				s.SendPush(data)
 			}
 		}
 	}
