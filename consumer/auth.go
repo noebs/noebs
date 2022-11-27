@@ -368,7 +368,7 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 	s.Logger.Printf("Verified ID token: %v\n", token)
 }
 
-func (s *Service) SendPush(m pushData) error {
+func (s *Service) SendPush(data pushData) error {
 	// Obtain a messaging.Client from the App.
 	ctx := context.Background()
 
@@ -378,15 +378,18 @@ func (s *Service) SendPush(m pushData) error {
 	}
 
 	// This registration token comes from the client FCM SDKs.
-	registrationToken := m.To
+	registrationToken := data.To
 
 	// See documentation on defining a message payload.
 	message := &messaging.Message{
 		Data: map[string]string{
-			"score": "850",
-			"time":  "2:45",
+			"type":            data.Type,
+			"time":            data.Date.String(),
+			"ebs_data":        fmt.Sprintf("%v", data.EBSData),
+			"call_to_action":  data.CallToAction,
+			"payment_request": fmt.Sprintf("%v", data.PaymentRequest),
 		},
-		Notification: &messaging.Notification{Title: "Successful transaction", Body: "it works!"},
+		Notification: &messaging.Notification{Title: data.Title, Body: data.Body},
 		Token:        registrationToken,
 	}
 
