@@ -788,7 +788,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 				data.EBSData = res
 				data.EBSData.PAN = fields.Pan
-				data.Body = fmt.Sprintf("%v %v has been transfered from your account to %v", res.AccountCurrency, fields.TranAmount, res.PAN)
+				data.Body = fmt.Sprintf("%v %v has been transfered from your account to %v", res.AccountCurrency, fields.TranAmount, fields.ToCard)
 
 				tranData <- data
 			}
