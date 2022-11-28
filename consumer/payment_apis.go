@@ -500,18 +500,21 @@ func (s *Service) Balance(c *gin.Context) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		// This is for push notifications
-		var data pushData
+		{
 
-		data.Type = "EBS"
-		data.Date = res.CreatedAt
-		data.Title = "Check Balance Success"
-		data.CallToAction = "balance"
+			var data pushData
 
-		data.EBSData = res
-		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
-		data.Body = fmt.Sprintf("Your balance is %v", res.Balance["available"])
+			data.Type = "EBS"
+			data.Date = res.CreatedAt
+			data.Title = "Balance Inquiry"
+			data.CallToAction = "balance"
 
-		tranData <- data
+			data.EBSData = res
+			data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+			data.Body = fmt.Sprintf("Your balance is: %v %v", res.AccountCurrency, res.Balance["available"])
+
+			tranData <- data
+		}
 
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
@@ -739,8 +742,56 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			// This is for push notifications (sender)
+			{
+
+				var data pushData
+
+				data.Type = "EBS"
+				data.Date = res.CreatedAt
+				data.Title = "Card Transfer"
+				data.CallToAction = "card_transfer"
+
+				data.EBSData = res
+				data.EBSData.PAN = fields.Pan
+				data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
+
+				tranData <- data
+			}
 			c.JSON(code, payload)
 		} else {
+			// This is for push notifications (receiver)
+			{
+
+				var data pushData
+
+				data.Type = "EBS"
+				data.Date = res.CreatedAt
+				data.Title = "Card Transfer"
+				data.CallToAction = "card_transfer"
+
+				data.EBSData = res
+				data.EBSData.PAN = fields.ToCard
+				data.Body = fmt.Sprintf("You received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
+
+				tranData <- data
+			}
+			// This is for push notifications (sender)
+			{
+
+				var data pushData
+
+				data.Type = "EBS"
+				data.Date = res.CreatedAt
+				data.Title = "Card Transfer"
+				data.CallToAction = "card_transfer"
+
+				data.EBSData = res
+				data.EBSData.PAN = fields.Pan
+				data.Body = fmt.Sprintf("%v %v has been transferred from your account to %v", res.AccountCurrency, fields.TranAmount, res.ToCard)
+
+				tranData <- data
+			}
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 

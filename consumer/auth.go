@@ -380,17 +380,35 @@ func (s *Service) SendPush(data pushData) error {
 	// This registration token comes from the client FCM SDKs.
 	registrationToken := data.To
 
+	var EBSData, PaymentRequest []byte
+
+	EBSData, err = json.Marshal(data.EBSData)
+	if err != nil {
+		log.Printf("Error marshalling EBSData: %v", err)
+	}
+
+	PaymentRequest, err = json.Marshal(data.PaymentRequest)
+	if err != nil {
+		log.Printf("Error marshalling PaymentRequest: %v", err)
+	}
+
 	// See documentation on defining a message payload.
 	message := &messaging.Message{
+		Token:        registrationToken,
+		Notification: &messaging.Notification{Title: data.Title, Body: data.Body},
+		Android:      &messaging.AndroidConfig{},
+		Webpush:      &messaging.WebpushConfig{},
+		APNS:         &messaging.APNSConfig{},
+		FCMOptions:   &messaging.FCMOptions{},
+		Topic:        "",
+		Condition:    "",
 		Data: map[string]string{
 			"type":            data.Type,
-			"time":            data.Date.String(),
-			"ebs_data":        fmt.Sprintf("%v", data.EBSData),
+			"time":            fmt.Sprint(data.Date.Unix()),
+			"ebs_data":        string(EBSData),
 			"call_to_action":  data.CallToAction,
-			"payment_request": fmt.Sprintf("%v", data.PaymentRequest),
+			"payment_request": string(PaymentRequest),
 		},
-		Notification: &messaging.Notification{Title: data.Title, Body: data.Body},
-		Token:        registrationToken,
 	}
 
 	// Send a message to the device corresponding to the provided
