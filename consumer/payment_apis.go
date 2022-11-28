@@ -753,7 +753,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 				data.CallToAction = "card_transfer"
 
 				data.EBSData = res
-				data.EBSData.PAN = fields.ToCard
+				data.EBSData.PAN = fields.Pan
 				data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
 
 				tranData <- data
@@ -787,7 +787,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 				data.CallToAction = "card_transfer"
 
 				data.EBSData = res
-				data.EBSData.PAN = fields.ToCard
+				data.EBSData.PAN = fields.Pan
 				data.Body = fmt.Sprintf("%v %v has been transfered from your account to %v", res.AccountCurrency, fields.TranAmount, res.PAN)
 
 				tranData <- data
