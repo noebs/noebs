@@ -285,8 +285,53 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			// This is for push notifications (failure)
+			{
+				var data pushData
+
+				data.Type = "EBS"
+				data.Date = res.CreatedAt
+				data.Title = "Payment Failure"
+				data.CallToAction = "bill_payment"
+
+				data.EBSData = res
+				data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+
+				data.Body = fmt.Sprintf("Payment failed due to: %v", res.ResponseMessage)
+
+				tranData <- data
+			}
 			c.JSON(code, payload)
 		} else {
+			// This is for push notifications (success)
+			{
+				var data pushData
+
+				data.Type = "EBS"
+				data.Date = res.CreatedAt
+				data.Title = "Payment Success"
+				data.CallToAction = "bill_payment"
+
+				data.EBSData = res
+				data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+
+				switch res.PayeeID {
+				case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
+					phone := res.PaymentInfo[7:]
+					data.Body = fmt.Sprintf("%v %v has been transferred to %v", res.AccountCurrency, res.TranAmount, phone)
+				case "0010030002", "0010030004": // mohe
+					data.Body = fmt.Sprintf("%v %v has been payed for Ministry of Higher Education", res.AccountCurrency, res.TranAmount)
+				case "0010030003": // Customs
+					data.Body = fmt.Sprintf("%v %v has been payed for Customs", res.AccountCurrency, res.TranAmount)
+				case "0010050001": // e-15
+					data.Body = fmt.Sprintf("%v %v has been payed for E-15", res.AccountCurrency, res.TranAmount)
+				case "0010020001": // electricity
+					meter := res.PaymentInfo[6:]
+					data.Body = fmt.Sprintf("%v %v has been payed for Electricity Meter No. %v", res.AccountCurrency, res.TranAmount, meter)
+				}
+
+				tranData <- data
+			}
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
