@@ -341,7 +341,7 @@ func (res EBSResponse) GetByUUID(uuid string, db *gorm.DB) (EBSResponse, error) 
 func (e EBSResponse) GetEBSUUID(originalUUID string, db *gorm.DB, noebsConfig *NoebsConfig) (EBSResponse, error) {
 	url := noebsConfig.ConsumerIP + ConsumerTransactionStatusEndpoint
 	var fields = ConsumerTransactionStatusFields{}
-	fields.ApplicationId = noebsConfig.ConsumerID
+	fields.ApplicationId = "ACTSCon"
 	fields.TranDateTime = EbsDate()
 	fields.OriginalTranUUID = originalUUID
 	uid,_ := uuid.NewRandom()
