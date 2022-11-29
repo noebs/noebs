@@ -214,6 +214,6 @@ type pushData struct {
 	Title          string                     `json:"title"`
 	Body           string                     `json:"body"`
 	EBSData        ebs_fields.EBSParserFields `json:"data"`
-	PaymentRequest ebs_fields.Token           `json:"payment_request"`
+	PaymentRequest ebs_fields.QrData          `json:"payment_request"`
 	CallToAction   string                     `json:"call_to_action"`
 }

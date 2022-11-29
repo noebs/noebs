@@ -157,7 +157,7 @@ func (u User) UpsertCards(cards []Card) error {
 	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
 }
 
-//UpsertBeneficiary adds or updates a beneficiary to a user
+// UpsertBeneficiary adds or updates a beneficiary to a user
 func (u User) UpsertBeneficiary(beneficiary []Beneficiary) error {
 	u.Beneficiaries = beneficiary
 	return u.db.Clauses(clause.OnConflict{
@@ -267,7 +267,7 @@ type Token struct {
 	IsPaid       bool          `json:"is_paid"`
 }
 
-type qrData struct {
+type QrData struct {
 	UUID   string `json:"uuid"`
 	ToCard string `json:"toCard,omitempty"`
 	Amount int    `json:"amount,omitempty"`
@@ -384,7 +384,7 @@ func (u *User) GetAllTokens() ([]Token, error) {
 
 // Encode PaymentToken to a URL safe link that can be used for online purchases
 func Encode(p *Token) (string, error) {
-	var qr qrData
+	var qr QrData
 	qr.Amount = p.Amount
 	qr.ToCard = p.ToCard
 	qr.UUID = p.UUID

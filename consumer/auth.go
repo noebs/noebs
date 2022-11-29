@@ -374,22 +374,25 @@ func (s *Service) SendPush(data pushData) error {
 
 	client, err := s.FirebaseApp.Messaging(ctx)
 	if err != nil {
-		s.Logger.Printf("error getting Messaging clientsf: %v\n", err)
+		s.Logger.Printf("error getting Messaging clients: %v\n", err)
 	}
 
 	// This registration token comes from the client FCM SDKs.
 	registrationToken := data.To
 
-	var EBSData, PaymentRequest []byte
-
-	EBSData, err = json.Marshal(data.EBSData)
-	if err != nil {
-		log.Printf("Error marshalling EBSData: %v", err)
+	firebaseData := map[string]string{
+		"type":           data.Type,
+		"time":           fmt.Sprint(data.Date.Unix()),
+		"uuid":           data.EBSData.UUID,
+		"call_to_action": data.CallToAction,
 	}
 
-	PaymentRequest, err = json.Marshal(data.PaymentRequest)
-	if err != nil {
-		log.Printf("Error marshalling PaymentRequest: %v", err)
+	if data.PaymentRequest != (ebs_fields.QrData{}) { // If you get an error in Payment Request notifications this may be the reason.
+		if PaymentRequest, err := json.Marshal(data.PaymentRequest); err == nil {
+			firebaseData["payment_request"] = string(PaymentRequest)
+		} else {
+			log.Printf("Error marshalling PaymentRequest: %v", err)
+		}
 	}
 
 	// See documentation on defining a message payload.
@@ -402,13 +405,7 @@ func (s *Service) SendPush(data pushData) error {
 		FCMOptions:   &messaging.FCMOptions{},
 		Topic:        "",
 		Condition:    "",
-		Data: map[string]string{
-			"type":            data.Type,
-			"time":            fmt.Sprint(data.Date.Unix()),
-			"ebs_data":        string(EBSData),
-			"call_to_action":  data.CallToAction,
-			"payment_request": string(PaymentRequest),
-		},
+		Data:         firebaseData,
 	}
 
 	// Send a message to the device corresponding to the provided
