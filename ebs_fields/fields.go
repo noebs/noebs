@@ -941,6 +941,9 @@ type NoebsConfig struct {
 	// server config
 	Cors    []string `json:"cors"`
 	IsDebug bool     `json:"is_debug"` // set as true if you want to have more debug options
+
+	// SMS message
+	SMSMessage string `json:"sms_message"`
 }
 
 func (n *NoebsConfig) Defaults() {

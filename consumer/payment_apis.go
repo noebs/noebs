@@ -317,10 +317,12 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 				switch res.PayeeID {
 				case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
-					phone := res.PaymentInfo[7:]
-					data.Body = fmt.Sprintf("%v %v has been transferred to %v", res.AccountCurrency, res.TranAmount, phone)
+					phone := "0" + res.PaymentInfo[7:]
+					data.Phone = phone
+					data.Body = fmt.Sprintf("%v %v has been transferred to phone No. %v", res.AccountCurrency, res.TranAmount, phone)
+					tranData <- data
 				case "0010030002", "0010030004": // mohe
-					data.Body = fmt.Sprintf("%v %v has been payed for Ministry of Higher Education", res.AccountCurrency, res.TranAmount)
+					data.Body = fmt.Sprintf("%v %v has been payed for Education", res.AccountCurrency, res.TranAmount)
 				case "0010030003": // Customs
 					data.Body = fmt.Sprintf("%v %v has been payed for Customs", res.AccountCurrency, res.TranAmount)
 				case "0010050001": // e-15
@@ -330,6 +332,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 					data.Body = fmt.Sprintf("%v %v has been payed for Electricity Meter No. %v", res.AccountCurrency, res.TranAmount, meter)
 				}
 
+				data.Phone = ""
 				tranData <- data
 			}
 			c.JSON(code, gin.H{"ebs_response": res})
