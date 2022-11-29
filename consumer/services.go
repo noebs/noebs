@@ -131,7 +131,7 @@ func (s *Service) AddCards(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
 	}
-	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
 		return
@@ -168,7 +168,7 @@ func (s *Service) EditCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "card idx is empty", "code": "card_idx_empty"})
 		return
 	}
-	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
 		return
@@ -204,7 +204,7 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		return
 	}
 
-	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
 		return

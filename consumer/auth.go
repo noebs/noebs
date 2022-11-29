@@ -2,7 +2,6 @@ package consumer
 
 import (
 	"context"
-	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,7 +138,7 @@ func (s *Service) SingleLoginHandler(c *gin.Context) {
 	}
 
 	// Validate the otp using user's stored public key
-	if totp.Validate(req.Message, u.EncodePublickey()) == false {
+	if totp.Validate(req.Message, u.EncodePublickey32()) == false {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong otp entered", "code": "wrong_otp"})
 		return
 	}
@@ -168,7 +167,7 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
 			s.Logger.Info("refresh: auth username is: ", claims.Mobile)
-			user, _ := ebs_fields.NewUserByMobile(claims.Mobile, s.Db)
+			user, _ := ebs_fields.GetUserByMobile(claims.Mobile, s.Db)
 			// should verify signature here...
 			if user.PublicKey == "" {
 				s.Logger.Printf("user: %s has no registered pubkey", user.Mobile)
@@ -246,13 +245,13 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 		return
 	}
 
-	if valid := totp.Validate(req.OTP, base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))); !valid {
+	// I think this one is buggy
+	if valid := u.VerifyOtp(req.OTP); !valid {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
 		return
 	}
 	// FIXME(adonese): we have a bug here! no where condition!
 	s.Db.Model(&req).Update("is_password_otp", true)
-
 	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
@@ -433,18 +432,8 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
 		return
 	}
-	user, _ := ebs_fields.NewUserByMobile(req.Mobile, s.Db)
-	if user.PublicKey == "" && !allowInsecure {
-		// user has no public key
-		c.JSON(http.StatusBadRequest, gin.H{"message": "no pubkey was found", "code": "bad_request"})
-		return
-	}
-	secure := user.EncodePublickey()
-	if allowInsecure {
-		secure = base32.StdEncoding.EncodeToString([]byte(s.NoebsConfig.JWTKey))
-	}
-	log.Printf("the code is: %s", secure)
-	key, err := generateOtp(secure)
+	user, _ := ebs_fields.GetUserByMobile(req.Mobile, s.Db)
+	key, err := user.GenerateOTP()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
@@ -452,7 +441,6 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 	log.Printf("the key is: %s", key)
 	// this function doesn't have to be blocking.
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
-
 	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 

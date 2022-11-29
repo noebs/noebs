@@ -1717,7 +1717,7 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ve)
 		return
 	}
-	user, err := ebs_fields.NewUserByMobile(username, s.Db)
+	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
 		ve := validationError{Message: "user doesn't exist", Code: "record_not_found"}
 		c.JSON(http.StatusBadRequest, ve)

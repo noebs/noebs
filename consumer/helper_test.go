@@ -1,9 +1,11 @@
 package consumer
 
 import (
+	"encoding/base32"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/pquerna/otp/totp"
 )
 
 func Test_validatePassword(t *testing.T) {
@@ -44,6 +46,32 @@ func Test_parseTime(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := ebs_fields.EbsDate(); got != tt.want {
 				t.Errorf("parseTime() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_generateOtp(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		secret  string
+		want    string
+		wantErr bool
+	}{
+		{"test generateOtp", "12345678", "", false},
+	}
+	for _, tt := range tests {
+
+		sec := base32.StdEncoding.EncodeToString([]byte(tt.secret))
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := generateOtp(sec)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("generateOtp() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !totp.Validate(got, sec) {
+				t.Error("generateOtp() error not valid otp")
 			}
 		})
 	}

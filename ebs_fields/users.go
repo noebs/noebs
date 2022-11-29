@@ -1,11 +1,14 @@
 package ebs_fields
 
 import (
+	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -52,14 +55,34 @@ func NewUser(db *gorm.DB) *User {
 	}
 }
 
-// NewUserByMobile Retrieves a user from the database by mobile (username)
-func NewUserByMobile(mobile string, db *gorm.DB) (User, error) {
+// GetUserByMobile Retrieves a user from the database by mobile (username)
+func GetUserByMobile(mobile string, db *gorm.DB) (User, error) {
 	var user User
 	if result := db.First(&user, "mobile = ?", mobile); errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return user, errors.New("user not found")
 	}
 	user.db = db
 	return user, nil
+}
+
+// GenerateOTP for a noebs user
+func (u User) GenerateOTP() (string, error) {
+	if u.PublicKey == "" {
+		return "", errors.New("no publickey")
+	}
+	code, err := totp.GenerateCode(u.EncodePublickey32(), time.Now())
+	if err != nil {
+		return "", err
+	}
+	return code, nil
+}
+
+// GenerateOTP for a noebs user
+func (u User) VerifyOtp(code string) bool {
+	if u.PublicKey == "" {
+		return false
+	}
+	return totp.Validate(code, u.EncodePublickey32())
 }
 
 func NewUserWithCards(mobile string, db *gorm.DB) (*User, error) {
@@ -128,6 +151,11 @@ func GetUserTokens(mobile string, db *gorm.DB) ([]Token, error) {
 // EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
 func (u User) EncodePublickey() string {
 	return base64.StdEncoding.EncodeToString([]byte(u.PublicKey))
+}
+
+// EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
+func (u User) EncodePublickey32() string {
+	return base32.StdEncoding.EncodeToString([]byte(u.PublicKey))
 }
 
 func (u *User) SanitizeName() {
@@ -341,7 +369,7 @@ func NewToken(db *gorm.DB) *Token {
 
 // NewPaymentToken creates a new payment token and assign it to a user
 func NewPaymentToken(mobile string, db *gorm.DB) (*Token, error) {
-	user, err := NewUserByMobile(mobile, db)
+	user, err := GetUserByMobile(mobile, db)
 	print(user.ID)
 	if err != nil {
 		return nil, err
