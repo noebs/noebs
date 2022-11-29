@@ -170,7 +170,7 @@ func (s *Service) Pusher() {
 		select {
 		case data := <-tranData:
 			if data.Phone != "" { // Telecom operation
-				user, err := ebs_fields.NewUserByMobile(data.Phone, s.Db)
+				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
 				if err != nil {
 					// not a tutipay user
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
