@@ -343,6 +343,7 @@ func (e EBSResponse) GetEBSUUID(originalUUID string, db *gorm.DB, noebsConfig *N
 	var fields = ConsumerTransactionStatusFields{}
 	fields.ApplicationId = noebsConfig.ConsumerID
 	fields.TranDateTime = EbsDate()
+	fields.OriginalTranUUID = originalUUID
 	uid,_ := uuid.NewRandom()
 	fields.UUID = uid.String()
 	jsonBuffer, err := json.Marshal(fields)
