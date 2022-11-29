@@ -328,9 +328,10 @@ func (m *MinistatementDB) Scan(value interface{}) error {
 
 	return json.Unmarshal(b, m)
 }
+
 func (res EBSResponse) GetByUUID(uuid string, db *gorm.DB) (EBSResponse, error) {
 	var data EBSResponse
-	if res := db.Model(&res).Where("uuid = ?").First(&data); errors.Is(res.Error, gorm.ErrRecordNotFound) {
+	if res := db.Model(&res).First(&data, "uuid = ?", uuid); errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		return EBSResponse{}, res.Error
 	}
 	return data, nil

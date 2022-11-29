@@ -215,3 +215,32 @@ func TestUpdateBiller(t *testing.T) {
 		})
 	}
 }
+
+func TestEBSResponse_GetByUUID(t *testing.T) {
+
+	type args struct {
+		uuid string
+		db   *gorm.DB
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    EBSResponse
+		wantErr bool
+	}{
+		{"test get by uuid", args{"5352365a-8cfa-4945-a58d-bbbd5c8fa537", testDB}, EBSResponse{UUID: "5352365a-8cfa-4945-a58d-bbbd5c8fa537"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := EBSResponse{}
+			got, err := res.GetByUUID(tt.args.uuid, tt.args.db)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EBSResponse.GetByUUID() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got.ResponseCode != 59 { // insufficient funds
+				t.Errorf("EBSResponse.GetByUUID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
