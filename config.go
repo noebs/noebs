@@ -164,8 +164,11 @@ func GetMainEngine() *gin.Engine {
 			var res ebs_fields.EBSResponse
 			id := ctx.Query("uuid")
 			if response, err := res.GetByUUID(id, database); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
-				return
+				response, err = res.GetEBSUUID(id, database, &noebsConfig)
+				if err != nil {
+					ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
+					return
+				}
 			} else {
 				ctx.JSON(http.StatusOK, response)
 			}

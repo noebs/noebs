@@ -15,6 +15,7 @@ import (
 	_ "embed"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -335,6 +336,27 @@ func (res EBSResponse) GetByUUID(uuid string, db *gorm.DB) (EBSResponse, error) 
 		return EBSResponse{}, res.Error
 	}
 	return data, nil
+}
+
+func (e EBSResponse) GetEBSUUID(originalUUID string, db *gorm.DB, noebsConfig *NoebsConfig) (EBSResponse, error) {
+	url := noebsConfig.ConsumerIP + ConsumerTransactionStatusEndpoint
+	var fields = ConsumerTransactionStatusFields{}
+	fields.ApplicationId = noebsConfig.ConsumerID
+	fields.TranDateTime = EbsDate()
+	uid,_ := uuid.NewRandom()
+	fields.UUID = uid.String()
+	jsonBuffer, err := json.Marshal(fields)
+	if err != nil {
+		return EBSResponse{}, err
+	}
+	_, res, ebsErr := EBSHttpClient(url, jsonBuffer)
+	res.Name = "status"
+	db.Table("transactions").Create(&res.EBSResponse)
+	if ebsErr != nil {
+		return EBSResponse{}, ebsErr
+	} else {
+		return res.EBSResponse, nil
+	}
 }
 
 // Value return json value, implement driver.Valuer interface
