@@ -24,7 +24,7 @@ func GetRedisClient(addr string) *redis.Client {
 	return client
 }
 
-//SaveRedisList saves to a list in redis
+// SaveRedisList saves to a list in redis
 func SaveRedisList(r *redis.Client, key string, value interface{}) error {
 	_, err := r.LPush(key, value).Result()
 	return err
@@ -67,7 +67,7 @@ func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
 	v.Add("api_key", noebsConfig.SMSAPIKey)
 	v.Add("from", noebsConfig.SMSSender)
 	v.Add("to", "249"+strings.TrimPrefix(sms.Mobile, "0"))
-	v.Add("sms", sms.Message+"\n\n~tutipay <3")
+	v.Add("sms", sms.Message+"\n\n"+noebsConfig.SMSMessage)
 	url := noebsConfig.SMSGateway + v.Encode()
 	log.Printf("the url is: %+v", url)
 	res, err := http.Get(url)

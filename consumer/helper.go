@@ -19,6 +19,7 @@ import (
 	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/utils"
 	"github.com/go-redis/redis/v7"
 	"github.com/pquerna/otp/totp"
 )
@@ -168,14 +169,25 @@ func (s *Service) Pusher() {
 	for {
 		select {
 		case data := <-tranData:
-			// Read the pan from the payload
-			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
-			if err != nil {
-				s.Logger.Printf("error in Pusher service: %s", err)
+			if data.Phone != "" { // Telecom operation
+				user, err := ebs_fields.NewUserByMobile(data.Phone, s.Db)
+				if err != nil {
+					// not a tutipay user
+					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
+				} else {
+					data.To = user.DeviceID
+					s.SendPush(data)
+				}
 			} else {
-				data.To = user.DeviceID
-				// Store to database first
-				s.SendPush(data)
+				// Read the pan from the payload
+				user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+				if err != nil {
+					s.Logger.Printf("error in Pusher service: %s", err)
+				} else {
+					data.To = user.DeviceID
+					// Store to database first
+					s.SendPush(data)
+				}
 			}
 		}
 	}
