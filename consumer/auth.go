@@ -203,7 +203,6 @@ func (s *Service) CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
-
 	// Make sure user is unique
 	var tmpUser ebs_fields.User
 	if res := s.Db.Where("mobile = ?", u.Mobile).First(&tmpUser); res.Error == nil {
@@ -257,7 +256,6 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 
 // BalanceStep part of our 2fa steps for account recovery
 func (s *Service) BalanceStep(c *gin.Context) {
-
 	// FIXME(adonese): we need to check for `is_password_otp` = true
 	type data struct {
 		ebs_fields.ConsumerBalanceFields
@@ -370,12 +368,10 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 func (s *Service) SendPush(data pushData) error {
 	// Obtain a messaging.Client from the App.
 	ctx := context.Background()
-
 	client, err := s.FirebaseApp.Messaging(ctx)
 	if err != nil {
 		s.Logger.Printf("error getting Messaging clients: %v\n", err)
 	}
-
 	// This registration token comes from the client FCM SDKs.
 	registrationToken := data.To
 

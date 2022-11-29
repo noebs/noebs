@@ -264,3 +264,50 @@ func TestGetUserByCard(t *testing.T) {
 		})
 	}
 }
+
+func TestUser_GenerateOTP(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		pubkey  string
+		wantErr bool
+	}{
+		{"rest generate otp", "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAteM6IQBAUK4Lsb42zgr13YRHoBWyiQHuifjHvxxI7QHnOlQGRYU0xqgplV+Gumers6c3vH5xtlPsy6lHFJ7VQnTPHlZIcRefy7rKsVC+D1cjA6H3W6jWAdKDslxEb8sMfnatWI1PO0MNDz4Nh7KHS3V51nDqlx7I+TggtKZU8zq/epeVb+pqCKQphGd36J9KqZzaobDKxY6ObrLQDncKtF74UerJjmQxFd52VM/XDwOjmWS7shpQZx2HaLzFq6IOpTnKE+nySZqoXZVDB5j6llctinSs9E+HAOmN2r32B6zthYvMIO8gQjSZNyRp0E/GKhlPgfF8r55upszm7qIUZQIDAQAB", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := User{PublicKey: tt.pubkey}
+			got, err := u.GenerateOTP()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("User.GenerateOTP() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			print(got)
+			if len(got) != 6 {
+				t.Error("User.GenerateOTP() error = wrong otp")
+				return
+			}
+		})
+	}
+}
+
+func TestUser_VerifyOtp(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		code    string
+		pubkey  string
+		wantErr bool
+	}{
+		{"rest generate otp", "464261", "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAteM6IQBAUK4Lsb42zgr13YRHoBWyiQHuifjHvxxI7QHnOlQGRYU0xqgplV+Gumers6c3vH5xtlPsy6lHFJ7VQnTPHlZIcRefy7rKsVC+D1cjA6H3W6jWAdKDslxEb8sMfnatWI1PO0MNDz4Nh7KHS3V51nDqlx7I+TggtKZU8zq/epeVb+pqCKQphGd36J9KqZzaobDKxY6ObrLQDncKtF74UerJjmQxFd52VM/XDwOjmWS7shpQZx2HaLzFq6IOpTnKE+nySZqoXZVDB5j6llctinSs9E+HAOmN2r32B6zthYvMIO8gQjSZNyRp0E/GKhlPgfF8r55upszm7qIUZQIDAQAB", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := User{PublicKey: tt.pubkey}
+			if !u.VerifyOtp(tt.code) {
+				t.Errorf("User.VerifyOtp() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
+}
