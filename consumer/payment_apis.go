@@ -337,7 +337,6 @@ func (s *Service) BillPayment(c *gin.Context) {
 			}
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
-
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
@@ -354,7 +353,6 @@ func (s *Service) GetBills(c *gin.Context) {
 
 	uid, _ := uuid.NewRandom()
 	var fields ebs_fields.ConsumerBillInquiryFields
-
 	fields.ApplicationId = s.NoebsConfig.ConsumerID
 	fields.UUID = uid.String()
 	updatePaymentInfo(&fields, b)
@@ -367,7 +365,6 @@ func (s *Service) GetBills(c *gin.Context) {
 	fields.ConsumerCardHolderFields.Ipin = ipinBlock
 	fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
 	fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
-
 	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
 	// Get our cache results before hand
@@ -393,7 +390,6 @@ func (s *Service) GetBills(c *gin.Context) {
 			"message": err,
 		}).Info("error in migrating purchase model")
 	}
-
 	if ebsErr != nil {
 		cacheBills.Save(s.Db, true)
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -405,7 +401,6 @@ func (s *Service) GetBills(c *gin.Context) {
 			cacheBills.Save(s.Db, true)
 			payload := ebs_fields.ErrorDetails{Code: 502, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(502, payload)
-
 			return
 		}
 		c.JSON(code, gin.H{"ebs_response": res, "due_amount": due})
