@@ -423,6 +423,11 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	user.Password = card.Password
 	user.PublicKey = card.PublicKey
 	user.HashPassword()
+	key, err := user.GenerateOtp()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		return
+	}
 	if res := s.Db.Create(&user); res.Error == nil {
 		ucard := card.NewCardFromCached(int(user.ID))
 		ucard.ID = 0
@@ -430,6 +435,8 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 		user.UpsertCards([]ebs_fields.Card{ucard})
 	}
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: card.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
+
 }
 
 // BillerID retrieves a billerID from noebs and performs an ebs request

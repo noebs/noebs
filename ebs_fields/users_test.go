@@ -277,7 +277,7 @@ func TestUser_GenerateOTP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			u := User{PublicKey: tt.pubkey}
-			got, err := u.GenerateOTP()
+			got, err := u.GenerateOtp()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("User.GenerateOTP() error = %v, wantErr %v", err, tt.wantErr)
 				return

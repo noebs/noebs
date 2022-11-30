@@ -65,8 +65,8 @@ func GetUserByMobile(mobile string, db *gorm.DB) (User, error) {
 	return user, nil
 }
 
-// GenerateOTP for a noebs user
-func (u User) GenerateOTP() (string, error) {
+// GenerateOtp for a noebs user
+func (u User) GenerateOtp() (string, error) {
 	if u.PublicKey == "" {
 		return "", errors.New("no publickey")
 	}

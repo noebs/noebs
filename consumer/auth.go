@@ -426,7 +426,7 @@ func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
 		return
 	}
 	user, _ := ebs_fields.GetUserByMobile(req.Mobile, s.Db)
-	key, err := user.GenerateOTP()
+	key, err := user.GenerateOtp()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
