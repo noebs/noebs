@@ -343,6 +343,8 @@ func (s *Service) BillPayment(c *gin.Context) {
 	}
 }
 
+// GetBills for any EBS supported bill just by the entityID (phone number or the invoice ID). A good abstraction over EBS
+// services. The function also updates a local database for each result for subsequent queries.
 func (s *Service) GetBills(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b bills
@@ -393,7 +395,6 @@ func (s *Service) GetBills(c *gin.Context) {
 	}
 
 	if ebsErr != nil {
-
 		cacheBills.Save(s.Db, true)
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
