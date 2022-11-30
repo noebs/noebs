@@ -412,7 +412,7 @@ func (s *Service) GetBills(c *gin.Context) {
 func (s *Service) RegisterWithCard(c *gin.Context) {
 	var card ebs_fields.CacheCards
 	c.ShouldBindJSON(&card)
-	if ok, err := s.isValidCard(card); !ok {
+	if ok, err := s.isValidCard(card); !ok || card.PublicKey == "" || card.Mobile == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "not_valid_card"})
 		return
 	}
