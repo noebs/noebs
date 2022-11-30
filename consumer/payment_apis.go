@@ -413,7 +413,7 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	var card ebs_fields.CacheCards
 	c.ShouldBindJSON(&card)
 	if ok, err := s.isValidCard(card); !ok || card.PublicKey == "" || card.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "not_valid_card"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "invalid_card_or_credentials"})
 		return
 	}
 	user := ebs_fields.NewUser(s.Db)
