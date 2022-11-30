@@ -457,6 +457,7 @@ type CacheCards struct {
 	Name     string `json:"name"`
 	Mobile   string `json:"mobile" gorm:"-:all"`
 	Password string `json:"password" gorm:"-:all"`
+	PublicKey string `json:"user_pubkey" gorm:"-:all"`
 	IsValid  *bool  `json:"is_valid"`
 }
 

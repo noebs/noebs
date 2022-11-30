@@ -423,7 +423,10 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
 	user.Fullname = card.Name
+	// BUG(adonese): Encrypt password here
 	user.Password = card.Password
+	user.PublicKey = card.PublicKey
+	user.HashPassword()
 	if res := s.Db.Create(&user); res.Error == nil {
 		ucard := card.NewCardFromCached(int(user.ID))
 		ucard.ID = 0
