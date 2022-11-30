@@ -354,7 +354,7 @@ func (e EBSResponse) GetEBSUUID(originalUUID string, db *gorm.DB, noebsConfig *N
 	res.Name = "status"
 	db.Table("transactions").Create(&res.EBSResponse)
 	if ebsErr != nil {
-		return EBSResponse{}, ebsErr
+		return res.EBSResponse, ebsErr
 	} else {
 		return res.EBSResponse, nil
 	}
