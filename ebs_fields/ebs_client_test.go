@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+type data struct {}
+func (d data) TableName() string {
+	return "cache_cards"
+}
+
 func Test_updateCardValidity(t *testing.T) {
 	type args struct {
 		req     []byte
@@ -31,7 +36,6 @@ func Test_updateCardValidity(t *testing.T) {
 			if res.Pan != "9222232" || !res.IsValid {
 				t.Errorf("card not working")
 			}
-
 		})
 	}
 }
