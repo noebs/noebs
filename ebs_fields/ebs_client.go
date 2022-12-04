@@ -24,9 +24,6 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	verifyTLS := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-
-	True := true
-	False := false
 	ebsClient := http.Client{
 		Timeout:   3 * 30 * time.Second,
 		Transport: verifyTLS,
@@ -65,6 +62,10 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		}).Error("Error reading ebs response")
 		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
+	var c CacheCards
+	var isValid = true
+	c.Pan = getPan(req)
+	
 	log.Printf("ebs_raw: %s", string(responseBody))
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
 		log.WithFields(logrus.Fields{
@@ -75,19 +76,14 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	}
 	var tmpRes IPINResponse
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
-		// there's no problem in Unmarshalling
+		if ebsGenericResponse.ResponseCode == INVALIDCARD {
+			isValid = false
+		}
+		c.IsValid = &isValid
+		EBSRes<-c
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
-			var c CacheCards
-				c.Pan = getPan(req)
-				c.IsValid = &True
-				EBSRes<-c
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
-			var c CacheCards
-				c.Pan = getPan(req)
-				c.IsValid = &False
-
-				EBSRes<-c
 			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 		}
 	} else {
@@ -98,27 +94,17 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			"all_response": string(responseBody),
 			"ebs_fields":   ebsGenericResponse,
 		}).Info("ebs response transaction")
-		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") { // fuck me
-			// we have TWO cases here:
-			// fuck ebs
+		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") {
 			json.Unmarshal(responseBody, &tmpRes)
 			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
-				var c CacheCards
-				c.Pan = getPan(req)
-				c.IsValid = &True
-				EBSRes<-c
 				return http.StatusOK, tmpRes.newResponse(), nil
 			} else {
-				var c CacheCards
-				c.Pan = getPan(req)
-				c.IsValid = &False
-				EBSRes<-c
 				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 			}
 		}
 		return http.StatusInternalServerError, ebsGenericResponse, err
 	}
-
+	
 }
 
 type IPINResponse struct {
