@@ -256,6 +256,7 @@ func init() {
 	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger, FirebaseApp: firebaseApp, Auth: &auth}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
+	dataConfigs.DB = database
 }
 
 func wsAdapter(msg chat.Hub) gin.HandlerFunc {
@@ -263,3 +264,4 @@ func wsAdapter(msg chat.Hub) gin.HandlerFunc {
 		chat.ServeWs(&msg, c.Writer, c.Request)
 	}
 }
+

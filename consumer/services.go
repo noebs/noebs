@@ -234,7 +234,7 @@ func (s *Service) NecToName(c *gin.Context) {
 var billerChan = make(chan billerForm)
 
 // BillerHooks submits results to external endpoint
-func BillerHooks() {
+func (s Service) BillerHooks() {
 
 	for {
 		select {
@@ -248,6 +248,8 @@ func BillerHooks() {
 			if _, err := http.Post(value.to, "application/json", bytes.NewBuffer(data)); err != nil {
 				log.Printf("the error is: %v", err)
 			}
+		case res:= <-ebs_fields.EBSRes:
+			s.Db.Debug().Model(&ebs_fields.CacheCards{}).Where("pan = ?",res.Pan).Update("is_valid", res.IsValid)
 		}
 	}
 }

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -76,9 +75,16 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
 		// there's no problem in Unmarshalling
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
-			go updateCardValidity(req, ebsGenericResponse.ResponseCode)
+			var c CacheCards
+				c.Pan = getPan(req)
+				*c.IsValid = true
+				EBSRes<-c
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
+			var c CacheCards
+				c.Pan = getPan(req)
+				*c.IsValid = false
+				EBSRes<-c
 			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 		}
 	} else {
@@ -94,8 +100,16 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			// fuck ebs
 			json.Unmarshal(responseBody, &tmpRes)
 			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
+				var c CacheCards
+				c.Pan = getPan(req)
+				*c.IsValid = true
+				EBSRes<-c
 				return http.StatusOK, tmpRes.newResponse(), nil
 			} else {
+				var c CacheCards
+				c.Pan = getPan(req)
+				*c.IsValid = false
+				EBSRes<-c
 				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 			}
 		}
@@ -129,20 +143,14 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	return EBSParserFields{EBSResponse: res}
 }
 
-func updateCardValidity(req []byte, ebsCode int) {
-	// this might be a little bit tricky in that we are opening too many database instances
-	isValid := true
-	if ebsCode == INVALIDCARD {
-		isValid = false
-	}
-	tdb, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
-	if err != nil {
-		log.Printf("error in gorm: %v", err)
-		return
-	}
-	var tmp map[string]string
-	json.Unmarshal(req, &tmp)
-	tdb.Debug().Model(&CacheCards{}).Where("pan = ?", tmp["PAN"]).Update("is_valid", isValid)
+
+var EBSRes = make(chan CacheCards)
+
+func getPan(data []byte) string {
+	var d map[string]any
+	json.Unmarshal(data, &d)
+	return d["PAN"].(string)
+
 }
 
 var (
@@ -150,3 +158,8 @@ var (
 	SUCCESS     = 0
 	INVALIDCARD = 52
 )
+
+
+type Configs struct {
+	DB *gorm.DB
+}

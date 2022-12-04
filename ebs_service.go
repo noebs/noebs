@@ -18,6 +18,7 @@ var logrusLogger = logrus.New()
 var redisClient = utils.GetRedisClient("")
 var database *gorm.DB
 var consumerService consumer.Service
+var dataConfigs ebs_fields.Configs
 var service consumer.Service
 var auth gateway.JWTAuth
 var dashService dashboard.Service
@@ -27,7 +28,7 @@ var hub chat.Hub
 func main() {
 
 	go hub.Run()
-	go consumer.BillerHooks()
+	go consumerService.BillerHooks()
 	go consumerService.Pusher()
 	if noebsConfig.Port == "" {
 		noebsConfig.Port = ":8080"
