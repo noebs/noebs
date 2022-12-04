@@ -138,14 +138,17 @@ var EBSRes = make(chan CacheCards)
 func getPan(data []byte) string {
 	var d map[string]any
 	json.Unmarshal(data, &d)
-	return d["PAN"].(string)
-
+	if res, ok := d["PAN"].(string); ok {
+		return res
+	}
+	return ""
 }
 
 var (
 	INVALIDPIN  = 53
 	SUCCESS     = 0
 	INVALIDCARD = 52
+	ROUTINGERROR=72
 )
 
 
