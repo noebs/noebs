@@ -405,6 +405,13 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "invalid_card_or_credentials"})
 		return
 	}
+	// Make sure user is unique
+	var tmpUser ebs_fields.User
+	if res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser); res.Error == nil && (tmpUser.Mobile != "" && tmpUser.Password != "") {
+		// User already exists
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
+		return
+	}
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
 	user.Fullname = card.Name
@@ -425,7 +432,6 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: card.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
-
 }
 
 // BillerID retrieves a billerID from noebs and performs an ebs request
@@ -450,12 +456,7 @@ func (s *Service) GetBiller(c *gin.Context) {
 
 // BillInquiry for telecos, utility and government (billers inquiries)
 func (s *Service) BillInquiry(c *gin.Context) {
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint // EBS simulator endpoint url goes here.
-	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
-	// consume the request here and pass it over onto the EBS.
-	// marshal the request
-	// fuck. This shouldn't be here at all.
-
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var fields = ebs_fields.ConsumerBillInquiryFields{}
 
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
