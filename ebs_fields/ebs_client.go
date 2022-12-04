@@ -135,14 +135,14 @@ func updateCardValidity(req []byte, ebsCode int) {
 	if ebsCode == INVALIDCARD {
 		isValid = false
 	}
-	testDB, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
+	tdb, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
 	if err != nil {
 		log.Printf("error in gorm: %v", err)
 		return
 	}
 	var tmp map[string]string
 	json.Unmarshal(req, &tmp)
-	testDB.Debug().Model(&CacheCards{}).Where("pan = ?", tmp["PAN"]).Update("is_valid", isValid)
+	tdb.Debug().Model(&CacheCards{}).Where("pan = ?", tmp["PAN"]).Update("is_valid", isValid)
 }
 
 var (
