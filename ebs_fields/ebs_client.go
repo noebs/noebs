@@ -142,7 +142,7 @@ func updateCardValidity(req []byte, ebsCode int) {
 	}
 	var tmp map[string]string
 	json.Unmarshal(req, &tmp)
-	testDB.Debug().Model(&cacheCards{}).Where("pan = ?", tmp["PAN"]).Update("is_valid", isValid)
+	testDB.Debug().Model(&CacheCards{}).Where("pan = ?", tmp["PAN"]).Update("is_valid", isValid)
 }
 
 var (
@@ -150,13 +150,3 @@ var (
 	SUCCESS     = 0
 	INVALIDCARD = 52
 )
-
-
-type cacheCards struct {
-	Pan string 
-	IsValid bool
-}
-
-func (c cacheCards) TableName() string{
-	return "cache_cards"
-}
