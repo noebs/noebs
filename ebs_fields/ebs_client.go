@@ -25,6 +25,8 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
+	True := true
+	False := false
 	ebsClient := http.Client{
 		Timeout:   3 * 30 * time.Second,
 		Transport: verifyTLS,
@@ -77,13 +79,14 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
 			var c CacheCards
 				c.Pan = getPan(req)
-				*c.IsValid = true
+				c.IsValid = &True
 				EBSRes<-c
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
 			var c CacheCards
 				c.Pan = getPan(req)
-				*c.IsValid = false
+				c.IsValid = &False
+
 				EBSRes<-c
 			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 		}
@@ -102,13 +105,13 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
 				var c CacheCards
 				c.Pan = getPan(req)
-				*c.IsValid = true
+				c.IsValid = &True
 				EBSRes<-c
 				return http.StatusOK, tmpRes.newResponse(), nil
 			} else {
 				var c CacheCards
 				c.Pan = getPan(req)
-				*c.IsValid = false
+				c.IsValid = &False
 				EBSRes<-c
 				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 			}
