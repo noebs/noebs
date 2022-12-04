@@ -283,58 +283,47 @@ func (s *Service) BillPayment(c *gin.Context) {
 			}).Info("error in migrating purchase model")
 		}
 
+		// This is for push notification
+		var data pushData
+		data.Type = "EBS"
+		data.Date = res.CreatedAt
+		data.CallToAction = "bill_payment"
+		data.EBSData = res
+
 		if ebsErr != nil {
-			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			// This is for push notifications (failure)
-			{
-				var data pushData
+			data.Title = "Payment Failure"
+			data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+			data.Body = fmt.Sprintf("Payment failed due to: %v", res.ResponseMessage)
+			tranData <- data
 
-				data.Type = "EBS"
-				data.Date = res.CreatedAt
-				data.Title = "Payment Failure"
-				data.CallToAction = "bill_payment"
-
-				data.EBSData = res
-				data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
-
-				data.Body = fmt.Sprintf("Payment failed due to: %v", res.ResponseMessage)
-
-				tranData <- data
-			}
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
 			// This is for push notifications (success)
-			{
-				var data pushData
+			data.Title = "Payment Success"
+			data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
 
-				data.Type = "EBS"
-				data.Date = res.CreatedAt
-				data.Title = "Payment Success"
-				data.CallToAction = "bill_payment"
-
-				data.EBSData = res
-				data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
-
-				switch res.PayeeID {
-				case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
-					phone := "0" + res.PaymentInfo[7:]
-					data.Phone = phone
-					data.Body = fmt.Sprintf("%v %v has been transferred to phone No. %v", res.AccountCurrency, res.TranAmount, phone)
-					tranData <- data
-				case "0010030002", "0010030004": // mohe
-					data.Body = fmt.Sprintf("%v %v has been payed for Education", res.AccountCurrency, res.TranAmount)
-				case "0010030003": // Customs
-					data.Body = fmt.Sprintf("%v %v has been payed for Customs", res.AccountCurrency, res.TranAmount)
-				case "0010050001": // e-15
-					data.Body = fmt.Sprintf("%v %v has been payed for E-15", res.AccountCurrency, res.TranAmount)
-				case "0010020001": // electricity
-					meter := res.PaymentInfo[6:]
-					data.Body = fmt.Sprintf("%v %v has been payed for Electricity Meter No. %v", res.AccountCurrency, res.TranAmount, meter)
-				}
-
-				data.Phone = ""
+			switch res.PayeeID {
+			case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
+				phone := "0" + res.PaymentInfo[7:]
+				data.Phone = phone
+				data.Body = fmt.Sprintf("You have received %v %v on your phone: %v", res.AccountCurrency, res.TranAmount, phone)
 				tranData <- data
+			case "0010030002", "0010030004": // mohe
+				data.Body = fmt.Sprintf("%v %v has been payed for Education", res.AccountCurrency, res.TranAmount)
+			case "0010030003": // Customs
+				data.Body = fmt.Sprintf("%v %v has been payed for Customs", res.AccountCurrency, res.TranAmount)
+			case "0010050001": // e-15
+				data.Body = fmt.Sprintf("%v %v has been payed for E-15", res.AccountCurrency, res.TranAmount)
+			case "0010020001": // electricity
+				meter := res.PaymentInfo[6:]
+				data.Body = fmt.Sprintf("%v %v has been payed for Electricity Meter No. %v", res.AccountCurrency, res.TranAmount, meter)
 			}
+
+			data.Phone = ""
+			tranData <- data
+
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 	default:
@@ -553,33 +542,28 @@ func (s *Service) Balance(c *gin.Context) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
-		// This is for push notifications
-		{
-
-			var data pushData
-
-			data.Type = "EBS"
-			data.Date = res.CreatedAt
-			data.Title = "Balance Inquiry"
-			data.CallToAction = "balance"
-
-			data.EBSData = res
-			data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
-			data.Body = fmt.Sprintf("Your balance is: %v %v", res.AccountCurrency, res.Balance["available"])
-
-			tranData <- data
-		}
-
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
+		// This is for push notifications
+		var data pushData
+		data.Type = "EBS"
+		data.Date = res.CreatedAt
+		data.Title = "Balance Inquiry"
+		data.CallToAction = "balance"
+		data.EBSData = res
+		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			data.Body = fmt.Sprintf("Balance Inquiry faild due to: %v", res.ResponseMessage)
 			c.JSON(code, payload)
 		} else {
+			data.Body = fmt.Sprintf("Your balance is: %v %v", res.AccountCurrency, res.Balance["available"])
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
+		tranData <- data
 		s.Db.Table("transactions").Create(&res.EBSResponse)
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
@@ -764,58 +748,34 @@ func (s *Service) CardTransfer(c *gin.Context) {
 			}).Info("error in migrating purchase model")
 		}
 
+		// This is for push notifications
+		var data pushData
+		data.Type = "EBS"
+		data.Date = res.CreatedAt
+		data.Title = "Card Transfer"
+		data.CallToAction = "card_transfer"
+		data.EBSData = res
+
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+
 			// This is for push notifications (sender)
-			{
+			data.EBSData.PAN = fields.Pan
+			data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
+			tranData <- data
 
-				var data pushData
-
-				data.Type = "EBS"
-				data.Date = res.CreatedAt
-				data.Title = "Card Transfer"
-				data.CallToAction = "card_transfer"
-
-				data.EBSData = res
-				data.EBSData.PAN = fields.Pan
-				data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
-
-				tranData <- data
-			}
 			c.JSON(code, payload)
 		} else {
 			// This is for push notifications (receiver)
-			{
+			data.EBSData.PAN = fields.ToCard
+			data.Body = fmt.Sprintf("You have received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
+			tranData <- data
 
-				var data pushData
-
-				data.Type = "EBS"
-				data.Date = res.CreatedAt
-				data.Title = "Card Transfer"
-				data.CallToAction = "card_transfer"
-
-				data.EBSData = res
-				data.EBSData.PAN = fields.ToCard
-				data.Body = fmt.Sprintf("You received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
-
-				tranData <- data
-			}
 			// This is for push notifications (sender)
-			{
+			data.EBSData.PAN = fields.Pan
+			data.Body = fmt.Sprintf("%v %v has been transferred from your account to %v", res.AccountCurrency, fields.TranAmount, res.ToCard)
+			tranData <- data
 
-				var data pushData
-
-				data.Type = "EBS"
-				data.Date = res.CreatedAt
-				data.Title = "Card Transfer"
-				data.CallToAction = "card_transfer"
-
-				data.EBSData = res
-				data.EBSData.PAN = fields.Pan
-				data.Body = fmt.Sprintf("%v %v has been transferred from your account to %v", res.AccountCurrency, fields.TranAmount, res.ToCard)
-
-				tranData <- data
-			}
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
 
