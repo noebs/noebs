@@ -407,10 +407,12 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	}
 	// Make sure user is unique
 	var tmpUser ebs_fields.User
-	if res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser); res.Error == nil && (tmpUser.Mobile != "" && tmpUser.Password != "") {
-		// User already exists
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
-		return
+	if res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser); res.Error == nil {
+		if (tmpUser.Mobile != "" && tmpUser.Password != "") {
+			// User already exists
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
+			return
+		}
 	}
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
