@@ -296,7 +296,7 @@ type EBSResponse struct {
 	EntityID                 string  `json:"entityId,omitempty"`
 	EntityType               string  `json:"entityType,omitempty"`
 	Username                 string  `json:"userName,omitempty"`
-	DynamicFees              float64 `json:"dynamicFees,omitempty"`
+	DynamicFees              float32 `json:"dynamicFees,omitempty"`
 	QRCode                   string  `json:"QRCode,omitempty"`
 	ExpDate                  string  `json:"expDate,omitempty"` // FIXME(adonese): don't store it in database
 	FinancialInstitutionID   string  `json:"financialInstitutionId,omitempty"`
@@ -377,7 +377,7 @@ type EBSParserFields struct {
 	EBSMapFields
 	EBSResponse
 	OriginalTransaction EBSResponse `json:"originalTransaction,omitempty"`
-	DynamicFees         float32     `json:"dynamicFees,omitempty"`
+	
 }
 
 // To allow Redis to use this struct directly in marshaling

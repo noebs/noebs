@@ -169,6 +169,7 @@ func (s *Service) Pusher() {
 	for {
 		select {
 		case data := <-tranData:
+			s.Db.Create(&data)
 			if data.Phone != "" { // Telecom operation
 				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
 				if err != nil {

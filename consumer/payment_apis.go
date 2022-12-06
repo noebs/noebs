@@ -288,7 +288,9 @@ func (s *Service) BillPayment(c *gin.Context) {
 		data.Type = "EBS"
 		data.Date = res.CreatedAt
 		data.CallToAction = "bill_payment"
-		data.EBSData = res
+		data.EBSData = res.EBSResponse
+		data.UUID = fields.UUID
+		
 
 		if ebsErr != nil {
 			// This is for push notifications (failure)
@@ -303,6 +305,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 			// This is for push notifications (success)
 			data.Title = "Payment Success"
 			data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+			data.UUID = fields.UUID
 
 			switch res.PayeeID {
 			case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
@@ -552,8 +555,9 @@ func (s *Service) Balance(c *gin.Context) {
 		data.Date = res.CreatedAt
 		data.Title = "Balance Inquiry"
 		data.CallToAction = "balance"
-		data.EBSData = res
+		data.EBSData = res.EBSResponse
 		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
+		data.UUID = fields.UUID
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -754,7 +758,8 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		data.Date = res.CreatedAt
 		data.Title = "Card Transfer"
 		data.CallToAction = "card_transfer"
-		data.EBSData = res
+		data.EBSData = res.EBSResponse
+		data.UUID = fields.UUID
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -768,6 +773,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		} else {
 			// This is for push notifications (receiver)
 			data.EBSData.PAN = fields.ToCard
+			
 			data.Body = fmt.Sprintf("You have received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
 			tranData <- data
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"gorm.io/gorm"
 )
 
 const (
@@ -208,12 +209,14 @@ func newFromBytes(d []byte, code int) (response, error) {
 */
 
 type pushData struct {
+	gorm.Model
 	Type           string                     `json:"type"`
 	Date           time.Time                  `json:"date"`
+	UUID string 
 	To             string                     `json:"to"`
 	Title          string                     `json:"title"`
 	Body           string                     `json:"body"`
-	EBSData        ebs_fields.EBSParserFields `json:"data"`
+	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID,references:UUID"` // EBS parser fields holds many unnecssary info
 	PaymentRequest ebs_fields.QrData          `json:"payment_request"`
 	CallToAction   string                     `json:"call_to_action"`
 	Phone          string                     `json:"phone"`
