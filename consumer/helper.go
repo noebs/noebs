@@ -188,6 +188,7 @@ func (s *Service) Pusher() {
 				} else {
 					data.To = user.DeviceID
 					// Store to database first
+					s.Db.Create(&data)
 					s.SendPush(data)
 				}
 			}
