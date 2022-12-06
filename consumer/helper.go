@@ -169,7 +169,7 @@ func (s *Service) Pusher() {
 	for {
 		select {
 		case data := <-tranData:
-			s.Db.Create(&data)
+			
 			if data.Phone != "" { // Telecom operation
 				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
 				if err != nil {
@@ -177,6 +177,7 @@ func (s *Service) Pusher() {
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
 				} else {
 					data.To = user.DeviceID
+					s.Db.Create(&data)
 					s.SendPush(data)
 				}
 			} else {
