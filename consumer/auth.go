@@ -365,7 +365,7 @@ func (s *Service) VerifyFirebase(c *gin.Context) {
 	s.Logger.Printf("Verified ID token: %v\n", token)
 }
 
-func (s *Service) SendPush(data pushData) error {
+func (s *Service) SendPush(data PushData) error {
 	// Obtain a messaging.Client from the App.
 	ctx := context.Background()
 	client, err := s.FirebaseApp.Messaging(ctx)

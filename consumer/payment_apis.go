@@ -284,7 +284,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		}
 
 		// This is for push notification
-		var data pushData
+		var data PushData
 		data.Type = "EBS"
 		data.Date = res.CreatedAt
 		data.CallToAction = "bill_payment"
@@ -550,7 +550,7 @@ func (s *Service) Balance(c *gin.Context) {
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		// This is for push notifications
-		var data pushData
+		var data PushData
 		data.Type = "EBS"
 		data.Date = res.CreatedAt
 		data.Title = "Balance Inquiry"
@@ -753,7 +753,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		}
 
 		// This is for push notifications
-		var data pushData
+		var data PushData
 		data.Type = "EBS"
 		data.Date = res.CreatedAt
 		data.Title = "Card Transfer"

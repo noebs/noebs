@@ -163,7 +163,7 @@ func (s *Service) ToDatabasename(url string) string {
 	return data[url]
 }
 
-var tranData = make(chan pushData)
+var tranData = make(chan PushData)
 
 func (s *Service) Pusher() {
 	for {

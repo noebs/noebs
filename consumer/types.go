@@ -208,7 +208,7 @@ func newFromBytes(d []byte, code int) (response, error) {
 	}
 */
 
-type pushData struct {
+type PushData struct {
 	gorm.Model
 	Type           string                     `json:"type"`
 	Date           time.Time                  `json:"date"`

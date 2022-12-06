@@ -66,14 +66,14 @@ func TestService_SendPush(t *testing.T) {
 		Auth        Auther
 	}
 	type args struct {
-		m pushData
+		m PushData
 	}
 	tests := []struct {
 		name   string
 		fields fields
 		args   args
 	}{
-		{"test firebaseff", fields{FirebaseApp: app}, args{m: pushData{To: "dK64gIe5TzOGOqA7y8RcQv:APA91bGR-eX9UEFrKi8XXxjXIr2aPE0tOpMz3DXeYnKnHpZ-XkXDdRQ-ybsWKmXU0681hJWH483kuUgjG3iWr1mXj3RPZc-rhksBojG9MiKmW5ZrHoQJse3I87gvRFYGZVGN70bpiRLx"}}},
+		{"test firebaseff", fields{FirebaseApp: app}, args{m: PushData{To: "dK64gIe5TzOGOqA7y8RcQv:APA91bGR-eX9UEFrKi8XXxjXIr2aPE0tOpMz3DXeYnKnHpZ-XkXDdRQ-ybsWKmXU0681hJWH483kuUgjG3iWr1mXj3RPZc-rhksBojG9MiKmW5ZrHoQJse3I87gvRFYGZVGN70bpiRLx"}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
