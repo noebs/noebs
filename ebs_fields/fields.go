@@ -236,6 +236,9 @@ func iso8601(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
+
+
+
 // EBSResponse represent a struct that captures all of EBS response fields and map them into Transaction table
 // We should really split this up between consumer and merchant. It is just too complicated to manage now
 type EBSResponse struct {
@@ -260,7 +263,7 @@ type EBSResponse struct {
 	PayeeID                string  `json:"payeeId,omitempty"`
 	// Consumer fields
 	PubKeyValue     string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
-	UUID            string `json:"UUID,omitempty" form:"UUID"`
+	UUID            string `json:"UUID,omitempty" form:"UUID" gorm:"primaryKey"`
 	ResponseMessage string `json:"responseMessage,omitempty"`
 	ResponseStatus  string `json:"responseStatus,omitempty"`
 	ResponseCode    int    `json:"responseCode"`
@@ -274,7 +277,6 @@ type EBSResponse struct {
 	AdditionalData       string          `json:"additionalData,omitempty"`
 	TranDateTime         string          `json:"tranDateTime,omitempty"`
 	TranFee              *float32        `json:"tranFee,omitempty"`
-
 	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
 	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
 	IssTranFee       *float32 `json:"issuerTranFee,omitempty"`

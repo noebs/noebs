@@ -197,27 +197,17 @@ func newFromBytes(d []byte, code int) (response, error) {
 	}
 }
 
-/*
-	{
-		type: EBS | noebs,
-		date,
-		uuid: String?,
-		message: {"title", "body", "pics": "url"}?,
-		payment_request: PaymentToke?,
-		"call_to_action": "/a router"
-	}
-*/
 
 type PushData struct {
 	gorm.Model
 	Type           string                     `json:"type"`
 	Date           time.Time                  `json:"date"`
-	UUID string 
+	UUID string
 	To             string                     `json:"to"`
 	Title          string                     `json:"title"`
 	Body           string                     `json:"body"`
-	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID;references:UUID"` // EBS parser fields holds many unnecssary info
-	PaymentRequest ebs_fields.QrData          `json:"payment_request"`
+	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID"` // EBS parser fields holds many unnecssary info
+	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
 	CallToAction   string                     `json:"call_to_action"`
 	Phone          string                     `json:"phone"`
 }

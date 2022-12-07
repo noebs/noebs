@@ -247,7 +247,7 @@ func init() {
 	// gorm debug-level logger
 	database.Logger.LogMode(logger.Info)
 	if err := database.AutoMigrate(&consumer.PushData{}, &ebs_fields.User{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{}, &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
-		logrusLogger.Printf("error in migration: %v", err)
+		logrusLogger.Fatalf("error in migration: %v", err)
 	}
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 

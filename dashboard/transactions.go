@@ -23,7 +23,7 @@ func (e *Env) GetTransactionbyID(c *gin.Context) {
 	if err != nil {
 		c.AbortWithStatus(404)
 	}
-	c.JSON(200, gin.H{"result": tran.ID})
+	c.JSON(200, gin.H{"result": tran.UUID})
 
 }
 
