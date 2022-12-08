@@ -248,7 +248,7 @@ type EBSResponse struct {
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string  `json:"clientId,omitempty"`
 	PAN                    string  `json:"PAN,omitempty"`
-	PushUUID string `gorm:"uniqueIndex;not null"`
+	PushUUID string `gorm:"uniqueIndex"`
 	ServiceID              string  `json:"serviceId,omitempty"`
 	TranAmount             float32 `json:"tranAmount,omitempty"`
 	PhoneNumber            string  `json:"phoneNumber,omitempty"`
