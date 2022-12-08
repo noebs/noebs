@@ -177,6 +177,7 @@ func (s *Service) Pusher() {
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
 				} else {
 					data.To = user.DeviceID
+					data.EBSData = ebs_fields.EBSResponse{}
 					s.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&data)
 					s.SendPush(data)
 				}
@@ -188,6 +189,7 @@ func (s *Service) Pusher() {
 				} else {
 					data.To = user.DeviceID
 					// Store to database first
+					data.EBSData = ebs_fields.EBSResponse{}
 					s.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&data)
 					s.SendPush(data)
 				}
