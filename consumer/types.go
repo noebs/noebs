@@ -209,7 +209,7 @@ type PushData struct {
 	To             string                     `json:"to"`
 	Title          string                     `json:"title"`
 	Body           string                     `json:"body"`
-	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:PushUUID;references:UUID"` // EBS parser fields holds many unnecssary info
+	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID;references:UUID"` // EBS parser fields holds many unnecssary info
 	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
 	CallToAction   string                     `json:"call_to_action"`
 	Phone          string                     `json:"phone"`
