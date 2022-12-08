@@ -200,14 +200,16 @@ func newFromBytes(d []byte, code int) (response, error) {
 //PushData is a database table we use to push notifications to their users. It has a one-to-one reference
 // to transactions Table and a noebs Token (if needed)
 type PushData struct {
-	gorm.Model
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
 	Type           string                     `json:"type"`
 	Date           time.Time                  `json:"date"`
-	UUID string
+	UUID string `gorm:"primaryKey"`
 	To             string                     `json:"to"`
 	Title          string                     `json:"title"`
 	Body           string                     `json:"body"`
-	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID"` // EBS parser fields holds many unnecssary info
+	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID;references:UUID"` // EBS parser fields holds many unnecssary info
 	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
 	CallToAction   string                     `json:"call_to_action"`
 	Phone          string                     `json:"phone"`
