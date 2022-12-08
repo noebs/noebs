@@ -22,6 +22,7 @@ import (
 	"github.com/adonese/noebs/utils"
 	"github.com/go-redis/redis/v7"
 	"github.com/pquerna/otp/totp"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -176,7 +177,7 @@ func (s *Service) Pusher() {
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
 				} else {
 					data.To = user.DeviceID
-					s.Db.Omit("Transactions").Create(&data)
+					s.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&data)
 					s.SendPush(data)
 				}
 			} else {
@@ -187,7 +188,7 @@ func (s *Service) Pusher() {
 				} else {
 					data.To = user.DeviceID
 					// Store to database first
-					s.Db.Omit("Transactions").Create(&data)
+					s.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&data)
 					s.SendPush(data)
 				}
 			}
