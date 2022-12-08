@@ -197,7 +197,8 @@ func newFromBytes(d []byte, code int) (response, error) {
 	}
 }
 
-
+//PushData is a database table we use to push notifications to their users. It has a one-to-one reference
+// to transactions Table and a noebs Token (if needed)
 type PushData struct {
 	gorm.Model
 	Type           string                     `json:"type"`
