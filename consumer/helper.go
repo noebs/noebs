@@ -178,7 +178,8 @@ func (s *Service) Pusher() {
 				} else {
 					data.To = user.DeviceID
 					data.EBSData = ebs_fields.EBSResponse{}
-					s.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&data)
+					//Omit association when creating
+					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 				}
 			} else {
@@ -189,8 +190,8 @@ func (s *Service) Pusher() {
 				} else {
 					data.To = user.DeviceID
 					// Store to database first
-					data.EBSData = ebs_fields.EBSResponse{}
-					s.Db.Clauses(clause.OnConflict{DoNothing: true}).Create(&data)
+					//Omit association when creating
+					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 				}
 			}
