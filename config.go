@@ -181,6 +181,18 @@ func GetMainEngine() *gin.Engine {
 			gin.HandlerFunc(func(c *gin.Context) {
 				consumerService.GenerateSignInCode(c, true)
 			}))
+		cons.GET("/notifications", gin.HandlerFunc(func(ctx *gin.Context) {
+			
+			if mobile := ctx.Query("mobile"); mobile == "" {
+				ctx.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code":"bad_request"})
+				return
+			} else {
+				var notifications []consumer.PushData
+				consumerService.Db.Where("mobile = ?", mobile).Find(&notifications)
+				ctx.JSON(http.StatusOK, notifications)
+			}
+			
+		}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/otp/verify", consumerService.VerifyOTP)
 		cons.POST("/otp/balance", consumerService.BalanceStep)
