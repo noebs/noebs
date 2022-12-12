@@ -183,7 +183,9 @@ func GetMainEngine() *gin.Engine {
 			}))
 		cons.GET("/notifications", gin.HandlerFunc(func(ctx *gin.Context) {
 			
-			if mobile := ctx.Query("mobile"); mobile == "" {
+			 
+			mobile := ctx.Query("mobile"); 
+			if mobile == "" {
 				ctx.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code":"bad_request"})
 				return
 			} else {
@@ -191,8 +193,8 @@ func GetMainEngine() *gin.Engine {
 				consumerService.Db.Where("is_read = ?", false).Where("mobile = ?", mobile).Find(&notifications)
 				ctx.JSON(http.StatusOK, notifications)
 			}
-			var pushdata PushData
-			pushdata.UpdateIsRead(mobile, cons.Db)
+			var pushdata consumer.PushData
+			pushdata.UpdateIsRead(mobile, consumerService.Db)
 			
 		}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
