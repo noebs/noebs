@@ -188,9 +188,11 @@ func GetMainEngine() *gin.Engine {
 				return
 			} else {
 				var notifications []consumer.PushData
-				consumerService.Db..Where("is_read = ?", false).Where("mobile = ?", mobile).Find(&notifications)
+				consumerService.Db.Where("is_read = ?", false).Where("mobile = ?", mobile).Find(&notifications)
 				ctx.JSON(http.StatusOK, notifications)
 			}
+			var pushdata PushData
+			pushdata.UpdateIsRead(mobile, cons.Db)
 			
 		}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)

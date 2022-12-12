@@ -217,6 +217,6 @@ type PushData struct {
 }
 
 
-func (p *PushData) updateIsRead(db *gorm.DB) {
-	db.Exec("UPDATE push_data SET is_read = ?", true)
+func (p *PushData) UpdateIsRead(phone string, db *gorm.DB) {
+	db.Model(PushData{}).Where("phone = ?", phone).Updates(PushData{IsRead: true})
 }
