@@ -188,7 +188,7 @@ func GetMainEngine() *gin.Engine {
 				return
 			} else {
 				var notifications []consumer.PushData
-				consumerService.Db.Where("mobile = ?", mobile).Find(&notifications)
+				consumerService.Db..Where("is_read = ?", false).Where("mobile = ?", mobile).Find(&notifications)
 				ctx.JSON(http.StatusOK, notifications)
 			}
 			

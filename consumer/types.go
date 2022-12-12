@@ -213,4 +213,10 @@ type PushData struct {
 	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
 	CallToAction   string                     `json:"call_to_action"`
 	Phone          string                     `json:"phone"`
+	IsRead bool
+}
+
+
+func (p *PushData) updateIsRead(db *gorm.DB) {
+	db.Exec("UPDATE push_data SET is_read = ?", true)
 }
