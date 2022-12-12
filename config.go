@@ -63,7 +63,7 @@ func verifyToken(f *firebase.App, token string) (string, error) {
 	return idToken.Audience, nil
 }
 
-//GetMainEngine function responsible for getting all of our routes to be delivered for gin
+// GetMainEngine function responsible for getting all of our routes to be delivered for gin
 func GetMainEngine() *gin.Engine {
 
 	if !noebsConfig.IsDebug {
@@ -182,18 +182,19 @@ func GetMainEngine() *gin.Engine {
 				consumerService.GenerateSignInCode(c, true)
 			}))
 		cons.GET("/notifications", gin.HandlerFunc(func(ctx *gin.Context) {
-			
-			if mobile := ctx.Query("mobile"); mobile == "" {
-				ctx.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code":"bad_request"})
+
+			mobile := ctx.Query("mobile")
+			if mobile == "" {
+				ctx.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code": "bad_request"})
 				return
 			} else {
 				var notifications []consumer.PushData
 				consumerService.Db.Where("is_read = ?", false).Where("mobile = ?", mobile).Find(&notifications)
 				ctx.JSON(http.StatusOK, notifications)
 			}
-			var pushdata PushData
-			pushdata.UpdateIsRead(mobile, cons.Db)
-			
+			var pushdata consumer.PushData
+			pushdata.UpdateIsRead(mobile, consumerService.Db)
+
 		}))
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/otp/verify", consumerService.VerifyOTP)
@@ -265,14 +266,14 @@ func init() {
 	database.Migrator().DropConstraint(&consumer.PushData{}, "Transactions")
 	database.Migrator().DropConstraint(&consumer.PushData{}, "fk_push_data_ebs_data")
 	if err := database.Debug().AutoMigrate(&consumer.PushData{}, &ebs_fields.User{},
-		 &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{},
-		  &ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
+		&ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{},
+		&ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
 		logrusLogger.Fatalf("error in migration: %v", err)
 	}
 	// check database foreign key for user & credit_cards exists or not
 	database.Migrator().HasConstraint(&consumer.PushData{}, "Transactions")
 	database.Migrator().HasConstraint(&consumer.PushData{}, "fk_push_data_ebs_data")
-	
+
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 
 	auth.Init()
@@ -288,4 +289,3 @@ func wsAdapter(msg chat.Hub) gin.HandlerFunc {
 		chat.ServeWs(&msg, c.Writer, c.Request)
 	}
 }
-
