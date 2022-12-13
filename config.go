@@ -182,15 +182,13 @@ func GetMainEngine() *gin.Engine {
 				consumerService.GenerateSignInCode(c, true)
 			}))
 		cons.GET("/notifications", gin.HandlerFunc(func(ctx *gin.Context) {
-			
-			 
 			mobile := ctx.Query("mobile"); 
 			if mobile == "" {
 				ctx.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code":"bad_request"})
 				return
 			} else {
 				var notifications []consumer.PushData
-				consumerService.Db.Where("is_read = ?", false).Where("mobile = ?", mobile).Find(&notifications)
+				consumerService.Db.Where("is_read = ?", false).Where("phone = ?", mobile).Find(&notifications)
 				ctx.JSON(http.StatusOK, notifications)
 			}
 			var pushdata consumer.PushData
