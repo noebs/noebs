@@ -680,7 +680,7 @@ func (s *Service) Notifications(c *gin.Context) {
 
 		var notifications []PushData
 		s.Db.Where("is_read = ?", d.All).Where("phone = ?", d.Mobile).Find(&notifications)
-		c.JSON(http.StatusOK, notifications)
+		c.JSON(http.StatusOK, gin.H{"notifications": notifications})
 	}
 	var pushdata PushData
 	pushdata.UpdateIsRead(d.Mobile, s.Db)
