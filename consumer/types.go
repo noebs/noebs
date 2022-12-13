@@ -220,3 +220,4 @@ type PushData struct {
 func (p *PushData) UpdateIsRead(phone string, db *gorm.DB) {
 	db.Model(PushData{}).Where("phone = ?", phone).Updates(PushData{IsRead: true})
 }
+

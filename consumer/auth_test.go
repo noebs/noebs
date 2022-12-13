@@ -40,6 +40,7 @@ func testSetupRouter() *gin.Engine {
 	r.POST("/register", service.CreateUser)
 	r.POST("/login", service.LoginHandler)
 	r.POST("/register_with_card", service.RegisterWithCard)
+	r.GET("/notifications", service.Notifications)
 	return r
 }
 

@@ -1,6 +1,9 @@
 package consumer
 
 import (
+	"encoding/json"
+	"io/ioutil"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -37,3 +40,28 @@ func TestService_isValidCard(t *testing.T) {
 		})
 	}
 }
+
+func TestService_Notifications(t *testing.T) {
+
+	w := httptest.NewRecorder()
+	route := testSetupRouter()
+	query := "?mobile=0129751986&all=true"
+
+	req := httptest.NewRequest("GET", "/notifications" + query, nil)
+
+	route.ServeHTTP(w, req)
+	
+	var data []PushData
+	res, _ := ioutil.ReadAll(w.Body)
+	json.Unmarshal(res, &data)
+	if data == nil {
+		t.Errorf("no response")
+	}
+	if data[0].Body != "test me" {
+		t.Error("wrong data")
+	}
+	if w.Code != 200 {
+		t.Errorf("expected: %d, got: %d", 200, w.Code)
+	}
+}
+

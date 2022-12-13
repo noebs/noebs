@@ -663,3 +663,25 @@ func (s *Service) GetIpinPubKey() error {
 		return nil
 	}
 }
+
+// Notifications handles various crud operations (json)
+func (s *Service) Notifications(c *gin.Context) {
+	type data struct {
+		All bool `form:"all"`
+		Mobile string `form:"mobile"`
+	}
+	var d data
+	c.ShouldBindWith(&d, binding.Form)
+	
+	if d.Mobile == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code":"bad_request"})
+		return
+	} else {
+
+		var notifications []PushData
+		s.Db.Where("is_read = ?", d.All).Where("phone = ?", d.Mobile).Find(&notifications)
+		c.JSON(http.StatusOK, notifications)
+	}
+	var pushdata PushData
+	pushdata.UpdateIsRead(d.Mobile, s.Db)
+}
