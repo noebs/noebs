@@ -214,7 +214,7 @@ type PushData struct {
 	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
 	CallToAction   string                     `json:"call_to_action"`
 	// 
-	Mobile          string                     `json:"phone"`
+	Phone          string                     `json:"phone"`
 	IsRead bool `json:"is_read"`
 }
 
