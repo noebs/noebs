@@ -375,9 +375,11 @@ func (s *Service) SendPush(data PushData) error {
 	// This registration token comes from the client FCM SDKs.
 	registrationToken := data.To
 
+	// This is the same struct as PushData, but due to firebase api
+	// we had to make it in a map of string:any
 	firebaseData := map[string]string{
 		"type":           data.Type,
-		"time":           fmt.Sprint(data.Date.Unix()),
+		"time":           fmt.Sprint(data),
 		"uuid":           data.EBSData.UUID,
 		"call_to_action": data.CallToAction,
 	}

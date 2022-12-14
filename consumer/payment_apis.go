@@ -286,8 +286,8 @@ func (s *Service) BillPayment(c *gin.Context) {
 		// This is for push notification
 		var data PushData
 		data.Type = EBS_NOTIFICATION
-		data.Date = res.CreatedAt
-		data.CallToAction = "bill_payment"
+		data.Date = res.CreatedAt.Unix()
+		data.CallToAction = CTA_BILL_PAYMENT
 		data.EBSData = res.EBSResponse
 		data.UUID = fields.UUID
 		
@@ -552,9 +552,9 @@ func (s *Service) Balance(c *gin.Context) {
 		// This is for push notifications
 		var data PushData
 		data.Type = EBS_NOTIFICATION
-		data.Date = res.CreatedAt
+		data.Date = res.CreatedAt.Unix()
 		data.Title = "Balance Inquiry"
-		data.CallToAction = "balance"
+		data.CallToAction = CTA_BALANCE
 		data.EBSData = res.EBSResponse
 		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
 		data.UUID = fields.UUID
@@ -755,15 +755,14 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		// This is for push notifications
 		var data PushData
 		data.Type = EBS_NOTIFICATION
-		data.Date = res.CreatedAt
+		data.Date = res.CreatedAt.Unix()
 		data.Title = "Card Transfer"
-		data.CallToAction = "card_transfer"
+		data.CallToAction = CTA_CARD_TRANSFER
 		data.EBSData = res.EBSResponse
 		data.UUID = fields.UUID
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-
 			// This is for push notifications (sender)
 			data.EBSData.PAN = fields.Pan
 			data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
