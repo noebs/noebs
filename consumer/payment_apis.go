@@ -285,7 +285,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		// This is for push notification
 		var data PushData
-		data.Type = "EBS"
+		data.Type = EBS_NOTIFICATION
 		data.Date = res.CreatedAt
 		data.CallToAction = "bill_payment"
 		data.EBSData = res.EBSResponse
@@ -310,7 +310,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 			switch res.PayeeID {
 			case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
 				phone := "0" + res.PaymentInfo[7:]
-				data.Phone = phone
+				data.Mobile = phone
 				data.Body = fmt.Sprintf("You have received %v %v on your phone: %v", res.AccountCurrency, res.TranAmount, phone)
 				tranData <- data
 			case "0010030002", "0010030004": // mohe
@@ -324,7 +324,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 				data.Body = fmt.Sprintf("%v %v has been payed for Electricity Meter No. %v", res.AccountCurrency, res.TranAmount, meter)
 			}
 
-			data.Phone = ""
+			data.Mobile = ""
 			tranData <- data
 
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -551,7 +551,7 @@ func (s *Service) Balance(c *gin.Context) {
 
 		// This is for push notifications
 		var data PushData
-		data.Type = "EBS"
+		data.Type = EBS_NOTIFICATION
 		data.Date = res.CreatedAt
 		data.Title = "Balance Inquiry"
 		data.CallToAction = "balance"
@@ -754,7 +754,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 		// This is for push notifications
 		var data PushData
-		data.Type = "EBS"
+		data.Type = EBS_NOTIFICATION
 		data.Date = res.CreatedAt
 		data.Title = "Card Transfer"
 		data.CallToAction = "card_transfer"

@@ -170,11 +170,14 @@ func (s *Service) Pusher() {
 	for {
 		select {
 		case data := <-tranData:
-			if data.Phone != "" { // Telecom operation
-				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
+			// In the case we want to send a push notification to the receipient
+			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
+			// But the problem, is that we have lost the reference to the original sender
+			if data.Mobile != "" { 
+				user, err := ebs_fields.GetUserByMobile(data.Mobile, s.Db)
 				if err != nil {
 					// not a tutipay user
-					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
+					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Mobile, Message: data.Body})
 				} else {
 					data.To = user.DeviceID
 					data.EBSData = ebs_fields.EBSResponse{}
@@ -182,19 +185,19 @@ func (s *Service) Pusher() {
 					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 				}
-			} else {
+			} 
 				// Read the pan from the payload
 				user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
 				if err != nil {
 					s.Logger.Printf("error in Pusher service: %s", err)
 				} else {
 					data.To = user.DeviceID
+					data.Mobile = user.Mobile
 					// Store to database first
 					//Omit association when creating
 					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 				}
-			}
 		}
 	}
 

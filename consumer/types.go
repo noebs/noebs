@@ -206,13 +206,15 @@ type PushData struct {
 	Type           string                     `json:"type"`
 	Date           time.Time                  `json:"date"`
 	UUID string `gorm:"primaryKey"`
+	// To could be a phone number a bill id a card number, you name it
 	To             string                     `json:"to"`
 	Title          string                     `json:"title"`
 	Body           string                     `json:"body"`
 	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID;references:UUID"` // EBS parser fields holds many unnecssary info
 	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
 	CallToAction   string                     `json:"call_to_action"`
-	Phone          string                     `json:"phone"`
+	// 
+	Mobile          string                     `json:"phone"`
 	IsRead bool `json:"is_read"`
 }
 
@@ -221,3 +223,11 @@ func (p *PushData) UpdateIsRead(phone string, db *gorm.DB) {
 	db.Model(PushData{}).Where("phone = ?", phone).Updates(PushData{IsRead: true})
 }
 
+
+
+const (
+	EBS_NOTIFICATION = "ebs"
+	NOEBS_NOTIFICATION = "noebs"
+	MARKETING_NOTIFICATION = "marketing"
+	OTHERS_NOTIFICATIONS = "others"
+)
