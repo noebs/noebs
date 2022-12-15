@@ -311,3 +311,36 @@ func TestUser_VerifyOtp(t *testing.T) {
 		})
 	}
 }
+
+func TestExpandCard(t *testing.T) {
+	type args struct {
+		card      string
+		userCards []Card
+	}
+	cards1 := []Card{{Pan: "92221212345678901234"}, {Pan: "9222121234567895678"}, {Pan: "9222121234567899999"}, {Pan: "2222121234567899999"}}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{"failure", args{"92221****8889998", cards1}, "", true},
+		{"regular case of find a card with asterisks", args{"922212888888885678", cards1}, "9222121234567895678", false},
+		{"ends with", args{"222212000008889999", cards1}, "2222121234567899999", false},
+		{"nil user cards", args{"222212000008889999", nil}, "", true},
+		{"nil query nil cards", args{"", nil}, "", true},
+		{"nil query with cards", args{"", cards1}, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ExpandCard(tt.args.card, tt.args.userCards)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExpandCard() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ExpandCard() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

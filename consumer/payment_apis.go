@@ -558,6 +558,7 @@ func (s *Service) Balance(c *gin.Context) {
 		data.EBSData = res.EBSResponse
 		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
 		data.UUID = fields.UUID
+		data.Date = res.CreatedAt.Unix()
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -980,19 +981,14 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
 
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
 
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
-
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, _ := json.Marshal(fields)
@@ -1002,18 +998,15 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 
 		// mask the pan
 		res.MaskPAN()
-
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
-
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
-
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
@@ -1108,16 +1101,11 @@ func (s *Service) Status(c *gin.Context) {
 
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
-
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
-
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
-
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
@@ -1130,21 +1118,17 @@ func (s *Service) Status(c *gin.Context) {
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
-
 		// mask the pan
 		res.MaskPAN()
-
 		res.Name = s.ToDatabasename(url)
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
-
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
-
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
@@ -1157,7 +1141,7 @@ func (s *Service) Status(c *gin.Context) {
 	}
 }
 
-// QRPayment performs QR payment transaction
+// QRPayment performs QR payment transaction. This is EBS-based QR transaction, and to be confused with noebs one
 func (s *Service) QRPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
 
@@ -1222,16 +1206,11 @@ func (s *Service) QRPayment(c *gin.Context) {
 // QRRefund performs qr refund transaction
 func (s *Service) QRTransactions(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.MerchantTransactionStatus // EBS simulator endpoint url goes here.
-
 	var fields = ebs_fields.ConsumerQRStatus{}
-
 	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
-
 	switch bindingErr := bindingErr.(type) {
-
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
-
 		for _, err := range bindingErr {
 
 			details = append(details, ebs_fields.ErrorToString(err))
@@ -1679,14 +1658,13 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
 		return
 	}
-
-	token.UUID = uuid.New().String()
-	// token.UserID = user.ID
-	if token.ToCard == "" {
-		// Only override card if the user didn't explicity specify a card
-		token.ToCard = user.Cards[0].Pan
+	fullPan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err})
+		return
 	}
-
+	token.ToCard = fullPan
+	token.UUID = uuid.New().String()
 	if err := user.SavePaymentToken(&token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})
@@ -1727,10 +1705,9 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+//NoebsQuickPayment performs a QR or payment via url transaction
 func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
-
-	print(url)
 	var data ebs_fields.QuickPaymentFields
 	c.ShouldBindWith(&data, binding.JSON) // ignore the errors
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
@@ -1748,13 +1725,10 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "amount_mismatch", "message": "amount_mismatch"})
 		return
 	}
-
 	data.ApplicationId = s.NoebsConfig.ConsumerID
 	data.ToCard = storedToken.ToCard
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
-
 	storedToken.IsPaid = ebsErr == nil
-
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
 		s.Logger.Printf("error in saving transaction: %v - the token: %+v", err, storedToken)
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "unable_to_save_transaction"})
@@ -1765,13 +1739,11 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		c.JSON(code, payload)
 	} else {
-
 		type qrres struct {
 			ebs_fields.Token
 			Transaction ebs_fields.EBSResponse `json:"transaction"`
 		}
 		d := qrres{Token: storedToken, Transaction: res.EBSResponse}
-
 		c.JSON(code, d)
 	}
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}

@@ -4,6 +4,7 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
+	"regexp"
 	"strings"
 	"time"
 
@@ -475,4 +476,34 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 		Expiry: c.Expiry,
 		UserID: uint(id),
 	}
+}
+
+
+// ExpandCard performs a regex search for the first and last 4 digits of a pan and retrieves the matching pan number
+func ExpandCard(card string, userCards []Card) (string, error) {
+	// You can edit this code!
+	// Click here and start typing.
+	if len(card) < 8 {
+		return "", errors.New("short query")
+	}
+	if userCards == nil {
+		return "", errors.New("empty_cards")
+	}
+
+	// Create a list of strings
+	var cards []string 
+	for _, v := range userCards {
+		cards = append(cards, v.Pan)
+	}
+	search := card[:4] + ".*"+ card[len(card)-4:] + "$"
+	// Compile the regular expression pattern that matches the search string
+	pattern := regexp.MustCompile(search)
+	// Iterate through the list of strings
+	for _, item := range cards {
+		// Check if the list item matches the search string using the regular expression
+		if pattern.MatchString(item) {
+			return item, nil
+		}
+	}
+	return "", errors.New("not able to find a match")
 }
