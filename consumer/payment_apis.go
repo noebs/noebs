@@ -562,13 +562,10 @@ func (s *Service) Balance(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			data.Body = fmt.Sprintf("Balance Inquiry faild due to: %v", res.ResponseMessage)
 			c.JSON(code, payload)
 		} else {
-			data.Body = fmt.Sprintf("Your balance is: %v %v", res.AccountCurrency, res.Balance["available"])
 			c.JSON(code, gin.H{"ebs_response": res})
 		}
-		tranData <- data
 		s.Db.Table("transactions").Create(&res.EBSResponse)
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
