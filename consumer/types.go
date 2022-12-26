@@ -197,41 +197,40 @@ func newFromBytes(d []byte, code int) (response, error) {
 	}
 }
 
-//PushData is a database table we use to push notifications to their users. It has a one-to-one reference
+// PushData is a database table we use to push notifications to their users. It has a one-to-one reference
 // to transactions Table and a noebs Token (if needed)
 type PushData struct {
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
-	Type           string                     `json:"type"`
-	Date   int64 `json:"date" gorm:"autoCreateTime"`
-	UUID string `gorm:"primaryKey"`
+	Type      string         `json:"type"`
+	Date      int64          `json:"date" gorm:"autoCreateTime"`
+	UUID      string         `gorm:"primaryKey"`
 	// To could be a phone number a bill id a card number, you name it
-	To             string                     `json:"to"`
-	Title          string                     `json:"title"`
-	Body           string                     `json:"body"`
+	To             string                 `json:"to"`
+	Title          string                 `json:"title"`
+	Body           string                 `json:"body"`
 	EBSData        ebs_fields.EBSResponse `json:"data" gorm:"foreignKey:UUID;references:UUID"` // EBS parser fields holds many unnecssary info
-	PaymentRequest ebs_fields.QrData          `json:"payment_request" gorm:"foreignKey:UUID"`
-	CallToAction   string                     `json:"call_to_action"`
+	PaymentRequest ebs_fields.QrData      `json:"payment_request" gorm:"foreignKey:UUID"`
+	CallToAction   string                 `json:"call_to_action"`
 	// We use phone field to store a reference to the mobile number for both the sender and the receiver
-	// for future reference to be queried. 
-	Phone          string                     `json:"phone"`
-	IsRead bool `json:"is_read"`
+	// for future reference to be queried.
+	Phone  string `json:"phone"`
+	IsRead bool   `json:"is_read"`
 }
-
 
 func (p *PushData) UpdateIsRead(phone string, db *gorm.DB) {
 	db.Model(PushData{}).Where("phone = ?", phone).Updates(PushData{IsRead: true})
 }
 
-
 // various consts we are using for push data and notifications
 const (
-	EBS_NOTIFICATION = "ebs"
-	NOEBS_NOTIFICATION = "noebs"
+	EBS_NOTIFICATION       = "ebs"
+	NOEBS_NOTIFICATION     = "noebs"
 	MARKETING_NOTIFICATION = "marketing"
-	OTHERS_NOTIFICATIONS = "others"
-	CTA_CARD_TRANSFER = "card_transfer"
-	CTA_BALANCE = "balance"
-	CTA_BILL_PAYMENT = "bill_payment"
-	CTA_OTHERS = "others"
+	OTHERS_NOTIFICATIONS   = "others"
+	CTA_CARD_TRANSFER      = "card_transfer"
+	CTA_BALANCE            = "balance"
+	CTA_BILL_PAYMENT       = "bill_payment"
+	CTA_VOUCHER            = "voucher"
+	CTA_OTHERS             = "others"
 )
