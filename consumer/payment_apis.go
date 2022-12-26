@@ -290,7 +290,6 @@ func (s *Service) BillPayment(c *gin.Context) {
 		data.CallToAction = CTA_BILL_PAYMENT
 		data.EBSData = res.EBSResponse
 		data.UUID = fields.UUID
-		
 
 		if ebsErr != nil {
 			// This is for push notifications (failure)
@@ -313,6 +312,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 				data.Phone = phone
 				data.Body = fmt.Sprintf("You have received %v %v on your phone: %v", res.AccountCurrency, res.TranAmount, phone)
 				tranData <- data
+				data.Body = fmt.Sprintf("You have sent %v %v to phone: %v", res.AccountCurrency, res.TranAmount, phone)
 			case "0010030002", "0010030004": // mohe
 				data.Body = fmt.Sprintf("%v %v has been payed for Education", res.AccountCurrency, res.TranAmount)
 			case "0010030003": // Customs
@@ -549,17 +549,6 @@ func (s *Service) Balance(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
-		// This is for push notifications
-		var data PushData
-		data.Type = EBS_NOTIFICATION
-		data.Date = res.CreatedAt.Unix()
-		data.Title = "Balance Inquiry"
-		data.CallToAction = CTA_BALANCE
-		data.EBSData = res.EBSResponse
-		data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
-		data.UUID = fields.UUID
-		data.Date = res.CreatedAt.Unix()
-
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
@@ -770,7 +759,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		} else {
 			// This is for push notifications (receiver)
 			data.EBSData.PAN = fields.ToCard
-			
+
 			data.Body = fmt.Sprintf("You have received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
 			tranData <- data
 
@@ -1702,7 +1691,7 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-//NoebsQuickPayment performs a QR or payment via url transaction
+// NoebsQuickPayment performs a QR or payment via url transaction
 func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
 	var data ebs_fields.QuickPaymentFields
@@ -2044,10 +2033,28 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 			}).Info("error in migrating purchase model")
 		}
 
+		// This is for push notifications
+		var data PushData
+		data.Type = EBS_NOTIFICATION
+		data.Date = res.CreatedAt.Unix()
+		data.Title = "Voucher Generation"
+		data.CallToAction = CTA_VOUCHER
+		data.EBSData = res.EBSResponse
+		data.UUID = fields.UUID
+		data.EBSData.PAN = fields.Pan
+
 		if ebsErr != nil {
+			// This is for push notifications (sender)
+			data.Body = fmt.Sprintf("Voucher generation failed due to: %v", res.ResponseMessage)
+			tranData <- data
+
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			c.JSON(code, payload)
 		} else {
+			// This is for push notifications (sender)
+			data.Body = fmt.Sprintf("Voucher number generated for phone %v is %v", fields.VoucherNumber, res.VoucherCode)
+			tranData <- data
+
 			c.JSON(code, gin.H{"ebs_response": res})
 
 		}
