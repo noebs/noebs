@@ -173,6 +173,7 @@ func (s *Service) Pusher() {
 			// In the case we want to send a push notification to the receipient
 			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
 			// But the problem, is that we have lost the reference to the original sender
+			s.Logger.Info("the data is: %+v", data)
 			if data.Phone != "" {
 				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
 				if err != nil {
@@ -186,19 +187,19 @@ func (s *Service) Pusher() {
 					s.SendPush(data)
 				}
 			} 
-				// Read the pan from the payload
-				user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
-				s.Logger.Printf("the fb user is: %+v", user)
-				if err != nil {
-					s.Logger.Printf("error in Pusher service: %s", err)
-				} else {
-					data.To = user.DeviceID
-					data.Phone = user.Mobile
-					// Store to database first
-					//Omit association when creating
-					s.Db.Omit(clause.Associations).Create(&data)
-					s.SendPush(data)
-				}
+			// Read the pan from the payload
+			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+			s.Logger.Printf("the fb user is: %+v", user)
+			if err != nil {
+				s.Logger.Printf("error in Pusher service: %s", err)
+			} else {
+				data.To = user.DeviceID
+				data.Phone = user.Mobile
+				// Store to database first
+				//Omit association when creating
+				s.Db.Omit(clause.Associations).Create(&data)
+				s.SendPush(data)
+			}
 		}
 	}
 
