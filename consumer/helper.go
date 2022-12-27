@@ -185,19 +185,20 @@ func (s *Service) Pusher() {
 					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 				}
-			}
-			// Read the pan from the payload
-			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
-			if err != nil {
-				s.Logger.Printf("error in Pusher service: %s", err)
-			} else {
-				data.To = user.DeviceID
-				data.Phone = user.Mobile
-				// Store to database first
-				//Omit association when creating
-				s.Db.Omit(clause.Associations).Create(&data)
-				s.SendPush(data)
-			}
+			} 
+				// Read the pan from the payload
+				user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+				s.Logger.Printf("the fb user is: %+v", user)
+				if err != nil {
+					s.Logger.Printf("error in Pusher service: %s", err)
+				} else {
+					data.To = user.DeviceID
+					data.Phone = user.Mobile
+					// Store to database first
+					//Omit association when creating
+					s.Db.Omit(clause.Associations).Create(&data)
+					s.SendPush(data)
+				}
 		}
 	}
 

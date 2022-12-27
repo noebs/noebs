@@ -491,7 +491,7 @@ func ExpandCard(card string, userCards []Card) (string, error) {
 	}
 
 	// Create a list of strings
-	var cards []string 
+	var cards []string
 	for _, v := range userCards {
 		cards = append(cards, v.Pan)
 	}
