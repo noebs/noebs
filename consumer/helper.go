@@ -180,6 +180,7 @@ func (s *Service) Pusher() {
 					// not a tutipay user
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
 				} else {
+
 					data.To = user.DeviceID
 					data.EBSData = ebs_fields.EBSResponse{}
 					//Omit association when creating
@@ -191,20 +192,19 @@ func (s *Service) Pusher() {
 				}
 			} 
 			// Read the pan from the payload 
-			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
-			s.Logger.Printf("the fb user is: %+v", user)
+			ids, err := ebs_fields.GetMobiles(data.EBSData.PAN, s.Db)
+			
 			if err != nil {
 				s.Logger.Printf("error in Pusher service: %s", err)
 			} else {
-				data.To = user.DeviceID
-				data.Phone = user.Mobile
-				// Store to database first
-				//Omit association when creating
-				s.Db.Omit(clause.Associations).Create(&data)
-				s.SendPush(data)
-				// FIXME(adonese): fallback option, maybe there is not need for the duplication
-				data.To=data.DeviceID
-				s.SendPush(data)
+				for _, deviceId := range ids {
+					data.To = deviceId
+					// Store to database first
+					//Omit association when creating
+					s.Db.Omit(clause.Associations).Create(&data)
+					s.SendPush(data)
+				}
+				
 			}
 		}
 	}

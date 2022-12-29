@@ -122,6 +122,13 @@ func GetUserByCard(pan string, db *gorm.DB) (User, error) {
 	return user, nil
 }
 
+// GetUserByCard retrieves a noebs user by their PAN
+func GetMobiles(pan string, db *gorm.DB) ([]string, error) {
+	var results []string
+	err := db.Model(&User{}).Distinct("users.device_id").Joins("left join cards on cards.user_id = users.id").Where("users.device_id != ?", "").Where("cards.pan = ?", pan).Scan(&results)
+	return results, err.Error
+}
+
 // NewUserByMobile Retrieves a user from the database by mobile (username)
 func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	var user User

@@ -344,3 +344,31 @@ func TestExpandCard(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMobiles(t *testing.T) {
+	type args struct {
+		pan string
+		db  *gorm.DB
+	}
+	testDB = testDB.Debug()
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{"get_mobiles", args{"7222331370182156067", testDB}, []string{"322", "2", "3", "4"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetMobiles(tt.args.pan, tt.args.db)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetMobiles() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetMobiles() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
