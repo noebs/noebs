@@ -216,6 +216,7 @@ type PushData struct {
 	// for future reference to be queried.
 	Phone  string `json:"phone"`
 	IsRead bool   `json:"is_read"`
+	DeviceID string `json:"device_id"`
 }
 
 func (p *PushData) UpdateIsRead(phone string, db *gorm.DB) {

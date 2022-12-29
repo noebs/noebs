@@ -250,7 +250,7 @@ func TestGetUserByCard(t *testing.T) {
 		want    User
 		wantErr bool
 	}{
-		{"get user with cards", args{pan: "3289329839829832983", db: testDB}, User{}, true},
+		{"get user with cards", args{pan: "7222331370182156067", db: testDB}, User{}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -258,7 +258,7 @@ func TestGetUserByCard(t *testing.T) {
 			if err != nil {
 				t.FailNow()
 			}
-			if got.ID != 1 {
+			if got.Mobile != "0923377628" {
 				t.Errorf("GetUserByCard() = %v, want %v", got.ID, tt.want.ID)
 			}
 		})

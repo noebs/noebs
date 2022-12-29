@@ -503,7 +503,13 @@ type ConsumerCommonFields struct {
 	ApplicationId string `json:"applicationId" form:"applicationId" binding:"required"`
 	TranDateTime  string `json:"tranDateTime" form:"tranDateTime" binding:"required"`
 	UUID          string `json:"UUID" form:"UUID" binding:"required"`
+	DeviceID string `json:"device_id,omitempty"`
 }
+
+func (c *ConsumerCommonFields) DelDeviceID() {
+	c.DeviceID = ""
+}
+
 
 type ConsumerBillInquiryFields struct {
 	ConsumerCommonFields

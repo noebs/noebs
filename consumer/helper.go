@@ -185,9 +185,12 @@ func (s *Service) Pusher() {
 					//Omit association when creating
 					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
+					// FIXME(adonese): fallback option, maybe there is not need for the duplication
+					data.To=data.DeviceID
+					s.SendPush(data)
 				}
 			} 
-			// Read the pan from the payload
+			// Read the pan from the payload 
 			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
 			s.Logger.Printf("the fb user is: %+v", user)
 			if err != nil {
@@ -198,6 +201,9 @@ func (s *Service) Pusher() {
 				// Store to database first
 				//Omit association when creating
 				s.Db.Omit(clause.Associations).Create(&data)
+				s.SendPush(data)
+				// FIXME(adonese): fallback option, maybe there is not need for the duplication
+				data.To=data.DeviceID
 				s.SendPush(data)
 			}
 		}

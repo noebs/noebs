@@ -259,6 +259,8 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
+		deviceID := fields.DeviceID
+		fields.ConsumerCommonFields.DelDeviceID()
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -290,6 +292,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		data.CallToAction = CTA_BILL_PAYMENT
 		data.EBSData = res.EBSResponse
 		data.UUID = fields.UUID
+		data.DeviceID = deviceID
 
 		if ebsErr != nil {
 			// This is for push notifications (failure)
@@ -714,6 +717,8 @@ func (s *Service) CardTransfer(c *gin.Context) {
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.DynamicFees = fees.CardTransferfees
+		deviceID := fields.DeviceID
+		fields.ConsumerCommonFields.DelDeviceID()
 		// save this to redis
 		if mobile := fields.Mobile; mobile != "" {
 			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
@@ -747,6 +752,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		data.CallToAction = CTA_CARD_TRANSFER
 		data.EBSData = res.EBSResponse
 		data.UUID = fields.UUID
+		data.DeviceID = deviceID
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -2008,6 +2014,8 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
+		deviceID := fields.DeviceID
+		fields.ConsumerCommonFields.DelDeviceID()
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
@@ -2042,6 +2050,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		data.EBSData = res.EBSResponse
 		data.UUID = fields.UUID
 		data.EBSData.PAN = fields.Pan
+		data.DeviceID = deviceID
 
 		if ebsErr != nil {
 			// This is for push notifications (sender)
