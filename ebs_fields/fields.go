@@ -236,9 +236,6 @@ func iso8601(fl validator.FieldLevel) bool {
 	return err == nil
 }
 
-
-
-
 // EBSResponse represent a struct that captures all of EBS response fields and map them into Transaction table
 // We should really split this up between consumer and merchant. It is just too complicated to manage now
 type EBSResponse struct {
@@ -277,10 +274,10 @@ type EBSResponse struct {
 	AdditionalData       string          `json:"additionalData,omitempty"`
 	TranDateTime         string          `json:"tranDateTime,omitempty"`
 	TranFee              *float32        `json:"tranFee,omitempty"`
-	AdditionalAmount *float32 `json:"additionalAmount,omitempty"`
-	AcqTranFee       *float32 `json:"acqTranFee,omitempty"`
-	IssTranFee       *float32 `json:"issuerTranFee,omitempty"`
-	TranCurrency     string   `json:"tranCurrency,omitempty"`
+	AdditionalAmount     *float32        `json:"additionalAmount,omitempty"`
+	AcqTranFee           *float32        `json:"acqTranFee,omitempty"`
+	IssTranFee           *float32        `json:"issuerTranFee,omitempty"`
+	TranCurrency         string          `json:"tranCurrency,omitempty"`
 
 	// QR payment fields
 	MerchantID               string  `json:"merchantID,omitempty"`
@@ -346,7 +343,7 @@ func (e EBSResponse) GetEBSUUID(originalUUID string, db *gorm.DB, noebsConfig *N
 	fields.ApplicationId = noebsConfig.ConsumerID
 	fields.TranDateTime = EbsDate()
 	fields.OriginalTranUUID = originalUUID
-	uid,_ := uuid.NewRandom()
+	uid, _ := uuid.NewRandom()
 	fields.UUID = uid.String()
 	jsonBuffer, err := json.Marshal(fields)
 	if err != nil {
@@ -379,7 +376,6 @@ type EBSParserFields struct {
 	EBSMapFields
 	EBSResponse
 	OriginalTransaction EBSResponse `json:"originalTransaction,omitempty"`
-	
 }
 
 // To allow Redis to use this struct directly in marshaling
@@ -503,13 +499,12 @@ type ConsumerCommonFields struct {
 	ApplicationId string `json:"applicationId" form:"applicationId" binding:"required"`
 	TranDateTime  string `json:"tranDateTime" form:"tranDateTime" binding:"required"`
 	UUID          string `json:"UUID" form:"UUID" binding:"required"`
-	DeviceID string `json:"device_id,omitempty"`
+	DeviceID      string `json:"device_id,omitempty"`
 }
 
 func (c *ConsumerCommonFields) DelDeviceID() {
 	c.DeviceID = ""
 }
-
 
 type ConsumerBillInquiryFields struct {
 	ConsumerCommonFields
@@ -976,6 +971,9 @@ type NoebsConfig struct {
 
 	// SMS message
 	SMSMessage string `json:"sms_message"`
+
+	// This the base of the link for payment links
+	PaymentLinkBase string `json:"payment_link_base"`
 }
 
 func (n *NoebsConfig) Defaults() {
