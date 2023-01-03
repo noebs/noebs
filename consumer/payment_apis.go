@@ -1667,6 +1667,37 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID})
 }
 
+// GeneratePaymentLink is used by noebs user to generate payment links to share.
+func (s *Service) GeneratePaymentLink(c *gin.Context, baseLink string) {
+	var token ebs_fields.Token
+	mobile := c.GetString("mobile")
+	c.ShouldBindWith(&token, binding.JSON)
+	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
+		return
+	}
+
+	if len(user.Cards) < 1 && token.ToCard == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
+		return
+	}
+	fullPan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err})
+		return
+	}
+	token.ToCard = fullPan
+	token.UUID = uuid.New().String()
+	if err := user.SavePaymentToken(&token); err != nil {
+		s.Logger.Printf("error in saving payment link: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment link"})
+		return
+	}
+	paymentLink := baseLink + "/pay/" + token.UUID
+	c.JSON(http.StatusCreated, gin.H{"payment_link": paymentLink})
+}
+
 // GetPaymentToken retrieves a generated payment token by UUID
 // This service should be accessed via an authorization header
 func (s *Service) GetPaymentToken(c *gin.Context) {

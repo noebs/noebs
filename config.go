@@ -176,8 +176,8 @@ func GetMainEngine() *gin.Engine {
 		cons.GET("/users/cards", gin.HandlerFunc(func(ctx *gin.Context) {
 			mobile := ctx.Query("mobile")
 			if response, err := ebs_fields.GetCardsOrFail(mobile, database); err != nil {
-					ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
-					return
+				ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
+				return
 			} else {
 				ctx.JSON(http.StatusOK, response)
 			}
@@ -209,6 +209,9 @@ func GetMainEngine() *gin.Engine {
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
 		cons.GET("/payment_token", consumerService.GetPaymentToken)
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
+		cons.POST("/payment_link", func(ctx *gin.Context) {
+			consumerService.GeneratePaymentLink(ctx, noebsConfig.PaymentLinkBase)
+		})
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 	}
 	return route

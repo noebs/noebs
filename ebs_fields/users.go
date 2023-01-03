@@ -301,6 +301,7 @@ type Token struct {
 	ToCard       string        `json:"toCard,omitempty"`
 	EBSResponses []EBSResponse `json:"transaction,omitempty"`
 	IsPaid       bool          `json:"is_paid"`
+	Link         string        `json:"link"`
 }
 
 type QrData struct {
@@ -460,13 +461,13 @@ type Card struct {
 
 type CacheCards struct {
 	gorm.Model
-	Pan      string `json:"pan" gorm:"uniqueIndex"`
-	Expiry   string `json:"exp_date"`
-	Name     string `json:"name"`
-	Mobile   string `json:"mobile" gorm:"-:all"`
-	Password string `json:"password" gorm:"-:all"`
+	Pan       string `json:"pan" gorm:"uniqueIndex"`
+	Expiry    string `json:"exp_date"`
+	Name      string `json:"name"`
+	Mobile    string `json:"mobile" gorm:"-:all"`
+	Password  string `json:"password" gorm:"-:all"`
 	PublicKey string `json:"user_pubkey" gorm:"-:all"`
-	IsValid  *bool  `json:"is_valid"`
+	IsValid   *bool  `json:"is_valid"`
 }
 
 func (c CacheCards) OverrideField() string {
@@ -485,7 +486,6 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 	}
 }
 
-
 // ExpandCard performs a regex search for the first and last 4 digits of a pan and retrieves the matching pan number
 func ExpandCard(card string, userCards []Card) (string, error) {
 	// You can edit this code!
@@ -502,7 +502,7 @@ func ExpandCard(card string, userCards []Card) (string, error) {
 	for _, v := range userCards {
 		cards = append(cards, v.Pan)
 	}
-	search := card[:4] + ".*"+ card[len(card)-4:] + "$"
+	search := card[:4] + ".*" + card[len(card)-4:] + "$"
 	// Compile the regular expression pattern that matches the search string
 	pattern := regexp.MustCompile(search)
 	// Iterate through the list of strings
