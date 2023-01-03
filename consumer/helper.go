@@ -174,13 +174,13 @@ func (s *Service) Pusher() {
 			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
 			// But the problem, is that we have lost the reference to the original sender
 			s.Logger.Info("the data is: %+v", data)
+			// we are doing too much of db and logic here, let's simplify it
 			if data.Phone != "" {
 				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
 				if err != nil {
 					// not a tutipay user
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
 				} else {
-
 					data.To = user.DeviceID
 					data.EBSData = ebs_fields.EBSResponse{}
 					//Omit association when creating

@@ -173,6 +173,15 @@ func GetMainEngine() *gin.Engine {
 				ctx.JSON(http.StatusOK, response)
 			}
 		}))
+		cons.GET("/users/cards", gin.HandlerFunc(func(ctx *gin.Context) {
+			mobile := ctx.Query("mobile")
+			if response, err := ebs_fields.GetCardsOrFail(mobile, database); err != nil {
+					ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
+					return
+			} else {
+				ctx.JSON(http.StatusOK, response)
+			}
+		}))
 		cons.POST("/otp/generate",
 			gin.HandlerFunc(func(c *gin.Context) {
 				consumerService.GenerateSignInCode(c, false)
