@@ -209,10 +209,11 @@ func GetMainEngine() *gin.Engine {
 		cons.DELETE("/delete_card", consumerService.RemoveCard)
 		cons.GET("/payment_token", consumerService.GetPaymentToken)
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
+		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 		cons.POST("/payment_link", func(ctx *gin.Context) {
 			consumerService.GeneratePaymentLink(ctx, noebsConfig.PaymentLinkBase)
 		})
-		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
+		cons.POST("/pay/:uuid", consumerService.PayPaymentLink)
 	}
 	return route
 }

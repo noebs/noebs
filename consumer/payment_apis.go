@@ -1668,7 +1668,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 }
 
 // GeneratePaymentLink is used by noebs user to generate payment links to share.
-func (s *Service) GeneratePaymentLink(c *gin.Context, baseLink string) {
+func (s *Service) GeneratePaymentLink(c *gin.Context, linkBase string) {
 	var token ebs_fields.Token
 	mobile := c.GetString("mobile")
 	c.ShouldBindWith(&token, binding.JSON)
@@ -1694,8 +1694,55 @@ func (s *Service) GeneratePaymentLink(c *gin.Context, baseLink string) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment link"})
 		return
 	}
-	paymentLink := baseLink + "/pay/" + token.UUID
+	paymentLink := linkBase + token.UUID
 	c.JSON(http.StatusCreated, gin.H{"payment_link": paymentLink})
+}
+
+func (s *Service) PayPaymentLink(c *gin.Context) {
+	uuid, exits := c.Params.Get("uuid")
+	if exits == false {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": "uuid is not in the url"})
+		return
+	}
+
+	token, err := ebs_fields.GetTokenByUUID(uuid, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "token_not_found"})
+		return
+	}
+
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
+	var data ebs_fields.ConsumerCardTransferFields
+	err = c.ShouldBindWith(&data, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "could_not_parse_json"})
+		return
+	}
+
+	data.ApplicationId = s.NoebsConfig.ConsumerID
+	data.ToCard = token.ToCard
+	jsonBuffer, err := json.Marshal(data)
+
+	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	token.IsPaid = ebsErr == nil
+	if err := token.UpsertTransaction(res.EBSResponse, token.UUID); err != nil {
+		s.Logger.Printf("error in saving transaction: %v - the token: %+v", err, token)
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "unable_to_save_transaction"})
+		return
+	}
+
+	if ebsErr != nil {
+		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+		c.JSON(code, payload)
+	} else {
+		type qrres struct {
+			ebs_fields.Token
+			Transaction ebs_fields.EBSResponse `json:"transaction"`
+		}
+		d := qrres{Token: token, Transaction: res.EBSResponse}
+		c.JSON(code, d)
+	}
+	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
 
 // GetPaymentToken retrieves a generated payment token by UUID
