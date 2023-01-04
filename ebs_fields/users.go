@@ -301,7 +301,6 @@ type Token struct {
 	ToCard       string        `json:"toCard,omitempty"`
 	EBSResponses []EBSResponse `json:"transaction,omitempty"`
 	IsPaid       bool          `json:"is_paid"`
-	Link         string        `json:"link"`
 }
 
 type QrData struct {
