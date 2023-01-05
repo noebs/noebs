@@ -214,8 +214,8 @@ type PushData struct {
 	CallToAction   string                 `json:"call_to_action"`
 	// We use phone field to store a reference to the mobile number for both the sender and the receiver
 	// for future reference to be queried.
-	Phone  string `json:"phone"`
-	IsRead bool   `json:"is_read"`
+	Phone    string `json:"phone"`
+	IsRead   bool   `json:"is_read"`
 	DeviceID string `json:"device_id"`
 }
 
@@ -233,5 +233,6 @@ const (
 	CTA_BALANCE            = "balance"
 	CTA_BILL_PAYMENT       = "bill_payment"
 	CTA_VOUCHER            = "voucher"
+	CTA_REQUEST_FUNDS      = "request_funds"
 	CTA_OTHERS             = "others"
 )
