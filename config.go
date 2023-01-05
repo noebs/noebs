@@ -214,6 +214,7 @@ func GetMainEngine() *gin.Engine {
 			consumerService.GeneratePaymentLink(ctx, noebsConfig.PaymentLinkBase)
 		})
 		cons.POST("/pay/:uuid", consumerService.PayPaymentLink)
+		cons.POST("/request_funds", consumerService.RequestFunds)
 	}
 	return route
 }
