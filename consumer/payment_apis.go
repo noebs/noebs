@@ -1635,7 +1635,8 @@ func (s *Service) IPINKey(c *gin.Context) {
 	}
 }
 
-// GeneratePaymentToken is used by noebs user to charge their customers.
+// GeneratePaymentToken is used by noebs user to charge their customers. This is also used to generate a payment link
+// that can be used by tuti users to perfom online payments
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.Token
 	mobile := c.GetString("mobile")
@@ -1664,85 +1665,8 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 	encoded, _ := ebs_fields.Encode(&token)
 	s.Logger.Printf("token is: %v", encoded)
-	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID})
-}
-
-// GeneratePaymentLink is used by noebs user to generate payment links to share.
-func (s *Service) GeneratePaymentLink(c *gin.Context, linkBase string) {
-	var token ebs_fields.Token
-	mobile := c.GetString("mobile")
-	c.ShouldBindWith(&token, binding.JSON)
-	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
-		return
-	}
-
-	if len(user.Cards) < 1 && token.ToCard == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
-		return
-	}
-	fullPan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err})
-		return
-	}
-	token.ToCard = fullPan
-	token.UUID = uuid.New().String()
-	if err := user.SavePaymentToken(&token); err != nil {
-		s.Logger.Printf("error in saving payment link: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment link"})
-		return
-	}
-	paymentLink := linkBase + token.UUID
-	c.JSON(http.StatusCreated, gin.H{"payment_link": paymentLink})
-}
-
-func (s *Service) PayPaymentLink(c *gin.Context) {
-	uuid, exits := c.Params.Get("uuid")
-	if exits == false {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": "uuid is not in the url"})
-		return
-	}
-
-	token, err := ebs_fields.GetTokenByUUID(uuid, s.Db)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "token_not_found"})
-		return
-	}
-
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
-	var data ebs_fields.ConsumerCardTransferFields
-	err = c.ShouldBindWith(&data, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "could_not_parse_json"})
-		return
-	}
-
-	data.ApplicationId = s.NoebsConfig.ConsumerID
-	data.ToCard = token.ToCard
-	jsonBuffer, err := json.Marshal(data)
-
-	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-	token.IsPaid = ebsErr == nil
-	if err := token.UpsertTransaction(res.EBSResponse, token.UUID); err != nil {
-		s.Logger.Printf("error in saving transaction: %v - the token: %+v", err, token)
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "unable_to_save_transaction"})
-		return
-	}
-
-	if ebsErr != nil {
-		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
-	} else {
-		type qrres struct {
-			ebs_fields.Token
-			Transaction ebs_fields.EBSResponse `json:"transaction"`
-		}
-		d := qrres{Token: token, Transaction: res.EBSResponse}
-		c.JSON(code, d)
-	}
-	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
+	paymentLink := s.NoebsConfig.PaymentLinkBase + token.UUID
+	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
 }
 
 // GetPaymentToken retrieves a generated payment token by UUID
@@ -1775,28 +1699,57 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+
 // NoebsQuickPayment performs a QR or payment via url transaction
+// The api should be like this, and it should work for both the mobile and the web clients
+// The very unique thing about the full payment token is that it is self-containted, the implmenter
+// doesn't have to do an http call to inquire about its fields
+// but, let's walkthrough the process, should we used a uuid of the payment token instead.
+// - a user will click on an item 
+// - the app or web will make a call to generate a payment token
+// - and it will return a link and a payment token. the link, or noebs link is only valid in the case of 
+// noebs' vendors payments (e.g., Solus or tuti): in that, it cannot work for the case of ecommerce 
+// - there are two cases for using the endpoint:
+// - using the full-token should render the forms to show the details of the token (toCard, amount, and any comments)
+// - using the uuid only, should be followed by the client performing a request to get the token info
+// request body fields should always take precendents over query params
 func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
+
+	// those should be nil, and assumed to be sent in the request body -- that's fine.
+	uuid := c.Query("uuid")
+	token := c.Query("token")
+	var noebsToken ebs_fields.Token
+
 	var data ebs_fields.QuickPaymentFields
 	c.ShouldBindWith(&data, binding.JSON) // ignore the errors
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "bad_request"})
-		return
+		// you should now work on the uuid and token
+		if t, err := ebs_fields.Decode(token); err == nil {
+			noebsToken = t
+		}else {
+			if t, err := ebs_fields.GetTokenByUUID(uuid, s.Db); err == nil {
+				noebsToken = t
+			}
+		}
+	} else {
+		// we are getting paymentToken from the request
+		noebsToken = paymentToken
 	}
-
-	storedToken, err := ebs_fields.GetTokenByUUID(paymentToken.UUID, s.Db)
+	storedToken, err := ebs_fields.GetTokenByUUID(noebsToken.UUID, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "token_not_found"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_token", "message": err.Error()})
 		return
 	}
-	if storedToken.Amount != 0 && storedToken.Amount != paymentToken.Amount {
+	
+	if storedToken.Amount != 0 && storedToken.Amount != int(data.TranAmount) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "amount_mismatch", "message": "amount_mismatch"})
 		return
 	}
 	data.ApplicationId = s.NoebsConfig.ConsumerID
 	data.ToCard = storedToken.ToCard
+	data.TranAmount = float32(noebsToken.Amount)
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
 	storedToken.IsPaid = ebsErr == nil
 	if err := storedToken.UpsertTransaction(res.EBSResponse, storedToken.UUID); err != nil {
