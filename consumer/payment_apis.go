@@ -1637,6 +1637,68 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 // GeneratePaymentToken is used by noebs user to charge their customers. This is also used to generate a payment link
 // that can be used by tuti users to perfom online payments
+// RequestFunds is used by noebs users to request money from other noebs users.
+func (s *Service) RequestFunds(c *gin.Context) {
+	type RequestFundsFields struct {
+		ToMobile string `json:"to_mobile"`
+		ebs_fields.Token
+	}
+	var rff RequestFundsFields
+	c.ShouldBindWith(&rff, binding.JSON)
+
+	mobile := c.GetString("mobile")
+	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
+		return
+	}
+
+	if len(user.Cards) < 1 && rff.ToCard == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
+		return
+	}
+
+	fullPan, err := ebs_fields.ExpandCard(rff.ToCard, user.Cards)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err})
+		return
+	}
+
+	rff.ToCard = fullPan
+	rff.UUID = uuid.New().String()
+	if err := user.SavePaymentToken(&rff.Token); err != nil {
+		s.Logger.Printf("error in saving payment token: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})
+		return
+	}
+
+	encoded, _ := ebs_fields.Encode(&rff.Token)
+	s.Logger.Printf("token is: %v", encoded)
+
+	toUser, err := ebs_fields.GetUserByMobile(rff.ToMobile, s.Db)
+	if err != nil {
+		s.Logger.Printf("Error retrieving user from db: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// This is for push notifications
+	var data PushData
+	data.Type = NOEBS_NOTIFICATION
+	data.Date = rff.Token.CreatedAt.Unix()
+	data.Title = "Funds Request"
+	data.CallToAction = CTA_REQUEST_FUNDS
+	data.UUID = rff.Token.UUID
+	data.DeviceID = toUser.DeviceID
+	data.Phone = rff.ToMobile
+	data.Body = fmt.Sprintf("%v requested %v from you. Click to confirm transfer.", user.Mobile, rff.Token.Amount)
+
+	tranData <- data
+
+	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": rff.Token.UUID})
+}
+
+// GeneratePaymentToken is used by noebs user to charge their customers.
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.Token
 	mobile := c.GetString("mobile")
