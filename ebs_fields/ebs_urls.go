@@ -79,16 +79,19 @@ const (
 // DynamicFeesFields for p2p and mohe dynamic fees case
 type DynamicFeesFields struct {
 	CardTransferfees   float32 `json:"p2p_fees"`
-	MoheFees           float32 `json:"mohe_fees"`
 	CustomFees         float32 `json:"custom_fees"`
 	SpecialPaymentFees float32 `json:"special_payment_fees"`
 }
 
 func NewDynamicFeesWithDefaults() DynamicFeesFields {
 	return DynamicFeesFields{
-		CardTransferfees:   100, // ebs QA server returns error for 1 fees
-		MoheFees:           25,
-		SpecialPaymentFees: 10,
-		CustomFees:         1,
+		// dynamic fees are set to the minimum amount required by ebs
+		//whih is as follows:
+		//p2p [7.5-150]
+		//customs [85-150]
+		//special payment [2-150]
+		CardTransferfees:   7.5, // ebs QA server returns error for 1 fees
+		SpecialPaymentFees: 2,
+		CustomFees:         85, //TODO add custom fees to the request
 	}
 }
