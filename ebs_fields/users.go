@@ -36,6 +36,8 @@ type User struct {
 	FirebaseIDToken string `json:"firebase_token"`
 	NewPassword     string `json:"new_password" gorm:"-"`
 	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
+	Pan string `json:"pan" gorm:"column:main_card"`
+	ExpDate string `json:"exp_date" gorm:"column:main_expdate"`
 }
 
 // func (user *User) BeforeSave(tx *gorm.DB) (err error) {
@@ -86,6 +88,17 @@ func (u User) VerifyOtp(code string) bool {
 	return totp.Validate(code, u.EncodePublickey32())
 }
 
+//GetUser retrieves a user via their mobile number
+func GetUser(mobile string, db *gorm.DB) (*User, error) {
+	var user User
+	// Get user model and preload Cards and order the model relation Cards.is_main
+	// This trick is really super important: it will allow us to get a user's main card
+	// with ease, without having to do a second fetch and then filter the main card
+	result := db.Model(&User{}).First(&user, "mobile = ?", mobile)
+	user.db = db
+	return &user, result.Error
+}
+
 func NewUserWithCards(mobile string, db *gorm.DB) (*User, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main
@@ -122,14 +135,17 @@ func GetUserByCard(pan string, db *gorm.DB) (User, error) {
 	return user, nil
 }
 
-// GetUserByCard retrieves a noebs user by their PAN
-func GetMobiles(pan string, db *gorm.DB) ([]string, error) {
+// GetDeviceIDsByPan retrieves device_ids associated to a card number
+func GetDeviceIDsByPan(pan string, db *gorm.DB) ([]string, error) {
 	var results []string
 	err := db.Model(&User{}).Distinct("users.device_id").Joins("left join cards on cards.user_id = users.id").Where("users.device_id != ?", "").Where("cards.pan = ?", pan).Scan(&results)
 	return results, err.Error
 }
 
-// NewUserByMobile Retrieves a user from the database by mobile (username)
+// GetCardsOrFail returns a user model and fails if user doesn't exist. It preloads
+// an existing user model with their cards. The user model itself might be used for other
+// cases, that's why we are not just returning Card
+// NOTE: we are not masking cards here which is really *very* insecure to say the least. 
 func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main

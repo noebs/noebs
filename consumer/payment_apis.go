@@ -407,6 +407,7 @@ func (s *Service) GetBills(c *gin.Context) {
 func (s *Service) RegisterWithCard(c *gin.Context) {
 	var card ebs_fields.CacheCards
 	c.ShouldBindJSON(&card)
+	// why are we checking for card.PublicKey and card.Mobile here?
 	if ok, err := s.isValidCard(card); !ok || card.PublicKey == "" || card.Mobile == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "invalid_card_or_credentials"})
 		return
@@ -420,6 +421,8 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
 	user.Fullname = card.Name
+	user.Pan = card.Pan
+	user.ExpDate = card.Expiry
 	// BUG(adonese): Encrypt password here
 	user.Password = card.Password
 	user.PublicKey = card.PublicKey
@@ -1699,6 +1702,7 @@ func (s *Service) RequestFunds(c *gin.Context) {
 }
 
 // GeneratePaymentToken is used by noebs user to charge their customers.
+// the toCard field in `Token` uses a masked PAN (first 6 digits and last 4 digits and any number of * in between)
 func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	var token ebs_fields.Token
 	mobile := c.GetString("mobile")
@@ -1780,6 +1784,8 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 
 	// those should be nil, and assumed to be sent in the request body -- that's fine.
 	uuid := c.Query("uuid")
+	// token has serious security issues as it exposes the payment card info
+	// in the "to" field. 
 	token := c.Query("token")
 	var noebsToken ebs_fields.Token
 

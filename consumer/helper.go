@@ -192,7 +192,7 @@ func (s *Service) Pusher() {
 				}
 			} 
 			// Read the pan from the payload 
-			ids, err := ebs_fields.GetMobiles(data.EBSData.PAN, s.Db)
+			ids, err := ebs_fields.GetDeviceIDsByPan(data.EBSData.PAN, s.Db)
 			
 			if err != nil {
 				s.Logger.Printf("error in Pusher service: %s", err)

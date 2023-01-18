@@ -361,7 +361,7 @@ func TestGetMobiles(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetMobiles(tt.args.pan, tt.args.db)
+			got, err := GetDeviceIDsByPan(tt.args.pan, tt.args.db)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetMobiles() error = %v, wantErr %v", err, tt.wantErr)
 				return
