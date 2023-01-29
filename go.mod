@@ -16,7 +16,7 @@ require (
 	github.com/noebs/ipin v0.0.0-20210301180224-78c1bef582f2
 	github.com/prometheus/client_golang v1.13.0
 	github.com/sirupsen/logrus v1.9.0
-	github.com/tutipay/ws v0.0.18
+	github.com/tutipay/ws v0.0.24
 	github.com/zsais/go-gin-prometheus v0.1.0
 	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a
 	gorm.io/driver/sqlite v1.4.2
