@@ -211,6 +211,11 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
 		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
 		cons.POST("/request_funds", consumerService.RequestFunds)
+		cons.POST("/submit_contacts", func() gin.HandlerFunc {
+			return func(c *gin.Context) {
+				chat.SubmitContacts(c.GetString("mobile"), consumerService.NoebsConfig.DatabasePath, c.Writer, c.Request)
+			}
+		}())
 	}
 	return route
 }
