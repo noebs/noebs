@@ -1758,23 +1758,28 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, ve)
 			return
 		}
+		for _, token := range tokens {
+			token.ToCard = utils.MaskPAN(token.ToCard)
+		}
 		c.JSON(http.StatusOK, gin.H{"token": tokens, "count": len(tokens)})
 		return
 	}
 	result, _ := ebs_fields.GetTokenByUUID(uuid, s.Db)
+
+	// Masking the PAN
+	result.ToCard = utils.MaskPAN(result.ToCard)
 	c.JSON(http.StatusOK, result)
 }
-
 
 // NoebsQuickPayment performs a QR or payment via url transaction
 // The api should be like this, and it should work for both the mobile and the web clients
 // The very unique thing about the full payment token is that it is self-containted, the implmenter
 // doesn't have to do an http call to inquire about its fields
 // but, let's walkthrough the process, should we used a uuid of the payment token instead.
-// - a user will click on an item 
+// - a user will click on an item
 // - the app or web will make a call to generate a payment token
-// - and it will return a link and a payment token. the link, or noebs link is only valid in the case of 
-// noebs' vendors payments (e.g., Solus or tuti): in that, it cannot work for the case of ecommerce 
+// - and it will return a link and a payment token. the link, or noebs link is only valid in the case of
+// noebs' vendors payments (e.g., Solus or tuti): in that, it cannot work for the case of ecommerce
 // - there are two cases for using the endpoint:
 // - using the full-token should render the forms to show the details of the token (toCard, amount, and any comments)
 // - using the uuid only, should be followed by the client performing a request to get the token info
@@ -1785,7 +1790,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	// those should be nil, and assumed to be sent in the request body -- that's fine.
 	uuid := c.Query("uuid")
 	// token has serious security issues as it exposes the payment card info
-	// in the "to" field. 
+	// in the "to" field.
 	token := c.Query("token")
 	var noebsToken ebs_fields.Token
 
@@ -1796,7 +1801,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		// you should now work on the uuid and token
 		if t, err := ebs_fields.Decode(token); err == nil {
 			noebsToken = t
-		}else {
+		} else {
 			if t, err := ebs_fields.GetTokenByUUID(uuid, s.Db); err == nil {
 				noebsToken = t
 			}
@@ -1810,7 +1815,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_token", "message": err.Error()})
 		return
 	}
-	
+
 	if storedToken.Amount != 0 && storedToken.Amount != int(data.TranAmount) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "amount_mismatch", "message": "amount_mismatch"})
 		return
