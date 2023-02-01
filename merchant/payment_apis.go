@@ -71,7 +71,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 // IsAliveWrk is for testing only. We want to bypass our middleware checks and move
 // up directly to ebs
-//FIXME #68
+// FIXME #68
 func (s *Service) IsAliveWrk(c *gin.Context) {
 	//FIXME #69 make url embedded from struct
 	url := s.NoebsConfig.MerchantIP + ebs_fields.IsAliveEndpoint
@@ -360,7 +360,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 	}
 }
 
-//TopUpPayment to perform electricity and telecos topups
+// TopUpPayment to perform electricity and telecos topups
 func (s *Service) TopUpPayment(c *gin.Context) {
 
 	url := s.NoebsConfig.MerchantIP + ebs_fields.BillPrepaymentEndpoint // EBS simulator endpoint url goes here.
@@ -505,7 +505,7 @@ func (s *Service) CashOut(c *gin.Context) {
 	}
 }
 
-//VoucherCashOut for non-card based transactions
+// VoucherCashOut for non-card based transactions
 func (s *Service) VoucherCashOut(c *gin.Context) {
 
 	url := s.NoebsConfig.MerchantIP + ebs_fields.VoucherCashOutWithAmountEndpoint // EBS simulator endpoint url goes here
@@ -556,7 +556,7 @@ func (s *Service) VoucherCashOut(c *gin.Context) {
 	}
 }
 
-//VoucherCashIn for non-card based transactions
+// VoucherCashIn for non-card based transactions
 func (s *Service) VoucherCashIn(c *gin.Context) {
 
 	url := s.NoebsConfig.MerchantIP + ebs_fields.VoucherCashInEndpoint // EBS simulator endpoint url goes here
@@ -607,7 +607,7 @@ func (s *Service) VoucherCashIn(c *gin.Context) {
 	}
 }
 
-//Statement for non-card based transactions
+// Statement for non-card based transactions
 func (s *Service) Statement(c *gin.Context) {
 
 	url := s.NoebsConfig.MerchantIP + ebs_fields.MiniStatementEndpoint // EBS simulator endpoint url goes here
@@ -658,7 +658,7 @@ func (s *Service) Statement(c *gin.Context) {
 	}
 }
 
-//GenerateVoucher for non-card based transactions
+// GenerateVoucher for non-card based transactions
 func (s *Service) GenerateVoucher(c *gin.Context) {
 	url := s.NoebsConfig.MerchantIP + ebs_fields.GenerateVoucherEndpoint // EBS simulator endpoint url goes here
 	var fields = ebs_fields.GenerateVoucherFields{}
@@ -854,8 +854,8 @@ func (s *Service) testAPI(c *gin.Context) {
 	}
 }
 
-//Refund requests a refund for supported refund services in ebs merchant. Currnetly, it is not working
-//FIXME issue #68
+// Refund requests a refund for supported refund services in ebs merchant. Currnetly, it is not working
+// FIXME issue #68
 func (s *Service) Refund(c *gin.Context) {
 	url := s.NoebsConfig.MerchantIP + ebs_fields.RefundEndpoint
 	var fields = ebs_fields.RefundFields{}
@@ -900,7 +900,7 @@ func (s *Service) Refund(c *gin.Context) {
 	}
 }
 
-//EBS is an EBS compatible endpoint! Well.
+// EBS is an EBS compatible endpoint! Well.
 // it really just works as a reverse proxy with db and nothing more!
 func (s *Service) EBS(c *gin.Context) {
 	url := c.Request.URL.Path

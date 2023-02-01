@@ -32,7 +32,7 @@ func (s Service) calculateOffset(page, pageSize int) uint {
 	return uint((page - 1) * pageSize)
 }
 
-//MerchantViews deprecated in favor of using the react-based dashboard features.
+// MerchantViews deprecated in favor of using the react-based dashboard features.
 func (s *Service) MerchantViews(c *gin.Context) {
 	db, _ := utils.Database("test.db")
 	terminal := c.Param("id")
@@ -157,7 +157,7 @@ func (s *Service) GetAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
 }
 
-//GetID gets a transaction by its database ID.
+// GetID gets a transaction by its database ID.
 func (s *Service) GetID(c *gin.Context) {
 	id := c.Param("id")
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})

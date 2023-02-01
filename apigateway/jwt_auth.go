@@ -11,7 +11,7 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
-//JWTAuth provides an encapsulation for jwt auth
+// JWTAuth provides an encapsulation for jwt auth
 type JWTAuth struct {
 	Key         []byte
 	NoebsConfig ebs_fields.NoebsConfig
@@ -19,7 +19,7 @@ type JWTAuth struct {
 
 type GetRedisClient func(string) *redis.Client
 
-//Init initializes jwt auth
+// Init initializes jwt auth
 func (j *JWTAuth) Init() {
 	log.Printf("jwt_key: %s", j.NoebsConfig.JWTKey)
 	j.Key = []byte(j.NoebsConfig.JWTKey)
@@ -73,7 +73,7 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 	}
 }
 
-//verifyWithClaim deprecated it shouldn't be used.
+// verifyWithClaim deprecated it shouldn't be used.
 func (j *JWTAuth) verifyWithClaim(tokenString string) error {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return j.Key, nil
@@ -102,7 +102,7 @@ type TokenClaims struct {
 	jwt.StandardClaims
 }
 
-//secretFromClaims returns the claim's secret. in this case it is a user name
+// secretFromClaims returns the claim's secret. in this case it is a user name
 func (j *JWTAuth) secretFromClaims(token string, skipTime bool) (string, error) {
 	claims, err := j.VerifyJWT(token)
 	if e, ok := err.(*jwt.ValidationError); ok {

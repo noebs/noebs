@@ -41,7 +41,7 @@ func structFields(s interface{}) (fields []map[string]interface{}) {
 	return fields
 }
 
-//endpointToFields the corresponding struct field for the endpoint string.
+// endpointToFields the corresponding struct field for the endpoint string.
 // we use simple string matching to capture the results
 func endpointToFields(e string) interface{} {
 	if strings.Contains(e, "cashIn") {
@@ -68,7 +68,7 @@ func endpointToFields(e string) interface{} {
 	return ebs_fields.EBSResponse{}
 }
 
-//generateDoc generates API doc for this particular field
+// generateDoc generates API doc for this particular field
 func generateDoc(e string) []map[string]interface{} {
 
 	fields := endpointToFields(e)
@@ -77,7 +77,7 @@ func generateDoc(e string) []map[string]interface{} {
 	return scheme
 }
 
-//getAllRoutes gets all routes for this particular engine
+// getAllRoutes gets all routes for this particular engine
 // perhaps, it could better be rewritten to explicitly show that
 func getAllRoutes() []map[string]string {
 	e := GetMainEngine()

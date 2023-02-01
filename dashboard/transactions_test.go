@@ -14,7 +14,6 @@ func Test_mapSearchField(t *testing.T) {
 		{"success_case", "approval_code", "approval_code"},
 		{"created at test", "CreatedAt", "created_at"},
 		{"test case for id", "ID", "id"},
-
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

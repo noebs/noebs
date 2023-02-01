@@ -47,10 +47,10 @@ func TestService_Notifications(t *testing.T) {
 	route := testSetupRouter()
 	query := "?mobile=0129751986&all=true"
 
-	req := httptest.NewRequest("GET", "/notifications" + query, nil)
+	req := httptest.NewRequest("GET", "/notifications"+query, nil)
 
 	route.ServeHTTP(w, req)
-	
+
 	var data []PushData
 	res, _ := ioutil.ReadAll(w.Body)
 	json.Unmarshal(res, &data)
@@ -64,4 +64,3 @@ func TestService_Notifications(t *testing.T) {
 		t.Errorf("expected: %d, got: %d", 200, w.Code)
 	}
 }
-
