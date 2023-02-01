@@ -199,26 +199,32 @@ func GetMainEngine() *gin.Engine {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
 		cons.POST("/check_user", func(c *gin.Context) {
-			var phones []string
+			type checkUserRequest struct {
+				Phones []string `json:"phones"`
+			}
+			type checkUserResponse struct {
+				Phone  string `json:"phone"`
+				IsUser bool   `json:"is_iser"`
+			}
 
-			isUser := make(map[string]bool)
+			var request checkUserRequest
+			var response []checkUserResponse
 
-			if err := c.ShouldBindBodyWith(&phones, binding.JSON); err != nil {
+			if err := c.ShouldBindBodyWith(&request, binding.JSON); err != nil {
 				log.Printf("The request is wrong. %v", err)
 				c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
 				return
 			}
 
-			for _, phone := range phones {
+			for _, phone := range request.Phones {
 				_, err := ebs_fields.GetUserByMobile(phone, database)
 				if err == nil {
-					isUser[phone] = true
+					response = append(response, checkUserResponse{phone, true})
 				} else {
-					isUser[phone] = false
+					response = append(response, checkUserResponse{phone, false})
 				}
-
 			}
-			c.JSON(http.StatusOK, isUser)
+			c.JSON(http.StatusOK, gin.H{"result": response})
 		})
 
 		cons.Use(auth.AuthMiddleware())
