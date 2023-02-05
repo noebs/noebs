@@ -718,6 +718,17 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
+		// Here we handle the case of sending a mobile number instead of the receiving card PAN
+		if fields.Mobile != "" && fields.ToCard == "" {
+			user, err := ebs_fields.GetUserByMobile(fields.Mobile, s.Db)
+			if err != nil {
+				s.Logger.Printf("Error getting user from db: %v", err)
+				c.JSON(http.StatusBadRequest, gin.H{"error": "error getting user from db, make sure mobile_number is correct"})
+				return
+			}
+			fields.ToCard = user.Pan
+		}
+
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.DynamicFees = fees.CardTransferfees
 		deviceID := fields.DeviceID
