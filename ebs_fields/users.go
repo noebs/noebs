@@ -36,8 +36,8 @@ type User struct {
 	FirebaseIDToken string `json:"firebase_token"`
 	NewPassword     string `json:"new_password" gorm:"-"`
 	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
-	Pan string `json:"pan" gorm:"column:main_card"`
-	ExpDate string `json:"exp_date" gorm:"column:main_expdate"`
+	Pan             string `json:"pan" gorm:"column:main_card"`
+	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
 }
 
 // func (user *User) BeforeSave(tx *gorm.DB) (err error) {
@@ -88,7 +88,7 @@ func (u User) VerifyOtp(code string) bool {
 	return totp.Validate(code, u.EncodePublickey32())
 }
 
-//GetUser retrieves a user via their mobile number
+// GetUser retrieves a user via their mobile number
 func GetUser(mobile string, db *gorm.DB) (*User, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main
@@ -145,7 +145,7 @@ func GetDeviceIDsByPan(pan string, db *gorm.DB) ([]string, error) {
 // GetCardsOrFail returns a user model and fails if user doesn't exist. It preloads
 // an existing user model with their cards. The user model itself might be used for other
 // cases, that's why we are not just returning Card
-// NOTE: we are not masking cards here which is really *very* insecure to say the least. 
+// NOTE: we are not masking cards here which is really *very* insecure to say the least.
 func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	var user User
 	// Get user model and preload Cards and order the model relation Cards.is_main

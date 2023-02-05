@@ -78,3 +78,10 @@ func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
 	log.Printf("The response body is: %v", res)
 	return nil
 }
+
+// MaskPAN returns a masked string of the PAN
+func MaskPAN(PAN string) string {
+	length := len(PAN)
+	PAN = PAN[:6] + "*****" + PAN[length-4:]
+	return PAN
+}

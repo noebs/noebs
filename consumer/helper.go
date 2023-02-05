@@ -187,13 +187,13 @@ func (s *Service) Pusher() {
 					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 					// FIXME(adonese): fallback option, maybe there is not need for the duplication
-					data.To=data.DeviceID
+					data.To = data.DeviceID
 					s.SendPush(data)
 				}
-			} 
-			// Read the pan from the payload 
+			}
+			// Read the pan from the payload
 			ids, err := ebs_fields.GetDeviceIDsByPan(data.EBSData.PAN, s.Db)
-			
+
 			if err != nil {
 				s.Logger.Printf("error in Pusher service: %s", err)
 			} else {
@@ -204,7 +204,7 @@ func (s *Service) Pusher() {
 					s.Db.Omit(clause.Associations).Create(&data)
 					s.SendPush(data)
 				}
-				
+
 			}
 		}
 	}

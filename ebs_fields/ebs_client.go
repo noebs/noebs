@@ -65,7 +65,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 	var c CacheCards
 	var isValid = true
 	c.Pan = getPan(req)
-	
+
 	log.Printf("ebs_raw: %s", string(responseBody))
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
 		log.WithFields(logrus.Fields{
@@ -80,7 +80,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			isValid = false
 		}
 		c.IsValid = &isValid
-		EBSRes<-c
+		EBSRes <- c
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
@@ -104,7 +104,7 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		}
 		return http.StatusInternalServerError, ebsGenericResponse, err
 	}
-	
+
 }
 
 type IPINResponse struct {
@@ -132,7 +132,6 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	return EBSParserFields{EBSResponse: res}
 }
 
-
 var EBSRes = make(chan CacheCards)
 
 func getPan(data []byte) string {
@@ -145,12 +144,11 @@ func getPan(data []byte) string {
 }
 
 var (
-	INVALIDPIN  = 53
-	SUCCESS     = 0
-	INVALIDCARD = 52
-	ROUTINGERROR=72
+	INVALIDPIN   = 53
+	SUCCESS      = 0
+	INVALIDCARD  = 52
+	ROUTINGERROR = 72
 )
-
 
 type Configs struct {
 	DB *gorm.DB

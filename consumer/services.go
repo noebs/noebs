@@ -248,8 +248,8 @@ func (s Service) BillerHooks() {
 			if _, err := http.Post(value.to, "application/json", bytes.NewBuffer(data)); err != nil {
 				log.Printf("the error is: %v", err)
 			}
-		case res:= <-ebs_fields.EBSRes:
-			s.Db.Debug().Model(&ebs_fields.CacheCards{}).Where("pan = ?",res.Pan).Update("is_valid", res.IsValid)
+		case res := <-ebs_fields.EBSRes:
+			s.Db.Debug().Model(&ebs_fields.CacheCards{}).Where("pan = ?", res.Pan).Update("is_valid", res.IsValid)
 		}
 	}
 }
@@ -510,7 +510,7 @@ func toInt(amount string) int {
 	return d
 }
 
-//billerID retrieves the type of a mobile number (the operator and the type with prepaid or postpaid) using
+// billerID retrieves the type of a mobile number (the operator and the type with prepaid or postpaid) using
 // some heuristics -- it fallback to making a request to ebs as a last resort to get the type of phone number (by making a free transaction, that is bill inquiry)
 func (s *Service) billerID(mobile string) (string, error) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
@@ -565,7 +565,7 @@ func (s *Service) billerID(mobile string) (string, error) {
 	}
 }
 
-//isValidCard checks noebs database first and fallback to making an actual payment request
+// isValidCard checks noebs database first and fallback to making an actual payment request
 // to ensure that a card is actually valid
 func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 	var dbCard ebs_fields.Card
@@ -667,14 +667,14 @@ func (s *Service) GetIpinPubKey() error {
 // Notifications handles various crud operations (json)
 func (s *Service) Notifications(c *gin.Context) {
 	type data struct {
-		All bool `form:"all"`
+		All    bool   `form:"all"`
 		Mobile string `form:"mobile"`
 	}
 	var d data
 	c.ShouldBindWith(&d, binding.Form)
-	
+
 	if d.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code":"bad_request"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code": "bad_request"})
 		return
 	} else {
 

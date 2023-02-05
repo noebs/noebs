@@ -4,7 +4,7 @@ import (
 	"gorm.io/gorm"
 )
 
-//Token used by noebs client to refresh an existing token, that is Token.JWT
+// Token used by noebs client to refresh an existing token, that is Token.JWT
 // Signature is the signed Message (it could be a mobile username, or totp code)
 // and Message is the raw message (it could be a mobile username, or totp code)
 type Token struct {

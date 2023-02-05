@@ -198,6 +198,34 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
+		cons.POST("/check_user", func(c *gin.Context) {
+			type checkUserRequest struct {
+				Phones []string `json:"phones"`
+			}
+			type checkUserResponse struct {
+				Phone  string `json:"phone"`
+				IsUser bool   `json:"is_iser"`
+			}
+
+			var request checkUserRequest
+			var response []checkUserResponse
+
+			if err := c.ShouldBindBodyWith(&request, binding.JSON); err != nil {
+				log.Printf("The request is wrong. %v", err)
+				c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+				return
+			}
+
+			for _, phone := range request.Phones {
+				_, err := ebs_fields.GetUserByMobile(phone, database)
+				if err == nil {
+					response = append(response, checkUserResponse{phone, true})
+				} else {
+					response = append(response, checkUserResponse{phone, false})
+				}
+			}
+			c.JSON(http.StatusOK, gin.H{"result": response})
+		})
 
 		cons.Use(auth.AuthMiddleware())
 		cons.POST("/user/firebase", consumerService.AddFirebaseID)

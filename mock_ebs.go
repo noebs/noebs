@@ -81,7 +81,7 @@ func getEbsErrorCodes() ebsCodes {
 	return code
 }
 
-//Return the corresponding EBS Code. To be used for indexing.
+// Return the corresponding EBS Code. To be used for indexing.
 func getCodesNumber() []int {
 	return []int{0, 103, 130, 178, 158, 161, 191, 194, 196, 201, 205, 251, 281, 338, 355, 375, 362, 389, 412, 413, 467}
 }

@@ -16,8 +16,8 @@ import (
 
 var apiKey = make([]byte, 16)
 
-//AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
-//to get a username from the payload (maybe change it to mobile number at somepoint)
+// AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
+// to get a username from the payload (maybe change it to mobile number at somepoint)
 func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// just handle the simplest case, authorization is not provided.
@@ -49,7 +49,7 @@ func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
 
 }
 
-//GenerateSecretKey generates secret key for jwt signing
+// GenerateSecretKey generates secret key for jwt signing
 func GenerateSecretKey(n int) ([]byte, error) {
 	key := make([]byte, n)
 	if _, err := rand.Read(key); err != nil {
@@ -58,7 +58,7 @@ func GenerateSecretKey(n int) ([]byte, error) {
 	return key, nil
 }
 
-//NoebsCors reads from noebs config to setup cors headers for the server
+// NoebsCors reads from noebs config to setup cors headers for the server
 func NoebsCors(headers []string) func(c *gin.Context) {
 	cors := strings.Join(headers, ",")
 	return func(c *gin.Context) {
