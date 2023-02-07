@@ -164,7 +164,9 @@ func (s *Service) ToDatabasename(url string) string {
 	return data[url]
 }
 
-var tranData = make(chan PushData)
+// The buffer of the tranData channel must be greater than the maximum number of
+// concurrnet clients that are connected to all services that use this channel
+var tranData = make(chan PushData, 2048)
 
 func (s *Service) Pusher() {
 	for {
