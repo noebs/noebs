@@ -204,7 +204,7 @@ func GetMainEngine() *gin.Engine {
 			}
 			type checkUserResponse struct {
 				Phone  string `json:"phone"`
-				IsUser bool   `json:"is_iser"`
+				IsUser bool   `json:"is_user"`
 			}
 
 			var request checkUserRequest
