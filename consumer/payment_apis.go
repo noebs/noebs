@@ -2263,7 +2263,7 @@ func (s *Service) SetMainCard(c *gin.Context) {
 	// Updating the user
 	result = s.Db.Model(&ebs_fields.User{}).Where("id = ?", user.ID).Update("pan", card.Pan)
 	if result.Error != nil {
-		s.Logger.Printf("Error updating user.Pan: %v", err)
+		s.Logger.Printf("Error updating user.Pan: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
 		return
 	}
@@ -2271,14 +2271,14 @@ func (s *Service) SetMainCard(c *gin.Context) {
 	// Updating the cards table
 	result = s.Db.Model(&ebs_fields.Card{}).Where("pan = ?", card.Pan).Update("is_main", true)
 	if result.Error != nil {
-		s.Logger.Printf("Error updating card: %v", err)
+		s.Logger.Printf("Error updating card: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
 		return
 	}
 	// Remove `is_main` flag from previous card
 	result = s.Db.Model(&ebs_fields.Card{}).Where("user_id = ? AND is_main = ?", user.ID, true).Update("is_main", false)
 	if result.Error != nil {
-		s.Logger.Printf("Error updating cards: %v", err)
+		s.Logger.Printf("Error updating cards: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
 		return
 	}
