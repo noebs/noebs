@@ -2187,3 +2187,46 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
 }
+
+func (s *Service) CheckUser(c *gin.Context) {
+	type checkUserRequest struct {
+		Phones []string `json:"phones"`
+	}
+
+	type checkUserResponse struct {
+		Phone  string `json:"phone"`
+		IsUser bool   `json:"is_user"`
+		Pan    string `json:"PAN"`
+	}
+
+	var request checkUserRequest
+	var response []checkUserResponse
+
+	if err := c.ShouldBindBodyWith(&request, binding.JSON); err != nil {
+		s.Logger.Printf("The request is wrong. %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+		return
+	}
+
+	for _, phone := range request.Phones {
+		user, err := ebs_fields.GetUserByMobile(phone, s.Db)
+		if err != nil {
+			response = append(response, checkUserResponse{Phone: phone, IsUser: false})
+			continue
+		}
+		pan := user.Pan
+		if pan == "" {
+			var card ebs_fields.Card
+			result := s.Db.Where("user_id = ?", user.ID).First(&card)
+			if result.Error != nil {
+				s.Logger.Printf("User does not have any cards. Error: %v", err)
+				//FIXME: we are not returning this user so we don't break the front-end's code
+				continue
+			}
+			pan = card.Pan
+		}
+		maskedPan := utils.MaskPAN(pan)
+		response = append(response, checkUserResponse{Phone: phone, IsUser: true, Pan: maskedPan})
+	}
+	c.JSON(http.StatusOK, response)
+}
