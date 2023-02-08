@@ -205,6 +205,7 @@ func GetMainEngine() *gin.Engine {
 			type checkUserResponse struct {
 				Phone  string `json:"phone"`
 				IsUser bool   `json:"is_user"`
+				Pan    string `json:"PAN"`
 			}
 
 			var request checkUserRequest
@@ -217,11 +218,12 @@ func GetMainEngine() *gin.Engine {
 			}
 
 			for _, phone := range request.Phones {
-				_, err := ebs_fields.GetUserByMobile(phone, database)
+				user, err := ebs_fields.GetUserByMobile(phone, database)
 				if err == nil {
-					response = append(response, checkUserResponse{phone, true})
+					maskedPan := utils.MaskPAN(user.Pan)
+					response = append(response, checkUserResponse{Phone: phone, IsUser: true, Pan: maskedPan})
 				} else {
-					response = append(response, checkUserResponse{phone, false})
+					response = append(response, checkUserResponse{Phone: phone, IsUser: false})
 				}
 			}
 			c.JSON(http.StatusOK, gin.H{"result": response})
