@@ -435,6 +435,8 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	if res := s.Db.Create(&user); res.Error == nil {
 		ucard := card.NewCardFromCached(int(user.ID))
 		ucard.ID = 0
+		// We can set this card as main since it is the first card of the this user
+		ucard.IsMain = true
 		user.Cards = append(user.Cards, ucard)
 		user.UpsertCards([]ebs_fields.Card{ucard})
 	}
