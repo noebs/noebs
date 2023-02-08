@@ -2216,16 +2216,19 @@ func (s *Service) CheckUser(c *gin.Context) {
 			response = append(response, checkUserResponse{Phone: phone, IsUser: false})
 			continue
 		}
+		// Returning the masked pan of the user that exists (this is convenient
+		// for the omnibox)
 		pan := user.Pan
 		if pan == "" {
-			var card ebs_fields.Card
-			result := s.Db.Where("user_id = ?", user.ID).First(&card)
-			if result.Error != nil {
-				s.Logger.Printf("User does not have any cards. Error: %v", err)
-				//FIXME: we are not returning this user so we don't break the front-end's code
+			userCards, err := ebs_fields.GetCardsOrFail(phone, s.Db)
+			if err != nil {
+				s.Logger.Printf("Error getting user cards: %v", err)
+				// We will not return this user because they don't have any
+				// cards (in our case this will not be useful for frontent)
 				continue
 			}
-			pan = card.Pan
+			// GetCardsOrFail returns the main card as the first one
+			pan = userCards.Cards[0].Pan
 		}
 		maskedPan := utils.MaskPAN(pan)
 		response = append(response, checkUserResponse{Phone: phone, IsUser: true, Pan: maskedPan})
