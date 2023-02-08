@@ -2264,19 +2264,10 @@ func (s *Service) SetMainCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Card does not exist"})
 		return
 	}
-
 	// Updating the user
-	result = s.Db.Model(&ebs_fields.User{}).Where("id = ?", user.ID).Update("pan", card.Pan)
+	result = s.Db.Model(&ebs_fields.User{}).Where("id = ?", user.ID).Update("main_card", card.Pan)
 	if result.Error != nil {
 		s.Logger.Printf("Error updating user.Pan: %v", result.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
-		return
-	}
-
-	// Updating the cards table
-	result = s.Db.Model(&ebs_fields.Card{}).Where("pan = ?", card.Pan).Update("is_main", true)
-	if result.Error != nil {
-		s.Logger.Printf("Error updating card: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
 		return
 	}
@@ -2287,6 +2278,13 @@ func (s *Service) SetMainCard(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
 		return
 	}
+	// Setting the new card as the main one
+	result = s.Db.Model(&ebs_fields.Card{}).Where("pan = ?", card.Pan).Update("is_main", true)
+	if result.Error != nil {
+		s.Logger.Printf("Error updating card: %v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success"})
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 }
