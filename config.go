@@ -198,38 +198,10 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
-		cons.POST("/check_user", func(c *gin.Context) {
-			type checkUserRequest struct {
-				Phones []string `json:"phones"`
-			}
-			type checkUserResponse struct {
-				Phone  string `json:"phone"`
-				IsUser bool   `json:"is_user"`
-				Pan    string `json:"PAN"`
-			}
-
-			var request checkUserRequest
-			var response []checkUserResponse
-
-			if err := c.ShouldBindBodyWith(&request, binding.JSON); err != nil {
-				log.Printf("The request is wrong. %v", err)
-				c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
-				return
-			}
-
-			for _, phone := range request.Phones {
-				user, err := ebs_fields.GetUserByMobile(phone, database)
-				if err == nil {
-					maskedPan := utils.MaskPAN(user.Pan)
-					response = append(response, checkUserResponse{Phone: phone, IsUser: true, Pan: maskedPan})
-				} else {
-					response = append(response, checkUserResponse{Phone: phone, IsUser: false})
-				}
-			}
-			c.JSON(http.StatusOK, gin.H{"result": response})
-		})
+		cons.POST("/check_user", consumerService.CheckUser)
 
 		cons.Use(auth.AuthMiddleware())
+		cons.POST("/cards/set_main", consumerService.SetMainCard)
 		cons.POST("/user/firebase", consumerService.AddFirebaseID)
 		cons.Any("/beneficiary", consumerService.Beneficiaries)
 		cons.POST("/change_password", consumerService.ChangePassword)
