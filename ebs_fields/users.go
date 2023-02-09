@@ -36,7 +36,7 @@ type User struct {
 	FirebaseIDToken string `json:"firebase_token"`
 	NewPassword     string `json:"new_password" gorm:"-"`
 	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
-	Pan             string `json:"pan" gorm:"column:main_card"`
+	MainCard        string `json:"main_card" gorm:"column:main_card"`
 	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
 }
 

@@ -421,7 +421,7 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
 	user.Fullname = card.Name
-	user.Pan = card.Pan
+	user.MainCard = card.Pan
 	user.ExpDate = card.Expiry
 	// BUG(adonese): Encrypt password here
 	user.Password = card.Password
@@ -728,7 +728,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "error getting user from db, make sure mobile_number is correct"})
 				return
 			}
-			fields.ToCard = user.Pan
+			fields.ToCard = user.MainCard
 		}
 
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -2218,7 +2218,7 @@ func (s *Service) CheckUser(c *gin.Context) {
 		}
 		// Returning the masked pan of the user that exists (this is convenient
 		// for the omnibox)
-		pan := user.Pan
+		pan := user.MainCard
 		if pan == "" {
 			userCards, err := ebs_fields.GetCardsOrFail(phone, s.Db)
 			if err != nil {
