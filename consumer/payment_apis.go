@@ -2230,7 +2230,17 @@ func (s *Service) CheckUser(c *gin.Context) {
 			// GetCardsOrFail returns the main card as the first one
 			pan = userCards.Cards[0].Pan
 		}
-		maskedPan := utils.MaskPAN(pan)
+		var maskedPan string
+		// Here we try to make this function backward compatible with the
+		// database; in the beginning of the application the rule of having
+		// every registered card be correct was not enforced like now, for
+		// the purpose of testing of course, and this resulted in many
+		// cards that exist in the database not having a pan which will
+		// cause a runtime error if we don't skip them. This issue will not
+		// face new users.
+		if pan != "" {
+			maskedPan = utils.MaskPAN(pan)
+		}
 		response = append(response, checkUserResponse{Phone: phone, IsUser: true, Pan: maskedPan})
 	}
 	c.JSON(http.StatusOK, response)
