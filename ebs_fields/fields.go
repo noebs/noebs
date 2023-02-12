@@ -784,6 +784,15 @@ type ConsumerCardTransferAndMobileFields struct {
 	Mobile string `json:"mobile_number"`
 }
 
+type ConsumerMobileTransferFields struct {
+	ConsumerCommonFields
+	ConsumerCardHolderFields
+	AmountFields
+	ToCard      string  `json:"toCard"`
+	DynamicFees float32 `json:"dynamicFees,omitempty"`
+	Mobile      string  `json:"mobile" binding:"required"`
+}
+
 type ConsumerCashInFields struct {
 	ConsumerCardTransferFields
 }

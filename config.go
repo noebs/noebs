@@ -201,6 +201,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/check_user", consumerService.CheckUser)
 
 		cons.Use(auth.AuthMiddleware())
+		cons.POST("/p2p_mobile", consumerService.MobileTransfer)
 		cons.POST("/cards/set_main", consumerService.SetMainCard)
 		cons.POST("/user/firebase", consumerService.AddFirebaseID)
 		cons.Any("/beneficiary", consumerService.Beneficiaries)
