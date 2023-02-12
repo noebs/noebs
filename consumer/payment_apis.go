@@ -720,17 +720,6 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-		// Here we handle the case of sending a mobile number instead of the receiving card PAN
-		if fields.Mobile != "" && fields.ToCard == "" {
-			user, err := ebs_fields.GetUserByMobile(fields.Mobile, s.Db)
-			if err != nil {
-				s.Logger.Printf("Error getting user from db: %v", err)
-				c.JSON(http.StatusBadRequest, gin.H{"error": "error getting user from db, make sure mobile_number is correct"})
-				return
-			}
-			fields.ToCard = user.MainCard
-		}
-
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.DynamicFees = fees.CardTransferfees
 		deviceID := fields.DeviceID
@@ -2297,4 +2286,104 @@ func (s *Service) SetMainCard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+}
+
+func (s *Service) MobileTransfer(c *gin.Context) {
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
+	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
+	// consume the request here and pass it over onto the EBS.
+	// marshal the request
+	// fuck. This shouldn't be here at all.
+
+	var fields = ebs_fields.ConsumerMobileTransferFields{}
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+		user, err := ebs_fields.GetUserByMobile(fields.Mobile, s.Db)
+		if err != nil {
+			s.Logger.Printf("Error getting user from db: %v", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "error getting user from db, make sure mobile is correct"})
+			return
+		}
+		fields.ToCard = user.MainCard
+
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
+		fields.DynamicFees = fees.CardTransferfees
+		deviceID := fields.DeviceID
+		fields.ConsumerCommonFields.DelDeviceID()
+		// save this to redis
+		if mobile := fields.Mobile; mobile != "" {
+			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
+		}
+
+		jsonBuffer := fields.MustMarshal()
+		s.Logger.Printf("the request is: %v", string(jsonBuffer))
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		res.Name = s.ToDatabasename(url)
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"code":    "unable to migrate purchase model",
+				"message": err,
+			}).Info("error in migrating purchase model")
+		}
+
+		// This is for push notifications
+		var data PushData
+		data.Type = EBS_NOTIFICATION
+		data.Date = res.CreatedAt.Unix()
+		data.Title = "Card Transfer"
+		data.CallToAction = CTA_CARD_TRANSFER
+		data.EBSData = res.EBSResponse
+		data.UUID = fields.UUID
+		data.DeviceID = deviceID
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			// This is for push notifications (sender)
+			data.EBSData.PAN = fields.Pan
+			data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
+			tranData <- data
+
+			c.JSON(code, payload)
+		} else {
+			// This is for push notifications (receiver)
+			data.EBSData.PAN = fields.ToCard
+
+			data.Body = fmt.Sprintf("You have received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
+			tranData <- data
+
+			// This is for push notifications (sender)
+			data.EBSData.PAN = fields.Pan
+			data.Body = fmt.Sprintf("%v %v has been transferred from your account to %v", res.AccountCurrency, fields.TranAmount, res.ToCard)
+			tranData <- data
+
+			c.JSON(code, gin.H{"ebs_response": res})
+		}
+
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+	}
 }
