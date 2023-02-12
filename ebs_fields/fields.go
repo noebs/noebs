@@ -822,6 +822,12 @@ func (p2p *ConsumerCardTransferFields) MustMarshal() []byte {
 	return d
 }
 
+// MustMarshal panics if not able to marshal repsonse
+func (p2p *ConsumerMobileTransferFields) MustMarshal() []byte {
+	d, _ := json.Marshal(p2p)
+	return d
+}
+
 type ConsumerStatusFields struct {
 	ConsumerCommonFields
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
