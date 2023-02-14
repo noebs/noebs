@@ -1726,6 +1726,8 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 	token.ToCard = fullPan
 	token.UUID = uuid.New().String()
+	token.UserID = user.ID
+	token.User = *user
 	if err := user.SavePaymentToken(&token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})

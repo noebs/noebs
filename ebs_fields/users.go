@@ -308,7 +308,7 @@ type Token struct {
 	gorm.Model
 	UserID uint
 
-	User         User          `gorm:"-" json:",-"`
+	User         User          `gorm:"-" json:"-"`
 	Amount       int           `json:"amount,omitempty"`
 	CartID       string        `json:"cart_id,omitempty"`
 	UUID         string        `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
