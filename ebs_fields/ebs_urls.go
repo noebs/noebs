@@ -90,7 +90,7 @@ func NewDynamicFeesWithDefaults() DynamicFeesFields {
 		//p2p [7.5-150]
 		//customs [85-150]
 		//special payment [2-150]
-		CardTransferfees:   7.5, // ebs QA server returns error for 1 fees
+		CardTransferfees:   30, // ebs QA server returns error for 1 fees
 		SpecialPaymentFees: 2,
 		CustomFees:         85, //TODO add custom fees to the request
 	}
