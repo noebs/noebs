@@ -260,7 +260,7 @@ type EBSResponse struct {
 	PayeeID                string  `json:"payeeId,omitempty"`
 	// Consumer fields
 	PubKeyValue     string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
-	UUID            string `json:"UUID,omitempty" form:"UUID" gorm:"primaryKey;not null;"`
+	UUID            string `json:"UUID,omitempty" form:"UUID" gorm:"primarykey;not null;"`
 	ResponseMessage string `json:"responseMessage,omitempty"`
 	ResponseStatus  string `json:"responseStatus,omitempty"`
 	ResponseCode    int    `json:"responseCode"`
