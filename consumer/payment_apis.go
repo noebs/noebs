@@ -1768,7 +1768,11 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"token": tokens, "count": len(tokens)})
 		return
 	}
-	result, _ := ebs_fields.GetTokenByUUID(uuid, s.Db)
+	result, err := ebs_fields.GetTokenByUUID(uuid, s.Db)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": "record_not_found", "message": "token not found"})
+		return
+	}
 
 	// Masking the PAN
 	result.ToCard = utils.MaskPAN(result.ToCard)
