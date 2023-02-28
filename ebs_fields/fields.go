@@ -599,6 +599,8 @@ type QRMerchantFields struct {
 	MerchantAccountReference string `json:"merchantAccountReference" form:"merchantAccountReference" binding:"required"`
 	MerchantName             string `json:"merchantName" form:"merchantName" binding:"required"`
 	MerchantCity             string `json:"merchantCity" form:"merchantCity" binding:"required"`
+	
+	// ebs uses mobile number for kyc AND also otp future reuse
 	MobileNo                 string `json:"mobileNo" form:"mobileNo" binding:"required"`
 	IDType                   string `json:"idType" form:"idType" binding:"required"`
 	IdNo                     string `json:"idNo" form:"idNo" binding:"required"`

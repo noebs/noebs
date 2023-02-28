@@ -68,6 +68,10 @@ func GetUserByMobile(mobile string, db *gorm.DB) (User, error) {
 	return user, nil
 }
 
+type QRMerchant struct {
+	Mobile string
+}
+
 // GenerateOtp for a noebs user
 func (u User) GenerateOtp() (string, error) {
 	if u.PublicKey == "" {
