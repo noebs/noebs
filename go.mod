@@ -19,7 +19,7 @@ require (
 	github.com/tutipay/ws v0.0.25
 	github.com/zsais/go-gin-prometheus v0.1.0
 	golang.org/x/crypto v0.0.0-20221012134737-56aed061732a
-	gorm.io/driver/sqlite v1.4.2
+	gorm.io/driver/sqlite v1.4.4
 	gorm.io/gorm v1.24.0
 )
 
