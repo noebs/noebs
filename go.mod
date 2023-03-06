@@ -3,7 +3,7 @@ module github.com/adonese/noebs
 go 1.18
 
 require (
-	firebase.google.com/go/v4 v4.9.0
+	firebase.google.com/go/v4 v4.10.0
 	github.com/adonese/crypto v1.1.0
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
@@ -29,7 +29,9 @@ require (
 	cloud.google.com/go/firestore v1.7.0 // indirect
 	cloud.google.com/go/iam v0.5.0 // indirect
 	cloud.google.com/go/storage v1.27.0 // indirect
+	github.com/MicahParks/keyfunc v1.5.1 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
+	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.0 // indirect
