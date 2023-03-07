@@ -142,7 +142,7 @@ func GetUserByCard(pan string, db *gorm.DB) (User, error) {
 // GetDeviceIDsByPan retrieves device_ids associated to a card number
 func GetDeviceIDsByPan(pan string, db *gorm.DB) ([]string, error) {
 	var results []string
-	err := db.Model(&User{}).Distinct("users.device_id").Joins("left join cards on cards.user_id = users.id").Where("users.device_id != ?", "").Where("cards.pan = ?", pan).Scan(&results)
+	err := db.Model(&User{}).Distinct("users.device_id").Joins("left join cards on cards.user_id = users.id").Where("users.device_id != ?", "").Where("cards.pan = ? and cards.deleted_at is null", pan).Scan(&results)
 	return results, err.Error
 }
 
