@@ -2270,7 +2270,7 @@ func (s *Service) SetMainCard(c *gin.Context) {
 		return
 	}
 	// Updating the user
-	result = s.Db.Model(&ebs_fields.User{}).Where("id = ?", user.ID).Update("main_card", card.Pan)
+	result = s.Db.Debug().Model(&ebs_fields.User{}).Where("mobile = ?", user.Mobile).Update("main_card", card.Pan)
 	if result.Error != nil {
 		s.Logger.Printf("Error updating user.Pan: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
