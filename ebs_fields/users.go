@@ -160,7 +160,7 @@ func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 		logrus.Errorf("Error with user (mobile = %v): ", mobile, result.Error)
 		return nil, result.Error
 	}
-	result = db.Model(&Card{}).Find(&user.Cards, "user_id = ?", user.ID)
+	result = db.Model(&Card{}).Order("is_main DESC").Find(&user.Cards, "user_id = ?", user.ID)
 	if result.Error != nil {
 		logrus.Errorf("Error with user (mobile = %v): ", mobile, result.Error)
 		return nil, result.Error
