@@ -214,7 +214,7 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {
-		c.JSON(http.StatusCreated, gin.H{"result": "ok"})
+		c.JSON(http.StatusOK, gin.H{"result": "ok"})
 		return
 	}
 }

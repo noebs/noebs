@@ -511,10 +511,9 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 	}
 }
 
-// ExpandCard performs a regex search for the first and last 4 digits of a pan and retrieves the matching pan number
+// ExpandCard performs a regex search for the first and last 4 digits of a pan
+// and retrieves the matching pan number
 func ExpandCard(card string, userCards []Card) (string, error) {
-	// You can edit this code!
-	// Click here and start typing.
 	if len(card) < 8 {
 		return "", errors.New("short query")
 	}
