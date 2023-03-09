@@ -1721,7 +1721,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 	fullPan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err.Error()})
 		return
 	}
 	token.ToCard = fullPan
