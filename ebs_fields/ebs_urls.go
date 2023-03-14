@@ -24,6 +24,7 @@ const (
 	VoucherCashInEndpoint            = "voucherCashIn"
 	GenerateOTPEndpoint              = "generateOTP"
 	ChangePINEndpoint                = "changePin"
+	UpdateCardRegistrtion            = "updateRegisteredCard"
 )
 
 const (

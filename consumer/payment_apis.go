@@ -846,6 +846,68 @@ func (s *Service) CashIn(c *gin.Context) {
 	}
 }
 
+// This service is used to renew card after expiration
+func (s *Service) UpdateCardRegistration(c *gin.Context) {
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.UpdateCardRegistrtion // EBS simulator endpoint url goes here.
+
+	var fields = ebs_fields.ConsumerUpdateCardRegistration{}
+
+	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+
+	switch bindingErr := bindingErr.(type) {
+
+	case validator.ValidationErrors:
+		var details []ebs_fields.ErrDetails
+
+		for _, err := range bindingErr {
+
+			details = append(details, ebs_fields.ErrorToString(err))
+		}
+
+		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
+
+		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+
+	case nil:
+		fields.ApplicationId = s.NoebsConfig.ConsumerID
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			// there's an error in parsing the struct. Server error.
+			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
+			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		}
+
+		// the only part left is fixing EBS errors. Formalizing them per se.
+		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
+
+		// mask the pan
+		res.MaskPAN()
+
+		res.Name = s.ToDatabasename(url)
+		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+
+		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+			logrus.WithFields(logrus.Fields{
+				"code":    "unable to migrate purchase model",
+				"message": err,
+			}).Info("error in migrating purchase model")
+		}
+
+		if ebsErr != nil {
+			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
+			c.JSON(code, payload)
+		} else {
+			c.JSON(code, gin.H{"ebs_response": res, "fees": fees})
+
+		}
+
+	default:
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+	}
+}
+
 // CashIn performs cash in transactions
 func (s *Service) QRMerchantRegistration(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
