@@ -742,6 +742,8 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
+		res.EBSResponse.SenderPAN = fields.Pan
+		res.EBSResponse.ReceiverPAN = fields.ToCard
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
@@ -2392,4 +2394,16 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 	default:
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
 	}
+}
+
+func (s *Service) GetTransactions(c *gin.Context) {
+	mobile := c.GetString("mobile")
+	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
+		return
+	}
+	var trans []ebs_fields.EBSResponse
+	s.Db.Model(ebs_fields.EBSResponse{}).Where("sender_pan = ? OR receiver_pan = ?", user.MainCard, user.MainCard).Find(&trans)
+	c.JSON(http.StatusOK, trans)
 }
