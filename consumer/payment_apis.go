@@ -2399,13 +2399,20 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 
 func (s *Service) GetTransactions(c *gin.Context) {
 	mobile := c.GetString("mobile")
-	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
 		return
 	}
-	uMaskedPan := utils.MaskPAN(user.MainCard)
+
 	var trans []ebs_fields.EBSResponse
-	s.Db.Model(ebs_fields.EBSResponse{}).Where("pan = ? OR sender_pan = ? OR receiver_pan = ?", uMaskedPan, uMaskedPan, uMaskedPan).Find(&trans)
+	for _, card := range user.Cards {
+		// Mask cards and perform the query for each card
+		uMaskedPan := utils.MaskPAN(card.Pan)
+		var cardTrans []ebs_fields.EBSResponse
+		s.Db.Model(ebs_fields.EBSResponse{}).Where("pan = ? OR sender_pan = ? OR receiver_pan = ?", uMaskedPan, uMaskedPan, uMaskedPan).Find(&cardTrans)
+		trans = append(trans, cardTrans...)
+	}
+
 	c.JSON(http.StatusOK, trans)
 }
