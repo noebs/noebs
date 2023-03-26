@@ -1,7 +1,6 @@
 package ebs_fields
 
 import (
-	_ "embed"
 	"reflect"
 	"testing"
 
