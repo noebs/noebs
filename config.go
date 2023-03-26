@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 
 	firebase "firebase.google.com/go/v4"
 	gateway "github.com/adonese/noebs/apigateway"
@@ -27,8 +28,17 @@ import (
 	"google.golang.org/api/option"
 )
 
-//go:embed .secrets.json
 var secretsFile []byte
+
+// readConfig reads the config file that contains all the variables required
+// for the service to function
+func readConfig(configPath string) ([]byte, error) {
+	configFile, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+	return configFile, nil
+}
 
 func parseConfig(data *ebs_fields.NoebsConfig) error {
 	if err := json.Unmarshal(secretsFile, data); err != nil {
@@ -229,6 +239,12 @@ func init() {
 
 	logrusLogger.Level = logrus.DebugLevel
 	logrusLogger.SetReportCaller(true)
+
+	// Read noebs configurations
+	secretsFile, err = readConfig(".secrets.json")
+	if err != nil {
+		logrusLogger.Printf("error in reading file: %v", err)
+	}
 
 	// Parse noebs system-level configurations
 	if err = parseConfig(&noebsConfig); err != nil {
