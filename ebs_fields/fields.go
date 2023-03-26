@@ -312,6 +312,10 @@ type EBSResponse struct {
 
 	SenderPAN   string `json:"-"`
 	ReceiverPAN string `json:"-"`
+	// BillType is the type of bill (TopUp, Electricity, Educations, ...etc)
+	BillType string `json:"bill_type,omitempty"`
+	// BillTo is the number associated with the bill type (TopUp: phone number, Electricity: meter number, ...etc)
+	BillTo string `json:"bill_to,omitempty"`
 }
 
 // TableName overrides the default table name for gorm
