@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "embed"
 	"testing"
 
 	firebase "firebase.google.com/go/v4"

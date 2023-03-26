@@ -12,8 +12,6 @@ import (
 	"regexp"
 	"time"
 
-	_ "embed"
-
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
