@@ -298,7 +298,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 			// This is for push notifications (failure)
 			data.Title = "Payment Failure"
 			data.EBSData.PAN = fields.Pan // Changing the masked PAN with the unmasked one.
-			data.Body = fmt.Sprintf("Payment failed due to: %v", res.ResponseMessage)
+			data.Body = fmt.Sprintf("Payment failed due to: %v.", res.ResponseMessage)
 			tranData <- data
 
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -313,18 +313,18 @@ func (s *Service) BillPayment(c *gin.Context) {
 			case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
 				phone := "0" + res.PaymentInfo[7:]
 				data.Phone = phone
-				data.Body = fmt.Sprintf("You have received %v %v on your phone: %v", res.AccountCurrency, res.TranAmount, phone)
+				data.Body = fmt.Sprintf("You have received %v %v on your phone: %v.", res.TranAmount, res.AccountCurrency, phone)
 				tranData <- data
-				data.Body = fmt.Sprintf("You have sent %v %v to phone: %v", res.AccountCurrency, res.TranAmount, phone)
+				data.Body = fmt.Sprintf("You have sent %v %v to phone: %v successfully.", res.TranAmount, res.AccountCurrency, phone)
 			case "0010030002", "0010030004": // mohe
-				data.Body = fmt.Sprintf("%v %v has been payed for Education", res.AccountCurrency, res.TranAmount)
+				data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
 			case "0010030003": // Customs
-				data.Body = fmt.Sprintf("%v %v has been payed for Customs", res.AccountCurrency, res.TranAmount)
+				data.Body = fmt.Sprintf("%v %v has been paid successfully for Customs.", res.TranAmount, res.AccountCurrency)
 			case "0010050001": // e-15
-				data.Body = fmt.Sprintf("%v %v has been payed for E-15", res.AccountCurrency, res.TranAmount)
+				data.Body = fmt.Sprintf("%v %v has been paid successfully for E-15.", res.TranAmount, res.AccountCurrency)
 			case "0010020001": // electricity
 				meter := res.PaymentInfo[6:]
-				data.Body = fmt.Sprintf("%v %v has been payed for Electricity Meter No. %v", res.AccountCurrency, res.TranAmount, meter)
+				data.Body = fmt.Sprintf("%v %v has been paid successfully for Electricity Meter No. %v", res.TranAmount, res.AccountCurrency, meter)
 			}
 
 			data.Phone = ""
@@ -765,7 +765,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			// This is for push notifications (sender)
 			data.EBSData.PAN = fields.Pan
-			data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
+			data.Body = fmt.Sprintf("Card Transfer failed due to: %v.", res.ResponseMessage)
 			tranData <- data
 
 			c.JSON(code, payload)
@@ -773,12 +773,12 @@ func (s *Service) CardTransfer(c *gin.Context) {
 			// This is for push notifications (receiver)
 			data.EBSData.PAN = fields.ToCard
 
-			data.Body = fmt.Sprintf("You have received %v %v from %v", res.AccountCurrency, fields.TranAmount, res.PAN)
+			data.Body = fmt.Sprintf("You have received %v %v from %v.", fields.TranAmount, res.AccountCurrency, res.PAN)
 			tranData <- data
 
 			// This is for push notifications (sender)
 			data.EBSData.PAN = fields.Pan
-			data.Body = fmt.Sprintf("%v %v has been transferred from your account to %v", res.AccountCurrency, fields.TranAmount, res.ToCard)
+			data.Body = fmt.Sprintf("%v %v has been transferred successfully from your account to %v.", fields.TranAmount, res.AccountCurrency, res.ToCard)
 			tranData <- data
 
 			c.JSON(code, gin.H{"ebs_response": res})
@@ -1698,7 +1698,7 @@ func (s *Service) RequestFunds(c *gin.Context) {
 	data.UUID = rff.Token.UUID
 	data.DeviceID = toUser.DeviceID
 	data.Phone = rff.ToMobile
-	data.Body = fmt.Sprintf("%v requested %v from you. Click to confirm transfer.", user.Mobile, rff.Token.Amount)
+	data.Body = fmt.Sprintf("%v requested %v from you. Tap to confirm money transfer.", user.Mobile, rff.Token.Amount)
 
 	tranData <- data
 
@@ -2168,7 +2168,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 
 		if ebsErr != nil {
 			// This is for push notifications (sender)
-			data.Body = fmt.Sprintf("Voucher generation failed due to: %v", res.ResponseMessage)
+			data.Body = fmt.Sprintf("Voucher generation failed due to: %v.", res.ResponseMessage)
 			tranData <- data
 
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
