@@ -183,6 +183,7 @@ func (s *Service) Pusher() {
 			} else {
 				data.To = user.DeviceID
 				data.EBSData = ebs_fields.EBSResponse{}
+				data.UserMobile = user.Mobile
 				//Omit association when creating
 				s.Db.Omit(clause.Associations).Create(&data)
 				s.SendPush(data)
@@ -196,6 +197,7 @@ func (s *Service) Pusher() {
 			s.Logger.Printf("error finding user: %v", err)
 		} else {
 			data.To = user.DeviceID
+			data.UserMobile = user.Mobile
 			s.Db.Omit(clause.Associations).Create(&data)
 			s.SendPush(data)
 		}

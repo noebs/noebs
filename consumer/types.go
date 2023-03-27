@@ -217,6 +217,9 @@ type PushData struct {
 	Phone    string `json:"phone"`
 	IsRead   bool   `json:"is_read"`
 	DeviceID string `json:"device_id"`
+
+	// UserMobile identifies which user the notification belogs to
+	UserMobile string `json:"user_mobile"`
 }
 
 func (p *PushData) UpdateIsRead(phone string, db *gorm.DB) {

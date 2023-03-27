@@ -666,22 +666,16 @@ func (s *Service) GetIpinPubKey() error {
 
 // Notifications handles various crud operations (json)
 func (s *Service) Notifications(c *gin.Context) {
-	type data struct {
-		All    bool   `form:"all"`
-		Mobile string `form:"mobile"`
+	mobile := c.GetString("mobile")
+	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	if err != nil {
+		s.Logger.Printf("Error finding user: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
-	var d data
-	c.ShouldBindWith(&d, binding.Form)
 
-	if d.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "no mobile", "code": "bad_request"})
-		return
-	} else {
-
-		var notifications []PushData
-		s.Db.Where("is_read = ?", d.All).Where("phone = ?", d.Mobile).Find(&notifications)
-		c.JSON(http.StatusOK, gin.H{"notifications": notifications})
-	}
+	var notifications []PushData
+	s.Db.Where("user_mobile = ?", user.Mobile).Find(&notifications)
+	c.JSON(http.StatusOK, notifications)
 	var pushdata PushData
-	pushdata.UpdateIsRead(d.Mobile, s.Db)
+	pushdata.UpdateIsRead(mobile, s.Db)
 }
