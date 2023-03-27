@@ -199,7 +199,6 @@ func GetMainEngine() *gin.Engine {
 			gin.HandlerFunc(func(c *gin.Context) {
 				consumerService.GenerateSignInCode(c, true)
 			}))
-		cons.GET("/notifications", consumerService.Notifications)
 		cons.POST("/otp/login", consumerService.SingleLoginHandler)
 		cons.POST("/otp/verify", consumerService.VerifyOTP)
 		cons.POST("/otp/balance", consumerService.BalanceStep)
@@ -210,6 +209,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/check_user", consumerService.CheckUser)
 
 		cons.Use(auth.AuthMiddleware())
+		cons.GET("/notifications", consumerService.Notifications)
 		cons.GET("/transactions", consumerService.GetTransactions)
 		cons.POST("/p2p_mobile", consumerService.MobileTransfer)
 		cons.POST("/cards/set_main", consumerService.SetMainCard)
