@@ -169,46 +169,35 @@ func (s *Service) ToDatabasename(url string) string {
 var tranData = make(chan PushData, 2048)
 
 func (s *Service) Pusher() {
-	for {
-		select {
-		case data := <-tranData:
-			// In the case we want to send a push notification to the receipient
-			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
-			// But the problem, is that we have lost the reference to the original sender
-			s.Logger.Info("the data is: %+v", data)
-			// we are doing too much of db and logic here, let's simplify it
-			if data.Phone != "" {
-				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
-				if err != nil {
-					// not a tutipay user
-					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
-				} else {
-					data.To = user.DeviceID
-					data.EBSData = ebs_fields.EBSResponse{}
-					//Omit association when creating
-					s.Db.Omit(clause.Associations).Create(&data)
-					s.SendPush(data)
-					// FIXME(adonese): fallback option, maybe there is not need for the duplication
-					data.To = data.DeviceID
-					s.SendPush(data)
-				}
-			}
-			// Read the pan from the payload
-			ids, err := ebs_fields.GetDeviceIDsByPan(data.EBSData.PAN, s.Db)
-
+	for data := range tranData {
+		// In the case we want to send a push notification to the receipient
+		//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
+		// But the problem, is that we have lost the reference to the original sender
+		s.Logger.Info("the data is: %+v", data)
+		// we are doing too much of db and logic here, let's simplify it
+		if data.Phone != "" {
+			user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
 			if err != nil {
-				s.Logger.Printf("error in Pusher service: %s", err)
+				// not a tutipay user
+				utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
 			} else {
-				for _, deviceId := range ids {
-					data.To = deviceId
-					// Store to database first
-					//Omit association when creating
-					s.Db.Omit(clause.Associations).Create(&data)
-					s.SendPush(data)
-				}
-
+				data.To = user.DeviceID
+				data.EBSData = ebs_fields.EBSResponse{}
+				//Omit association when creating
+				s.Db.Omit(clause.Associations).Create(&data)
+				s.SendPush(data)
+				// FIXME(adonese): fallback option, maybe there is not need for the duplication
+				data.To = data.DeviceID // Sender DeviceID
+				s.SendPush(data)
 			}
 		}
+		user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+		if err != nil {
+			s.Logger.Printf("error finding user: %v", err)
+		} else {
+			data.To = user.DeviceID
+			s.Db.Omit(clause.Associations).Create(&data)
+			s.SendPush(data)
+		}
 	}
-
 }
