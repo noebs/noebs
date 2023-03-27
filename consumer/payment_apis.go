@@ -279,25 +279,20 @@ func (s *Service) BillPayment(c *gin.Context) {
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		// Adding BillType and BillTo so that the mobile client can show these fields in transactions history
+		res.EBSResponse.BillTo = res.PaymentInfo
 		switch res.PayeeID {
 		case "0010010001", "0010010003", "0010010005": // telecom top up
-			phone := "0" + res.PaymentInfo[7:]
-			res.EBSResponse.BillType = "telecom_top_up"
-			res.EBSResponse.BillTo = phone
+			res.EBSResponse.BillType = "Telecom TopUp"
 		case "0010010002", "0010010004", "0010010006": // telecom bill payment
-			phone := "0" + res.PaymentInfo[7:]
-			res.EBSResponse.BillType = "telecom_bill_payment"
-			res.EBSResponse.BillTo = phone
+			res.EBSResponse.BillType = "Telecom Bill Payment"
 		case "0010030002", "0010030004": // mohe
-			// FIXME: figure out the form of the response and add it
+			res.EBSResponse.BillType = "Education"
 		case "0010030003": // Customs
-			// FIXME: figure out the form of the response and add it
+			res.EBSResponse.BillType = "Customs"
 		case "0010050001": // e-15
-			// FIXME: figure out the form of the response and add it
+			res.EBSResponse.BillType = "Government E-15"
 		case "0010020001": // electricity
-			meter := res.PaymentInfo[6:]
-			res.EBSResponse.BillType = "electricity"
-			res.EBSResponse.BillTo = meter
+			res.EBSResponse.BillType = "Electricity"
 		}
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
