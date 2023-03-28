@@ -545,3 +545,7 @@ func ExpandCard(card string, userCards []Card) (string, error) {
 	}
 	return "", errors.New("not able to find a match")
 }
+
+func UpdateUser(user User, db *gorm.DB) error {
+	return db.Where("mobile = ?", user.Mobile).Updates(&user).Error
+}

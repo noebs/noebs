@@ -691,3 +691,35 @@ func (s *Service) GetUser(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, profile)
 }
+
+// UpdateUser allows the currently logged in user to update their profile info
+func (s *Service) UpdateUser(c *gin.Context) {
+	var profile ebs_fields.UserProfile
+	err := c.ShouldBindWith(&profile, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "binding_error"})
+		return
+	}
+
+	mobile := c.GetString("mobile")
+	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
+		return
+	}
+	var tmpUser ebs_fields.User
+	if res := s.Db.Where("username = ?", profile.Username).First(&tmpUser); res.Error == nil && tmpUser.Mobile != user.Mobile {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "duplication_error", "message": "username already exists"})
+		return
+	}
+	user.Fullname = profile.Fullname
+	user.Username = profile.Username
+	user.Email = profile.Email
+	user.Birthday = profile.Birthday
+	user.Gender = profile.Gender
+	if err := ebs_fields.UpdateUser(user, s.Db); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+}
