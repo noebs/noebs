@@ -679,3 +679,15 @@ func (s *Service) Notifications(c *gin.Context) {
 	var pushdata PushData
 	pushdata.UpdateIsRead(mobile, s.Db)
 }
+
+// GetUser returns the user profile object for the currently logged in user
+func (s *Service) GetUser(c *gin.Context) {
+	mobile := c.GetString("mobile")
+
+	var profile ebs_fields.UserProfile
+	if res := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", mobile).First(&profile); res.Error != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": res.Error.Error(), "code": "database_error"})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}

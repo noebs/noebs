@@ -209,6 +209,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/check_user", consumerService.CheckUser)
 
 		cons.Use(auth.AuthMiddleware())
+		cons.GET("/user", consumerService.GetUser)
 		cons.GET("/notifications", consumerService.Notifications)
 		cons.GET("/transactions", consumerService.GetTransactions)
 		cons.POST("/p2p_mobile", consumerService.MobileTransfer)
