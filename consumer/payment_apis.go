@@ -280,7 +280,12 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		// Adding BillType, BillTo and BillInfo2 so that the mobile client can show these fields in transactions history
 		res.EBSResponse.BillTo = res.PaymentInfo
-		res.EBSResponse.BillInfo2 = res.BillInfo
+		d, err := json.Marshal(res.BillInfo)
+		if err != nil {
+			s.Logger.Println("Error in marshalling:", err)
+		} else {
+			res.EBSResponse.BillInfo2 = string(d)
+		}
 		switch res.PayeeID {
 		case "0010010001", "0010010003", "0010010005":
 			res.EBSResponse.BillType = "Telecom TopUp"
