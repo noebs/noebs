@@ -83,6 +83,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/adonese/noebs/ebs_fields"
@@ -339,8 +340,16 @@ func (s *Service) BillPayment(c *gin.Context) {
 				data.Body = fmt.Sprintf("You have received %v %v on your phone: %v.", res.TranAmount, res.AccountCurrency, phone)
 				tranData <- data
 				data.Body = fmt.Sprintf("You have sent %v %v to phone: %v successfully.", res.TranAmount, res.AccountCurrency, phone)
-			case "0010030002", "0010030004": // mohe
+				data.Phone = ""
+			case "0010030002": // mohe
 				data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
+			case "0010030004": // mohe arab
+				// TODO: This case NEED to be tested
+				phone := strings.Split(res.PaymentInfo, "/")[1][10:]
+				data.Phone = phone
+				data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
+				tranData <- data
+				data.Phone = ""
 			case "0010030003": // Customs
 				data.Body = fmt.Sprintf("%v %v has been paid successfully for Customs.", res.TranAmount, res.AccountCurrency)
 			case "0010050001": // e-15
@@ -350,7 +359,6 @@ func (s *Service) BillPayment(c *gin.Context) {
 				data.Body = fmt.Sprintf("%v %v has been paid successfully for Electricity Meter No. %v", res.TranAmount, res.AccountCurrency, meter)
 			}
 
-			data.Phone = ""
 			tranData <- data
 
 			c.JSON(code, gin.H{"ebs_response": res})

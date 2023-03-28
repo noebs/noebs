@@ -191,15 +191,16 @@ func (s *Service) Pusher() {
 				data.To = data.DeviceID // Sender DeviceID
 				s.SendPush(data)
 			}
-		}
-		user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
-		if err != nil {
-			s.Logger.Printf("error finding user: %v", err)
 		} else {
-			data.To = user.DeviceID
-			data.UserMobile = user.Mobile
-			s.Db.Omit(clause.Associations).Create(&data)
-			s.SendPush(data)
+			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+			if err != nil {
+				s.Logger.Printf("error finding user: %v", err)
+			} else {
+				data.To = user.DeviceID
+				data.UserMobile = user.Mobile
+				s.Db.Omit(clause.Associations).Create(&data)
+				s.SendPush(data)
+			}
 		}
 	}
 }
