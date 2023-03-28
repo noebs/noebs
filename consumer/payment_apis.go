@@ -443,6 +443,7 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	}
 	user := ebs_fields.NewUser(s.Db)
 	user.Mobile = card.Mobile
+	user.Username = card.Mobile
 	user.Fullname = card.Name
 	user.MainCard = card.Pan
 	user.ExpDate = card.Expiry

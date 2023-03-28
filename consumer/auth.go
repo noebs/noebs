@@ -203,12 +203,24 @@ func (s *Service) CreateUser(c *gin.Context) {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
+	// FIXME: Optimize these checks
 	// Make sure user is unique
 	var tmpUser ebs_fields.User
 	if res := s.Db.Where("mobile = ?", u.Mobile).First(&tmpUser); res.Error == nil {
 		// User already exists
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
 		return
+	}
+	// Make sure username is unique
+	if u.Username != "" {
+		if res := s.Db.Where("username = ?", u.Username).First(&tmpUser); res.Error == nil {
+			// User already exists
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this username already exists"})
+			return
+		}
+	} else {
+		// Currently we set the username to be the same as the mobile number
+		u.Username = u.Mobile
 	}
 
 	// validate u.Password to include at least one capital letter, one symbol and one number
