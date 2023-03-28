@@ -20,6 +20,8 @@ type User struct {
 	gorm.Model
 	Password        string `binding:"required,min=8,max=20" json:"password"`
 	Fullname        string `json:"fullname"`
+	Username        string `json:"username"`
+	Gender          string `json:"gender"`
 	Birthday        string `json:"birthday"`
 	Mobile          string `json:"mobile" gorm:"primaryKey;not null;unique;uniqueIndex"`
 	Email           string `json:"email"`
