@@ -42,6 +42,16 @@ type User struct {
 	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
 }
 
+// UserProfile is a subset of the User struct, it contains information that appear in the user profile
+// and which user can change.
+type UserProfile struct {
+	Fullname string `json:"fullname" binding:"required,min=1"`
+	Username string `json:"username" binding:"min=1"`
+	Email    string `json:"email" binding:"email"`
+	Birthday string `json:"birthday"`
+	Gender   string `json:"gender"`
+}
+
 // func (user *User) BeforeSave(tx *gorm.DB) (err error) {
 // 	if user.Password == "" {
 // 		return errors.New("password is empty")
