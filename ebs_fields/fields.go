@@ -314,6 +314,8 @@ type EBSResponse struct {
 	BillType string `json:"bill_type,omitempty"`
 	// BillTo is the number associated with the bill type (TopUp: phone number, Electricity: meter number, ...etc)
 	BillTo string `json:"bill_to,omitempty"`
+	// BillInfo2 contains the electricicity token
+	BillInfo2 map[string]interface{} `json:"bill_info2,omitempty"`
 }
 
 // TableName overrides the default table name for gorm
