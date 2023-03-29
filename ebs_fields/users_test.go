@@ -10,53 +10,6 @@ import (
 
 var testDB, err = gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
 
-func TestPaymentToken_UpsertTransaction(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("../test.db"), &gorm.Config{})
-	if err != nil {
-		t.Fatal()
-	}
-	if err := db.AutoMigrate(&Token{}, &EBSResponse{}, &User{}); err != nil {
-		panic(err)
-	}
-	if err := db.AutoMigrate(&User{}); err != nil {
-		t.FailNow()
-	}
-	type args struct {
-		transaction EBSResponse
-		uuid        string
-		db          *gorm.DB
-	}
-	res := EBSResponse{TranAmount: 696969, ResponseMessage: "Successful"}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr string
-	}{
-		{"test_upsert_transaction", args{transaction: res, uuid: "461f5bb8-f9e8-42eb-9b15-2195e2e30101", db: db}, "Successful"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tran := tt.args.transaction
-			var trans []EBSResponse
-			trans = append(trans, tran)
-			p := Token{
-				db:           tt.args.db,
-				EBSResponses: trans,
-			}
-			// p.UserID = 1
-			// p.User = User{Mobile: "0912141679", Model: gorm.Model{ID: 1}}
-			if err := p.UpsertTransaction(tt.args.transaction, tt.args.uuid); err != nil {
-				t.Errorf("PaymentToken.UpsertTransaction() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			// newToken, err := GetTokenWithTransaction(tt.args.uuid, tt.args.db)
-			// if err != nil {
-			// 	t.Errorf("GetTokenWithTransaction() error = %v, wantErr %v, the token: %+v", err, tt.wantErr, newToken)
-			// }
-
-		})
-	}
-}
-
 func TestGetTokenByUUID(t *testing.T) {
 	type args struct {
 		uuid   string
