@@ -70,7 +70,7 @@ func (s *Service) GetCards(c *gin.Context) {
 			"code":    "unable to get results from redis",
 			"message": err.Error(),
 		}).Info("unable to get results from redis")
-		c.JSON(http.StatusOK, gin.H{"cards": nil, "main_card": nil})
+		c.JSON(http.StatusNotFound, gin.H{"cards": nil, "main_card": nil})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
@@ -214,7 +214,7 @@ func (s *Service) RemoveCard(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
 		return
 	} else {
-		c.JSON(http.StatusCreated, gin.H{"result": "ok"})
+		c.JSON(http.StatusOK, gin.H{"result": "ok"})
 		return
 	}
 }

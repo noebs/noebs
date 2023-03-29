@@ -10,6 +10,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/pquerna/otp/totp"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -158,23 +159,28 @@ func GetDeviceIDsByPan(pan string, db *gorm.DB) ([]string, error) {
 	return results, err.Error
 }
 
-// GetCardsOrFail returns a user model and fails if user doesn't exist. It preloads
+// GetCardsOrFail returns a user model and fails if user doesn't exist. It loads
 // an existing user model with their cards. The user model itself might be used for other
 // cases, that's why we are not just returning Card
 // NOTE: we are not masking cards here which is really *very* insecure to say the least.
 func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	var user User
-	// Get user model and preload Cards and order the model relation Cards.is_main
-	// This trick is really super important: it will allow us to get a user's main card
-	// with ease, without having to do a second fetch and then filter the main card
-	result := db.Model(&User{}).Preload("Cards", func(db *gorm.DB) *gorm.DB {
-		db = db.Order("is_main desc")
-		return db
-	}).First(&user, "mobile = ?", mobile)
-	user.db = db
-	if len(user.Cards) == 0 {
-		return nil, errors.New("empty records")
+	result := db.Model(&User{}).First(&user, "mobile = ?", mobile)
+	if result.Error != nil {
+		// This should be impossible because the user would not get to this
+		// point if he does not exits
+		logrus.Errorf("Error with user (mobile = %v): ", mobile, result.Error)
+		return nil, result.Error
 	}
+	result = db.Model(&Card{}).Order("is_main DESC").Find(&user.Cards, "user_id = ?", user.ID)
+	if result.Error != nil {
+		logrus.Errorf("Error with user (mobile = %v): ", mobile, result.Error)
+		return nil, result.Error
+	}
+	if len(user.Cards) == 0 {
+		return nil, errors.New("no cards found")
+	}
+	user.db = db
 	return &user, result.Error
 }
 
@@ -517,10 +523,9 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 	}
 }
 
-// ExpandCard performs a regex search for the first and last 4 digits of a pan and retrieves the matching pan number
+// ExpandCard performs a regex search for the first and last 4 digits of a pan
+// and retrieves the matching pan number
 func ExpandCard(card string, userCards []Card) (string, error) {
-	// You can edit this code!
-	// Click here and start typing.
 	if len(card) < 8 {
 		return "", errors.New("short query")
 	}

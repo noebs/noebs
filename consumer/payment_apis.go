@@ -1756,7 +1756,7 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	}
 	fullPan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err})
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err.Error()})
 		return
 	}
 	token.ToCard = fullPan
@@ -2305,7 +2305,7 @@ func (s *Service) SetMainCard(c *gin.Context) {
 		return
 	}
 	// Updating the user
-	result = s.Db.Model(&ebs_fields.User{}).Where("id = ?", user.ID).Update("main_card", card.Pan)
+	result = s.Db.Debug().Model(&ebs_fields.User{}).Where("mobile = ?", user.Mobile).Update("main_card", card.Pan)
 	if result.Error != nil {
 		s.Logger.Printf("Error updating user.Pan: %v", result.Error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
