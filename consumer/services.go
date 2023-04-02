@@ -617,12 +617,10 @@ func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 			"message": err,
 		}).Info("error in migrating purchase model")
 	}
-	if ebsErr != nil {
-		s.Logger.Printf("error in encryption: %v", err)
-		return false, err
-	} else {
-		return true, nil
+	if res.ResponseCode == ebs_fields.INVALIDCARD {
+		return false, ebsErr
 	}
+	return true, nil
 }
 
 func guessMobile(mobile string) string {
