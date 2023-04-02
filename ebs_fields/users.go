@@ -41,6 +41,8 @@ type User struct {
 	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
 	MainCard        string `json:"main_card" gorm:"column:main_card"`
 	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
+	// IsVerified indicates whether a user has verified their mobile with OTP
+	IsVerified bool `json:"is_verified"`
 }
 
 // UserProfile is a subset of the User struct, it contains information that appear in the user profile

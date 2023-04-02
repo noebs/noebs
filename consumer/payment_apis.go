@@ -440,7 +440,7 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	c.ShouldBindJSON(&card)
 	// why are we checking for card.PublicKey and card.Mobile here?
 	if ok, err := s.isValidCard(card); !ok || card.PublicKey == "" || card.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err, "code": "invalid_card_or_credentials"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "invalid_card_or_missing_credentials"})
 		return
 	}
 	// Make sure user is unique
@@ -455,7 +455,6 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	user.Fullname = card.Name
 	user.MainCard = card.Pan
 	user.ExpDate = card.Expiry
-	// BUG(adonese): Encrypt password here
 	user.Password = card.Password
 	user.PublicKey = card.PublicKey
 	user.HashPassword()

@@ -99,6 +99,11 @@ func (s *Service) LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
 		return
 	}
+	if !u.IsVerified {
+		// user has not verified their phone number with OTP
+		c.JSON(http.StatusUnauthorized, gin.H{"code": "unauthorized_access", "message": "verify phone number with OTP"})
+		return
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
 		return
@@ -261,8 +266,8 @@ func (s *Service) VerifyOTP(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
 		return
 	}
-	// FIXME(adonese): we have a bug here! no where condition!
-	s.Db.Model(&req).Update("is_password_otp", true)
+	s.Db.Model(&req).Where("mobile = ?", req.Mobile).Update("is_password_otp", true)
+	s.Db.Model(&req).Where("mobile = ?", req.Mobile).Update("is_verified", true)
 	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
