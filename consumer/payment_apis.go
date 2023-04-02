@@ -445,7 +445,8 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	}
 	// Make sure user is unique
 	var tmpUser ebs_fields.User
-	if res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser); res.Error == nil {
+	res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser)
+	if res.Error == nil && tmpUser.IsVerified {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
 		return
 	}
@@ -462,6 +463,13 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
 		return
+	}
+	if tmpUser.IsVerified {
+		if res := s.Db.Delete(&tmpUser); res.Error != nil {
+			s.Logger.Printf("error deleting user: %v", err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"code": "database_error", "message": "could not replace user"})
+			return
+		}
 	}
 	if res := s.Db.Create(&user); res.Error == nil {
 		ucard := card.NewCardFromCached(int(user.ID))
