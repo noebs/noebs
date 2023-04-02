@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
@@ -92,7 +93,13 @@ func (u User) GenerateOtp() (string, error) {
 	if u.PublicKey == "" {
 		return "", errors.New("no publickey")
 	}
-	code, err := totp.GenerateCode(u.EncodePublickey32(), time.Now())
+	code, err := totp.GenerateCodeCustom(u.EncodePublickey32(), time.Now(), totp.ValidateOpts{
+		Period:    900,
+		Skew:      1,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA1,
+	})
+
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +111,19 @@ func (u User) VerifyOtp(code string) bool {
 	if u.PublicKey == "" {
 		return false
 	}
-	return totp.Validate(code, u.EncodePublickey32())
+	// using custom validator to increase OTP validation period
+	isValid, _ := totp.ValidateCustom(
+		code,
+		u.EncodePublickey32(),
+		time.Now().UTC(),
+		totp.ValidateOpts{
+			Period:    900,
+			Skew:      1,
+			Digits:    otp.DigitsSix,
+			Algorithm: otp.AlgorithmSHA1,
+		},
+	)
+	return isValid
 }
 
 // GetUser retrieves a user via their mobile number
