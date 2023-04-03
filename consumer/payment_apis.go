@@ -84,6 +84,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	firebase "firebase.google.com/go/v4"
 	"github.com/adonese/noebs/ebs_fields"
@@ -1778,6 +1779,79 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	encoded, _ := ebs_fields.Encode(&token)
 	s.Logger.Printf("token is: %v", encoded)
 	paymentLink := s.NoebsConfig.PaymentLinkBase + token.UUID
+	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
+}
+
+func (s *Service) PaymentRequest(c *gin.Context) {
+	mobile := c.GetString("mobile")
+
+	type PRData struct {
+		Mobile string `json:"mobile,omitempty"`
+		ToCard string `json:"toCard,omitempty"`
+		Amount int    `json:"amount,omitempty"`
+	}
+
+	var data PRData
+	err := c.ShouldBindWith(&data, binding.JSON)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "binding_error", "message": err.Error()})
+		return
+	}
+
+	sender, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err.Error()})
+		return
+	}
+
+	receiver, err := ebs_fields.GetUserByMobile(data.Mobile, s.Db)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err.Error()})
+		return
+	}
+
+	if len(sender.Cards) < 1 && data.ToCard == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
+		return
+	}
+
+	fullPan, err := ebs_fields.ExpandCard(data.ToCard, sender.Cards)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err.Error()})
+		return
+	}
+
+	var token ebs_fields.Token
+	token.ToCard = fullPan
+	token.Amount = data.Amount
+	token.UUID = uuid.New().String()
+	token.UserID = sender.ID
+	token.User = *sender
+	if err := sender.SavePaymentToken(&token); err != nil {
+		s.Logger.Printf("error in saving payment token: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})
+		return
+	}
+	encoded, _ := ebs_fields.Encode(&token)
+	paymentLink := s.NoebsConfig.PaymentLinkBase + token.UUID
+
+	name := sender.Fullname
+	if name == "" {
+		name = sender.Mobile
+	}
+	// This is for push notification
+	var pData PushData
+	pData.Type = NOEBS_NOTIFICATION
+	pData.Date = time.Now().Unix()
+	pData.CallToAction = CTA_REQUEST_FUNDS
+	pData.UUID = token.UUID
+	pData.DeviceID = receiver.DeviceID
+	pData.Title = "Payment Request"
+	pData.Body = fmt.Sprintf("%v has requested %v SDG from you.", name, token.Amount)
+	pData.Phone = data.Mobile
+	pData.UserMobile = data.Mobile
+	pData.PaymentRequest = ebs_fields.QrData{UUID: token.UUID, ToCard: token.ToCard, Amount: token.Amount}
+	tranData <- pData
 	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
 }
 

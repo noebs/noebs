@@ -570,12 +570,8 @@ func (s *Service) billerID(mobile string) (string, error) {
 func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 	var dbCard ebs_fields.Card
 	if res := s.Db.Where("pan = ?", card.Pan).First(&dbCard); res.Error == nil {
-		if dbCard.IsValid != nil {
-			if *dbCard.IsValid {
-				return true, nil
-			}
-			return false, errors.New("invalid card")
-		}
+		// if the card made it to the db this means it's a valid card
+		return true, nil
 	}
 
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
@@ -602,10 +598,6 @@ func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 
 	// the only part left is fixing EBS errors. Formalizing them per se.
 	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-
-	if err := ebs_fields.SaveOrUpdates(s.Db, card, ebsErr == nil); err != nil {
-		s.Logger.Printf("error in encryption: %v", err)
-	}
 
 	// s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 	// mask the pan
