@@ -713,3 +713,35 @@ func (s *Service) UpdateUser(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 }
+
+func (s *Service) GetUserLanguage(c *gin.Context) {
+	mobile := c.GetString("mobile")
+	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	if err != nil {
+		s.Logger.Printf("ERROR: could not get user from by mobile: %v", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"language": user.Language})
+}
+
+func (s *Service) SetUserLanguage(c *gin.Context) {
+	mobile := c.GetString("mobile")
+	language := c.Query("language")
+	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	if err != nil {
+		s.Logger.Printf("ERROR: could not get user from by mobile: %v", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
+		return
+	}
+	if language == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "You must set a language", "code": "client_error"})
+		return
+	}
+	user.Language = language
+	if err := ebs_fields.UpdateUser(user, s.Db); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "database_error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+}
