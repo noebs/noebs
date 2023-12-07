@@ -1,0 +1,18 @@
+# flyctl launch added from .gitignore
+**/.idea
+**/.certs
+**/test1.db
+**/.vscode
+**/*.sublime-project
+**/.noebs
+**/*.log
+**/noebs
+**/*.exe
+**/*.db
+**/ebs_fields/.secrets.jsontmp
+**/__debug_bin
+**/test.db-*
+**/*.test.db*
+**/.secrets.json
+**/firebase-sdk.json
+fly.toml

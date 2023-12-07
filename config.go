@@ -76,7 +76,7 @@ func verifyToken(f *firebase.App, token string) (string, error) {
 func GetMainEngine() *gin.Engine {
 
 	if !noebsConfig.IsDebug {
-		gin.SetMode(gin.ReleaseMode)
+		gin.SetMode(gin.DebugMode)
 	}
 	route := gin.Default()
 	instrument := gateway.Instrumentation()
@@ -87,7 +87,21 @@ func GetMainEngine() *gin.Engine {
 	route.GET("/ws", wsAdapter(hub))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
-	route.LoadHTMLGlob("./dashboard/template/*")
+	// route.LoadHTMLGlob("./dashboard/template/*") // we don't want to create runtime errors for this #FIXME(adonese): #313 let's fix it properly
+	/**
+		[GIN-debug] GET    /ws                       --> main.GetMainEngine.wsAdapter.func8 (4 handlers)
+	[GIN-debug] Loaded HTML Templates (10):
+	        - head
+	        - navbar
+	        - qr_status.html
+	        - search.html
+	        -
+	        - index.html
+	        - merchants.html
+	        - style.css
+	        - table.html
+	        - base.html
+	*/
 	route.Static("/dashboard/assets", "./dashboard/template")
 	route.POST("/generate_api_key", consumerService.GenerateAPIKey)
 	route.POST("/workingKey", merchantServices.WorkingKey)
@@ -254,13 +268,13 @@ func init() {
 		logrusLogger.Printf("error in parsing file: %v", err)
 	}
 	noebsConfig.Defaults()
-	path := "test.db"
+	dbpath := "test.db"
 	if noebsConfig.DatabasePath != "" {
-		path = noebsConfig.DatabasePath
+		dbpath = noebsConfig.DatabasePath
 	}
 
 	// Initialize database
-	database, err = utils.Database(path)
+	database, err = utils.Database(dbpath)
 	if err != nil {
 		logrusLogger.Fatalf("error in connecting to db: %v", err)
 	}
@@ -275,7 +289,8 @@ func init() {
 	// 	// We recommend adjusting this value in production,
 	// 	TracesSampleRate: 1.0,
 	// })
-	chatDb, err := chat.OpenDb("test.db")
+	// FIXME we should pass on the same database here
+	chatDb, err := chat.OpenDb(dbpath)
 	if err != nil {
 		logrusLogger.Printf("The final config file is: %#v", err)
 	}
