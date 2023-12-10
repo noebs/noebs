@@ -7,7 +7,7 @@ app = "noebs"
 primary_region = "ams"
 
 [mounts]
-  source = "litefs"
+  source = "noebs"
   destination = "/var/lib/litefs"
 
 [build]

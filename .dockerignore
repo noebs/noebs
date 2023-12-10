@@ -13,6 +13,6 @@
 **/__debug_bin
 **/test.db-*
 **/*.test.db*
-**/.secrets.json
+**/.secrets.jsontmp
 **/firebase-sdk.json
 fly.toml

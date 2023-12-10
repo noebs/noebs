@@ -23,31 +23,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm/logger"
 
+	_ "embed"
+
 	chat "github.com/tutipay/ws"
 	"google.golang.org/api/option"
 )
 
+//go:embed .secrets.json
 var secretsFile []byte
-
-// readConfig reads the config file that contains all the variables required
-// for the service to function
-func readConfig(configPath string) ([]byte, error) {
-	configFile, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, err
-	}
-	return configFile, nil
-}
-
-func parseConfig(data *ebs_fields.NoebsConfig) error {
-	if err := json.Unmarshal(secretsFile, data); err != nil {
-		logrusLogger.Printf("Error in parsing config files: %v", err)
-		return err
-	} else {
-		logrusLogger.Printf("the data is: %#v", data)
-		return nil
-	}
-}
 
 func getFirebase() (*firebase.App, error) {
 	opt := option.WithCredentialsFile("firebase-sdk.json")
@@ -256,23 +239,23 @@ func init() {
 
 	logrusLogger.Level = logrus.DebugLevel
 	logrusLogger.SetReportCaller(true)
+	logrusLogger.Out = os.Stderr
 
-	// Read noebs configurations
-	secretsFile, err = readConfig(".secrets.json")
-	if err != nil {
-		logrusLogger.Printf("error in reading file: %v", err)
+	// print stringified version of []byte
+	logrus.Printf("the data is: %x", secretsFile)
+
+	// load the secrets file
+	if err := json.Unmarshal(secretsFile, &noebsConfig); err != nil {
+		logrusLogger.Printf("error in unmarshaling secrets file: %v - the file: %v", err, string(secretsFile))
 	}
 
-	// Parse noebs system-level configurations
-	if err = parseConfig(&noebsConfig); err != nil {
-		logrusLogger.Printf("error in parsing file: %v", err)
-	}
 	noebsConfig.Defaults()
 	dbpath := "test.db"
 	if noebsConfig.DatabasePath != "" {
 		dbpath = noebsConfig.DatabasePath
 	}
 
+	logrusLogger.Printf("The final database file is: %#v", dbpath)
 	// Initialize database
 	database, err = utils.Database(dbpath)
 	if err != nil {
@@ -321,6 +304,7 @@ func init() {
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	dataConfigs.DB = database
+	backup.Db = database
 }
 
 func wsAdapter(msg chat.Hub) gin.HandlerFunc {
