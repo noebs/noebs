@@ -245,6 +245,7 @@ func (s *Service) CreateUser(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
+	go gateway.SyncLedger(u)
 }
 
 func (s *Service) VerifyOTP(c *gin.Context) {

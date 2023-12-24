@@ -20,12 +20,13 @@ import (
 // User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
 type User struct {
 	gorm.Model
-	Password        string `binding:"required,min=8,max=20" json:"password"`
-	Fullname        string `json:"fullname"`
-	Username        string `json:"username"`
-	Gender          string `json:"gender"`
-	Birthday        string `json:"birthday"`
-	Mobile          string `json:"mobile" gorm:"primaryKey;not null;unique;uniqueIndex"`
+	Created  int64  `gorm:"autoCreateTime"`
+	Password string `binding:"required,min=8,max=20" json:"password"`
+	Fullname string `json:"fullname"`
+	Username string `json:"username"`
+	Gender   string `json:"gender"`
+	Birthday string `json:"birthday"`
+
 	Email           string `json:"email"`
 	Password2       string `json:"password2" gorm:"-"`
 	IsMerchant      bool   `json:"is_merchant" gorm:"default:false"`
@@ -43,8 +44,48 @@ type User struct {
 	MainCard        string `json:"main_card" gorm:"column:main_card"`
 	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
 	Language        string `json:"language"`
-	// IsVerified indicates whether a user has verified their mobile with OTP
-	IsVerified bool `json:"is_verified"`
+	IsVerified      bool   `json:"is_verified"`
+	Mobile          string `json:"mobile" gorm:"primaryKey;not null;unique;uniqueIndex"`
+	KYC             *KYC   `gorm:"foreignKey:UserMobile;references:Mobile"`
+}
+
+type KYC struct {
+	gorm.Model
+	UserMobile  string   `gorm:"not null;unique"`
+	Mobile      string   `gorm:"primaryKey;not null;unique"`
+	Passport    Passport `gorm:"foreignKey:Mobile;references:Mobile"`
+	Selfie      string
+	PassportImg string
+}
+
+// BeforeSave GORM hook
+func (k *KYC) BeforeSave(tx *gorm.DB) (err error) {
+	if k.Mobile == "" {
+		err = errors.New("mobile cannot be an empty string")
+	}
+	if k.UserMobile == "" {
+		err = errors.New("user_mobile cannot be an empty string")
+	}
+	return
+}
+
+type Passport struct {
+	gorm.Model
+	Mobile         string    `gorm:"primaryKey;not null;unique" json:"mobile,omitempty"`
+	BirthDate      time.Time `json:"birth_date,omitempty"`
+	IssueDate      time.Time `json:"issue_date,omitempty"`
+	ExpirationDate time.Time `json:"expiration_date,omitempty"`
+	NationalNumber string    `json:"national_number,omitempty"`
+	PassportNumber string    `json:"passport_number,omitempty"`
+	Gender         string    `json:"gender,omitempty"`
+	Nationality    string    `json:"nationality,omitempty"`
+	HolderName     string    `json:"holder_name,omitempty"`
+}
+
+type KYCPassport struct {
+	Selfie      string `json:"selfie,omitempty"`
+	PassportImg string `json:"passport_image,omitempty"`
+	Passport
 }
 
 // UserProfile is a subset of the User struct, it contains information that appear in the user profile
@@ -191,12 +232,12 @@ func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
 	if result.Error != nil {
 		// This should be impossible because the user would not get to this
 		// point if he does not exits
-		logrus.Errorf("Error with user (mobile = %v): ", mobile, result.Error)
+		logrus.Errorf("Error with user (mobile = %v): error: %v", mobile, result.Error)
 		return nil, result.Error
 	}
 	result = db.Model(&Card{}).Order("is_main DESC").Find(&user.Cards, "user_id = ?", user.ID)
 	if result.Error != nil {
-		logrus.Errorf("Error with user (mobile = %v): ", mobile, result.Error)
+		logrus.Errorf("Error with user (mobile = %v): error: %v", mobile, result.Error)
 		return nil, result.Error
 	}
 	if len(user.Cards) == 0 {

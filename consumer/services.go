@@ -745,3 +745,19 @@ func (s *Service) SetUserLanguage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"result": "ok"})
 }
+
+func (s *Service) KYC(ctx *gin.Context) {
+	// Decode the request body into the CreateUserRequest struct
+	var request ebs_fields.KYCPassport
+	err := ctx.ShouldBindJSON(&request)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		return
+	}
+	if err := ebs_fields.UpdateUserWithKYC(s.Db, &request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		return
+	}
+	// Return a success message
+	ctx.JSON(http.StatusOK, gin.H{"message": "KYC created successfully", "code": "ok"})
+}

@@ -24,12 +24,10 @@ var auth gateway.JWTAuth
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
 var hub chat.Hub
-var backup gateway.DbBackup
 
 func main() {
 
 	go hub.Run()
-	go backup.RemoteBackup()
 	go consumerService.BillerHooks()
 	go consumerService.Pusher()
 	if noebsConfig.Port == "" {

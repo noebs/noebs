@@ -1,8 +1,11 @@
 package ebs_fields
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"reflect"
 	"testing"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -324,4 +327,203 @@ func TestGetMobiles(t *testing.T) {
 			}
 		})
 	}
+}
+
+func setup() *gorm.DB {
+	db, err := gorm.Open(sqlite.Open("../test.db"))
+	if err != nil {
+		panic("failed to connect database")
+	}
+	// Migrate the schema
+	err = db.AutoMigrate(&User{}, &KYC{}, &Passport{})
+	if err != nil {
+		panic(err)
+	}
+
+	return db
+}
+
+// generateRandomBytes returns securely generated random bytes.
+func generateRandomBytes(n int) ([]byte, error) {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// generateRandomBase64String returns a base64 encoded securely generated random string.
+func generateRandomBase64String(s int) string {
+	b, _ := generateRandomBytes(s)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func TestCreateKYCAndPassportForExistingUser(t *testing.T) {
+	db := setup()
+
+	// Define test cases
+	testCases := []struct {
+		name          string
+		userMobile    string
+		selfie        string
+		passportImg   string
+		passport      Passport
+		expectedError bool
+		kycMobile     string
+	}{
+		{
+			name:        "Valid User",
+			userMobile:  "0111493885",
+			kycMobile:   "011149387785",
+			selfie:      generateRandomBase64String(32),
+			passportImg: generateRandomBase64String(32),
+			passport: Passport{
+				Mobile:         "011149387785",
+				BirthDate:      time.Now(),
+				IssueDate:      time.Now(),
+				ExpirationDate: time.Now(),
+				NationalNumber: "1234567890",
+				PassportNumber: "XYZ1234567",
+				Gender:         "Male",
+				Nationality:    "Exampleland",
+				HolderName:     "John Doe",
+			},
+			expectedError: false,
+		},
+		// Add more test cases as needed...
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Check if user exists
+			var user User
+			if err := db.First(&user, "mobile = ?", tc.userMobile).Error; err != nil {
+				t.Errorf("User does not exist" + err.Error())
+				return
+			}
+
+			// Create a new KYC
+			kyc := KYC{
+				Mobile:      tc.kycMobile,
+				Passport:    tc.passport,
+				Selfie:      tc.selfie,
+				PassportImg: tc.passportImg,
+				UserMobile:  tc.userMobile,
+			}
+
+			err := db.Create(&kyc).Error
+			if (err != nil) != tc.expectedError {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			// Retrieve the user with KYC and Passport
+			var retrievedUser User
+			db.Preload("KYC").Preload("KYC.Passport").First(&retrievedUser, "mobile = ?", tc.kycMobile)
+
+			// Check if the passport data is correct
+			if retrievedUser.KYC.Passport.HolderName != tc.passport.HolderName {
+				t.Errorf("Failed to create passport with correct data")
+			}
+
+			// Check if the KYC data is correct
+			if retrievedUser.KYC.Selfie != tc.selfie {
+				t.Errorf("Failed to create KYC with correct data")
+			}
+		})
+	}
+}
+
+func TestGetUserWithKYCAndPassport(t *testing.T) {
+	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	db.AutoMigrate(&User{}, &KYC{}, &Passport{})
+
+	// Create a user with associated KYC and Passport
+	passport := &Passport{
+		Mobile:         "0111493885",
+		BirthDate:      time.Now(),
+		IssueDate:      time.Now(),
+		ExpirationDate: time.Now(),
+		NationalNumber: "123456",
+		PassportNumber: "ABC123",
+		Gender:         "M",
+		Nationality:    "X",
+		HolderName:     "John Doe",
+	}
+	kyc := &KYC{
+		Mobile:      "0111493885",
+		UserMobile:  "0111493885",
+		Passport:    *passport,
+		Selfie:      "Selfie_URL",
+		PassportImg: "PassportImg_URL",
+	}
+	user := &User{
+		Created:         time.Now().Unix(),
+		Password:        "$2a$08$T7DFFXzndRwZnzYSHSrQPesxr52aWOG76NGw.TdxMKg1jrxq5A2cy",
+		Fullname:        "John Doe",
+		Username:        "johndoe",
+		Gender:          "M",
+		Birthday:        "2000-01-01",
+		Email:           "johndoe@example.com",
+		IsMerchant:      false,
+		PublicKey:       "PublicKey",
+		DeviceID:        "DeviceID",
+		OTP:             "OTP",
+		SignedOTP:       "SignedOTP",
+		FirebaseIDToken: "FirebaseIDToken",
+		NewPassword:     "NewPassword123",
+		IsPasswordOTP:   false,
+		MainCard:        "MainCard",
+		ExpDate:         "2022-12-31",
+		Language:        "EN",
+		IsVerified:      true,
+		Mobile:          "0111493885",
+		KYC:             kyc,
+	}
+	db.Create(user)
+
+	userWithoutKYC := &User{Mobile: "0111493886"}
+	db.Create(userWithoutKYC)
+
+	dbWithError, _ := gorm.Open(sqlite.Open(":error:"), &gorm.Config{})
+
+	tests := []struct {
+		name    string
+		db      *gorm.DB
+		mobile  string
+		wantErr bool
+		user    *User
+	}{
+		{"User with KYC and Passport", db, "0111493885", false, user},
+		{"User without KYC and Passport", db, "0111493886", false, userWithoutKYC},
+		{"Non-existent user", db, "0000000000", true, nil},
+		{"Database error", dbWithError, "0111493885", true, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := GetUserWithKYCAndPassport(tt.db, tt.mobile)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetUserWithKYCAndPassport() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if err == nil && result.Password != tt.user.Password {
+				t.Errorf("Expected user password to be %s, but got %s", tt.user.Password, result.Password)
+			}
+		})
+	}
+
+	t.Run("Check Password", func(t *testing.T) {
+		result, err := GetUserWithKYCAndPassport(db, "0111493885")
+		if err != nil {
+			t.Errorf("GetUserWithKYCAndPassport() error = %v", err)
+			return
+		}
+
+		if result.Password != user.Password {
+			t.Errorf("Expected user password to be %s, but got %s", user.Password, result.Password)
+		}
+	})
 }

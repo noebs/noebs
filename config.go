@@ -166,6 +166,7 @@ func GetMainEngine() *gin.Engine {
 		cons.POST("/cards/new", consumerService.RegisterCard)
 		cons.POST("/cards/complete", consumerService.CompleteRegistration)
 		cons.POST("/login", consumerService.LoginHandler)
+		cons.POST("/kyc", consumerService.KYC)
 		cons.GET("/transaction", gin.HandlerFunc(func(ctx *gin.Context) {
 			var res ebs_fields.EBSResponse
 			id := ctx.Query("uuid")
@@ -289,7 +290,7 @@ func init() {
 	database.Migrator().DropConstraint(&consumer.PushData{}, "fk_push_data_ebs_data")
 	if err := database.Debug().AutoMigrate(&consumer.PushData{}, &ebs_fields.User{},
 		&ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{},
-		&ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}); err != nil {
+		&ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}, &ebs_fields.KYC{}, &ebs_fields.Passport{}); err != nil {
 		logrusLogger.Fatalf("error in migration: %v", err)
 	}
 	// check database foreign key for user & credit_cards exists or not
@@ -304,7 +305,7 @@ func init() {
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	dataConfigs.DB = database
-	backup.Db = database
+
 }
 
 func wsAdapter(msg chat.Hub) gin.HandlerFunc {
