@@ -101,8 +101,9 @@ func (s *Service) LoginHandler(c *gin.Context) {
 	}
 	if !u.IsVerified {
 		// user has not verified their phone number with OTP
-		c.JSON(http.StatusUnauthorized, gin.H{"code": "unauthorized_access", "message": "verify phone number with OTP"})
-		return
+		s.Logger.Printf("User with service_id %s is not verified.", req.Mobile)
+		// c.JSON(http.StatusUnauthorized, gin.H{"code": "unauthorized_access", "message": "verify phone number with OTP"})
+		// return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})

@@ -1,0 +1,20 @@
+meta {
+  name: Working Key API
+  type: http
+  seq: 1
+}
+
+post {
+  url: https://beta.soluspay.net/api/workingKey
+  body: text
+  auth: basic
+}
+
+auth:basic {
+  username: test
+  password: test12
+}
+
+body:text {
+  {"clientId": "ACTS", "systemTraceAuditNumber": 54, "tranDateTime": "200419085611", "terminalId": "18000377"}
+}

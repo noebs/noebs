@@ -1,0 +1,20 @@
+meta {
+  name: Balance API
+  type: http
+  seq: 4
+}
+
+post {
+  url: https://beta.soluspay.net/api/balance
+  body: text
+  auth: basic
+}
+
+auth:basic {
+  username: test
+  password: test12
+}
+
+body:text {
+  {"clientId": "ACTS", "systemTraceAuditNumber": 54, "tranDateTime": "200419085611", "terminalId": "18000377", "PAN": "6392560017624665", "expDate": "2303", "PIN": "221eb901ed3b40b1", "tranAmount": 950, "tranCurrencyCode": "SDG", "toCard": "6391871100137098"}
+}
