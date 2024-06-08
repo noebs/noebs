@@ -14,3 +14,5 @@ test.db-*
 *.test.db*
 .secrets.json
 firebase-sdk.json
+cli/noebs
+cli/cli
