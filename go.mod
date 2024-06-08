@@ -33,6 +33,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	cloud.google.com/go/firestore v1.15.0 // indirect
 	cloud.google.com/go/iam v1.1.8 // indirect
+	cloud.google.com/go/longrunning v0.5.7 // indirect
 	cloud.google.com/go/storage v1.40.0 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
 	github.com/bytedance/sonic v1.11.8 // indirect
@@ -66,6 +67,7 @@ require (
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/appengine/v2 v2.0.2 // indirect
 	google.golang.org/genproto v0.0.0-20240528184218-531527333157 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240521202816-d264139d666e // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
 	google.golang.org/grpc v1.64.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
