@@ -12,7 +12,7 @@ noebs has grown from a small side-project to a production system that is used by
 
 
 
-This is an e-payment gateway system. It implements most of EBS's services with clear emphasis on scalabilty and a maintainable code. It is written in Go, a language for building high performant systems. It is also open source, the way any serious project should be. I wrote this software while I was learning Go, I tried to write an idiomatic Go as much as possible.
+This is an e-payment gateway system. It implements most of EBS's services with clear emphasis on scalability and a maintainable code. It is written in Go, a language for building high performant systems. It is also open source, the way any serious project should be. I wrote this software while I was learning Go, I tried to write an idiomatic Go as much as possible.
 
 It is open source and it will remain open source. I will also maintain it and I welcome any contributors help me doing that as well.
 _Our [blog post covers some other aspects about this project](https://medium.com/@adonese/noebs-a-free-and-open-source-payment-gateway-eb70c5dc26fb)_.
@@ -45,7 +45,7 @@ We provide an easier way to build and run noebs using Docker.
 - `cd` to noebs root directory (E.g., $HOME/src/noebs)
 - `docker build -t noebs .`  # -t for giving it a name
 - `docker run -v /home/adonese/src/noebs:/database -p 8080:8080 -it noebs:latest` # This is recommended to mount the sqlite3 database
-- Open `localhost:8000/test` in your broswer to interact with noebs
+- Open `localhost:8000/test` in your browser to interact with noebs
 
 ## Notes on installation
 noebs needs to be connected with EBS merchant server in order to get useful responses. *However, you can run our embedded server that mocks EBS responses in cases where you cannot reach EBS server*. To do that, you need to enable the development mode using a special env var, `EBS_LOCAL_DEV`. You need to set `EBS_LOCAL_DEV=1` in order to use the mocking functionality.
@@ -70,7 +70,7 @@ You can however have this system architecture, suppose that you're building a mo
 - there could be other services e.g., push notifications, SMS, 2FA and plenty of others.
 - logging and the reporting system.
 - rate limiting, geographical blocking and other API gateway protections.
-All of these will be implemented in a microservice archiectural design pattern, and it is your decision to choose what services you want. A mobile payment provider can use our payment service inside their application whenever their users are requesting any transactions. _It is not our responsibility to authenticate your users_. This way, we can use this application in virtually any place. Our client consumers are held responsible for providing any kind of authentication for their requests.
+All of these will be implemented in a microservice architectural design pattern, and it is your decision to choose what services you want. A mobile payment provider can use our payment service inside their application whenever their users are requesting any transactions. _It is not our responsibility to authenticate your users_. This way, we can use this application in virtually any place. Our client consumers are held responsible for providing any kind of authentication for their requests.
 
 
 ## Services we offer
