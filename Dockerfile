@@ -7,8 +7,6 @@ WORKDIR /src/app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Create empty .secrets.json for the embed directive (in cli dir where the embed is)
-RUN echo '{}' > .secrets.json && echo '{}' > cli/.secrets.json
 RUN CGO_ENABLED=1 go build -buildvcs=false -ldflags "-s -w" -o /usr/local/bin/noebs ./cli
 
 

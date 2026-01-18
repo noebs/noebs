@@ -23,14 +23,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm/logger"
 
-	_ "embed"
-
 	chat "github.com/tutipay/ws"
 	"google.golang.org/api/option"
 )
 
-//go:embed .secrets.json
-var configFile []byte
+var configFile = []byte("{}")
 
 func loadConfig() []byte {
 	secretsPath := ".secrets.json"
