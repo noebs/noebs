@@ -1,0 +1,15 @@
+# SOPS configuration for noebs
+# Uses age encryption (modern replacement for PGP)
+
+creation_rules:
+  # Encrypt any yaml file with secrets in the name
+  - path_regex: .*secrets.*\.yaml$
+    age: age1jmq9nl0haxetduys37jfj7ha93vee9pd7me7mtyw5ztm4n8flyrse3mwum
+
+  # Encrypt any .enc.yaml files
+  - path_regex: \.enc\.yaml$
+    age: age1jmq9nl0haxetduys37jfj7ha93vee9pd7me7mtyw5ztm4n8flyrse3mwum
+
+  # Encrypt .secrets.json (the noebs config)
+  - path_regex: \.secrets\.json$
+    age: age1jmq9nl0haxetduys37jfj7ha93vee9pd7me7mtyw5ztm4n8flyrse3mwum

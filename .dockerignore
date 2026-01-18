@@ -15,4 +15,8 @@
 **/*.test.db*
 **/.secrets.jsontmp
 **/firebase-sdk.json
+.sops/
+secrets*.yaml
+secrets*.yml
+**/.secrets.json
 fly.toml

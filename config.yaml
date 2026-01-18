@@ -1,0 +1,19 @@
+noebs:
+  db_path: /data/noebs.db
+  port: ":8080"
+  is_debug: false
+  cors:
+    - "*"
+
+litestream:
+  dbs:
+    - path: /data/noebs.db
+      replicas:
+        - type: s3
+          bucket: litestream-dbs
+          path: noebs
+          endpoint: https://6806c24e30d8129e3570ea9825d21eed.r2.cloudflarestorage.com
+          force-path-style: true
+          sync-interval: 10s
+          retention: 168h
+          snapshot-interval: 1h

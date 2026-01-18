@@ -16,3 +16,10 @@ test.db-*
 firebase-sdk.json
 cli/noebs
 cli/cli
+
+# SOPS/age secrets - NEVER commit these
+.sops/age-key.txt
+secrets.yaml.bak
+
+# Keep secrets.yaml in git (it's encrypted), but not decrypted versions
+secrets.decrypted.yaml

@@ -1,34 +1,51 @@
-# Build our application using a Go builder.
-FROM golang:latest AS builder
+# Build stage - using bookworm for glibc compatibility with mattn/go-sqlite3
+FROM golang:1.25-bookworm AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src/app
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN go build -buildvcs=false -ldflags "-s -w -extldflags '-static'" -tags osusergo,netgo -o /usr/local/bin/noebs /src/app
+# Create empty .secrets.json for the embed directive (in cli dir where the embed is)
+RUN echo '{}' > .secrets.json && echo '{}' > cli/.secrets.json
+RUN CGO_ENABLED=1 go build -buildvcs=false -ldflags "-s -w" -o /usr/local/bin/noebs ./cli
 
 
-# Our final Docker image stage starts here.
-FROM alpine
-ARG LITEFS_CONFIG=litefs.yml
+# Final stage - using slim debian for runtime
+FROM debian:bookworm-slim
 
-# Copy binaries from the previous build stages.
-COPY --from=flyio/litefs:0.5 /usr/local/bin/litefs /usr/local/bin/litefs
+# Install runtime dependencies + litestream + sops + age
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash sqlite3 ca-certificates curl wget python3 python3-yaml \
+    && rm -rf /var/lib/apt/lists/* \
+    && wget -q https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.deb \
+    && dpkg -i litestream-v0.3.13-linux-amd64.deb \
+    && rm litestream-v0.3.13-linux-amd64.deb \
+    && wget -q https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64 -O /usr/local/bin/sops \
+    && chmod +x /usr/local/bin/sops \
+    && wget -q https://github.com/FiloSottile/age/releases/download/v1.2.0/age-v1.2.0-linux-amd64.tar.gz \
+    && tar -xzf age-v1.2.0-linux-amd64.tar.gz \
+    && mv age/age age/age-keygen /usr/local/bin/ \
+    && rm -rf age age-v1.2.0-linux-amd64.tar.gz
+
+# Copy application binary
 COPY --from=builder /usr/local/bin/noebs /usr/local/bin/noebs
 
-# Copy the possible LiteFS configurations.
-ADD litefs.yml /tmp/litefs.yml
-ADD litefs.static-lease.yml /tmp/litefs.static-lease.yml
+# Copy configs
+COPY config.yaml /app/config.yaml
+COPY scripts/entrypoint.sh /entrypoint.sh
+COPY scripts/render-configs.sh /usr/local/bin/render-configs
+RUN chmod +x /entrypoint.sh /usr/local/bin/render-configs
 
-# Move the appropriate LiteFS config file to /etc/ (this one will be
-# used by LiteFS). By default this is the config file used on Fly.io,
-# but it's set appropriately to other files for the docker setup in
-# docker-compose.yml
-RUN cp /tmp/$LITEFS_CONFIG /etc/litefs.yml
+# Create data directory
+RUN mkdir -p /data /app /app/.sops
 
-# Setup our environment to include FUSE & SQLite. We install ca-certificates
-# so we can communicate with the Consul server over HTTPS. cURL is added so
-# we can call our HTTP endpoints for debugging.
-RUN apk add bash fuse3 sqlite ca-certificates curl
+WORKDIR /app
 
-# Run LiteFS as the entrypoint. After it has connected and sync'd with the
-# cluster, it will run the commands listed in the "exec" field of the config.
-ENTRYPOINT litefs mount
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/test || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]

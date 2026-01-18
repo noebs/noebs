@@ -4,7 +4,10 @@ services:
     build: .
     ports:
       - "8080:8080"
-  service-name:
-    image: noebs
-    environment:
-      - GIN_MODE=release
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./secrets.yaml:/app/secrets.yaml:ro
+      - ./.sops/age-key.txt:/app/.sops/age-key.txt:ro
+      - noebs-data:/data
+volumes:
+  noebs-data:

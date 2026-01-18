@@ -30,7 +30,20 @@ import (
 )
 
 //go:embed .secrets.json
-var secretsFile []byte
+var configFile []byte
+
+func loadConfig() []byte {
+	secretsPath := ".secrets.json"
+
+	if data, err := os.ReadFile(secretsPath); err == nil && len(data) > 0 {
+		logrusLogger.Printf("Loaded config from %s", secretsPath)
+		return data
+	} else if err != nil && !os.IsNotExist(err) {
+		logrusLogger.Printf("Failed to read config file %s: %v (falling back to embedded)", secretsPath, err)
+	}
+
+	return configFile
+}
 
 func getFirebase() (*firebase.App, error) {
 	opt := option.WithCredentialsFile("firebase-sdk.json")
@@ -242,12 +255,11 @@ func init() {
 	logrusLogger.SetReportCaller(true)
 	logrusLogger.Out = os.Stderr
 
-	// print stringified version of []byte
-	logrus.Printf("the data is: %x", secretsFile)
-
 	// load the secrets file
-	if err := json.Unmarshal(secretsFile, &noebsConfig); err != nil {
-		logrusLogger.Printf("error in unmarshaling secrets file: %v - the file: %v", err, string(secretsFile))
+	configData := loadConfig()
+	logrusLogger.Printf("Loaded config (%d bytes)", len(configData))
+	if err := json.Unmarshal(configData, &noebsConfig); err != nil {
+		logrusLogger.Printf("error in unmarshaling config file: %v", err)
 	}
 
 	noebsConfig.Defaults()
