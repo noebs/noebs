@@ -1,8 +1,6 @@
 module github.com/adonese/noebs
 
-go 1.21.1
-
-toolchain go1.21.4
+go 1.25.0
 
 require (
 	firebase.google.com/go/v4 v4.9.0
@@ -22,6 +20,7 @@ require (
 	github.com/tutipay/ws v0.0.25
 	github.com/zsais/go-gin-prometheus v0.1.0
 	golang.org/x/crypto v0.24.0
+	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/sqlite v1.4.2
 	gorm.io/gorm v1.25.10
 )
@@ -66,7 +65,6 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240521202816-d264139d666e // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240604185151-ef581f913117 // indirect
 	google.golang.org/grpc v1.64.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (
