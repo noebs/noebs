@@ -5,13 +5,14 @@ CONFIG_FILE="${1:-/app/config.yaml}"
 SECRETS_FILE="${2:-/app/secrets.yaml}"
 OUTPUT_JSON="${3:-/app/.secrets.json}"
 OUTPUT_LITESTREAM="${4:-/etc/litestream.yml}"
+OUTPUT_DB_PATH="${5:-/app/.db_path}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "Missing config file: $CONFIG_FILE" >&2
     exit 1
 fi
 
-mkdir -p "$(dirname "$OUTPUT_JSON")" "$(dirname "$OUTPUT_LITESTREAM")"
+mkdir -p "$(dirname "$OUTPUT_JSON")" "$(dirname "$OUTPUT_LITESTREAM")" "$(dirname "$OUTPUT_DB_PATH")"
 umask 077
 
 rm -f "$OUTPUT_LITESTREAM"
@@ -28,13 +29,13 @@ if [[ -f "$SECRETS_FILE" ]]; then
     sops -d "$SECRETS_FILE" > "$TEMP_SECRETS"
 fi
 
-python3 - "$CONFIG_FILE" "$OUTPUT_JSON" "$OUTPUT_LITESTREAM" "$TEMP_SECRETS" <<'PY'
+python3 - "$CONFIG_FILE" "$OUTPUT_JSON" "$OUTPUT_LITESTREAM" "$OUTPUT_DB_PATH" "$TEMP_SECRETS" <<'PY'
 import json
 import sys
 
 import yaml
 
-config_path, output_json, output_litestream, secrets_path = sys.argv[1:5]
+config_path, output_json, output_litestream, output_db_path, secrets_path = sys.argv[1:6]
 
 with open(config_path, "r", encoding="utf-8") as config_file:
     config = yaml.safe_load(config_file) or {}
@@ -68,6 +69,9 @@ merged = merge(config, secrets)
 noebs = merged.get("noebs", {}) or {}
 if not noebs.get("db_path"):
     noebs["db_path"] = "/data/noebs.db"
+
+with open(output_db_path, "w", encoding="utf-8") as db_file:
+    db_file.write(noebs["db_path"])
 
 with open(output_json, "w", encoding="utf-8") as json_file:
     json.dump(noebs, json_file, indent=2)

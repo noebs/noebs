@@ -7,6 +7,7 @@ set -euo pipefail
 CONFIG_FILE="/app/config.yaml"
 SECRETS_FILE="/app/secrets.yaml"
 SECRETS_JSON="/app/.secrets.json"
+DB_PATH_FILE="/app/.db_path"
 LITESTREAM_CONFIG="/etc/litestream.yml"
 AGE_KEY_FILE="/app/.sops/age-key.txt"
 SOPS_KEY_FILE="/root/.config/sops/age/keys.txt"
@@ -24,25 +25,14 @@ if [[ -f "$SECRETS_FILE" ]]; then
 fi
 
 echo "Rendering config + secrets..."
-/usr/local/bin/render-configs "$CONFIG_FILE" "$SECRETS_FILE" "$SECRETS_JSON" "$LITESTREAM_CONFIG"
+/usr/local/bin/render-configs "$CONFIG_FILE" "$SECRETS_FILE" "$SECRETS_JSON" "$LITESTREAM_CONFIG" "$DB_PATH_FILE"
 
 if [[ -f "$LITESTREAM_CONFIG" ]]; then
-    DB_PATH="$(python3 - <<'PY'
-import yaml
-
-db_path = "/data/noebs.db"
-try:
-    with open("/etc/litestream.yml", "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    dbs = data.get("dbs", [])
-    if isinstance(dbs, list) and dbs and dbs[0].get("path"):
-        db_path = dbs[0]["path"]
-except Exception:
-    pass
-
-print(db_path)
-PY
-)"
+    if [[ -f "$DB_PATH_FILE" ]]; then
+        DB_PATH="$(cat "$DB_PATH_FILE")"
+    else
+        DB_PATH="/data/noebs.db"
+    fi
 
     echo "Checking for existing database backup in R2..."
     litestream restore -if-replica-exists -config "$LITESTREAM_CONFIG" "$DB_PATH" || true
