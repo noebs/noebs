@@ -19,4 +19,6 @@
 secrets*.yaml
 secrets*.yml
 **/.secrets.json
+**/.db_path
+litestream.yml
 fly.toml

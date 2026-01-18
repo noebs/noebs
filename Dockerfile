@@ -17,7 +17,7 @@ FROM debian:bookworm-slim
 
 # Install runtime dependencies + litestream + sops + age
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash sqlite3 ca-certificates curl wget python3 python3-yaml \
+    bash sqlite3 ca-certificates curl wget \
     && rm -rf /var/lib/apt/lists/* \
     && wget -q https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.deb \
     && dpkg -i litestream-v0.3.13-linux-amd64.deb \
@@ -35,8 +35,7 @@ COPY --from=builder /usr/local/bin/noebs /usr/local/bin/noebs
 # Copy configs
 COPY config.yaml /app/config.yaml
 COPY scripts/entrypoint.sh /entrypoint.sh
-COPY scripts/render-configs.sh /usr/local/bin/render-configs
-RUN chmod +x /entrypoint.sh /usr/local/bin/render-configs
+RUN chmod +x /entrypoint.sh
 
 # Create data directory
 RUN mkdir -p /data /app /app/.sops

@@ -26,6 +26,12 @@ var merchantServices = merchant.Service{}
 var hub chat.Hub
 
 func main() {
+	if isRenderConfigCommand() {
+		if err := renderConfigFiles(); err != nil {
+			logrusLogger.Fatalf("render config failed: %v", err)
+		}
+		return
+	}
 
 	go hub.Run()
 	go consumerService.BillerHooks()

@@ -249,6 +249,9 @@ func GetMainEngine() *gin.Engine {
 }
 
 func init() {
+	if isRenderConfigCommand() {
+		return
+	}
 	var err error
 
 	logrusLogger.Level = logrus.DebugLevel

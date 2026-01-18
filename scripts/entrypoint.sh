@@ -4,9 +4,7 @@ set -euo pipefail
 # Entrypoint for noebs with SOPS + Litestream
 # Config is merged from config.yaml + secrets.yaml at runtime
 
-CONFIG_FILE="/app/config.yaml"
 SECRETS_FILE="/app/secrets.yaml"
-SECRETS_JSON="/app/.secrets.json"
 DB_PATH_FILE="/app/.db_path"
 LITESTREAM_CONFIG="/etc/litestream.yml"
 AGE_KEY_FILE="/app/.sops/age-key.txt"
@@ -25,7 +23,7 @@ if [[ -f "$SECRETS_FILE" ]]; then
 fi
 
 echo "Rendering config + secrets..."
-/usr/local/bin/render-configs "$CONFIG_FILE" "$SECRETS_FILE" "$SECRETS_JSON" "$LITESTREAM_CONFIG" "$DB_PATH_FILE"
+noebs render-config
 
 if [[ -f "$LITESTREAM_CONFIG" ]]; then
     if [[ -f "$DB_PATH_FILE" ]]; then

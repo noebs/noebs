@@ -16,6 +16,8 @@ test.db-*
 firebase-sdk.json
 cli/noebs
 cli/cli
+litestream.yml
+.db_path
 
 # SOPS/age secrets - NEVER commit these
 .sops/age-key.txt
