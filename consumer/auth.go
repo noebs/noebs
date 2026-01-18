@@ -15,9 +15,9 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gofiber/fiber/v2"
-	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
 	"github.com/pquerna/otp/totp"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -36,8 +36,9 @@ func (s *Service) GenerateAPIKey(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "bad_request"})
 	}
 	if _, ok := m["email"]; ok {
+		ctx := c.UserContext()
 		k, _ := gateway.GenerateAPIKey()
-		s.Redis.SAdd("apikeys", k)
+		s.Redis.SAdd(ctx, "apikeys", k)
 		return c.Status(http.StatusOK).JSON(fiber.Map{"result": k})
 	}
 	return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "missing_field"})
@@ -51,7 +52,8 @@ func (s *Service) ApiKeyMiddleware(c *fiber.Ctx) error {
 	if email == "" || key == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
-	res, err := s.Redis.HGet("api_keys", email).Result()
+	ctx := c.UserContext()
+	res, err := s.Redis.HGet(ctx, "api_keys", email).Result()
 	if err != redis.Nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
@@ -66,7 +68,8 @@ func (s *Service) ApiKeyMiddleware(c *fiber.Ctx) error {
 func (s *Service) IpFilterMiddleware(c *fiber.Ctx) error {
 	ip := c.IP()
 	if u := getMobile(c); u != "" {
-		s.Redis.HIncrBy(u+":ips_count", ip, 1)
+		ctx := c.UserContext()
+		s.Redis.HIncrBy(ctx, u+":ips_count", ip, 1)
 		return c.Next()
 	} else {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized_access"})
@@ -429,7 +432,8 @@ func (s *Service) GenerateSignInCode(c *fiber.Ctx, allowInsecure bool) error {
 func (s *Service) APIAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if key := c.Get("api-key"); key != "" {
-			if !isMember("apikeys", key, s.Redis) {
+			ctx := c.UserContext()
+			if !isMember(ctx, "apikeys", key, s.Redis) {
 				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "wrong_api_key",
 					"message": "visit https://soluspay.net/contact for a key"})
 			}

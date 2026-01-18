@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,12 +14,12 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
-	"github.com/google/uuid"
-	"github.com/go-redis/redis/v7"
 	"github.com/gofiber/fiber/v2"
-	"gorm.io/gorm/clause"
+	"github.com/google/uuid"
 	"github.com/noebs/ipin"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -32,17 +33,18 @@ func (s *Service) CardFromNumber(c *fiber.Ctx) error {
 	if q == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "mobile number is empty", "code": "empty_mobile_number"})
 	}
+	ctx := c.UserContext()
 	// now search through redis for this mobile number!
 	// first check if we have already collected that number before
-	pan, err := s.Redis.Get(q + ":pan").Result()
+	pan, err := s.Redis.Get(ctx, q+":pan").Result()
 	if err == nil {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
 	}
-	username, err := s.Redis.Get(q).Result()
+	username, err := s.Redis.Get(ctx, q).Result()
 	if err == redis.Nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
 	}
-	if pan, ok := utils.PanfromMobile(username, s.Redis); ok {
+	if pan, ok := utils.PanfromMobile(ctx, username, s.Redis); ok {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
 	} else {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
@@ -192,7 +194,8 @@ func (s *Service) RemoveCard(c *fiber.Ctx) error {
 // NecToName gets an nec number from the context and maps it to its meter number
 func (s *Service) NecToName(c *fiber.Ctx) error {
 	if nec := c.Query("nec"); nec != "" {
-		name, err := s.Redis.HGet("meters", nec).Result()
+		ctx := c.UserContext()
+		name, err := s.Redis.HGet(ctx, "meters", nec).Result()
 		if err != nil {
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user found with this NEC", "code": "nec_not_found"})
 		} else {
@@ -305,11 +308,11 @@ func (s *Service) PaymentOrder() fiber.Handler {
 
 // CashoutPub experimental support to add pubsub support
 // we need to make this api public
-func (s *Service) CashoutPub() {
-	pubsub := s.Redis.Subscribe("chan_cashouts")
+func (s *Service) CashoutPub(ctx context.Context) {
+	pubsub := s.Redis.Subscribe(ctx, "chan_cashouts")
 
 	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive()
+	_, err := pubsub.Receive(ctx)
 	if err != nil {
 		log.Printf("There is an error in connecting to chan.")
 		return
@@ -341,11 +344,11 @@ func (s *Service) CashoutPub() {
 	}
 }
 
-func (s *Service) pubSub(channel string, message interface{}) {
-	pubsub := s.Redis.Subscribe(channel)
+func (s *Service) pubSub(ctx context.Context, channel string, message interface{}) {
+	pubsub := s.Redis.Subscribe(ctx, channel)
 
 	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive()
+	_, err := pubsub.Receive(ctx)
 	if err != nil {
 		panic(err)
 	}

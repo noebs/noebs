@@ -1,13 +1,14 @@
 package utils
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/go-redis/redis/v7"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -25,8 +26,8 @@ func GetRedisClient(addr string) *redis.Client {
 }
 
 // SaveRedisList saves to a list in redis
-func SaveRedisList(r *redis.Client, key string, value interface{}) error {
-	_, err := r.LPush(key, value).Result()
+func SaveRedisList(ctx context.Context, r *redis.Client, key string, value interface{}) error {
+	_, err := r.LPush(ctx, key, value).Result()
 	return err
 }
 
@@ -38,12 +39,12 @@ func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
 	return value.(string), ok
 }
 
-func PanfromMobile(username string, r *redis.Client) (string, bool) {
-	c, err := r.HGet(username, "main_card").Result()
+func PanfromMobile(ctx context.Context, username string, r *redis.Client) (string, bool) {
+	c, err := r.HGet(ctx, username, "main_card").Result()
 	if err == nil {
 		return c, true
 	} else {
-		c, err := r.LRange(username+":pans", 0, 0).Result()
+		c, err := r.LRange(ctx, username+":pans", 0, 0).Result()
 		if err == nil {
 			return c[0], true
 		}

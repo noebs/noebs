@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,7 +12,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/gofiber/fiber/v2"
-	"github.com/go-redis/redis/v7"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -45,7 +46,7 @@ func (s *Service) MerchantViews(c *fiber.Ctx) {
 	db.Table("transactions").Where("id >= ? and terminal_id LIKE ? and approval_code != ?", offset, "%"+terminal+"%", "").Order("id desc").Limit(pageSize).Find(&tran)
 	// get complaints
 
-	com, _ := s.Redis.LRange("complaints", 0, -1).Result()
+	com, _ := s.Redis.LRange(c.UserContext(), "complaints", 0, -1).Result()
 
 	var mC []merchantsIssues
 	var m merchantsIssues
@@ -234,7 +235,7 @@ func (s *Service) QRStatus(c *fiber.Ctx) {
 		return
 	}
 
-	data, err := s.getLastTransactions(q)
+	data, err := s.getLastTransactions(c.UserContext(), q)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error()})
 		return
@@ -243,10 +244,10 @@ func (s *Service) QRStatus(c *fiber.Ctx) {
 	_ = c.Render("qr_status", fiber.Map{"transactions": data}, "base")
 }
 
-func (s *Service) getLastTransactions(merchantID string) ([]ebs_fields.QRPurchase, error) {
+func (s *Service) getLastTransactions(ctx context.Context, merchantID string) ([]ebs_fields.QRPurchase, error) {
 	var transactions []ebs_fields.QRPurchase
 
-	data, err := s.Redis.HGet(merchantID, "data").Result()
+	data, err := s.Redis.HGet(ctx, merchantID, "data").Result()
 	if err != nil {
 		log.Printf("erorr in redis: %v", err)
 		return transactions, err
@@ -296,15 +297,15 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 		return
 	}
 
-	v, err := s.Redis.LRange(tid+":purchase", 0, -1).Result()
+	v, err := s.Redis.LRange(c.UserContext(), tid+":purchase", 0, -1).Result()
 	if err != nil {
 		jsonResponse(c, http.StatusOK, fiber.Map{"result": MerchantTransactions{}})
 		return
 	}
 	sum := purchaseSum(v)
-	failedTransactions, _ := s.Redis.Get(tid + ":failed_transactions").Result()
-	successfulTransactions, _ := s.Redis.Get(tid + ":successful_transactions").Result()
-	numberTransactions, _ := s.Redis.Get(tid + ":number_purchase_transactions").Result()
+	failedTransactions, _ := s.Redis.Get(c.UserContext(), tid+":failed_transactions").Result()
+	successfulTransactions, _ := s.Redis.Get(c.UserContext(), tid+":successful_transactions").Result()
+	numberTransactions, _ := s.Redis.Get(c.UserContext(), tid+":number_purchase_transactions").Result()
 	failed, _ := strconv.Atoi(failedTransactions)
 	succ, _ := strconv.Atoi(successfulTransactions)
 	num, _ := strconv.Atoi(numberTransactions)
@@ -319,8 +320,8 @@ func (s *Service) ReportIssueEndpoint(c *fiber.Ctx) {
 	if err := parseJSON(c, &issue); err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
 	} else {
-		s.Redis.LPush("complaints", &issue)
-		s.Redis.LPush(issue.TerminalID+":complaints", &issue)
+		s.Redis.LPush(c.UserContext(), "complaints", &issue)
+		s.Redis.LPush(c.UserContext(), issue.TerminalID+":complaints", &issue)
 		jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 	}
 }

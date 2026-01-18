@@ -1,10 +1,11 @@
 package gateway
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/redis/go-redis/v9"
 )
 
 func Test_GenerateApiKey(t *testing.T) {
@@ -35,7 +36,7 @@ func Test_isMember(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isMember(tt.args.key, tt.args.val, tt.args.r); got != tt.want {
+			if got := isMember(context.Background(), tt.args.key, tt.args.val, tt.args.r); got != tt.want {
 				t.Errorf("isMember() = %v, want %v", got, tt.want)
 			}
 		})

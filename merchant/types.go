@@ -3,7 +3,7 @@ package merchant
 
 import (
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/go-redis/redis/v7"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )

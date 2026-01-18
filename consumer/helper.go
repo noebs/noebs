@@ -11,6 +11,7 @@
 package consumer
 
 import (
+	"context"
 	"errors"
 	"log"
 	"strconv"
@@ -20,8 +21,8 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
-	"github.com/go-redis/redis/v7"
 	"github.com/pquerna/otp/totp"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm/clause"
 )
 
@@ -32,8 +33,8 @@ var (
 	errObjectNotFound = errors.New("object not found")
 )
 
-func isMember(key, val string, r *redis.Client) bool {
-	b, _ := r.SIsMember(key, val).Result()
+func isMember(ctx context.Context, key, val string, r *redis.Client) bool {
+	b, _ := r.SIsMember(ctx, key, val).Result()
 	return b
 }
 
@@ -68,9 +69,9 @@ func validatePassword(password string) bool {
 // we have to implement a way to:
 // - identify user's devices
 // - allow them to use the app in other devices in case their original device was lost
-func userHasSessions(s *Service, username string) bool {
+func userHasSessions(ctx context.Context, s *Service, username string) bool {
 	// Make sure the user doesn't have any active sessions!
-	lCount, err := s.Redis.Get(username + ":logged_in_devices").Result()
+	lCount, err := s.Redis.Get(ctx, username+":logged_in_devices").Result()
 
 	num, _ := strconv.Atoi(lCount)
 	// Allow for the user to be logged in -- add allowance through someway
@@ -86,20 +87,20 @@ func userHasSessions(s *Service, username string) bool {
 }
 
 // userExceedMaxSessions keep track of many login-attempts a user has made
-func userExceededMaxSessions(s *Service, username string) bool {
+func userExceededMaxSessions(ctx context.Context, s *Service, username string) bool {
 	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
-	res, err := s.Redis.Get(username + ":login_counts").Result()
+	res, err := s.Redis.Get(ctx, username+":login_counts").Result()
 	if err == redis.Nil {
 		// the has just logged in
-		s.Redis.Set(username+":login_counts", 0, time.Hour)
+		s.Redis.Set(ctx, username+":login_counts", 0, time.Hour)
 	} else if err == nil {
 		count, _ := strconv.Atoi(res)
 		if count >= 5 {
 			// Allow users to use another login method (e.g., totp, or they should reset their password)
 			// Lock their account
 			//s.Redis.HSet(username, "suspecious_behavior", 1)
-			s.Redis.HIncrBy(username, "suspicious_behavior", 1)
-			ttl, _ := s.Redis.TTL(username + ":login_counts").Result()
+			s.Redis.HIncrBy(ctx, username, "suspicious_behavior", 1)
+			ttl, _ := s.Redis.TTL(ctx, username+":login_counts").Result()
 			log.Printf("user exceeded max sessions %v", ttl)
 			return true
 		}
@@ -107,17 +108,17 @@ func userExceededMaxSessions(s *Service, username string) bool {
 	return false
 }
 
-func (s *Service) store(buf []byte, username string, edit bool) error {
+func (s *Service) store(ctx context.Context, buf []byte, username string, edit bool) error {
 	z := &redis.Z{
 		Member: buf,
 	}
 	if edit {
-		_, err := s.Redis.ZAdd(username+":cards", z).Result()
+		_, err := s.Redis.ZAdd(ctx, username+":cards", *z).Result()
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err := s.Redis.ZAdd(username+":cards", z).Result()
+		_, err := s.Redis.ZAdd(ctx, username+":cards", *z).Result()
 		if err != nil {
 			return err
 		}

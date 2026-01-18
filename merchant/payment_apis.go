@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-		"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
 )
 
@@ -153,14 +153,15 @@ func (s *Service) Purchase(c *fiber.Ctx) {
 			}).Info("error in migrating purchase model")
 		}
 		uid := generateUUID()
-		s.Redis.HSet(fields.TerminalID+":purchase", uid, &res)
-		s.Redis.Incr(fields.TerminalID + ":number_purchase_transactions")
+		ctx := c.UserContext()
+		s.Redis.HSet(ctx, fields.TerminalID+":purchase", uid, &res)
+		s.Redis.Incr(ctx, fields.TerminalID+":number_purchase_transactions")
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
-			s.Redis.Incr(fields.TerminalID + ":failed_transactions")
+			s.Redis.Incr(ctx, fields.TerminalID+":failed_transactions")
 			jsonResponse(c, code, payload)
 		} else {
-			s.Redis.Incr(fields.TerminalID + ":successful_transactions")
+			s.Redis.Incr(ctx, fields.TerminalID+":successful_transactions")
 			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 	} else {

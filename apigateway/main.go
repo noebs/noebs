@@ -2,6 +2,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -10,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
+	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -84,13 +85,13 @@ func GenerateAPIKey() (string, error) {
 	return a, err
 }
 
-func isMember(key, val string, r *redis.Client) bool {
-	b, _ := r.SIsMember(key, val).Result()
+func isMember(ctx context.Context, key, val string, r *redis.Client) bool {
+	b, _ := r.SIsMember(ctx, key, val).Result()
 	return b
 }
 
-func getMap(key, val string, r *redis.Client) (bool, error) {
-	res, err := r.HGet("apikeys", key).Result()
+func getMap(ctx context.Context, key, val string, r *redis.Client) (bool, error) {
+	res, err := r.HGet(ctx, "apikeys", key).Result()
 	if err != nil {
 		return false, err
 	}

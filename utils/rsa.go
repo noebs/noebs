@@ -2,15 +2,15 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
-	"github.com/go-redis/redis/v7"
-
-	"crypto/x509"
+	"github.com/redis/go-redis/v9"
 )
 
 func rsaEncrypt(text string, key string) {
@@ -45,7 +45,7 @@ func StringsToBytes(s []string) (bytes.Buffer, error) {
 }
 
 // MarshalIntoRedis marshals a type interface{} into a redis data
-func MarshalIntoRedis(f interface{}, r *redis.Client, key string) error {
+func MarshalIntoRedis(ctx context.Context, f interface{}, r *redis.Client, key string) error {
 	res, err := json.Marshal(f)
 	if err != nil {
 		return err
@@ -53,6 +53,6 @@ func MarshalIntoRedis(f interface{}, r *redis.Client, key string) error {
 	mem := &redis.Z{
 		Member: res,
 	}
-	_, err = r.ZAdd(key, mem).Result()
+	_, err = r.ZAdd(ctx, key, *mem).Result()
 	return err
 }

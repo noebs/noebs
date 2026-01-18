@@ -79,6 +79,7 @@ Please advice with ebs documentations about iPIN block encryption. You can cite 
 package consumer
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -89,11 +90,11 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
-		"github.com/go-playground/validator/v10"
-	"github.com/go-redis/redis/v7"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
@@ -147,7 +148,7 @@ func (s *Service) Purchase(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -210,7 +211,7 @@ func (s *Service) IsAlive(c *fiber.Ctx) {
 		//// mask the pan
 		res.MaskPAN()
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 		res.Name = s.ToDatabasename(url)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -277,7 +278,7 @@ func (s *Service) BillPayment(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		// Adding BillType, BillTo and BillInfo2 so that the mobile client can show these fields in transactions history
 		res.EBSResponse.BillTo = res.PaymentInfo
@@ -551,7 +552,7 @@ func (s *Service) BillInquiry(c *fiber.Ctx) {
 
 		// Save to Redis lis
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -594,7 +595,7 @@ func (s *Service) Balance(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -646,7 +647,7 @@ func (s *Service) TransactionStatus(c *fiber.Ctx) {
 	}
 }
 
-func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSParserFields) error {
+func (s *Service) storeLastTransactions(ctx context.Context, merchantID string, res *ebs_fields.EBSParserFields) error {
 	// this stores LastTransactions to redis
 	// marshall the lastTransactions
 	// store them into redis
@@ -660,7 +661,7 @@ func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSPa
 	if err != nil {
 		return err
 	}
-	if _, err := s.Redis.HSet(merchantID, "data", data).Result(); err != nil {
+	if _, err := s.Redis.HSet(ctx, merchantID, "data", data).Result(); err != nil {
 		s.Logger.Printf("erorr in redis: %v", err)
 		return err
 	}
@@ -711,7 +712,7 @@ func (s *Service) WorkingKey(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -765,7 +766,7 @@ func (s *Service) CardTransfer(c *fiber.Ctx) {
 		fields.ConsumerCommonFields.DelDeviceID()
 		// save this to redis
 		if mobile := fields.Mobile; mobile != "" {
-			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
+			s.Redis.Set(c.UserContext(), fields.Mobile+":pan", fields.Pan, 0)
 		}
 
 		jsonBuffer := fields.MustMarshal()
@@ -779,7 +780,7 @@ func (s *Service) CardTransfer(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		res.EBSResponse.SenderPAN = utils.MaskPAN(fields.Pan)
 		res.EBSResponse.ReceiverPAN = utils.MaskPAN(fields.ToCard)
@@ -867,7 +868,7 @@ func (s *Service) CashIn(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -926,7 +927,7 @@ func (s *Service) QRMerchantRegistration(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -985,7 +986,7 @@ func (s *Service) CashOut(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url) // rename me to cashin transaction
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1039,7 +1040,7 @@ func (s *Service) AccountTransfer(c *fiber.Ctx) {
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
@@ -1102,7 +1103,7 @@ func (s *Service) IPinChange(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1161,7 +1162,7 @@ func (s *Service) Status(c *fiber.Ctx) {
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
@@ -1220,7 +1221,7 @@ func (s *Service) QRPayment(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1277,7 +1278,7 @@ func (s *Service) QRTransactions(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1292,7 +1293,7 @@ func (s *Service) QRTransactions(c *fiber.Ctx) {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			jsonResponse(c, code, payload)
 		} else {
-			s.storeLastTransactions(fields.MerchantID, &res)
+			s.storeLastTransactions(c.UserContext(), fields.MerchantID, &res)
 			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
@@ -1341,7 +1342,7 @@ func (s *Service) QRRefund(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1402,7 +1403,7 @@ func (s *Service) QRComplete(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1463,7 +1464,7 @@ func (s *Service) QRGeneration(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1542,7 +1543,7 @@ func (s *Service) GenerateIpin(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1602,7 +1603,7 @@ func (s *Service) CompleteIpin(c *fiber.Ctx) {
 
 	res.Name = s.ToDatabasename(url)
 	username := getUsername(c)
-	utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+	utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 	s.Db.Table("transactions")
 
 	if ebsErr != nil {
@@ -1659,7 +1660,7 @@ func (s *Service) IPINKey(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1950,7 +1951,7 @@ func (s *Service) EbsGetCardInfo(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1999,7 +2000,7 @@ func (s *Service) GetMSISDNFromCard(c *fiber.Ctx) {
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
@@ -2057,7 +2058,7 @@ func (s *Service) RegisterCard(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -2197,7 +2198,7 @@ func (s *Service) GenerateVoucher(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -2386,7 +2387,7 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 		fields.ConsumerCommonFields.DelDeviceID()
 		// save this to redis
 		if mobile := fields.Mobile; mobile != "" {
-			s.Redis.Set(fields.Mobile+":pan", fields.Pan, 0)
+			s.Redis.Set(c.UserContext(), fields.Mobile+":pan", fields.Pan, 0)
 		}
 
 		jsonBuffer := fields.MustMarshal()
@@ -2400,7 +2401,7 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 		username := getUsername(c)
-		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
+		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{

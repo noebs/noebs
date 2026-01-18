@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/go-redis/redis/v7"
+	"github.com/redis/go-redis/v9"
 	"github.com/golang-jwt/jwt"
 )
 
