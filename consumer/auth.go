@@ -343,7 +343,7 @@ func (s *Service) VerifyFirebase(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	ctx := context.Background()
+	ctx := c.UserContext()
 	fb, err := s.FirebaseApp.Auth(ctx)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "internal_error"})
@@ -356,9 +356,8 @@ func (s *Service) VerifyFirebase(c *fiber.Ctx) error {
 	return nil
 }
 
-func (s *Service) SendPush(data PushData) error {
+func (s *Service) SendPush(ctx context.Context, data PushData) error {
 	// Obtain a messaging.Client from the App.
-	ctx := context.Background()
 	client, err := s.FirebaseApp.Messaging(ctx)
 	if err != nil {
 		s.Logger.Printf("error getting Messaging clients: %v\n", err)

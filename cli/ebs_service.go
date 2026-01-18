@@ -1,6 +1,11 @@
 package main
 
 import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
@@ -33,9 +38,12 @@ func main() {
 		return
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	go hub.Run()
-	go consumerService.BillerHooks()
-	go consumerService.Pusher()
+	go consumerService.BillerHooks(ctx)
+	go consumerService.Pusher(ctx)
 	if noebsConfig.Port == "" {
 		noebsConfig.Port = ":8080"
 	}

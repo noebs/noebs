@@ -208,11 +208,15 @@ func (s *Service) NecToName(c *fiber.Ctx) error {
 var billerChan = make(chan billerForm)
 
 // BillerHooks submits results to external endpoint
-func (s Service) BillerHooks() {
-
+func (s *Service) BillerHooks(ctx context.Context) {
 	for {
 		select {
-		case value := <-billerChan:
+		case <-ctx.Done():
+			return
+		case value, ok := <-billerChan:
+			if !ok {
+				return
+			}
 			log.Printf("The recv is: %v", value)
 			data, _ := json.Marshal(&value)
 			// FIXME this code is dangerous
@@ -222,7 +226,10 @@ func (s Service) BillerHooks() {
 			if _, err := http.Post(value.to, "application/json", bytes.NewBuffer(data)); err != nil {
 				log.Printf("the error is: %v", err)
 			}
-		case res := <-ebs_fields.EBSRes:
+		case res, ok := <-ebs_fields.EBSRes:
+			if !ok {
+				return
+			}
 			s.Db.Debug().Model(&ebs_fields.CacheCards{}).Where("pan = ?", res.Pan).Update("is_valid", res.IsValid)
 		}
 	}

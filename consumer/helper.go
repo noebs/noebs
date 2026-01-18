@@ -169,38 +169,46 @@ func (s *Service) ToDatabasename(url string) string {
 // concurrnet clients that are connected to all services that use this channel
 var tranData = make(chan PushData, 2048)
 
-func (s *Service) Pusher() {
-	for data := range tranData {
-		// In the case we want to send a push notification to the receipient
-		//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
-		// But the problem, is that we have lost the reference to the original sender
-		s.Logger.Infof("the data is: %+v", data)
-		// we are doing too much of db and logic here, let's simplify it
-		if data.Phone != "" {
-			user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
-			if err != nil {
-				// not a tutipay user
-				utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
-			} else {
-				data.To = user.DeviceID
-				data.EBSData = ebs_fields.EBSResponse{}
-				data.UserMobile = user.Mobile
-				//Omit association when creating
-				s.Db.Omit(clause.Associations).Create(&data)
-				s.SendPush(data)
-				// FIXME(adonese): fallback option, maybe there is not need for the duplication
-				data.To = data.DeviceID // Sender DeviceID
-				s.SendPush(data)
+func (s *Service) Pusher(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case data, ok := <-tranData:
+			if !ok {
+				return
 			}
-		} else {
-			user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
-			if err != nil {
-				s.Logger.Printf("error finding user: %v", err)
+			// In the case we want to send a push notification to the receipient
+			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
+			// But the problem, is that we have lost the reference to the original sender
+			s.Logger.Infof("the data is: %+v", data)
+			// we are doing too much of db and logic here, let's simplify it
+			if data.Phone != "" {
+				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
+				if err != nil {
+					// not a tutipay user
+					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
+				} else {
+					data.To = user.DeviceID
+					data.EBSData = ebs_fields.EBSResponse{}
+					data.UserMobile = user.Mobile
+					//Omit association when creating
+					s.Db.Omit(clause.Associations).Create(&data)
+					s.SendPush(ctx, data)
+					// FIXME(adonese): fallback option, maybe there is not need for the duplication
+					data.To = data.DeviceID // Sender DeviceID
+					s.SendPush(ctx, data)
+				}
 			} else {
-				data.To = user.DeviceID
-				data.UserMobile = user.Mobile
-				s.Db.Omit(clause.Associations).Create(&data)
-				s.SendPush(data)
+				user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+				if err != nil {
+					s.Logger.Printf("error finding user: %v", err)
+				} else {
+					data.To = user.DeviceID
+					data.UserMobile = user.Mobile
+					s.Db.Omit(clause.Associations).Create(&data)
+					s.SendPush(ctx, data)
+				}
 			}
 		}
 	}
