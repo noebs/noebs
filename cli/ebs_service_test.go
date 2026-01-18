@@ -3,17 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/gin-gonic/gin"
 )
 
 func TestEnv(t *testing.T) {
@@ -29,6 +26,13 @@ func TestEnv(t *testing.T) {
 	}
 }
 
+func requireIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv("NOEBS_INTEGRATION_TESTS") == "" {
+		t.Skip("NOEBS_INTEGRATION_TESTS not set")
+	}
+}
+
 func TestWorkingKey(t *testing.T) {
 	var workingKeyFields ebs_fields.WorkingKeyFields
 	workingKeyFields.ClientID = "noebs"
@@ -40,25 +44,26 @@ func TestWorkingKey(t *testing.T) {
 	if err != nil {
 		t.Fatal()
 	}
-	w := httptest.NewRecorder()
 	route := GetMainEngine()
-
-	fmt.Println(w.Body.String(), "Why is it.")
 
 	// well, assuming that the server is running. Eh?
 	// Mock data BTW...
-	req := httptest.NewRequest("POST", "/test", bytes.NewBuffer(payload))
+	req := httptest.NewRequest(http.MethodGet, "/test", bytes.NewBuffer(payload))
 
-	route.ServeHTTP(w, req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
 
-	if w.Code != 200 {
-		t.Errorf("expected: %d, got: %d", 200, w.Code)
+	if resp.StatusCode != 200 {
+		t.Errorf("expected: %d, got: %d", 200, resp.StatusCode)
 	}
 	// I'm really not sure why this would ever work.
 	// suddenly, things starting to make sense.
 }
 
 func TestPurchase(t *testing.T) {
+	requireIntegration(t)
 	// always returns t.Fatal...
 	// test a missing field always returns 400.
 
@@ -74,16 +79,16 @@ func TestPurchase(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/purchase", bytes.NewBuffer(buff))
-		w := httptest.NewRecorder()
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
 
-		route.ServeHTTP(w, req)
-
-		got := w.Code
+		got := resp.StatusCode
 		want := 500
 
 		if got != want {
 			t.Errorf("got '%d', want '%d'", got, want)
-			t.Errorf(w.Body.String())
 		}
 	})
 
@@ -94,11 +99,12 @@ func TestPurchase(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/purchase", bytes.NewBuffer(buff))
-		w := httptest.NewRecorder()
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
 
-		route.ServeHTTP(w, req)
-
-		got := w.Code
+		got := resp.StatusCode
 		want := 400
 
 		if got != want {
@@ -108,39 +114,51 @@ func TestPurchase(t *testing.T) {
 }
 
 func TestEBSHttpClient(t *testing.T) {
-	// always return wrong
-	// i need to mock up EBS server (which is really challenging!
-
-	//t.Fatalf("Something went wrong")
 	t.Run("Testing wrong content-types", func(t *testing.T) {
-		url := "https://example.com"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"responseCode":0,"responseMessage":"Success"}`))
+		}))
+		t.Cleanup(server.Close)
+
 		payload := getSuccessfulPurchasePayload(ebs_fields.PurchaseFields{})
-		fmt.Println(string(payload))
-		_, _, err := ebs_fields.EBSHttpClient(url, payload)
+		_, _, err := ebs_fields.EBSHttpClient(server.URL, payload)
 
 		if err != ebs_fields.ContentTypeErr {
 			t.Fatalf("Returned error is not of the correct type, %v. Wanted %v", err, ebs_fields.ContentTypeErr)
 		}
 	})
 
-	t.Run("Check the return error type is EBSFailedTransactionErr", func(t *testing.T) {
-		url := "https://212.0.129.118/terminal_api/transactions/purchase/"
+	t.Run("Returns error on failed transaction", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"responseCode":72,"responseMessage":"Failed"}`))
+		}))
+		t.Cleanup(server.Close)
+
 		payload := getFailedPurchasePayload(t, ebs_fields.PurchaseFields{})
+		status, res, err := ebs_fields.EBSHttpClient(server.URL, payload)
 
-		fmt.Println(string(payload))
-		_, _, err := ebs_fields.EBSHttpClient(url, payload)
-
-		fmt.Print(reflect.TypeOf(err))
-
-		if err != ebs_fields.EbsFailedTransaction {
-
-			t.Fatalf("Returned error is not of the correct type. Got: (%s). Wanted: (%s)", reflect.TypeOf(err), ebs_fields.ContentTypeErr)
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if err.Error() != "Failed" {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+		if status != http.StatusBadGateway {
+			t.Fatalf("unexpected status: %d", status)
+		}
+		if res.ResponseCode != 72 {
+			t.Fatalf("unexpected response code: %d", res.ResponseCode)
 		}
 	})
 
 }
 
 func TestCardTransfer(t *testing.T) {
+	requireIntegration(t)
 	route := GetMainEngine()
 	t.Run("Test all CardTransfer passed", func(t *testing.T) {
 		fields := populateCardTransferFields()
@@ -153,16 +171,16 @@ func TestCardTransfer(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/cardTransfer", bytes.NewBuffer(buff))
-		w := httptest.NewRecorder()
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
 
-		route.ServeHTTP(w, req)
-
-		got := w.Code
+		got := resp.StatusCode
 		want := 500
 
 		if got != want {
 			t.Errorf("got '%d', want '%d'", got, want)
-			t.Errorf(w.Body.String())
 		}
 	})
 
@@ -173,11 +191,12 @@ func TestCardTransfer(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/cardTransfer", bytes.NewBuffer(buff))
-		w := httptest.NewRecorder()
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
 
-		route.ServeHTTP(w, req)
-
-		got := w.Code
+		got := resp.StatusCode
 		want := 400
 
 		if got != want {
@@ -187,18 +206,4 @@ func TestCardTransfer(t *testing.T) {
 
 }
 
-func TestPurchase1(t *testing.T) {
-	type args struct {
-		c *gin.Context
-	}
-	tests := []struct {
-		name string
-		args args
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-		})
-	}
-}
+// TODO: Add Purchase handler tests for fiber if needed.

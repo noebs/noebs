@@ -89,9 +89,8 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/go-playground/validator/v10"
+	"github.com/gofiber/fiber/v2"
+		"github.com/go-playground/validator/v10"
 	"github.com/go-redis/redis/v7"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
@@ -117,7 +116,7 @@ var fees = ebs_fields.NewDynamicFeesWithDefaults()
 // Purchase performs special payment api from ebs consumer services
 // It requires: card info (src), amount fields, specialPaymentId (destination)
 // in order to complete the transaction
-func (s *Service) Purchase(c *gin.Context) {
+func (s *Service) Purchase(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPurchaseEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -125,7 +124,7 @@ func (s *Service) Purchase(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerPurchaseFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -133,7 +132,7 @@ func (s *Service) Purchase(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		fields.DynamicFees = fees.SpecialPaymentFees
@@ -141,13 +140,13 @@ func (s *Service) Purchase(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -159,18 +158,18 @@ func (s *Service) Purchase(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // IsAlive performs isAlive request to inquire for ebs server availability
-func (s *Service) IsAlive(c *gin.Context) {
+func (s *Service) IsAlive(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerIsAliveEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -179,7 +178,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerIsAliveFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -193,7 +192,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -201,7 +200,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -210,7 +209,7 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 		//// mask the pan
 		res.MaskPAN()
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 		res.Name = s.ToDatabasename(url)
 
@@ -223,18 +222,18 @@ func (s *Service) IsAlive(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // BillPayment is responsible for utility, telecos, e-government and other payment services
-func (s *Service) BillPayment(c *gin.Context) {
+func (s *Service) BillPayment(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillPaymentEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -243,7 +242,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerBillPaymentFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -257,7 +256,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -267,7 +266,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -277,7 +276,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		// Adding BillType, BillTo and BillInfo2 so that the mobile client can show these fields in transactions history
@@ -327,7 +326,7 @@ func (s *Service) BillPayment(c *gin.Context) {
 			tranData <- data
 
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
 			// This is for push notifications (success)
 			data.Title = "Payment Success"
@@ -362,20 +361,20 @@ func (s *Service) BillPayment(c *gin.Context) {
 
 			tranData <- data
 
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // GetBills for any EBS supported bill just by the entityID (phone number or the invoice ID). A good abstraction over EBS
 // services. The function also updates a local database for each result for subsequent queries.
-func (s *Service) GetBills(c *gin.Context) {
+func (s *Service) GetBills(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b bills
-	if bindingErr := c.ShouldBindBodyWith(&b, binding.JSON); bindingErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": bindingErr.Error()})
+	if bindingErr := bindJSON(c, &b); bindingErr != nil {
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": bindingErr.Error()})
 	}
 
 	uid, _ := uuid.NewRandom()
@@ -387,7 +386,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
 	if err != nil {
 		s.Logger.Printf("error in encryption: %v", err)
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	fields.ConsumerCardHolderFields.Ipin = ipinBlock
 	fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
@@ -403,7 +402,7 @@ func (s *Service) GetBills(c *gin.Context) {
 	if err != nil {
 		// there's an error in parsing the struct. Server error.
 		er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-		c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 	}
 	// the only part left is fixing EBS errors. Formalizing them per se.
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
@@ -420,35 +419,35 @@ func (s *Service) GetBills(c *gin.Context) {
 	if ebsErr != nil {
 		cacheBills.Save(s.Db, true)
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		jsonResponse(c, code, payload)
 	} else {
 		due, err := parseDueAmounts(fields.PayeeId, res.BillInfo)
 		if err != nil {
 			// hardcoded
 			cacheBills.Save(s.Db, true)
 			payload := ebs_fields.ErrorDetails{Code: 502, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(502, payload)
+			jsonResponse(c, 502, payload)
 			return
 		}
-		c.JSON(code, gin.H{"ebs_response": res, "due_amount": due})
+		jsonResponse(c, code, fiber.Map{"ebs_response": res, "due_amount": due})
 		cacheBills.Save(s.Db, false)
 	}
 }
 
 // Register with card allow a user to register through noebs and assigning a card to them
-func (s *Service) RegisterWithCard(c *gin.Context) {
+func (s *Service) RegisterWithCard(c *fiber.Ctx) {
 	var card ebs_fields.CacheCards
-	c.ShouldBindJSON(&card)
+	bindJSON(c, &card)
 	// why are we checking for card.PublicKey and card.Mobile here?
 	if ok, err := s.isValidCard(card); !ok || card.PublicKey == "" || card.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "invalid_card_or_missing_credentials"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_card_or_missing_credentials"})
 		return
 	}
 	// Make sure user is unique
 	var tmpUser ebs_fields.User
 	res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser)
 	if res.Error == nil && tmpUser.IsVerified {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "User with this mobile number already exists"})
 		return
 	}
 	user := ebs_fields.NewUser(s.Db)
@@ -462,13 +461,13 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 	user.HashPassword()
 	key, err := user.GenerateOtp()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 		return
 	}
 	if tmpUser.IsVerified {
 		if res := s.Db.Delete(&tmpUser); res.Error != nil {
 			s.Logger.Printf("error deleting user: %v", err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"code": "database_error", "message": "could not replace user"})
+			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": "database_error", "message": "could not replace user"})
 			return
 		}
 	}
@@ -480,36 +479,36 @@ func (s *Service) RegisterWithCard(c *gin.Context) {
 		user.Cards = append(user.Cards, ucard)
 		user.UpsertCards([]ebs_fields.Card{ucard})
 	}
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: card.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
 }
 
 // BillerID retrieves a billerID from noebs and performs an ebs request
 // if a phone number doesn't exist in our system
-func (s *Service) GetBiller(c *gin.Context) {
+func (s *Service) GetBiller(c *fiber.Ctx) {
 	var mobile string
-	mobile, _ = c.GetQuery("mobile")
+	mobile = c.Query("mobile")
 	if mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "empty_mobile", "code": "empty_mobile"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "empty_mobile", "code": "empty_mobile"})
 		return
 	}
 	guessed, err := ebs_fields.GetBillerInfo(mobile, s.Db)
 	if err != nil {
 		// we don't know about this
 		// what if we go CRAZY here and launch a new request to EBS!
-		c.JSON(http.StatusBadRequest, gin.H{"message": "no record", "code": "empty_mobile"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "no record", "code": "empty_mobile"})
 		go s.billerID(mobile) // we are launching a go routine here to update this query for future reference
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"biller_id": guessed.BillerID})
+	jsonResponse(c, http.StatusOK, fiber.Map{"biller_id": guessed.BillerID})
 }
 
 // BillInquiry for telecos, utility and government (billers inquiries)
-func (s *Service) BillInquiry(c *gin.Context) {
+func (s *Service) BillInquiry(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var fields = ebs_fields.ConsumerBillInquiryFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -523,7 +522,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -531,7 +530,7 @@ func (s *Service) BillInquiry(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -551,27 +550,27 @@ func (s *Service) BillInquiry(c *gin.Context) {
 		}
 
 		// Save to Redis lis
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // Balance gets performs get balance transaction for the provided card info
-func (s *Service) Balance(c *gin.Context) {
+func (s *Service) Balance(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
 	var fields = ebs_fields.ConsumerBalanceFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -579,14 +578,14 @@ func (s *Service) Balance(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -594,26 +593,26 @@ func (s *Service) Balance(c *gin.Context) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 		s.Db.Table("transactions").Create(&res.EBSResponse)
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // TransactionStatus queries EBS to get the status of the transaction
-func (s *Service) TransactionStatus(c *gin.Context) {
+func (s *Service) TransactionStatus(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerTransactionStatusEndpoint
 	var fields = ebs_fields.ConsumerTransactionStatusFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -621,7 +620,7 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		// this is really extremely a complex case
@@ -629,7 +628,7 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
@@ -638,12 +637,12 @@ func (s *Service) TransactionStatus(c *gin.Context) {
 		s.Db.Table("transactions").Create(&res.EBSResponse)
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res.OriginalTransaction})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res.OriginalTransaction})
 		}
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
@@ -669,7 +668,7 @@ func (s *Service) storeLastTransactions(merchantID string, res *ebs_fields.EBSPa
 }
 
 // WorkingKey get ebs working key for encrypting ipin for consumer transactions
-func (s *Service) WorkingKey(c *gin.Context) {
+func (s *Service) WorkingKey(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerWorkingKeyEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -678,7 +677,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerWorkingKeyFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -692,7 +691,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -700,7 +699,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -711,7 +710,7 @@ func (s *Service) WorkingKey(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -723,19 +722,19 @@ func (s *Service) WorkingKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res, "fees": fees})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res, "fees": fees})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // CardTransfer performs p2p transactions
-func (s *Service) CardTransfer(c *gin.Context) {
+func (s *Service) CardTransfer(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -743,7 +742,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerCardTransferAndMobileFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -757,7 +756,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -779,7 +778,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		res.EBSResponse.SenderPAN = utils.MaskPAN(fields.Pan)
@@ -809,7 +808,7 @@ func (s *Service) CardTransfer(c *gin.Context) {
 			data.Body = fmt.Sprintf("Card Transfer failed due to: %v.", res.ResponseMessage)
 			tranData <- data
 
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
 			// This is for push notifications (receiver)
 			data.EBSData.PAN = fields.ToCard
@@ -822,16 +821,16 @@ func (s *Service) CardTransfer(c *gin.Context) {
 			data.Body = fmt.Sprintf("%v %v has been transferred successfully from your account to %v.", fields.TranAmount, res.AccountCurrency, res.ToCard)
 			tranData <- data
 
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // CashIn performs cash in transactions
-func (s *Service) CashIn(c *gin.Context) {
+func (s *Service) CashIn(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashInEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -840,7 +839,7 @@ func (s *Service) CashIn(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerCashInFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -854,7 +853,7 @@ func (s *Service) CashIn(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -867,7 +866,7 @@ func (s *Service) CashIn(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -879,18 +878,18 @@ func (s *Service) CashIn(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // CashIn performs cash in transactions
-func (s *Service) QRMerchantRegistration(c *gin.Context) {
+func (s *Service) QRMerchantRegistration(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -899,7 +898,7 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerQRRegistration{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -913,7 +912,7 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -926,7 +925,7 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -938,18 +937,18 @@ func (s *Service) QRMerchantRegistration(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // CashOut performs cashout transactions
-func (s *Service) CashOut(c *gin.Context) {
+func (s *Service) CashOut(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashOutEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -958,7 +957,7 @@ func (s *Service) CashOut(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerCashoOutFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -972,7 +971,7 @@ func (s *Service) CashOut(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -985,7 +984,7 @@ func (s *Service) CashOut(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url) // rename me to cashin transaction
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -997,18 +996,18 @@ func (s *Service) CashOut(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // AccountTransfer performs p2p transactions
-func (s *Service) AccountTransfer(c *gin.Context) {
+func (s *Service) AccountTransfer(c *fiber.Ctx) {
 
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.AccountTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
@@ -1018,7 +1017,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumrAccountTransferFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
@@ -1028,7 +1027,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, _ := json.Marshal(fields)
@@ -1039,7 +1038,7 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1049,18 +1048,18 @@ func (s *Service) AccountTransfer(c *gin.Context) {
 		}
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // IPinChange changes the ipin for the card holder provided card
-func (s *Service) IPinChange(c *gin.Context) {
+func (s *Service) IPinChange(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerChangeIPinEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1069,7 +1068,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerIPinFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1083,7 +1082,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1091,7 +1090,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1102,7 +1101,7 @@ func (s *Service) IPinChange(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1114,19 +1113,19 @@ func (s *Service) IPinChange(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // Status get transactions status from ebs
-func (s *Service) Status(c *gin.Context) {
+func (s *Service) Status(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerStatusEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1135,7 +1134,7 @@ func (s *Service) Status(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerStatusFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1145,14 +1144,14 @@ func (s *Service) Status(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1161,7 +1160,7 @@ func (s *Service) Status(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -1171,23 +1170,23 @@ func (s *Service) Status(c *gin.Context) {
 		}
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRPayment performs QR payment transaction. This is EBS-based QR transaction, and to be confused with noebs one
-func (s *Service) QRPayment(c *gin.Context) {
+func (s *Service) QRPayment(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRPaymentFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1201,7 +1200,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1209,7 +1208,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1220,7 +1219,7 @@ func (s *Service) QRPayment(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1232,22 +1231,22 @@ func (s *Service) QRPayment(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRRefund performs qr refund transaction
-func (s *Service) QRTransactions(c *gin.Context) {
+func (s *Service) QRTransactions(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.MerchantTransactionStatus // EBS simulator endpoint url goes here.
 	var fields = ebs_fields.ConsumerQRStatus{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -1258,7 +1257,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1266,7 +1265,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1277,7 +1276,7 @@ func (s *Service) QRTransactions(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1291,24 +1290,24 @@ func (s *Service) QRTransactions(c *gin.Context) {
 			// also store value to redis
 
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
 			s.storeLastTransactions(fields.MerchantID, &res)
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRRefund performs qr refund transaction
-func (s *Service) QRRefund(c *gin.Context) {
+func (s *Service) QRRefund(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRRefundEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRRefundFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1322,7 +1321,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1330,7 +1329,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1341,7 +1340,7 @@ func (s *Service) QRRefund(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1353,23 +1352,23 @@ func (s *Service) QRRefund(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRRefund performs qr refund transaction
-func (s *Service) QRComplete(c *gin.Context) {
+func (s *Service) QRComplete(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerComplete // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerQRCompleteFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1383,7 +1382,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1391,7 +1390,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1402,7 +1401,7 @@ func (s *Service) QRComplete(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1414,23 +1413,23 @@ func (s *Service) QRComplete(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRGeneration generates a qr token for the registered merchant
-func (s *Service) QRGeneration(c *gin.Context) {
+func (s *Service) QRGeneration(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRGenerationEndpoint // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.MerchantRegistrationFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1444,7 +1443,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1452,7 +1451,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1463,7 +1462,7 @@ func (s *Service) QRGeneration(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1475,19 +1474,19 @@ func (s *Service) QRGeneration(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // GenerateIpin generates a new ipin for card holder
-func (s *Service) GenerateIpin(c *gin.Context) {
+func (s *Service) GenerateIpin(c *fiber.Ctx) {
 	url := s.NoebsConfig.IPIN + ebs_fields.IPinGeneration // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1496,7 +1495,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerGenerateIPin{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1510,7 +1509,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 
@@ -1521,7 +1520,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
 		if err != nil {
 			s.Logger.Printf("error in encryption: %v", err)
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+			jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 		}
 		fields.Username = s.NoebsConfig.EBSIPINUsername
 		fields.Password = ipinBlock
@@ -1531,7 +1530,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1542,7 +1541,7 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1555,18 +1554,18 @@ func (s *Service) GenerateIpin(c *gin.Context) {
 		if ebsErr != nil {
 			ebsIpinEncryptionKey = ""
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // CompleteIpin performs an otp check from ebs to complete ipin change transaction
-func (s *Service) CompleteIpin(c *gin.Context) {
+func (s *Service) CompleteIpin(c *fiber.Ctx) {
 	url := s.NoebsConfig.IPIN + ebs_fields.IPinCompletion // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1575,7 +1574,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerGenerateIPinCompletion{}
 
-	c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindJSON(c, &fields)
 	s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
 	uid, _ := uuid.NewRandom()
 	passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
@@ -1592,7 +1591,7 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 	if err != nil {
 		// there's an error in parsing the struct. Server error.
 		er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-		c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 	}
 
 	// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1602,21 +1601,21 @@ func (s *Service) CompleteIpin(c *gin.Context) {
 	res.MaskPAN()
 
 	res.Name = s.ToDatabasename(url)
-	username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+	username := getUsername(c)
 	utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 	s.Db.Table("transactions")
 
 	if ebsErr != nil {
 		ebsIpinEncryptionKey = ""
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		jsonResponse(c, code, payload)
 	} else {
-		c.JSON(code, gin.H{"ebs_response": res})
+		jsonResponse(c, code, fiber.Map{"ebs_response": res})
 	}
 }
 
 // CompleteIpin performs an otp check from ebs to complete ipin change transaction
-func (s *Service) IPINKey(c *gin.Context) {
+func (s *Service) IPINKey(c *fiber.Ctx) {
 	url := s.NoebsConfig.IPIN + ebs_fields.QRPublicKey // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1627,7 +1626,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerGenerateIPINFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1641,14 +1640,14 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1659,7 +1658,7 @@ func (s *Service) IPINKey(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1671,37 +1670,37 @@ func (s *Service) IPINKey(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
 			// store the key somewhere
 			ebsIpinEncryptionKey = res.PubKeyValue
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // GeneratePaymentToken is used by noebs user to charge their customers.
 // the toCard field in `Token` uses a masked PAN (first 6 digits and last 4 digits and any number of * in between)
-func (s *Service) GeneratePaymentToken(c *gin.Context) {
+func (s *Service) GeneratePaymentToken(c *fiber.Ctx) {
 	var token ebs_fields.Token
-	mobile := c.GetString("mobile")
-	c.ShouldBindWith(&token, binding.JSON)
+	mobile := getMobile(c)
+	bindJSON(c, &token)
 	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error()})
 		return
 	}
 
 	if len(user.Cards) < 1 && token.ToCard == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "no card found"})
 		return
 	}
 	fullPan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "no_card_found", "message": err.Error()})
 		return
 	}
 	token.ToCard = fullPan
@@ -1710,17 +1709,17 @@ func (s *Service) GeneratePaymentToken(c *gin.Context) {
 	token.User = *user
 	if err := user.SavePaymentToken(&token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
 		return
 	}
 	encoded, _ := ebs_fields.Encode(&token)
 	s.Logger.Printf("token is: %v", encoded)
 	paymentLink := s.NoebsConfig.PaymentLinkBase + token.UUID
-	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
+	jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
 }
 
-func (s *Service) PaymentRequest(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) PaymentRequest(c *fiber.Ctx) {
+	mobile := getMobile(c)
 
 	type PRData struct {
 		Mobile string `json:"mobile,omitempty"`
@@ -1729,32 +1728,32 @@ func (s *Service) PaymentRequest(c *gin.Context) {
 	}
 
 	var data PRData
-	err := c.ShouldBindWith(&data, binding.JSON)
+	err := bindJSON(c, &data)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "binding_error", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
 		return
 	}
 
 	sender, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 		return
 	}
 
 	receiver, err := ebs_fields.GetUserByMobile(data.Mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 		return
 	}
 
 	if len(sender.Cards) < 1 && data.ToCard == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no card found"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "no card found"})
 		return
 	}
 
 	fullPan, err := ebs_fields.ExpandCard(data.ToCard, sender.Cards)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "no_card_found", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "no_card_found", "message": err.Error()})
 		return
 	}
 
@@ -1766,7 +1765,7 @@ func (s *Service) PaymentRequest(c *gin.Context) {
 	token.User = *sender
 	if err := sender.SavePaymentToken(&token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"code": err.Error(), "message": "Unable to save payment token"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
 		return
 	}
 	encoded, _ := ebs_fields.Encode(&token)
@@ -1789,47 +1788,47 @@ func (s *Service) PaymentRequest(c *gin.Context) {
 	pData.UserMobile = data.Mobile
 	pData.PaymentRequest = ebs_fields.QrData{UUID: token.UUID, ToCard: token.ToCard, Amount: token.Amount}
 	tranData <- pData
-	c.JSON(http.StatusCreated, gin.H{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
+	jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
 }
 
 // GetPaymentToken retrieves a generated payment token by UUID
 // This service should be accessed via an authorization header
-func (s *Service) GetPaymentToken(c *gin.Context) {
-	username := c.GetString("mobile")
+func (s *Service) GetPaymentToken(c *fiber.Ctx) {
+	username := getMobile(c)
 	if username == "" {
 		ve := validationError{Message: "Empty payment id", Code: "empty_uuid"}
-		c.JSON(http.StatusBadRequest, ve)
+		jsonResponse(c, http.StatusBadRequest, ve)
 		return
 	}
 	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
 		ve := validationError{Message: "user doesn't exist", Code: "record_not_found"}
-		c.JSON(http.StatusBadRequest, ve)
+		jsonResponse(c, http.StatusBadRequest, ve)
 		return
 	}
-	uuid, _ := c.GetQuery("uuid")
+	uuid := c.Query("uuid")
 	if uuid == "" { // the user wants to enlist *all* tokens generated for them
 		tokens, err := ebs_fields.GetUserTokens(user.Mobile, s.Db)
 		if err != nil {
 			ve := validationError{Message: "error in retrieving tokens", Code: "error_retrieving_tokens"}
-			c.JSON(http.StatusBadRequest, ve)
+			jsonResponse(c, http.StatusBadRequest, ve)
 			return
 		}
 		for _, token := range tokens {
 			token.ToCard = utils.MaskPAN(token.ToCard)
 		}
-		c.JSON(http.StatusOK, gin.H{"token": tokens, "count": len(tokens)})
+		jsonResponse(c, http.StatusOK, fiber.Map{"token": tokens, "count": len(tokens)})
 		return
 	}
 	result, err := ebs_fields.GetTokenByUUID(uuid, s.Db)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": "record_not_found", "message": "token not found"})
+		jsonResponse(c, http.StatusNotFound, fiber.Map{"code": "record_not_found", "message": "token not found"})
 		return
 	}
 
 	// Masking the PAN
 	result.ToCard = utils.MaskPAN(result.ToCard)
-	c.JSON(http.StatusOK, result)
+	jsonResponse(c, http.StatusOK, result)
 }
 
 // NoebsQuickPayment performs a QR or payment via url transaction
@@ -1845,7 +1844,7 @@ func (s *Service) GetPaymentToken(c *gin.Context) {
 // - using the full-token should render the forms to show the details of the token (toCard, amount, and any comments)
 // - using the uuid only, should be followed by the client performing a request to get the token info
 // request body fields should always take precendents over query params
-func (s *Service) NoebsQuickPayment(c *gin.Context) {
+func (s *Service) NoebsQuickPayment(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint
 
 	// those should be nil, and assumed to be sent in the request body -- that's fine.
@@ -1856,7 +1855,7 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	var noebsToken ebs_fields.Token
 
 	var data ebs_fields.QuickPaymentFields
-	c.ShouldBindWith(&data, binding.JSON) // ignore the errors
+	bindJSON(c, &data) // ignore the errors
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
 	if err != nil {
 		// you should now work on the uuid and token
@@ -1873,12 +1872,12 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	}
 	storedToken, err := ebs_fields.GetTokenByUUID(noebsToken.UUID, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_token", "message": err.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_token", "message": err.Error()})
 		return
 	}
 
 	if storedToken.Amount != 0 && storedToken.Amount != int(data.TranAmount) {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "amount_mismatch", "message": "amount_mismatch"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "amount_mismatch", "message": "amount_mismatch"})
 		return
 	}
 	data.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1890,25 +1889,25 @@ func (s *Service) NoebsQuickPayment(c *gin.Context) {
 	res.EBSResponse.ReceiverPAN = storedToken.ToCard
 	if res := s.Db.Table("transactions").Create(&res.EBSResponse); res.Error != nil {
 		s.Logger.Printf("Error saving transactions: %v", res.Error.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"code": res.Error.Error(), "message": "unable_to_save_transaction"})
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": res.Error.Error(), "message": "unable_to_save_transaction"})
 	}
 	if res := s.Db.Where("uuid = ?", storedToken.UUID).Updates(&storedToken); res.Error != nil {
 		s.Logger.Printf("Error saving token: %v", res.Error.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"code": res.Error.Error(), "message": "unable_to_save_token"})
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": res.Error.Error(), "message": "unable_to_save_token"})
 	}
 
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-		c.JSON(code, payload)
+		jsonResponse(c, code, payload)
 	} else {
-		c.JSON(code, gin.H{"ebs_response": res})
+		jsonResponse(c, code, fiber.Map{"ebs_response": res})
 	}
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: ebsErr == nil, Token: data.UUID}
 }
 
 // EbsGetCardInfo get card holder name from pan. Currently is limited to telecos only
-func (s *Service) EbsGetCardInfo(c *gin.Context) {
+func (s *Service) EbsGetCardInfo(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardInfo // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -1917,7 +1916,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 
 	var fields = ebs_fields.ConsumerCardInfoFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -1931,7 +1930,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -1939,7 +1938,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -1950,7 +1949,7 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -1962,21 +1961,21 @@ func (s *Service) EbsGetCardInfo(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // GetMSISDNFromCard for ussd to get pan info from sim card
-func (s *Service) GetMSISDNFromCard(c *gin.Context) {
+func (s *Service) GetMSISDNFromCard(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPANFromMobile // EBS simulator endpoint url goes here.
 	var fields = ebs_fields.ConsumerPANFromMobileFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 	switch bindingErr := bindingErr.(type) {
 	case validator.ValidationErrors:
 		var details []ebs_fields.ErrDetails
@@ -1984,14 +1983,14 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
 		jsonBuffer, err := json.Marshal(fields)
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
@@ -1999,7 +1998,7 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		// mask the pan
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
@@ -2009,22 +2008,22 @@ func (s *Service) GetMSISDNFromCard(c *gin.Context) {
 		}
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRPayment performs QR payment transaction
-func (s *Service) RegisterCard(c *gin.Context) {
+func (s *Service) RegisterCard(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerRegister // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerRegistrationFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -2038,7 +2037,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -2046,7 +2045,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -2057,7 +2056,7 @@ func (s *Service) RegisterCard(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -2069,24 +2068,24 @@ func (s *Service) RegisterCard(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // CompleteRegistration step 2 in card issuance process
-func (s *Service) CompleteRegistration(c *gin.Context) {
+func (s *Service) CompleteRegistration(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerCompleteRegistrationFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -2096,7 +2095,7 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 			details = append(details, ebs_fields.ErrorToString(err))
 		}
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -2104,7 +2103,7 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// if no errors, then proceed to creating a new user
@@ -2137,9 +2136,9 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 			// Associate the card to that user
 			// create a card here
 			card := ebs_fields.CacheCards{Pan: res.PAN, Expiry: res.ExpDate}
@@ -2152,17 +2151,17 @@ func (s *Service) CompleteRegistration(c *gin.Context) {
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
 // QRPayment performs QR payment transaction
-func (s *Service) GenerateVoucher(c *gin.Context) {
+func (s *Service) GenerateVoucher(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerGenerateVoucher // EBS simulator endpoint url goes here.
 
 	var fields = ebs_fields.ConsumerGenerateVoucherFields{}
 
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -2176,7 +2175,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -2186,7 +2185,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		if err != nil {
 			// there's an error in parsing the struct. Server error.
 			er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-			c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
+			jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
 		}
 
 		// the only part left is fixing EBS errors. Formalizing them per se.
@@ -2197,7 +2196,7 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -2224,22 +2223,22 @@ func (s *Service) GenerateVoucher(c *gin.Context) {
 			tranData <- data
 
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
 			// This is for push notifications (sender)
 			data.Body = fmt.Sprintf("Voucher number generated for phone %v is %v", fields.VoucherNumber, res.VoucherCode)
 			tranData <- data
 
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
-func (s *Service) CheckUser(c *gin.Context) {
+func (s *Service) CheckUser(c *fiber.Ctx) {
 	type checkUserRequest struct {
 		Phones []string `json:"phones"`
 	}
@@ -2253,9 +2252,9 @@ func (s *Service) CheckUser(c *gin.Context) {
 	var request checkUserRequest
 	var response []checkUserResponse
 
-	if err := c.ShouldBindBodyWith(&request, binding.JSON); err != nil {
+	if err := bindJSON(c, &request); err != nil {
 		s.Logger.Printf("The request is wrong. %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Bad request.", "code": "bad_request"})
 		return
 	}
 
@@ -2292,26 +2291,26 @@ func (s *Service) CheckUser(c *gin.Context) {
 		}
 		response = append(response, checkUserResponse{Phone: phone, IsUser: true, Pan: maskedPan})
 	}
-	c.JSON(http.StatusOK, response)
+	jsonResponse(c, http.StatusOK, response)
 }
 
-func (s *Service) SetMainCard(c *gin.Context) {
+func (s *Service) SetMainCard(c *fiber.Ctx) {
 	type Card struct {
 		Pan string `json:"PAN"`
 	}
-	mobile := c.GetString("mobile")
+	mobile := getMobile(c)
 	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
 	if err != nil {
 		s.Logger.Printf("Error finding user in db: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Error finding user in the database"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "Error finding user in the database"})
 		return
 	}
 
 	var card Card
-	err = c.ShouldBindWith(&card, binding.JSON)
+	err = bindJSON(c, &card)
 	if err != nil {
 		s.Logger.Printf("Binding error: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Binding error, make sure the sent json is correct"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "Binding error, make sure the sent json is correct"})
 		return
 	}
 
@@ -2320,35 +2319,35 @@ func (s *Service) SetMainCard(c *gin.Context) {
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		// Card does not exist
 		s.Logger.Println("Card does not exist")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Card does not exist"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "Card does not exist"})
 		return
 	}
 	// Updating the user
 	result = s.Db.Debug().Model(&ebs_fields.User{}).Where("mobile = ?", user.Mobile).Update("main_card", card.Pan)
 	if result.Error != nil {
 		s.Logger.Printf("Error updating user.Pan: %v", result.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"error": "Could not save card as main card"})
 		return
 	}
 	// Remove `is_main` flag from previous card
 	result = s.Db.Model(&ebs_fields.Card{}).Where("user_id = ? AND is_main = ?", user.ID, true).Update("is_main", false)
 	if result.Error != nil {
 		s.Logger.Printf("Error updating cards: %v", result.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"error": "Could not save card as main card"})
 		return
 	}
 	// Setting the new card as the main one
 	result = s.Db.Model(&ebs_fields.Card{}).Where("pan = ?", card.Pan).Update("is_main", true)
 	if result.Error != nil {
 		s.Logger.Printf("Error updating card: %v", result.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save card as main card"})
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"error": "Could not save card as main card"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 }
 
-func (s *Service) MobileTransfer(c *gin.Context) {
+func (s *Service) MobileTransfer(c *fiber.Ctx) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardTransferEndpoint // EBS simulator endpoint url goes here.
 	//FIXME instead of hardcoding it here, maybe offer it in the some struct that handles everything about the application configurations.
 	// consume the request here and pass it over onto the EBS.
@@ -2356,7 +2355,7 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 	// fuck. This shouldn't be here at all.
 
 	var fields = ebs_fields.ConsumerMobileTransferFields{}
-	bindingErr := c.ShouldBindBodyWith(&fields, binding.JSON)
+	bindingErr := bindJSON(c, &fields)
 
 	switch bindingErr := bindingErr.(type) {
 
@@ -2370,13 +2369,13 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 
 		payload := ebs_fields.ErrorDetails{Details: details, Code: http.StatusBadRequest, Message: "Request fields validation error", Status: ebs_fields.BadRequest}
 
-		c.JSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
+		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
 		user, err := ebs_fields.GetUserByMobile(fields.Mobile, s.Db)
 		if err != nil {
 			s.Logger.Printf("Error getting user from db: %v", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "error getting user from db, make sure mobile is correct"})
+			jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "error getting user from db, make sure mobile is correct"})
 			return
 		}
 		fields.ToCard = user.MainCard
@@ -2400,7 +2399,7 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username, _ := utils.GetOrDefault(c.Keys, "username", "anon")
+		username := getUsername(c)
 		utils.SaveRedisList(s.Redis, username+":all_transactions", &res)
 
 		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
@@ -2427,7 +2426,7 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 			data.Body = fmt.Sprintf("Card Transfer failed due to: %v", res.ResponseMessage)
 			tranData <- data
 
-			c.JSON(code, payload)
+			jsonResponse(c, code, payload)
 		} else {
 			// This is for push notifications (receiver)
 			data.EBSData.PAN = fields.ToCard
@@ -2440,19 +2439,19 @@ func (s *Service) MobileTransfer(c *gin.Context) {
 			data.Body = fmt.Sprintf("%v %v has been transferred from your account to %v", res.AccountCurrency, fields.TranAmount, res.ToCard)
 			tranData <- data
 
-			c.JSON(code, gin.H{"ebs_response": res})
+			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 
 	default:
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": bindingErr.Error()})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
 }
 
-func (s *Service) GetTransactions(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) GetTransactions(c *fiber.Ctx) {
+	mobile := getMobile(c)
 	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "database_error"})
 		return
 	}
 
@@ -2465,5 +2464,5 @@ func (s *Service) GetTransactions(c *gin.Context) {
 		trans = append(trans, cardTrans...)
 	}
 
-	c.JSON(http.StatusOK, trans)
+	jsonResponse(c, http.StatusOK, trans)
 }

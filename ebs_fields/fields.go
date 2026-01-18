@@ -950,6 +950,9 @@ type NoebsConfig struct {
 	JWTKey       string `json:"jwt_secret"`
 	Sentry       string `json:"sentry"`
 	Port         string `json:"port"`
+	GoogleClientID     string `json:"google_client_id"`
+	GoogleClientSecret string `json:"google_client_secret"`
+	GoogleRedirectURL  string `json:"google_redirect_url"`
 
 	IsConsumerProd bool `json:"is_consumer_prod"`
 	IsMerchantProd bool `json:"is_merchant_prod"`

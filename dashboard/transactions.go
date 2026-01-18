@@ -7,8 +7,7 @@ import (
 	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/gin-contrib/multitemplate"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
 
@@ -16,14 +15,14 @@ type Env struct {
 	Db *gorm.DB
 }
 
-func (e *Env) GetTransactionbyID(c *gin.Context) {
+func (e *Env) GetTransactionbyID(c *fiber.Ctx) {
 	var tran ebs_fields.EBSResponse
 	//id := c.Params.ByName("id")
 	err := e.Db.Find(&tran).Error
 	if err != nil {
-		c.AbortWithStatus(404)
+		_ = c.SendStatus(404)
 	}
-	c.JSON(200, gin.H{"result": tran.UUID})
+	jsonResponse(c, 200, fiber.Map{"result": tran.UUID})
 
 }
 
@@ -110,13 +109,6 @@ func structToSlice(t []ebs_fields.EBSResponse) []string {
 
 func TimeFormatter(t time.Time) string {
 	return t.Format(time.RFC3339)
-}
-
-func GenerateMultiTemplate() multitemplate.Renderer {
-	r := multitemplate.NewRenderer()
-	r.AddFromFiles("table", "dashboard/template/base.html", "dashboard/template/table.html")
-	r.AddFromFiles("index", "dashboard/template/base.html", "dashboard/template/index.html")
-	return r
 }
 
 type merchantsIssues struct {

@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http/httptest"
 	"testing"
 
@@ -11,7 +11,8 @@ import (
 
 func TestService_isValidCard(t *testing.T) {
 
-	testDB.Debug().AutoMigrate(&ebs_fields.CacheCards{})
+	env := newTestEnv(t)
+	env.DB.Debug().AutoMigrate(&ebs_fields.CacheCards{})
 	type args struct {
 		card ebs_fields.CacheCards
 	}
@@ -24,10 +25,16 @@ func TestService_isValidCard(t *testing.T) {
 		{"test is valid", args{ebs_fields.CacheCards{Pan: "99999"}}, true, false},
 		{"test is valid", args{ebs_fields.CacheCards{Pan: "88888"}}, true, false},
 	}
+	if err := env.DB.Create(&ebs_fields.Card{Pan: "99999"}).Error; err != nil {
+		t.Fatalf("seed card 99999: %v", err)
+	}
+	if err := env.DB.Create(&ebs_fields.Card{Pan: "88888"}).Error; err != nil {
+		t.Fatalf("seed card 88888: %v", err)
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Service{
-				Db: testDB,
+				Db: env.DB,
 			}
 			got, err := s.isValidCard(tt.args.card)
 			if (err != nil) != tt.wantErr {
@@ -43,24 +50,37 @@ func TestService_isValidCard(t *testing.T) {
 
 func TestService_Notifications(t *testing.T) {
 
-	w := httptest.NewRecorder()
-	route := testSetupRouter()
-	query := "?mobile=0129751986&all=true"
+	env := newTestEnv(t)
 
-	req := httptest.NewRequest("GET", "/notifications"+query, nil)
+	user := seedUser(t, env.DB, "0129751986", "Me@Passw0rd!")
+	seed := PushData{UUID: "uuid-1", Body: "test me", UserMobile: user.Mobile, Phone: user.Mobile}
+	if err := env.DB.Create(&seed).Error; err != nil {
+		t.Fatalf("seed notification: %v", err)
+	}
 
-	route.ServeHTTP(w, req)
+	token, err := env.Auth.GenerateJWT(user.ID, user.Mobile)
+	if err != nil {
+		t.Fatalf("generate token: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/notifications", nil)
+	req.Header.Set("Authorization", token)
+
+	resp, err := env.Router.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
 
 	var data []PushData
-	res, _ := ioutil.ReadAll(w.Body)
+	res, _ := io.ReadAll(resp.Body)
 	json.Unmarshal(res, &data)
-	if data == nil {
+	if len(data) == 0 {
 		t.Errorf("no response")
 	}
 	if data[0].Body != "test me" {
 		t.Error("wrong data")
 	}
-	if w.Code != 200 {
-		t.Errorf("expected: %d, got: %d", 200, w.Code)
+	if resp.StatusCode != 200 {
+		t.Errorf("expected: %d, got: %d", 200, resp.StatusCode)
 	}
 }

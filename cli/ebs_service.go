@@ -39,5 +39,5 @@ func main() {
 	if noebsConfig.Port == "" {
 		noebsConfig.Port = ":8080"
 	}
-	logrusLogger.Fatal(GetMainEngine().Run(noebsConfig.Port))
+	logrusLogger.Fatal(GetMainEngine().Listen(noebsConfig.Port))
 }

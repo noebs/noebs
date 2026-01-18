@@ -26,12 +26,13 @@ func (j *JWTAuth) Init() {
 }
 
 // GenerateJWT generates a JWT standard token with default values hardcoded. FIXME
-func (j *JWTAuth) GenerateJWT(serviceID string) (string, error) {
+func (j *JWTAuth) GenerateJWT(userID uint, mobile string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 	expiresAt := time.Now().Add(10 * time.Hour).UTC().Unix()
 	claims := TokenClaims{
-		serviceID,
+		userID,
+		mobile,
 		jwt.StandardClaims{
 			ExpiresAt: expiresAt,
 			Issuer:    "noebs",
@@ -98,7 +99,8 @@ func (j *JWTAuth) verifyWithClaim(tokenString string) error {
 
 // TokenClaims noebs standard claim
 type TokenClaims struct {
-	Mobile string `json:"mobile"`
+	UserID uint   `json:"uid"`
+	Mobile string `json:"mobile,omitempty"`
 	jwt.StandardClaims
 }
 

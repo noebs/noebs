@@ -3,7 +3,6 @@ package dashboard
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,7 +10,7 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-redis/redis/v7"
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/sqlite"
@@ -33,12 +32,12 @@ func (s Service) calculateOffset(page, pageSize int) uint {
 }
 
 // MerchantViews deprecated in favor of using the react-based dashboard features.
-func (s *Service) MerchantViews(c *gin.Context) {
+func (s *Service) MerchantViews(c *fiber.Ctx) {
 	db, _ := utils.Database("test.db")
-	terminal := c.Param("id")
+	terminal := c.Params("id")
 
 	pageSize := 50
-	page := c.DefaultQuery("page", "0")
+	page := c.Query("page", "0")
 	p, _ := strconv.Atoi(page)
 	offset := p*pageSize - pageSize
 
@@ -56,13 +55,13 @@ func (s *Service) MerchantViews(c *gin.Context) {
 		mC = append(mC, m)
 	}
 
-	c.HTML(http.StatusOK, "merchants.html", gin.H{"tran": tran, "issues": mC})
+	_ = c.Render("merchants", fiber.Map{"tran": tran, "issues": mC}, "base")
 
 	//TODO get merchant profile
 
 }
 
-func (s *Service) TransactionsCount(c *gin.Context) {
+func (s *Service) TransactionsCount(c *fiber.Ctx) {
 
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
@@ -84,13 +83,13 @@ func (s *Service) TransactionsCount(c *gin.Context) {
 				"code":    err.Error(),
 				"details": "error in database",
 			}).Info("error in database")
-		c.AbortWithStatus(404)
+		c.SendStatus(404)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": count})
+	jsonResponse(c, http.StatusOK, fiber.Map{"result": count})
 }
 
-func (s *Service) TransactionByTid(c *gin.Context) {
+func (s *Service) TransactionByTid(c *fiber.Ctx) {
 
 	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 	if err != nil {
@@ -101,7 +100,7 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 			}).Info("error in database")
 	}
 
-	tid, _ := c.GetQuery("tid")
+	tid := c.Query("tid")
 
 	var tran []ebs_fields.EBSResponse
 	if err := db.Where("terminal_id LIKE ?", tid+"%").Find(&tran).Error; err != nil {
@@ -109,13 +108,13 @@ func (s *Service) TransactionByTid(c *gin.Context) {
 			"code":    err.Error(),
 			"details": tran,
 		}).Info("no transaction with this ID")
-		c.AbortWithStatus(404)
+		c.SendStatus(404)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": tran, "count": len(tran)})
+	jsonResponse(c, http.StatusOK, fiber.Map{"result": tran, "count": len(tran)})
 }
 
-func (s *Service) MakeDummyTransaction(c *gin.Context) {
+func (s *Service) MakeDummyTransaction(c *fiber.Ctx) {
 
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
@@ -124,21 +123,21 @@ func (s *Service) MakeDummyTransaction(c *gin.Context) {
 	tran := ebs_fields.EBSResponse{}
 
 	if err := env.Db.Create(&tran).Error; err != nil {
-		c.AbortWithStatusJSON(500, gin.H{"code": err.Error()})
+		jsonResponse(c, 500, fiber.Map{"code": err.Error()})
 	} else {
-		c.JSON(200, gin.H{"message": "object create successfully."})
+		jsonResponse(c, 200, fiber.Map{"message": "object create successfully."})
 	}
 }
 
-func (s *Service) GetAll(c *gin.Context) {
-	p := c.DefaultQuery("page", "0")
-	size := c.DefaultQuery("size", "50")
-	perPage := c.DefaultQuery("perPage", "")
+func (s *Service) GetAll(c *fiber.Ctx) {
+	p := c.Query("page", "0")
+	size := c.Query("size", "50")
+	perPage := c.Query("perPage", "")
 
-	search := c.DefaultQuery("search", "")
-	searchField := c.DefaultQuery("field", "")
-	sortField := c.DefaultQuery("sort_field", "id")
-	sortCase := c.DefaultQuery("order", "")
+	search := c.Query("search", "")
+	searchField := c.Query("field", "")
+	sortField := c.Query("sort_field", "id")
+	sortCase := c.Query("order", "")
 
 	if perPage != "" {
 		size = perPage
@@ -154,28 +153,28 @@ func (s *Service) GetAll(c *gin.Context) {
 		"after":    page + 1,
 		"count":    count,
 	}
-	c.JSON(http.StatusOK, gin.H{"result": tran, "paging": paging})
+	jsonResponse(c, http.StatusOK, fiber.Map{"result": tran, "paging": paging})
 }
 
 // GetID gets a transaction by its database ID.
-func (s *Service) GetID(c *gin.Context) {
-	id := c.Param("id")
+func (s *Service) GetID(c *fiber.Ctx) {
+	id := c.Params("id")
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	var tran ebs_fields.EBSResponse
 	if err := db.Where("id = ?", id).First(&tran).Error; err != nil {
-		c.AbortWithStatus(404)
+		c.SendStatus(404)
 	} else {
-		c.JSON(http.StatusOK, gin.H{"result": tran})
+		jsonResponse(c, http.StatusOK, fiber.Map{"result": tran})
 	}
 }
 
-func (s *Service) BrowserDashboard(c *gin.Context) {
+func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	db, _ := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
 
 	var page int
 
-	q := c.DefaultQuery("page", "1")
+	q := c.Query("page", "1")
 	page, _ = strconv.Atoi(q)
 
 	//todo make a pagination funct(s *Service)ion
@@ -196,7 +195,7 @@ func (s *Service) BrowserDashboard(c *gin.Context) {
 	db.Table("transactions").Count(&count)
 	db.Table("transactions").Select("sum(tran_amount) as amount").Scan(&totAmount)
 
-	if c.ShouldBind(&search) == nil {
+	if err := parseJSON(c, &search); err == nil {
 		db.Table("transactions").Where("id >= ? and terminal_id LIKE ?", offset, "%"+search.TerminalID+"%").Order("id desc").Limit(pageSize).Find(&tran)
 	} else {
 		db.Table("transactions").Where("id >= ?", offset).Limit(pageSize).Find(&tran)
@@ -222,26 +221,26 @@ func (s *Service) BrowserDashboard(c *gin.Context) {
 	}
 
 	sumFees := computeSum(terminalFees)
-	c.HTML(http.StatusOK, "table.html", gin.H{"transactions": tran, "count": pager + 1,
+	_ = c.Render("table", fiber.Map{"transactions": tran, "count": pager + 1,
 		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants,
-		"terminal_fees": terminalFees, "sum_fees": sumFees})
+		"terminal_fees": terminalFees, "sum_fees": sumFees}, "base")
 }
 
-func (s *Service) QRStatus(c *gin.Context) {
+func (s *Service) QRStatus(c *fiber.Ctx) {
 
 	q := c.Query("id")
 	if q == "" {
-		c.AbortWithError(http.StatusBadRequest, errors.New("id is required"))
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "id is required"})
 		return
 	}
 
 	data, err := s.getLastTransactions(q)
 	if err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error()})
 		return
 	}
 
-	c.HTML(http.StatusOK, "qr_status.html", gin.H{"transactions": data})
+	_ = c.Render("qr_status", fiber.Map{"transactions": data}, "base")
 }
 
 func (s *Service) getLastTransactions(merchantID string) ([]ebs_fields.QRPurchase, error) {
@@ -260,11 +259,11 @@ func (s *Service) getLastTransactions(merchantID string) ([]ebs_fields.QRPurchas
 	return transactions, nil
 }
 
-func (s *Service) IndexPage(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.html", nil)
+func (s *Service) IndexPage(c *fiber.Ctx) {
+	_ = c.Render("index", fiber.Map{}, "base")
 }
 
-func (s *Service) Stream(c *gin.Context) {
+func (s *Service) Stream(c *fiber.Ctx) {
 	var trans []ebs_fields.EBSResponse
 	var stream bytes.Buffer
 
@@ -272,10 +271,9 @@ func (s *Service) Stream(c *gin.Context) {
 	db.Table("transactions").Find(&trans)
 	json.NewEncoder(&stream).Encode(trans)
 
-	extraHeaders := map[string]string{
-		"Content-Disposition": `attachment; filename="transactions.json"`,
-	}
-	c.DataFromReader(http.StatusOK, int64(stream.Len()), "application/octet-stream", &stream, extraHeaders)
+	c.Set("Content-Disposition", `attachment; filename="transactions.json"`)
+	c.Set("Content-Type", "application/octet-stream")
+	_ = c.SendStream(&stream)
 
 }
 
@@ -285,22 +283,22 @@ type purchasesSum map[string]interface{}
 // used by us for testing and prototyping only. YOU HAVE TO USE PROPER AUTHENTICATION system
 // if you decide to go with it. See apigateway package if you are interested.
 // DEPRECATED as it is not being used and needs proper maintainance
-func (s *Service) DailySettlement(c *gin.Context) {
+func (s *Service) DailySettlement(c *fiber.Ctx) {
 	// get the results from DB
 }
 
-func (s *Service) MerchantTransactionsEndpoint(c *gin.Context) {
+func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 	tid := c.Query("terminal")
 	if tid == "" {
 		// the user didn't sent any id
-		c.JSON(http.StatusBadRequest, gin.H{"message": "terminal id not present in url params",
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "terminal id not present in url params",
 			"code": "terminal_id_not_present_in_request"})
 		return
 	}
 
 	v, err := s.Redis.LRange(tid+":purchase", 0, -1).Result()
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"result": MerchantTransactions{}})
+		jsonResponse(c, http.StatusOK, fiber.Map{"result": MerchantTransactions{}})
 		return
 	}
 	sum := purchaseSum(v)
@@ -313,17 +311,17 @@ func (s *Service) MerchantTransactionsEndpoint(c *gin.Context) {
 
 	p := MerchantTransactions{PurchaseAmount: sum, FailedTransactions: failed, SuccessfulTransactions: succ,
 		AllTransactions: num}
-	c.JSON(http.StatusOK, gin.H{"result": p})
+	jsonResponse(c, http.StatusOK, fiber.Map{"result": p})
 }
 
-func (s *Service) ReportIssueEndpoint(c *gin.Context) {
+func (s *Service) ReportIssueEndpoint(c *fiber.Ctx) {
 	var issue merchantsIssues
-	if err := c.ShouldBindJSON(&issue); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
+	if err := parseJSON(c, &issue); err != nil {
+		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
 	} else {
 		s.Redis.LPush("complaints", &issue)
 		s.Redis.LPush(issue.TerminalID+":complaints", &issue)
-		c.JSON(http.StatusOK, gin.H{"result": "ok"})
+		jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 	}
 }
 

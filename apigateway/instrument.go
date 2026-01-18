@@ -7,15 +7,18 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func Instrumentation() gin.HandlerFunc {
+var registerOnce sync.Once
+
+func Instrumentation() fiber.Handler {
 	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace:   "noebs",
 		Subsystem:   "request",
@@ -65,39 +68,40 @@ func Instrumentation() gin.HandlerFunc {
 
 	// prometheus collector
 	colls := []prometheus.Collector{counterVec, resTime, resSize, reqSize, resTimeSum}
-	for _, v := range colls {
-		err := prometheus.Register(v)
-		if err != nil {
-			panic(err)
+	registerOnce.Do(func() {
+		for _, v := range colls {
+			err := prometheus.Register(v)
+			if err != nil {
+				panic(err)
+			}
 		}
-	}
-	return func(c *gin.Context) {
+	})
+	return func(c *fiber.Ctx) error {
 
-		if c.Request.URL.Path == "/metrics" {
-			c.Next()
-			return
+		if c.Path() == "/metrics" {
+			return c.Next()
 		}
 		start := time.Now()
-		c.Next()
+		err := c.Next()
 		duration := float64(time.Since(start)) * 1e-6 // to millisecond
 
-		rSize := c.Writer.Size()
-		rqSize := c.Request.ContentLength
+		rSize := len(c.Response().Body())
+		rqSize := len(c.Body())
 
-		status := strconv.Itoa(c.Writer.Status())
-		url := getUrl(c)
+		status := strconv.Itoa(c.Response().StatusCode())
+		url := c.Path()
+		routePath := ""
+		if c.Route() != nil {
+			routePath = c.Route().Path
+		}
 
-		counterVec.WithLabelValues(status, c.Request.Method, c.HandlerName(), c.Request.Host, url).Inc()
+		counterVec.WithLabelValues(status, c.Method(), routePath, string(c.Context().Host()), url).Inc()
 		resTime.Observe(duration)
 		resSize.Observe(float64(rSize))
 		reqSize.Observe(float64(rqSize))
 		resTimeSum.Observe(duration)
-
+		return err
 	}
-}
-
-func getUrl(c *gin.Context) string {
-	return c.Request.URL.Path
 }
 
 // SyncLedger sends the user data to the server endpoint (dapi.noebs.sd) for backup

@@ -14,8 +14,7 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
 	"github.com/pquerna/otp/totp"
@@ -25,79 +24,69 @@ import (
 
 type Auther interface {
 	VerifyJWT(token string) (*gateway.TokenClaims, error)
-	GenerateJWT(token string) (string, error)
+	GenerateJWT(userID uint, mobile string) (string, error)
 }
 
 // GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
 // the user must submit their email to generate a unique token per email.
 // FIXME #59 #58 #61 api generation should be decoupled from apigateway package
-func (s *Service) GenerateAPIKey(c *gin.Context) {
+func (s *Service) GenerateAPIKey(c *fiber.Ctx) error {
 	var m map[string]string
-	if err := c.ShouldBindJSON(&m); err != nil {
-		if _, ok := m["email"]; ok {
-			k, _ := gateway.GenerateAPIKey()
-			s.Redis.SAdd("apikeys", k)
-			c.JSON(http.StatusOK, gin.H{"result": k})
-			return
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "missing_field"})
-			return
-		}
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "error in email"})
-
+	if err := parseJSON(c, &m); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "bad_request"})
 	}
+	if _, ok := m["email"]; ok {
+		k, _ := gateway.GenerateAPIKey()
+		s.Redis.SAdd("apikeys", k)
+		return c.Status(http.StatusOK).JSON(fiber.Map{"result": k})
+	}
+	return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "missing_field"})
 }
 
 // ApiKeyMiddleware used to authenticate clients using X-Email and X-API-Key headers
 // FIXME issue #58 #61
-func (s *Service) ApiKeyMiddleware(c *gin.Context) {
-	email := c.GetHeader("X-Email")
-	key := c.GetHeader("X-API-Key")
+func (s *Service) ApiKeyMiddleware(c *fiber.Ctx) error {
+	email := c.Get("X-Email")
+	key := c.Get("X-API-Key")
 	if email == "" || key == "" {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
 	res, err := s.Redis.HGet("api_keys", email).Result()
 	if err != redis.Nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
 	if key == res {
-		c.Next()
+		return c.Next()
 	} else {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
 }
 
 // FIXME issue #58 #61
-func (s *Service) IpFilterMiddleware(c *gin.Context) {
-	ip := c.ClientIP()
-	if u := c.GetString("mobile"); u != "" {
+func (s *Service) IpFilterMiddleware(c *fiber.Ctx) error {
+	ip := c.IP()
+	if u := getMobile(c); u != "" {
 		s.Redis.HIncrBy(u+":ips_count", ip, 1)
-		c.Next()
+		return c.Next()
 	} else {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "unauthorized_access"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized_access"})
 	}
 }
 
 // LoginHandler noebs signin page
-func (s *Service) LoginHandler(c *gin.Context) {
+func (s *Service) LoginHandler(c *fiber.Ctx) error {
 	var req ebs_fields.User
-	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
+	if err := bindJSON(c, &req); err != nil {
 		// The request is wrong
 		s.Logger.Printf("The request is wrong. %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	s.Logger.Printf("the processed request is: %+v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
 		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
 	}
 	if !u.IsVerified {
 		// user has not verified their phone number with OTP
@@ -106,17 +95,15 @@ func (s *Service) LoginHandler(c *gin.Context) {
 		// return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong password entered", "code": "wrong_password"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "wrong password entered", "code": "wrong_password"})
 	}
 
-	token, err := s.Auth.GenerateJWT(u.Mobile)
+	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
+		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
-	c.Writer.Header().Set("Authorization", token)
-	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
+	c.Set("Authorization", token)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": token, "user": u})
 }
 
 // SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
@@ -124,56 +111,58 @@ func (s *Service) LoginHandler(c *gin.Context) {
 //
 // NOTES
 // This function only allows one-time authentication VIA the same device that the user originally has signed up with.
-func (s *Service) SingleLoginHandler(c *gin.Context) {
+func (s *Service) SingleLoginHandler(c *fiber.Ctx) error {
 
 	var req gateway.Token
-	c.ShouldBindWith(&req, binding.JSON)
+	_ = parseJSON(c, &req)
 	s.Logger.Printf("the processed request is: %v\n", req)
 
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
 	}
 
 	if _, encErr := noebsCrypto.VerifyWithHeaders(u.PublicKey, req.Signature, req.Message); encErr != nil {
 		s.Logger.Printf("invalid signature in refresh: %v", encErr)
-		c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": encErr.Error(), "code": "bad_request"})
 	}
 
 	// Validate the otp using user's stored public key
 	if totp.Validate(req.Message, u.EncodePublickey32()) == false {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "wrong otp entered", "code": "wrong_otp"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "wrong otp entered", "code": "wrong_otp"})
 	}
-	token, err := s.Auth.GenerateJWT(u.Mobile)
+	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
+		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
-	c.Writer.Header().Set("Authorization", token)
-	c.JSON(http.StatusOK, gin.H{"authorization": token, "user": u})
+	c.Set("Authorization", token)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": token, "user": u})
 }
 
 // RefreshHandler generates a new access token to the user using
 // their signed public key.
 // the user will sign their username with their private key, and noebs will verify
 // the signature using the stored public key for the user
-func (s *Service) RefreshHandler(c *gin.Context) {
+func (s *Service) RefreshHandler(c *fiber.Ctx) error {
 	var req gateway.Token
-	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
+	if err := bindJSON(c, &req); err != nil {
 		// The request is wrong
 		s.Logger.Printf("The request is wrong. %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if e, ok := err.(*jwt.ValidationError); ok {
 		if e.Errors&jwt.ValidationErrorExpired != 0 {
 			s.Logger.Info("refresh: auth username is: ", claims.Mobile)
-			user, _ := ebs_fields.GetUserByMobile(claims.Mobile, s.Db)
+			var user ebs_fields.User
+			if claims.UserID != 0 {
+				if err := s.Db.First(&user, claims.UserID).Error; err != nil {
+					user, _ = ebs_fields.GetUserByMobile(claims.Mobile, s.Db)
+				}
+			} else {
+				user, _ = ebs_fields.GetUserByMobile(claims.Mobile, s.Db)
+			}
 			// should verify signature here...
 			if user.PublicKey == "" {
 				s.Logger.Printf("user: %s has no registered pubkey", user.Mobile)
@@ -181,48 +170,44 @@ func (s *Service) RefreshHandler(c *gin.Context) {
 			s.Logger.Printf("grabbed user is: %#v", user.Mobile)
 			if _, encErr := noebsCrypto.VerifyWithHeaders(user.PublicKey, req.Signature, req.Message); encErr != nil {
 				s.Logger.Printf("invalid signature in refresh: %v", encErr)
-				c.JSON(http.StatusBadRequest, gin.H{"message": encErr.Error(), "code": "bad_request"})
-				return
+				return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": encErr.Error(), "code": "bad_request"})
 			}
-			auth, _ := s.Auth.GenerateJWT(claims.Mobile)
-			c.Writer.Header().Set("Authorization", auth)
-			c.JSON(http.StatusOK, gin.H{"authorization": auth})
+			auth, _ := s.Auth.GenerateJWT(user.ID, user.Mobile)
+			c.Set("Authorization", auth)
+			return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": auth})
 
 		} else {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
-			return
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 		}
 	} else if err == nil {
 		// FIXME it is better to let the endpoint explicitly Get the claim off the user
 		//  as we will assume the auth server will reside in a different domain!
 		s.Logger.Printf("the username is: %s", claims.Mobile)
-		auth, _ := s.Auth.GenerateJWT(claims.Mobile)
-		c.Writer.Header().Set("Authorization", auth)
-		c.JSON(http.StatusOK, gin.H{"authorization": auth})
+		auth, _ := s.Auth.GenerateJWT(claims.UserID, claims.Mobile)
+		c.Set("Authorization", auth)
+		return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": auth})
 	}
+	return nil
 }
 
 // CreateUser to register a new user to noebs
-func (s *Service) CreateUser(c *gin.Context) {
+func (s *Service) CreateUser(c *fiber.Ctx) error {
 	u := ebs_fields.User{}
-	if err := c.ShouldBindBodyWith(&u, binding.JSON); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
-		return
+	if err := bindJSON(c, &u); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error()})
 	}
 	// FIXME: Optimize these checks
 	// Make sure user is unique
 	var tmpUser ebs_fields.User
 	if res := s.Db.Where("mobile = ?", u.Mobile).First(&tmpUser); res.Error == nil {
 		// User already exists
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this mobile number already exists"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "User with this mobile number already exists"})
 	}
 	// Make sure username is unique
 	if u.Username != "" {
 		if res := s.Db.Where("username = ?", u.Username).First(&tmpUser); res.Error == nil {
 			// User already exists
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "User with this username already exists"})
-			return
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "User with this username already exists"})
 		}
 	} else {
 		// Currently we set the username to be the same as the mobile number
@@ -232,49 +217,45 @@ func (s *Service) CreateUser(c *gin.Context) {
 	// validate u.Password to include at least one capital letter, one symbol and one number
 	// and that it is at least 8 characters long
 	if !validatePassword(u.Password) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Password must be at least 8 characters long, and must include at least one capital letter, one symbol and one number", "code": "password_invalid"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Password must be at least 8 characters long, and must include at least one capital letter, one symbol and one number", "code": "password_invalid"})
 	}
 
 	// make sure that the user doesn't exist in the database
 	if err := u.HashPassword(); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error()})
 	}
 	if err := s.Db.Create(&u).Error; err != nil {
 		// unable to create this user; see possible reasons
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "duplicate_username"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "duplicate_username"})
 	}
-	c.JSON(http.StatusCreated, gin.H{"ok": "object was successfully created", "details": u})
+	c.Status(http.StatusCreated).JSON(fiber.Map{"ok": "object was successfully created", "details": u})
 	go gateway.SyncLedger(u)
+	return nil
 }
 
-func (s *Service) VerifyOTP(c *gin.Context) {
+func (s *Service) VerifyOTP(c *fiber.Ctx) error {
 	var req ebs_fields.User
-	c.ShouldBindWith(&req, binding.JSON)
+	_ = parseJSON(c, &req)
 	if req.OTP == "" || req.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "otp was not sent", "code": "empty_otp"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "otp was not sent", "code": "empty_otp"})
 	}
 	s.Logger.Printf("the processed request is: %v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
 	}
 
 	// I think this one is buggy
 	if valid := u.VerifyOtp(req.OTP); !valid {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid otp", "code": "invalid_otp"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Invalid otp", "code": "invalid_otp"})
 	}
 	s.Db.Model(&req).Where("mobile = ?", req.Mobile).Update("is_password_otp", true)
 	s.Db.Model(&req).Where("mobile = ?", req.Mobile).Update("is_verified", true)
-	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
 // BalanceStep part of our 2fa steps for account recovery
-func (s *Service) BalanceStep(c *gin.Context) {
+func (s *Service) BalanceStep(c *fiber.Ctx) error {
 	// FIXME(adonese): we need to check for `is_password_otp` = true
 	type data struct {
 		ebs_fields.ConsumerBalanceFields
@@ -283,12 +264,11 @@ func (s *Service) BalanceStep(c *gin.Context) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint // EBS simulator endpoint url goes here.
 
 	var req data
-	c.ShouldBindWith(&req, binding.JSON)
+	_ = parseJSON(c, &req)
 	user, _ := ebs_fields.NewUserWithCards(req.Mobile, s.Db)
 	var isMatched bool
 	if user.Cards == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "no matching card was found", "code": "card_not_matched"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "no matching card was found", "code": "card_not_matched"})
 	}
 	for _, card := range user.Cards {
 		if req.Pan == card.Pan {
@@ -297,8 +277,7 @@ func (s *Service) BalanceStep(c *gin.Context) {
 		}
 	}
 	if !isMatched {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "no matching card was found", "code": "card_not_matched"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "no matching card was found", "code": "card_not_matched"})
 	}
 
 	// make transaction to ebs here
@@ -309,79 +288,69 @@ func (s *Service) BalanceStep(c *gin.Context) {
 	if err != nil {
 		// there's an error in parsing the struct. Server error.
 		er := ebs_fields.ErrorDetails{Details: nil, Code: http.StatusBadRequest, Message: "Unable to parse the request", Status: ebs_fields.ParsingError}
-		c.AbortWithStatusJSON(http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: er})
-		return
+		return c.Status(http.StatusBadRequest).JSON(ebs_fields.ErrorResponse{ErrorDetails: er})
 	}
 
 	// the only part left is fixing EBS errors. Formalizing them per se.
 	_, _, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 	if ebsErr != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid credentials", "code": "transaction_failed"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Invalid credentials", "code": "transaction_failed"})
 	}
 
 	// generate a jwt here
-	token, err := s.Auth.GenerateJWT(mobile)
+	token, err := s.Auth.GenerateJWT(user.ID, mobile)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
+		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
-	c.Writer.Header().Set("Authorization", token)
-	c.JSON(http.StatusOK, gin.H{"result": "ok", "authorization": token})
-
+	c.Set("Authorization", token)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "authorization": token})
 }
 
 // ChangePassword used to change a user's password using their old one
-func (s *Service) ChangePassword(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) ChangePassword(c *fiber.Ctx) error {
+	mobile := getMobile(c)
 	var req ebs_fields.User
-	if err := c.ShouldBindWith(&req, binding.JSON); err != nil || req.NewPassword == "" {
+	if err := bindJSON(c, &req); err != nil || req.NewPassword == "" {
 		s.Logger.Printf("The request is wrong. %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request.", "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Bad request.", "code": "bad_request"})
 	}
 	s.Logger.Printf("the processed request is: %+v\n", req)
 	u := ebs_fields.User{}
 	if notFound := s.Db.Where("mobile = ?", strings.ToLower(mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
 		// service id is not found
 		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		c.JSON(http.StatusBadRequest, gin.H{"message": notFound.Error(), "code": "not_found"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
 	}
 
 	// Create and update the user's password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 8)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
+		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
 	if err := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", u.Mobile).Update("password", string(hashedPassword)).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, err)
-		return
+		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"result": "ok", "user": u})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": u})
 }
 
 // VerifyFirebase used to confirm that the user's token is valid
-func (s *Service) VerifyFirebase(c *gin.Context) {
+func (s *Service) VerifyFirebase(c *fiber.Ctx) error {
 	var req ebs_fields.User
-	if err := c.ShouldBindWith(&req, binding.JSON); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+	if err := bindJSON(c, &req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	ctx := context.Background()
 	fb, err := s.FirebaseApp.Auth(ctx)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "internal_error"})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "internal_error"})
 	}
 	token, err := fb.VerifyIDToken(ctx, req.FirebaseIDToken)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "internal_error"})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "internal_error"})
 	}
 	s.Logger.Printf("Verified ID token: %v\n", token)
+	return nil
 }
 
 func (s *Service) SendPush(data PushData) error {
@@ -437,38 +406,35 @@ func (s *Service) SendPush(data PushData) error {
 }
 
 // GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
-func (s *Service) GenerateSignInCode(c *gin.Context, allowInsecure bool) {
+func (s *Service) GenerateSignInCode(c *fiber.Ctx, allowInsecure bool) error {
 	var req gateway.Token
-	c.ShouldBindWith(&req, binding.JSON)
+	_ = parseJSON(c, &req)
 	s.Logger.Printf("the req is: %+v", req)
 	// default username to mobile, in case username was not provided
 	if req.Mobile == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Mobile number was not sent", "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Mobile number was not sent", "code": "bad_request"})
 	}
 	user, _ := ebs_fields.GetUserByMobile(req.Mobile, s.Db)
 	key, err := user.GenerateOtp()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	log.Printf("the key is: %s", key)
 	// this function doesn't have to be blocking.
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
-	c.JSON(http.StatusCreated, gin.H{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
+	return c.Status(http.StatusCreated).JSON(fiber.Map{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
 }
 
 // APIAuth API-Key middleware. Currently is used by consumer services
-func (s *Service) APIAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if key := c.GetHeader("api-key"); key != "" {
+func (s *Service) APIAuth() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if key := c.Get("api-key"); key != "" {
 			if !isMember("apikeys", key, s.Redis) {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": "wrong_api_key",
+				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "wrong_api_key",
 					"message": "visit https://soluspay.net/contact for a key"})
-				return
 			}
 		}
-		c.Next()
+		return c.Next()
 	}
 
 }

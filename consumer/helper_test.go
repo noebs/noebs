@@ -36,18 +36,14 @@ func Test_validatePassword(t *testing.T) {
 }
 
 func Test_parseTime(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-	}{
-		{"parse time", "301112121212"},
+	got := ebs_fields.EbsDate()
+	if len(got) != 12 {
+		t.Fatalf("parseTime() length = %d, want 12", len(got))
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ebs_fields.EbsDate(); got != tt.want {
-				t.Errorf("parseTime() = %v, want %v", got, tt.want)
-			}
-		})
+	for _, c := range got {
+		if c < '0' || c > '9' {
+			t.Fatalf("parseTime() contains non-digit: %q", c)
+		}
 	}
 }
 

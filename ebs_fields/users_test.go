@@ -399,7 +399,7 @@ func TestCreateKYCAndPassportForExistingUser(t *testing.T) {
 			// Check if user exists
 			var user User
 			if err := db.First(&user, "mobile = ?", tc.userMobile).Error; err != nil {
-				t.Errorf("User does not exist" + err.Error())
+				t.Errorf("User does not exist: %v", err)
 				return
 			}
 

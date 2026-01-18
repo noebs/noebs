@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
 	"github.com/go-redis/redis/v7"
 	"github.com/golang-jwt/jwt"
 	log "github.com/sirupsen/logrus"
@@ -18,33 +19,34 @@ var apiKey = make([]byte, 16)
 
 // AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
 // to get a username from the payload (maybe change it to mobile number at somepoint)
-func (a *JWTAuth) AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
+func (a *JWTAuth) AuthMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		// just handle the simplest case, authorization is not provided.
-		h := c.GetHeader("Authorization")
+		h := c.Get("Authorization")
 		if h == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "empty header was sent",
-				"code": "unauthorized"})
-			return
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "empty header was sent", "code": "unauthorized"})
 		}
 		claims, err := a.VerifyJWT(h)
 		log.Printf("They key is: %v", a.Key)
 		if e, ok := err.(*jwt.ValidationError); ok {
 			if e.Errors&jwt.ValidationErrorExpired != 0 {
 				// in this case you might need to give it another spin
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Token has expired", "code": "jwt_expired"})
-				return
+				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
 			} else {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Malformed token", "code": "jwt_malformed"})
-				return
+				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 			}
 		} else if err == nil {
 			// FIXME it is better to let the endpoint explicitly Get the claim off the user
 			//  as we will assume the auth server will reside in a different domain!
-			c.Set("mobile", claims.Mobile)
+			c.Locals("user_id", claims.UserID)
+			if isValidMobile(claims.Mobile) {
+				c.Locals("mobile", claims.Mobile)
+				c.Locals("username", claims.Mobile)
+			}
 			log.Printf("the username is: %s", claims.Mobile)
-			c.Next()
+			return c.Next()
 		}
+		return nil
 	}
 
 }
@@ -59,19 +61,19 @@ func GenerateSecretKey(n int) ([]byte, error) {
 }
 
 // NoebsCors reads from noebs config to setup cors headers for the server
-func NoebsCors(headers []string) func(c *gin.Context) {
+func NoebsCors(headers []string) fiber.Handler {
 	cors := strings.Join(headers, ",")
-	return func(c *gin.Context) {
-		if c.Request.Method != "OPTIONS" {
-			c.Header("Access-Control-Allow-Origin", cors)
-			c.Next()
+	return func(c *fiber.Ctx) error {
+		if c.Method() != fiber.MethodOptions {
+			c.Set("Access-Control-Allow-Origin", cors)
+			return c.Next()
 		} else {
-			c.Header("Access-Control-Allow-Origin", cors)
-			c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-			c.Header("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, X-CSRF-TOKEN")
-			c.Header("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
-			c.Header("Content-Type", "application/json")
-			c.AbortWithStatus(http.StatusOK)
+			c.Set("Access-Control-Allow-Origin", cors)
+			c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+			c.Set("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, X-CSRF-TOKEN")
+			c.Set("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
+			c.Set("Content-Type", "application/json")
+			return c.SendStatus(http.StatusOK)
 		}
 	}
 }
@@ -105,3 +107,9 @@ var (
 	errNoServiceID    = errors.New("empty Service ID was entered")
 	errObjectNotFound = errors.New("object not found")
 )
+
+var mobileRegex = regexp.MustCompile(`^[0-9]{10}$`)
+
+func isValidMobile(mobile string) bool {
+	return mobileRegex.MatchString(mobile)
+}

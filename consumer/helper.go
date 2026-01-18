@@ -173,7 +173,7 @@ func (s *Service) Pusher() {
 		// In the case we want to send a push notification to the receipient
 		//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
 		// But the problem, is that we have lost the reference to the original sender
-		s.Logger.Info("the data is: %+v", data)
+		s.Logger.Infof("the data is: %+v", data)
 		// we are doing too much of db and logic here, let's simplify it
 		if data.Phone != "" {
 			user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)

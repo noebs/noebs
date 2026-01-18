@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,11 +14,9 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/utils"
 	"github.com/google/uuid"
-	"gorm.io/gorm/clause"
-
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"github.com/go-redis/redis/v7"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm/clause"
 	"github.com/noebs/ipin"
 	"github.com/sirupsen/logrus"
 )
@@ -29,39 +26,34 @@ const (
 )
 
 // CardFromNumber gets the gussesed associated mobile number to this pan
-func (s *Service) CardFromNumber(c *gin.Context) {
+func (s *Service) CardFromNumber(c *fiber.Ctx) error {
 	// the user must submit in their mobile number *ONLY*, and it is get
-	q, ok := c.GetQuery("mobile_number")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "mobile number is empty", "code": "empty_mobile_number"})
-		return
+	q := c.Query("mobile_number")
+	if q == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "mobile number is empty", "code": "empty_mobile_number"})
 	}
 	// now search through redis for this mobile number!
 	// first check if we have already collected that number before
 	pan, err := s.Redis.Get(q + ":pan").Result()
 	if err == nil {
-		c.JSON(http.StatusOK, gin.H{"result": pan})
-		return
+		return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
 	}
 	username, err := s.Redis.Get(q).Result()
 	if err == redis.Nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
 	}
 	if pan, ok := utils.PanfromMobile(username, s.Redis); ok {
-		c.JSON(http.StatusOK, gin.H{"result": pan})
+		return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
 	}
-
 }
 
 // GetCards Get all cards for the currently authorized user
-func (s *Service) GetCards(c *gin.Context) {
-	username := c.GetString("mobile")
+func (s *Service) GetCards(c *fiber.Ctx) error {
+	username := getMobile(c)
 	if username == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		return
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
 	}
 	userCards, err := ebs_fields.GetCardsOrFail(username, s.Db)
 	if err != nil {
@@ -70,71 +62,66 @@ func (s *Service) GetCards(c *gin.Context) {
 			"code":    "unable to get results from redis",
 			"message": err.Error(),
 		}).Info("unable to get results from redis")
-		c.JSON(http.StatusNotFound, gin.H{"cards": nil, "main_card": nil})
-		return
+		return c.Status(http.StatusNotFound).JSON(fiber.Map{"cards": nil, "main_card": nil})
 	}
-	c.JSON(http.StatusOK, gin.H{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
 }
 
-func (s *Service) AddFirebaseID(c *gin.Context) {
-	username := c.GetString("mobile")
+func (s *Service) AddFirebaseID(c *fiber.Ctx) error {
+	username := getMobile(c)
 	type data struct {
 		Token string `json:"token"`
 	}
 
 	var req data
-	c.MustBindWith(&req, binding.JSON)
+	if err := bindJSON(c, &req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
 	if res := s.Db.Debug().Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "mobile"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{"device_id": req.Token}),
 	}).Create(&ebs_fields.User{Mobile: username, DeviceID: req.Token}); res.Error != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": res.Error, "code": "db_error"})
-		return
-	} else {
-		c.JSON(http.StatusOK, nil)
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": res.Error, "code": "db_error"})
 	}
+	return c.Status(http.StatusOK).JSON(nil)
 }
 
 // Beneficiaries manage all of beneficiaries data
-func (s *Service) Beneficiaries(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) Beneficiaries(c *fiber.Ctx) error {
+	mobile := getMobile(c)
 
 	var req ebs_fields.Beneficiary
-	c.ShouldBindWith(&req, binding.JSON)
+	_ = parseJSON(c, &req)
 	s.Logger.Printf("the data in beneficiary is: %+v", req)
 	user, err := ebs_fields.NewUserWithBeneficiaries(mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	if c.Request.Method == "POST" {
+	if c.Method() == fiber.MethodPost {
 		user.UpsertBeneficiary([]ebs_fields.Beneficiary{req})
-		c.JSON(http.StatusCreated, nil)
-		return
-	} else if c.Request.Method == "GET" {
-		c.JSON(http.StatusOK, user.Beneficiaries)
-		return
-	} else if c.Request.Method == "DELETE" {
+		return c.Status(http.StatusCreated).JSON(nil)
+	} else if c.Method() == fiber.MethodGet {
+		return c.Status(http.StatusOK).JSON(user.Beneficiaries)
+	} else if c.Method() == fiber.MethodDelete {
 		req.UserID = user.ID
 		ebs_fields.DeleteBeneficiary(req, s.Db)
-		c.JSON(http.StatusNoContent, nil)
+		return c.Status(http.StatusNoContent).JSON(nil)
 	}
+	return nil
 }
 
 // AddCards Allow users to add card to their profile
 // if main_card was set to true, then it will be their main card AND
 // it will remove the previously selected one FIXME
-func (s *Service) AddCards(c *gin.Context) {
+func (s *Service) AddCards(c *fiber.Ctx) error {
 	var listCards []ebs_fields.Card
-	username := c.GetString("mobile")
-	if err := c.ShouldBindBodyWith(&listCards, binding.JSON); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
-		return
+	username := getMobile(c)
+	if err := parseJSON(c, &listCards); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 
 	// manually zero-valueing card ID to avoid gorm upserting it
@@ -143,92 +130,76 @@ func (s *Service) AddCards(c *gin.Context) {
 		listCards[idx].UserID = user.ID
 	}
 	if err := user.UpsertCards(listCards); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
-	c.JSON(http.StatusOK, gin.H{"code": "ok", "message": "cards added"})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"code": "ok", "message": "cards added"})
 }
 
 // EditCard allow authorized users to edit their cards (e.g., edit pan / expdate)
 // this updates any card via
-func (s *Service) EditCard(c *gin.Context) {
+func (s *Service) EditCard(c *fiber.Ctx) error {
 	var req ebs_fields.Card
-	err := c.ShouldBindWith(&req, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
-		return
+	if err := bindJSON(c, &req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
-	username := c.GetString("mobile")
+	username := getMobile(c)
 	if username == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		return
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
 	}
 	// If no ID was provided that means we are adding a new card. We don't want that!
 	if req.CardIdx == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "card idx is empty", "code": "card_idx_empty"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "card idx is empty", "code": "card_idx_empty"})
 	}
 	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
 	req.UserID = user.ID
 	if err := ebs_fields.UpdateCard(req, s.Db); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
-		return
-	} else {
-		c.JSON(http.StatusCreated, gin.H{"result": "ok"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
+	return c.Status(http.StatusCreated).JSON(fiber.Map{"result": "ok"})
 }
 
 // RemoveCard allow authorized users to remove their card
 // when the send the card id (from its list in app view)
-func (s *Service) RemoveCard(c *gin.Context) {
-	username := c.GetString("mobile")
+func (s *Service) RemoveCard(c *fiber.Ctx) error {
+	username := getMobile(c)
 	if username == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized access", "code": "unauthorized_access"})
-		return
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
 	}
 	var card ebs_fields.Card
-	err := c.ShouldBindWith(&card, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
-		return
+	if err := bindJSON(c, &card); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
 	s.Logger.Printf("the card is: %v+#", card)
 	// If no ID was provided that means we are adding a new card. We don't want that!
 	if card.CardIdx == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "card idx is empty", "code": "card_idx_empty"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "card idx is empty", "code": "card_idx_empty"})
 	}
 
 	user, err := ebs_fields.GetUserByMobile(username, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "unmarshalling_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
 	card.UserID = user.ID
 	if err := ebs_fields.DeleteCard(card, s.Db); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err})
-		return
-	} else {
-		c.JSON(http.StatusOK, gin.H{"result": "ok"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok"})
 }
 
 // NecToName gets an nec number from the context and maps it to its meter number
-func (s *Service) NecToName(c *gin.Context) {
+func (s *Service) NecToName(c *fiber.Ctx) error {
 	if nec := c.Query("nec"); nec != "" {
 		name, err := s.Redis.HGet("meters", nec).Result()
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "No user found with this NEC", "code": "nec_not_found"})
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user found with this NEC", "code": "nec_not_found"})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"result": name})
+			return c.Status(http.StatusOK).JSON(fiber.Map{"result": name})
 		}
 	}
+	return nil
 }
 
 var billerChan = make(chan billerForm)
@@ -264,26 +235,26 @@ func (s Service) BillerHooks() {
 // - We are not allowed to store value, we cannot save users money in our account
 // - We cannot store user's payment information (pan, ipin, exp date) in our system
 // - And we don't want the user to everytime login into the app and key in their payment information
-func (s *Service) PaymentOrder() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		mobile := c.GetString("mobile")
+func (s *Service) PaymentOrder() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		mobile := getMobile(c)
 		var req ebs_fields.Token
 		token, _ := uuid.NewRandom()
 		user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
 		if err != nil {
 			log.Printf("error in retrieving card: %v", err)
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 		}
 
 		// there shouldn't be any error here, but still
-		if err := c.ShouldBindBodyWith(&req, binding.JSON); err != nil {
+		if err := bindJSON(c, &req); err != nil {
 			log.Printf("error in retrieving card: %v", err)
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 		}
 		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, user.Cards[0].IPIN, token.String())
 		if err != nil {
 			log.Printf("error in encryption: %v", err)
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "bad_request", "message": err.Error()})
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 		}
 		data := ebs_fields.ConsumerCardTransferFields{
 			ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
@@ -306,13 +277,12 @@ func (s *Service) PaymentOrder() gin.HandlerFunc {
 			ToCard: req.ToCard,
 		}
 		updatedRequest, _ := json.Marshal(&data)
-		// Modify gin's context to update the request body
-		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(updatedRequest))
-		c.Request.ContentLength = int64(len(updatedRequest))
-		c.Request.Header.Set("Content-Type", "application/json")
+		// Modify request body for downstream handlers
+		c.Request().SetBody(updatedRequest)
+		c.Request().Header.SetContentType("application/json")
 
 		// Call the next handler
-		c.Next()
+		return c.Next()
 
 		// pubsub := s.Redis.Subscribe("chan_cashouts")
 		// // Wait for confirmation that subscription is created before publishing anything.
@@ -655,52 +625,50 @@ func (s *Service) GetIpinPubKey() error {
 }
 
 // Notifications handles various crud operations (json)
-func (s *Service) Notifications(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) Notifications(c *fiber.Ctx) error {
+	mobile := getMobile(c)
 	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
 	if err != nil {
 		s.Logger.Printf("Error finding user: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	var notifications []PushData
 	s.Db.Where("user_mobile = ?", user.Mobile).Find(&notifications)
-	c.JSON(http.StatusOK, notifications)
+	if err := c.Status(http.StatusOK).JSON(notifications); err != nil {
+		return err
+	}
 	var pushdata PushData
 	pushdata.UpdateIsRead(mobile, s.Db)
+	return nil
 }
 
 // GetUser returns the user profile object for the currently logged in user
-func (s *Service) GetUser(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) GetUser(c *fiber.Ctx) error {
+	mobile := getMobile(c)
 
 	var profile ebs_fields.UserProfile
 	if res := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", mobile).First(&profile); res.Error != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": res.Error.Error(), "code": "database_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": res.Error.Error(), "code": "database_error"})
 	}
-	c.JSON(http.StatusOK, profile)
+	return c.Status(http.StatusOK).JSON(profile)
 }
 
 // UpdateUser allows the currently logged in user to update their profile info
-func (s *Service) UpdateUser(c *gin.Context) {
+func (s *Service) UpdateUser(c *fiber.Ctx) error {
 	var profile ebs_fields.UserProfile
-	err := c.ShouldBindWith(&profile, binding.JSON)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "binding_error"})
-		return
+	if err := bindJSON(c, &profile); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "binding_error"})
 	}
 
-	mobile := c.GetString("mobile")
+	mobile := getMobile(c)
 	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
 	var tmpUser ebs_fields.User
 	if res := s.Db.Where("username = ?", profile.Username).First(&tmpUser); res.Error == nil && tmpUser.Mobile != user.Mobile {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"code": "duplication_error", "message": "username already exists"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "duplication_error", "message": "username already exists"})
 	}
 	user.Fullname = profile.Fullname
 	user.Username = profile.Username
@@ -708,56 +676,48 @@ func (s *Service) UpdateUser(c *gin.Context) {
 	user.Birthday = profile.Birthday
 	user.Gender = profile.Gender
 	if err := ebs_fields.UpdateUser(user, s.Db); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": "database_error", "message": err.Error()})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok"})
 }
 
-func (s *Service) GetUserLanguage(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) GetUserLanguage(c *fiber.Ctx) error {
+	mobile := getMobile(c)
 	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
 	if err != nil {
 		s.Logger.Printf("ERROR: could not get user from by mobile: %v", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
-	c.JSON(http.StatusOK, gin.H{"language": user.Language})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"language": user.Language})
 }
 
-func (s *Service) SetUserLanguage(c *gin.Context) {
-	mobile := c.GetString("mobile")
+func (s *Service) SetUserLanguage(c *fiber.Ctx) error {
+	mobile := getMobile(c)
 	language := c.Query("language")
 	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
 	if err != nil {
 		s.Logger.Printf("ERROR: could not get user from by mobile: %v", err.Error())
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "database_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
 	if language == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "You must set a language", "code": "client_error"})
-		return
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "You must set a language", "code": "client_error"})
 	}
 	user.Language = language
 	if err := ebs_fields.UpdateUser(user, s.Db); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error(), "code": "database_error"})
-		return
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
-	c.JSON(http.StatusOK, gin.H{"result": "ok"})
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok"})
 }
 
-func (s *Service) KYC(ctx *gin.Context) {
+func (s *Service) KYC(ctx *fiber.Ctx) error {
 	// Decode the request body into the CreateUserRequest struct
 	var request ebs_fields.KYCPassport
-	err := ctx.ShouldBindJSON(&request)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+	if err := bindJSON(ctx, &request); err != nil {
+		return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	if err := ebs_fields.UpdateUserWithKYC(s.Db, &request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"message": err.Error(), "code": "bad_request"})
-		return
+		return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	// Return a success message
-	ctx.JSON(http.StatusOK, gin.H{"message": "KYC created successfully", "code": "ok"})
+	return ctx.Status(http.StatusOK).JSON(fiber.Map{"message": "KYC created successfully", "code": "ok"})
 }

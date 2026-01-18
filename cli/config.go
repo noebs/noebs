@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	firebase "firebase.google.com/go/v4"
 	gateway "github.com/adonese/noebs/apigateway"
@@ -17,8 +17,9 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/utils"
 	"github.com/bradfitz/iter"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
+	"github.com/gofiber/adaptor/v2"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/template/html/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm/logger"
@@ -42,8 +43,38 @@ func loadConfig() []byte {
 	return configFile
 }
 
+func resolveDashboardTemplateDir() string {
+	candidates := []string{
+		"./dashboard/template",
+		"../dashboard/template",
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			return filepath.Clean(candidate)
+		}
+	}
+	return "./dashboard/template"
+}
+
+func resolveFirebaseCredentialsPath() (string, error) {
+	candidates := []string{
+		"firebase-sdk.json",
+		"../firebase-sdk.json",
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return filepath.Clean(candidate), nil
+		}
+	}
+	return "", fmt.Errorf("firebase credentials file not found")
+}
+
 func getFirebase() (*firebase.App, error) {
-	opt := option.WithCredentialsFile("firebase-sdk.json")
+	credPath, err := resolveFirebaseCredentialsPath()
+	if err != nil {
+		return nil, err
+	}
+	opt := option.WithCredentialsFile(credPath)
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing app: %v", err)
@@ -65,182 +96,178 @@ func verifyToken(f *firebase.App, token string) (string, error) {
 	return idToken.Audience, nil
 }
 
-// GetMainEngine function responsible for getting all of our routes to be delivered for gin
-func GetMainEngine() *gin.Engine {
+// GetMainEngine function responsible for getting all of our routes to be delivered for fiber
+func GetMainEngine() *fiber.App {
+	templateDir := resolveDashboardTemplateDir()
+	engine := html.New(templateDir, ".html")
+	engine.AddFunc("N", iter.N)
+	engine.AddFunc("time", dashboard.TimeFormatter)
 
-	if !noebsConfig.IsDebug {
-		gin.SetMode(gin.DebugMode)
-	}
-	route := gin.Default()
-	instrument := gateway.Instrumentation()
-	route.Use(instrument)
-	// route.Use(sentrygin.New(sentrygin.Options{}))
-	route.HandleMethodNotAllowed = true
-	route.POST("/ebs/*all", merchantServices.EBS)
-	route.GET("/ws", wsAdapter(hub))
+	route := fiber.New(fiber.Config{Views: engine, ViewsLayout: "base"})
+	route.Use(gateway.Instrumentation())
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
-	route.SetFuncMap(template.FuncMap{"N": iter.N, "time": dashboard.TimeFormatter})
-	// route.LoadHTMLGlob("./dashboard/template/*") // we don't want to create runtime errors for this #FIXME(adonese): #313 let's fix it properly
-	/**
-		[GIN-debug] GET    /ws                       --> main.GetMainEngine.wsAdapter.func8 (4 handlers)
-	[GIN-debug] Loaded HTML Templates (10):
-	        - head
-	        - navbar
-	        - qr_status.html
-	        - search.html
-	        -
-	        - index.html
-	        - merchants.html
-	        - style.css
-	        - table.html
-	        - base.html
-	*/
-	route.Static("/dashboard/assets", "./dashboard/template")
-	route.POST("/generate_api_key", consumerService.GenerateAPIKey)
-	route.POST("/workingKey", merchantServices.WorkingKey)
-	route.POST("/cardTransfer", merchantServices.CardTransfer)
-	route.POST("/voucher", merchantServices.GenerateVoucher)
-	route.POST("/voucher/cash_in", merchantServices.VoucherCashIn)
-	route.POST("/cashout", merchantServices.VoucherCashOut)
-	route.POST("/purchase", merchantServices.Purchase)
-	route.POST("/cashIn", merchantServices.CashIn)
-	route.POST("/cashOut", merchantServices.CashOut)
-	route.POST("/billInquiry", merchantServices.BillInquiry)
-	route.POST("/billPayment", merchantServices.BillPayment)
-	route.POST("/bills", merchantServices.TopUpPayment)
-	route.POST("/changePin", merchantServices.ChangePIN)
-	route.POST("/miniStatement", merchantServices.MiniStatement)
-	route.POST("/isAlive", merchantServices.IsAlive)
-	route.POST("/balance", merchantServices.Balance)
-	route.POST("/refund", merchantServices.Refund)
-	route.POST("/toAccount", merchantServices.ToAccount)
-	route.POST("/statement", merchantServices.Statement)
-	route.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": true})
+
+	route.Post("/ebs/*", wrapHandler(merchantServices.EBS))
+	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chat.ServeWs(&hub, w, r)
+	}))
+
+	route.Static("/dashboard/assets", templateDir)
+	route.Post("/generate_api_key", wrapHandler(consumerService.GenerateAPIKey))
+	route.Post("/workingKey", wrapHandler(merchantServices.WorkingKey))
+	route.Post("/cardTransfer", wrapHandler(merchantServices.CardTransfer))
+	route.Post("/voucher", wrapHandler(merchantServices.GenerateVoucher))
+	route.Post("/voucher/cash_in", wrapHandler(merchantServices.VoucherCashIn))
+	route.Post("/cashout", wrapHandler(merchantServices.VoucherCashOut))
+	route.Post("/purchase", wrapHandler(merchantServices.Purchase))
+	route.Post("/cashIn", wrapHandler(merchantServices.CashIn))
+	route.Post("/cashOut", wrapHandler(merchantServices.CashOut))
+	route.Post("/billInquiry", wrapHandler(merchantServices.BillInquiry))
+	route.Post("/billPayment", wrapHandler(merchantServices.BillPayment))
+	route.Post("/bills", wrapHandler(merchantServices.TopUpPayment))
+	route.Post("/changePin", wrapHandler(merchantServices.ChangePIN))
+	route.Post("/miniStatement", wrapHandler(merchantServices.MiniStatement))
+	route.Post("/isAlive", wrapHandler(merchantServices.IsAlive))
+	route.Post("/balance", wrapHandler(merchantServices.Balance))
+	route.Post("/refund", wrapHandler(merchantServices.Refund))
+	route.Post("/toAccount", wrapHandler(merchantServices.ToAccount))
+	route.Post("/statement", wrapHandler(merchantServices.Statement))
+	route.Get("/test", func(c *fiber.Ctx) error {
+		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 	})
 
-	route.GET("/wrk", merchantServices.IsAliveWrk)
-	route.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	route.Get("/wrk", wrapHandler(merchantServices.IsAliveWrk))
+	route.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
+
 	dashboardGroup := route.Group("/dashboard")
 	{
-		dashboardGroup.GET("/", dashService.BrowserDashboard)
-		dashboardGroup.GET("/get_tid", dashService.TransactionByTid)
-		dashboardGroup.GET("/get", dashService.TransactionByTid)
-		dashboardGroup.GET("/create", dashService.MakeDummyTransaction)
-		dashboardGroup.GET("/all", dashService.GetAll)
-		dashboardGroup.GET("/all/:id", dashService.GetID)
-		dashboardGroup.GET("/count", dashService.TransactionsCount)
-		dashboardGroup.GET("/settlement", dashService.DailySettlement)
-		dashboardGroup.GET("/merchant", dashService.MerchantTransactionsEndpoint)
-		dashboardGroup.GET("/merchant/:id", dashService.MerchantViews)
-		dashboardGroup.POST("/issues", dashService.ReportIssueEndpoint)
-		dashboardGroup.GET("/status", dashService.QRStatus)
-		dashboardGroup.GET("/test_browser", dashService.IndexPage)
-		dashboardGroup.GET("/stream", dashService.Stream)
+		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
+		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
+		dashboardGroup.Get("/get", wrapHandler(dashService.TransactionByTid))
+		dashboardGroup.Get("/create", wrapHandler(dashService.MakeDummyTransaction))
+		dashboardGroup.Get("/all", wrapHandler(dashService.GetAll))
+		dashboardGroup.Get("/all/:id", wrapHandler(dashService.GetID))
+		dashboardGroup.Get("/count", wrapHandler(dashService.TransactionsCount))
+		dashboardGroup.Get("/settlement", wrapHandler(dashService.DailySettlement))
+		dashboardGroup.Get("/merchant", wrapHandler(dashService.MerchantTransactionsEndpoint))
+		dashboardGroup.Get("/merchant/:id", wrapHandler(dashService.MerchantViews))
+		dashboardGroup.Post("/issues", wrapHandler(dashService.ReportIssueEndpoint))
+		dashboardGroup.Get("/status", wrapHandler(dashService.QRStatus))
+		dashboardGroup.Get("/test_browser", wrapHandler(dashService.IndexPage))
+		dashboardGroup.Get("/stream", wrapHandler(dashService.Stream))
 	}
 
 	cons := route.Group("/consumer")
 
 	{
-		cons.POST("/register", consumerService.CreateUser)
-		cons.POST("/register_with_card", consumerService.RegisterWithCard)
-		cons.POST("/refresh", consumerService.RefreshHandler)
-		cons.POST("/balance", consumerService.Balance)
-		cons.POST("/status", consumerService.TransactionStatus)
-		cons.POST("/is_alive", consumerService.IsAlive)
-		cons.POST("/bill_payment", consumerService.BillPayment)
-		cons.POST("/bills", consumerService.GetBills)
-		cons.GET("/guess_biller", consumerService.GetBiller)
-		cons.POST("/bill_inquiry", consumerService.BillInquiry)
-		cons.POST("/p2p", consumerService.CardTransfer)
-		cons.POST("/cashIn", consumerService.CashIn)
-		cons.POST("/cashOut", consumerService.CashOut)
-		cons.POST("/account", consumerService.AccountTransfer)
-		cons.POST("/purchase", consumerService.Purchase)
-		cons.POST("/n/status", consumerService.Status)
-		cons.POST("/key", consumerService.WorkingKey)
-		cons.POST("/ipin", consumerService.IPinChange)
-		cons.POST("/generate_qr", consumerService.QRMerchantRegistration)
-		cons.POST("/qr_payment", consumerService.QRPayment)
-		cons.POST("/qr_status", consumerService.QRTransactions)
-		cons.POST("/ipin_key", consumerService.IPINKey)
-		cons.POST("/generate_ipin", consumerService.GenerateIpin)
-		cons.POST("/complete_ipin", consumerService.CompleteIpin)
-		cons.POST("/qr_refund", consumerService.QRRefund)
-		cons.POST("/qr_complete", consumerService.QRComplete)
-		cons.POST("/card_info", consumerService.EbsGetCardInfo)
-		cons.POST("/pan_from_mobile", consumerService.GetMSISDNFromCard)
-		cons.GET("/mobile2pan", consumerService.CardFromNumber)
-		cons.GET("/nec2name", consumerService.NecToName)
-		cons.POST("/vouchers/generate", consumerService.GenerateVoucher)
-		cons.POST("/cards/new", consumerService.RegisterCard)
-		cons.POST("/cards/complete", consumerService.CompleteRegistration)
-		cons.POST("/login", consumerService.LoginHandler)
-		cons.POST("/kyc", consumerService.KYC)
-		cons.GET("/transaction", gin.HandlerFunc(func(ctx *gin.Context) {
+		cons.Post("/register", wrapHandler(consumerService.CreateUser))
+		cons.Post("/register_with_card", wrapHandler(consumerService.RegisterWithCard))
+		cons.Post("/refresh", wrapHandler(consumerService.RefreshHandler))
+		cons.Post("/balance", wrapHandler(consumerService.Balance))
+		cons.Post("/status", wrapHandler(consumerService.TransactionStatus))
+		cons.Post("/is_alive", wrapHandler(consumerService.IsAlive))
+		cons.Post("/bill_payment", wrapHandler(consumerService.BillPayment))
+		cons.Post("/bills", wrapHandler(consumerService.GetBills))
+		cons.Get("/guess_biller", wrapHandler(consumerService.GetBiller))
+		cons.Post("/bill_inquiry", wrapHandler(consumerService.BillInquiry))
+		cons.Post("/p2p", wrapHandler(consumerService.CardTransfer))
+		cons.Post("/cashIn", wrapHandler(consumerService.CashIn))
+		cons.Post("/cashOut", wrapHandler(consumerService.CashOut))
+		cons.Post("/account", wrapHandler(consumerService.AccountTransfer))
+		cons.Post("/purchase", wrapHandler(consumerService.Purchase))
+		cons.Post("/n/status", wrapHandler(consumerService.Status))
+		cons.Post("/key", wrapHandler(consumerService.WorkingKey))
+		cons.Post("/ipin", wrapHandler(consumerService.IPinChange))
+		cons.Post("/generate_qr", wrapHandler(consumerService.QRMerchantRegistration))
+		cons.Post("/qr_payment", wrapHandler(consumerService.QRPayment))
+		cons.Post("/qr_status", wrapHandler(consumerService.QRTransactions))
+		cons.Post("/ipin_key", wrapHandler(consumerService.IPINKey))
+		cons.Post("/generate_ipin", wrapHandler(consumerService.GenerateIpin))
+		cons.Post("/complete_ipin", wrapHandler(consumerService.CompleteIpin))
+		cons.Post("/qr_refund", wrapHandler(consumerService.QRRefund))
+		cons.Post("/qr_complete", wrapHandler(consumerService.QRComplete))
+		cons.Post("/card_info", wrapHandler(consumerService.EbsGetCardInfo))
+		cons.Post("/pan_from_mobile", wrapHandler(consumerService.GetMSISDNFromCard))
+		cons.Get("/mobile2pan", wrapHandler(consumerService.CardFromNumber))
+		cons.Get("/nec2name", wrapHandler(consumerService.NecToName))
+		cons.Post("/vouchers/generate", wrapHandler(consumerService.GenerateVoucher))
+		cons.Post("/cards/new", wrapHandler(consumerService.RegisterCard))
+		cons.Post("/cards/complete", wrapHandler(consumerService.CompleteRegistration))
+		cons.Post("/login", wrapHandler(consumerService.LoginHandler))
+		cons.Post("/kyc", wrapHandler(consumerService.KYC))
+		cons.Get("/transaction", func(ctx *fiber.Ctx) error {
 			var res ebs_fields.EBSResponse
 			id := ctx.Query("uuid")
 			if response, err := res.GetByUUID(id, database); err != nil {
 				response, err = res.GetEBSUUID(id, database, &noebsConfig)
 				if err != nil {
-					ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
-					return
+					return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "not_found", "message": err.Error()})
 				}
 			} else {
-				ctx.JSON(http.StatusOK, response)
+				return ctx.Status(http.StatusOK).JSON(response)
 			}
-		}))
-		cons.GET("/users/cards", gin.HandlerFunc(func(ctx *gin.Context) {
+			return nil
+		})
+		cons.Get("/users/cards", func(ctx *fiber.Ctx) error {
 			mobile := ctx.Query("mobile")
 			if response, err := ebs_fields.GetCardsOrFail(mobile, database); err != nil {
-				ctx.JSON(http.StatusBadRequest, gin.H{"code": "not_found", "message": err.Error()})
-				return
+				return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "not_found", "message": err.Error()})
 			} else {
-				ctx.JSON(http.StatusOK, response)
+				return ctx.Status(http.StatusOK).JSON(response)
 			}
-		}))
-		cons.POST("/otp/generate",
-			gin.HandlerFunc(func(c *gin.Context) {
-				consumerService.GenerateSignInCode(c, false)
-			}))
-		cons.POST("/otp/generate_insecure",
-			gin.HandlerFunc(func(c *gin.Context) {
-				consumerService.GenerateSignInCode(c, true)
-			}))
-		cons.POST("/otp/login", consumerService.SingleLoginHandler)
-		cons.POST("/otp/verify", consumerService.VerifyOTP)
-		cons.POST("/otp/balance", consumerService.BalanceStep)
-		cons.POST("/verify_firebase", consumerService.VerifyFirebase)
-		cons.POST("/test", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"message": true})
 		})
-		cons.POST("/check_user", consumerService.CheckUser)
+		cons.Post("/otp/generate", func(c *fiber.Ctx) error {
+			return consumerService.GenerateSignInCode(c, false)
+		})
+		cons.Post("/otp/generate_insecure", func(c *fiber.Ctx) error {
+			return consumerService.GenerateSignInCode(c, true)
+		})
+		cons.Post("/otp/login", wrapHandler(consumerService.SingleLoginHandler))
+		cons.Post("/otp/verify", wrapHandler(consumerService.VerifyOTP))
+		cons.Post("/otp/balance", wrapHandler(consumerService.BalanceStep))
+		cons.Post("/verify_firebase", wrapHandler(consumerService.VerifyFirebase))
+		cons.Post("/test", func(c *fiber.Ctx) error {
+			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
+		})
+		cons.Post("/check_user", wrapHandler(consumerService.CheckUser))
+
+		// New auth routes (email/social)
+		cons.Post("/auth/google", wrapHandler(consumerService.GoogleAuth))
 
 		cons.Use(auth.AuthMiddleware())
-		cons.GET("/user", consumerService.GetUser)
-		cons.PUT("/user", consumerService.UpdateUser)
-		cons.GET("/user/lang", consumerService.GetUserLanguage)
-		cons.PUT("/user/lang", consumerService.SetUserLanguage)
-		cons.GET("/notifications", consumerService.Notifications)
-		cons.GET("/transactions", consumerService.GetTransactions)
-		cons.POST("/p2p_mobile", consumerService.MobileTransfer)
-		cons.POST("/cards/set_main", consumerService.SetMainCard)
-		cons.POST("/user/firebase", consumerService.AddFirebaseID)
-		cons.Any("/beneficiary", consumerService.Beneficiaries)
-		cons.POST("/change_password", consumerService.ChangePassword)
-		cons.GET("/get_cards", consumerService.GetCards)
-		cons.POST("/add_card", consumerService.AddCards)
-		cons.PUT("/edit_card", consumerService.EditCard)
-		cons.DELETE("/delete_card", consumerService.RemoveCard)
-		cons.GET("/payment_token", consumerService.GetPaymentToken)
-		cons.POST("/payment_token", consumerService.GeneratePaymentToken)
-		cons.POST("/payment_request", consumerService.PaymentRequest)
-		cons.POST("/payment_token/quick_pay", consumerService.NoebsQuickPayment)
-		cons.POST("/submit_contacts", func() gin.HandlerFunc {
-			return func(c *gin.Context) {
-				chat.SubmitContacts(c.GetString("mobile"), consumerService.NoebsConfig.DatabasePath, c.Writer, c.Request)
+		cons.Post("/auth/complete_profile", wrapHandler(consumerService.CompleteProfile))
+		cons.Get("/auth/me", wrapHandler(consumerService.AuthMe))
+		cons.Get("/user", wrapHandler(consumerService.GetUser))
+		cons.Put("/user", wrapHandler(consumerService.UpdateUser))
+		cons.Get("/user/lang", wrapHandler(consumerService.GetUserLanguage))
+		cons.Put("/user/lang", wrapHandler(consumerService.SetUserLanguage))
+		cons.Get("/notifications", wrapHandler(consumerService.Notifications))
+		cons.Get("/transactions", wrapHandler(consumerService.GetTransactions))
+		cons.Post("/p2p_mobile", wrapHandler(consumerService.MobileTransfer))
+		cons.Post("/cards/set_main", wrapHandler(consumerService.SetMainCard))
+		cons.Post("/user/firebase", wrapHandler(consumerService.AddFirebaseID))
+		cons.All("/beneficiary", wrapHandler(consumerService.Beneficiaries))
+		cons.Post("/change_password", wrapHandler(consumerService.ChangePassword))
+		cons.Get("/get_cards", wrapHandler(consumerService.GetCards))
+		cons.Post("/add_card", wrapHandler(consumerService.AddCards))
+		cons.Put("/edit_card", wrapHandler(consumerService.EditCard))
+		cons.Delete("/delete_card", wrapHandler(consumerService.RemoveCard))
+		cons.Get("/payment_token", wrapHandler(consumerService.GetPaymentToken))
+		cons.Post("/payment_token", wrapHandler(consumerService.GeneratePaymentToken))
+		cons.Post("/payment_request", wrapHandler(consumerService.PaymentRequest))
+		cons.Post("/payment_token/quick_pay", wrapHandler(consumerService.NoebsQuickPayment))
+		cons.Post("/submit_contacts", func(c *fiber.Ctx) error {
+			mobile := c.Locals("mobile")
+			var m string
+			if mobile != nil {
+				if s, ok := mobile.(string); ok {
+					m = s
+				}
 			}
-		}())
+			return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				chat.SubmitContacts(m, consumerService.NoebsConfig.DatabasePath, w, r)
+			})(c)
+		})
 	}
 	return route
 }
@@ -301,7 +328,7 @@ func init() {
 	database.Migrator().DropConstraint(&consumer.PushData{}, "Transactions")
 	database.Migrator().DropConstraint(&consumer.PushData{}, "fk_push_data_ebs_data")
 	if err := database.Debug().AutoMigrate(&consumer.PushData{}, &ebs_fields.User{},
-		&ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{},
+		&ebs_fields.AuthAccount{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{},
 		&ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}, &ebs_fields.KYC{}, &ebs_fields.Passport{}); err != nil {
 		logrusLogger.Fatalf("error in migration: %v", err)
 	}
@@ -312,16 +339,9 @@ func init() {
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 
 	auth.Init()
-	binding.Validator = new(ebs_fields.DefaultValidator)
 	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger, FirebaseApp: firebaseApp, Auth: &auth}
 	dashService = dashboard.Service{Redis: redisClient, Db: database}
 	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	dataConfigs.DB = database
 
-}
-
-func wsAdapter(msg chat.Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		chat.ServeWs(&msg, c.Writer, c.Request)
-	}
 }

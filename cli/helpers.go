@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
-	ginprometheus "github.com/zsais/go-gin-prometheus"
+	"github.com/gofiber/fiber/v2"
 )
 
 type redisPurchaseFields map[string]interface{}
@@ -81,15 +81,16 @@ func generateDoc(e string) []map[string]interface{} {
 // perhaps, it could better be rewritten to explicitly show that
 func getAllRoutes() []map[string]string {
 	e := GetMainEngine()
-	endpoints := e.Routes()
 	var allRoutes []map[string]string
-	for _, r := range endpoints {
-		name := strings.TrimPrefix(r.Path, "/")
-		mapping := map[string]string{
-			"http_method": r.Method,
-			"path":        name,
+	for _, stack := range e.Stack() {
+		for _, r := range stack {
+			name := strings.TrimPrefix(r.Path, "/")
+			mapping := map[string]string{
+				"http_method": r.Method,
+				"path":        name,
+			}
+			allRoutes = append(allRoutes, mapping)
 		}
-		allRoutes = append(allRoutes, mapping)
 	}
 	return allRoutes
 }
@@ -124,37 +125,18 @@ func MockEBSServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(f))
 }
 
-func Metrics() []*ginprometheus.Metric {
-	metrics := []*ginprometheus.Metric{
-		{
-			ID:          "1234",                // optional string
-			Name:        "test_metric",         // required string
-			Description: "Counter test metric", // required string
-			Type:        "counter",             // required string
-		},
-		{
-			ID:          "1235",                // Identifier
-			Name:        "test_metric_2",       // Metric Name
-			Description: "Summary test metric", // Help Description
-			Type:        "summary",             // type associated with prometheus collector
-		},
-		{
-			ID:          "1235",                // Identifier
-			Name:        "test_metric_3",       // Metric Name
-			Description: "Summary test metric", // Help Description
-			Type:        "counter_vec",         // type associated with prometheus collector
-		},
-		{
-			ID:          "1236",                // Identifier
-			Name:        "test_metric_4",       // Metric Name
-			Description: "Summary test metric", // Help Description
-			Type:        "histogram_vec",       // type associated with prometheus collector
-		},
-		// Type Options:
-		//	counter, counter_vec, gauge, gauge_vec,
-		//	histogram, histogram_vec, summary, summary_vec
+func wrapHandler(h interface{}) fiber.Handler {
+	switch v := h.(type) {
+	case func(*fiber.Ctx) error:
+		return v
+	case func(*fiber.Ctx):
+		return func(c *fiber.Ctx) error {
+			v(c)
+			return nil
+		}
+	default:
+		panic("unsupported handler type")
 	}
-	return metrics
 }
 
 func additionalFieldsToHash(a string) (map[string]string, error) {

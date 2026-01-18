@@ -1,35 +1,27 @@
 package main
 
 import (
+	"os"
 	"testing"
-
-	firebase "firebase.google.com/go/v4"
 )
 
 func Test_verifyToken(t *testing.T) {
-	fb, _ := getFirebase()
-	type args struct {
-		f     *firebase.App
-		token string
+	token := os.Getenv("NOEBS_FIREBASE_TEST_TOKEN")
+	if token == "" {
+		t.Skip("NOEBS_FIREBASE_TEST_TOKEN not set")
 	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		{"test_firebase", args{f: fb, token: "AOO2nWWuSVpFDbTcSWI66vZ12OjGmZakPfkbYdh5Aji98hqh__SExUV2BSjegGVKJ8sqRKOoHxpIeNdWOeAahDzcRKedDmV7ZBblvyjxAtSOSsDrKoaCcAU3EvAkNhjTIMlCsGwuKwmdnsi-BRUJl4YQ_iDWToMCdAFwms141wsnfKSrdSrnQJ8cjSoZwhL064vCXs3SbBuueS5WBMQN6nGp5EZ0IG7dlrDsvUgMRDO8BE6cWSZyv-I"}, "0111493885", false},
+	fb, err := getFirebase()
+	if err != nil {
+		t.Skipf("firebase credentials not configured: %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := verifyToken(tt.args.f, tt.args.token)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("verifyToken() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("verifyToken() = %v, want %v", got, tt.want)
-			}
-		})
+	got, err := verifyToken(fb, token)
+	if err != nil {
+		t.Fatalf("verifyToken() error = %v", err)
+	}
+	if got == "" {
+		t.Fatalf("verifyToken() returned empty audience")
+	}
+	if want := os.Getenv("NOEBS_FIREBASE_TEST_AUD"); want != "" && got != want {
+		t.Fatalf("verifyToken() = %v, want %v", got, want)
 	}
 }

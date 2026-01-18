@@ -27,7 +27,7 @@ type User struct {
 	Gender   string `json:"gender"`
 	Birthday string `json:"birthday"`
 
-	Email           string `json:"email"`
+	Email           string `json:"email" gorm:"index"`
 	Password2       string `json:"password2" gorm:"-"`
 	IsMerchant      bool   `json:"is_merchant" gorm:"default:false"`
 	PublicKey       string `json:"user_pubkey"`
@@ -45,7 +45,7 @@ type User struct {
 	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
 	Language        string `json:"language"`
 	IsVerified      bool   `json:"is_verified"`
-	Mobile          string `json:"mobile" gorm:"primaryKey;not null;unique;uniqueIndex"`
+	Mobile          string `json:"mobile" gorm:"not null;uniqueIndex"`
 	KYC             *KYC   `gorm:"foreignKey:UserMobile;references:Mobile"`
 }
 

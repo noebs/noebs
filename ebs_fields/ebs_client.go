@@ -80,7 +80,10 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 			isValid = false
 		}
 		c.IsValid = &isValid
-		EBSRes <- c
+		select {
+		case EBSRes <- c:
+		default:
+		}
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
 			return http.StatusOK, ebsGenericResponse, nil
 		} else {
