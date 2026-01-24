@@ -27,6 +27,9 @@ var auth gateway.JWTAuth
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
 var hub *chat.Hub
+var logSampling gateway.LogSamplingConfig
+var otelShutdown func(context.Context) error
+var otelEnabled bool
 
 func main() {
 	if isRenderConfigCommand() {
@@ -34,6 +37,16 @@ func main() {
 			logrusLogger.Fatalf("render config failed: %v", err)
 		}
 		return
+	}
+
+	if otelShutdown != nil {
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), otelShutdownTimeout)
+			defer cancel()
+			if err := otelShutdown(ctx); err != nil {
+				logrusLogger.WithError(err).Warn("otel shutdown failed")
+			}
+		}()
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

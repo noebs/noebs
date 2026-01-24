@@ -18,7 +18,6 @@ type JWTAuth struct {
 
 // Init initializes jwt auth
 func (j *JWTAuth) Init() {
-	log.Printf("jwt_key: %s", j.NoebsConfig.JWTKey)
 	j.Key = []byte(j.NoebsConfig.JWTKey)
 }
 
@@ -42,12 +41,10 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	log.Println("generating token")
 	// Sign and get the complete encoded token as a string using the secret
 	if j.Key == nil {
 		return "", errors.New("empty jwt key")
 	}
-	log.Printf("jwt_key: %s", j.Key)
 	if tokenString, err := token.SignedString(j.Key); err == nil {
 		return tokenString, nil
 	} else {

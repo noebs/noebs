@@ -18,10 +18,10 @@ import (
 	"github.com/adonese/noebs/store"
 	"github.com/bradfitz/iter"
 	"github.com/gofiber/adaptor/v2"
+	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 
 	chat "github.com/tutipay/ws"
 	"gopkg.in/yaml.v3"
@@ -106,7 +106,20 @@ func GetMainEngine() *fiber.App {
 	engine.AddFunc("time", dashboard.TimeFormatter)
 
 	route := fiber.New(fiber.Config{Views: engine, ViewsLayout: "base"})
+	route.Use(gateway.RequestID())
+	if otelEnabled {
+		route.Use(otelfiber.Middleware(
+			otelfiber.WithServerName(noebsConfig.OtelServiceName),
+			otelfiber.WithSpanNameFormatter(func(ctx *fiber.Ctx) string {
+				if r := ctx.Route(); r != nil && r.Path != "" {
+					return ctx.Method() + " " + r.Path
+				}
+				return ctx.Method() + " " + ctx.Path()
+			}),
+		))
+	}
 	route.Use(gateway.Instrumentation())
+	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 
 	route.Post("/ebs/*", wrapHandler(merchantServices.EBS))
@@ -296,10 +309,6 @@ func init() {
 	}
 	var err error
 
-	logrusLogger.Level = logrus.DebugLevel
-	logrusLogger.SetReportCaller(true)
-	logrusLogger.Out = os.Stderr
-
 	// load the secrets file
 	configData, err := loadConfig()
 	if err != nil {
@@ -311,6 +320,8 @@ func init() {
 	}
 
 	noebsConfig.Defaults()
+	configureLogger(noebsConfig)
+	initOTel(context.Background(), noebsConfig, logrusLogger)
 	tenantID := noebsConfig.DefaultTenantID
 	if tenantID == "" {
 		tenantID = store.DefaultTenantID

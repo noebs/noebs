@@ -953,6 +953,16 @@ type NoebsConfig struct {
 	Cors    []string `json:"cors"`
 	IsDebug bool     `json:"is_debug"` // set as true if you want to have more debug options
 
+	// logging/observability
+	LogSamplingTickMs  int     `json:"log_sampling_tick_ms"`
+	LogSamplingAfterMs int     `json:"log_sampling_after_ms"`
+	OtelEnabled        bool    `json:"otel_enabled"`
+	OtelEndpoint       string  `json:"otel_endpoint"`
+	OtelInsecure       bool    `json:"otel_insecure"`
+	OtelSampleRate     float64 `json:"otel_sample_rate"`
+	OtelServiceName    string  `json:"otel_service_name"`
+	OtelServiceVersion string  `json:"otel_service_version"`
+
 	// SMS message
 	SMSMessage string `json:"sms_message"`
 
@@ -976,6 +986,12 @@ func (n *NoebsConfig) Defaults() {
 	} else {
 		n.MerchantIP = n.MerchantQAIP
 		n.MerchantID = n.MerchantQAID
+	}
+	if n.OtelServiceName == "" {
+		n.OtelServiceName = "noebs"
+	}
+	if n.OtelSampleRate == 0 {
+		n.OtelSampleRate = 0.1
 	}
 }
 

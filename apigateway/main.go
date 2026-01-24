@@ -11,7 +11,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-	log "github.com/sirupsen/logrus"
 )
 
 var apiKey = make([]byte, 16)
@@ -21,12 +20,14 @@ var apiKey = make([]byte, 16)
 func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// just handle the simplest case, authorization is not provided.
-		h := c.Get("Authorization")
+		h := strings.TrimSpace(c.Get("Authorization"))
+		if strings.HasPrefix(strings.ToLower(h), "bearer ") {
+			h = strings.TrimSpace(h[7:])
+		}
 		if h == "" {
 			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "empty header was sent", "code": "unauthorized"})
 		}
 		claims, err := a.VerifyJWT(h)
-		log.Printf("They key is: %v", a.Key)
 		if err != nil {
 			if errors.Is(err, jwt.ErrTokenExpired) {
 				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
@@ -43,7 +44,6 @@ func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 			if claims.TenantID != "" {
 				c.Locals("tenant_id", claims.TenantID)
 			}
-			log.Printf("the username is: %s", claims.Mobile)
 			return c.Next()
 		}
 	}

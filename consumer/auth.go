@@ -79,7 +79,6 @@ func (s *Service) LoginHandler(c *fiber.Ctx) error {
 		s.Logger.Printf("The request is wrong. %v", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	s.Logger.Printf("the processed request is: %+v\n", req)
 	tenantID := resolveTenantID(c, s.NoebsConfig)
 	u, err := s.Store.GetUserByEmailOrMobile(c.UserContext(), tenantID, req.Mobile)
 	if err != nil {
@@ -115,8 +114,9 @@ func (s *Service) LoginHandler(c *fiber.Ctx) error {
 func (s *Service) SingleLoginHandler(c *fiber.Ctx) error {
 
 	var req gateway.Token
-	_ = parseJSON(c, &req)
-	s.Logger.Printf("the processed request is: %v\n", req)
+	if err := parseJSON(c, &req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
 
 	tenantID := resolveTenantID(c, s.NoebsConfig)
 	u, err := s.Store.GetUserByUsernameEmailOrMobile(c.UserContext(), tenantID, req.Mobile)
@@ -249,11 +249,12 @@ func (s *Service) CreateUser(c *fiber.Ctx) error {
 
 func (s *Service) VerifyOTP(c *fiber.Ctx) error {
 	var req ebs_fields.User
-	_ = parseJSON(c, &req)
+	if err := parseJSON(c, &req); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
 	if req.OTP == "" || req.Mobile == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "otp was not sent", "code": "empty_otp"})
 	}
-	s.Logger.Printf("the processed request is: %v\n", req)
 	tenantID := resolveTenantID(c, s.NoebsConfig)
 	u, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, strings.ToLower(req.Mobile))
 	if err != nil {

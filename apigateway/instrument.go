@@ -17,138 +17,123 @@ import (
 )
 
 var registerOnce sync.Once
+var (
+	httpRequestsTotal   *prometheus.CounterVec
+	httpRequestDuration *prometheus.HistogramVec
+	httpRequestSize     *prometheus.HistogramVec
+	httpResponseSize    *prometheus.HistogramVec
+	httpInFlight        *prometheus.GaugeVec
+)
+
+func registerCounterVec(c *prometheus.CounterVec) *prometheus.CounterVec {
+	if err := prometheus.Register(c); err != nil {
+		if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+			if existing, ok := already.ExistingCollector.(*prometheus.CounterVec); ok {
+				return existing
+			}
+		}
+		log.Printf("prometheus counter register failed: %v", err)
+	}
+	return c
+}
+
+func registerHistogramVec(c *prometheus.HistogramVec) *prometheus.HistogramVec {
+	if err := prometheus.Register(c); err != nil {
+		if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+			if existing, ok := already.ExistingCollector.(*prometheus.HistogramVec); ok {
+				return existing
+			}
+		}
+		log.Printf("prometheus histogram register failed: %v", err)
+	}
+	return c
+}
+
+func registerGaugeVec(c *prometheus.GaugeVec) *prometheus.GaugeVec {
+	if err := prometheus.Register(c); err != nil {
+		if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+			if existing, ok := already.ExistingCollector.(*prometheus.GaugeVec); ok {
+				return existing
+			}
+		}
+		log.Printf("prometheus gauge register failed: %v", err)
+	}
+	return c
+}
+
+func initHTTPMetrics() {
+	registerOnce.Do(func() {
+		httpRequestsTotal = registerCounterVec(prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "noebs",
+			Subsystem: "http_server",
+			Name:      "requests_total",
+			Help:      "Total number of HTTP requests.",
+		}, []string{"code", "method", "route"}))
+
+		httpRequestDuration = registerHistogramVec(prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "noebs",
+			Subsystem: "http_server",
+			Name:      "request_duration_seconds",
+			Help:      "Duration of HTTP requests.",
+			Buckets:   prometheus.DefBuckets,
+		}, []string{"code", "method", "route"}))
+
+		sizeBuckets := []float64{100, 500, 1_000, 2_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000}
+		httpRequestSize = registerHistogramVec(prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "noebs",
+			Subsystem: "http_server",
+			Name:      "request_size_bytes",
+			Help:      "Size of HTTP requests.",
+			Buckets:   sizeBuckets,
+		}, []string{"method", "route"}))
+
+		httpResponseSize = registerHistogramVec(prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "noebs",
+			Subsystem: "http_server",
+			Name:      "response_size_bytes",
+			Help:      "Size of HTTP responses.",
+			Buckets:   sizeBuckets,
+		}, []string{"code", "method", "route"}))
+
+		httpInFlight = registerGaugeVec(prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "noebs",
+			Subsystem: "http_server",
+			Name:      "in_flight_requests",
+			Help:      "Number of HTTP requests currently being served.",
+		}, []string{"method", "route"}))
+	})
+}
 
 func Instrumentation() fiber.Handler {
-	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace:   "noebs",
-		Subsystem:   "request",
-		Name:        "requests_count",
-		Help:        "Number of requests per each endpoint",
-		ConstLabels: nil,
-	}, []string{"code", "method", "handler", "host", "url"})
-
-	resTime := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace:   "noebs",
-		Subsystem:   "response",
-		Name:        "response_time_hist",
-		Help:        "noebs response duration",
-		ConstLabels: nil,
-		Buckets:     nil,
-	})
-
-	resSize := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace:   "noebs",
-		Subsystem:   "response",
-		Name:        "size_histogram",
-		Help:        "noebs response size",
-		ConstLabels: nil,
-		Buckets:     nil,
-	})
-
-	reqSize := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace:   "noebs",
-		Subsystem:   "request",
-		Name:        "size_hist",
-		Help:        "Request size instrumenter",
-		ConstLabels: nil,
-		Buckets:     nil,
-	})
-
-	resTimeSum := prometheus.NewSummary(prometheus.SummaryOpts{
-		Namespace:   "noebs",
-		Subsystem:   "response",
-		Name:        "latency_summary",
-		Help:        "Computes responses latency",
-		ConstLabels: nil,
-		Objectives:  nil,
-		MaxAge:      0,
-		AgeBuckets:  0,
-		BufCap:      0,
-	})
-
-	registerOnce.Do(func() {
-		if err := prometheus.Register(counterVec); err != nil {
-			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
-				if existing, ok := already.ExistingCollector.(*prometheus.CounterVec); ok {
-					counterVec = existing
-				}
-				log.Printf("prometheus counter already registered: %v", err)
-			} else {
-				log.Printf("prometheus counter register failed: %v", err)
-			}
-		}
-		if err := prometheus.Register(resTime); err != nil {
-			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
-				if existing, ok := already.ExistingCollector.(prometheus.Histogram); ok {
-					resTime = existing
-				}
-				log.Printf("prometheus resTime already registered: %v", err)
-			} else {
-				log.Printf("prometheus resTime register failed: %v", err)
-			}
-		}
-		if err := prometheus.Register(resSize); err != nil {
-			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
-				if existing, ok := already.ExistingCollector.(prometheus.Histogram); ok {
-					resSize = existing
-				}
-				log.Printf("prometheus resSize already registered: %v", err)
-			} else {
-				log.Printf("prometheus resSize register failed: %v", err)
-			}
-		}
-		if err := prometheus.Register(reqSize); err != nil {
-			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
-				if existing, ok := already.ExistingCollector.(prometheus.Histogram); ok {
-					reqSize = existing
-				}
-				log.Printf("prometheus reqSize already registered: %v", err)
-			} else {
-				log.Printf("prometheus reqSize register failed: %v", err)
-			}
-		}
-		if err := prometheus.Register(resTimeSum); err != nil {
-			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
-				if existing, ok := already.ExistingCollector.(prometheus.Summary); ok {
-					resTimeSum = existing
-				}
-				log.Printf("prometheus resTimeSum already registered: %v", err)
-			} else {
-				log.Printf("prometheus resTimeSum register failed: %v", err)
-			}
-		}
-	})
+	initHTTPMetrics()
 	return func(c *fiber.Ctx) error {
-
 		if c.Path() == "/metrics" {
 			return c.Next()
 		}
+		routePath := c.Path()
+		if r := c.Route(); r != nil && r.Path != "" {
+			routePath = r.Path
+		}
+		method := c.Method()
+		httpInFlight.WithLabelValues(method, routePath).Inc()
+		defer httpInFlight.WithLabelValues(method, routePath).Dec()
+
 		start := time.Now()
 		err := c.Next()
-		duration := float64(time.Since(start)) * 1e-6 // to millisecond
-
-		rSize := len(c.Response().Body())
-		rqSize := len(c.Body())
+		duration := time.Since(start).Seconds()
 
 		status := strconv.Itoa(c.Response().StatusCode())
-		url := c.Path()
-		routePath := ""
-		if c.Route() != nil {
-			routePath = c.Route().Path
-		}
-
-		counterVec.WithLabelValues(status, c.Method(), routePath, string(c.Context().Host()), url).Inc()
-		resTime.Observe(duration)
-		resSize.Observe(float64(rSize))
-		reqSize.Observe(float64(rqSize))
-		resTimeSum.Observe(duration)
+		httpRequestsTotal.WithLabelValues(status, method, routePath).Inc()
+		httpRequestDuration.WithLabelValues(status, method, routePath).Observe(duration)
+		httpRequestSize.WithLabelValues(method, routePath).Observe(float64(len(c.Body())))
+		httpResponseSize.WithLabelValues(status, method, routePath).Observe(float64(len(c.Response().Body())))
 		return err
 	}
 }
 
 // SyncLedger sends the user data to the server endpoint (dapi.noebs.sd) for backup
 func SyncLedger(user ebs_fields.User) error {
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 	body, err := json.Marshal(&user)
 	if err != nil {
 		log.Printf("error in marshaling user data: %v", err)
@@ -174,7 +159,7 @@ func SyncLedger(user ebs_fields.User) error {
 		log.Printf("response from server: %v", string(res))
 		return nil
 	}
-	err = backoff.Retry(op, backoff.NewExponentialBackOff())
+	err = backoff.Retry(op, expBackoff)
 	return err
 }
 

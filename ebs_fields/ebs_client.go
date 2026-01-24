@@ -5,73 +5,93 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 var log = logrus.New()
 
+var ebsTransport = &http.Transport{
+	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+
+var ebsHTTPClient = &http.Client{
+	Timeout:   3 * 30 * time.Second,
+	Transport: otelhttp.NewTransport(ebsTransport),
+}
+
 // EBSHttpClient the client to interact with EBS
-func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
-
-	verifyTLS := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
+	initEBSMetrics()
+	start := time.Now()
+	reqSize := len(req)
+	respSize := 0
+	endpointLabel := "unknown"
+	targetLabel := "unknown"
+	if parsed, parseErr := url.Parse(targetURL); parseErr == nil {
+		if parsed.Path != "" {
+			endpointLabel = parsed.Path
+		}
+		if parsed.Host != "" {
+			targetLabel = parsed.Host
+		}
 	}
-	ebsClient := http.Client{
-		Timeout:   3 * 30 * time.Second,
-		Transport: verifyTLS,
-	}
+	defer func() {
+		recordEBSMetrics(endpointLabel, targetLabel, http.MethodPost, code, err, reqSize, respSize, time.Since(start))
+	}()
 
-	log.Printf("EBS url is: %v", url)
-	log.Printf("our request to EBS: %v", string(req))
+	log.WithFields(logrus.Fields{"url": targetURL, "bytes": reqSize}).Debug("EBS request")
 	reqBuffer := bytes.NewBuffer(req)
 
-	var ebsGenericResponse EBSParserFields
-
-	reqHandler, err := http.NewRequest(http.MethodPost, url, reqBuffer)
+	reqHandler, err := http.NewRequest(http.MethodPost, targetURL, reqBuffer)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		code = http.StatusInternalServerError
 		log.WithFields(logrus.Fields{
 			"code": err.Error(),
 		}).Error("Error in establishing connection to the host")
-		return 500, ebsGenericResponse, err
+		return code, ebsGenericResponse, err
 	}
 	reqHandler.Header.Set("Content-Type", "application/json")
 
-	ebsResponse, err := ebsClient.Do(reqHandler)
+	ebsResponse, err := ebsHTTPClient.Do(reqHandler)
 	if err != nil {
+		code = http.StatusGatewayTimeout
 		log.WithFields(logrus.Fields{
 			"code": err.Error(),
 		}).Error("Error in establishing connection to the host")
-		return http.StatusGatewayTimeout, ebsGenericResponse, EbsGatewayConnectivityErr
+		return code, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
 
 	defer ebsResponse.Body.Close()
 	responseBody, err := io.ReadAll(ebsResponse.Body)
 	if err != nil {
+		code = http.StatusInternalServerError
 		log.WithFields(logrus.Fields{
 			"code": err.Error(),
 		}).Error("Error reading ebs response")
-		return http.StatusInternalServerError, ebsGenericResponse, EbsGatewayConnectivityErr
+		return code, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
+	respSize = len(responseBody)
 	var c CacheCards
 	var isValid = true
 	c.Pan = getPan(req)
 
-	log.Printf("ebs_raw: %s", string(responseBody))
+	log.WithFields(logrus.Fields{"bytes": respSize}).Debug("EBS response received")
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
+		code = http.StatusInternalServerError
 		log.WithFields(logrus.Fields{
 			"code":    "wrong content type parsed",
 			"details": ebsResponse.Header.Get("Content-Type"),
 		}).Error("ebs response content type is not application/json")
-		return http.StatusInternalServerError, ebsGenericResponse, ContentTypeErr
+		return code, ebsGenericResponse, ContentTypeErr
 	}
 	var tmpRes IPINResponse
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
@@ -84,9 +104,11 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		default:
 		}
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
-			return http.StatusOK, ebsGenericResponse, nil
+			code = http.StatusOK
+			return code, ebsGenericResponse, nil
 		} else {
-			return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
+			code = http.StatusBadGateway
+			return code, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 		}
 	} else {
 		// there is an error in handling the incoming EBS's ebsResponse
@@ -99,12 +121,15 @@ func EBSHttpClient(url string, req []byte) (int, EBSParserFields, error) {
 		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") {
 			json.Unmarshal(responseBody, &tmpRes)
 			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
-				return http.StatusOK, tmpRes.newResponse(), nil
+				code = http.StatusOK
+				return code, tmpRes.newResponse(), nil
 			} else {
-				return http.StatusBadGateway, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
+				code = http.StatusBadGateway
+				return code, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 			}
 		}
-		return http.StatusInternalServerError, ebsGenericResponse, err
+		code = http.StatusInternalServerError
+		return code, ebsGenericResponse, err
 	}
 
 }
