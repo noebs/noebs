@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 const (
@@ -73,12 +73,13 @@ func (s *Service) GoogleAuth(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "invalid_userinfo", "message": "google subject missing"})
 	}
 
-	user, isNew, err := s.findOrCreateUserFromGoogle(info)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, isNew, err := s.findOrCreateUserFromGoogle(c.UserContext(), tenantID, info)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "user_create_failed", "message": err.Error()})
 	}
 
-	jwtToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile)
+	jwtToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "jwt_failed", "message": err.Error()})
 	}
@@ -97,6 +98,7 @@ func (s *Service) CompleteProfile(c *fiber.Ctx) error {
 	if userID == 0 {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "unauthorized", "message": "missing user id"})
 	}
+	tenantID := resolveTenantID(c, s.NoebsConfig)
 
 	var req completeProfileRequest
 	if err := bindJSON(c, &req); err != nil {
@@ -107,28 +109,18 @@ func (s *Service) CompleteProfile(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "mobile_required", "message": "mobile is required"})
 	}
 
-	var existing ebs_fields.User
-	if err := s.Db.Where("mobile = ?", req.Mobile).First(&existing).Error; err == nil && existing.ID != userID {
+	if existing, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, req.Mobile); err == nil && existing.ID != userID {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "mobile_taken", "message": "mobile already in use"})
 	}
-
-	updates := map[string]interface{}{
-		"mobile":   req.Mobile,
-		"username": req.Mobile,
+	if err := s.Store.UpdateUserMobile(c.UserContext(), tenantID, userID, req.Mobile, req.Fullname); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
-	if req.Fullname != "" {
-		updates["fullname"] = req.Fullname
-	}
-	if err := s.Db.Model(&ebs_fields.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+	user, err := s.Store.FindUserByID(c.UserContext(), tenantID, userID)
+	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 
-	var user ebs_fields.User
-	if err := s.Db.First(&user, userID).Error; err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
-	}
-
-	jwtToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile)
+	jwtToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "jwt_failed", "message": err.Error()})
 	}
@@ -142,8 +134,9 @@ func (s *Service) AuthMe(c *fiber.Ctx) error {
 	if userID == 0 {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "unauthorized", "message": "missing user id"})
 	}
-	var user ebs_fields.User
-	if err := s.Db.First(&user, userID).Error; err != nil {
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.FindUserByID(c.UserContext(), tenantID, userID)
+	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"user": user})
@@ -221,62 +214,67 @@ func (s *Service) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 	return info, nil
 }
 
-func (s *Service) findOrCreateUserFromGoogle(info googleUserInfo) (ebs_fields.User, bool, error) {
+func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID string, info googleUserInfo) (ebs_fields.User, bool, error) {
 	var user ebs_fields.User
 	isNew := false
+	if tenantID == "" {
+		tenantID = store.DefaultTenantID
+	}
 
-	err := s.Db.Transaction(func(tx *gorm.DB) error {
-		var account ebs_fields.AuthAccount
-		if err := tx.Where("provider = ? AND provider_user_id = ?", googleProvider, info.Sub).First(&account).Error; err == nil {
-			return tx.First(&user, account.UserID).Error
+	if account, err := s.Store.FindAuthAccount(ctx, tenantID, googleProvider, info.Sub); err == nil {
+		found, err := s.Store.FindUserByID(ctx, tenantID, account.UserID)
+		if err != nil {
+			return user, false, err
 		}
+		return *found, false, nil
+	}
 
-		email := strings.ToLower(info.Email)
-		if email != "" {
-			if err := tx.Where("email = ?", email).First(&user).Error; err == nil {
-				account = ebs_fields.AuthAccount{
-					UserID:         user.ID,
-					Provider:       googleProvider,
-					ProviderUserID: info.Sub,
-					Email:          email,
-					EmailVerified:  info.EmailVerified,
-				}
-				return tx.Create(&account).Error
-			} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
+	email := strings.ToLower(info.Email)
+	if email != "" {
+		if existing, err := s.Store.FindUserByEmail(ctx, tenantID, email); err == nil {
+			account := ebs_fields.AuthAccount{
+				UserID:         existing.ID,
+				Provider:       googleProvider,
+				ProviderUserID: info.Sub,
+				Email:          email,
+				EmailVerified:  info.EmailVerified,
 			}
+			if err := s.Store.LinkAuthAccount(ctx, tenantID, &account); err != nil {
+				return user, false, err
+			}
+			return *existing, false, nil
 		}
+	}
 
-		isNew = true
-		placeholderMobile := fmt.Sprintf("google:%s", info.Sub)
-		password := uuid.NewString()
-		user = ebs_fields.User{
-			Email:      email,
-			Fullname:   info.Name,
-			Username:   email,
-			Mobile:     placeholderMobile,
-			Password:   password,
-			IsVerified: false,
-		}
-		if user.Username == "" {
-			user.Username = fmt.Sprintf("google_%s", info.Sub)
-		}
-		if err := user.HashPassword(); err != nil {
-			return err
-		}
-		if err := tx.Create(&user).Error; err != nil {
-			return err
-		}
-
-		account = ebs_fields.AuthAccount{
-			UserID:         user.ID,
-			Provider:       googleProvider,
-			ProviderUserID: info.Sub,
-			Email:          email,
-			EmailVerified:  info.EmailVerified,
-		}
-		return tx.Create(&account).Error
-	})
-
-	return user, isNew, err
+	isNew = true
+	placeholderMobile := fmt.Sprintf("google:%s", info.Sub)
+	password := uuid.NewString()
+	user = ebs_fields.User{
+		Email:      email,
+		Fullname:   info.Name,
+		Username:   email,
+		Mobile:     placeholderMobile,
+		Password:   password,
+		IsVerified: false,
+	}
+	if user.Username == "" {
+		user.Username = fmt.Sprintf("google_%s", info.Sub)
+	}
+	if err := user.HashPassword(); err != nil {
+		return user, isNew, err
+	}
+	if err := s.Store.CreateUser(ctx, tenantID, &user); err != nil {
+		return user, isNew, err
+	}
+	account := ebs_fields.AuthAccount{
+		UserID:         user.ID,
+		Provider:       googleProvider,
+		ProviderUserID: info.Sub,
+		Email:          email,
+		EmailVerified:  info.EmailVerified,
+	}
+	if err := s.Store.LinkAuthAccount(ctx, tenantID, &account); err != nil {
+		return user, isNew, err
+	}
+	return user, isNew, nil
 }

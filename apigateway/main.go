@@ -2,7 +2,6 @@
 package gateway
 
 import (
-	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -11,8 +10,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt"
-	"github.com/redis/go-redis/v9"
+	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,14 +27,12 @@ func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 		}
 		claims, err := a.VerifyJWT(h)
 		log.Printf("They key is: %v", a.Key)
-		if e, ok := err.(*jwt.ValidationError); ok {
-			if e.Errors&jwt.ValidationErrorExpired != 0 {
-				// in this case you might need to give it another spin
+		if err != nil {
+			if errors.Is(err, jwt.ErrTokenExpired) {
 				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
-			} else {
-				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 			}
-		} else if err == nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
+		} else {
 			// FIXME it is better to let the endpoint explicitly Get the claim off the user
 			//  as we will assume the auth server will reside in a different domain!
 			c.Locals("user_id", claims.UserID)
@@ -44,10 +40,12 @@ func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 				c.Locals("mobile", claims.Mobile)
 				c.Locals("username", claims.Mobile)
 			}
+			if claims.TenantID != "" {
+				c.Locals("tenant_id", claims.TenantID)
+			}
 			log.Printf("the username is: %s", claims.Mobile)
 			return c.Next()
 		}
-		return nil
 	}
 
 }
@@ -83,23 +81,6 @@ func GenerateAPIKey() (string, error) {
 	_, err := rand.Read(apiKey)
 	a := fmt.Sprintf("%x", apiKey)
 	return a, err
-}
-
-func isMember(ctx context.Context, key, val string, r *redis.Client) bool {
-	b, _ := r.SIsMember(ctx, key, val).Result()
-	return b
-}
-
-func getMap(ctx context.Context, key, val string, r *redis.Client) (bool, error) {
-	res, err := r.HGet(ctx, "apikeys", key).Result()
-	if err != nil {
-		return false, err
-	}
-	if res != val {
-		return false, errors.New("wrong_key")
-	}
-
-	return true, nil
 }
 
 var (

@@ -81,22 +81,20 @@ package consumer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	firebase "firebase.google.com/go/v4"
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/utils"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
-	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 )
 
 // we use a simple string to store the ipin key and reuse it across noebs.
@@ -104,15 +102,20 @@ var ebsIpinEncryptionKey string
 
 // Service consumer for utils.Service struct
 type Service struct {
-	Redis       *redis.Client
-	Db          *gorm.DB
+	Store       *store.Store
 	NoebsConfig ebs_fields.NoebsConfig
 	Logger      *logrus.Logger
-	FirebaseApp *firebase.App
 	Auth        Auther
 }
 
 var fees = ebs_fields.NewDynamicFeesWithDefaults()
+
+func (s *Service) recordTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {
+	if tenantID == "" {
+		tenantID = store.DefaultTenantID
+	}
+	return s.Store.CreateTransaction(ctx, tenantID, res)
+}
 
 // Purchase performs special payment api from ebs consumer services
 // It requires: card info (src), amount fields, specialPaymentId (destination)
@@ -147,10 +150,8 @@ func (s *Service) Purchase(c *fiber.Ctx) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
-
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		tenantID := resolveTenantID(c, s.NoebsConfig)
+		if err := s.recordTransaction(c.UserContext(), tenantID, res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -210,11 +211,9 @@ func (s *Service) IsAlive(c *fiber.Ctx) {
 
 		//// mask the pan
 		res.MaskPAN()
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 		res.Name = s.ToDatabasename(url)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -277,8 +276,6 @@ func (s *Service) BillPayment(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		// Adding BillType, BillTo and BillInfo2 so that the mobile client can show these fields in transactions history
 		res.EBSResponse.BillTo = res.PaymentInfo
@@ -303,7 +300,7 @@ func (s *Service) BillPayment(c *fiber.Ctx) {
 			res.EBSResponse.BillType = "Electricity"
 		}
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -394,8 +391,9 @@ func (s *Service) GetBills(c *fiber.Ctx) {
 	fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
 	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
+	tenantID := resolveTenantID(c, s.NoebsConfig)
 	// Get our cache results before hand
-	if oldCache, err := ebs_fields.GetBillerInfo(b.Phone, s.Db); err == nil { // we have stored this phone number before
+	if oldCache, err := s.Store.GetCacheBiller(c.UserContext(), tenantID, b.Phone); err == nil { // we have stored this phone number before
 		fields.PayeeId = oldCache.BillerID // use the data we stored previously
 		cacheBills.BillerID = oldCache.BillerID
 	}
@@ -411,27 +409,29 @@ func (s *Service) GetBills(c *fiber.Ctx) {
 	// mask the pan
 	res.MaskPAN()
 	res.Name = s.ToDatabasename(url)
-	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+	if err := s.recordTransaction(c.UserContext(), tenantID, res.EBSResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"code":    "unable to migrate purchase model",
 			"message": err,
 		}).Info("error in migrating purchase model")
 	}
 	if ebsErr != nil {
-		cacheBills.Save(s.Db, true)
+		cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
+		_ = s.Store.UpsertCacheBiller(c.UserContext(), tenantID, cacheBills.Mobile, cacheBills.BillerID)
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		jsonResponse(c, code, payload)
 	} else {
 		due, err := parseDueAmounts(fields.PayeeId, res.BillInfo)
 		if err != nil {
 			// hardcoded
-			cacheBills.Save(s.Db, true)
+			cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
+			_ = s.Store.UpsertCacheBiller(c.UserContext(), tenantID, cacheBills.Mobile, cacheBills.BillerID)
 			payload := ebs_fields.ErrorDetails{Code: 502, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			jsonResponse(c, 502, payload)
 			return
 		}
 		jsonResponse(c, code, fiber.Map{"ebs_response": res, "due_amount": due})
-		cacheBills.Save(s.Db, false)
+		_ = s.Store.UpsertCacheBiller(c.UserContext(), tenantID, cacheBills.Mobile, cacheBills.BillerID)
 	}
 }
 
@@ -440,46 +440,49 @@ func (s *Service) RegisterWithCard(c *fiber.Ctx) {
 	var card ebs_fields.CacheCards
 	bindJSON(c, &card)
 	// why are we checking for card.PublicKey and card.Mobile here?
-	if ok, err := s.isValidCard(card); !ok || card.PublicKey == "" || card.Mobile == "" {
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	if ok, err := s.isValidCard(c.UserContext(), tenantID, card); !ok || card.PublicKey == "" || card.Mobile == "" {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_card_or_missing_credentials"})
 		return
 	}
 	// Make sure user is unique
-	var tmpUser ebs_fields.User
-	res := s.Db.Where("mobile = ?", card.Mobile).First(&tmpUser)
-	if res.Error == nil && tmpUser.IsVerified {
+	var user *ebs_fields.User
+	tmpUser, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, card.Mobile)
+	if err == nil && tmpUser.IsVerified {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "User with this mobile number already exists"})
 		return
 	}
-	user := ebs_fields.NewUser(s.Db)
-	user.Mobile = card.Mobile
-	user.Username = card.Mobile
+	if err == nil {
+		user = tmpUser
+	} else {
+		user = &ebs_fields.User{Mobile: card.Mobile, Username: card.Mobile}
+	}
 	user.Fullname = card.Name
 	user.MainCard = card.Pan
 	user.ExpDate = card.Expiry
 	user.Password = card.Password
 	user.PublicKey = card.PublicKey
-	user.HashPassword()
+	_ = user.HashPassword()
 	key, err := user.GenerateOtp()
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 		return
 	}
-	if tmpUser.IsVerified {
-		if res := s.Db.Delete(&tmpUser); res.Error != nil {
-			s.Logger.Printf("error deleting user: %v", err.Error())
-			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": "database_error", "message": "could not replace user"})
+	if user.ID == 0 {
+		if err := s.Store.CreateUser(c.UserContext(), tenantID, user); err != nil {
+			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": "database_error", "message": "could not create user"})
+			return
+		}
+	} else {
+		if err := s.Store.UpdateUser(c.UserContext(), tenantID, user); err != nil {
+			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": "database_error", "message": "could not update user"})
 			return
 		}
 	}
-	if res := s.Db.Create(&user); res.Error == nil {
-		ucard := card.NewCardFromCached(int(user.ID))
-		ucard.ID = 0
-		// We can set this card as main since it is the first card of the this user
-		ucard.IsMain = true
-		user.Cards = append(user.Cards, ucard)
-		user.UpsertCards([]ebs_fields.Card{ucard})
-	}
+	ucard := card.NewCardFromCached(int(user.ID))
+	ucard.ID = 0
+	ucard.IsMain = true
+	_ = s.Store.AddCards(c.UserContext(), tenantID, user.ID, []ebs_fields.Card{ucard})
 	jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: card.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
 }
@@ -493,12 +496,13 @@ func (s *Service) GetBiller(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "empty_mobile", "code": "empty_mobile"})
 		return
 	}
-	guessed, err := ebs_fields.GetBillerInfo(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	guessed, err := s.Store.GetCacheBiller(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		// we don't know about this
 		// what if we go CRAZY here and launch a new request to EBS!
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "no record", "code": "empty_mobile"})
-		go s.billerID(mobile) // we are launching a go routine here to update this query for future reference
+		go s.billerID(c.UserContext(), tenantID, mobile) // we are launching a go routine here to update this query for future reference
 		return
 	}
 	jsonResponse(c, http.StatusOK, fiber.Map{"biller_id": guessed.BillerID})
@@ -543,7 +547,7 @@ func (s *Service) BillInquiry(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -551,8 +555,6 @@ func (s *Service) BillInquiry(c *fiber.Ctx) {
 		}
 
 		// Save to Redis lis
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -594,8 +596,6 @@ func (s *Service) Balance(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -603,7 +603,7 @@ func (s *Service) Balance(c *fiber.Ctx) {
 		} else {
 			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
-		s.Db.Table("transactions").Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse)
 	default:
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": bindingErr.Error()})
 	}
@@ -635,7 +635,7 @@ func (s *Service) TransactionStatus(c *fiber.Ctx) {
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = s.ToDatabasename(url)
-		s.Db.Table("transactions").Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse)
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			jsonResponse(c, code, payload)
@@ -648,23 +648,9 @@ func (s *Service) TransactionStatus(c *fiber.Ctx) {
 }
 
 func (s *Service) storeLastTransactions(ctx context.Context, merchantID string, res *ebs_fields.EBSParserFields) error {
-	// this stores LastTransactions to redis
-	// marshall the lastTransactions
-	// store them into redis
-	// store the lastTransactions into the database
-	s.Logger.Printf("merchantID is: %s", merchantID)
-	if res == nil {
-		return errors.New("empty response")
-	}
-	// parse the last transactions
-	data, err := json.Marshal(res.LastTransactions)
-	if err != nil {
-		return err
-	}
-	if _, err := s.Redis.HSet(ctx, merchantID, "data", data).Result(); err != nil {
-		s.Logger.Printf("erorr in redis: %v", err)
-		return err
-	}
+	_ = ctx
+	_ = merchantID
+	_ = res
 	return nil
 }
 
@@ -711,10 +697,8 @@ func (s *Service) WorkingKey(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -764,12 +748,11 @@ func (s *Service) CardTransfer(c *fiber.Ctx) {
 		fields.DynamicFees = fees.CardTransferfees
 		deviceID := fields.DeviceID
 		fields.ConsumerCommonFields.DelDeviceID()
-		// save this to redis
-		if mobile := fields.Mobile; mobile != "" {
-			s.Redis.Set(c.UserContext(), fields.Mobile+":pan", fields.Pan, 0)
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return
 		}
-
-		jsonBuffer := fields.MustMarshal()
 		s.Logger.Printf("the request is: %v", string(jsonBuffer))
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
@@ -779,13 +762,10 @@ func (s *Service) CardTransfer(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
-
 		res.EBSResponse.SenderPAN = utils.MaskPAN(fields.Pan)
 		res.EBSResponse.ReceiverPAN = utils.MaskPAN(fields.ToCard)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -858,7 +838,11 @@ func (s *Service) CashIn(c *fiber.Ctx) {
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
-		jsonBuffer := fields.MustMarshal() // this part basically gets us into trouble
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return
+		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
@@ -867,10 +851,8 @@ func (s *Service) CashIn(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -917,7 +899,11 @@ func (s *Service) QRMerchantRegistration(c *fiber.Ctx) {
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
-		jsonBuffer, _ := json.Marshal(fields) // this part basically gets us into trouble
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return
+		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
@@ -926,10 +912,8 @@ func (s *Service) QRMerchantRegistration(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -976,7 +960,11 @@ func (s *Service) CashOut(c *fiber.Ctx) {
 
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
-		jsonBuffer := fields.MustMarshal()
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return
+		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
@@ -985,10 +973,8 @@ func (s *Service) CashOut(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url) // rename me to cashin transaction
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1031,7 +1017,11 @@ func (s *Service) AccountTransfer(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 	case nil:
 		fields.ApplicationId = s.NoebsConfig.ConsumerID
-		jsonBuffer, _ := json.Marshal(fields)
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return
+		}
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
@@ -1039,9 +1029,7 @@ func (s *Service) AccountTransfer(c *fiber.Ctx) {
 		// mask the pan
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1102,10 +1090,8 @@ func (s *Service) IPinChange(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1161,9 +1147,7 @@ func (s *Service) Status(c *fiber.Ctx) {
 		// mask the pan
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1220,10 +1204,8 @@ func (s *Service) QRPayment(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1277,10 +1259,8 @@ func (s *Service) QRTransactions(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1341,10 +1321,8 @@ func (s *Service) QRRefund(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1402,10 +1380,8 @@ func (s *Service) QRComplete(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1463,10 +1439,8 @@ func (s *Service) QRGeneration(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1542,10 +1516,8 @@ func (s *Service) GenerateIpin(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1602,9 +1574,8 @@ func (s *Service) CompleteIpin(c *fiber.Ctx) {
 	res.MaskPAN()
 
 	res.Name = s.ToDatabasename(url)
-	username := getUsername(c)
-	utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
-	s.Db.Table("transactions")
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	_ = s.recordTransaction(c.UserContext(), tenantID, res.EBSResponse)
 
 	if ebsErr != nil {
 		ebsIpinEncryptionKey = ""
@@ -1659,10 +1630,8 @@ func (s *Service) IPINKey(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1689,7 +1658,8 @@ func (s *Service) GeneratePaymentToken(c *fiber.Ctx) {
 	var token ebs_fields.Token
 	mobile := getMobile(c)
 	bindJSON(c, &token)
-	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetCardsOrFail(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error()})
 		return
@@ -1708,7 +1678,7 @@ func (s *Service) GeneratePaymentToken(c *fiber.Ctx) {
 	token.UUID = uuid.New().String()
 	token.UserID = user.ID
 	token.User = *user
-	if err := user.SavePaymentToken(&token); err != nil {
+	if err := s.Store.CreateToken(c.UserContext(), tenantID, &token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
 		return
@@ -1735,13 +1705,14 @@ func (s *Service) PaymentRequest(c *fiber.Ctx) {
 		return
 	}
 
-	sender, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	sender, err := s.Store.GetCardsOrFail(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 		return
 	}
 
-	receiver, err := ebs_fields.GetUserByMobile(data.Mobile, s.Db)
+	receiver, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, data.Mobile)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 		return
@@ -1764,7 +1735,7 @@ func (s *Service) PaymentRequest(c *fiber.Ctx) {
 	token.UUID = uuid.New().String()
 	token.UserID = sender.ID
 	token.User = *sender
-	if err := sender.SavePaymentToken(&token); err != nil {
+	if err := s.Store.CreateToken(c.UserContext(), tenantID, &token); err != nil {
 		s.Logger.Printf("error in saving payment token: %v", err)
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
 		return
@@ -1801,7 +1772,8 @@ func (s *Service) GetPaymentToken(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusBadRequest, ve)
 		return
 	}
-	user, err := ebs_fields.GetUserByMobile(username, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, username)
 	if err != nil {
 		ve := validationError{Message: "user doesn't exist", Code: "record_not_found"}
 		jsonResponse(c, http.StatusBadRequest, ve)
@@ -1809,7 +1781,7 @@ func (s *Service) GetPaymentToken(c *fiber.Ctx) {
 	}
 	uuid := c.Query("uuid")
 	if uuid == "" { // the user wants to enlist *all* tokens generated for them
-		tokens, err := ebs_fields.GetUserTokens(user.Mobile, s.Db)
+		tokens, err := s.Store.GetAllTokensByUserID(c.UserContext(), tenantID, user.ID)
 		if err != nil {
 			ve := validationError{Message: "error in retrieving tokens", Code: "error_retrieving_tokens"}
 			jsonResponse(c, http.StatusBadRequest, ve)
@@ -1821,7 +1793,7 @@ func (s *Service) GetPaymentToken(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusOK, fiber.Map{"token": tokens, "count": len(tokens)})
 		return
 	}
-	result, err := ebs_fields.GetTokenByUUID(uuid, s.Db)
+	result, err := s.Store.GetTokenByUUID(c.UserContext(), tenantID, uuid)
 	if err != nil {
 		jsonResponse(c, http.StatusNotFound, fiber.Map{"code": "record_not_found", "message": "token not found"})
 		return
@@ -1857,21 +1829,22 @@ func (s *Service) NoebsQuickPayment(c *fiber.Ctx) {
 
 	var data ebs_fields.QuickPaymentFields
 	bindJSON(c, &data) // ignore the errors
+	tenantID := resolveTenantID(c, s.NoebsConfig)
 	paymentToken, err := ebs_fields.Decode(data.EncodedPaymentToken)
 	if err != nil {
 		// you should now work on the uuid and token
 		if t, err := ebs_fields.Decode(token); err == nil {
 			noebsToken = t
 		} else {
-			if t, err := ebs_fields.GetTokenByUUID(uuid, s.Db); err == nil {
-				noebsToken = t
+			if t, err := s.Store.GetTokenByUUID(c.UserContext(), tenantID, uuid); err == nil {
+				noebsToken = *t
 			}
 		}
 	} else {
 		// we are getting paymentToken from the request
 		noebsToken = paymentToken
 	}
-	storedToken, err := ebs_fields.GetTokenByUUID(noebsToken.UUID, s.Db)
+	storedToken, err := s.Store.GetTokenByUUID(c.UserContext(), tenantID, noebsToken.UUID)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_token", "message": err.Error()})
 		return
@@ -1885,16 +1858,14 @@ func (s *Service) NoebsQuickPayment(c *fiber.Ctx) {
 	data.ToCard = storedToken.ToCard
 	data.TranAmount = float32(noebsToken.Amount)
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, data.MarshallP2pFields())
-	storedToken.IsPaid = ebsErr == nil
 	res.EBSResponse.SenderPAN = data.Pan
 	res.EBSResponse.ReceiverPAN = storedToken.ToCard
-	if res := s.Db.Table("transactions").Create(&res.EBSResponse); res.Error != nil {
-		s.Logger.Printf("Error saving transactions: %v", res.Error.Error())
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": res.Error.Error(), "message": "unable_to_save_transaction"})
+	if err := s.recordTransaction(c.UserContext(), tenantID, res.EBSResponse); err != nil {
+		s.Logger.Printf("Error saving transactions: %v", err.Error())
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": err.Error(), "message": "unable_to_save_transaction"})
 	}
-	if res := s.Db.Where("uuid = ?", storedToken.UUID).Updates(&storedToken); res.Error != nil {
-		s.Logger.Printf("Error saving token: %v", res.Error.Error())
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": res.Error.Error(), "message": "unable_to_save_token"})
+	if ebsErr == nil {
+		_ = s.Store.MarkTokenPaid(c.UserContext(), tenantID, storedToken.UUID)
 	}
 
 	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
@@ -1950,10 +1921,8 @@ func (s *Service) EbsGetCardInfo(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -1999,9 +1968,7 @@ func (s *Service) GetMSISDNFromCard(c *fiber.Ctx) {
 		// mask the pan
 		res.MaskPAN()
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -2057,10 +2024,8 @@ func (s *Service) RegisterCard(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -2108,16 +2073,15 @@ func (s *Service) CompleteRegistration(c *fiber.Ctx) {
 		}
 
 		// if no errors, then proceed to creating a new user
-		var user ebs_fields.User
-		var userID int
-		user.Mobile = fields.Mobile
+		tenantID := resolveTenantID(c, s.NoebsConfig)
+		user := ebs_fields.User{Mobile: fields.Mobile, Username: fields.Mobile}
 		user.Password = fields.NoebsPassword
 		user.HashPassword()
 		user.SanitizeName()
-		if res := s.Db.Create(&user); res.Error == nil {
-			userID = int(res.RowsAffected)
+		if err := s.Store.CreateUser(c.UserContext(), tenantID, &user); err != nil {
+			jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
+			return
 		}
-		user.ID = uint(userID)
 
 		fields.NoebsPassword = ""
 		fields.Mobile = ""
@@ -2128,7 +2092,7 @@ func (s *Service) CompleteRegistration(c *fiber.Ctx) {
 
 		res.Name = s.ToDatabasename(url)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), tenantID, res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -2145,10 +2109,10 @@ func (s *Service) CompleteRegistration(c *fiber.Ctx) {
 			card := ebs_fields.CacheCards{Pan: res.PAN, Expiry: res.ExpDate}
 
 			// now, it is better to store this card as a cached card
-			ebs_fields.SaveOrUpdates(s.Db, card, true)
+			_ = s.Store.UpsertCacheCard(c.UserContext(), tenantID, card)
 
 			// we associated the newly created card to its owner
-			user.UpsertCards([]ebs_fields.Card{card.NewCardFromCached(userID)})
+			_ = s.Store.AddCards(c.UserContext(), tenantID, user.ID, []ebs_fields.Card{card.NewCardFromCached(int(user.ID))})
 		}
 
 	default:
@@ -2197,10 +2161,8 @@ func (s *Service) GenerateVoucher(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -2260,7 +2222,8 @@ func (s *Service) CheckUser(c *fiber.Ctx) {
 	}
 
 	for _, phone := range request.Phones {
-		user, err := ebs_fields.GetUserByMobile(phone, s.Db)
+		tenantID := resolveTenantID(c, s.NoebsConfig)
+		user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, phone)
 		if err != nil {
 			response = append(response, checkUserResponse{Phone: phone, IsUser: false})
 			continue
@@ -2269,7 +2232,7 @@ func (s *Service) CheckUser(c *fiber.Ctx) {
 		// for the omnibox)
 		pan := user.MainCard
 		if pan == "" {
-			userCards, err := ebs_fields.GetCardsOrFail(phone, s.Db)
+			userCards, err := s.Store.GetCardsOrFail(c.UserContext(), tenantID, phone)
 			if err != nil {
 				s.Logger.Printf("Error getting user cards: %v", err)
 				// We will not return this user because they don't have any
@@ -2300,7 +2263,8 @@ func (s *Service) SetMainCard(c *fiber.Ctx) {
 		Pan string `json:"PAN"`
 	}
 	mobile := getMobile(c)
-	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		s.Logger.Printf("Error finding user in db: %v", err)
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "Error finding user in the database"})
@@ -2315,32 +2279,18 @@ func (s *Service) SetMainCard(c *fiber.Ctx) {
 		return
 	}
 
-	var dbCard ebs_fields.Card
-	result := s.Db.Where("pan = ?", card.Pan).First(&dbCard)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		// Card does not exist
+	if ok, err := s.Store.CardExists(c.UserContext(), tenantID, card.Pan); err != nil || !ok {
 		s.Logger.Println("Card does not exist")
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "Card does not exist"})
 		return
 	}
-	// Updating the user
-	result = s.Db.Debug().Model(&ebs_fields.User{}).Where("mobile = ?", user.Mobile).Update("main_card", card.Pan)
-	if result.Error != nil {
-		s.Logger.Printf("Error updating user.Pan: %v", result.Error)
+	if err := s.Store.SetMainCard(c.UserContext(), tenantID, user.ID, card.Pan); err != nil {
+		s.Logger.Printf("Error updating cards: %v", err)
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"error": "Could not save card as main card"})
 		return
 	}
-	// Remove `is_main` flag from previous card
-	result = s.Db.Model(&ebs_fields.Card{}).Where("user_id = ? AND is_main = ?", user.ID, true).Update("is_main", false)
-	if result.Error != nil {
-		s.Logger.Printf("Error updating cards: %v", result.Error)
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"error": "Could not save card as main card"})
-		return
-	}
-	// Setting the new card as the main one
-	result = s.Db.Model(&ebs_fields.Card{}).Where("pan = ?", card.Pan).Update("is_main", true)
-	if result.Error != nil {
-		s.Logger.Printf("Error updating card: %v", result.Error)
+	if err := s.Store.UpdateUserColumns(c.UserContext(), tenantID, user.ID, map[string]any{"main_card": card.Pan}); err != nil {
+		s.Logger.Printf("Error updating user.Pan: %v", err)
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"error": "Could not save card as main card"})
 		return
 	}
@@ -2373,7 +2323,8 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusBadRequest, ebs_fields.ErrorResponse{ErrorDetails: payload})
 
 	case nil:
-		user, err := ebs_fields.GetUserByMobile(fields.Mobile, s.Db)
+		tenantID := resolveTenantID(c, s.NoebsConfig)
+		user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, fields.Mobile)
 		if err != nil {
 			s.Logger.Printf("Error getting user from db: %v", err)
 			jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": "error getting user from db, make sure mobile is correct"})
@@ -2385,12 +2336,11 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 		fields.DynamicFees = fees.CardTransferfees
 		deviceID := fields.DeviceID
 		fields.ConsumerCommonFields.DelDeviceID()
-		// save this to redis
-		if mobile := fields.Mobile; mobile != "" {
-			s.Redis.Set(c.UserContext(), fields.Mobile+":pan", fields.Pan, 0)
+		jsonBuffer, err := json.Marshal(fields)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return
 		}
-
-		jsonBuffer := fields.MustMarshal()
 		s.Logger.Printf("the request is: %v", string(jsonBuffer))
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
@@ -2400,10 +2350,8 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = s.ToDatabasename(url)
-		username := getUsername(c)
-		utils.SaveRedisList(c.UserContext(), s.Redis, username+":all_transactions", &res)
 
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), resolveTenantID(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
@@ -2450,7 +2398,8 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 
 func (s *Service) GetTransactions(c *fiber.Ctx) {
 	mobile := getMobile(c)
-	user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetCardsOrFail(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "database_error"})
 		return
@@ -2460,9 +2409,10 @@ func (s *Service) GetTransactions(c *fiber.Ctx) {
 	for _, card := range user.Cards {
 		// Mask cards and perform the query for each card
 		uMaskedPan := utils.MaskPAN(card.Pan)
-		var cardTrans []ebs_fields.EBSResponse
-		s.Db.Model(ebs_fields.EBSResponse{}).Where("pan = ? OR sender_pan = ? OR receiver_pan = ?", uMaskedPan, uMaskedPan, uMaskedPan).Find(&cardTrans)
-		trans = append(trans, cardTrans...)
+		cardTrans, err := s.Store.GetTransactionsByMaskedPan(c.UserContext(), tenantID, uMaskedPan)
+		if err == nil {
+			trans = append(trans, cardTrans...)
+		}
 	}
 
 	jsonResponse(c, http.StatusOK, trans)

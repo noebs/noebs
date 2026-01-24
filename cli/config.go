@@ -3,44 +3,86 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
-	firebase "firebase.google.com/go/v4"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/merchant"
-	"github.com/adonese/noebs/utils"
+	"github.com/adonese/noebs/store"
 	"github.com/bradfitz/iter"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm/logger"
 
 	chat "github.com/tutipay/ws"
-	"google.golang.org/api/option"
+	"gopkg.in/yaml.v3"
 )
 
-var configFile = []byte("{}")
+func isTestRun() bool {
+	return strings.HasSuffix(os.Args[0], ".test")
+}
 
-func loadConfig() []byte {
-	secretsPath := ".secrets.json"
-
-	if data, err := os.ReadFile(secretsPath); err == nil && len(data) > 0 {
-		logrusLogger.Printf("Loaded config from %s", secretsPath)
-		return data
-	} else if err != nil && !os.IsNotExist(err) {
-		logrusLogger.Printf("Failed to read config file %s: %v (falling back to embedded)", secretsPath, err)
+func loadConfig() ([]byte, error) {
+	configPath := firstExistingPath(defaultConfigPath, "./config.yaml", "../config.yaml")
+	if configPath == "" {
+		if isTestRun() {
+			return []byte("{}"), nil
+		}
+		return nil, errors.New("config.yaml not found")
 	}
 
-	return configFile
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	configMap := map[string]interface{}{}
+	if err := yaml.Unmarshal(configData, &configMap); err != nil {
+		return nil, fmt.Errorf("parse config yaml: %w", err)
+	}
+
+	secretsMap := map[string]interface{}{}
+	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml", "../secrets.yaml")
+	if secretsPath != "" {
+		decrypted, err := decryptSopsFile(secretsPath)
+		if err != nil {
+			if isTestRun() {
+				logrusLogger.Printf("Skipping secrets (%s): %v", secretsPath, err)
+			} else {
+				return nil, err
+			}
+		} else if err := yaml.Unmarshal(decrypted, &secretsMap); err != nil {
+			return nil, fmt.Errorf("parse secrets yaml: %w", err)
+		} else {
+			logrusLogger.Printf("Loaded secrets from %s", secretsPath)
+		}
+	}
+
+	merged, ok := mergeConfig(configMap, secretsMap).(map[string]interface{})
+	if !ok {
+		return nil, errors.New("merged config is not a map")
+	}
+	noebs := getMap(merged, "noebs")
+	if noebs == nil {
+		noebs = map[string]interface{}{}
+	}
+
+	payload, err := json.Marshal(noebs)
+	if err != nil {
+		return nil, fmt.Errorf("encode noebs config: %w", err)
+	}
+
+	logrusLogger.Printf("Loaded config from %s", configPath)
+	return payload, nil
 }
 
 func resolveDashboardTemplateDir() string {
@@ -56,46 +98,6 @@ func resolveDashboardTemplateDir() string {
 	return "./dashboard/template"
 }
 
-func resolveFirebaseCredentialsPath() (string, error) {
-	candidates := []string{
-		"firebase-sdk.json",
-		"../firebase-sdk.json",
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return filepath.Clean(candidate), nil
-		}
-	}
-	return "", fmt.Errorf("firebase credentials file not found")
-}
-
-func getFirebase() (*firebase.App, error) {
-	credPath, err := resolveFirebaseCredentialsPath()
-	if err != nil {
-		return nil, err
-	}
-	opt := option.WithCredentialsFile(credPath)
-	app, err := firebase.NewApp(context.Background(), nil, opt)
-	if err != nil {
-		return nil, fmt.Errorf("error initializing app: %v", err)
-	}
-	return app, nil
-}
-
-func verifyToken(f *firebase.App, token string) (string, error) {
-	ctx := context.Background()
-	fb, err := f.Auth(ctx)
-	if err != nil {
-		return "", err
-	}
-	idToken, err := fb.VerifyIDToken(ctx, token)
-	if err != nil {
-		return "", err
-	}
-	log.Printf("Verified ID token: %v\n", idToken)
-	return idToken.Audience, nil
-}
-
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	templateDir := resolveDashboardTemplateDir()
@@ -109,7 +111,11 @@ func GetMainEngine() *fiber.App {
 
 	route.Post("/ebs/*", wrapHandler(merchantServices.EBS))
 	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		chat.ServeWs(&hub, w, r)
+		if hub == nil {
+			http.Error(w, "chat disabled", http.StatusServiceUnavailable)
+			return
+		}
+		chat.ServeWs(hub, w, r)
 	}))
 
 	route.Static("/dashboard/assets", templateDir)
@@ -196,21 +202,30 @@ func GetMainEngine() *fiber.App {
 		cons.Post("/login", wrapHandler(consumerService.LoginHandler))
 		cons.Post("/kyc", wrapHandler(consumerService.KYC))
 		cons.Get("/transaction", func(ctx *fiber.Ctx) error {
-			var res ebs_fields.EBSResponse
 			id := ctx.Query("uuid")
-			if response, err := res.GetByUUID(id, database); err != nil {
-				response, err = res.GetEBSUUID(id, database, &noebsConfig)
-				if err != nil {
-					return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "not_found", "message": err.Error()})
-				}
-			} else {
-				return ctx.Status(http.StatusOK).JSON(response)
+			tenantID := ctx.Get("X-Tenant-ID")
+			if tenantID == "" {
+				tenantID = noebsConfig.DefaultTenantID
 			}
-			return nil
+			if tenantID == "" {
+				tenantID = store.DefaultTenantID
+			}
+			response, err := storeSvc.GetTransactionByUUID(ctx.UserContext(), tenantID, id)
+			if err != nil {
+				return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "not_found", "message": err.Error()})
+			}
+			return ctx.Status(http.StatusOK).JSON(response)
 		})
 		cons.Get("/users/cards", func(ctx *fiber.Ctx) error {
 			mobile := ctx.Query("mobile")
-			if response, err := ebs_fields.GetCardsOrFail(mobile, database); err != nil {
+			tenantID := ctx.Get("X-Tenant-ID")
+			if tenantID == "" {
+				tenantID = noebsConfig.DefaultTenantID
+			}
+			if tenantID == "" {
+				tenantID = store.DefaultTenantID
+			}
+			if response, err := storeSvc.GetCardsOrFail(ctx.UserContext(), tenantID, mobile); err != nil {
 				return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "not_found", "message": err.Error()})
 			} else {
 				return ctx.Status(http.StatusOK).JSON(response)
@@ -225,7 +240,6 @@ func GetMainEngine() *fiber.App {
 		cons.Post("/otp/login", wrapHandler(consumerService.SingleLoginHandler))
 		cons.Post("/otp/verify", wrapHandler(consumerService.VerifyOTP))
 		cons.Post("/otp/balance", wrapHandler(consumerService.BalanceStep))
-		cons.Post("/verify_firebase", wrapHandler(consumerService.VerifyFirebase))
 		cons.Post("/test", func(c *fiber.Ctx) error {
 			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 		})
@@ -245,7 +259,8 @@ func GetMainEngine() *fiber.App {
 		cons.Get("/transactions", wrapHandler(consumerService.GetTransactions))
 		cons.Post("/p2p_mobile", wrapHandler(consumerService.MobileTransfer))
 		cons.Post("/cards/set_main", wrapHandler(consumerService.SetMainCard))
-		cons.Post("/user/firebase", wrapHandler(consumerService.AddFirebaseID))
+		cons.Post("/user/firebase", wrapHandler(consumerService.AddDeviceToken))
+		cons.Post("/user/device", wrapHandler(consumerService.AddDeviceToken))
 		cons.All("/beneficiary", wrapHandler(consumerService.Beneficiaries))
 		cons.Post("/change_password", wrapHandler(consumerService.ChangePassword))
 		cons.Get("/get_cards", wrapHandler(consumerService.GetCards))
@@ -257,6 +272,9 @@ func GetMainEngine() *fiber.App {
 		cons.Post("/payment_request", wrapHandler(consumerService.PaymentRequest))
 		cons.Post("/payment_token/quick_pay", wrapHandler(consumerService.NoebsQuickPayment))
 		cons.Post("/submit_contacts", func(c *fiber.Ctx) error {
+			if hub == nil {
+				return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"code": "chat_disabled", "message": "chat disabled"})
+			}
 			mobile := c.Locals("mobile")
 			var m string
 			if mobile != nil {
@@ -283,23 +301,44 @@ func init() {
 	logrusLogger.Out = os.Stderr
 
 	// load the secrets file
-	configData := loadConfig()
+	configData, err := loadConfig()
+	if err != nil {
+		logrusLogger.Fatalf("error loading config: %v", err)
+	}
 	logrusLogger.Printf("Loaded config (%d bytes)", len(configData))
 	if err := json.Unmarshal(configData, &noebsConfig); err != nil {
-		logrusLogger.Printf("error in unmarshaling config file: %v", err)
+		logrusLogger.Fatalf("error in unmarshaling config file: %v", err)
 	}
 
 	noebsConfig.Defaults()
+	tenantID := noebsConfig.DefaultTenantID
+	if tenantID == "" {
+		tenantID = store.DefaultTenantID
+	}
 	dbpath := "test.db"
 	if noebsConfig.DatabasePath != "" {
 		dbpath = noebsConfig.DatabasePath
 	}
+	if isTestRun() {
+		if tmp, err := os.CreateTemp("", "noebs-test-*.db"); err == nil {
+			dbpath = tmp.Name()
+			_ = tmp.Close()
+		}
+	}
 
 	logrusLogger.Printf("The final database file is: %#v", dbpath)
-	// Initialize database
-	database, err = utils.Database(dbpath)
+	database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, dbpath, noebsConfig.DatabaseDriver)
 	if err != nil {
 		logrusLogger.Fatalf("error in connecting to db: %v", err)
+	}
+	storeSvc = store.New(database)
+	migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelMigrate()
+	if err := store.Migrate(migrateCtx, database, tenantID); err != nil {
+		logrusLogger.Fatalf("error in migrations: %v", err)
+	}
+	if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
+		logrusLogger.Fatalf("error ensuring tenant: %v", err)
 	}
 
 	logrusLogger.Printf("The final config file is: %#v", noebsConfig)
@@ -315,33 +354,17 @@ func init() {
 	// FIXME we should pass on the same database here
 	chatDb, err := chat.OpenDb(dbpath)
 	if err != nil {
-		logrusLogger.Printf("The final config file is: %#v", err)
+		logrusLogger.Printf("chat db unavailable: %v", err)
+	} else {
+		hub = chat.NewHub(chatDb)
 	}
-
-	hub = *chat.NewHub(chatDb)
-
-	firebaseApp, err := getFirebase()
-	// gorm debug-level logger
-	database.Logger.LogMode(logger.Info)
-
-	// check database foreign key for user & credit_cards exists or not
-	database.Migrator().DropConstraint(&consumer.PushData{}, "Transactions")
-	database.Migrator().DropConstraint(&consumer.PushData{}, "fk_push_data_ebs_data")
-	if err := database.Debug().AutoMigrate(&consumer.PushData{}, &ebs_fields.User{},
-		&ebs_fields.AuthAccount{}, &ebs_fields.Card{}, &ebs_fields.EBSResponse{}, &ebs_fields.Token{},
-		&ebs_fields.CacheBillers{}, &ebs_fields.CacheCards{}, &ebs_fields.Beneficiary{}, &ebs_fields.KYC{}, &ebs_fields.Passport{}); err != nil {
-		logrusLogger.Fatalf("error in migration: %v", err)
-	}
-	// check database foreign key for user & credit_cards exists or not
-	database.Migrator().HasConstraint(&consumer.PushData{}, "Transactions")
-	database.Migrator().HasConstraint(&consumer.PushData{}, "fk_push_data_ebs_data")
 
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 
 	auth.Init()
-	consumerService = consumer.Service{Db: database, Redis: redisClient, NoebsConfig: noebsConfig, Logger: logrusLogger, FirebaseApp: firebaseApp, Auth: &auth}
-	dashService = dashboard.Service{Redis: redisClient, Db: database}
-	merchantServices = merchant.Service{Db: database, Redis: redisClient, Logger: logrusLogger, NoebsConfig: noebsConfig}
+	consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
+	dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
+	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	dataConfigs.DB = database
 
 }

@@ -9,22 +9,21 @@ import (
 	"net/http"
 	"strings"
 
-	"firebase.google.com/go/v4/messaging"
 	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/utils"
 	"github.com/gofiber/fiber/v2"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp/totp"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
 )
 
 type Auther interface {
 	VerifyJWT(token string) (*gateway.TokenClaims, error)
-	GenerateJWT(userID uint, mobile string) (string, error)
+	GenerateJWT(userID int64, mobile, tenantID string) (string, error)
 }
 
 // GenerateAPIKey An Admin-only endpoint that is used to generate api key for our clients
@@ -37,8 +36,11 @@ func (s *Service) GenerateAPIKey(c *fiber.Ctx) error {
 	}
 	if _, ok := m["email"]; ok {
 		ctx := c.UserContext()
+		tenantID := resolveTenantID(c, s.NoebsConfig)
 		k, _ := gateway.GenerateAPIKey()
-		s.Redis.SAdd(ctx, "apikeys", k)
+		if err := s.Store.CreateAPIKey(ctx, tenantID, m["email"], k); err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": "db_error"})
+		}
 		return c.Status(http.StatusOK).JSON(fiber.Map{"result": k})
 	}
 	return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "missing_field"})
@@ -53,27 +55,20 @@ func (s *Service) ApiKeyMiddleware(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
 	ctx := c.UserContext()
-	res, err := s.Redis.HGet(ctx, "api_keys", email).Result()
-	if err != redis.Nil {
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	ok, err := s.Store.ValidateAPIKey(ctx, tenantID, email, key)
+	if err != nil || !ok {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
 	}
-	if key == res {
-		return c.Next()
-	} else {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized"})
-	}
+	return c.Next()
 }
 
 // FIXME issue #58 #61
 func (s *Service) IpFilterMiddleware(c *fiber.Ctx) error {
-	ip := c.IP()
 	if u := getMobile(c); u != "" {
-		ctx := c.UserContext()
-		s.Redis.HIncrBy(ctx, u+":ips_count", ip, 1)
 		return c.Next()
-	} else {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized_access"})
 	}
+	return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "unauthorized_access"})
 }
 
 // LoginHandler noebs signin page
@@ -85,11 +80,14 @@ func (s *Service) LoginHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	s.Logger.Printf("the processed request is: %+v\n", req)
-	u := ebs_fields.User{}
-	if notFound := s.Db.Where("email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		// service id is not found
-		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	u, err := s.Store.GetUserByEmailOrMobile(c.UserContext(), tenantID, req.Mobile)
+	if err != nil {
+		if store.ErrNotFound(err) {
+			s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "not_found"})
+		}
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 	if !u.IsVerified {
 		// user has not verified their phone number with OTP
@@ -101,7 +99,7 @@ func (s *Service) LoginHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "wrong password entered", "code": "wrong_password"})
 	}
 
-	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile)
+	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
@@ -120,10 +118,14 @@ func (s *Service) SingleLoginHandler(c *fiber.Ctx) error {
 	_ = parseJSON(c, &req)
 	s.Logger.Printf("the processed request is: %v\n", req)
 
-	u := ebs_fields.User{}
-	if notFound := s.Db.Where("username = ? or email = ? or mobile = ?", strings.ToLower(req.Mobile), strings.ToLower(req.Mobile), strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	u, err := s.Store.GetUserByUsernameEmailOrMobile(c.UserContext(), tenantID, req.Mobile)
+	if err != nil {
+		if store.ErrNotFound(err) {
+			s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "not_found"})
+		}
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 
 	if _, encErr := noebsCrypto.VerifyWithHeaders(u.PublicKey, req.Signature, req.Message); encErr != nil {
@@ -135,7 +137,7 @@ func (s *Service) SingleLoginHandler(c *fiber.Ctx) error {
 	if totp.Validate(req.Message, u.EncodePublickey32()) == false {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "wrong otp entered", "code": "wrong_otp"})
 	}
-	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile)
+	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
@@ -155,16 +157,22 @@ func (s *Service) RefreshHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	claims, err := s.Auth.VerifyJWT(req.JWT)
-	if e, ok := err.(*jwt.ValidationError); ok {
-		if e.Errors&jwt.ValidationErrorExpired != 0 {
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			tenantID := claims.TenantID
+			if tenantID == "" {
+				tenantID = resolveTenantID(c, s.NoebsConfig)
+			}
 			s.Logger.Info("refresh: auth username is: ", claims.Mobile)
-			var user ebs_fields.User
+			var user *ebs_fields.User
+			var fetchErr error
 			if claims.UserID != 0 {
-				if err := s.Db.First(&user, claims.UserID).Error; err != nil {
-					user, _ = ebs_fields.GetUserByMobile(claims.Mobile, s.Db)
-				}
+				user, fetchErr = s.Store.FindUserByID(c.UserContext(), tenantID, claims.UserID)
 			} else {
-				user, _ = ebs_fields.GetUserByMobile(claims.Mobile, s.Db)
+				user, fetchErr = s.Store.GetUserByMobile(c.UserContext(), tenantID, claims.Mobile)
+			}
+			if fetchErr != nil {
+				return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": fetchErr.Error(), "code": "not_found"})
 			}
 			// should verify signature here...
 			if user.PublicKey == "" {
@@ -175,18 +183,21 @@ func (s *Service) RefreshHandler(c *fiber.Ctx) error {
 				s.Logger.Printf("invalid signature in refresh: %v", encErr)
 				return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": encErr.Error(), "code": "bad_request"})
 			}
-			auth, _ := s.Auth.GenerateJWT(user.ID, user.Mobile)
+			auth, _ := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
 			c.Set("Authorization", auth)
 			return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": auth})
 
-		} else {
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 		}
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 	} else if err == nil {
 		// FIXME it is better to let the endpoint explicitly Get the claim off the user
 		//  as we will assume the auth server will reside in a different domain!
 		s.Logger.Printf("the username is: %s", claims.Mobile)
-		auth, _ := s.Auth.GenerateJWT(claims.UserID, claims.Mobile)
+		tenantID := claims.TenantID
+		if tenantID == "" {
+			tenantID = resolveTenantID(c, s.NoebsConfig)
+		}
+		auth, _ := s.Auth.GenerateJWT(claims.UserID, claims.Mobile, tenantID)
 		c.Set("Authorization", auth)
 		return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": auth})
 	}
@@ -199,16 +210,16 @@ func (s *Service) CreateUser(c *fiber.Ctx) error {
 	if err := bindJSON(c, &u); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error()})
 	}
+	tenantID := resolveTenantID(c, s.NoebsConfig)
 	// FIXME: Optimize these checks
 	// Make sure user is unique
-	var tmpUser ebs_fields.User
-	if res := s.Db.Where("mobile = ?", u.Mobile).First(&tmpUser); res.Error == nil {
+	if _, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, u.Mobile); err == nil {
 		// User already exists
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "User with this mobile number already exists"})
 	}
 	// Make sure username is unique
 	if u.Username != "" {
-		if res := s.Db.Where("username = ?", u.Username).First(&tmpUser); res.Error == nil {
+		if _, err := s.Store.FindUserByUsername(c.UserContext(), tenantID, u.Username); err == nil {
 			// User already exists
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "User with this username already exists"})
 		}
@@ -227,7 +238,7 @@ func (s *Service) CreateUser(c *fiber.Ctx) error {
 	if err := u.HashPassword(); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error()})
 	}
-	if err := s.Db.Create(&u).Error; err != nil {
+	if err := s.Store.CreateUser(c.UserContext(), tenantID, &u); err != nil {
 		// unable to create this user; see possible reasons
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "duplicate_username"})
 	}
@@ -243,17 +254,20 @@ func (s *Service) VerifyOTP(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "otp was not sent", "code": "empty_otp"})
 	}
 	s.Logger.Printf("the processed request is: %v\n", req)
-	u := ebs_fields.User{}
-	if notFound := s.Db.Where("mobile = ?", strings.ToLower(req.Mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	u, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, strings.ToLower(req.Mobile))
+	if err != nil {
+		if store.ErrNotFound(err) {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "not_found"})
+		}
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 
 	// I think this one is buggy
 	if valid := u.VerifyOtp(req.OTP); !valid {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Invalid otp", "code": "invalid_otp"})
 	}
-	s.Db.Model(&req).Where("mobile = ?", req.Mobile).Update("is_password_otp", true)
-	s.Db.Model(&req).Where("mobile = ?", req.Mobile).Update("is_verified", true)
+	_ = s.Store.UpdateUserColumns(c.UserContext(), tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true})
 	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
@@ -268,9 +282,10 @@ func (s *Service) BalanceStep(c *fiber.Ctx) error {
 
 	var req data
 	_ = parseJSON(c, &req)
-	user, _ := ebs_fields.NewUserWithCards(req.Mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, _ := s.Store.GetUserWithCards(c.UserContext(), tenantID, req.Mobile)
 	var isMatched bool
-	if user.Cards == nil {
+	if user == nil || user.Cards == nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "no matching card was found", "code": "card_not_matched"})
 	}
 	for _, card := range user.Cards {
@@ -301,7 +316,7 @@ func (s *Service) BalanceStep(c *fiber.Ctx) error {
 	}
 
 	// generate a jwt here
-	token, err := s.Auth.GenerateJWT(user.ID, mobile)
+	token, err := s.Auth.GenerateJWT(user.ID, mobile, tenantID)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
@@ -318,11 +333,14 @@ func (s *Service) ChangePassword(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Bad request.", "code": "bad_request"})
 	}
 	s.Logger.Printf("the processed request is: %+v\n", req)
-	u := ebs_fields.User{}
-	if notFound := s.Db.Where("mobile = ?", strings.ToLower(mobile)).First(&u).Error; errors.Is(notFound, gorm.ErrRecordNotFound) {
-		// service id is not found
-		s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": notFound.Error(), "code": "not_found"})
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	u, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, strings.ToLower(mobile))
+	if err != nil {
+		if store.ErrNotFound(err) {
+			s.Logger.Printf("User with service_id %s is not found.", req.Mobile)
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "not_found"})
+		}
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 
 	// Create and update the user's password
@@ -330,81 +348,20 @@ func (s *Service) ChangePassword(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
-	if err := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", u.Mobile).Update("password", string(hashedPassword)).Error; err != nil {
+	if err := s.Store.UpdateUserPassword(c.UserContext(), tenantID, u.ID, string(hashedPassword)); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": u})
 }
 
-// VerifyFirebase used to confirm that the user's token is valid
-func (s *Service) VerifyFirebase(c *fiber.Ctx) error {
-	var req ebs_fields.User
-	if err := bindJSON(c, &req); err != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	ctx := c.UserContext()
-	fb, err := s.FirebaseApp.Auth(ctx)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "internal_error"})
-	}
-	token, err := fb.VerifyIDToken(ctx, req.FirebaseIDToken)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "internal_error"})
-	}
-	s.Logger.Printf("Verified ID token: %v\n", token)
-	return nil
-}
-
+// SendPush is a no-op placeholder while push delivery is disabled.
 func (s *Service) SendPush(ctx context.Context, data PushData) error {
-	// Obtain a messaging.Client from the App.
-	client, err := s.FirebaseApp.Messaging(ctx)
-	if err != nil {
-		s.Logger.Printf("error getting Messaging clients: %v\n", err)
+	_ = ctx
+	if s.Logger != nil {
+		s.Logger.Printf("push disabled: drop notification type=%s uuid=%s", data.Type, data.UUID)
 	}
-	// This registration token comes from the client FCM SDKs.
-	registrationToken := data.To
-
-	// This is the same struct as PushData, but due to firebase api
-	// we had to make it in a map of string:any
-	firebaseData := map[string]string{
-		"type":           data.Type,
-		"time":           fmt.Sprint(data),
-		"uuid":           data.EBSData.UUID,
-		"call_to_action": data.CallToAction,
-	}
-
-	if data.PaymentRequest != (ebs_fields.QrData{}) { // If you get an error in Payment Request notifications this may be the reason.
-		if PaymentRequest, err := json.Marshal(data.PaymentRequest); err == nil {
-			firebaseData["payment_request"] = string(PaymentRequest)
-		} else {
-			log.Printf("Error marshalling PaymentRequest: %v", err)
-		}
-	}
-
-	// See documentation on defining a message payload.
-	message := &messaging.Message{
-		Token:        registrationToken,
-		Notification: &messaging.Notification{Title: data.Title, Body: data.Body},
-		Android:      &messaging.AndroidConfig{},
-		Webpush:      &messaging.WebpushConfig{},
-		APNS:         &messaging.APNSConfig{},
-		FCMOptions:   &messaging.FCMOptions{},
-		Topic:        "",
-		Condition:    "",
-		Data:         firebaseData,
-	}
-
-	// Send a message to the device corresponding to the provided
-	// registration token.
-	response, err := client.Send(ctx, message)
-	if err != nil {
-		s.Logger.Printf("the error is: %v", err)
-		return err
-	}
-	// Response is a message ID string.
-	log.Print(response)
-	return nil
+	return apperr.ErrUnavailable
 }
 
 // GenerateSignInCode allows noebs users to access their accounts in case they forgotten their passwords
@@ -416,7 +373,11 @@ func (s *Service) GenerateSignInCode(c *fiber.Ctx, allowInsecure bool) error {
 	if req.Mobile == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Mobile number was not sent", "code": "bad_request"})
 	}
-	user, _ := ebs_fields.GetUserByMobile(req.Mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, req.Mobile)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "user not found", "code": "not_found"})
+	}
 	key, err := user.GenerateOtp()
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
@@ -432,7 +393,9 @@ func (s *Service) APIAuth() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if key := c.Get("api-key"); key != "" {
 			ctx := c.UserContext()
-			if !isMember(ctx, "apikeys", key, s.Redis) {
+			tenantID := resolveTenantID(c, s.NoebsConfig)
+			ok, err := s.Store.ValidateAPIKeyValue(ctx, tenantID, key)
+			if err != nil || !ok {
 				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "wrong_api_key",
 					"message": "visit https://soluspay.net/contact for a key"})
 			}

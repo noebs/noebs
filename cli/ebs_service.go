@@ -11,24 +11,22 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/merchant"
-	"github.com/adonese/noebs/utils"
+	"github.com/adonese/noebs/store"
 	"github.com/sirupsen/logrus"
 	chat "github.com/tutipay/ws"
-	_ "gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 var noebsConfig ebs_fields.NoebsConfig
 var logrusLogger = logrus.New()
-var redisClient = utils.GetRedisClient("")
-var database *gorm.DB
+var database *store.DB
+var storeSvc *store.Store
 var consumerService consumer.Service
 var dataConfigs ebs_fields.Configs
 var service consumer.Service
 var auth gateway.JWTAuth
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
-var hub chat.Hub
+var hub *chat.Hub
 
 func main() {
 	if isRenderConfigCommand() {
@@ -41,7 +39,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	go hub.Run()
+	if hub != nil {
+		go hub.Run()
+	} else {
+		logrusLogger.Warn("chat hub disabled (db unavailable)")
+	}
 	go consumerService.BillerHooks(ctx)
 	go consumerService.Pusher(ctx)
 	if noebsConfig.Port == "" {

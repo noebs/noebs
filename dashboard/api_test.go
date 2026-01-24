@@ -3,14 +3,12 @@ package dashboard
 import (
 	"testing"
 
-	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
+	"github.com/adonese/noebs/store"
 )
 
 func TestService_calculateOffset(t *testing.T) {
 	type fields struct {
-		Redis *redis.Client
-		Db    *gorm.DB
+		Store *store.Store
 	}
 	type args struct {
 		page     int
@@ -31,8 +29,7 @@ func TestService_calculateOffset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := Service{
-				Redis: tt.fields.Redis,
-				Db:    tt.fields.Db,
+				Store: tt.fields.Store,
 			}
 			if got := s.calculateOffset(tt.args.page, tt.args.pageSize); got != tt.want {
 				t.Errorf("Service.calculateOffset() = %v, want %v", got, tt.want)

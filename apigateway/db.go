@@ -1,12 +1,9 @@
 package gateway
 
-import (
-	_ "gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-)
+import "github.com/adonese/noebs/ebs_fields"
 
 type Service struct {
-	gorm.Model
+	ebs_fields.Model
 	ServiceName string `gorm:"index"`
 	Password    string
 	JWT         JWT
@@ -14,6 +11,6 @@ type Service struct {
 }
 
 type JWT struct {
-	gorm.Model
+	ebs_fields.Model
 	SecretKey string
 }

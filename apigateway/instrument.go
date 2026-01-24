@@ -66,13 +66,55 @@ func Instrumentation() fiber.Handler {
 		BufCap:      0,
 	})
 
-	// prometheus collector
-	colls := []prometheus.Collector{counterVec, resTime, resSize, reqSize, resTimeSum}
 	registerOnce.Do(func() {
-		for _, v := range colls {
-			err := prometheus.Register(v)
-			if err != nil {
-				panic(err)
+		if err := prometheus.Register(counterVec); err != nil {
+			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+				if existing, ok := already.ExistingCollector.(*prometheus.CounterVec); ok {
+					counterVec = existing
+				}
+				log.Printf("prometheus counter already registered: %v", err)
+			} else {
+				log.Printf("prometheus counter register failed: %v", err)
+			}
+		}
+		if err := prometheus.Register(resTime); err != nil {
+			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+				if existing, ok := already.ExistingCollector.(prometheus.Histogram); ok {
+					resTime = existing
+				}
+				log.Printf("prometheus resTime already registered: %v", err)
+			} else {
+				log.Printf("prometheus resTime register failed: %v", err)
+			}
+		}
+		if err := prometheus.Register(resSize); err != nil {
+			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+				if existing, ok := already.ExistingCollector.(prometheus.Histogram); ok {
+					resSize = existing
+				}
+				log.Printf("prometheus resSize already registered: %v", err)
+			} else {
+				log.Printf("prometheus resSize register failed: %v", err)
+			}
+		}
+		if err := prometheus.Register(reqSize); err != nil {
+			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+				if existing, ok := already.ExistingCollector.(prometheus.Histogram); ok {
+					reqSize = existing
+				}
+				log.Printf("prometheus reqSize already registered: %v", err)
+			} else {
+				log.Printf("prometheus reqSize register failed: %v", err)
+			}
+		}
+		if err := prometheus.Register(resTimeSum); err != nil {
+			if already, ok := err.(prometheus.AlreadyRegisteredError); ok {
+				if existing, ok := already.ExistingCollector.(prometheus.Summary); ok {
+					resTimeSum = existing
+				}
+				log.Printf("prometheus resTimeSum already registered: %v", err)
+			} else {
+				log.Printf("prometheus resTimeSum register failed: %v", err)
 			}
 		}
 	})

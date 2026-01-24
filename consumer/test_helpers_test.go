@@ -1,49 +1,52 @@
 package consumer
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 type testEnv struct {
 	Router  *fiber.App
 	Service *Service
 	Auth    *gateway.JWTAuth
-	DB      *gorm.DB
+	Store   *store.Store
+	DB      *store.DB
+	Tenant  string
 }
 
-func newTestDB(t *testing.T) *gorm.DB {
+func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	db, err := store.OpenFromConfig("", dbPath, "")
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
-	if err := db.AutoMigrate(
-		&ebs_fields.User{},
-		&ebs_fields.Card{},
-		&ebs_fields.Token{},
-		&ebs_fields.EBSResponse{},
-		&PushData{},
-		&ebs_fields.CacheCards{},
-	); err != nil {
-		t.Fatalf("auto migrate: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := store.Migrate(ctx, db, store.DefaultTenantID); err != nil {
+		t.Fatalf("migrate: %v", err)
 	}
-	return db
+	storeSvc := store.New(db)
+	tenantID := "test-tenant"
+	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	return db, storeSvc, tenantID
 }
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	db := newTestDB(t)
+	db, storeSvc, tenantID := newTestDB(t)
 
 	smsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -58,6 +61,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		SMSAPIKey:       "test-key",
 		SMSSender:       "noebs",
 		SMSMessage:      "test",
+		DefaultTenantID: tenantID,
 	}
 
 	auth := &gateway.JWTAuth{NoebsConfig: cfg}
@@ -65,7 +69,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	logger := logrus.New()
 	service := &Service{
-		Db:          db,
+		Store:       storeSvc,
 		NoebsConfig: cfg,
 		Logger:      logger,
 		Auth:        auth,
@@ -77,7 +81,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	r.Post("/register_with_card", wrapTestHandler(service.RegisterWithCard))
 	r.Get("/notifications", auth.AuthMiddleware(), service.Notifications)
 
-	return &testEnv{Router: r, Service: service, Auth: auth, DB: db}
+	return &testEnv{Router: r, Service: service, Auth: auth, Store: storeSvc, DB: db, Tenant: tenantID}
 }
 
 func wrapTestHandler(h interface{}) fiber.Handler {
@@ -94,7 +98,7 @@ func wrapTestHandler(h interface{}) fiber.Handler {
 	}
 }
 
-func seedUser(t *testing.T, db *gorm.DB, mobile, password string) ebs_fields.User {
+func seedUser(t *testing.T, storeSvc *store.Store, tenantID, mobile, password string) ebs_fields.User {
 	t.Helper()
 	user := ebs_fields.User{
 		Mobile:   mobile,
@@ -105,7 +109,7 @@ func seedUser(t *testing.T, db *gorm.DB, mobile, password string) ebs_fields.Use
 	if err := user.HashPassword(); err != nil {
 		t.Fatalf("hash password: %v", err)
 	}
-	if err := db.Create(&user).Error; err != nil {
+	if err := storeSvc.CreateUser(context.Background(), tenantID, &user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	return user

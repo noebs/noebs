@@ -13,17 +13,7 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
-
-// NoebsDatabase is an interface that can be used throughout the codebase to make the process of many sql operations
-// more seamless
-type NoebsDatabase interface {
-	OverrideField() string
-	GetPk() string
-}
 
 type IsAliveFields struct {
 	CommonFields
@@ -237,8 +227,9 @@ func iso8601(fl validator.FieldLevel) bool {
 // EBSResponse represent a struct that captures all of EBS response fields and map them into Transaction table
 // We should really split this up between consumer and merchant. It is just too complicated to manage now
 type EBSResponse struct {
-	gorm.Model
-	TokenID                uint
+	Model
+	TenantID               string `json:"-"`
+	TokenID                int64
 	TerminalID             string  `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string  `json:"clientId,omitempty"`
@@ -318,11 +309,6 @@ type EBSResponse struct {
 	BillInfo2 string `json:"bill_info2,omitempty"`
 }
 
-// TableName overrides the default table name for gorm
-func (EBSResponse) TableName() string {
-	return "transactions"
-}
-
 type MinistatementDB []map[string]interface{}
 
 func (m *MinistatementDB) Scan(value interface{}) error {
@@ -334,36 +320,6 @@ func (m *MinistatementDB) Scan(value interface{}) error {
 	}
 
 	return json.Unmarshal(b, m)
-}
-
-func (res EBSResponse) GetByUUID(uuid string, db *gorm.DB) (EBSResponse, error) {
-	var data EBSResponse
-	if res := db.Model(&res).First(&data, "uuid = ?", uuid); errors.Is(res.Error, gorm.ErrRecordNotFound) {
-		return EBSResponse{}, res.Error
-	}
-	return data, nil
-}
-
-func (e EBSResponse) GetEBSUUID(originalUUID string, db *gorm.DB, noebsConfig *NoebsConfig) (EBSResponse, error) {
-	url := noebsConfig.ConsumerIP + ConsumerTransactionStatusEndpoint
-	var fields = ConsumerTransactionStatusFields{}
-	fields.ApplicationId = noebsConfig.ConsumerID
-	fields.TranDateTime = EbsDate()
-	fields.OriginalTranUUID = originalUUID
-	uid, _ := uuid.NewRandom()
-	fields.UUID = uid.String()
-	jsonBuffer, err := json.Marshal(fields)
-	if err != nil {
-		return EBSResponse{}, err
-	}
-	_, res, ebsErr := EBSHttpClient(url, jsonBuffer)
-	res.Name = "status"
-	db.Table("transactions").Create(&res.EBSResponse)
-	if ebsErr != nil {
-		return res.EBSResponse, ebsErr
-	} else {
-		return res.EBSResponse, nil
-	}
 }
 
 // Value return json value, implement driver.Valuer interface
@@ -935,21 +891,22 @@ type ValidationError struct {
 	Message string `json:"message,omitempty"`
 }
 
-// NoebsConfig contains all about noebs configuration, including ebs ips and ports,
-// redis ips, and so on.
-// The file currently reads from `ebs_fields/.secrets.json` using go embedding fs.
-// NoebsConfig can be accessed via [NoebsSecrets] which is initialized in the
-// [ebs_fields] package in the init method.
+// NoebsConfig contains all about noebs configuration, including EBS endpoints,
+// database settings, and auth keys. Runtime config is built by merging
+// config.yaml with secrets.yaml (SOPS-encrypted) at startup.
 type NoebsConfig struct {
-	OneSignal    string `json:"onesignal_key"`
-	DatabasePath string `json:"db_path"`
-	SMSAPIKey    string `json:"sms_key"`
-	SMSSender    string `json:"sms_sender"`
-	SMSGateway   string `json:"sms_gateway"`
-	RedisPort    string `json:"redis_port"`
-	JWTKey       string `json:"jwt_secret"`
-	Sentry       string `json:"sentry"`
-	Port         string `json:"port"`
+	OneSignal          string `json:"onesignal_key"`
+	DatabasePath       string `json:"db_path"`
+	DatabaseURL        string `json:"db_url"`
+	DatabaseDriver     string `json:"db_driver"`
+	DefaultTenantID    string `json:"default_tenant_id"`
+	SMSAPIKey          string `json:"sms_key"`
+	SMSSender          string `json:"sms_sender"`
+	SMSGateway         string `json:"sms_gateway"`
+	RedisPort          string `json:"redis_port"`
+	JWTKey             string `json:"jwt_secret"`
+	Sentry             string `json:"sentry"`
+	Port               string `json:"port"`
 	GoogleClientID     string `json:"google_client_id"`
 	GoogleClientSecret string `json:"google_client_secret"`
 	GoogleRedirectURL  string `json:"google_redirect_url"`
@@ -1039,61 +996,8 @@ func (q QuickPaymentFields) MarshallP2pFields() []byte {
 }
 
 type CacheBillers struct {
-	Mobile   string `gorm:"primaryKey"`
+	Mobile   string `json:"mobile"`
 	BillerID string
-}
-
-func (c *CacheBillers) Save(db *gorm.DB, flipBiller bool) error {
-	newId := c.BillerID
-	if flipBiller {
-		switch c.BillerID {
-		case "0010010002": // zain bill payment
-			newId = "0010010001" // zain top up
-		case "0010010001":
-			newId = "0010010002"
-
-		case "0010010004": // mtn bill payment
-			newId = "0010010003" // mtn top up
-		case "0010010003":
-			newId = "0010010004"
-
-		case "0010010006": // sudani bill payment
-			newId = "0010010005" // sudani top up
-		case "0010010005":
-			newId = "0010010006"
-		}
-		c.BillerID = newId
-	}
-	return db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "mobile"}}, DoUpdates: clause.Assignments(map[string]any{"biller_id": c.BillerID}),
-	}).Create(&c).Error
-}
-
-func GetBillerInfo(mobile string, db *gorm.DB) (CacheBillers, error) {
-	c := CacheBillers{Mobile: mobile}
-	res := db.First(&c)
-	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-		return c, res.Error
-	}
-	return c, nil
-}
-
-func UpdateBiller(mobile, biller string, db *gorm.DB) (CacheBillers, error) {
-	c := CacheBillers{Mobile: mobile}
-	res := db.Model(&c).Where("mobile = ?", mobile).Update("biller_id", biller)
-	if res.Error != nil {
-		return c, res.Error
-	}
-	return c, nil
-}
-
-// Saves or updates any type that implements noebsdatabase. Currently it works best when the case is to only update one field (flag in db e.g., is_valid)
-// In case of no conflicts, it writes to db directly
-func SaveOrUpdates(db *gorm.DB, entity NoebsDatabase, newVal any) error {
-	card := entity.(CacheCards)
-	return db.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: entity.GetPk()}}, DoUpdates: clause.Assignments(map[string]any{entity.OverrideField(): newVal}),
-	}).Create(&card).Error
 }
 
 // EbsDate generates an ebs compliant date format ("ddMMYYhhmmss")

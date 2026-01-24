@@ -1,0 +1,7 @@
+noebs:
+  db_url: postgres://noebs:noebs@db:5432/noebs?sslmode=disable
+  db_driver: pgx
+  port: ":8080"
+  is_debug: false
+  cors:
+    - "*"

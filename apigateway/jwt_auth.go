@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/redis/go-redis/v9"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // JWTAuth provides an encapsulation for jwt auth
@@ -17,8 +16,6 @@ type JWTAuth struct {
 	NoebsConfig ebs_fields.NoebsConfig
 }
 
-type GetRedisClient func(string) *redis.Client
-
 // Init initializes jwt auth
 func (j *JWTAuth) Init() {
 	log.Printf("jwt_key: %s", j.NoebsConfig.JWTKey)
@@ -26,16 +23,22 @@ func (j *JWTAuth) Init() {
 }
 
 // GenerateJWT generates a JWT standard token with default values hardcoded. FIXME
-func (j *JWTAuth) GenerateJWT(userID uint, mobile string) (string, error) {
+func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
-	expiresAt := time.Now().Add(10 * time.Hour).UTC().Unix()
+	expiresAt := time.Now().Add(10 * time.Hour).UTC()
+	if tenantID == "" {
+		tenantID = "default"
+	}
 	claims := TokenClaims{
-		userID,
-		mobile,
-		jwt.StandardClaims{
-			ExpiresAt: expiresAt,
+		UserID:   userID,
+		Mobile:   mobile,
+		TenantID: tenantID,
+		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "noebs",
+			Subject:   fmt.Sprintf("%d", userID),
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -54,11 +57,8 @@ func (j *JWTAuth) GenerateJWT(userID uint, mobile string) (string, error) {
 
 // VerifyJWT giving a jwt token and a secret it validates the token against a hard coded TokenClaims struct
 func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// Don't forget to validate the alg is what you expect:
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	token, err := parser.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return j.Key, nil
 	})
 	if token == nil {
@@ -66,54 +66,23 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 		return nil, err
 	}
 
-	if claims, ok := token.Claims.(*TokenClaims); ok && token.Valid {
-		log.Println("why am i here?")
-		return claims, nil
-	} else {
+	claims, ok := token.Claims.(*TokenClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid claims")
+	}
+	if err != nil {
 		return claims, err
 	}
-}
-
-// verifyWithClaim deprecated it shouldn't be used.
-func (j *JWTAuth) verifyWithClaim(tokenString string) error {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return j.Key, nil
-	})
-
-	if token.Valid {
-		fmt.Println("You look nice today")
-	} else if ve, ok := err.(*jwt.ValidationError); ok {
-		if ve.Errors&jwt.ValidationErrorMalformed != 0 {
-			return errors.New("That's not even a token")
-		} else if ve.Errors&(jwt.ValidationErrorExpired|jwt.ValidationErrorNotValidYet) != 0 {
-			// Token is either expired or not active yet
-			return errors.New("Timing is everything")
-		} else {
-			return errors.New("Couldn't handle this token:")
-		}
-	} else {
-		return errors.New("Couldn't handle this token")
+	if !token.Valid {
+		return claims, jwt.ErrTokenInvalidClaims
 	}
-	return nil
+	return claims, nil
 }
 
 // TokenClaims noebs standard claim
 type TokenClaims struct {
-	UserID uint   `json:"uid"`
-	Mobile string `json:"mobile,omitempty"`
-	jwt.StandardClaims
-}
-
-// secretFromClaims returns the claim's secret. in this case it is a user name
-func (j *JWTAuth) secretFromClaims(token string, skipTime bool) (string, error) {
-	claims, err := j.VerifyJWT(token)
-	if e, ok := err.(*jwt.ValidationError); ok {
-		if e.Errors&jwt.ValidationErrorExpired > 0 && skipTime {
-			return claims.Mobile, nil
-		} else {
-			return "", errors.New("token is invalid")
-		}
-	} else {
-		return "", errors.New("token is invalid")
-	}
+	UserID   int64  `json:"uid"`
+	Mobile   string `json:"mobile,omitempty"`
+	TenantID string `json:"tenant_id,omitempty"`
+	jwt.RegisteredClaims
 }

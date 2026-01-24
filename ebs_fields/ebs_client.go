@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 )
 
 var log = logrus.New()
@@ -154,5 +153,5 @@ var (
 )
 
 type Configs struct {
-	DB *gorm.DB
+	DB any
 }

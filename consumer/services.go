@@ -10,16 +10,14 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
+	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
-	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm/clause"
 )
 
 const (
@@ -33,22 +31,12 @@ func (s *Service) CardFromNumber(c *fiber.Ctx) error {
 	if q == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "mobile number is empty", "code": "empty_mobile_number"})
 	}
-	ctx := c.UserContext()
-	// now search through redis for this mobile number!
-	// first check if we have already collected that number before
-	pan, err := s.Redis.Get(ctx, q+":pan").Result()
-	if err == nil {
-		return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
-	}
-	username, err := s.Redis.Get(ctx, q).Result()
-	if err == redis.Nil {
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	pan, err := s.Store.GetPanByMobile(c.UserContext(), tenantID, q)
+	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
 	}
-	if pan, ok := utils.PanfromMobile(ctx, username, s.Redis); ok {
-		return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
-	} else {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
-	}
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": pan})
 }
 
 // GetCards Get all cards for the currently authorized user
@@ -57,19 +45,20 @@ func (s *Service) GetCards(c *fiber.Ctx) error {
 	if username == "" {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
 	}
-	userCards, err := ebs_fields.GetCardsOrFail(username, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	userCards, err := s.Store.GetCardsOrFail(c.UserContext(), tenantID, username)
 	if err != nil {
 		// handle the error somehow
 		logrus.WithFields(logrus.Fields{
-			"code":    "unable to get results from redis",
+			"code":    "unable to fetch cards",
 			"message": err.Error(),
-		}).Info("unable to get results from redis")
+		}).Info("unable to get cards from store")
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"cards": nil, "main_card": nil})
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"cards": userCards.Cards, "main_card": userCards.Cards[0]})
 }
 
-func (s *Service) AddFirebaseID(c *fiber.Ctx) error {
+func (s *Service) AddDeviceToken(c *fiber.Ctx) error {
 	username := getMobile(c)
 	type data struct {
 		Token string `json:"token"`
@@ -79,11 +68,9 @@ func (s *Service) AddFirebaseID(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	if res := s.Db.Debug().Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "mobile"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{"device_id": req.Token}),
-	}).Create(&ebs_fields.User{Mobile: username, DeviceID: req.Token}); res.Error != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": res.Error, "code": "db_error"})
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	if err := s.Store.UpsertDeviceToken(c.UserContext(), tenantID, username, req.Token); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 	return c.Status(http.StatusOK).JSON(nil)
 }
@@ -95,18 +82,27 @@ func (s *Service) Beneficiaries(c *fiber.Ctx) error {
 	var req ebs_fields.Beneficiary
 	_ = parseJSON(c, &req)
 	s.Logger.Printf("the data in beneficiary is: %+v", req)
-	user, err := ebs_fields.NewUserWithBeneficiaries(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	if c.Method() == fiber.MethodPost {
-		user.UpsertBeneficiary([]ebs_fields.Beneficiary{req})
+		req.UserID = user.ID
+		if err := s.Store.UpsertBeneficiary(c.UserContext(), tenantID, user.ID, req); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
+		}
 		return c.Status(http.StatusCreated).JSON(nil)
 	} else if c.Method() == fiber.MethodGet {
-		return c.Status(http.StatusOK).JSON(user.Beneficiaries)
+		list, err := s.Store.ListBeneficiaries(c.UserContext(), tenantID, user.ID)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
+		}
+		return c.Status(http.StatusOK).JSON(list)
 	} else if c.Method() == fiber.MethodDelete {
-		req.UserID = user.ID
-		ebs_fields.DeleteBeneficiary(req, s.Db)
+		if err := s.Store.DeleteBeneficiary(c.UserContext(), tenantID, user.ID, req.Data); err != nil {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
+		}
 		return c.Status(http.StatusNoContent).JSON(nil)
 	}
 	return nil
@@ -121,7 +117,8 @@ func (s *Service) AddCards(c *fiber.Ctx) error {
 	if err := parseJSON(c, &listCards); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
-	user, err := ebs_fields.GetUserByMobile(username, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, username)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
@@ -131,7 +128,7 @@ func (s *Service) AddCards(c *fiber.Ctx) error {
 		listCards[idx].ID = 0
 		listCards[idx].UserID = user.ID
 	}
-	if err := user.UpsertCards(listCards); err != nil {
+	if err := s.Store.AddCards(c.UserContext(), tenantID, user.ID, listCards); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"code": "ok", "message": "cards added"})
@@ -152,12 +149,13 @@ func (s *Service) EditCard(c *fiber.Ctx) error {
 	if req.CardIdx == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "card idx is empty", "code": "card_idx_empty"})
 	}
-	user, err := ebs_fields.GetUserByMobile(username, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, username)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
 	req.UserID = user.ID
-	if err := ebs_fields.UpdateCard(req, s.Db); err != nil {
+	if err := s.Store.UpdateCard(c.UserContext(), tenantID, user.ID, req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"result": "ok"})
@@ -180,12 +178,13 @@ func (s *Service) RemoveCard(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "card idx is empty", "code": "card_idx_empty"})
 	}
 
-	user, err := ebs_fields.GetUserByMobile(username, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, username)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
 	card.UserID = user.ID
-	if err := ebs_fields.DeleteCard(card, s.Db); err != nil {
+	if err := s.Store.DeleteCard(c.UserContext(), tenantID, user.ID, card.CardIdx); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok"})
@@ -194,8 +193,8 @@ func (s *Service) RemoveCard(c *fiber.Ctx) error {
 // NecToName gets an nec number from the context and maps it to its meter number
 func (s *Service) NecToName(c *fiber.Ctx) error {
 	if nec := c.Query("nec"); nec != "" {
-		ctx := c.UserContext()
-		name, err := s.Redis.HGet(ctx, "meters", nec).Result()
+		tenantID := resolveTenantID(c, s.NoebsConfig)
+		name, err := s.Store.GetMeterName(c.UserContext(), tenantID, nec)
 		if err != nil {
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "No user found with this NEC", "code": "nec_not_found"})
 		} else {
@@ -218,7 +217,11 @@ func (s *Service) BillerHooks(ctx context.Context) {
 				return
 			}
 			log.Printf("The recv is: %v", value)
-			data, _ := json.Marshal(&value)
+			data, err := json.Marshal(&value)
+			if err != nil {
+				log.Printf("error marshaling biller hook payload: %v", err)
+				continue
+			}
 			// FIXME this code is dangerous
 			if value.to == "" {
 				value.to = "http://test.tawasuloman.com:8088/ShihabSudanWS/ShihabEBSConfirmation"
@@ -230,7 +233,13 @@ func (s *Service) BillerHooks(ctx context.Context) {
 			if !ok {
 				return
 			}
-			s.Db.Debug().Model(&ebs_fields.CacheCards{}).Where("pan = ?", res.Pan).Update("is_valid", res.IsValid)
+			tenantID := s.NoebsConfig.DefaultTenantID
+			if tenantID == "" {
+				tenantID = store.DefaultTenantID
+			}
+			if err := s.Store.UpsertCacheCard(ctx, tenantID, res); err != nil {
+				log.Printf("cache card update failed: %v", err)
+			}
 		}
 	}
 }
@@ -250,7 +259,8 @@ func (s *Service) PaymentOrder() fiber.Handler {
 		mobile := getMobile(c)
 		var req ebs_fields.Token
 		token, _ := uuid.NewRandom()
-		user, err := ebs_fields.GetCardsOrFail(mobile, s.Db)
+		tenantID := resolveTenantID(c, s.NoebsConfig)
+		user, err := s.Store.GetCardsOrFail(c.UserContext(), tenantID, mobile)
 		if err != nil {
 			log.Printf("error in retrieving card: %v", err)
 			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
@@ -286,7 +296,11 @@ func (s *Service) PaymentOrder() fiber.Handler {
 			},
 			ToCard: req.ToCard,
 		}
-		updatedRequest, _ := json.Marshal(&data)
+		updatedRequest, err := json.Marshal(&data)
+		if err != nil {
+			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
+			return nil
+		}
 		// Modify request body for downstream handlers
 		c.Request().SetBody(updatedRequest)
 		c.Request().Header.SetContentType("application/json")
@@ -316,62 +330,14 @@ func (s *Service) PaymentOrder() fiber.Handler {
 // CashoutPub experimental support to add pubsub support
 // we need to make this api public
 func (s *Service) CashoutPub(ctx context.Context) {
-	pubsub := s.Redis.Subscribe(ctx, "chan_cashouts")
-
-	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive(ctx)
-	if err != nil {
-		log.Printf("There is an error in connecting to chan.")
-		return
-	}
-
-	// // Go channel which receives messages.
-	ch := pubsub.Channel()
-
-	// Consume messages.
-	var card cashoutFields
-	for msg := range ch {
-		// So this is how we gonna do it! So great!
-		// we have to parse the payload here:
-		if err := json.Unmarshal([]byte(msg.Payload), &card); err != nil {
-			log.Printf("Error in marshaling data: %v", err)
-			continue
-		}
-
-		data, err := json.Marshal(&card)
-		if err != nil {
-			log.Printf("Error in marshaling response: %v", err)
-			continue
-		}
-		_, err = http.Post(card.Endpoint, "application/json", bytes.NewBuffer(data))
-		if err != nil {
-			log.Printf("Error in response: %v", err)
-		}
-		fmt.Println(msg.Channel, msg.Payload)
-	}
+	_ = ctx
+	s.Logger.Printf("cashout pubsub disabled (redis removed)")
 }
 
 func (s *Service) pubSub(ctx context.Context, channel string, message interface{}) {
-	pubsub := s.Redis.Subscribe(ctx, channel)
-
-	// Wait for confirmation that subscription is created before publishing anything.
-	_, err := pubsub.Receive(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	// // Go channel which receives messages.
-	ch := pubsub.Channel()
-
-	time.AfterFunc(time.Second, func() {
-		// When pubsub is closed channel is closed too.
-		_ = pubsub.Close()
-	})
-
-	// Consume messages.
-	for msg := range ch {
-		fmt.Println(msg.Channel, msg.Payload)
-	}
+	_ = ctx
+	_ = channel
+	_ = message
 }
 
 func updatePaymentInfo(ebsBills *ebs_fields.ConsumerBillInquiryFields, b bills) {
@@ -492,7 +458,7 @@ func toInt(amount string) int {
 
 // billerID retrieves the type of a mobile number (the operator and the type with prepaid or postpaid) using
 // some heuristics -- it fallback to making a request to ebs as a last resort to get the type of phone number (by making a free transaction, that is bill inquiry)
-func (s *Service) billerID(mobile string) (string, error) {
+func (s *Service) billerID(ctx context.Context, tenantID, mobile string) (string, error) {
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b bills
 	b.PayeeID = guessMobile(mobile)
@@ -514,7 +480,7 @@ func (s *Service) billerID(mobile string) (string, error) {
 	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
 	// Get our cache results before hand
-	if oldCache, err := ebs_fields.GetBillerInfo(b.Phone, s.Db); err == nil { // we have stored this phone number before
+	if oldCache, err := s.Store.GetCacheBiller(ctx, tenantID, b.Phone); err == nil { // we have stored this phone number before
 		fields.PayeeId = oldCache.BillerID // use the data we stored previously
 	}
 	jsonBuffer, err := json.Marshal(fields)
@@ -529,7 +495,7 @@ func (s *Service) billerID(mobile string) (string, error) {
 	// mask the pan
 	res.MaskPAN()
 	res.Name = s.ToDatabasename(url)
-	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+	if err := s.Store.CreateTransaction(ctx, tenantID, res.EBSResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"code":    "unable to migrate purchase model",
 			"message": err,
@@ -537,20 +503,41 @@ func (s *Service) billerID(mobile string) (string, error) {
 	}
 	if ebsErr != nil {
 		// it fails gracefully here..
-		cacheBills.Save(s.Db, true)
+		cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
+		_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
 		return cacheBills.BillerID, nil
 	} else {
-		cacheBills.Save(s.Db, false)
+		_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
 		return cacheBills.BillerID, nil
 	}
 }
 
+func flipBillerID(id string) string {
+	newId := id
+	switch id {
+	case "0010010002": // zain bill payment
+		newId = "0010010001" // zain top up
+	case "0010010001":
+		newId = "0010010002"
+	case "0010010004": // mtn bill payment
+		newId = "0010010003" // mtn top up
+	case "0010010003":
+		newId = "0010010004"
+	case "0010010006": // sudani bill payment
+		newId = "0010010005" // sudani top up
+	case "0010010005":
+		newId = "0010010006"
+	}
+	return newId
+}
+
 // isValidCard checks noebs database first and fallback to making an actual payment request
 // to ensure that a card is actually valid
-func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
-	var dbCard ebs_fields.Card
-	if res := s.Db.Where("pan = ?", card.Pan).First(&dbCard); res.Error == nil {
-		// if the card made it to the db this means it's a valid card
+func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
+	if tenantID == "" {
+		tenantID = store.DefaultTenantID
+	}
+	if exists, err := s.Store.CardExists(ctx, tenantID, card.Pan); err == nil && exists {
 		return true, nil
 	}
 
@@ -583,7 +570,7 @@ func (s *Service) isValidCard(card ebs_fields.CacheCards) (bool, error) {
 	// mask the pan
 	res.MaskPAN()
 	res.Name = s.ToDatabasename(url)
-	if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+	if err := s.Store.CreateTransaction(ctx, tenantID, res.EBSResponse); err != nil {
 		logrus.WithFields(logrus.Fields{
 			"code":    "unable to migrate purchase model",
 			"message": err,
@@ -609,7 +596,7 @@ func guessMobile(mobile string) string {
 	}
 }
 
-func (s *Service) GetIpinPubKey() error {
+func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	s.Logger.Printf("someone launched getipin goroutine")
 	url := s.NoebsConfig.IPIN + ebs_fields.QRPublicKey
 	s.Logger.Printf("EBS url is: %v", url)
@@ -623,7 +610,9 @@ func (s *Service) GetIpinPubKey() error {
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 	s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 	res.Name = s.ToDatabasename(url)
-	s.Db.Table("transactions").Create(&res.EBSResponse)
+	if err := s.Store.CreateTransaction(ctx, tenantID, res.EBSResponse); err != nil {
+		s.Logger.Printf("transaction save failed: %v", err)
+	}
 	if ebsErr != nil {
 		return errors.New("error in transaction: ebs")
 	} else {
@@ -637,29 +626,38 @@ func (s *Service) GetIpinPubKey() error {
 // Notifications handles various crud operations (json)
 func (s *Service) Notifications(c *fiber.Ctx) error {
 	mobile := getMobile(c)
-	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		s.Logger.Printf("Error finding user: %v", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	var notifications []PushData
-	s.Db.Where("user_mobile = ?", user.Mobile).Find(&notifications)
-	if err := c.Status(http.StatusOK).JSON(notifications); err != nil {
+	records, err := s.Store.GetNotifications(c.UserContext(), tenantID, user.Mobile)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+	if err := c.Status(http.StatusOK).JSON(records); err != nil {
 		return err
 	}
-	var pushdata PushData
-	pushdata.UpdateIsRead(mobile, s.Db)
+	_ = s.Store.MarkNotificationsRead(c.UserContext(), tenantID, mobile)
 	return nil
 }
 
 // GetUser returns the user profile object for the currently logged in user
 func (s *Service) GetUser(c *fiber.Ctx) error {
 	mobile := getMobile(c)
-
-	var profile ebs_fields.UserProfile
-	if res := s.Db.Model(&ebs_fields.User{}).Where("mobile = ?", mobile).First(&profile); res.Error != nil {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": res.Error.Error(), "code": "database_error"})
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
+	}
+	profile := ebs_fields.UserProfile{
+		Fullname: user.Fullname,
+		Username: user.Username,
+		Email:    user.Email,
+		Birthday: user.Birthday,
+		Gender:   user.Gender,
 	}
 	return c.Status(http.StatusOK).JSON(profile)
 }
@@ -672,20 +670,17 @@ func (s *Service) UpdateUser(c *fiber.Ctx) error {
 	}
 
 	mobile := getMobile(c)
-	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
-	var tmpUser ebs_fields.User
-	if res := s.Db.Where("username = ?", profile.Username).First(&tmpUser); res.Error == nil && tmpUser.Mobile != user.Mobile {
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "duplication_error", "message": "username already exists"})
+	if profile.Username != "" {
+		if other, err := s.Store.FindUserByUsername(c.UserContext(), tenantID, profile.Username); err == nil && other.ID != user.ID {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "duplication_error", "message": "username already exists"})
+		}
 	}
-	user.Fullname = profile.Fullname
-	user.Username = profile.Username
-	user.Email = profile.Email
-	user.Birthday = profile.Birthday
-	user.Gender = profile.Gender
-	if err := ebs_fields.UpdateUser(user, s.Db); err != nil {
+	if err := s.Store.UpdateUserProfile(c.UserContext(), tenantID, user.ID, profile); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok"})
@@ -693,7 +688,8 @@ func (s *Service) UpdateUser(c *fiber.Ctx) error {
 
 func (s *Service) GetUserLanguage(c *fiber.Ctx) error {
 	mobile := getMobile(c)
-	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		s.Logger.Printf("ERROR: could not get user from by mobile: %v", err.Error())
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
@@ -704,7 +700,8 @@ func (s *Service) GetUserLanguage(c *fiber.Ctx) error {
 func (s *Service) SetUserLanguage(c *fiber.Ctx) error {
 	mobile := getMobile(c)
 	language := c.Query("language")
-	user, err := ebs_fields.GetUserByMobile(mobile, s.Db)
+	tenantID := resolveTenantID(c, s.NoebsConfig)
+	user, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		s.Logger.Printf("ERROR: could not get user from by mobile: %v", err.Error())
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
@@ -712,8 +709,7 @@ func (s *Service) SetUserLanguage(c *fiber.Ctx) error {
 	if language == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "You must set a language", "code": "client_error"})
 	}
-	user.Language = language
-	if err := ebs_fields.UpdateUser(user, s.Db); err != nil {
+	if err := s.Store.UpdateUserLanguage(c.UserContext(), tenantID, user.ID, language); err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
 	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok"})
@@ -725,7 +721,15 @@ func (s *Service) KYC(ctx *fiber.Ctx) error {
 	if err := bindJSON(ctx, &request); err != nil {
 		return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	if err := ebs_fields.UpdateUserWithKYC(s.Db, &request); err != nil {
+	tenantID := resolveTenantID(ctx, s.NoebsConfig)
+	kyc := &ebs_fields.KYC{
+		UserMobile:  request.Mobile,
+		Mobile:      request.Mobile,
+		Selfie:      request.Selfie,
+		PassportImg: request.PassportImg,
+	}
+	passport := request.Passport
+	if err := s.Store.UpdateKYC(ctx.UserContext(), tenantID, kyc, &passport); err != nil {
 		return ctx.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	// Return a success message

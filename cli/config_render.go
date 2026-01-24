@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -29,7 +28,6 @@ func renderConfigFiles() error {
 	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml")
 
 	outputDir := filepath.Dir(configPath)
-	outputJSON := filepath.Join(outputDir, ".secrets.json")
 	outputDBPath := filepath.Join(outputDir, ".db_path")
 	outputLitestream := litestreamOutputPath(outputDir)
 
@@ -65,14 +63,6 @@ func renderConfigFiles() error {
 
 	if err := os.WriteFile(outputDBPath, []byte(fmt.Sprint(noebs["db_path"])), 0600); err != nil {
 		return fmt.Errorf("write db path: %w", err)
-	}
-
-	jsonData, err := json.MarshalIndent(noebs, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode noebs config: %w", err)
-	}
-	if err := os.WriteFile(outputJSON, jsonData, 0600); err != nil {
-		return fmt.Errorf("write runtime config: %w", err)
 	}
 
 	if err := writeLitestreamConfig(merged, noebs, outputLitestream); err != nil {

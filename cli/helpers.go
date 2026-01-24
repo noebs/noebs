@@ -16,12 +16,23 @@ import (
 type redisPurchaseFields map[string]interface{}
 
 func structFields(s interface{}) (fields []map[string]interface{}) {
-	val := reflect.Indirect(reflect.ValueOf(s))
-	// val is a reflect.Type now
+	val := reflect.ValueOf(s)
+	if !val.IsValid() {
+		return fields
+	}
+	for val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+		if val.IsNil() {
+			return fields
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fields
+	}
 
 	t := val.Type()
 
-	for i := 0; i <= t.NumField(); i++ {
+	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		name := f.Tag.Get("json")
 		tag := f.Tag.Get("binding")
@@ -135,7 +146,9 @@ func wrapHandler(h interface{}) fiber.Handler {
 			return nil
 		}
 	default:
-		panic("unsupported handler type")
+		return func(c *fiber.Ctx) error {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "invalid_handler", "message": "unsupported handler type"})
+		}
 	}
 }
 
@@ -146,7 +159,13 @@ func additionalFieldsToHash(a string) (map[string]string, error) {
 	}
 	out := make(map[string]string)
 	for _, v := range fields {
-		f := strings.Split(v, "=")
+		if v == "" {
+			continue
+		}
+		f := strings.SplitN(v, "=", 2)
+		if len(f) != 2 {
+			return nil, errors.New("invalid key=value pair")
+		}
 		out[f[0]] = f[1]
 	}
 	return out, nil

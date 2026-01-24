@@ -3,15 +3,13 @@ package merchant
 
 import (
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/redis/go-redis/v9"
+	"github.com/adonese/noebs/store"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 )
 
 // Service is a generic struct to hold all application-level data
 type Service struct {
-	Redis       *redis.Client
-	Db          *gorm.DB
+	Store       *store.Store
 	IP          string
 	Logger      *logrus.Logger
 	NoebsConfig ebs_fields.NoebsConfig

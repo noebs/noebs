@@ -1,13 +1,26 @@
 version: '2'
 services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: noebs
+      POSTGRES_PASSWORD: noebs
+      POSTGRES_DB: noebs
+    ports:
+      - "5432:5432"
+    volumes:
+      - noebs-postgres:/var/lib/postgresql/data
   web:
     build: .
     ports:
       - "8080:8080"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      - ./config.docker.yaml:/app/config.yaml:ro
       - ./secrets.yaml:/app/secrets.yaml:ro
       - ./.sops/age-key.txt:/app/.sops/age-key.txt:ro
       - noebs-data:/data
+    depends_on:
+      - db
 volumes:
   noebs-data:
+  noebs-postgres:

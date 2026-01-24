@@ -13,17 +13,14 @@ package consumer
 import (
 	"context"
 	"errors"
-	"log"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/utils"
 	"github.com/pquerna/otp/totp"
-	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm/clause"
 )
 
 var (
@@ -32,11 +29,6 @@ var (
 	errNoServiceID    = errors.New("empty Service ID was entered")
 	errObjectNotFound = errors.New("object not found")
 )
-
-func isMember(ctx context.Context, key, val string, r *redis.Client) bool {
-	b, _ := r.SIsMember(ctx, key, val).Result()
-	return b
-}
 
 // validatePassword to include at least one capital letter, one symbol and one number
 // and that it is at least 8 characters long
@@ -62,68 +54,6 @@ func validatePassword(password string) bool {
 		}
 	}
 	return hasUpper && hasSymbol && hasNumber
-}
-
-// userHasSessions is a handy function we can use to check if a user has any active sessions e.g., esp
-// when we don't want our users to use our app in new devices.
-// we have to implement a way to:
-// - identify user's devices
-// - allow them to use the app in other devices in case their original device was lost
-func userHasSessions(ctx context.Context, s *Service, username string) bool {
-	// Make sure the user doesn't have any active sessions!
-	lCount, err := s.Redis.Get(ctx, username+":logged_in_devices").Result()
-
-	num, _ := strconv.Atoi(lCount)
-	// Allow for the user to be logged in -- add allowance through someway
-	if err != redis.Nil && num > 1 {
-		// The user is already logged in somewhere else. Communicate that to them, clearly!
-		//c.JSON(http.StatusBadRequest, gin.H{"code": "user_logged_elsewhere",
-		//	"code": "You are logging from another device. You can only have one valid session"})
-		//return
-		log.Print("The user is logging from a different location")
-		return true
-	}
-	return false
-}
-
-// userExceedMaxSessions keep track of many login-attempts a user has made
-func userExceededMaxSessions(ctx context.Context, s *Service, username string) bool {
-	// make sure number of failed logged_in counts doesn't exceed the allowed threshold.
-	res, err := s.Redis.Get(ctx, username+":login_counts").Result()
-	if err == redis.Nil {
-		// the has just logged in
-		s.Redis.Set(ctx, username+":login_counts", 0, time.Hour)
-	} else if err == nil {
-		count, _ := strconv.Atoi(res)
-		if count >= 5 {
-			// Allow users to use another login method (e.g., totp, or they should reset their password)
-			// Lock their account
-			//s.Redis.HSet(username, "suspecious_behavior", 1)
-			s.Redis.HIncrBy(ctx, username, "suspicious_behavior", 1)
-			ttl, _ := s.Redis.TTL(ctx, username+":login_counts").Result()
-			log.Printf("user exceeded max sessions %v", ttl)
-			return true
-		}
-	}
-	return false
-}
-
-func (s *Service) store(ctx context.Context, buf []byte, username string, edit bool) error {
-	z := &redis.Z{
-		Member: buf,
-	}
-	if edit {
-		_, err := s.Redis.ZAdd(ctx, username+":cards", *z).Result()
-		if err != nil {
-			return err
-		}
-	} else {
-		_, err := s.Redis.ZAdd(ctx, username+":cards", *z).Result()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func generateOtp(secret string) (string, error) {
@@ -184,7 +114,11 @@ func (s *Service) Pusher(ctx context.Context) {
 			s.Logger.Infof("the data is: %+v", data)
 			// we are doing too much of db and logic here, let's simplify it
 			if data.Phone != "" {
-				user, err := ebs_fields.GetUserByMobile(data.Phone, s.Db)
+				tenantID := s.NoebsConfig.DefaultTenantID
+				if tenantID == "" {
+					tenantID = store.DefaultTenantID
+				}
+				user, err := s.Store.GetUserByMobile(ctx, tenantID, data.Phone)
 				if err != nil {
 					// not a tutipay user
 					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
@@ -192,23 +126,54 @@ func (s *Service) Pusher(ctx context.Context) {
 					data.To = user.DeviceID
 					data.EBSData = ebs_fields.EBSResponse{}
 					data.UserMobile = user.Mobile
-					//Omit association when creating
-					s.Db.Omit(clause.Associations).Create(&data)
+					record := ebs_fields.PushDataRecord{
+						UUID:           data.UUID,
+						Type:           data.Type,
+						Date:           data.Date,
+						To:             data.To,
+						Title:          data.Title,
+						Body:           data.Body,
+						CallToAction:   data.CallToAction,
+						Phone:          data.Phone,
+						IsRead:         data.IsRead,
+						DeviceID:       data.DeviceID,
+						UserMobile:     data.UserMobile,
+						PaymentRequest: data.PaymentRequest,
+					}
+					_ = s.Store.CreatePushData(ctx, tenantID, &record)
 					s.SendPush(ctx, data)
 					// FIXME(adonese): fallback option, maybe there is not need for the duplication
 					data.To = data.DeviceID // Sender DeviceID
 					s.SendPush(ctx, data)
 				}
 			} else {
-				user, err := ebs_fields.GetUserByCard(data.EBSData.PAN, s.Db)
+				tenantID := s.NoebsConfig.DefaultTenantID
+				if tenantID == "" {
+					tenantID = store.DefaultTenantID
+				}
+				user, err := s.Store.GetUserByCard(ctx, tenantID, data.EBSData.PAN)
 				if err != nil {
 					s.Logger.Printf("error finding user: %v", err)
-				} else {
-					data.To = user.DeviceID
-					data.UserMobile = user.Mobile
-					s.Db.Omit(clause.Associations).Create(&data)
-					s.SendPush(ctx, data)
+					continue
 				}
+				data.To = user.DeviceID
+				data.UserMobile = user.Mobile
+				record := ebs_fields.PushDataRecord{
+					UUID:           data.UUID,
+					Type:           data.Type,
+					Date:           data.Date,
+					To:             data.To,
+					Title:          data.Title,
+					Body:           data.Body,
+					CallToAction:   data.CallToAction,
+					Phone:          data.Phone,
+					IsRead:         data.IsRead,
+					DeviceID:       data.DeviceID,
+					UserMobile:     data.UserMobile,
+					PaymentRequest: data.PaymentRequest,
+				}
+				_ = s.Store.CreatePushData(ctx, tenantID, &record)
+				s.SendPush(ctx, data)
 			}
 		}
 	}

@@ -11,15 +11,13 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
 type User struct {
-	gorm.Model
+	Model
+	TenantID string `json:"-"`
 	Created  int64  `gorm:"autoCreateTime"`
 	Password string `binding:"required,min=8,max=20" json:"password"`
 	Fullname string `json:"fullname"`
@@ -27,30 +25,31 @@ type User struct {
 	Gender   string `json:"gender"`
 	Birthday string `json:"birthday"`
 
-	Email           string `json:"email" gorm:"index"`
-	Password2       string `json:"password2" gorm:"-"`
-	IsMerchant      bool   `json:"is_merchant" gorm:"default:false"`
-	PublicKey       string `json:"user_pubkey"`
-	DeviceID        string `json:"device_id"`
-	OTP             string `json:"otp"`
-	SignedOTP       string `json:"signed_otp"`
-	Tokens          []Token
-	Beneficiaries   []Beneficiary
-	db              *gorm.DB
-	Cards           []Card
-	FirebaseIDToken string `json:"firebase_token"`
-	NewPassword     string `json:"new_password" gorm:"-"`
-	IsPasswordOTP   bool   `json:"is_password_otp" gorm:"default:false"`
-	MainCard        string `json:"main_card" gorm:"column:main_card"`
-	ExpDate         string `json:"exp_date" gorm:"column:main_expdate"`
-	Language        string `json:"language"`
-	IsVerified      bool   `json:"is_verified"`
-	Mobile          string `json:"mobile" gorm:"not null;uniqueIndex"`
-	KYC             *KYC   `gorm:"foreignKey:UserMobile;references:Mobile"`
+	Email         string `json:"email" gorm:"index"`
+	Password2     string `json:"password2" gorm:"-"`
+	IsMerchant    bool   `json:"is_merchant" gorm:"default:false"`
+	PublicKey     string `json:"user_pubkey"`
+	DeviceID      string `json:"device_id"`
+	OTP           string `json:"otp"`
+	SignedOTP     string `json:"signed_otp"`
+	Tokens        []Token
+	Beneficiaries []Beneficiary
+	Cards         []Card
+	// DeviceToken stores a push token (legacy db column is firebase_token).
+	DeviceToken   string `json:"device_token" db:"firebase_token"`
+	NewPassword   string `json:"new_password" gorm:"-"`
+	IsPasswordOTP bool   `json:"is_password_otp" gorm:"default:false"`
+	MainCard      string `json:"main_card" gorm:"column:main_card"`
+	ExpDate       string `json:"exp_date" gorm:"column:main_expdate" db:"main_expdate"`
+	Language      string `json:"language"`
+	IsVerified    bool   `json:"is_verified"`
+	Mobile        string `json:"mobile" gorm:"not null;uniqueIndex"`
+	KYC           *KYC   `gorm:"foreignKey:UserMobile;references:Mobile"`
 }
 
 type KYC struct {
-	gorm.Model
+	Model
+	TenantID    string   `json:"-"`
 	UserMobile  string   `gorm:"not null;unique"`
 	Mobile      string   `gorm:"primaryKey;not null;unique"`
 	Passport    Passport `gorm:"foreignKey:Mobile;references:Mobile"`
@@ -58,19 +57,9 @@ type KYC struct {
 	PassportImg string
 }
 
-// BeforeSave GORM hook
-func (k *KYC) BeforeSave(tx *gorm.DB) (err error) {
-	if k.Mobile == "" {
-		err = errors.New("mobile cannot be an empty string")
-	}
-	if k.UserMobile == "" {
-		err = errors.New("user_mobile cannot be an empty string")
-	}
-	return
-}
-
 type Passport struct {
-	gorm.Model
+	Model
+	TenantID       string    `json:"-"`
 	Mobile         string    `gorm:"primaryKey;not null;unique" json:"mobile,omitempty"`
 	BirthDate      time.Time `json:"birth_date,omitempty"`
 	IssueDate      time.Time `json:"issue_date,omitempty"`
@@ -109,22 +98,6 @@ type UserProfile struct {
 // 		return err
 // 	}
 // }
-
-func NewUser(db *gorm.DB) *User {
-	return &User{
-		db: db,
-	}
-}
-
-// GetUserByMobile Retrieves a user from the database by mobile (username)
-func GetUserByMobile(mobile string, db *gorm.DB) (User, error) {
-	var user User
-	if result := db.First(&user, "mobile = ?", mobile); errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return user, errors.New("user not found")
-	}
-	user.db = db
-	return user, nil
-}
 
 type QRMerchant struct {
 	Mobile string
@@ -168,95 +141,6 @@ func (u User) VerifyOtp(code string) bool {
 	return isValid
 }
 
-// GetUser retrieves a user via their mobile number
-func GetUser(mobile string, db *gorm.DB) (*User, error) {
-	var user User
-	// Get user model and preload Cards and order the model relation Cards.is_main
-	// This trick is really super important: it will allow us to get a user's main card
-	// with ease, without having to do a second fetch and then filter the main card
-	result := db.Model(&User{}).First(&user, "mobile = ?", mobile)
-	user.db = db
-	return &user, result.Error
-}
-
-func NewUserWithCards(mobile string, db *gorm.DB) (*User, error) {
-	var user User
-	// Get user model and preload Cards and order the model relation Cards.is_main
-	// This trick is really super important: it will allow us to get a user's main card
-	// with ease, without having to do a second fetch and then filter the main card
-	result := db.Model(&User{}).Preload("Cards", func(db *gorm.DB) *gorm.DB {
-		db = db.Order("is_main desc")
-		return db
-	}).First(&user, "mobile = ?", mobile)
-	user.db = db
-	return &user, result.Error
-}
-
-func NewUserWithBeneficiaries(mobile string, db *gorm.DB) (*User, error) {
-	var user User
-	// Get user model and preload Beneficiaries and order the model relation
-	// This trick is really super important: it will allow us to get a user's main card
-	// with ease, without having to do a second fetch and then filter the main card
-	result := db.Model(&User{}).Preload("Beneficiaries").First(&user, "mobile = ?", mobile)
-	user.db = db
-	return &user, result.Error
-}
-
-// GetUserByCard retrieves a noebs user by their PAN
-func GetUserByCard(pan string, db *gorm.DB) (User, error) {
-	var card Card
-	var user User
-	if err := db.Model(&Card{}).Where("pan = ?", pan).First(&card); errors.Is(err.Error, gorm.ErrRecordNotFound) {
-		return User{}, err.Error
-	}
-	if err := db.Model(&User{}).Where("id = ?", card.UserID).First(&user); errors.Is(err.Error, gorm.ErrRecordNotFound) {
-		return User{}, err.Error
-	}
-	return user, nil
-}
-
-// GetDeviceIDsByPan retrieves device_ids associated to a card number
-func GetDeviceIDsByPan(pan string, db *gorm.DB) ([]string, error) {
-	var results []string
-	err := db.Model(&User{}).Distinct("users.device_id").Joins("left join cards on cards.user_id = users.id").Where("users.device_id != ?", "").Where("cards.pan = ? and cards.deleted_at is null", pan).Scan(&results)
-	return results, err.Error
-}
-
-// GetCardsOrFail returns a user model and fails if user doesn't exist. It loads
-// an existing user model with their cards. The user model itself might be used for other
-// cases, that's why we are not just returning Card
-// NOTE: we are not masking cards here which is really *very* insecure to say the least.
-func GetCardsOrFail(mobile string, db *gorm.DB) (*User, error) {
-	var user User
-	result := db.Model(&User{}).First(&user, "mobile = ?", mobile)
-	if result.Error != nil {
-		// This should be impossible because the user would not get to this
-		// point if he does not exits
-		logrus.Errorf("Error with user (mobile = %v): error: %v", mobile, result.Error)
-		return nil, result.Error
-	}
-	result = db.Model(&Card{}).Order("is_main DESC").Find(&user.Cards, "user_id = ?", user.ID)
-	if result.Error != nil {
-		logrus.Errorf("Error with user (mobile = %v): error: %v", mobile, result.Error)
-		return nil, result.Error
-	}
-	if len(user.Cards) == 0 {
-		return nil, errors.New("no cards found")
-	}
-	user.db = db
-	return &user, result.Error
-}
-
-// NewUserByMobile Retrieves a user from the database by mobile (username)
-func GetUserTokens(mobile string, db *gorm.DB) ([]Token, error) {
-	var user User
-	// Get user model and preload Cards and order the model relation Cards.is_main
-	// This trick is really super important: it will allow us to get a user's main card
-	// with ease, without having to do a second fetch and then filter the main card
-	result := db.Model(&User{}).Preload("Tokens").First(&user, "mobile = ?", mobile)
-	return user.Tokens, result.Error
-}
-
 // EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
 func (u User) EncodePublickey() string {
 	return base64.StdEncoding.EncodeToString([]byte(u.PublicKey))
@@ -281,55 +165,12 @@ func (u *User) HashPassword() error {
 	return nil
 }
 
-// UpsertCards to an existing noebs user. It uses gorm' relation to amends a user cards
-// When adding a card, make sure the card.ID is set to zero value so that
-// gorm wouldn't confuse it for an update
-//
-// FIXME(adonese): since we are using gorm.Model in Card table, gorm thinks
-// it is an ID for the card (a primary key) and as a result will do an update instead of insert
-func (u User) UpsertCards(cards []Card) error {
-	u.Cards = cards
-	return u.db.Debug().Clauses(clause.OnConflict{
-		UpdateAll: true,
-	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
-}
-
-// UpsertBeneficiary adds or updates a beneficiary to a user
-func (u User) UpsertBeneficiary(beneficiary []Beneficiary) error {
-	u.Beneficiaries = beneficiary
-	return u.db.Clauses(clause.OnConflict{
-		UpdateAll: true,
-	}).Session(&gorm.Session{FullSaveAssociations: true}).Updates(&u).Error
-}
-
-// UpdateCard only changes a card pan number
-func UpdateCard(card Card, db *gorm.DB) error {
-	return db.Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Updates(&card).Error
-}
-
-// DeleteCards soft-deletes a card of list of cards associated to a user
-func (u User) DeleteCards(cards []Card) error {
-	for idx := range cards {
-		cards[idx].UserID = u.ID
-	}
-	log.Printf("the user card model is: %v", u)
-	return u.db.Session(&gorm.Session{FullSaveAssociations: true}).Delete(&cards).Error
-}
-
-// DeleteCard with a user_id
-func DeleteCard(card Card, db *gorm.DB) error {
-	return db.Debug().Where("pan = ? AND user_id = ?", card.CardIdx, card.UserID).Delete(&card).Error
-}
-
-// DeleteBeneficiary with a user_id
-func DeleteBeneficiary(card Beneficiary, db *gorm.DB) error {
-	return db.Debug().Where("data = ? AND user_id = ?", card.Data, card.UserID).Delete(&card).Error
-}
-
 type Beneficiary struct {
+	Model
+	TenantID string `json:"-"`
 	Data     string `json:"data"`
 	BillType string `json:"bill_type"`
-	UserID   uint
+	UserID   int64
 	Name     string `json:"name"` // a beneficiary name
 }
 
@@ -390,15 +231,15 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 //  5. Mobile: the receipient of the payment mobile. This is an optional field
 //  6. Note: an optional text note to be sent to the recipient.
 type Token struct {
-	gorm.Model
-	UserID uint
+	Model
+	TenantID string `json:"-"`
+	UserID   int64
 
-	User         User          `gorm:"-" json:"-"`
+	User         User          `json:"-"`
 	Amount       int           `json:"amount,omitempty"`
 	CartID       string        `json:"cart_id,omitempty"`
-	UUID         string        `json:"uuid,omitempty" gorm:"not null;unique;uniqueIndex"`
+	UUID         string        `json:"uuid,omitempty"`
 	Note         string        `json:"note,omitempty"`
-	db           *gorm.DB      `gorm:"-"`
 	ToCard       string        `json:"toCard,omitempty"`
 	EBSResponses []EBSResponse `json:"transaction,omitempty"`
 	IsPaid       bool          `json:"is_paid"`
@@ -419,89 +260,6 @@ func (u *User) NewPaymentToken(amount int, note string, cartID string) (*Token, 
 		CartID: cartID,
 	}
 	return token, nil
-}
-
-// SavePaymentToken saves the payment token to the database
-func (u *User) SavePaymentToken(pt *Token) error {
-	return u.db.Model(&Token{}).Create(pt).Error
-}
-
-// GetAllTokens associated to a user.
-func GetAllTokens(db *gorm.DB) ([]Token, error) {
-	var tokens []Token
-	result := db.Model(&Token{}).Preload("Transaction").Find(&tokens)
-	return tokens, result.Error
-}
-
-// GetTokenWithTransaction preloads a token with its transaction
-func GetTokenWithTransaction(uuid string, db *gorm.DB) (Token, error) {
-	var paymentToken Token
-	result := db.Model(&Token{}).Preload("Transaction").First(&paymentToken, "uuid = ?", uuid)
-	paymentToken.db = db
-	return paymentToken, result.Error
-}
-
-// GetAllTokens associated to a user.
-func GetAllTokensByUserID(userID uint, db *gorm.DB) ([]Token, error) {
-	var tokens []Token
-	result := db.Model(&Token{}).Preload("Transaction").Where("user_id = ?", userID).Find(&tokens)
-	return tokens, result.Error
-}
-
-// GetAllTokens associated to a user.
-func GetAllTokensByUserIDAndCartID(userID uint, cartID string, db *gorm.DB) ([]Token, error) {
-	// var tokens []PaymentToken
-	return nil, nil
-}
-
-// NewToken creates a new paymenttoken struct and populate it with a database
-func NewToken(db *gorm.DB) *Token {
-	return &Token{
-		db: db,
-	}
-}
-
-// NewPaymentToken creates a new payment token and assign it to a user
-func NewPaymentToken(mobile string, db *gorm.DB) (*Token, error) {
-	user, err := GetUserByMobile(mobile, db)
-	print(user.ID)
-	if err != nil {
-		return nil, err
-	}
-	token := &Token{}
-	return token, nil
-}
-
-// GetTokenByUUID gets a preloaded token with the user's ID and their cards
-func GetTokenWithResult(uuid string, db *gorm.DB) (Token, error) {
-	var payment Token
-	result := db.Debug().Preload("Transaction").First(&payment, "uuid = ?", uuid)
-	payment.db = db
-	return payment, result.Error
-}
-
-// GetTokenByUUID gets a preloaded token with the user's ID and their cards
-func GetTokenByUUID(uuid string, db *gorm.DB) (Token, error) {
-	var payment Token
-	result := db.Debug().Where("uuid = ?", uuid).First(&payment)
-	if result.Error != nil {
-		return payment, result.Error
-	}
-	var user User
-	user.ID = payment.UserID
-	if result := db.Debug().Preload("Cards").First(&user); result.Error != nil {
-		return payment, result.Error
-	}
-	payment.db = db
-	payment.User = user
-	return payment, result.Error
-}
-
-// GetAllTokens associated to a user. This requires a populated model (u.Mobile != "")
-func (u *User) GetAllTokens() ([]Token, error) {
-	var user User
-	result := u.db.Model(&User{}).Preload("Tokens").Find(&user, "mobile = ?", u.Mobile)
-	return user.Tokens, result.Error
 }
 
 // Encode PaymentToken to a URL safe link that can be used for online purchases
@@ -533,19 +291,21 @@ func Decode(data string) (Token, error) {
 
 // Card represents a single card in noebs.
 type Card struct {
-	gorm.Model
-	Pan     string `json:"pan"`
-	Expiry  string `json:"exp_date"`
-	Name    string `json:"name"`
-	IPIN    string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
-	UserID  uint
-	IsMain  bool   `json:"is_main" gorm:"default:false"`
-	CardIdx string `json:"card_index" gorm:"-:all"`
-	IsValid *bool  `json:"is_valid"`
+	Model
+	TenantID string `json:"-"`
+	Pan      string `json:"pan"`
+	Expiry   string `json:"exp_date"`
+	Name     string `json:"name"`
+	IPIN     string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
+	UserID   int64
+	IsMain   bool   `json:"is_main" gorm:"default:false"`
+	CardIdx  string `json:"card_index" gorm:"-:all"`
+	IsValid  *bool  `json:"is_valid"`
 }
 
 type CacheCards struct {
-	gorm.Model
+	Model
+	TenantID  string `json:"-"`
 	Pan       string `json:"pan" gorm:"uniqueIndex"`
 	Expiry    string `json:"exp_date"`
 	Name      string `json:"name"`
@@ -567,7 +327,7 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 	return Card{
 		Pan:    c.Pan,
 		Expiry: c.Expiry,
-		UserID: uint(id),
+		UserID: int64(id),
 	}
 }
 
@@ -597,8 +357,4 @@ func ExpandCard(card string, userCards []Card) (string, error) {
 		}
 	}
 	return "", errors.New("not able to find a match")
-}
-
-func UpdateUser(user User, db *gorm.DB) error {
-	return db.Where("mobile = ?", user.Mobile).Updates(&user).Error
 }

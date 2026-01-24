@@ -1,14 +1,12 @@
 package merchant
 
 import (
-	"context"
 	"encoding/json"
 	"strconv"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 )
 
 func validateRequest(v validator.ValidationErrors) ebs_fields.ErrorDetails {
@@ -22,31 +20,6 @@ func validateRequest(v validator.ValidationErrors) ebs_fields.ErrorDetails {
 
 func generateUUID() string {
 	return uuid.New().String()
-}
-
-func handleChan(ctx context.Context, r *redis.Client) {
-	// when getting redis results, ALWAYS json.Marshal them
-	for {
-		select {
-		case c := <-billChan:
-			if c.PayeeID == necPayment {
-				var m necBill
-				//FIXME there is a bug here
-				//mapFields, _ := additionalFieldsToHash(c.BillInfo)
-				m.NewFromMap(c.BillInfo)
-				r.HSet(ctx, "meters", m.MeterNumber, m.CustomerName)
-			}
-			//} else if c.PayeeID == mtnTopUp {
-			//	var m mtnBill
-			//	mapFields, _ := additionalFieldsToHash(c.AdditionalData)
-			//	m.NewFromMap(mapFields)
-			//} else if c.PayeeID == sudaniTopUp {
-			//	var m sudaniBill
-			//	mapFields, _ := additionalFieldsToHash(c.AdditionalData)
-			//	m.NewFromMap(mapFields)
-			//}
-		}
-	}
 }
 
 const (

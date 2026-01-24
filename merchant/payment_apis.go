@@ -49,7 +49,7 @@ func (s *Service) IsAlive(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		// God please make it works.
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			s.Logger.WithFields(logrus.Fields{
 				"code":    err,
 				"details": "Error in writing to Database",
@@ -105,9 +105,9 @@ func (s *Service) WorkingKey(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		// God please make it works.
-		if err := s.Db.Create(&res.EBSResponse).Error; err != nil {
+		if err := s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			s.Logger.WithFields(logrus.Fields{
-				"code":    err.Error(),
+				"code":    err,
 				"details": "Error in writing to Database",
 			}).Info("Problem in transaction table committing")
 		}
@@ -146,22 +146,16 @@ func (s *Service) Purchase(c *fiber.Ctx) {
 		res.MaskPAN()
 
 		res.Name = "change me"
-		if err := s.Db.Table("transactions").Create(&res.EBSResponse); err != nil {
+		if err := s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse); err != nil {
 			logrus.WithFields(logrus.Fields{
 				"code":    "unable to migrate purchase model",
 				"message": err,
 			}).Info("error in migrating purchase model")
 		}
-		uid := generateUUID()
-		ctx := c.UserContext()
-		s.Redis.HSet(ctx, fields.TerminalID+":purchase", uid, &res)
-		s.Redis.Incr(ctx, fields.TerminalID+":number_purchase_transactions")
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
-			s.Redis.Incr(ctx, fields.TerminalID+":failed_transactions")
 			jsonResponse(c, code, payload)
 		} else {
-			s.Redis.Incr(ctx, fields.TerminalID+":successful_transactions")
 			jsonResponse(c, code, fiber.Map{"ebs_response": res})
 		}
 	} else {
@@ -207,7 +201,7 @@ func (s *Service) Balance(c *fiber.Ctx) {
 		// return a masked pan
 
 		// God please make it works.
-		s.Db.Table("transactions").Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -252,7 +246,7 @@ func (s *Service) CardTransfer(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Table("transactions").Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -304,7 +298,7 @@ func (s *Service) BillInquiry(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -346,7 +340,7 @@ func (s *Service) BillPayment(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		res.MaskPAN()
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			jsonResponse(c, code, payload)
@@ -390,7 +384,7 @@ func (s *Service) TopUpPayment(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		res.MaskPAN()
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			jsonResponse(c, code, payload)
@@ -440,7 +434,7 @@ func (s *Service) ChangePIN(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -490,7 +484,7 @@ func (s *Service) CashOut(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -541,7 +535,7 @@ func (s *Service) VoucherCashOut(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -592,7 +586,7 @@ func (s *Service) VoucherCashIn(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -643,7 +637,7 @@ func (s *Service) Statement(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -683,7 +677,7 @@ func (s *Service) GenerateVoucher(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
 			jsonResponse(c, code, payload)
@@ -721,7 +715,7 @@ func (s *Service) CashIn(c *fiber.Ctx) {
 
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -759,7 +753,7 @@ func (s *Service) ToAccount(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -801,7 +795,7 @@ func (s *Service) MiniStatement(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 			jsonResponse(c, code, payload)
@@ -839,7 +833,7 @@ func (s *Service) testAPI(c *fiber.Ctx) {
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
 		res.Name = "change me"
 		// God please make it works.
-		s.Db.Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 		if ebsErr != nil {
 			// convert ebs res code to int
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
@@ -885,7 +879,7 @@ func (s *Service) Refund(c *fiber.Ctx) {
 		// return a masked pan
 
 		// God please make it works.
-		s.Db.Table("transactions").Create(&res.EBSResponse)
+		s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 
 		if ebsErr != nil {
 			payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res.EBSResponse, Message: ebs_fields.EBSError}
@@ -912,6 +906,6 @@ func (s *Service) EBS(c *fiber.Ctx) {
 
 	res.Name = "change me"
 	// God please make it works.
-	s.Db.Create(&res.EBSResponse)
+	s.recordTransaction(c.UserContext(), tenantIDFromCtx(c, s.NoebsConfig), res.EBSResponse)
 	jsonResponse(c, http.StatusOK, res)
 }

@@ -2,35 +2,20 @@ package dashboard
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/gofiber/fiber/v2"
-	"gorm.io/gorm"
+	"github.com/jmoiron/sqlx"
 )
 
-type Env struct {
-	Db *gorm.DB
-}
-
-func (e *Env) GetTransactionbyID(c *fiber.Ctx) {
-	var tran ebs_fields.EBSResponse
-	//id := c.Params.ByName("id")
-	err := e.Db.Find(&tran).Error
-	if err != nil {
-		_ = c.SendStatus(404)
-	}
-	jsonResponse(c, 200, fiber.Map{"result": tran.UUID})
-
-}
-
 type MerchantTransactions struct {
-	PurchaseAmount         float32 `json:"purchase_amount"`
-	AllTransactions        int     `json:"purchases_count"`
-	SuccessfulTransactions int     `json:"successful_transactions"`
-	FailedTransactions     int     `json:"failed_transactions"`
+	PurchaseAmount         float32 `json:"purchase_amount" db:"purchase_amount"`
+	AllTransactions        int     `json:"purchases_count" db:"all_transactions"`
+	SuccessfulTransactions int     `json:"successful_transactions" db:"successful_transactions"`
+	FailedTransactions     int     `json:"failed_transactions" db:"failed_transactions"`
 }
 
 // To allow Redis to use this struct directly in marshaling
@@ -112,41 +97,89 @@ func TimeFormatter(t time.Time) string {
 }
 
 type merchantsIssues struct {
-	TerminalID string    `json:"terminalId" binding:"required"`
-	Latitude   float32   `json:"lat"`
-	Longitude  float32   `json:"long"`
-	Time       time.Time `json:"time"`
+	TerminalID string    `json:"terminalId" binding:"required" db:"terminal_id"`
+	Latitude   float32   `json:"lat" db:"latitude"`
+	Longitude  float32   `json:"long" db:"longitude"`
+	Time       time.Time `json:"time" db:"reported_at"`
 }
 
 func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
 	return json.Marshal(m)
 }
 
-func sortTable(db *gorm.DB, searchField, search string, sortField, sortCase string, offset, pageSize int) ([]ebs_fields.EBSResponse, int) {
+func sortTable(db *sqlx.DB, tenantID, searchField, search, sortField, sortCase string, offset, pageSize int) ([]ebs_fields.EBSResponse, int, error) {
+	if db == nil {
+		return nil, 0, fmt.Errorf("nil db")
+	}
 
-	var tran []ebs_fields.EBSResponse
-	var count int64
-
-	searchField = mapSearchField(searchField)
-	sortField = mapSearchField(sortField)
+	searchField = normalizeSearchField(searchField)
+	sortField = normalizeSortField(sortField)
+	sortCase = normalizeSortCase(sortCase)
 	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
 
-	if searchField != "" || search != "" {
-		// systemTraceAuditNumber
+	where := "tenant_id = ?"
+	args := []any{tenantID}
+
+	if search != "" {
+		if searchField == "" {
+			searchField = "terminal_id"
+		}
 		switch searchField {
 		case "created_at":
-			db.Table("transactions").Where("id >= ? AND created_at in (?)", offset, search).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
-		case "system_trace_audit_number": // exact match
-			db.Table("transactions").Where("id >= ? AND system_trace_audit_number = ?", offset, search).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
+			where += " AND created_at LIKE ?"
+			args = append(args, "%"+search+"%")
+		case "system_trace_audit_number":
+			where += " AND system_trace_audit_number = ?"
+			args = append(args, search)
 		default:
-			db.Table("transactions").Where("id >= ? AND terminal_id LIKE ?", offset, "%"+search+"%").Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
+			where += " AND " + searchField + " LIKE ?"
+			args = append(args, "%"+search+"%")
 		}
-	} else {
-		// we only want to sort, no searching required
-		db.Table("transactions").Where("id >= ?", offset).Count(&count).Limit(pageSize).Order(sortField + " " + sortCase).Find(&tran)
 	}
-	return tran, int(count)
 
+	countQuery := "SELECT COUNT(*) FROM transactions WHERE " + where
+	var count int
+	if err := db.Get(&count, db.Rebind(countQuery), args...); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf("SELECT id, created_at, updated_at, payload FROM transactions WHERE %s ORDER BY %s %s LIMIT ? OFFSET ?", where, sortField, sortCase)
+	args = append(args, pageSize, offset)
+
+	rows := []transactionRow{}
+	if err := db.Select(&rows, db.Rebind(query), args...); err != nil {
+		return nil, 0, err
+	}
+	return decodeTransactionRows(rows), count, nil
+}
+
+func normalizeSearchField(f string) string {
+	f = mapSearchField(f)
+	switch f {
+	case "id", "terminal_id", "system_trace_audit_number", "approval_code", "created_at", "tran_date_time", "response_status", "uuid":
+		return f
+	default:
+		return ""
+	}
+}
+
+func normalizeSortField(f string) string {
+	f = mapSearchField(f)
+	switch f {
+	case "id", "terminal_id", "system_trace_audit_number", "approval_code", "created_at", "tran_date_time", "tran_amount", "response_status", "response_code":
+		return f
+	default:
+		return "id"
+	}
+}
+
+func normalizeSortCase(sortCase string) string {
+	switch strings.ToUpper(sortCase) {
+	case "DESC":
+		return "DESC"
+	default:
+		return "ASC"
+	}
 }
 
 func mapSearchField(f string) string {

@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http/httptest"
@@ -12,7 +13,8 @@ import (
 func TestService_isValidCard(t *testing.T) {
 
 	env := newTestEnv(t)
-	env.DB.Debug().AutoMigrate(&ebs_fields.CacheCards{})
+	ctx := context.Background()
+	user := seedUser(t, env.Store, env.Tenant, "0912999999", "Me@Passw0rd!")
 	type args struct {
 		card ebs_fields.CacheCards
 	}
@@ -25,18 +27,15 @@ func TestService_isValidCard(t *testing.T) {
 		{"test is valid", args{ebs_fields.CacheCards{Pan: "99999"}}, true, false},
 		{"test is valid", args{ebs_fields.CacheCards{Pan: "88888"}}, true, false},
 	}
-	if err := env.DB.Create(&ebs_fields.Card{Pan: "99999"}).Error; err != nil {
+	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "99999"}}); err != nil {
 		t.Fatalf("seed card 99999: %v", err)
 	}
-	if err := env.DB.Create(&ebs_fields.Card{Pan: "88888"}).Error; err != nil {
+	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "88888"}}); err != nil {
 		t.Fatalf("seed card 88888: %v", err)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				Db: env.DB,
-			}
-			got, err := s.isValidCard(tt.args.card)
+			got, err := env.Service.isValidCard(ctx, env.Tenant, tt.args.card)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Service.isValidCard() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -52,13 +51,13 @@ func TestService_Notifications(t *testing.T) {
 
 	env := newTestEnv(t)
 
-	user := seedUser(t, env.DB, "0129751986", "Me@Passw0rd!")
+	user := seedUser(t, env.Store, env.Tenant, "0129751986", "Me@Passw0rd!")
 	seed := PushData{UUID: "uuid-1", Body: "test me", UserMobile: user.Mobile, Phone: user.Mobile}
-	if err := env.DB.Create(&seed).Error; err != nil {
+	if err := env.Store.CreatePushData(context.Background(), env.Tenant, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
 		t.Fatalf("seed notification: %v", err)
 	}
 
-	token, err := env.Auth.GenerateJWT(user.ID, user.Mobile)
+	token, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}

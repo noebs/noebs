@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"testing"
@@ -12,8 +13,10 @@ import (
 func TestService_RegisterWithCard(t *testing.T) {
 	env := newTestEnv(t)
 
+	ctx := context.Background()
+	user := seedUser(t, env.Store, env.Tenant, "0900000000", "Seed@Pass1")
 	seedCard := ebs_fields.Card{Pan: "23232323", Expiry: "2901"}
-	if err := env.DB.Create(&seedCard).Error; err != nil {
+	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{seedCard}); err != nil {
 		t.Fatalf("seed card: %v", err)
 	}
 
@@ -56,7 +59,7 @@ func TestService_CreateUser(t *testing.T) {
 
 func TestService_LoginHandler(t *testing.T) {
 	env := newTestEnv(t)
-	seedUser(t, env.DB, "0912141660", "me@Suckit1")
+	seedUser(t, env.Store, env.Tenant, "0912141660", "me@Suckit1")
 
 	card := ebs_fields.User{Mobile: "0912141660", Password: "me@Suckit1"}
 	payload, _ := json.Marshal(card)

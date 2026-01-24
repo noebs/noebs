@@ -12,7 +12,7 @@ var jj = &JWTAuth{}
 
 func TestVerifyJWT(t *testing.T) {
 	jj.Key = []byte("test-key")
-	token, err := jj.GenerateJWT(42, "0990000000")
+	token, err := jj.GenerateJWT(42, "0990000000", "default")
 	if err != nil {
 		t.Fatalf("GenerateJWT error: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestJWTAuth_GenerateJWT(t *testing.T) {
 		Key []byte
 	}
 	type args struct {
-		userID uint
+		userID int64
 		mobile string
 	}
 	tests := []struct {
@@ -53,7 +53,7 @@ func TestJWTAuth_GenerateJWT(t *testing.T) {
 			j := &JWTAuth{
 				Key: tt.fields.Key,
 			}
-			got, err := j.GenerateJWT(tt.args.userID, tt.args.mobile)
+			got, err := j.GenerateJWT(tt.args.userID, tt.args.mobile, "default")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("JWTAuth.GenerateJWT() error = %v, wantErr %v", err, tt.wantErr)
 				return
