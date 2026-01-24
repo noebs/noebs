@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -19,16 +17,16 @@ import (
 const otelShutdownTimeout = 5 * time.Second
 
 func initOTel(ctx context.Context, cfg ebs_fields.NoebsConfig, logger *logrus.Logger) {
-	endpoint := firstNonEmpty(cfg.OtelEndpoint, os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
-	enabled := cfg.OtelEnabled || endpoint != ""
-	if !enabled {
+	if !cfg.OtelEnabled {
+		return
+	}
+	if cfg.OtelEndpoint == "" {
+		logger.Warn("otel enabled but endpoint is empty; tracing disabled")
 		return
 	}
 
 	opts := []otlptracegrpc.Option{}
-	if endpoint != "" {
-		opts = append(opts, otlptracegrpc.WithEndpoint(endpoint))
-	}
+	opts = append(opts, otlptracegrpc.WithEndpoint(cfg.OtelEndpoint))
 	if cfg.OtelInsecure {
 		opts = append(opts, otlptracegrpc.WithInsecure())
 	}
@@ -40,9 +38,6 @@ func initOTel(ctx context.Context, cfg ebs_fields.NoebsConfig, logger *logrus.Lo
 	}
 
 	serviceName := cfg.OtelServiceName
-	if serviceName == "" {
-		serviceName = os.Getenv("OTEL_SERVICE_NAME")
-	}
 	if serviceName == "" {
 		serviceName = "noebs"
 	}
@@ -69,7 +64,7 @@ func initOTel(ctx context.Context, cfg ebs_fields.NoebsConfig, logger *logrus.Lo
 	otelShutdown = tp.Shutdown
 
 	logger.WithFields(logrus.Fields{
-		"endpoint":    endpoint,
+		"endpoint":    cfg.OtelEndpoint,
 		"sample_rate": sampleRate,
 		"service":     serviceName,
 		"insecure":    cfg.OtelInsecure,
@@ -84,13 +79,4 @@ func clamp01(v float64) float64 {
 		return 1
 	}
 	return v
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
