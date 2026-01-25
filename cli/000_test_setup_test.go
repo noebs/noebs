@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 var testPostgres *testdb.PostgresContainer
 var testDBName string
+var testConfigPath string
 
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -30,13 +32,20 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("create test db: %v", err))
 	}
 	testDBName = dbName
-	if err := os.Setenv("NOEBS_TEST_DB_URL", dbURL); err != nil {
-		panic(fmt.Sprintf("set NOEBS_TEST_DB_URL: %v", err))
+	testConfigPath = filepath.Join(".", "config.test.yaml")
+	configPayload := fmt.Sprintf(`noebs:
+  db_url: %q
+  db_driver: %q
+  default_tenant_id: %q
+`, dbURL, "postgres", "test-tenant")
+	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
+		panic(fmt.Sprintf("write test config: %v", err))
 	}
-	_ = os.Setenv("NOEBS_TEST_DB_DRIVER", "postgres")
-	_ = os.Setenv("NOEBS_TEST_TENANT", "test-tenant")
 
 	code := m.Run()
+	if testConfigPath != "" {
+		_ = os.Remove(testConfigPath)
+	}
 	if testPostgres != nil {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()

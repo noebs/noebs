@@ -15,7 +15,6 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/bradfitz/iter"
@@ -33,26 +32,11 @@ func isTestRun() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
 }
 
-func applyTestOverrides(cfg *ebs_fields.NoebsConfig) {
-	if !isTestRun() {
-		return
-	}
-	if dbURL := os.Getenv("NOEBS_TEST_DB_URL"); dbURL != "" {
-		cfg.DatabaseURL = dbURL
-		if cfg.DatabaseDriver == "" {
-			cfg.DatabaseDriver = "postgres"
-		}
-	}
-	if driver := os.Getenv("NOEBS_TEST_DB_DRIVER"); driver != "" {
-		cfg.DatabaseDriver = driver
-	}
-	if tenantID := os.Getenv("NOEBS_TEST_TENANT"); tenantID != "" {
-		cfg.DefaultTenantID = tenantID
-	}
-}
-
 func loadConfig() ([]byte, error) {
 	configPath := firstExistingPath(defaultConfigPath, "./config.yaml", "../config.yaml")
+	if isTestRun() {
+		configPath = firstExistingPath("./config.test.yaml", "../config.test.yaml", "./config.yaml", "../config.yaml", defaultConfigPath)
+	}
 	if configPath == "" {
 		if isTestRun() {
 			return []byte("{}"), nil
@@ -359,7 +343,6 @@ func initConfig() {
 		logrusLogger.Fatalf("error in unmarshaling config file: %v", err)
 	}
 
-	applyTestOverrides(&noebsConfig)
 	noebsConfig.Defaults()
 	configureLogger(noebsConfig)
 	initOTel(context.Background(), noebsConfig, logrusLogger)
