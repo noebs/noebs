@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/pressly/goose/v3"
 )
@@ -14,7 +15,10 @@ func init() {
 func sensitiveDataUp(ctx context.Context, tx *sql.Tx) error {
 	driver := migrationDriver
 	if driver == "" {
-		driver = DriverSQLite
+		driver = DriverPostgres
+	}
+	if driver != DriverPostgres {
+		return fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
 
 	if err := ensureColumn(ctx, tx, "users", "main_card_enc", "TEXT", driver); err != nil {

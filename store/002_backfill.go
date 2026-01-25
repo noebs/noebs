@@ -17,7 +17,10 @@ func init() {
 func backfillUp(ctx context.Context, tx *sql.Tx) error {
 	driver := migrationDriver
 	if driver == "" {
-		driver = DriverSQLite
+		driver = DriverPostgres
+	}
+	if driver != DriverPostgres {
+		return fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
 	tenantID := migrationDefaultTenant
 	if tenantID == "" {
@@ -101,12 +104,10 @@ func ensureDefaultTenant(ctx context.Context, tx *sql.Tx, tenantID, driver strin
 		return err
 	}
 	now := time.Now().UTC()
-	switch driver {
-	case DriverPostgres:
-		_, err = tx.ExecContext(ctx, `INSERT INTO tenants (id, name, created_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`, tenantID, tenantID, now)
-	default:
-		_, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO tenants (id, name, created_at) VALUES (?, ?, ?)`, tenantID, tenantID, now)
+	if driver != DriverPostgres {
+		return fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO tenants (id, name, created_at) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`, tenantID, tenantID, now)
 	return err
 }
 
@@ -136,12 +137,10 @@ func backfillTenantID(ctx context.Context, tx *sql.Tx, table, tenantID, driver s
 	if err != nil || !exists {
 		return err
 	}
-	switch driver {
-	case DriverPostgres:
-		_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %s SET tenant_id = $1 WHERE tenant_id IS NULL OR tenant_id = ''", table), tenantID)
-	default:
-		_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %s SET tenant_id = ? WHERE tenant_id IS NULL OR tenant_id = ''", table), tenantID)
+	if driver != DriverPostgres {
+		return fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("UPDATE %s SET tenant_id = $1 WHERE tenant_id IS NULL OR tenant_id = ''", table), tenantID)
 	return err
 }
 
@@ -151,55 +150,27 @@ func copyPushDataToDevice(ctx context.Context, tx *sql.Tx) error {
 }
 
 func tableExists(ctx context.Context, tx *sql.Tx, table, driver string) (bool, error) {
-	switch driver {
-	case DriverPostgres:
-		var exists bool
-		err := tx.QueryRowContext(ctx, `SELECT EXISTS (
-			SELECT 1 FROM information_schema.tables
-			WHERE table_schema = current_schema() AND table_name = $1
-		)`, table).Scan(&exists)
-		return exists, err
-	default:
-		var name string
-		err := tx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`, table).Scan(&name)
-		if err == sql.ErrNoRows {
-			return false, nil
-		}
-		return err == nil, err
+	if driver != DriverPostgres {
+		return false, fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
+	var exists bool
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables
+		WHERE table_schema = current_schema() AND table_name = $1
+	)`, table).Scan(&exists)
+	return exists, err
 }
 
 func columnExists(ctx context.Context, tx *sql.Tx, table, column, driver string) (bool, error) {
-	switch driver {
-	case DriverPostgres:
-		var exists bool
-		err := tx.QueryRowContext(ctx, `SELECT EXISTS (
-			SELECT 1 FROM information_schema.columns
-			WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2
-		)`, table, column).Scan(&exists)
-		return exists, err
-	default:
-		rows, err := tx.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
-		if err != nil {
-			return false, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var cid int
-			var name string
-			var ctype string
-			var notnull int
-			var dflt sql.NullString
-			var pk int
-			if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
-				return false, err
-			}
-			if name == column {
-				return true, nil
-			}
-		}
-		return false, rows.Err()
+	if driver != DriverPostgres {
+		return false, fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
+	var exists bool
+	err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2
+	)`, table, column).Scan(&exists)
+	return exists, err
 }
 
 func sqlLiteral(value string) string {

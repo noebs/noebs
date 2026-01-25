@@ -8,9 +8,6 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-//go:embed migrations/sqlite/*.sql
-var sqliteMigrations embed.FS
-
 //go:embed migrations/postgres/*.sql
 var postgresMigrations embed.FS
 
@@ -29,18 +26,12 @@ func Migrate(ctx context.Context, db *DB, defaultTenantID string) error {
 		migrationDefaultTenant = DefaultTenantID
 	}
 
-	switch db.Driver {
-	case DriverPostgres:
-		if err := goose.SetDialect("postgres"); err != nil {
-			return err
-		}
-		goose.SetBaseFS(postgresMigrations)
-		return goose.UpContext(ctx, db.DB.DB, "migrations/postgres")
-	default:
-		if err := goose.SetDialect("sqlite3"); err != nil {
-			return err
-		}
-		goose.SetBaseFS(sqliteMigrations)
-		return goose.UpContext(ctx, db.DB.DB, "migrations/sqlite")
+	if db.Driver != DriverPostgres {
+		return fmt.Errorf("unsupported migration driver %q (postgres only)", db.Driver)
 	}
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	goose.SetBaseFS(postgresMigrations)
+	return goose.UpContext(ctx, db.DB.DB, "migrations/postgres")
 }

@@ -8,7 +8,7 @@ Date started: 2026-01-24
 - Remove Redis usage (move data to SQL).
 - Add strong unit-test invariants (tests first, then migrations).
 - Introduce proper context propagation (no hidden context.Background in helpers).
-- Move primary DB to Postgres via Docker Compose, keep SQLite for local/dev or tests.
+- Move primary DB to Postgres via Docker Compose; migrations target Postgres only.
 - Support Google sign-in (optional) while preserving existing mobile auth.
 - Make the system multi-tenant by design (tenant scoping everywhere).
 
