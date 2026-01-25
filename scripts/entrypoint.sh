@@ -7,11 +7,14 @@ set -euo pipefail
 SECRETS_FILE="/app/secrets.yaml"
 DB_PATH_FILE="/app/.db_path"
 LITESTREAM_CONFIG_DEFAULT="/etc/litestream.yml"
-AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-/app/.sops/age-key.txt}"
-export SOPS_AGE_KEY_FILE="$AGE_KEY_FILE"
+AGE_KEY_FILE="/app/.sops/age-key.txt"
+DEFAULT_AGE_KEY_FILE="/root/.config/sops/age/keys.txt"
 
 if [[ -f "$SECRETS_FILE" ]]; then
-    if [[ ! -f "$AGE_KEY_FILE" ]]; then
+    if [[ -f "$AGE_KEY_FILE" ]]; then
+        mkdir -p "$(dirname "$DEFAULT_AGE_KEY_FILE")"
+        cp "$AGE_KEY_FILE" "$DEFAULT_AGE_KEY_FILE"
+    elif [[ ! -f "$DEFAULT_AGE_KEY_FILE" ]]; then
         echo "Missing age key at $AGE_KEY_FILE" >&2
         exit 1
     fi

@@ -6,30 +6,24 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 )
 
-func TestEnv(t *testing.T) {
-	// Test that we can read environmental variables correctly.
-	key := "MYKEY"
-	val := "MYVA"
-	if err := os.Setenv(key, val); err != nil {
-		t.Errorf("An error occured: %s", err.Error())
-	}
-
-	if got := os.Getenv(key); got != val {
-		t.Errorf("environmental variable is incorrect. Wanted %s, Got: %s", key, got)
+func TestConfigLoad(t *testing.T) {
+	ensureInit()
+	if noebsConfig.DatabaseDriver == "" {
+		t.Fatalf("expected database driver to be configured for tests")
 	}
 }
 
 func requireIntegration(t *testing.T) {
 	t.Helper()
-	if os.Getenv("NOEBS_INTEGRATION_TESTS") == "" {
-		t.Skip("NOEBS_INTEGRATION_TESTS not set")
+	ensureInit()
+	if !noebsConfig.IntegrationTests {
+		t.Skip("integration_tests disabled in config")
 	}
 }
 

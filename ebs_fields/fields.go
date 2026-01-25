@@ -977,6 +977,9 @@ type NoebsConfig struct {
 	Cors    []string `json:"cors"`
 	IsDebug bool     `json:"is_debug"` // set as true if you want to have more debug options
 
+	// test behavior toggles
+	IntegrationTests bool `json:"integration_tests"`
+
 	// logging/observability
 	LogSamplingTickMs  int     `json:"log_sampling_tick_ms"`
 	LogSamplingAfterMs int     `json:"log_sampling_after_ms"`
