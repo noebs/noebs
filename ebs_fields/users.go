@@ -35,8 +35,8 @@ type User struct {
 	Tokens        []Token
 	Beneficiaries []Beneficiary
 	Cards         []Card
-	// DeviceToken stores a push token (legacy db column is firebase_token).
-	DeviceToken   string `json:"device_token" db:"firebase_token"`
+	// DeviceToken stores a push token for notifications.
+	DeviceToken   string `json:"device_token" db:"device_token"`
 	NewPassword   string `json:"new_password" gorm:"-"`
 	IsPasswordOTP bool   `json:"is_password_otp" gorm:"default:false"`
 	MainCard      string `json:"main_card" gorm:"column:main_card"`

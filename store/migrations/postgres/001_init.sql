@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   device_id TEXT,
   otp TEXT,
   signed_otp TEXT,
-  firebase_token TEXT,
+  device_token TEXT,
   is_password_otp BOOLEAN NOT NULL DEFAULT FALSE,
   main_card TEXT,
   main_expdate TEXT,

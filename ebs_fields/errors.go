@@ -25,7 +25,7 @@ import (
 )
 
 // ErrorCode represents the platform-wide error codes that can be raised by
-// Admin SDK APIs.
+// service APIs.
 type ErrorCode string
 
 const (
@@ -75,22 +75,22 @@ const (
 	DeadlineExceeded ErrorCode = "DEADLINE_EXCEEDED"
 )
 
-// FirebaseError is an error type containing an error code string.
-type FirebaseError struct {
+// PlatformError is an error type containing an error code string.
+type PlatformError struct {
 	ErrorCode ErrorCode
 	String    string
 	Response  *http.Response
 	Ext       map[string]interface{}
 }
 
-func (fe *FirebaseError) Error() string {
-	return fe.String
+func (pe *PlatformError) Error() string {
+	return pe.String
 }
 
 // HasPlatformErrorCode checks if the given error contains a specific error code.
 func HasPlatformErrorCode(err error, code ErrorCode) bool {
-	fe, ok := err.(*FirebaseError)
-	return ok && fe.ErrorCode == code
+	pe, ok := err.(*PlatformError)
+	return ok && pe.ErrorCode == code
 }
 
 var httpStatusToErrorCodes = map[int]ErrorCode{
@@ -103,14 +103,14 @@ var httpStatusToErrorCodes = map[int]ErrorCode{
 	http.StatusServiceUnavailable:  Unavailable,
 }
 
-// NewFirebaseError creates a new error from the given HTTP response.
-func NewFirebaseError(resp *Response) *FirebaseError {
+// NewPlatformError creates a new error from the given HTTP response.
+func NewPlatformError(resp *Response) *PlatformError {
 	code, ok := httpStatusToErrorCodes[resp.Status]
 	if !ok {
 		code = Unknown
 	}
 
-	return &FirebaseError{
+	return &PlatformError{
 		ErrorCode: code,
 		String:    fmt.Sprintf("unexpected http response with status: %d\n%s", resp.Status, string(resp.Body)),
 		Response:  resp.LowLevelResponse(),
@@ -118,13 +118,13 @@ func NewFirebaseError(resp *Response) *FirebaseError {
 	}
 }
 
-// NewFirebaseErrorOnePlatform parses the response payload as a GCP error response
+// NewPlatformErrorOnePlatform parses the response payload as a GCP error response
 // and create an error from the details extracted.
 //
 // If the response failes to parse, or otherwise doesn't provide any useful details
-// NewFirebaseErrorOnePlatform creates an error with some sensible defaults.
-func NewFirebaseErrorOnePlatform(resp *Response) *FirebaseError {
-	base := NewFirebaseError(resp)
+// NewPlatformErrorOnePlatform creates an error with some sensible defaults.
+func NewPlatformErrorOnePlatform(resp *Response) *PlatformError {
+	base := NewPlatformError(resp)
 
 	var gcpError struct {
 		Error struct {
@@ -144,7 +144,7 @@ func NewFirebaseErrorOnePlatform(resp *Response) *FirebaseError {
 	return base
 }
 
-func newFirebaseErrorTransport(err error) *FirebaseError {
+func newPlatformErrorTransport(err error) *PlatformError {
 	var code ErrorCode
 	var msg string
 	if os.IsTimeout(err) {
@@ -158,7 +158,7 @@ func newFirebaseErrorTransport(err error) *FirebaseError {
 		msg = fmt.Sprintf("unknown error while making an http call: %v", err)
 	}
 
-	return &FirebaseError{
+	return &PlatformError{
 		ErrorCode: code,
 		String:    msg,
 		Ext:       make(map[string]interface{}),

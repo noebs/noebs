@@ -100,7 +100,7 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO users(
 		tenant_id, password, fullname, username, gender, birthday, email, is_merchant, public_key, device_id, otp, signed_otp,
-		firebase_token, is_password_otp, main_card, main_card_enc, main_expdate, language, is_verified, mobile, created_at, updated_at
+		device_token, is_password_otp, main_card, main_card_enc, main_expdate, language, is_verified, mobile, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	res, err := db.ExecContext(ctx, stmt,
 		tenantID,
@@ -222,7 +222,7 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 	user.UpdatedAt = time.Now().UTC()
 	stmt := s.DB.Rebind(`UPDATE users SET
 		password = ?, fullname = ?, username = ?, gender = ?, birthday = ?, email = ?, is_merchant = ?, public_key = ?, device_id = ?,
-		otp = ?, signed_otp = ?, firebase_token = ?, is_password_otp = ?, main_card = ?, main_card_enc = ?, main_expdate = ?, language = ?, is_verified = ?, mobile = ?, updated_at = ?
+		otp = ?, signed_otp = ?, device_token = ?, is_password_otp = ?, main_card = ?, main_card_enc = ?, main_expdate = ?, language = ?, is_verified = ?, mobile = ?, updated_at = ?
 		WHERE tenant_id = ? AND id = ?`)
 	_, err = db.ExecContext(ctx, stmt,
 		user.Password,
@@ -286,19 +286,19 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 	return err
 }
 
-func (s *Store) UpsertDeviceToken(ctx context.Context, tenantID string, mobile, deviceID string) error {
+func (s *Store) UpsertDeviceToken(ctx context.Context, tenantID string, mobile, deviceToken string) error {
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind("UPDATE users SET device_id = ?, updated_at = ? WHERE tenant_id = ? AND mobile = ?")
-	res, err := db.ExecContext(ctx, stmt, deviceID, time.Now().UTC(), tenantID, mobile)
+	stmt := s.DB.Rebind("UPDATE users SET device_token = ?, updated_at = ? WHERE tenant_id = ? AND mobile = ?")
+	res, err := db.ExecContext(ctx, stmt, deviceToken, time.Now().UTC(), tenantID, mobile)
 	if err != nil {
 		return err
 	}
 	affected, _ := res.RowsAffected()
 	if affected == 0 {
-		user := &ebs_fields.User{Mobile: mobile, Username: mobile, DeviceID: deviceID}
+		user := &ebs_fields.User{Mobile: mobile, Username: mobile, DeviceToken: deviceToken}
 		return s.CreateUser(ctx, tenantID, user)
 	}
 	return nil

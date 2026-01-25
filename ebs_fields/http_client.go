@@ -203,7 +203,7 @@ func (c *HTTPClient) attempt(ctx context.Context, hr *http.Request, retries int)
 
 func (c *HTTPClient) handleResult(req *Request, result *attemptResult) (*Response, error) {
 	if result.Err != nil {
-		return nil, newFirebaseErrorTransport(result.Err)
+		return nil, newPlatformErrorTransport(result.Err)
 	}
 
 	if !c.success(req, result.Resp) {
@@ -228,7 +228,7 @@ func (c *HTTPClient) success(req *Request, resp *Response) bool {
 
 func (c *HTTPClient) newError(req *Request, resp *Response) error {
 	createErr := func(r *Response) error {
-		return NewFirebaseErrorOnePlatform(r)
+		return NewPlatformErrorOnePlatform(r)
 	}
 
 	if req.CreateErrFn != nil {

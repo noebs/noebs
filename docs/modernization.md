@@ -40,4 +40,4 @@ Date started: 2026-01-24
 - 2026-01-24: Replaced custom migrator with goose (embedded SQL + Go migrations) and added a backfill migration to ensure tenant_id columns and legacy push_data/transaction fields are migrated.
 - 2026-01-24: Removed GORM dependencies entirely (legacy GORM tests deleted; manual SQL is the only persistence path).
 - 2026-01-24: Introduced typed app errors and standardized JSON error responses in fiber helpers.
-- 2026-01-24: Removed Firebase integration and dependencies; push delivery is now a no-op and device tokens are stored without Firebase SDK.
+- 2026-01-24: Removed push-provider integration and dependencies; push delivery is now a no-op and device tokens are stored without vendor SDKs.

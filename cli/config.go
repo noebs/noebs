@@ -279,7 +279,6 @@ func GetMainEngine() *fiber.App {
 		cons.Get("/transactions", wrapHandler(consumerService.GetTransactions))
 		cons.Post("/p2p_mobile", wrapHandler(consumerService.MobileTransfer))
 		cons.Post("/cards/set_main", wrapHandler(consumerService.SetMainCard))
-		cons.Post("/user/firebase", wrapHandler(consumerService.AddDeviceToken))
 		cons.Post("/user/device", wrapHandler(consumerService.AddDeviceToken))
 		cons.All("/beneficiary", wrapHandler(consumerService.Beneficiaries))
 		cons.Post("/change_password", wrapHandler(consumerService.ChangePassword))
