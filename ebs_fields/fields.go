@@ -916,27 +916,24 @@ type ValidationError struct {
 // database settings, and auth keys. Runtime config is built by merging
 // config.yaml with secrets.yaml (SOPS-encrypted) at startup.
 type NoebsConfig struct {
-	OneSignal          string   `json:"onesignal_key"`
-	OneSignalAppID     string   `json:"onesignal_app_id"`
-	OneSignalPlayerIDs []string `json:"onesignal_player_ids"`
-	AdminKey           string   `json:"admin_key"`
-	AdminUser          string   `json:"admin_user"`
-	AdminPassword      string   `json:"admin_password"`
-	DataKey            string   `json:"data_key"`
-	DatabasePath       string   `json:"db_path"`
-	DatabaseURL        string   `json:"db_url"`
-	DatabaseDriver     string   `json:"db_driver"`
-	DefaultTenantID    string   `json:"default_tenant_id"`
-	SMSAPIKey          string   `json:"sms_key"`
-	SMSSender          string   `json:"sms_sender"`
-	SMSGateway         string   `json:"sms_gateway"`
-	RedisPort          string   `json:"redis_port"`
-	JWTKey             string   `json:"jwt_secret"`
-	Sentry             string   `json:"sentry"`
-	Port               string   `json:"port"`
-	GoogleClientID     string   `json:"google_client_id"`
-	GoogleClientSecret string   `json:"google_client_secret"`
-	GoogleRedirectURL  string   `json:"google_redirect_url"`
+	AdminKey           string `json:"admin_key"`
+	AdminUser          string `json:"admin_user"`
+	AdminPassword      string `json:"admin_password"`
+	DataKey            string `json:"data_key"`
+	DatabasePath       string `json:"db_path"`
+	DatabaseURL        string `json:"db_url"`
+	DatabaseDriver     string `json:"db_driver"`
+	DefaultTenantID    string `json:"default_tenant_id"`
+	SMSAPIKey          string `json:"sms_key"`
+	SMSSender          string `json:"sms_sender"`
+	SMSGateway         string `json:"sms_gateway"`
+	RedisPort          string `json:"redis_port"`
+	JWTKey             string `json:"jwt_secret"`
+	Sentry             string `json:"sentry"`
+	Port               string `json:"port"`
+	GoogleClientID     string `json:"google_client_id"`
+	GoogleClientSecret string `json:"google_client_secret"`
+	GoogleRedirectURL  string `json:"google_redirect_url"`
 
 	IsConsumerProd bool `json:"is_consumer_prod"`
 	IsMerchantProd bool `json:"is_merchant_prod"`

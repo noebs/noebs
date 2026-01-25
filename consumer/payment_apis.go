@@ -1865,7 +1865,6 @@ func (s *Service) NoebsQuickPayment(c *fiber.Ctx) {
 		_ = s.Store.MarkTokenPaid(c.UserContext(), tenantID, storedToken.UUID)
 	}
 
-	go pushMessage(s.NoebsConfig, fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		jsonResponse(c, code, payload)
