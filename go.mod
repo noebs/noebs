@@ -23,7 +23,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
-	github.com/tutipay/ws v0.0.25
+	github.com/tutipay/ws v0.1.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.52.0
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.39.0
@@ -31,8 +31,6 @@ require (
 	golang.org/x/crypto v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
-
-replace github.com/tutipay/ws => ../ws
 
 require (
 	cloud.google.com/go/auth v0.5.1 // indirect
