@@ -32,6 +32,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+replace github.com/tutipay/ws => ../ws
+
 require (
 	cloud.google.com/go/auth v0.5.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.2 // indirect

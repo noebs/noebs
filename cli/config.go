@@ -307,7 +307,11 @@ func GetMainEngine() *fiber.App {
 				}
 			}
 			return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				chat.SubmitContacts(m, consumerService.NoebsConfig.DatabasePath, w, r)
+				if database == nil || database.DB == nil {
+					http.Error(w, "chat disabled", http.StatusServiceUnavailable)
+					return
+				}
+				chat.SubmitContacts(m, database.DB, w, r)
 			})(c)
 		})
 	}
@@ -386,12 +390,8 @@ func initConfig() {
 	// 	// We recommend adjusting this value in production,
 	// 	TracesSampleRate: 1.0,
 	// })
-	// FIXME we should pass on the same database here
-	chatDb, err := chat.OpenDb(dbpath)
-	if err != nil {
-		logrusLogger.Printf("chat db unavailable: %v", err)
-	} else {
-		hub = chat.NewHub(chatDb)
+	if database != nil && database.DB != nil {
+		hub = chat.NewHub(database.DB)
 	}
 
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
