@@ -2,14 +2,16 @@ package consumer
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/testdb"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
@@ -24,15 +26,46 @@ type testEnv struct {
 	Tenant  string
 }
 
+var (
+	postgresOnce      sync.Once
+	postgresContainer *testdb.PostgresContainer
+	postgresErr       error
+)
+
+func ensurePostgresContainer(t *testing.T) *testdb.PostgresContainer {
+	t.Helper()
+	postgresOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		postgresContainer, postgresErr = testdb.StartPostgresContainer(ctx)
+	})
+	if postgresErr != nil {
+		t.Skipf("postgres testcontainer unavailable: %v", postgresErr)
+	}
+	return postgresContainer
+}
+
 func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := store.OpenFromConfig("", dbPath, "")
+	container := ensurePostgresContainer(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	dbName := fmt.Sprintf("noebs_consumer_%d", time.Now().UnixNano())
+	dbURL, err := container.CreateDatabase(ctx, dbName)
+	if err != nil {
+		t.Fatalf("create test db: %v", err)
+	}
+	db, err := store.OpenFromConfig(dbURL, "", "postgres")
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	t.Cleanup(func() {
+		_ = db.Close()
+		dropCtx, dropCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer dropCancel()
+		_ = container.DropDatabase(dropCtx, dbName)
+	})
 	if err := store.Migrate(ctx, db, store.DefaultTenantID); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}

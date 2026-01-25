@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/bradfitz/iter"
@@ -29,6 +31,24 @@ import (
 
 func isTestRun() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
+}
+
+func applyTestOverrides(cfg *ebs_fields.NoebsConfig) {
+	if !isTestRun() {
+		return
+	}
+	if dbURL := os.Getenv("NOEBS_TEST_DB_URL"); dbURL != "" {
+		cfg.DatabaseURL = dbURL
+		if cfg.DatabaseDriver == "" {
+			cfg.DatabaseDriver = "postgres"
+		}
+	}
+	if driver := os.Getenv("NOEBS_TEST_DB_DRIVER"); driver != "" {
+		cfg.DatabaseDriver = driver
+	}
+	if tenantID := os.Getenv("NOEBS_TEST_TENANT"); tenantID != "" {
+		cfg.DefaultTenantID = tenantID
+	}
 }
 
 func loadConfig() ([]byte, error) {
@@ -100,6 +120,7 @@ func resolveDashboardTemplateDir() string {
 
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
+	ensureInit()
 	templateDir := resolveDashboardTemplateDir()
 	engine := html.New(templateDir, ".html")
 	engine.AddFunc("N", iter.N)
@@ -309,10 +330,23 @@ func GetMainEngine() *fiber.App {
 	return route
 }
 
+var initOnce sync.Once
+
+func ensureInit() {
+	initOnce.Do(initConfig)
+}
+
 func init() {
 	if isRenderConfigCommand() {
 		return
 	}
+	if isTestRun() {
+		return
+	}
+	ensureInit()
+}
+
+func initConfig() {
 	var err error
 
 	// load the secrets file
@@ -325,6 +359,7 @@ func init() {
 		logrusLogger.Fatalf("error in unmarshaling config file: %v", err)
 	}
 
+	applyTestOverrides(&noebsConfig)
 	noebsConfig.Defaults()
 	configureLogger(noebsConfig)
 	initOTel(context.Background(), noebsConfig, logrusLogger)
