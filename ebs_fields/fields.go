@@ -436,20 +436,41 @@ type ConsumerSpecificFields struct {
 
 // MaskPAN returns the last 4 digit of the PAN. We shouldn't care about the first 6
 func (res *EBSResponse) MaskPAN() {
-	if res.PAN != "" {
-		length := len(res.PAN)
-		res.PAN = res.PAN[:6] + "*****" + res.PAN[length-4:]
-	}
+	res.PAN = maskPANValue(res.PAN)
+	res.ToCard = maskPANValue(res.ToCard)
+	res.FromCard = maskPANValue(res.FromCard)
+	res.SenderPAN = maskPANValue(res.SenderPAN)
+	res.ReceiverPAN = maskPANValue(res.ReceiverPAN)
+}
 
-	if res.ToCard != "" {
-		length := len(res.ToCard)
-		res.ToCard = res.ToCard[:6] + "*****" + res.ToCard[length-4:]
+func maskPANValue(value string) string {
+	if value == "" {
+		return value
 	}
+	length := len(value)
+	if length < 10 {
+		return value
+	}
+	return value[:6] + "*****" + value[length-4:]
+}
 
-	if res.FromCard != "" {
-		length := len(res.FromCard)
-		res.FromCard = res.FromCard[:6] + "*****" + res.FromCard[length-4:]
-	}
+// String returns a redacted summary to avoid logging sensitive cardholder data.
+func (res EBSResponse) String() string {
+	return fmt.Sprintf(
+		"EBSResponse{code=%d message=%q uuid=%s ref=%s approval=%s terminal=%s amount=%.2f}",
+		res.ResponseCode,
+		res.ResponseMessage,
+		res.UUID,
+		res.ReferenceNumber,
+		res.ApprovalCode,
+		res.TerminalID,
+		res.TranAmount,
+	)
+}
+
+// String returns a redacted summary to avoid logging sensitive cardholder data.
+func (p EBSParserFields) String() string {
+	return p.EBSResponse.String()
 }
 
 type ConsumerGenerateIPINFields struct {
@@ -895,21 +916,27 @@ type ValidationError struct {
 // database settings, and auth keys. Runtime config is built by merging
 // config.yaml with secrets.yaml (SOPS-encrypted) at startup.
 type NoebsConfig struct {
-	OneSignal          string `json:"onesignal_key"`
-	DatabasePath       string `json:"db_path"`
-	DatabaseURL        string `json:"db_url"`
-	DatabaseDriver     string `json:"db_driver"`
-	DefaultTenantID    string `json:"default_tenant_id"`
-	SMSAPIKey          string `json:"sms_key"`
-	SMSSender          string `json:"sms_sender"`
-	SMSGateway         string `json:"sms_gateway"`
-	RedisPort          string `json:"redis_port"`
-	JWTKey             string `json:"jwt_secret"`
-	Sentry             string `json:"sentry"`
-	Port               string `json:"port"`
-	GoogleClientID     string `json:"google_client_id"`
-	GoogleClientSecret string `json:"google_client_secret"`
-	GoogleRedirectURL  string `json:"google_redirect_url"`
+	OneSignal          string   `json:"onesignal_key"`
+	OneSignalAppID     string   `json:"onesignal_app_id"`
+	OneSignalPlayerIDs []string `json:"onesignal_player_ids"`
+	AdminKey           string   `json:"admin_key"`
+	AdminUser          string   `json:"admin_user"`
+	AdminPassword      string   `json:"admin_password"`
+	DataKey            string   `json:"data_key"`
+	DatabasePath       string   `json:"db_path"`
+	DatabaseURL        string   `json:"db_url"`
+	DatabaseDriver     string   `json:"db_driver"`
+	DefaultTenantID    string   `json:"default_tenant_id"`
+	SMSAPIKey          string   `json:"sms_key"`
+	SMSSender          string   `json:"sms_sender"`
+	SMSGateway         string   `json:"sms_gateway"`
+	RedisPort          string   `json:"redis_port"`
+	JWTKey             string   `json:"jwt_secret"`
+	Sentry             string   `json:"sentry"`
+	Port               string   `json:"port"`
+	GoogleClientID     string   `json:"google_client_id"`
+	GoogleClientSecret string   `json:"google_client_secret"`
+	GoogleRedirectURL  string   `json:"google_redirect_url"`
 
 	IsConsumerProd bool `json:"is_consumer_prod"`
 	IsMerchantProd bool `json:"is_merchant_prod"`

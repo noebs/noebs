@@ -753,7 +753,7 @@ func (s *Service) CardTransfer(c *fiber.Ctx) {
 			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
 			return
 		}
-		s.Logger.Printf("the request is: %v", string(jsonBuffer))
+		s.Logger.Printf("ebs request size=%d", len(jsonBuffer))
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)
@@ -1490,8 +1490,6 @@ func (s *Service) GenerateIpin(c *fiber.Ctx) {
 
 		uid, _ := uuid.NewRandom()
 		// encrypt the password here
-		s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
-
 		ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
 		if err != nil {
 			s.Logger.Printf("error in encryption: %v", err)
@@ -1548,7 +1546,6 @@ func (s *Service) CompleteIpin(c *fiber.Ctx) {
 	var fields = ebs_fields.ConsumerGenerateIPinCompletion{}
 
 	bindJSON(c, &fields)
-	s.Logger.Printf("ipin password is: %v", s.NoebsConfig.EBSIPINPassword)
 	uid, _ := uuid.NewRandom()
 	passwordBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid.String())
 	ipinBlock, _ := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid.String())
@@ -1684,7 +1681,7 @@ func (s *Service) GeneratePaymentToken(c *fiber.Ctx) {
 		return
 	}
 	encoded, _ := ebs_fields.Encode(&token)
-	s.Logger.Printf("token is: %v", encoded)
+	s.Logger.Printf("payment token generated uuid=%s", token.UUID)
 	paymentLink := s.NoebsConfig.PaymentLinkBase + token.UUID
 	jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": token.UUID, "payment_link": paymentLink})
 }
@@ -1868,7 +1865,7 @@ func (s *Service) NoebsQuickPayment(c *fiber.Ctx) {
 		_ = s.Store.MarkTokenPaid(c.UserContext(), tenantID, storedToken.UUID)
 	}
 
-	go pushMessage(fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
+	go pushMessage(s.NoebsConfig, fmt.Sprintf("Amount of: %v was added! Download noebs apps!", res.EBSResponse.TranAmount))
 	if ebsErr != nil {
 		payload := ebs_fields.ErrorDetails{Code: res.ResponseCode, Status: ebs_fields.EBSError, Details: res, Message: ebs_fields.EBSError}
 		jsonResponse(c, code, payload)
@@ -2341,7 +2338,7 @@ func (s *Service) MobileTransfer(c *fiber.Ctx) {
 			jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrMarshal, err.Error()))
 			return
 		}
-		s.Logger.Printf("the request is: %v", string(jsonBuffer))
+		s.Logger.Printf("ebs request size=%d", len(jsonBuffer))
 		// the only part left is fixing EBS errors. Formalizing them per se.
 		code, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 		s.Logger.Printf("response is: %d, %+v, %v", code, res, ebsErr)

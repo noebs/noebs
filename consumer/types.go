@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -86,7 +87,7 @@ func (pr *paymentResponse) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, pr)
 }
 
-func pushMessage(content string, pushID ...string) {
+func pushMessage(cfg ebs_fields.NoebsConfig, content string, pushID ...string) {
 	/*
 		curl --include --request POST --header "Content-Type: application/json; charset=utf-8"
 		 -H "Authorization: Basic NjEwNjk1YzctYzZjZC00Yzg2LTk5ZjYtMzI2ZjViZjE2ZTdi" -d
@@ -97,16 +98,29 @@ func pushMessage(content string, pushID ...string) {
 		  "contents": {"en": "Let us work it here!"} }'
 		 https://onesignal.com/api/v1/notifications
 	*/
-	pushID = []string{"a180bc8b-6b56-405e-ae77-dc055d86a9df"}
+	if cfg.OneSignal == "" || cfg.OneSignalAppID == "" {
+		log.Printf("push disabled: onesignal not configured")
+		return
+	}
+	if len(pushID) == 0 {
+		pushID = cfg.OneSignalPlayerIDs
+	}
+	if len(pushID) == 0 {
+		log.Printf("push disabled: no player ids provided")
+		return
+	}
+	authKey := strings.TrimSpace(cfg.OneSignal)
+	if !strings.HasPrefix(strings.ToLower(authKey), "basic ") {
+		authKey = "Basic " + authKey
+	}
 	b := map[string]interface{}{
-		"app_id":                        "20a9520e-44fd-4657-a2d9-78f5063045aa",
-		"include_player_ids":            pushID, // "a180bc8b-6b56-405e-ae77-dc055d86a9df"
+		"app_id":                        cfg.OneSignalAppID,
+		"include_player_ids":            pushID,
 		"channel_for_external_user_ids": "push",
 		"data":                          map[string]string{"foo": "bar"},
 		"contents":                      map[string]string{"en": content},
 	}
 	data, _ := json.Marshal(&b)
-	log.Printf("the data is: %v", string(data))
 	client, err := http.NewRequest("POST", "https://onesignal.com/api/v1/notifications", bytes.NewBuffer(data))
 	if err != nil {
 		log.Printf("error in sending a request: %v", err)
@@ -114,7 +128,7 @@ func pushMessage(content string, pushID ...string) {
 	}
 
 	client.Header.Set("Content-Type", "application/json; charset=utf-8")
-	client.Header.Set("Authorization", "Basic NjEwNjk1YzctYzZjZC00Yzg2LTk5ZjYtMzI2ZjViZjE2ZTdi")
+	client.Header.Set("Authorization", authKey)
 	res, err := http.DefaultClient.Do(client)
 	if err != nil {
 		log.Printf("Error in parse: %v", err)
@@ -128,10 +142,10 @@ func pushMessage(content string, pushID ...string) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
-		log.Printf("Response status is: %v - response is: %v", res.StatusCode, string(d))
+		log.Printf("push failed status=%v body_bytes=%d", res.StatusCode, len(d))
 		return
 	}
-	log.Printf("Response status is: %v - response is: %v", res.StatusCode, string(d))
+	log.Printf("push delivered status=%v", res.StatusCode)
 
 }
 

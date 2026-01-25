@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -103,7 +102,8 @@ func (s *Service) LoginHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
 	c.Set("Authorization", token)
-	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": token, "user": u})
+	safeUser := sanitizeUser(*u)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": token, "user": safeUser})
 }
 
 // SingleLoginHandler is used for one-time authentications. It checks a signed entered otp keys against
@@ -142,7 +142,8 @@ func (s *Service) SingleLoginHandler(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
 	c.Set("Authorization", token)
-	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": token, "user": u})
+	safeUser := sanitizeUser(*u)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": token, "user": safeUser})
 }
 
 // RefreshHandler generates a new access token to the user using
@@ -242,7 +243,8 @@ func (s *Service) CreateUser(c *fiber.Ctx) error {
 		// unable to create this user; see possible reasons
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "duplicate_username"})
 	}
-	c.Status(http.StatusCreated).JSON(fiber.Map{"ok": "object was successfully created", "details": u})
+	safeUser := sanitizeUser(u)
+	c.Status(http.StatusCreated).JSON(fiber.Map{"ok": "object was successfully created", "details": safeUser})
 	go gateway.SyncLedger(u)
 	return nil
 }
@@ -269,7 +271,8 @@ func (s *Service) VerifyOTP(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Invalid otp", "code": "invalid_otp"})
 	}
 	_ = s.Store.UpdateUserColumns(c.UserContext(), tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true})
-	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": u, "pubkey": s.NoebsConfig.EBSConsumerKey})
+	safeUser := sanitizeUser(*u)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": safeUser, "pubkey": s.NoebsConfig.EBSConsumerKey})
 }
 
 // BalanceStep part of our 2fa steps for account recovery
@@ -333,7 +336,6 @@ func (s *Service) ChangePassword(c *fiber.Ctx) error {
 		s.Logger.Printf("The request is wrong. %v", err)
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "Bad request.", "code": "bad_request"})
 	}
-	s.Logger.Printf("the processed request is: %+v\n", req)
 	tenantID := resolveTenantID(c, s.NoebsConfig)
 	u, err := s.Store.GetUserByMobile(c.UserContext(), tenantID, strings.ToLower(mobile))
 	if err != nil {
@@ -353,7 +355,8 @@ func (s *Service) ChangePassword(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(err)
 	}
 
-	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": u})
+	safeUser := sanitizeUser(*u)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"result": "ok", "user": safeUser})
 }
 
 // SendPush is a no-op placeholder while push delivery is disabled.
@@ -383,7 +386,6 @@ func (s *Service) GenerateSignInCode(c *fiber.Ctx, allowInsecure bool) error {
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	log.Printf("the key is: %s", key)
 	// this function doesn't have to be blocking.
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: req.Mobile, Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key)})
 	return c.Status(http.StatusCreated).JSON(fiber.Map{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})

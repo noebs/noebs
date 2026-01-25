@@ -19,20 +19,19 @@ func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
 
 // SendSMS a generic function to send sms to any user
 func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
-	log.Printf("the message is: %+v", sms)
+	log.Printf("sending sms to %s", maskMobile(sms.Mobile))
 	v := url.Values{}
 	v.Add("api_key", noebsConfig.SMSAPIKey)
 	v.Add("from", noebsConfig.SMSSender)
 	v.Add("to", "249"+strings.TrimPrefix(sms.Mobile, "0"))
 	v.Add("sms", sms.Message+"\n\n"+noebsConfig.SMSMessage)
 	url := noebsConfig.SMSGateway + v.Encode()
-	log.Printf("the url is: %+v", url)
 	res, err := http.Get(url)
 	if err != nil {
 		log.Printf("The error is: %+v", err)
 		return err
 	}
-	log.Printf("The response body is: %v", res)
+	log.Printf("sms response status=%s", res.Status)
 	return nil
 }
 
@@ -41,4 +40,14 @@ func MaskPAN(PAN string) string {
 	length := len(PAN)
 	PAN = PAN[:6] + "*****" + PAN[length-4:]
 	return PAN
+}
+
+func maskMobile(mobile string) string {
+	if mobile == "" {
+		return ""
+	}
+	if len(mobile) <= 4 {
+		return "****"
+	}
+	return "****" + mobile[len(mobile)-4:]
 }

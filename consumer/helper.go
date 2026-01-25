@@ -111,7 +111,7 @@ func (s *Service) Pusher(ctx context.Context) {
 			// In the case we want to send a push notification to the receipient
 			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
 			// But the problem, is that we have lost the reference to the original sender
-			s.Logger.Infof("the data is: %+v", data)
+			s.Logger.Infof("push queued type=%s uuid=%s", data.Type, data.UUID)
 			// we are doing too much of db and logic here, let's simplify it
 			if data.Phone != "" {
 				tenantID := s.NoebsConfig.DefaultTenantID

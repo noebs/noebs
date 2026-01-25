@@ -134,7 +134,8 @@ func Instrumentation() fiber.Handler {
 // SyncLedger sends the user data to the server endpoint (dapi.noebs.sd) for backup
 func SyncLedger(user ebs_fields.User) error {
 	client := &http.Client{Timeout: 15 * time.Second}
-	body, err := json.Marshal(&user)
+	safeUser := sanitizeLedgerUser(user)
+	body, err := json.Marshal(&safeUser)
 	if err != nil {
 		log.Printf("error in marshaling user data: %v", err)
 		return err
@@ -161,6 +162,24 @@ func SyncLedger(user ebs_fields.User) error {
 	}
 	err = backoff.Retry(op, expBackoff)
 	return err
+}
+
+func sanitizeLedgerUser(user ebs_fields.User) ebs_fields.User {
+	user.Password = ""
+	user.Password2 = ""
+	user.PublicKey = ""
+	user.OTP = ""
+	user.SignedOTP = ""
+	user.MainCard = ""
+	user.ExpDate = ""
+	user.DeviceID = ""
+	user.DeviceToken = ""
+	user.NewPassword = ""
+	user.KYC = nil
+	user.Cards = nil
+	user.Tokens = nil
+	user.Beneficiaries = nil
+	return user
 }
 
 const (

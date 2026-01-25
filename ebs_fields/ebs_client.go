@@ -114,9 +114,9 @@ func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse E
 		// there is an error in handling the incoming EBS's ebsResponse
 		// log the err here please
 		log.WithFields(logrus.Fields{
-			"code":         err.Error(),
-			"all_response": string(responseBody),
-			"ebs_fields":   ebsGenericResponse,
+			"code":           err.Error(),
+			"response_bytes": len(responseBody),
+			"ebs_fields":     ebsGenericResponse,
 		}).Info("ebs response transaction")
 		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") {
 			json.Unmarshal(responseBody, &tmpRes)

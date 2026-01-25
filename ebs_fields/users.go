@@ -40,6 +40,7 @@ type User struct {
 	NewPassword   string `json:"new_password" gorm:"-"`
 	IsPasswordOTP bool   `json:"is_password_otp" gorm:"default:false"`
 	MainCard      string `json:"main_card" gorm:"column:main_card"`
+	MainCardEnc   string `json:"-" db:"main_card_enc" gorm:"column:main_card_enc"`
 	ExpDate       string `json:"exp_date" gorm:"column:main_expdate" db:"main_expdate"`
 	Language      string `json:"language"`
 	IsVerified    bool   `json:"is_verified"`
@@ -241,6 +242,7 @@ type Token struct {
 	UUID         string        `json:"uuid,omitempty"`
 	Note         string        `json:"note,omitempty"`
 	ToCard       string        `json:"toCard,omitempty"`
+	ToCardEnc    string        `json:"-" db:"to_card_enc" gorm:"column:to_card_enc"`
 	EBSResponses []EBSResponse `json:"transaction,omitempty"`
 	IsPaid       bool          `json:"is_paid"`
 }
@@ -294,9 +296,11 @@ type Card struct {
 	Model
 	TenantID string `json:"-"`
 	Pan      string `json:"pan"`
+	PanEnc   string `json:"-" db:"pan_enc" gorm:"column:pan_enc"`
 	Expiry   string `json:"exp_date"`
 	Name     string `json:"name"`
 	IPIN     string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
+	IPINEnc  string `json:"-" db:"ipin_enc" gorm:"column:ipin_enc"`
 	UserID   int64
 	IsMain   bool   `json:"is_main" gorm:"default:false"`
 	CardIdx  string `json:"card_index" gorm:"-:all"`
@@ -307,6 +311,7 @@ type CacheCards struct {
 	Model
 	TenantID  string `json:"-"`
 	Pan       string `json:"pan" gorm:"uniqueIndex"`
+	PanEnc    string `json:"-" db:"pan_enc" gorm:"column:pan_enc"`
 	Expiry    string `json:"exp_date"`
 	Name      string `json:"name"`
 	Mobile    string `json:"mobile" gorm:"-:all"`

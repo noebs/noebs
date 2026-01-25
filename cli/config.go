@@ -122,6 +122,13 @@ func GetMainEngine() *fiber.App {
 	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 
+	adminGuard := gateway.RequireAdmin(gateway.AdminAuthConfig{
+		Key:      noebsConfig.AdminKey,
+		User:     noebsConfig.AdminUser,
+		Password: noebsConfig.AdminPassword,
+		Debug:    noebsConfig.IsDebug,
+	})
+
 	route.Post("/ebs/*", wrapHandler(merchantServices.EBS))
 	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hub == nil {
@@ -132,7 +139,7 @@ func GetMainEngine() *fiber.App {
 	}))
 
 	route.Static("/dashboard/assets", templateDir)
-	route.Post("/generate_api_key", wrapHandler(consumerService.GenerateAPIKey))
+	route.Post("/generate_api_key", adminGuard, wrapHandler(consumerService.GenerateAPIKey))
 	route.Post("/workingKey", wrapHandler(merchantServices.WorkingKey))
 	route.Post("/cardTransfer", wrapHandler(merchantServices.CardTransfer))
 	route.Post("/voucher", wrapHandler(merchantServices.GenerateVoucher))
@@ -156,9 +163,9 @@ func GetMainEngine() *fiber.App {
 	})
 
 	route.Get("/wrk", wrapHandler(merchantServices.IsAliveWrk))
-	route.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
+	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
 
-	dashboardGroup := route.Group("/dashboard")
+	dashboardGroup := route.Group("/dashboard", adminGuard)
 	{
 		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
 		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
@@ -207,13 +214,33 @@ func GetMainEngine() *fiber.App {
 		cons.Post("/qr_complete", wrapHandler(consumerService.QRComplete))
 		cons.Post("/card_info", wrapHandler(consumerService.EbsGetCardInfo))
 		cons.Post("/pan_from_mobile", wrapHandler(consumerService.GetMSISDNFromCard))
-		cons.Get("/mobile2pan", wrapHandler(consumerService.CardFromNumber))
 		cons.Get("/nec2name", wrapHandler(consumerService.NecToName))
 		cons.Post("/vouchers/generate", wrapHandler(consumerService.GenerateVoucher))
 		cons.Post("/cards/new", wrapHandler(consumerService.RegisterCard))
 		cons.Post("/cards/complete", wrapHandler(consumerService.CompleteRegistration))
 		cons.Post("/login", wrapHandler(consumerService.LoginHandler))
 		cons.Post("/kyc", wrapHandler(consumerService.KYC))
+		cons.Post("/otp/generate", func(c *fiber.Ctx) error {
+			return consumerService.GenerateSignInCode(c, false)
+		})
+		cons.Post("/otp/generate_insecure", func(c *fiber.Ctx) error {
+			return consumerService.GenerateSignInCode(c, true)
+		})
+		cons.Post("/otp/login", wrapHandler(consumerService.SingleLoginHandler))
+		cons.Post("/otp/verify", wrapHandler(consumerService.VerifyOTP))
+		cons.Post("/otp/balance", wrapHandler(consumerService.BalanceStep))
+		cons.Post("/test", func(c *fiber.Ctx) error {
+			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
+		})
+		cons.Post("/check_user", wrapHandler(consumerService.CheckUser))
+
+		// New auth routes (email/social)
+		cons.Post("/auth/google", wrapHandler(consumerService.GoogleAuth))
+
+		cons.Use(auth.AuthMiddleware())
+		cons.Post("/auth/complete_profile", wrapHandler(consumerService.CompleteProfile))
+		cons.Get("/auth/me", wrapHandler(consumerService.AuthMe))
+		cons.Get("/user", wrapHandler(consumerService.GetUser))
 		cons.Get("/transaction", func(ctx *fiber.Ctx) error {
 			id := ctx.Query("uuid")
 			tenantID := ctx.Get("X-Tenant-ID")
@@ -244,27 +271,7 @@ func GetMainEngine() *fiber.App {
 				return ctx.Status(http.StatusOK).JSON(response)
 			}
 		})
-		cons.Post("/otp/generate", func(c *fiber.Ctx) error {
-			return consumerService.GenerateSignInCode(c, false)
-		})
-		cons.Post("/otp/generate_insecure", func(c *fiber.Ctx) error {
-			return consumerService.GenerateSignInCode(c, true)
-		})
-		cons.Post("/otp/login", wrapHandler(consumerService.SingleLoginHandler))
-		cons.Post("/otp/verify", wrapHandler(consumerService.VerifyOTP))
-		cons.Post("/otp/balance", wrapHandler(consumerService.BalanceStep))
-		cons.Post("/test", func(c *fiber.Ctx) error {
-			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
-		})
-		cons.Post("/check_user", wrapHandler(consumerService.CheckUser))
-
-		// New auth routes (email/social)
-		cons.Post("/auth/google", wrapHandler(consumerService.GoogleAuth))
-
-		cons.Use(auth.AuthMiddleware())
-		cons.Post("/auth/complete_profile", wrapHandler(consumerService.CompleteProfile))
-		cons.Get("/auth/me", wrapHandler(consumerService.AuthMe))
-		cons.Get("/user", wrapHandler(consumerService.GetUser))
+		cons.Get("/mobile2pan", wrapHandler(consumerService.CardFromNumber))
 		cons.Put("/user", wrapHandler(consumerService.UpdateUser))
 		cons.Get("/user/lang", wrapHandler(consumerService.GetUserLanguage))
 		cons.Put("/user/lang", wrapHandler(consumerService.SetUserLanguage))
@@ -342,7 +349,7 @@ func init() {
 	if err != nil {
 		logrusLogger.Fatalf("error in connecting to db: %v", err)
 	}
-	storeSvc = store.New(database)
+	storeSvc = store.New(database, store.WithDataKey(noebsConfig.DataKey))
 	migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelMigrate()
 	if err := store.Migrate(migrateCtx, database, tenantID); err != nil {

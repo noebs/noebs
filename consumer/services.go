@@ -172,7 +172,7 @@ func (s *Service) RemoveCard(c *fiber.Ctx) error {
 	if err := bindJSON(c, &card); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
-	s.Logger.Printf("the card is: %v+#", card)
+	s.Logger.Printf("remove card request card_index=%s", card.CardIdx)
 	// If no ID was provided that means we are adding a new card. We don't want that!
 	if card.CardIdx == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"message": "card idx is empty", "code": "card_idx_empty"})

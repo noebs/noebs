@@ -84,7 +84,8 @@ func (s *Service) GoogleAuth(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "jwt_failed", "message": err.Error()})
 	}
 	c.Set("Authorization", jwtToken)
-	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": jwtToken, "user": user, "new_user": isNew})
+	safeUser := sanitizeUser(user)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": jwtToken, "user": safeUser, "new_user": isNew})
 }
 
 type completeProfileRequest struct {
@@ -125,7 +126,8 @@ func (s *Service) CompleteProfile(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"code": "jwt_failed", "message": err.Error()})
 	}
 	c.Set("Authorization", jwtToken)
-	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": jwtToken, "user": user})
+	safeUser := sanitizeUser(*user)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"authorization": jwtToken, "user": safeUser})
 }
 
 // AuthMe returns the current user by token.
@@ -139,7 +141,8 @@ func (s *Service) AuthMe(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "database_error", "message": err.Error()})
 	}
-	return c.Status(http.StatusOK).JSON(fiber.Map{"user": user})
+	safeUser := sanitizeUser(*user)
+	return c.Status(http.StatusOK).JSON(fiber.Map{"user": safeUser})
 }
 
 func (s *Service) exchangeGoogleCode(ctx context.Context, req googleAuthRequest) (googleTokenResponse, error) {
