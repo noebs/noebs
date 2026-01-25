@@ -6,24 +6,24 @@ set -euo pipefail
 
 SECRETS_FILE="/app/secrets.yaml"
 DB_PATH_FILE="/app/.db_path"
-LITESTREAM_CONFIG="/etc/litestream.yml"
-AGE_KEY_FILE="/app/.sops/age-key.txt"
-SOPS_KEY_FILE="/root/.config/sops/age/keys.txt"
+LITESTREAM_CONFIG_DEFAULT="/etc/litestream.yml"
+AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-/app/.sops/age-key.txt}"
+export SOPS_AGE_KEY_FILE="$AGE_KEY_FILE"
 
 if [[ -f "$SECRETS_FILE" ]]; then
     if [[ ! -f "$AGE_KEY_FILE" ]]; then
         echo "Missing age key at $AGE_KEY_FILE" >&2
         exit 1
     fi
-    echo "Preparing SOPS age key..."
-    mkdir -p "$(dirname "$SOPS_KEY_FILE")"
-    chmod 700 "$(dirname "$SOPS_KEY_FILE")"
-    cp "$AGE_KEY_FILE" "$SOPS_KEY_FILE"
-    chmod 600 "$SOPS_KEY_FILE"
 fi
 
 echo "Rendering config + secrets..."
 noebs render-config
+
+LITESTREAM_CONFIG="$LITESTREAM_CONFIG_DEFAULT"
+if [[ ! -f "$LITESTREAM_CONFIG" && -f "/app/litestream.yml" ]]; then
+    LITESTREAM_CONFIG="/app/litestream.yml"
+fi
 
 if [[ -f "$LITESTREAM_CONFIG" ]]; then
     if [[ -f "$DB_PATH_FILE" ]]; then

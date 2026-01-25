@@ -1,26 +1,75 @@
-version: '2'
+name: noebs
+
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: noebs
-      POSTGRES_PASSWORD: noebs
-      POSTGRES_DB: noebs
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-noebs}
+      POSTGRES_DB: ${POSTGRES_DB:-noebs}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - noebs-postgres:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   web:
     build: .
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./config.docker.yaml:/app/config.yaml:ro
-      - ./secrets.yaml:/app/secrets.yaml:ro
-      - ./.sops/age-key.txt:/app/.sops/age-key.txt:ro
-      - noebs-data:/data
+    restart: unless-stopped
+    init: true
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    ports:
+      - "${NOEBS_PORT_BIND:-127.0.0.1}:${NOEBS_PORT_HOST:-8080}:8080"
+    volumes:
+      - "${NOEBS_CONFIG_FILE:-./config.docker.yaml}:/app/config.yaml:ro"
+      - "${NOEBS_SECRETS_FILE:-./secrets.yaml}:/app/secrets.yaml:ro"
+      - "./.sops/age-key.txt:/app/.sops/age-key.txt:ro"
+    networks:
+      - backend
+      - public
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    user: "10001:10001"
+
 volumes:
-  noebs-data:
   noebs-postgres:
+
+secrets:
+  postgres_password:
+    file: ./.secrets/postgres_password.txt
+
+networks:
+  public:
+  backend:
+    internal: true
