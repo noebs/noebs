@@ -422,8 +422,8 @@ github.com/tklauser/go-sysconf v0.3.12 h1:0QaGUFOdQaIVdPgfITYzaTegZvdCjmYO52cSFA
 github.com/tklauser/go-sysconf v0.3.12/go.mod h1:Ho14jnntGE1fpdOqQEEaiKRpvIavV0hSfmBq8nJbHYI=
 github.com/tklauser/numcpus v0.6.1 h1:ng9scYS7az0Bk4OZLvrNXNSAO2Pxr1XXRAPyjhIx+Fk=
 github.com/tklauser/numcpus v0.6.1/go.mod h1:1XfjsgE2zo8GVw7POkMbHENHzVg3GzmoZ9fESEdAacY=
-github.com/tutipay/ws v0.1.1 h1:Ipg4w3Ug8repl0x9Q/xlt3teVJcCJvo6YEgn3YqzyQk=
-github.com/tutipay/ws v0.1.1/go.mod h1:dzLTs3EGcEQkdidILuK38bXNyGAFxAA2CyJ+JYKdwt0=
+github.com/tutipay/ws v0.1.2 h1:3kv1t9KAZ8At3c/rftCzHk1OozgSuKqLIpYZ7t4YkcQ=
+github.com/tutipay/ws v0.1.2/go.mod h1:dzLTs3EGcEQkdidILuK38bXNyGAFxAA2CyJ+JYKdwt0=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.51.0 h1:8b30A5JlZ6C7AS81RsWjYMQmrZG6feChmgAolCl1SqA=
