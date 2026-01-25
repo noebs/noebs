@@ -4,7 +4,7 @@ import "github.com/adonese/noebs/ebs_fields"
 
 type Service struct {
 	ebs_fields.Model
-	ServiceName string `gorm:"index"`
+	ServiceName string
 	Password    string
 	JWT         JWT
 	JWTID       int

@@ -18,16 +18,16 @@ import (
 type User struct {
 	Model
 	TenantID string `json:"-"`
-	Created  int64  `gorm:"autoCreateTime"`
+	Created  int64
 	Password string `binding:"required,min=8,max=20" json:"password"`
 	Fullname string `json:"fullname"`
 	Username string `json:"username"`
 	Gender   string `json:"gender"`
 	Birthday string `json:"birthday"`
 
-	Email         string `json:"email" gorm:"index"`
-	Password2     string `json:"password2" gorm:"-"`
-	IsMerchant    bool   `json:"is_merchant" gorm:"default:false"`
+	Email         string `json:"email"`
+	Password2     string `json:"password2" db:"-"`
+	IsMerchant    bool   `json:"is_merchant"`
 	PublicKey     string `json:"user_pubkey"`
 	DeviceID      string `json:"device_id"`
 	OTP           string `json:"otp"`
@@ -37,23 +37,23 @@ type User struct {
 	Cards         []Card
 	// DeviceToken stores a push token for notifications.
 	DeviceToken   string `json:"device_token" db:"device_token"`
-	NewPassword   string `json:"new_password" gorm:"-"`
-	IsPasswordOTP bool   `json:"is_password_otp" gorm:"default:false"`
-	MainCard      string `json:"main_card" gorm:"column:main_card"`
-	MainCardEnc   string `json:"-" db:"main_card_enc" gorm:"column:main_card_enc"`
-	ExpDate       string `json:"exp_date" gorm:"column:main_expdate" db:"main_expdate"`
+	NewPassword   string `json:"new_password" db:"-"`
+	IsPasswordOTP bool   `json:"is_password_otp"`
+	MainCard      string `json:"main_card"`
+	MainCardEnc   string `json:"-" db:"main_card_enc"`
+	ExpDate       string `json:"exp_date" db:"main_expdate"`
 	Language      string `json:"language"`
 	IsVerified    bool   `json:"is_verified"`
-	Mobile        string `json:"mobile" gorm:"not null;uniqueIndex"`
-	KYC           *KYC   `gorm:"foreignKey:UserMobile;references:Mobile"`
+	Mobile        string `json:"mobile"`
+	KYC           *KYC
 }
 
 type KYC struct {
 	Model
-	TenantID    string   `json:"-"`
-	UserMobile  string   `gorm:"not null;unique"`
-	Mobile      string   `gorm:"primaryKey;not null;unique"`
-	Passport    Passport `gorm:"foreignKey:Mobile;references:Mobile"`
+	TenantID    string `json:"-"`
+	UserMobile  string
+	Mobile      string
+	Passport    Passport
 	Selfie      string
 	PassportImg string
 }
@@ -61,7 +61,7 @@ type KYC struct {
 type Passport struct {
 	Model
 	TenantID       string    `json:"-"`
-	Mobile         string    `gorm:"primaryKey;not null;unique" json:"mobile,omitempty"`
+	Mobile         string    `json:"mobile,omitempty"`
 	BirthDate      time.Time `json:"birth_date,omitempty"`
 	IssueDate      time.Time `json:"issue_date,omitempty"`
 	ExpirationDate time.Time `json:"expiration_date,omitempty"`
@@ -87,18 +87,6 @@ type UserProfile struct {
 	Birthday string `json:"birthday"`
 	Gender   string `json:"gender"`
 }
-
-// func (user *User) BeforeSave(tx *gorm.DB) (err error) {
-// 	if user.Password == "" {
-// 		return errors.New("password is empty")
-// 	}
-// 	if err := user.HashPassword(); err == nil {
-// 		tx.Statement.SetColumn("password", user.Password)
-// 		return nil
-// 	} else {
-// 		return err
-// 	}
-// }
 
 type QRMerchant struct {
 	Mobile string
@@ -242,7 +230,7 @@ type Token struct {
 	UUID         string        `json:"uuid,omitempty"`
 	Note         string        `json:"note,omitempty"`
 	ToCard       string        `json:"toCard,omitempty"`
-	ToCardEnc    string        `json:"-" db:"to_card_enc" gorm:"column:to_card_enc"`
+	ToCardEnc    string        `json:"-" db:"to_card_enc"`
 	EBSResponses []EBSResponse `json:"transaction,omitempty"`
 	IsPaid       bool          `json:"is_paid"`
 }
@@ -296,27 +284,27 @@ type Card struct {
 	Model
 	TenantID string `json:"-"`
 	Pan      string `json:"pan"`
-	PanEnc   string `json:"-" db:"pan_enc" gorm:"column:pan_enc"`
+	PanEnc   string `json:"-" db:"pan_enc"`
 	Expiry   string `json:"exp_date"`
 	Name     string `json:"name"`
-	IPIN     string `json:"ipin" gorm:"column:ipin"` // set gorm db name to ipin to avoid conflict with the field name in the struct
-	IPINEnc  string `json:"-" db:"ipin_enc" gorm:"column:ipin_enc"`
+	IPIN     string `json:"ipin"`
+	IPINEnc  string `json:"-" db:"ipin_enc"`
 	UserID   int64
-	IsMain   bool   `json:"is_main" gorm:"default:false"`
-	CardIdx  string `json:"card_index" gorm:"-:all"`
+	IsMain   bool   `json:"is_main"`
+	CardIdx  string `json:"card_index" db:"-"`
 	IsValid  *bool  `json:"is_valid"`
 }
 
 type CacheCards struct {
 	Model
 	TenantID  string `json:"-"`
-	Pan       string `json:"pan" gorm:"uniqueIndex"`
-	PanEnc    string `json:"-" db:"pan_enc" gorm:"column:pan_enc"`
+	Pan       string `json:"pan"`
+	PanEnc    string `json:"-" db:"pan_enc"`
 	Expiry    string `json:"exp_date"`
 	Name      string `json:"name"`
-	Mobile    string `json:"mobile" gorm:"-:all"`
-	Password  string `json:"password" gorm:"-:all"`
-	PublicKey string `json:"user_pubkey" gorm:"-:all"`
+	Mobile    string `json:"mobile" db:"-"`
+	Password  string `json:"password" db:"-"`
+	PublicKey string `json:"user_pubkey" db:"-"`
 	IsValid   *bool  `json:"is_valid"`
 }
 

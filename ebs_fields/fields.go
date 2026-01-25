@@ -245,11 +245,11 @@ type EBSResponse struct {
 	OTPID                  string  `json:"otpId,omitempty"`
 	TranCurrencyCode       string  `json:"tranCurrencyCode,omitempty"`
 	EBSServiceName         string  `json:"-,omitempty"`
-	WorkingKey             string  `json:"workingKey,omitempty" gorm:"-"`
+	WorkingKey             string  `json:"workingKey,omitempty" db:"-"`
 	PayeeID                string  `json:"payeeId,omitempty"`
 	// Consumer fields
 	PubKeyValue     string `json:"pubKeyValue,omitempty" form:"pubKeyValue"`
-	UUID            string `json:"UUID,omitempty" form:"UUID" gorm:"primarykey;not null;"`
+	UUID            string `json:"UUID,omitempty" form:"UUID"`
 	ResponseMessage string `json:"responseMessage,omitempty"`
 	ResponseStatus  string `json:"responseStatus,omitempty"`
 	ResponseCode    int    `json:"responseCode"`
@@ -258,7 +258,7 @@ type EBSResponse struct {
 	VoucherNumber   string `json:"voucherNumber,omitempty"`
 	VoucherCode     string `json:"voucherCode,omitempty"`
 	//FIXME(adonese): #166 ministatement records need to be properly parsed to sqlite compatible type
-	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty" gorm:"type:text[]"` //make this gorm-able
+	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty"`
 	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
 	AdditionalData       string          `json:"additionalData,omitempty"`
 	TranDateTime         string          `json:"tranDateTime,omitempty"`
@@ -685,21 +685,21 @@ func (f *MerchantRegistrationFields) MustMarshal() []byte {
 
 // Merchant constructs ebs qualfied merchant
 type Merchant struct {
-	MerchantID           string `json:"merchant_id" form:"merchant_id" gorm:"index"`
-	MerchantName         string `json:"name" form:"name" binding:"required" gorm:"column:name"`
-	MerchantCity         string `json:"city" form:"city" binding:"required" gorm:"column:city"`
-	MerchantMobileNumber string `json:"mobile" form:"mobile" binding:"required,max=10" gorm:"column:mobile; index:,unqiue"`
-	IDType               int    `json:"id_type" form:"id_type" binding:"required" gorm:"column:id_type"`
-	IDNo                 string `json:"id_no" form:"id_no" binding:"required" gorm:"column:id_no"`
-	TerminalID           string `json:"-" gorm:"-"`
-	PushID               string `json:"push_id" gorm:"column:push_id"`
+	MerchantID           string `json:"merchant_id" form:"merchant_id" db:"merchant_id"`
+	MerchantName         string `json:"name" form:"name" binding:"required" db:"name"`
+	MerchantCity         string `json:"city" form:"city" binding:"required" db:"city"`
+	MerchantMobileNumber string `json:"mobile" form:"mobile" binding:"required,max=10" db:"mobile"`
+	IDType               int    `json:"id_type" form:"id_type" binding:"required" db:"id_type"`
+	IDNo                 string `json:"id_no" form:"id_no" binding:"required" db:"id_no"`
+	TerminalID           string `json:"-" db:"-"`
+	PushID               string `json:"push_id" db:"push_id"`
 	Password             string `json:"password"`
 	IsVerifed            bool   `json:"is_verified"`
 	BillerID             string `json:"biller_id"`
 	EBSBiller            string `json:"ebs_biller"`
-	CardNumber           string `json:"card" gorm:"column:card"`
-	Hooks                string `json:"hooks" gorm:"hooks"`
-	URL                  string `json:"url" gorm:"url"`
+	CardNumber           string `json:"card" db:"card"`
+	Hooks                string `json:"hooks" db:"hooks"`
+	URL                  string `json:"url" db:"url"`
 }
 
 type mLabel struct {

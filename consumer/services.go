@@ -123,7 +123,7 @@ func (s *Service) AddCards(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 
-	// manually zero-valueing card ID to avoid gorm upserting it
+	// manually zero-valueing card ID to avoid unintended upserts
 	for idx := range listCards {
 		listCards[idx].ID = 0
 		listCards[idx].UserID = user.ID
