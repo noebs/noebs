@@ -1,0 +1,16 @@
+dsa.adonese.sd {
+    reverse_proxy web:8080
+
+    encode gzip zstd
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

@@ -25,19 +25,29 @@ x-web-hardening: &web-hardening
       hard: 65535
 
 services:
+  runtime-init:
+    <<: *service-defaults
+    image: alpine:3.20
+    command: ["sh", "-c", "mkdir -p /app/runtime && chown -R 10001:10001 /app/runtime"]
+    volumes:
+      - noebs-runtime:/app/runtime
+    restart: "no"
+
   secrets-init:
     <<: *service-defaults
     build:
       context: .
     entrypoint: ["/usr/local/bin/noebs", "render-config"]
+    depends_on:
+      runtime-init:
+        condition: service_completed_successfully
     environment:
-      NOEBS_RUNTIME_DIR: /run/noebs
-      NOEBS_RENDER_DB_PASSWORD_FILE: /run/noebs/postgres_password.txt
+      NOEBS_RUNTIME_DIR: /app/runtime
+      NOEBS_RENDER_DB_PASSWORD_FILE: /app/runtime/postgres_password.txt
       SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     volumes:
-      - "${NOEBS_CONFIG_FILE:-./config.docker.yaml}:/app/config.yaml:ro"
-      - noebs-runtime:/run/noebs
-      - noebs-runtime:/run/noebs
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - noebs-runtime:/app/runtime
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -53,13 +63,13 @@ services:
       secrets-init:
         condition: service_completed_successfully
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-noebs}
-      POSTGRES_DB: ${POSTGRES_DB:-noebs}
-      POSTGRES_PASSWORD_FILE: /run/noebs/postgres_password.txt
+      POSTGRES_USER: noebs
+      POSTGRES_DB: noebs
+      POSTGRES_PASSWORD_FILE: /app/runtime/postgres_password.txt
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     volumes:
       - noebs-postgres:/var/lib/postgresql/data
-      - noebs-runtime:/run/noebs:ro
+      - noebs-runtime:/app/runtime:ro
     networks:
       - backend
     healthcheck:
@@ -78,9 +88,9 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "${NOEBS_PORT_BIND:-0.0.0.0}:${NOEBS_PORT_HOST:-8081}:8080"
+      - "0.0.0.0:8081:8080"
     volumes:
-      - "${NOEBS_CONFIG_FILE:-./config.docker.yaml}:/app/config.yaml:ro"
+      - "./config.docker.yaml:/app/config.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -93,7 +103,7 @@ services:
         gid: "10001"
         mode: 0400
     environment:
-      NOEBS_RUNTIME_DIR: ${NOEBS_RUNTIME_DIR:-/app/runtime}
+      NOEBS_RUNTIME_DIR: /app/runtime
       SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
@@ -107,15 +117,33 @@ services:
       start_period: 10s
     user: "10001:10001"
 
+  caddy:
+    <<: *service-defaults
+    image: caddy:2-alpine
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./Caddyfile:/etc/caddy/Caddyfile:ro"
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - public
+
 volumes:
   noebs-postgres:
   noebs-runtime:
+  caddy_data:
+  caddy_config:
 
 secrets:
   noebs_secrets:
-    file: ${NOEBS_SECRETS_FILE:-./secrets.yaml}
+    file: ./secrets.yaml
   sops_age_key:
-    file: ${NOEBS_AGE_KEY_FILE:-./.sops/age-key.txt}
+    file: ./.sops/age-key.txt
 
 networks:
   public:
