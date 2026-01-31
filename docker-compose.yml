@@ -1,17 +1,65 @@
 name: noebs
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging: *default-logging
+
+x-web-hardening: &web-hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+    - /run:rw,noexec,nosuid,nodev,size=16m
+  pids_limit: 200
+  ulimits:
+    nofile:
+      soft: 65535
+      hard: 65535
+
 services:
+  secrets-init:
+    <<: *service-defaults
+    build:
+      context: .
+    entrypoint: ["/usr/local/bin/noebs", "render-config"]
+    environment:
+      NOEBS_RUNTIME_DIR: /run/noebs
+      NOEBS_RENDER_DB_PASSWORD_FILE: /run/noebs/postgres_password.txt
+      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
+    volumes:
+      - "${NOEBS_CONFIG_FILE:-./config.docker.yaml}:/app/config.yaml:ro"
+      - noebs-runtime:/run/noebs
+      - noebs-runtime:/run/noebs
+    secrets:
+      - source: noebs_secrets
+        target: /app/secrets.yaml
+      - source: sops_age_key
+        target: /app/.sops/age-key.txt
+    restart: "no"
+
   db:
+    <<: *service-defaults
     image: postgres:16
-    restart: unless-stopped
+    init: true
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-noebs}
       POSTGRES_DB: ${POSTGRES_DB:-noebs}
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
-    secrets:
-      - postgres_password
+      POSTGRES_PASSWORD_FILE: /run/noebs/postgres_password.txt
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
     volumes:
       - noebs-postgres:/var/lib/postgresql/data
+      - noebs-runtime:/run/noebs:ro
     networks:
       - backend
     healthcheck:
@@ -20,34 +68,36 @@ services:
       timeout: 3s
       retries: 5
       start_period: 20s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
 
   web:
-    build: .
-    restart: unless-stopped
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
     init: true
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "${NOEBS_PORT_BIND:-127.0.0.1}:${NOEBS_PORT_HOST:-8080}:8080"
+      - "${NOEBS_PORT_BIND:-0.0.0.0}:${NOEBS_PORT_HOST:-8081}:8080"
     volumes:
       - "${NOEBS_CONFIG_FILE:-./config.docker.yaml}:/app/config.yaml:ro"
-      - "${NOEBS_SECRETS_FILE:-./secrets.yaml}:/app/secrets.yaml:ro"
-      - "./.sops/age-key.txt:/app/.sops/age-key.txt:ro"
+    secrets:
+      - source: noebs_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: sops_age_key
+        target: /app/.sops/age-key.txt
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    environment:
+      NOEBS_RUNTIME_DIR: ${NOEBS_RUNTIME_DIR:-/app/runtime}
+      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
       - public
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
@@ -55,19 +105,17 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
     user: "10001:10001"
 
 volumes:
   noebs-postgres:
+  noebs-runtime:
 
 secrets:
-  postgres_password:
-    file: ./.secrets/postgres_password.txt
+  noebs_secrets:
+    file: ${NOEBS_SECRETS_FILE:-./secrets.yaml}
+  sops_age_key:
+    file: ${NOEBS_AGE_KEY_FILE:-./.sops/age-key.txt}
 
 networks:
   public:
