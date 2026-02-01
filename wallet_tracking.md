@@ -96,9 +96,45 @@ Last updated: 2026-02-01
 - [x] Added server-side default timeouts for withdrawal/manual transfer with config defaults
 
 ## Next steps (short-term)
-- [ ] Implement PSP provider integrations beyond noop
+- [ ] Implement PSP provider integrations beyond noop (see “Missing workstreams” for context)
 - [ ] Add admin BO endpoints (HTMX/HATEOAS) for approvals, audit, and manual transfers
 - [ ] Add funding source + destination management APIs (create/list/verify)
+
+## Missing workstreams (handoff-ready, detailed)
+- [ ] **PSP providers + webhooks**
+  - Implement real provider adapters under `wallet/psp/<provider>` using `wallet/psp/provider.go` interface.
+  - Register providers in `cli/config.go` (see noop registration).
+  - Webhook endpoints are not implemented: add HTTP route + handler to verify signature via `wallet/psp/loader.go`, update `psp_transactions`, and signal workflows by `client_reference`.
+  - PSP errors should map to typed errors in `wallet/psp/errors.go`; activities already call provider via `wallet/activity/psp.go`.
+- [ ] **PSP webhook routing + poller schedules**
+  - Temporal poller workflow exists in `wallet/workflow/workflows.go` (`PSPStatusPoller`), but no Temporal schedule is created.
+  - Add schedule creation (or cron) and wiring in CLI bootstrap to kick off poller per tenant.
+- [ ] **Funding sources + destinations management APIs**
+  - Stores exist: `wallet/store/funding.go`, `wallet/store/destinations.go`, `wallet/store/ownership.go`.
+  - Needed endpoints (gRPC + gateway, plus optional Fiber handlers):
+    - Create/List funding sources (read-only for users).
+    - Create/List withdrawal destinations; set verification method; deactivate destination.
+    - Trigger ownership verification explicitly (create record in `ownership_verifications`).
+  - Workflow already enforces verification for withdrawals (`wallet/workflow/workflows.go`), but there’s no API to create/verify destinations.
+- [ ] **Admin BO (HTMX/HATEOAS)**
+  - HTMX admin routes exist only as stubs in `wallet/handler/admin.go`.
+  - Implement: approvals queue, approve/reject actions (manual transfers + withdrawals), audit log viewer, wallets list/details.
+  - Use store helpers in `wallet/store/*` and signal workflows via gRPC endpoints.
+- [ ] **Security UX + lifecycle**
+  - Wallet PIN set/reset flows (store `wallets.wallet_pin_hash`) are not exposed.
+  - User 2FA enrollment/disable not exposed; `wallet/activity/security.go` uses base user store for TOTP verification.
+- [ ] **Test coverage gaps**
+  - No workflow determinism tests for deposit/withdrawal/manual flows.
+  - No PSP mock server tests; no webhook/poller race tests.
+  - No end-to-end flow test: deposit → P2P → withdrawal with destination verification.
+
+## Context pointers (for other agents)
+- Workflow starters: `wallet/grpc/deposit.go`, `wallet/grpc/withdrawal.go`, `wallet/grpc/p2p.go`, `wallet/grpc/manual_transfer.go`.
+- Workflow logic: `wallet/workflow/workflows.go`.
+- PSP loader + registry: `wallet/psp/loader.go`, `wallet/psp/registry.go`, `wallet/psp/secrets.go`.
+- Store APIs for funding/destinations: `wallet/store/funding.go`, `wallet/store/destinations.go`, `wallet/store/ownership.go`.
+- Temporal worker setup: `wallet/worker/register.go`, `wallet/worker/worker.go`.
+- Config defaults: `ebs_fields/fields.go` (wallet timeout defaults).
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.
