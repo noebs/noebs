@@ -7,6 +7,7 @@ import (
 	walletlimits "github.com/adonese/noebs/wallet/limits"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type P2PValidationRequest struct {
@@ -81,6 +82,7 @@ type WithdrawalRule func(ctx context.Context, req WithdrawalValidationRequest, w
 
 type Service struct {
 	Store           *walletstore.Store
+	RateLookup      func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error)
 	P2PRules        []P2PRule
 	DepositRules    []DepositRule
 	WithdrawalRules []WithdrawalRule

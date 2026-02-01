@@ -66,6 +66,7 @@ Last updated: 2026-02-01
 - [x] Added gRPC proto + Buf configs for internal S2S and public JSON/OpenAPI generation
 - [x] Added proto generation test + Temporal testcontainers smoke test
 - [x] Added PSP transaction amount ledger for multi-currency/over-under payment tracking
+- [x] Added PSP amount resolution logic (accept under/overpayment by default; credit converted amount)
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

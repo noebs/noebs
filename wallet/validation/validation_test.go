@@ -1,10 +1,12 @@
 package validation
 
 import (
+	"context"
 	"testing"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 func TestValidateP2PRequest(t *testing.T) {
@@ -111,5 +113,86 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestResolvePSPDepositAmountsSameCurrency(t *testing.T) {
+	service := &Service{
+		Store: &walletstore.Store{},
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+			return decimal.NewFromInt(2), nil
+		},
+	}
+	req := PSPAmountResolutionRequest{
+		TenantID:           "tenant",
+		RequestedAmount:    100,
+		RequestedCurrency:  "USD",
+		SettlementAmount:   120,
+		SettlementCurrency: "USD",
+		WalletCurrency:     "USD",
+	}
+	result, err := service.ResolvePSPDepositAmounts(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.WalletCreditAmount != 120 {
+		t.Fatalf("expected credit 120, got %d", result.WalletCreditAmount)
+	}
+	if result.VarianceKind != walletstore.PSPAmountOverpayment {
+		t.Fatalf("expected overpayment, got %s", result.VarianceKind)
+	}
+}
+
+func TestResolvePSPDepositAmountsFXRate(t *testing.T) {
+	service := &Service{
+		Store: &walletstore.Store{},
+	}
+	req := PSPAmountResolutionRequest{
+		TenantID:           "tenant",
+		RequestedAmount:    100,
+		RequestedCurrency:  "USD",
+		SettlementAmount:   100,
+		SettlementCurrency: "EUR",
+		WalletCurrency:     "USD",
+		FXRate:             decimal.NullDecimal{Decimal: decimal.RequireFromString("1.2"), Valid: true},
+		FXBaseCurrency:     "EUR",
+		FXQuoteCurrency:    "USD",
+	}
+	result, err := service.ResolvePSPDepositAmounts(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.WalletCreditAmount != 120 {
+		t.Fatalf("expected credit 120, got %d", result.WalletCreditAmount)
+	}
+	if !result.AppliedFXRate.Valid {
+		t.Fatalf("expected fx rate")
+	}
+}
+
+func TestResolvePSPDepositAmountsRateLookup(t *testing.T) {
+	service := &Service{
+		Store: &walletstore.Store{},
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+			return decimal.RequireFromString("1.5"), nil
+		},
+	}
+	req := PSPAmountResolutionRequest{
+		TenantID:           "tenant",
+		RequestedAmount:    100,
+		RequestedCurrency:  "USD",
+		SettlementAmount:   100,
+		SettlementCurrency: "EUR",
+		WalletCurrency:     "USD",
+	}
+	result, err := service.ResolvePSPDepositAmounts(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.WalletCreditAmount != 150 {
+		t.Fatalf("expected credit 150, got %d", result.WalletCreditAmount)
+	}
+	if result.AppliedFXSource != "rates" {
+		t.Fatalf("expected fx source rates, got %s", result.AppliedFXSource)
 	}
 }
