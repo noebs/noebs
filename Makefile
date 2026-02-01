@@ -11,7 +11,7 @@ lint:
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint is required"; exit 1; }
 	@golangci-lint run ./...
 
-generate:
+generate: generate-enums generate-mocks generate-proto
 	@go generate ./...
 
 generate-mocks:
@@ -19,3 +19,6 @@ generate-mocks:
 
 generate-enums:
 	@go generate ./wallet/activity ./wallet/worker
+
+generate-proto:
+	@./scripts/gen_proto.sh
