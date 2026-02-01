@@ -471,6 +471,7 @@ func initConfig() {
 			walletworker.RegisterWallet(w, walletworker.RegisterDeps{
 				Store:         walletService.Store,
 				PSPActivities: pspActivities,
+				UserStore:     storeSvc,
 			})
 		}
 		runner, err := walletworker.NewRunner(context.Background(), workerOpts, register)

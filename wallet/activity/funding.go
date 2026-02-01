@@ -2,6 +2,7 @@ package activity
 
 import (
 	"context"
+	"time"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
@@ -51,4 +52,18 @@ func (a *FundingActivities) GetReturnToSourceOptions(ctx context.Context, tenant
 		}
 	}
 	return options, nil
+}
+
+func (a *FundingActivities) UpdateFundingSourceUsage(ctx context.Context, tenantID string, sourceID int64, amount int64, usedAt time.Time) error {
+	if a == nil || a.Store == nil {
+		return ErrMissingStore
+	}
+	return a.Store.UpdateFundingSourceUsage(ctx, tenantID, sourceID, amount, usedAt)
+}
+
+func (a *FundingActivities) UpdateWithdrawalDestinationUsage(ctx context.Context, tenantID string, destinationID int64, amount int64, usedAt time.Time) error {
+	if a == nil || a.Store == nil {
+		return ErrMissingStore
+	}
+	return a.Store.UpdateWithdrawalDestinationUsage(ctx, tenantID, destinationID, amount, usedAt)
 }

@@ -114,3 +114,77 @@ func (s *Store) ListWithdrawalDestinations(ctx context.Context, tenantID string,
 	}
 	return dests, nil
 }
+
+func (s *Store) UpdateWithdrawalDestinationUsage(ctx context.Context, tenantID string, destinationID int64, amount int64, usedAt time.Time) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if destinationID <= 0 {
+		return ErrMissingDestinationID
+	}
+	if amount <= 0 {
+		return ErrInvalidAmount
+	}
+	if usedAt.IsZero() {
+		return ErrMissingUsageTime
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE withdrawal_destinations
+		SET last_used_at = ?, total_withdrawn = total_withdrawn + ?, updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := db.ExecContext(ctx, stmt, usedAt, amount, usedAt, tenantID, destinationID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrDestinationNotFound
+	}
+	return nil
+}
+
+func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenantID string, destinationID int64, status string, verifiedAt sql.NullTime, updatedAt time.Time) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if destinationID <= 0 {
+		return ErrMissingDestinationID
+	}
+	if status == "" {
+		return ErrMissingStatus
+	}
+	if updatedAt.IsZero() {
+		return ErrMissingUpdatedAt
+	}
+	if status == "verified" && !verifiedAt.Valid {
+		return ErrMissingVerificationTime
+	}
+	if status != "verified" {
+		verifiedAt = sql.NullTime{}
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE withdrawal_destinations
+		SET ownership_status = ?, ownership_verified_at = ?, updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := db.ExecContext(ctx, stmt, status, verifiedAt, updatedAt, tenantID, destinationID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrDestinationNotFound
+	}
+	return nil
+}

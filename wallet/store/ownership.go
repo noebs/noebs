@@ -31,8 +31,8 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	stmt := db.Rebind(`INSERT INTO ownership_verifications(
 		tenant_id, destination_id, verification_type, status, micro_deposit_amounts,
 		micro_deposit_confirmed_at, card_verification_amount, document_type, document_url,
-		attempts, max_attempts, expires_at, completed_at, workflow_id, reference_id, created_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		attempts, max_attempts, expires_at, completed_at, workflow_id, reference_id, created_at, updated_at
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 	var stored OwnershipVerification
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -51,6 +51,7 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 		verification.CompletedAt,
 		verification.WorkflowID,
 		verification.ReferenceID,
+		now,
 		now,
 	); err != nil {
 		return nil, err
@@ -78,4 +79,38 @@ func (s *Store) GetOwnershipVerification(ctx context.Context, tenantID string, v
 		return nil, err
 	}
 	return &verification, nil
+}
+
+func (s *Store) UpdateOwnershipVerificationStatus(ctx context.Context, tenantID string, verificationID int64, status string, completedAt time.Time) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if verificationID <= 0 {
+		return ErrMissingVerificationID
+	}
+	if status == "" {
+		return ErrMissingStatus
+	}
+	if completedAt.IsZero() {
+		return ErrMissingVerificationTime
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE ownership_verifications
+		SET status = ?, completed_at = ?, updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := db.ExecContext(ctx, stmt, status, completedAt, completedAt, tenantID, verificationID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrVerificationNotFound
+	}
+	return nil
 }

@@ -281,6 +281,60 @@ func TestLedgerTransactionExistsValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingIdempotencyKey)
 }
 
+func TestUpdateWithdrawalDestinationUsageValidation(t *testing.T) {
+	s := &Store{}
+	now := time.Now().UTC()
+
+	err := s.UpdateWithdrawalDestinationUsage(t.Context(), "", 1, 100, now)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 0, 100, now)
+	assertErrorIs(t, err, ErrMissingDestinationID)
+
+	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 1, 0, now)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 1, 100, time.Time{})
+	assertErrorIs(t, err, ErrMissingUsageTime)
+}
+
+func TestUpdateFundingSourceUsageValidation(t *testing.T) {
+	s := &Store{}
+	now := time.Now().UTC()
+
+	err := s.UpdateFundingSourceUsage(t.Context(), "", 1, 100, now)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 0, 100, now)
+	assertErrorIs(t, err, ErrMissingFundingSourceID)
+
+	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 1, 0, now)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 1, 100, time.Time{})
+	assertErrorIs(t, err, ErrMissingUsageTime)
+}
+
+func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
+	s := &Store{}
+	now := time.Now().UTC()
+
+	err := s.UpdateWithdrawalDestinationOwnership(t.Context(), "", 1, "verified", sql.NullTime{Time: now, Valid: true}, now)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 0, "verified", sql.NullTime{Time: now, Valid: true}, now)
+	assertErrorIs(t, err, ErrMissingDestinationID)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "", sql.NullTime{Time: now, Valid: true}, now)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{Time: now, Valid: true}, time.Time{})
+	assertErrorIs(t, err, ErrMissingUpdatedAt)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{}, now)
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+}
+
 func TestAddPSPTransactionAmountValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPTransactionAmount{

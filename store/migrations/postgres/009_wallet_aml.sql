@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS funding_sources (
   supports_withdrawal BOOLEAN NOT NULL DEFAULT FALSE,
   withdrawal_method JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(tenant_id, wallet_id, source_type, external_reference)
 );
 
@@ -74,7 +75,8 @@ CREATE TABLE IF NOT EXISTS ownership_verifications (
   completed_at TIMESTAMPTZ,
   workflow_id TEXT,
   reference_id TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_funding_sources_wallet ON funding_sources(tenant_id, wallet_id);

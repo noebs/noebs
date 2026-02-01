@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -28,10 +29,22 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 	stmt := db.Rebind(`INSERT INTO funding_sources(
 		tenant_id, wallet_id, source_type, psp_provider, external_reference, verification_status,
 		verified_at, verified_by, currency, source_details, total_funded, last_funded_at,
-		total_withdrawn, last_withdrawn_at, supports_withdrawal, withdrawal_method
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON CONFLICT(tenant_id, wallet_id, source_type, external_reference) DO NOTHING
+		total_withdrawn, last_withdrawn_at, supports_withdrawal, withdrawal_method, created_at, updated_at
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(tenant_id, wallet_id, source_type, external_reference) DO UPDATE
+		SET total_funded = funding_sources.total_funded + EXCLUDED.total_funded,
+			last_funded_at = GREATEST(funding_sources.last_funded_at, EXCLUDED.last_funded_at),
+			supports_withdrawal = funding_sources.supports_withdrawal OR EXCLUDED.supports_withdrawal,
+			verification_status = CASE
+				WHEN funding_sources.verification_status = 'verified' THEN funding_sources.verification_status
+				WHEN EXCLUDED.verification_status = 'verified' THEN EXCLUDED.verification_status
+				ELSE funding_sources.verification_status
+			END,
+			verified_at = COALESCE(funding_sources.verified_at, EXCLUDED.verified_at),
+			verified_by = COALESCE(funding_sources.verified_by, EXCLUDED.verified_by),
+			updated_at = EXCLUDED.updated_at
 	RETURNING *`)
+	now := time.Now().UTC()
 	var stored FundingSource
 	if err := db.GetContext(ctx, &stored, stmt,
 		source.TenantID,
@@ -50,6 +63,8 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 		source.LastWithdrawnAt,
 		source.SupportsWithdrawal,
 		source.WithdrawalMethod,
+		now,
+		now,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return s.GetFundingSource(ctx, source.TenantID, source.WalletID, source.SourceType, source.ExternalReference)
@@ -146,6 +161,40 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		return nil, err
 	}
 	return &stored, nil
+}
+
+func (s *Store) UpdateFundingSourceUsage(ctx context.Context, tenantID string, sourceID int64, amount int64, usedAt time.Time) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if sourceID <= 0 {
+		return ErrMissingFundingSourceID
+	}
+	if amount <= 0 {
+		return ErrInvalidAmount
+	}
+	if usedAt.IsZero() {
+		return ErrMissingUsageTime
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE funding_sources
+		SET total_withdrawn = total_withdrawn + ?, last_withdrawn_at = ?, updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := db.ExecContext(ctx, stmt, amount, usedAt, usedAt, tenantID, sourceID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrFundingSourceNotFound
+	}
+	return nil
 }
 
 func (s *Store) GetFundingSourceByPSPRef(ctx context.Context, tenantID, provider string, externalRef string) (*FundingSource, error) {

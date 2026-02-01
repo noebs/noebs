@@ -27,6 +27,7 @@ type FundingSource struct {
 	SupportsWithdrawal bool            `db:"supports_withdrawal"`
 	WithdrawalMethod   json.RawMessage `db:"withdrawal_method"`
 	CreatedAt          time.Time       `db:"created_at"`
+	UpdatedAt          time.Time       `db:"updated_at"`
 }
 
 type LedgerFundingLink struct {

@@ -23,4 +23,5 @@ type OwnershipVerification struct {
 	WorkflowID              sql.NullString `db:"workflow_id"`
 	ReferenceID             sql.NullString `db:"reference_id"`
 	CreatedAt               time.Time      `db:"created_at"`
+	UpdatedAt               sql.NullTime   `db:"updated_at"`
 }
