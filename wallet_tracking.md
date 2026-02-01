@@ -34,6 +34,7 @@ Last updated: 2026-02-01
 - [x] Implemented deposit workflow stub calling PSP verify activity
 - [x] Implemented withdrawal workflow stub calling PSP payout activity
 - [x] Added fee/rate/limit store query helpers
+- [x] Added fee engine, rate service, and limit enforcer helpers
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
