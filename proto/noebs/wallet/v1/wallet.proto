@@ -14,8 +14,10 @@ service WalletInternalService {
   rpc ValidateP2P(ValidateP2PRequest) returns (ValidateP2PResponse) {}
   rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {}
   rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {}
+  rpc RequestManualTransfer(ManualTransferRequest) returns (WorkflowRun) {}
   rpc SignalWithdrawalApproval(WithdrawalApprovalRequest) returns (google.protobuf.Empty) {}
   rpc SignalWithdrawalVerification(WithdrawalDestinationVerificationRequest) returns (google.protobuf.Empty) {}
+  rpc SignalManualTransferDecision(ManualTransferDecisionRequest) returns (google.protobuf.Empty) {}
 }
 
 service WalletPublicService {
@@ -36,6 +38,12 @@ service WalletPublicService {
       body: "*"
     };
   }
+  rpc RequestManualTransfer(ManualTransferRequest) returns (WorkflowRun) {
+    option (google.api.http) = {
+      post: "/wallet/manual_transfers"
+      body: "*"
+    };
+  }
   rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {
     option (google.api.http) = {
       post: "/wallet/withdrawals"
@@ -51,6 +59,12 @@ service WalletPublicService {
   rpc SignalWithdrawalVerification(WithdrawalDestinationVerificationRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       post: "/wallet/withdrawals/{workflow_id}/verification"
+      body: "*"
+    };
+  }
+  rpc SignalManualTransferDecision(ManualTransferDecisionRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/manual_transfers/{workflow_id}/decision"
       body: "*"
     };
   }
@@ -112,6 +126,28 @@ message P2PTransferRequest {
   string from_owner_id = 10;
   string to_owner_type = 11;
   string to_owner_id = 12;
+}
+
+message ManualTransferRequest {
+  string tenant_id = 1;
+  string idempotency_key = 2;
+  string transfer_type = 3;
+  string wallet_id = 4;
+  int64 amount = 5;
+  string currency = 6;
+  string reason = 7;
+  int64 requested_by = 8;
+  string psp_provider = 9;
+  string psp_reference = 10;
+  int32 approval_timeout_seconds = 11;
+}
+
+message ManualTransferDecisionRequest {
+  string workflow_id = 1;
+  bool approved = 2;
+  int64 approver_id = 3;
+  string reason = 4;
+  string proof_of_payment = 5;
 }
 
 message WithdrawalRequest {

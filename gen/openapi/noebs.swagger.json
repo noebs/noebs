@@ -51,6 +51,77 @@
         ]
       }
     },
+    "/wallet/manual_transfers": {
+      "post": {
+        "operationId": "WalletPublicService_RequestManualTransfer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WorkflowRun"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ManualTransferRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/manual_transfers/{workflowId}/decision": {
+      "post": {
+        "operationId": "WalletPublicService_SignalManualTransferDecision",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1WalletPublicServiceSignalManualTransferDecisionBody"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
     "/wallet/p2p": {
       "post": {
         "operationId": "WalletPublicService_RequestP2PTransfer",
@@ -282,6 +353,47 @@
         }
       }
     },
+    "v1ManualTransferRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "transferType": {
+          "type": "string"
+        },
+        "walletId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "requestedBy": {
+          "type": "string",
+          "format": "int64"
+        },
+        "pspProvider": {
+          "type": "string"
+        },
+        "pspReference": {
+          "type": "string"
+        },
+        "approvalTimeoutSeconds": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "v1P2PTransferRequest": {
       "type": "object",
       "properties": {
@@ -373,6 +485,24 @@
           "type": "string"
         },
         "kycTier": {
+          "type": "string"
+        }
+      }
+    },
+    "v1WalletPublicServiceSignalManualTransferDecisionBody": {
+      "type": "object",
+      "properties": {
+        "approved": {
+          "type": "boolean"
+        },
+        "approverId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "proofOfPayment": {
           "type": "string"
         }
       }
