@@ -40,14 +40,15 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event AuditEvent) error {
 	if event.Action == "" {
 		return ErrMissingAction
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind(`INSERT INTO wallet_audit_log(
+	stmt := db.Rebind(`INSERT INTO wallet_audit_log(
 		tenant_id, event_type, actor_type, actor_id, target_type, target_id, action,
 		old_value, new_value, metadata, ip_address, user_agent, workflow_id, request_id, trace_id
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-	_, err := s.DB.ExecContext(ctx, stmt,
+	_, err = db.ExecContext(ctx, stmt,
 		event.TenantID,
 		event.EventType,
 		event.ActorType,

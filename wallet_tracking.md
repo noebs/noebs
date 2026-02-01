@@ -43,6 +43,7 @@ Last updated: 2026-02-01
 - [x] Added funding source store helpers
 - [x] Added withdrawal destination + ownership store helpers
 - [x] Added wallet list store helper + admin list handler
+- [x] Refactored wallet store queries to use ensured DB handle
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

@@ -48,11 +48,12 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	if params.Amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +72,7 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	}
 
 	now := time.Now().UTC()
-	insertStmt := s.DB.Rebind(`INSERT INTO balance_holds(
+	insertStmt := db.Rebind(`INSERT INTO balance_holds(
 		tenant_id, wallet_id, amount, amount_remaining, reason, reference_type, reference_id,
 		idempotency_key, status, expires_at, created_at, metadata
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
@@ -123,11 +124,12 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	if holdID <= 0 {
 		return ErrInvalidHoldID
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return err
 	}
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -159,7 +161,7 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 		return err
 	}
 
-	updateStmt := s.DB.Rebind(`UPDATE balance_holds
+	updateStmt := db.Rebind(`UPDATE balance_holds
 		SET status = 'released', amount_remaining = 0, released_at = ?
 		WHERE tenant_id = ? AND id = ?`)
 	if _, err := tx.ExecContext(ctx, updateStmt, now, tenantID, hold.ID); err != nil {

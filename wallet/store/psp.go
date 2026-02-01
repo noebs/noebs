@@ -27,12 +27,13 @@ func (s *Store) GetPSPConfig(ctx context.Context, tenantID, providerCode string)
 	if providerCode == "" {
 		return nil, ErrMissingProviderCode
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
-	stmt := s.DB.Rebind("SELECT * FROM psp_configs WHERE tenant_id = ? AND provider_code = ?")
+	stmt := db.Rebind("SELECT * FROM psp_configs WHERE tenant_id = ? AND provider_code = ?")
 	var cfg PSPConfig
-	if err := s.DB.GetContext(ctx, &cfg, stmt, tenantID, providerCode); err != nil {
+	if err := db.GetContext(ctx, &cfg, stmt, tenantID, providerCode); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrPSPConfigNotFound
 		}

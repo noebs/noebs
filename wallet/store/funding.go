@@ -20,11 +20,12 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 	if source.Currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
 
-	stmt := s.DB.Rebind(`INSERT INTO funding_sources(
+	stmt := db.Rebind(`INSERT INTO funding_sources(
 		tenant_id, wallet_id, source_type, psp_provider, external_reference, verification_status,
 		verified_at, verified_by, currency, source_details, total_funded, last_funded_at,
 		total_withdrawn, last_withdrawn_at, supports_withdrawal, withdrawal_method
@@ -32,7 +33,7 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 	ON CONFLICT(tenant_id, wallet_id, source_type, external_reference) DO NOTHING
 	RETURNING *`)
 	var stored FundingSource
-	if err := s.DB.GetContext(ctx, &stored, stmt,
+	if err := db.GetContext(ctx, &stored, stmt,
 		source.TenantID,
 		source.WalletID,
 		source.SourceType,
@@ -68,7 +69,8 @@ func (s *Store) GetFundingSource(ctx context.Context, tenantID string, walletID 
 	if sourceType == "" {
 		return nil, ErrMissingSourceType
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
 
@@ -80,9 +82,9 @@ func (s *Store) GetFundingSource(ctx context.Context, tenantID string, walletID 
 	} else {
 		query += " AND external_reference IS NULL"
 	}
-	stmt := s.DB.Rebind(query)
+	stmt := db.Rebind(query)
 	var source FundingSource
-	if err := s.DB.GetContext(ctx, &source, stmt, args...); err != nil {
+	if err := db.GetContext(ctx, &source, stmt, args...); err != nil {
 		return nil, err
 	}
 	return &source, nil
@@ -95,14 +97,15 @@ func (s *Store) ListFundingSources(ctx context.Context, tenantID string, walletI
 	if walletID == uuid.Nil {
 		return nil, ErrMissingWalletID
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
-	stmt := s.DB.Rebind(`SELECT * FROM funding_sources
+	stmt := db.Rebind(`SELECT * FROM funding_sources
 		WHERE tenant_id = ? AND wallet_id = ?
 		ORDER BY last_funded_at DESC NULLS LAST, created_at DESC`)
 	var sources []FundingSource
-	if err := s.DB.SelectContext(ctx, &sources, stmt, tenantID, walletID); err != nil {
+	if err := db.SelectContext(ctx, &sources, stmt, tenantID, walletID); err != nil {
 		return nil, err
 	}
 	return sources, nil
@@ -124,15 +127,16 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	if link.Currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
-	stmt := s.DB.Rebind(`INSERT INTO ledger_funding_links(
+	stmt := db.Rebind(`INSERT INTO ledger_funding_links(
 		tenant_id, ledger_entry_id, funding_source_id, amount, currency
 	) VALUES(?, ?, ?, ?, ?)
 	RETURNING *`)
 	var stored LedgerFundingLink
-	if err := s.DB.GetContext(ctx, &stored, stmt,
+	if err := db.GetContext(ctx, &stored, stmt,
 		link.TenantID,
 		link.LedgerEntryID,
 		link.FundingSourceID,
@@ -154,15 +158,16 @@ func (s *Store) GetFundingSourceByPSPRef(ctx context.Context, tenantID, provider
 	if externalRef == "" {
 		return nil, ErrMissingReferenceID
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
-	stmt := s.DB.Rebind(`SELECT * FROM funding_sources
+	stmt := db.Rebind(`SELECT * FROM funding_sources
 		WHERE tenant_id = ? AND psp_provider = ? AND external_reference = ?
 		ORDER BY created_at DESC
 		LIMIT 1`)
 	var source FundingSource
-	if err := s.DB.GetContext(ctx, &source, stmt, tenantID, provider, externalRef); err != nil {
+	if err := db.GetContext(ctx, &source, stmt, tenantID, provider, externalRef); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrFundingSourceNotFound
 		}

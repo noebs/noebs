@@ -27,12 +27,13 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if dest.OwnershipStatus == "" {
 		return nil, ErrMissingStatus
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
 
 	now := time.Now().UTC()
-	stmt := s.DB.Rebind(`INSERT INTO withdrawal_destinations(
+	stmt := db.Rebind(`INSERT INTO withdrawal_destinations(
 		tenant_id, wallet_id, destination_type, psp_provider, destination_details, display_name,
 		currency, country, ownership_status, ownership_verification_method, ownership_verified_at,
 		ownership_verified_by, ownership_proof, linked_funding_source_id, is_return_to_source,
@@ -40,7 +41,7 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 	var stored WithdrawalDestination
-	if err := s.DB.GetContext(ctx, &stored, stmt,
+	if err := db.GetContext(ctx, &stored, stmt,
 		dest.TenantID,
 		dest.WalletID,
 		dest.DestinationType,
@@ -74,12 +75,13 @@ func (s *Store) GetWithdrawalDestination(ctx context.Context, tenantID string, d
 	if destinationID <= 0 {
 		return nil, ErrMissingDestinationID
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
-	stmt := s.DB.Rebind("SELECT * FROM withdrawal_destinations WHERE tenant_id = ? AND id = ?")
+	stmt := db.Rebind("SELECT * FROM withdrawal_destinations WHERE tenant_id = ? AND id = ?")
 	var dest WithdrawalDestination
-	if err := s.DB.GetContext(ctx, &dest, stmt, tenantID, destinationID); err != nil {
+	if err := db.GetContext(ctx, &dest, stmt, tenantID, destinationID); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrDestinationNotFound
 		}
@@ -95,7 +97,8 @@ func (s *Store) ListWithdrawalDestinations(ctx context.Context, tenantID string,
 	if walletID == uuid.Nil {
 		return nil, ErrMissingWalletID
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
 	query := "SELECT * FROM withdrawal_destinations WHERE tenant_id = ? AND wallet_id = ?"
@@ -104,9 +107,9 @@ func (s *Store) ListWithdrawalDestinations(ctx context.Context, tenantID string,
 		query += " AND is_active = TRUE"
 	}
 	query += " ORDER BY updated_at DESC"
-	stmt := s.DB.Rebind(query)
+	stmt := db.Rebind(query)
 	var dests []WithdrawalDestination
-	if err := s.DB.SelectContext(ctx, &dests, stmt, args...); err != nil {
+	if err := db.SelectContext(ctx, &dests, stmt, args...); err != nil {
 		return nil, err
 	}
 	return dests, nil

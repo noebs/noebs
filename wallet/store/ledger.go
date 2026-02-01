@@ -55,11 +55,12 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 	if params.Amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
-	if _, err := s.ensureDB(); err != nil {
+	db, err := s.ensureDB()
+	if err != nil {
 		return nil, err
 	}
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,7 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 	refID := sql.NullString{String: params.ReferenceID, Valid: params.ReferenceID != ""}
 
 	var txID int64
-	insertTx := s.DB.Rebind(`INSERT INTO ledger_transactions(
+	insertTx := db.Rebind(`INSERT INTO ledger_transactions(
 		tenant_id, idempotency_key, currency, reference_type, reference_id, status, metadata, created_at
 	) VALUES(?, ?, ?, ?, ?, 'completed', ?, ?)
 	ON CONFLICT(tenant_id, idempotency_key) DO NOTHING
@@ -119,7 +120,7 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 	creditWallet.Balance += params.Amount
 	creditWallet.AvailableBalance += params.Amount
 
-	updateWallet := s.DB.Rebind(`UPDATE wallets
+	updateWallet := db.Rebind(`UPDATE wallets
 		SET balance = ?, available_balance = ?, version = version + 1, updated_at = ?
 		WHERE tenant_id = ? AND id = ?`)
 	if _, err := tx.ExecContext(ctx, updateWallet, debitWallet.Balance, debitWallet.AvailableBalance, now, params.TenantID, debitWallet.ID); err != nil {
