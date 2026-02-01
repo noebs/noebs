@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && mv age/age age/age-keygen /usr/local/bin/ \
     && rm -rf age age-v1.2.0-linux-amd64.tar.gz
 
+RUN useradd -u 10001 -m -s /usr/sbin/nologin -U noebs
+
 # Copy application binary
 COPY --from=builder /usr/local/bin/noebs /usr/local/bin/noebs
 
@@ -36,9 +38,11 @@ COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create data directory
-RUN mkdir -p /data /app /app/.sops
+RUN mkdir -p /data /app /app/.sops /app/.secrets \
+    && chown -R noebs:noebs /data /app
 
 WORKDIR /app
+USER noebs
 
 EXPOSE 8080
 

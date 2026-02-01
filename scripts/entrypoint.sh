@@ -5,27 +5,37 @@ set -euo pipefail
 # Config is merged from config.yaml + secrets.yaml at runtime
 
 SECRETS_FILE="/app/secrets.yaml"
-DB_PATH_FILE="/app/.db_path"
-LITESTREAM_CONFIG_DEFAULT="/etc/litestream.yml"
-AGE_KEY_FILE="/app/.sops/age-key.txt"
-DEFAULT_AGE_KEY_FILE="/root/.config/sops/age/keys.txt"
+RUNTIME_DIR="${NOEBS_RUNTIME_DIR:-/app}"
+DB_PATH_FILE="${RUNTIME_DIR}/.db_path"
+AGE_KEY_FILE="${SOPS_AGE_KEY_FILE:-/app/.sops/age-key.txt}"
+DEFAULT_AGE_KEY_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/sops/age/keys.txt"
+
+if [[ -n "${NOEBS_RUNTIME_DIR:-}" ]]; then
+    mkdir -p "$RUNTIME_DIR"
+fi
 
 if [[ -f "$SECRETS_FILE" ]]; then
-    if [[ -f "$AGE_KEY_FILE" ]]; then
-        mkdir -p "$(dirname "$DEFAULT_AGE_KEY_FILE")"
-        cp "$AGE_KEY_FILE" "$DEFAULT_AGE_KEY_FILE"
-    elif [[ ! -f "$DEFAULT_AGE_KEY_FILE" ]]; then
+    if [[ -n "${SOPS_AGE_KEY:-}" ]]; then
+        : # key provided via env
+    elif [[ -f "$AGE_KEY_FILE" ]]; then
+        export SOPS_AGE_KEY_FILE="$AGE_KEY_FILE"
+    elif [[ -f "$DEFAULT_AGE_KEY_FILE" ]]; then
+        export SOPS_AGE_KEY_FILE="$DEFAULT_AGE_KEY_FILE"
+    else
         echo "Missing age key at $AGE_KEY_FILE" >&2
         exit 1
     fi
 fi
 
 echo "Rendering config + secrets..."
+export NOEBS_RUNTIME_DIR="$RUNTIME_DIR"
 noebs render-config
 
-LITESTREAM_CONFIG="$LITESTREAM_CONFIG_DEFAULT"
-if [[ ! -f "$LITESTREAM_CONFIG" && -f "/app/litestream.yml" ]]; then
-    LITESTREAM_CONFIG="/app/litestream.yml"
+LITESTREAM_CONFIG=""
+if [[ -f "${RUNTIME_DIR}/litestream.yml" ]]; then
+    LITESTREAM_CONFIG="${RUNTIME_DIR}/litestream.yml"
+elif [[ -n "${NOEBS_LITESTREAM_CONFIG:-}" ]]; then
+    LITESTREAM_CONFIG="${NOEBS_LITESTREAM_CONFIG}"
 fi
 
 if [[ -f "$LITESTREAM_CONFIG" ]]; then

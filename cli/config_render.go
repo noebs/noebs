@@ -3,9 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,6 +30,9 @@ func renderConfigFiles() error {
 	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml")
 
 	outputDir := filepath.Dir(configPath)
+	if runtimeDir := strings.TrimSpace(os.Getenv("NOEBS_RUNTIME_DIR")); runtimeDir != "" {
+		outputDir = runtimeDir
+	}
 	outputDBPath := filepath.Join(outputDir, ".db_path")
 	outputLitestream := litestreamOutputPath(outputDir)
 
@@ -66,6 +71,10 @@ func renderConfigFiles() error {
 	}
 
 	if err := writeLitestreamConfig(merged, noebs, outputLitestream); err != nil {
+		return err
+	}
+
+	if err := writeDatabasePassword(noebs); err != nil {
 		return err
 	}
 
@@ -226,6 +235,36 @@ func writeLitestreamConfig(merged map[string]interface{}, noebs map[string]inter
 		return fmt.Errorf("write litestream config: %w", err)
 	}
 
+	return nil
+}
+
+func writeDatabasePassword(noebs map[string]interface{}) error {
+	outputPath := strings.TrimSpace(os.Getenv("NOEBS_RENDER_DB_PASSWORD_FILE"))
+	if outputPath == "" {
+		return nil
+	}
+	dbURL := strings.TrimSpace(fmt.Sprint(noebs["db_url"]))
+	if dbURL == "" {
+		return fmt.Errorf("db_url is required to render database password")
+	}
+	parsed, err := url.Parse(dbURL)
+	if err != nil {
+		return fmt.Errorf("parse db_url: %w", err)
+	}
+	if parsed.User == nil {
+		return fmt.Errorf("db_url missing user info")
+	}
+	password, ok := parsed.User.Password()
+	if !ok || password == "" {
+		return fmt.Errorf("db_url missing password")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+		return fmt.Errorf("create db password dir: %w", err)
+	}
+	if err := os.WriteFile(outputPath, []byte(password), 0600); err != nil {
+		return fmt.Errorf("write db password: %w", err)
+	}
 	return nil
 }
 
