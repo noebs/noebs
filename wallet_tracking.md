@@ -39,6 +39,7 @@ Last updated: 2026-02-01
 - [x] Added RBAC permission constants + role helper
 - [x] Added admin role/user store helpers
 - [x] Added audit log store helper
+- [x] Added manual transfer store helpers
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
