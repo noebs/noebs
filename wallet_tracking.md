@@ -29,6 +29,7 @@ Last updated: 2026-02-01
 - [x] Added PSP activities + worker wiring hooks
 - [x] Added PSP map-based secret resolver
 - [x] Added mock PSP provider scaffold
+- [x] Implemented initial P2P workflow using ledger activity
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
