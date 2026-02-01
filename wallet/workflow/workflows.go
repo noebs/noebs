@@ -7,6 +7,7 @@ import (
 	walletactivity "github.com/adonese/noebs/wallet/activity"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/workflow"
 )
@@ -34,6 +35,10 @@ type P2PParams struct {
 	Amount         int64
 	Description    string
 	ReferenceID    string
+	FromOwnerType  string
+	FromOwnerID    string
+	ToOwnerType    string
+	ToOwnerID      string
 }
 
 type ManualTransferParams struct{}
@@ -101,8 +106,20 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 		Amount:         params.Amount,
 		Description:    params.Description,
 	}
-	var validation struct{}
-	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, activityParams).Get(ctx, &validation); err != nil {
+	validationReq := walletvalidation.P2PValidationRequest{
+		TenantID:        params.TenantID,
+		TransactionType: "p2p",
+		FromWalletID:    fromID,
+		ToWalletID:      toID,
+		Currency:        params.Currency,
+		Amount:          params.Amount,
+		FromOwnerType:   params.FromOwnerType,
+		FromOwnerID:     params.FromOwnerID,
+		ToOwnerType:     params.ToOwnerType,
+		ToOwnerID:       params.ToOwnerID,
+	}
+	var validation walletvalidation.P2PValidationResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateP2PTransfer, validationReq).Get(ctx, &validation); err != nil {
 		return err
 	}
 	var result walletstore.DoubleEntryResult

@@ -35,6 +35,8 @@ func RegisterWallet(w worker.Worker, deps RegisterDeps) {
 		w.RegisterActivity(limits)
 		rates := walletactivity.NewRateActivities(deps.Store)
 		w.RegisterActivity(rates)
+		validation := walletactivity.NewValidationActivities(deps.Store)
+		w.RegisterActivity(validation)
 	}
 	if deps.PSPActivities != nil {
 		w.RegisterActivity(deps.PSPActivities)

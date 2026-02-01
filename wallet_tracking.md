@@ -58,6 +58,7 @@ Last updated: 2026-02-01
 - [x] Added exchange rate conversion activity
 - [x] Added explicit validation activities for ledger operations
 - [x] Added PSP poller query helper
+- [x] Added validation service + activity for P2P business rules
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

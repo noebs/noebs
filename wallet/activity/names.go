@@ -24,4 +24,5 @@ const (
 	ActivityCalculateFee                  = "CalculateFee"
 	ActivityCheckLimits                   = "CheckLimits"
 	ActivityConvertCurrency               = "ConvertCurrency"
+	ActivityValidateP2PTransfer           = "ValidateP2PTransfer"
 )
