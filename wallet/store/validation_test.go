@@ -145,6 +145,21 @@ func TestReleaseHoldValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidHoldID)
 }
 
+func TestUpdateManualTransferStatusValidation(t *testing.T) {
+	s := &Store{}
+	update := ManualTransferStatusUpdate{Status: "approved"}
+
+	err := s.UpdateManualTransferStatus(t.Context(), "", "wf-1", update)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateManualTransferStatus(t.Context(), "tenant", "", update)
+	assertErrorIs(t, err, ErrMissingWorkflowID)
+
+	update.Status = ""
+	err = s.UpdateManualTransferStatus(t.Context(), "tenant", "wf-1", update)
+	assertErrorIs(t, err, ErrMissingStatus)
+}
+
 func TestCreatePSPTransactionValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPTransaction{

@@ -13,7 +13,18 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-var ErrNotImplemented = errors.New("workflow not implemented")
+var (
+	ErrNotImplemented         = errors.New("workflow not implemented")
+	ErrManualTransferTimedOut = errors.New("manual transfer approval timed out")
+)
+
+const (
+	ManualTransferDecisionSignal  = "manual_transfer_decision"
+	ManualTransferStatusPending   = "pending"
+	ManualTransferStatusApproved  = "approved"
+	ManualTransferStatusRejected  = "rejected"
+	ManualTransferStatusCompleted = "completed"
+)
 
 type DepositParams struct {
 	TenantID        string
@@ -48,9 +59,34 @@ type P2PParams struct {
 	ToOwnerID      string
 }
 
-type ManualTransferParams struct{}
+type ManualTransferParams struct {
+	TenantID               string
+	IdempotencyKey         string
+	TransferType           string
+	WalletID               string
+	Amount                 int64
+	Currency               string
+	Reason                 string
+	RequestedBy            int64
+	PSPProvider            string
+	PSPReference           string
+	ApprovalTimeoutSeconds int
+}
 
-type ReconciliationParams struct{}
+type ManualTransferDecision struct {
+	Approved       bool
+	ApproverID     int64
+	Reason         string
+	ProofOfPayment string
+}
+
+type ReconciliationParams struct {
+	TenantID  string
+	Status    string
+	StartTime time.Time
+	EndTime   time.Time
+	Limit     int
+}
 
 type PSPStatusPollerParams struct {
 	TenantID            string
@@ -295,9 +331,204 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 }
 
 func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
-	_ = ctx
-	_ = params
-	return ErrNotImplemented
+	if params.TenantID == "" {
+		return walletstore.ErrMissingTenantID
+	}
+	if params.IdempotencyKey == "" {
+		return walletstore.ErrMissingIdempotencyKey
+	}
+	if params.TransferType == "" {
+		return walletstore.ErrMissingTransferType
+	}
+	if params.WalletID == "" {
+		return walletstore.ErrMissingWalletID
+	}
+	if params.Amount <= 0 {
+		return walletstore.ErrInvalidAmount
+	}
+	if params.Currency == "" {
+		return walletstore.ErrMissingCurrency
+	}
+	if params.Reason == "" {
+		return walletstore.ErrMissingReason
+	}
+	if params.RequestedBy <= 0 {
+		return walletstore.ErrMissingApproverID
+	}
+
+	walletID, err := uuid.Parse(params.WalletID)
+	if err != nil {
+		return walletstore.ErrMissingWalletID
+	}
+
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+	})
+
+	info := workflow.GetInfo(ctx)
+	workflowID := ""
+	if info != nil {
+		workflowID = info.WorkflowExecution.ID
+	}
+	if workflowID == "" {
+		workflowID = params.IdempotencyKey
+	}
+
+	transfer := walletstore.ManualTransfer{
+		TenantID:       params.TenantID,
+		WorkflowID:     workflowID,
+		IdempotencyKey: params.IdempotencyKey,
+		TransferType:   params.TransferType,
+		WalletID:       sql.NullString{String: params.WalletID, Valid: true},
+		Amount:         params.Amount,
+		Currency:       params.Currency,
+		Reason:         params.Reason,
+		Status:         ManualTransferStatusPending,
+		RequestedBy:    sql.NullInt64{Int64: params.RequestedBy, Valid: true},
+		PSPProvider:    sql.NullString{String: params.PSPProvider, Valid: params.PSPProvider != ""},
+		PSPReference:   sql.NullString{String: params.PSPReference, Valid: params.PSPReference != ""},
+	}
+	var stored walletstore.ManualTransfer
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityCreateManualTransfer, transfer).Get(ctx, &stored); err != nil {
+		return err
+	}
+
+	var holdID int64
+	if isManualTransferDebit(params.TransferType) {
+		holdParams := walletstore.HoldParams{
+			TenantID:       params.TenantID,
+			WalletID:       walletID,
+			Amount:         params.Amount,
+			Reason:         "manual_transfer",
+			ReferenceType:  params.TransferType,
+			ReferenceID:    workflowID,
+			IdempotencyKey: params.IdempotencyKey + ":hold",
+			ExpiresAt:      workflow.Now(ctx).Add(24 * time.Hour),
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateHold, holdParams).Get(ctx, nil); err != nil {
+			return err
+		}
+		var hold walletstore.BalanceHold
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityCreateHold, holdParams).Get(ctx, &hold); err != nil {
+			return err
+		}
+		holdID = hold.ID
+	}
+
+	decision, err := awaitManualTransferDecision(ctx, params)
+	if err != nil {
+		if holdID > 0 {
+			_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityReleaseHold, params.TenantID, holdID).Get(ctx, nil)
+		}
+		update := walletstore.ManualTransferStatusUpdate{
+			Status:          ManualTransferStatusRejected,
+			RejectionReason: sql.NullString{String: err.Error(), Valid: true},
+		}
+		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil)
+		return err
+	}
+
+	now := workflow.Now(ctx)
+	if decision.Approved {
+		if decision.ProofOfPayment == "" {
+			return walletstore.ErrMissingProofOfPayment
+		}
+		approval := walletstore.ManualTransferApproval{
+			TenantID:         params.TenantID,
+			ManualTransferID: stored.ID,
+			ApproverID:       decision.ApproverID,
+			Decision:         ManualTransferStatusApproved,
+			Reason:           sql.NullString{String: decision.Reason, Valid: decision.Reason != ""},
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, approval).Get(ctx, nil); err != nil {
+			return err
+		}
+		update := walletstore.ManualTransferStatusUpdate{
+			Status:         ManualTransferStatusApproved,
+			ApprovedBy:     sql.NullInt64{Int64: decision.ApproverID, Valid: true},
+			ApprovedAt:     sql.NullTime{Time: now, Valid: true},
+			ProofOfPayment: sql.NullString{String: decision.ProofOfPayment, Valid: true},
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil); err != nil {
+			return err
+		}
+		if holdID > 0 {
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
+				return err
+			}
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
+				return err
+			}
+		}
+		var treasury walletstore.Wallet
+		treasuryParams := walletactivity.EnsureSystemWalletParams{
+			TenantID:   params.TenantID,
+			Currency:   params.Currency,
+			WalletCode: walletstore.SystemTreasury,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
+			return err
+		}
+
+		debitID := walletID
+		creditID := treasury.ID
+		if params.TransferType == "manual_credit" {
+			debitID = treasury.ID
+			creditID = walletID
+		}
+		entry := walletstore.DoubleEntryParams{
+			TenantID:       params.TenantID,
+			IdempotencyKey: params.IdempotencyKey + ":ledger",
+			Currency:       params.Currency,
+			ReferenceType:  params.TransferType,
+			ReferenceID:    workflowID,
+			DebitWalletID:  debitID,
+			CreditWalletID: creditID,
+			Amount:         params.Amount,
+			Description:    params.Reason,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, entry).Get(ctx, nil); err != nil {
+			return err
+		}
+		var posted walletstore.DoubleEntryResult
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, entry).Get(ctx, &posted); err != nil {
+			return err
+		}
+		_ = posted
+
+		complete := walletstore.ManualTransferStatusUpdate{
+			Status:      ManualTransferStatusCompleted,
+			CompletedAt: sql.NullTime{Time: workflow.Now(ctx), Valid: true},
+		}
+		return workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, complete).Get(ctx, nil)
+	}
+
+	if decision.Reason == "" {
+		return walletstore.ErrMissingReason
+	}
+	rejection := walletstore.ManualTransferApproval{
+		TenantID:         params.TenantID,
+		ManualTransferID: stored.ID,
+		ApproverID:       decision.ApproverID,
+		Decision:         ManualTransferStatusRejected,
+		Reason:           sql.NullString{String: decision.Reason, Valid: true},
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, rejection).Get(ctx, nil); err != nil {
+		return err
+	}
+	if holdID > 0 {
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
+			return err
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
+			return err
+		}
+	}
+	update := walletstore.ManualTransferStatusUpdate{
+		Status:          ManualTransferStatusRejected,
+		RejectionReason: sql.NullString{String: decision.Reason, Valid: true},
+	}
+	return workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil)
 }
 
 func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
@@ -396,6 +627,42 @@ func recordPSPAmounts(ctx workflow.Context, tenantID string, pspTransactionID in
 	}
 	var stored []walletstore.PSPTransactionAmount
 	return workflow.ExecuteActivity(ctx, walletactivity.ActivityAddPSPTransactionAmounts, params).Get(ctx, &stored)
+}
+
+func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferParams) (ManualTransferDecision, error) {
+	timeout := time.Duration(params.ApprovalTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 24 * time.Hour
+	}
+	decisionCh := workflow.GetSignalChannel(ctx, ManualTransferDecisionSignal)
+	timer := workflow.NewTimer(ctx, timeout)
+
+	var decision ManualTransferDecision
+	timedOut := false
+	selector := workflow.NewSelector(ctx)
+	selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
+		c.Receive(ctx, &decision)
+	})
+	selector.AddFuture(timer, func(f workflow.Future) {
+		timedOut = true
+	})
+	selector.Select(ctx)
+	if timedOut {
+		return ManualTransferDecision{}, ErrManualTransferTimedOut
+	}
+	if decision.ApproverID <= 0 {
+		return ManualTransferDecision{}, walletstore.ErrMissingApproverID
+	}
+	return decision, nil
+}
+
+func isManualTransferDebit(transferType string) bool {
+	switch transferType {
+	case "manual_debit", "manual_withdrawal":
+		return true
+	default:
+		return false
+	}
 }
 
 func newLockToken(ctx workflow.Context) string {

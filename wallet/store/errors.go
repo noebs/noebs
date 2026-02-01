@@ -50,6 +50,7 @@ var (
 	ErrMissingWorkflowID         = errors.New("missing workflow id")
 	ErrMissingTransferType       = errors.New("missing transfer type")
 	ErrMissingReason             = errors.New("missing reason")
+	ErrMissingProofOfPayment     = errors.New("missing proof of payment")
 	ErrMissingDecision           = errors.New("missing decision")
 	ErrMissingManualTransferID   = errors.New("missing manual transfer id")
 	ErrMissingApproverID         = errors.New("missing approver id")

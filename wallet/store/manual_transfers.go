@@ -127,3 +127,44 @@ func (s *Store) GetManualTransferByWorkflow(ctx context.Context, tenantID, workf
 	}
 	return &transfer, nil
 }
+
+func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workflowID string, update ManualTransferStatusUpdate) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if workflowID == "" {
+		return ErrMissingWorkflowID
+	}
+	if update.Status == "" {
+		return ErrMissingStatus
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE manual_transfers
+		SET status = ?, approved_by = ?, approved_at = ?, completed_at = ?,
+			proof_of_payment = ?, rejection_reason = ?
+		WHERE tenant_id = ? AND workflow_id = ?`)
+	result, err := db.ExecContext(ctx, stmt,
+		update.Status,
+		update.ApprovedBy,
+		update.ApprovedAt,
+		update.CompletedAt,
+		update.ProofOfPayment,
+		update.RejectionReason,
+		tenantID,
+		workflowID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrManualTransferNotFound
+	}
+	return nil
+}

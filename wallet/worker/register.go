@@ -37,6 +37,8 @@ func RegisterWallet(w worker.Worker, deps RegisterDeps) {
 		w.RegisterActivity(limits)
 		rates := walletactivity.NewRateActivities(deps.Store)
 		w.RegisterActivity(rates)
+		wallets := walletactivity.NewWalletActivities(deps.Store)
+		w.RegisterActivity(wallets)
 		validation := walletactivity.NewValidationActivities(deps.Store)
 		w.RegisterActivity(validation)
 	}

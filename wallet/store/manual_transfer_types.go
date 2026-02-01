@@ -36,3 +36,12 @@ type ManualTransferApproval struct {
 	Reason           sql.NullString `db:"reason"`
 	DecidedAt        time.Time      `db:"decided_at"`
 }
+
+type ManualTransferStatusUpdate struct {
+	Status          string
+	ApprovedBy      sql.NullInt64
+	ApprovedAt      sql.NullTime
+	CompletedAt     sql.NullTime
+	ProofOfPayment  sql.NullString
+	RejectionReason sql.NullString
+}

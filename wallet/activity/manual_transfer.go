@@ -34,3 +34,10 @@ func (a *ManualTransferActivities) GetManualTransferByWorkflow(ctx context.Conte
 	}
 	return a.Store.GetManualTransferByWorkflow(ctx, tenantID, workflowID)
 }
+
+func (a *ManualTransferActivities) UpdateManualTransferStatus(ctx context.Context, tenantID, workflowID string, update walletstore.ManualTransferStatusUpdate) error {
+	if a == nil || a.Store == nil {
+		return ErrMissingStore
+	}
+	return a.Store.UpdateManualTransferStatus(ctx, tenantID, workflowID, update)
+}
