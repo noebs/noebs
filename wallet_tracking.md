@@ -27,9 +27,10 @@ Last updated: 2026-02-01
 - [x] Added ledger activities wrapper (double-entry + holds)
 - [x] Added workflow stubs + worker registration hook
 - [x] Added PSP activities + worker wiring hooks
+- [x] Added PSP map-based secret resolver
 
 ## Next steps (short-term)
-- [ ] Implement workflow logic + PSP secret resolver
+- [ ] Implement workflow logic + PSP provider implementations
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.

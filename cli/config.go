@@ -76,6 +76,7 @@ func loadConfig() ([]byte, error) {
 			logrusLogger.Printf("Loaded secrets from %s", secretsPath)
 		}
 	}
+	rawSecrets = secretsMap
 
 	merged, ok := mergeConfig(configMap, secretsMap).(map[string]interface{})
 	if !ok {
@@ -438,11 +439,15 @@ func initConfig() {
 	walletService = wallet.NewService(database, noebsConfig)
 	if noebsConfig.TemporalEnabled {
 		pspRegistry := walletpsp.NewRegistry()
+		secretResolver := walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
+			return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
+		})
+		if mapResolver := walletpsp.NewMapSecretResolver(rawSecrets); mapResolver != nil {
+			secretResolver = mapResolver
+		}
 		pspLoader := &walletpsp.Loader{
-			Store: walletService.Store,
-			Secrets: walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
-				return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
-			}),
+			Store:   walletService.Store,
+			Secrets: secretResolver,
 		}
 		pspActivities := walletactivity.NewPSPActivities(pspLoader, pspRegistry)
 		workerOpts := walletworker.Options{

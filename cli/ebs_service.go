@@ -30,6 +30,7 @@ var dashService dashboard.Service
 var merchantServices = merchant.Service{}
 var walletService *wallet.Service
 var walletWorker *walletworker.Runner
+var rawSecrets map[string]interface{}
 var hub *chat.Hub
 var logSampling gateway.LogSamplingConfig
 var otelShutdown func(context.Context) error
