@@ -22,6 +22,7 @@ Last updated: 2026-02-01
 - [x] Added PSP provider interface + registry skeleton
 - [x] Added PSP config store query helper
 - [x] Added PSP config merge + loader skeleton
+- [x] Added Temporal worker scaffold + task queue constants
 
 ## Next steps (short-term)
 - [ ] Add PSP + Temporal wiring (service + worker setup)
