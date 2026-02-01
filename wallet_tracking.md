@@ -23,9 +23,10 @@ Last updated: 2026-02-01
 - [x] Added PSP config store query helper
 - [x] Added PSP config merge + loader skeleton
 - [x] Added Temporal worker scaffold + task queue constants
+- [x] Wired Temporal worker startup (config-gated)
 
 ## Next steps (short-term)
-- [ ] Add PSP + Temporal wiring (service + worker setup)
+- [ ] Register wallet workflows/activities + PSP dispatch wiring
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.

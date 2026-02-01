@@ -19,6 +19,7 @@ import (
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/bradfitz/iter"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/contrib/otelfiber"
@@ -432,6 +433,22 @@ func initConfig() {
 	dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	walletService = wallet.NewService(database, noebsConfig)
+	if noebsConfig.TemporalEnabled {
+		workerOpts := walletworker.Options{
+			Host:      noebsConfig.TemporalHost,
+			Port:      noebsConfig.TemporalPort,
+			Namespace: noebsConfig.TemporalNamespace,
+			TaskQueue: walletworker.TaskQueueMain,
+		}
+		runner, err := walletworker.NewRunner(context.Background(), workerOpts, nil)
+		if err != nil {
+			logrusLogger.Fatalf("error creating wallet worker: %v", err)
+		}
+		if err := runner.Start(); err != nil {
+			logrusLogger.Fatalf("error starting wallet worker: %v", err)
+		}
+		walletWorker = runner
+	}
 	dataConfigs.DB = database
 
 }

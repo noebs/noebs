@@ -13,6 +13,7 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/sirupsen/logrus"
 	chat "github.com/tutipay/ws"
 )
@@ -28,6 +29,7 @@ var auth gateway.JWTAuth
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
 var walletService *wallet.Service
+var walletWorker *walletworker.Runner
 var hub *chat.Hub
 var logSampling gateway.LogSamplingConfig
 var otelShutdown func(context.Context) error
