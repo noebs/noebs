@@ -1,4 +1,4 @@
-package wallet
+package store
 
 const (
 	OwnerTypeUser     = "user"

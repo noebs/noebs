@@ -17,9 +17,10 @@ Last updated: 2026-02-01
 - [x] Added SOPS secrets skeleton for Temporal + PSP
 - [x] Added wallet store scaffold + system wallet ensure helpers
 - [x] Added ledger posting + holds helpers with validation tests (no defaults)
+- [x] Added wallet service wiring over store layer
 
 ## Next steps (short-term)
-- [ ] Wire store layer into wallet service/handlers
+- [ ] Add wallet handlers + route registration (user/admin skeletons)
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.

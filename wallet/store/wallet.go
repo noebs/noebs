@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/adonese/noebs/wallet"
 	"github.com/google/uuid"
 )
 
-func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, currency string, userID *int64) (*wallet.Wallet, error) {
+func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, currency string, userID *int64) (*Wallet, error) {
 	if tenantID == "" {
 		return nil, ErrMissingTenantID
 	}
@@ -22,7 +21,7 @@ func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, 
 	if currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	if ownerType == wallet.OwnerTypeUser {
+	if ownerType == OwnerTypeUser {
 		if userID == nil || *userID <= 0 {
 			return nil, ErrInvalidUserID
 		}
@@ -49,16 +48,16 @@ func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, 
 	return s.GetWalletByOwner(ctx, tenantID, ownerType, ownerID, currency)
 }
 
-func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*wallet.Wallet, error) {
+func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*Wallet, error) {
 	if tenantID == "" {
 		return nil, ErrMissingTenantID
 	}
 	if currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	systemWallets := make(map[string]*wallet.Wallet, len(wallet.SystemWalletCodes()))
-	for _, code := range wallet.SystemWalletCodes() {
-		w, err := s.EnsureWallet(ctx, tenantID, wallet.OwnerTypeSystem, code, currency, nil)
+	systemWallets := make(map[string]*Wallet, len(SystemWalletCodes()))
+	for _, code := range SystemWalletCodes() {
+		w, err := s.EnsureWallet(ctx, tenantID, OwnerTypeSystem, code, currency, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +66,7 @@ func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency stri
 	return systemWallets, nil
 }
 
-func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UUID) (*wallet.Wallet, error) {
+func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UUID) (*Wallet, error) {
 	if tenantID == "" {
 		return nil, ErrMissingTenantID
 	}
@@ -79,14 +78,14 @@ func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UU
 		return nil, err
 	}
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND id = ?")
-	var w wallet.Wallet
+	var w Wallet
 	if err := db.GetContext(ctx, &w, stmt, tenantID, walletID); err != nil {
 		return nil, err
 	}
 	return &w, nil
 }
 
-func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, ownerID, currency string) (*wallet.Wallet, error) {
+func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, ownerID, currency string) (*Wallet, error) {
 	if tenantID == "" {
 		return nil, ErrMissingTenantID
 	}
@@ -104,7 +103,7 @@ func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, owner
 		return nil, err
 	}
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND owner_type = ? AND owner_id = ? AND currency = ?")
-	var w wallet.Wallet
+	var w Wallet
 	if err := db.GetContext(ctx, &w, stmt, tenantID, ownerType, ownerID, currency); err != nil {
 		return nil, err
 	}

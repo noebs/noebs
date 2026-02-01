@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/adonese/noebs/wallet"
 	"github.com/google/uuid"
 )
 
@@ -20,13 +19,13 @@ func TestEnsureWalletValidation(t *testing.T) {
 		userID    *int64
 		wantErr   error
 	}{
-		{"missing-tenant", "", wallet.OwnerTypeUser, "user-1", "USD", &validUserID, ErrMissingTenantID},
+		{"missing-tenant", "", OwnerTypeUser, "user-1", "USD", &validUserID, ErrMissingTenantID},
 		{"missing-owner-type", "tenant", "", "user-1", "USD", &validUserID, ErrMissingOwnerType},
-		{"missing-owner-id", "tenant", wallet.OwnerTypeUser, "", "USD", &validUserID, ErrMissingOwnerID},
-		{"missing-currency", "tenant", wallet.OwnerTypeUser, "user-1", "", &validUserID, ErrMissingCurrency},
-		{"missing-user-id", "tenant", wallet.OwnerTypeUser, "user-1", "USD", nil, ErrInvalidUserID},
-		{"invalid-user-id", "tenant", wallet.OwnerTypeUser, "user-1", "USD", ptrInt64(0), ErrInvalidUserID},
-		{"user-id-on-system", "tenant", wallet.OwnerTypeSystem, "treasury", "USD", &validUserID, ErrInvalidUserID},
+		{"missing-owner-id", "tenant", OwnerTypeUser, "", "USD", &validUserID, ErrMissingOwnerID},
+		{"missing-currency", "tenant", OwnerTypeUser, "user-1", "", &validUserID, ErrMissingCurrency},
+		{"missing-user-id", "tenant", OwnerTypeUser, "user-1", "USD", nil, ErrInvalidUserID},
+		{"invalid-user-id", "tenant", OwnerTypeUser, "user-1", "USD", ptrInt64(0), ErrInvalidUserID},
+		{"user-id-on-system", "tenant", OwnerTypeSystem, "treasury", "USD", &validUserID, ErrInvalidUserID},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -48,16 +47,16 @@ func TestGetWalletValidation(t *testing.T) {
 
 func TestGetWalletByOwnerValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.GetWalletByOwner(t.Context(), "", wallet.OwnerTypeUser, "user-1", "USD")
+	_, err := s.GetWalletByOwner(t.Context(), "", OwnerTypeUser, "user-1", "USD")
 	assertErrorIs(t, err, ErrMissingTenantID)
 
 	_, err = s.GetWalletByOwner(t.Context(), "tenant", "", "user-1", "USD")
 	assertErrorIs(t, err, ErrMissingOwnerType)
 
-	_, err = s.GetWalletByOwner(t.Context(), "tenant", wallet.OwnerTypeUser, "", "USD")
+	_, err = s.GetWalletByOwner(t.Context(), "tenant", OwnerTypeUser, "", "USD")
 	assertErrorIs(t, err, ErrMissingOwnerID)
 
-	_, err = s.GetWalletByOwner(t.Context(), "tenant", wallet.OwnerTypeUser, "user-1", "")
+	_, err = s.GetWalletByOwner(t.Context(), "tenant", OwnerTypeUser, "user-1", "")
 	assertErrorIs(t, err, ErrMissingCurrency)
 }
 

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/adonese/noebs/wallet"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -24,7 +23,7 @@ type HoldParams struct {
 	Metadata       json.RawMessage
 }
 
-func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*wallet.BalanceHold, error) {
+func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold, error) {
 	if params.TenantID == "" {
 		return nil, ErrMissingTenantID
 	}
@@ -78,7 +77,7 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*wallet.Bala
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
 	ON CONFLICT(tenant_id, wallet_id, reference_type, reference_id) DO NOTHING
 	RETURNING *`)
-	var hold wallet.BalanceHold
+	var hold BalanceHold
 	err = tx.GetContext(ctx, &hold, insertStmt,
 		params.TenantID,
 		params.WalletID,
@@ -170,19 +169,19 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	return tx.Commit()
 }
 
-func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, tenantID string, walletID uuid.UUID, refType, refID string) (wallet.BalanceHold, error) {
+func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, tenantID string, walletID uuid.UUID, refType, refID string) (BalanceHold, error) {
 	stmt := s.DB.Rebind(`SELECT * FROM balance_holds
 		WHERE tenant_id = ? AND wallet_id = ? AND reference_type = ? AND reference_id = ?`)
-	var hold wallet.BalanceHold
+	var hold BalanceHold
 	if err := tx.GetContext(ctx, &hold, stmt, tenantID, walletID, refType, refID); err != nil {
-		return wallet.BalanceHold{}, err
+		return BalanceHold{}, err
 	}
 	return hold, nil
 }
 
-func (s *Store) lockHold(ctx context.Context, tx *sqlx.Tx, tenantID string, holdID int64) (*wallet.BalanceHold, error) {
+func (s *Store) lockHold(ctx context.Context, tx *sqlx.Tx, tenantID string, holdID int64) (*BalanceHold, error) {
 	stmt := s.DB.Rebind("SELECT * FROM balance_holds WHERE tenant_id = ? AND id = ? FOR UPDATE")
-	var hold wallet.BalanceHold
+	var hold BalanceHold
 	if err := tx.GetContext(ctx, &hold, stmt, tenantID, holdID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrHoldNotFound
@@ -192,9 +191,9 @@ func (s *Store) lockHold(ctx context.Context, tx *sqlx.Tx, tenantID string, hold
 	return &hold, nil
 }
 
-func (s *Store) lockWallet(ctx context.Context, tx *sqlx.Tx, tenantID string, walletID uuid.UUID) (*wallet.Wallet, error) {
+func (s *Store) lockWallet(ctx context.Context, tx *sqlx.Tx, tenantID string, walletID uuid.UUID) (*Wallet, error) {
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND id = ? FOR UPDATE")
-	var w wallet.Wallet
+	var w Wallet
 	if err := tx.GetContext(ctx, &w, stmt, tenantID, walletID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrWalletNotFound

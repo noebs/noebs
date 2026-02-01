@@ -7,7 +7,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/adonese/noebs/wallet"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
@@ -27,10 +26,10 @@ type DoubleEntryParams struct {
 
 type DoubleEntryResult struct {
 	TransactionID int64
-	DebitEntry    *wallet.LedgerEntry
-	CreditEntry   *wallet.LedgerEntry
-	DebitWallet   *wallet.Wallet
-	CreditWallet  *wallet.Wallet
+	DebitEntry    *LedgerEntry
+	CreditEntry   *LedgerEntry
+	DebitWallet   *Wallet
+	CreditWallet  *Wallet
 	Existing      bool
 }
 
@@ -139,7 +138,7 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 		return nil, err
 	}
 
-	debitEntry, err := s.insertEntry(ctx, tx, wallet.LedgerEntry{
+	debitEntry, err := s.insertEntry(ctx, tx, LedgerEntry{
 		TenantID:      params.TenantID,
 		TransactionID: txID,
 		WalletID:      debitWallet.ID,
@@ -157,7 +156,7 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 		return nil, err
 	}
 
-	creditEntry, err := s.insertEntry(ctx, tx, wallet.LedgerEntry{
+	creditEntry, err := s.insertEntry(ctx, tx, LedgerEntry{
 		TenantID:      params.TenantID,
 		TransactionID: txID,
 		WalletID:      creditWallet.ID,
@@ -214,25 +213,25 @@ func (s *Store) loadExistingEntries(ctx context.Context, tx *sqlx.Tx, tenantID, 
 	return result, nil
 }
 
-func (s *Store) listEntriesByTransaction(ctx context.Context, tx *sqlx.Tx, tenantID string, txID int64) ([]*wallet.LedgerEntry, error) {
+func (s *Store) listEntriesByTransaction(ctx context.Context, tx *sqlx.Tx, tenantID string, txID int64) ([]*LedgerEntry, error) {
 	stmt := s.DB.Rebind("SELECT * FROM ledger_entries WHERE tenant_id = ? AND transaction_id = ? ORDER BY id")
-	var entries []*wallet.LedgerEntry
+	var entries []*LedgerEntry
 	if err := tx.SelectContext(ctx, &entries, stmt, tenantID, txID); err != nil {
 		return nil, err
 	}
 	return entries, nil
 }
 
-func (s *Store) lockWallets(ctx context.Context, tx *sqlx.Tx, tenantID string, debitID, creditID uuid.UUID) (map[uuid.UUID]*wallet.Wallet, error) {
+func (s *Store) lockWallets(ctx context.Context, tx *sqlx.Tx, tenantID string, debitID, creditID uuid.UUID) (map[uuid.UUID]*Wallet, error) {
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND id IN (?, ?) ORDER BY id FOR UPDATE")
-	var rows []wallet.Wallet
+	var rows []Wallet
 	if err := tx.SelectContext(ctx, &rows, stmt, tenantID, debitID, creditID); err != nil {
 		return nil, err
 	}
 	if len(rows) != 2 {
 		return nil, ErrWalletNotFound
 	}
-	result := make(map[uuid.UUID]*wallet.Wallet, 2)
+	result := make(map[uuid.UUID]*Wallet, 2)
 	for i := range rows {
 		w := rows[i]
 		result[w.ID] = &w
@@ -252,13 +251,13 @@ func (s *Store) nextWalletSequence(ctx context.Context, tx *sqlx.Tx, tenantID st
 	return seq, nil
 }
 
-func (s *Store) insertEntry(ctx context.Context, tx *sqlx.Tx, entry wallet.LedgerEntry) (*wallet.LedgerEntry, error) {
+func (s *Store) insertEntry(ctx context.Context, tx *sqlx.Tx, entry LedgerEntry) (*LedgerEntry, error) {
 	stmt := s.DB.Rebind(`INSERT INTO ledger_entries(
 		tenant_id, transaction_id, wallet_id, entry_type, amount, currency,
 		balance_after, wallet_sequence, status, description, metadata, created_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
-	var stored wallet.LedgerEntry
+	var stored LedgerEntry
 	if err := tx.GetContext(ctx, &stored, stmt,
 		entry.TenantID,
 		entry.TransactionID,
