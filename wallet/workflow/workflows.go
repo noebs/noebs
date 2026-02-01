@@ -16,8 +16,10 @@ import (
 )
 
 var (
-	ErrNotImplemented         = errors.New("workflow not implemented")
-	ErrManualTransferTimedOut = errors.New("manual transfer approval timed out")
+	ErrNotImplemented               = errors.New("workflow not implemented")
+	ErrManualTransferTimedOut       = errors.New("manual transfer approval timed out")
+	ErrWithdrawalApprovalTimedOut   = errors.New("withdrawal approval timed out")
+	ErrWithdrawalVerificationTimedOut = errors.New("withdrawal destination verification timed out")
 )
 
 const (
@@ -26,6 +28,8 @@ const (
 	ManualTransferStatusApproved  = "approved"
 	ManualTransferStatusRejected  = "rejected"
 	ManualTransferStatusCompleted = "completed"
+	WithdrawalApprovalSignal      = "withdrawal_approval"
+	WithdrawalVerificationSignal  = "withdrawal_destination_verification"
 )
 
 type DepositParams struct {
@@ -38,12 +42,23 @@ type DepositParams struct {
 }
 
 type WithdrawalParams struct {
-	TenantID     string
-	ProviderCode string
-	WalletID     string
-	OwnerType    string
-	OwnerID      string
-	Request      walletpsp.PayoutRequest
+	TenantID                   string
+	ProviderCode               string
+	WalletID                   string
+	OwnerType                  string
+	OwnerID                    string
+	UserID                     int64
+	WalletPIN                  string
+	RequirePIN                 bool
+	TwoFACode                  string
+	Require2FA                 bool
+	DestinationID              int64
+	AllowReturnToSource         bool
+	ApprovalRequired           bool
+	ApprovalTimeoutSeconds     int
+	VerificationTimeoutSeconds int
+	HoldExpirySeconds          int
+	Request                    walletpsp.PayoutRequest
 }
 
 type P2PParams struct {
@@ -82,6 +97,19 @@ type ManualTransferDecision struct {
 	ProofOfPayment string
 }
 
+type WithdrawalApprovalDecision struct {
+	Approved       bool
+	ApproverID     int64
+	Reason         string
+	ProofOfPayment string
+}
+
+type DestinationVerificationDecision struct {
+	VerificationID int64
+	Verified       bool
+	Reason         string
+}
+
 type ReconciliationParams struct {
 	TenantID  string
 	Status    string
@@ -104,6 +132,11 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
+	info := workflow.GetInfo(ctx)
+	workflowID := ""
+	if info != nil {
+		workflowID = info.WorkflowExecution.ID
+	}
 
 	pspTxn, err := loadPSPTransaction(ctx, params.TenantID, params.ClientReference)
 	if err != nil {
@@ -329,17 +362,96 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		}
 		_ = feePosted
 	}
+	metadata, err := auditMetadata(map[string]any{
+		"client_reference":    params.ClientReference,
+		"provider_code":       providerCode,
+		"psp_transaction_id":  result.ProviderTxID,
+		"requested_amount":    pspTxn.Amount,
+		"requested_currency":  pspTxn.Currency,
+		"wallet_credit_amount": resolved.WalletCreditAmount,
+		"wallet_currency":     resolved.WalletCurrency,
+		"fee_amount":          feeAmount,
+		"funding_source_id":   storedSource.ID,
+		"ledger_transaction":  posted.TransactionID,
+	})
+	if err != nil {
+		return err
+	}
+	event := walletstore.AuditEvent{
+		TenantID:   params.TenantID,
+		EventType:  "wallet.deposit",
+		ActorType:  params.OwnerType,
+		ActorID:    params.OwnerID,
+		TargetType: sql.NullString{String: "wallet", Valid: true},
+		TargetID:   sql.NullString{String: walletID.String(), Valid: true},
+		Action:     "completed",
+		Metadata:   metadata,
+		WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RequestID:  sql.NullString{String: params.ClientReference, Valid: params.ClientReference != ""},
+	}
+	if err := recordAuditEvent(ctx, event); err != nil {
+		return err
+	}
 	return nil
 }
 
 func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
+	if params.TenantID == "" {
+		return walletstore.ErrMissingTenantID
+	}
+	if params.WalletID == "" {
+		return walletstore.ErrMissingWalletID
+	}
+	if params.OwnerType == "" {
+		return walletstore.ErrMissingOwnerType
+	}
+	if params.OwnerID == "" {
+		return walletstore.ErrMissingOwnerID
+	}
+	if params.Request.ClientReference == "" {
+		return walletstore.ErrMissingClientReference
+	}
+	if params.Request.Currency == "" {
+		return walletstore.ErrMissingCurrency
+	}
+	if params.Request.Amount <= 0 {
+		return walletstore.ErrInvalidAmount
+	}
+	if params.RequirePIN && params.WalletPIN == "" {
+		return walletstore.ErrMissingWalletPIN
+	}
+	if params.Require2FA {
+		if params.UserID <= 0 {
+			return walletstore.ErrInvalidUserID
+		}
+		if params.TwoFACode == "" {
+			return walletstore.ErrMissingTwoFACode
+		}
+	}
+	if params.HoldExpirySeconds <= 0 {
+		return walletstore.ErrMissingHoldExpiry
+	}
+	if params.ApprovalRequired && params.ApprovalTimeoutSeconds <= 0 {
+		return walletstore.ErrMissingApprovalTimeout
+	}
+	if params.DestinationID <= 0 && !params.AllowReturnToSource {
+		return walletstore.ErrMissingDestinationID
+	}
+
 	walletID, err := uuid.Parse(params.WalletID)
 	if err != nil {
 		return err
 	}
+
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
+
+	info := workflow.GetInfo(ctx)
+	workflowID := ""
+	if info != nil {
+		workflowID = info.WorkflowExecution.ID
+	}
 
 	pspTxn, err := loadPSPTransaction(ctx, params.TenantID, params.Request.ClientReference)
 	if err != nil {
@@ -349,6 +461,25 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	providerCode := params.ProviderCode
 	if providerCode == "" {
 		providerCode = pspTxn.PSPProvider
+	}
+
+	if params.RequirePIN {
+		var ok bool
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyWalletPIN, params.TenantID, walletID, params.WalletPIN).Get(ctx, &ok); err != nil {
+			return err
+		}
+		if !ok {
+			return walletstore.ErrInvalidWalletPIN
+		}
+	}
+	if params.Require2FA {
+		var ok bool
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyUserTOTP, params.TenantID, params.UserID, params.TwoFACode).Get(ctx, &ok); err != nil {
+			return err
+		}
+		if !ok {
+			return walletstore.ErrInvalidTwoFACode
+		}
 	}
 
 	validationReq := walletvalidation.WithdrawalValidationRequest{
@@ -366,13 +497,257 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		return err
 	}
 
+	var destination walletstore.WithdrawalDestination
+	var destinationDetails map[string]any
+	var destinationID int64
+	var fundingSource *walletstore.FundingSource
+
+	if params.AllowReturnToSource {
+		var sources []walletstore.FundingSource
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityGetReturnToSourceOptions, params.TenantID, walletID).Get(ctx, &sources); err != nil {
+			return err
+		}
+		selected, details, err := selectReturnToSource(sources, params.Request.Currency)
+		if err != nil {
+			return err
+		}
+		if selected != nil {
+			fundingSource = selected
+			destinationDetails = details
+		}
+	}
+
+	if fundingSource == nil {
+		if params.DestinationID <= 0 {
+			return walletstore.ErrMissingDestinationID
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityResolveWithdrawalDestination, params.TenantID, params.DestinationID).Get(ctx, &destination); err != nil {
+			return err
+		}
+		if !destination.IsActive {
+			return walletstore.ErrDestinationNotFound
+		}
+		if destination.Currency != params.Request.Currency {
+			return walletstore.ErrCurrencyMismatch
+		}
+		if destination.OwnershipStatus != "verified" {
+			if !destination.OwnershipVerificationMethod.Valid {
+				return walletstore.ErrMissingVerificationType
+			}
+			if params.VerificationTimeoutSeconds <= 0 {
+				return walletstore.ErrMissingVerificationTimeout
+			}
+			now := workflow.Now(ctx)
+			verification := walletstore.OwnershipVerification{
+				TenantID:         params.TenantID,
+				DestinationID:    destination.ID,
+				VerificationType: destination.OwnershipVerificationMethod.String,
+				Status:           "pending",
+				ExpiresAt:        now.Add(time.Duration(params.VerificationTimeoutSeconds) * time.Second),
+				WorkflowID:       sql.NullString{String: workflowID, Valid: workflowID != ""},
+				ReferenceID:      sql.NullString{String: params.Request.ClientReference, Valid: true},
+			}
+			var stored walletstore.OwnershipVerification
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityInitiateOwnershipVerification, verification).Get(ctx, &stored); err != nil {
+				return err
+			}
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateDestinationOwnership, params.TenantID, destination.ID, "pending", sql.NullTime{}, now).Get(ctx, nil); err != nil {
+				return err
+			}
+			decision, err := awaitDestinationVerificationDecision(ctx, stored.ID, params.VerificationTimeoutSeconds)
+			if err != nil {
+				_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateOwnershipVerificationStatus, params.TenantID, stored.ID, "expired", now).Get(ctx, nil)
+				return err
+			}
+			now = workflow.Now(ctx)
+			if decision.Verified {
+				if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateOwnershipVerificationStatus, params.TenantID, stored.ID, "verified", now).Get(ctx, nil); err != nil {
+					return err
+				}
+				if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateDestinationOwnership, params.TenantID, destination.ID, "verified", sql.NullTime{Time: now, Valid: true}, now).Get(ctx, nil); err != nil {
+					return err
+				}
+				destination.OwnershipStatus = "verified"
+			} else {
+				_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateOwnershipVerificationStatus, params.TenantID, stored.ID, "failed", now).Get(ctx, nil)
+				_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateDestinationOwnership, params.TenantID, destination.ID, "rejected", sql.NullTime{}, now).Get(ctx, nil)
+				rejectMeta, err := auditMetadata(map[string]any{
+					"client_reference": params.Request.ClientReference,
+					"destination_id":   destination.ID,
+					"reason":           decision.Reason,
+				})
+				if err != nil {
+					return err
+				}
+				rejectEvent := walletstore.AuditEvent{
+					TenantID:   params.TenantID,
+					EventType:  "wallet.withdrawal",
+					ActorType:  "workflow",
+					ActorID:    workflowID,
+					TargetType: sql.NullString{String: "destination", Valid: true},
+					TargetID:   sql.NullString{String: fmt.Sprintf("%d", destination.ID), Valid: true},
+					Action:     "destination_rejected",
+					Metadata:   rejectMeta,
+					WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+					RequestID:  sql.NullString{String: params.Request.ClientReference, Valid: params.Request.ClientReference != ""},
+				}
+				if err := recordAuditEvent(ctx, rejectEvent); err != nil {
+					return err
+				}
+				return walletstore.ErrDestinationNotVerified
+			}
+		}
+		if len(destination.DestinationDetails) == 0 {
+			return walletstore.ErrMissingDestinationDetails
+		}
+		if err := json.Unmarshal(destination.DestinationDetails, &destinationDetails); err != nil {
+			return err
+		}
+		destinationID = destination.ID
+		if destination.PSPProvider.Valid {
+			if providerCode == "" {
+				providerCode = destination.PSPProvider.String
+			} else if providerCode != destination.PSPProvider.String {
+				return walletstore.ErrMissingProviderCode
+			}
+		}
+	} else {
+		if fundingSource.PSPProvider.Valid {
+			if providerCode == "" {
+				providerCode = fundingSource.PSPProvider.String
+			} else if providerCode != fundingSource.PSPProvider.String {
+				return walletstore.ErrMissingProviderCode
+			}
+		} else if providerCode == "" {
+			return walletstore.ErrMissingProviderCode
+		}
+	}
+
+	if providerCode == "" {
+		return walletstore.ErrMissingProviderCode
+	}
+
+	holdParams := walletstore.HoldParams{
+		TenantID:       params.TenantID,
+		WalletID:       walletID,
+		Amount:         validation.TotalDebit,
+		Reason:         "withdrawal",
+		ReferenceType:  "withdrawal",
+		ReferenceID:    params.Request.ClientReference,
+		IdempotencyKey: params.Request.ClientReference + ":hold",
+		ExpiresAt:      workflow.Now(ctx).Add(time.Duration(params.HoldExpirySeconds) * time.Second),
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateHold, holdParams).Get(ctx, nil); err != nil {
+		return err
+	}
+	var hold walletstore.BalanceHold
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityCreateHold, holdParams).Get(ctx, &hold); err != nil {
+		return err
+	}
+	holdID := hold.ID
+
+	releaseHold := func() {
+		if holdID <= 0 {
+			return
+		}
+		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateReleaseHold, params.TenantID, holdID).Get(ctx, nil)
+		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityReleaseHold, params.TenantID, holdID).Get(ctx, nil)
+	}
+
+	if params.ApprovalRequired {
+		decision, err := awaitWithdrawalApproval(ctx, params)
+		if err != nil {
+			releaseHold()
+			return err
+		}
+		if !decision.Approved {
+			if decision.Reason == "" {
+				releaseHold()
+				return walletstore.ErrMissingApprovalReason
+			}
+			rejectMeta, err := auditMetadata(map[string]any{
+				"client_reference": params.Request.ClientReference,
+				"amount":           params.Request.Amount,
+				"currency":         params.Request.Currency,
+				"approver_id":      decision.ApproverID,
+				"reason":           decision.Reason,
+			})
+			if err != nil {
+				releaseHold()
+				return err
+			}
+			rejectEvent := walletstore.AuditEvent{
+				TenantID:   params.TenantID,
+				EventType:  "wallet.withdrawal",
+				ActorType:  "admin",
+				ActorID:    fmt.Sprintf("%d", decision.ApproverID),
+				TargetType: sql.NullString{String: "wallet", Valid: true},
+				TargetID:   sql.NullString{String: walletID.String(), Valid: true},
+				Action:     "rejected",
+				Metadata:   rejectMeta,
+				WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+				RequestID:  sql.NullString{String: params.Request.ClientReference, Valid: params.Request.ClientReference != ""},
+			}
+			if err := recordAuditEvent(ctx, rejectEvent); err != nil {
+				releaseHold()
+				return err
+			}
+			releaseHold()
+			return walletstore.ErrApprovalRejected
+		}
+		if decision.ProofOfPayment == "" {
+			releaseHold()
+			return walletstore.ErrMissingProofOfPayment
+		}
+	}
+
+	payout := params.Request
+	payout.Destination = destinationDetails
+	if payout.Metadata == nil {
+		payout.Metadata = map[string]any{}
+	}
+	if destinationID > 0 {
+		payout.Metadata["destination_id"] = destinationID
+	}
+	if fundingSource != nil {
+		payout.Metadata["funding_source_id"] = fundingSource.ID
+	}
+
 	payoutParams := walletactivity.SendPayoutParams{
 		TenantID:     params.TenantID,
 		ProviderCode: providerCode,
-		Request:      params.Request,
+		Request:      payout,
 	}
 	var result walletpsp.PayoutResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivitySendPayout, payoutParams).Get(ctx, &result); err != nil {
+		failMeta, metaErr := auditMetadata(map[string]any{
+			"client_reference": params.Request.ClientReference,
+			"provider_code":    providerCode,
+			"amount":           params.Request.Amount,
+			"currency":         params.Request.Currency,
+			"error":            err.Error(),
+		})
+		if metaErr != nil {
+			releaseHold()
+			return metaErr
+		}
+		failEvent := walletstore.AuditEvent{
+			TenantID:   params.TenantID,
+			EventType:  "wallet.withdrawal",
+			ActorType:  "workflow",
+			ActorID:    workflowID,
+			TargetType: sql.NullString{String: "wallet", Valid: true},
+			TargetID:   sql.NullString{String: walletID.String(), Valid: true},
+			Action:     "failed",
+			Metadata:   failMeta,
+			WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+			RequestID:  sql.NullString{String: params.Request.ClientReference, Valid: params.Request.ClientReference != ""},
+		}
+		if auditErr := recordAuditEvent(ctx, failEvent); auditErr != nil {
+			releaseHold()
+			return auditErr
+		}
+		releaseHold()
 		return err
 	}
 	status := result.Status
@@ -392,6 +767,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		Update:          update,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdatePSPTransactionStatus, updateParams).Get(ctx, nil); err != nil {
+		releaseHold()
 		return err
 	}
 
@@ -422,10 +798,39 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		})
 	}
 	if err := recordPSPAmounts(ctx, params.TenantID, pspTxn.ID, amounts); err != nil {
+		releaseHold()
 		return err
 	}
 	if status != "success" {
-		return nil
+		failMeta, metaErr := auditMetadata(map[string]any{
+			"client_reference": params.Request.ClientReference,
+			"provider_code":    providerCode,
+			"psp_status":       status,
+			"amount":           params.Request.Amount,
+			"currency":         params.Request.Currency,
+		})
+		if metaErr != nil {
+			releaseHold()
+			return metaErr
+		}
+		failEvent := walletstore.AuditEvent{
+			TenantID:   params.TenantID,
+			EventType:  "wallet.withdrawal",
+			ActorType:  "workflow",
+			ActorID:    workflowID,
+			TargetType: sql.NullString{String: "wallet", Valid: true},
+			TargetID:   sql.NullString{String: walletID.String(), Valid: true},
+			Action:     "failed",
+			Metadata:   failMeta,
+			WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+			RequestID:  sql.NullString{String: params.Request.ClientReference, Valid: params.Request.ClientReference != ""},
+		}
+		if auditErr := recordAuditEvent(ctx, failEvent); auditErr != nil {
+			releaseHold()
+			return auditErr
+		}
+		releaseHold()
+		return fmt.Errorf("withdrawal status %s", status)
 	}
 
 	var treasury walletstore.Wallet
@@ -435,6 +840,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		WalletCode: walletstore.SystemTreasury,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
+		releaseHold()
 		return err
 	}
 
@@ -450,13 +856,14 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		Description:    "withdrawal",
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, withdrawEntry).Get(ctx, nil); err != nil {
+		releaseHold()
 		return err
 	}
 	var posted walletstore.DoubleEntryResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, withdrawEntry).Get(ctx, &posted); err != nil {
+		releaseHold()
 		return err
 	}
-	_ = posted
 
 	feeAmount := int64(0)
 	if validation.Fee != nil {
@@ -470,6 +877,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			WalletCode: walletstore.SystemFees,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
+			releaseHold()
 			return err
 		}
 		feeEntry := walletstore.DoubleEntryParams{
@@ -484,13 +892,54 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			Description:    "withdrawal fee",
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, feeEntry).Get(ctx, nil); err != nil {
+			releaseHold()
 			return err
 		}
 		var feePosted walletstore.DoubleEntryResult
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, feeEntry).Get(ctx, &feePosted); err != nil {
+			releaseHold()
 			return err
 		}
 		_ = feePosted
+	}
+
+	releaseHold()
+
+	now := workflow.Now(ctx)
+	if destinationID > 0 {
+		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateWithdrawalDestinationUsage, params.TenantID, destinationID, params.Request.Amount, now).Get(ctx, nil)
+	}
+	if fundingSource != nil {
+		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateFundingSourceUsage, params.TenantID, fundingSource.ID, params.Request.Amount, now).Get(ctx, nil)
+	}
+	metadata, err := auditMetadata(map[string]any{
+		"client_reference":   params.Request.ClientReference,
+		"provider_code":      providerCode,
+		"psp_transaction_id": result.ProviderTxID,
+		"amount":             params.Request.Amount,
+		"currency":           params.Request.Currency,
+		"fee_amount":         feeAmount,
+		"destination_id":     destinationID,
+		"funding_source_id":  fundingSourceID(fundingSource),
+		"ledger_transaction": posted.TransactionID,
+	})
+	if err != nil {
+		return err
+	}
+	event := walletstore.AuditEvent{
+		TenantID:   params.TenantID,
+		EventType:  "wallet.withdrawal",
+		ActorType:  params.OwnerType,
+		ActorID:    params.OwnerID,
+		TargetType: sql.NullString{String: "wallet", Valid: true},
+		TargetID:   sql.NullString{String: walletID.String(), Valid: true},
+		Action:     "completed",
+		Metadata:   metadata,
+		WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RequestID:  sql.NullString{String: params.Request.ClientReference, Valid: params.Request.ClientReference != ""},
+	}
+	if err := recordAuditEvent(ctx, event); err != nil {
+		return err
 	}
 	return nil
 }
@@ -503,6 +952,11 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	toID, err := uuid.Parse(params.ToWalletID)
 	if err != nil {
 		return err
+	}
+	info := workflow.GetInfo(ctx)
+	workflowID := ""
+	if info != nil {
+		workflowID = info.WorkflowExecution.ID
 	}
 
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
@@ -538,6 +992,82 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	}
 	var result walletstore.DoubleEntryResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, activityParams).Get(ctx, &result); err != nil {
+		return err
+	}
+	_ = result
+
+	feeAmount := int64(0)
+	if validation.Fee != nil {
+		feeAmount = validation.Fee.TotalFee
+	}
+	if feeAmount > 0 {
+		var feesWallet walletstore.Wallet
+		feesParams := walletactivity.EnsureSystemWalletParams{
+			TenantID:   params.TenantID,
+			Currency:   params.Currency,
+			WalletCode: walletstore.SystemFees,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
+			return err
+		}
+		feeEntry := walletstore.DoubleEntryParams{
+			TenantID:       params.TenantID,
+			IdempotencyKey: params.IdempotencyKey + ":fee",
+			Currency:       params.Currency,
+			ReferenceType:  "fee",
+			ReferenceID:    params.ReferenceID,
+			DebitWalletID:  fromID,
+			CreditWalletID: feesWallet.ID,
+			Amount:         feeAmount,
+			Description:    "p2p fee",
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, feeEntry).Get(ctx, nil); err != nil {
+			return err
+		}
+		var feePosted walletstore.DoubleEntryResult
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, feeEntry).Get(ctx, &feePosted); err != nil {
+			return err
+		}
+		_ = feePosted
+	}
+	meta, err := auditMetadata(map[string]any{
+		"reference_id":      params.ReferenceID,
+		"amount":            params.Amount,
+		"currency":          params.Currency,
+		"fee_amount":        feeAmount,
+		"ledger_transaction": result.TransactionID,
+	})
+	if err != nil {
+		return err
+	}
+	debitEvent := walletstore.AuditEvent{
+		TenantID:   params.TenantID,
+		EventType:  "wallet.p2p",
+		ActorType:  params.FromOwnerType,
+		ActorID:    params.FromOwnerID,
+		TargetType: sql.NullString{String: "wallet", Valid: true},
+		TargetID:   sql.NullString{String: fromID.String(), Valid: true},
+		Action:     "debit",
+		Metadata:   meta,
+		WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RequestID:  sql.NullString{String: params.ReferenceID, Valid: params.ReferenceID != ""},
+	}
+	if err := recordAuditEvent(ctx, debitEvent); err != nil {
+		return err
+	}
+	creditEvent := walletstore.AuditEvent{
+		TenantID:   params.TenantID,
+		EventType:  "wallet.p2p",
+		ActorType:  params.ToOwnerType,
+		ActorID:    params.ToOwnerID,
+		TargetType: sql.NullString{String: "wallet", Valid: true},
+		TargetID:   sql.NullString{String: toID.String(), Valid: true},
+		Action:     "credit",
+		Metadata:   meta,
+		WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RequestID:  sql.NullString{String: params.ReferenceID, Valid: params.ReferenceID != ""},
+	}
+	if err := recordAuditEvent(ctx, creditEvent); err != nil {
 		return err
 	}
 	return nil
@@ -603,6 +1133,30 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	}
 	var stored walletstore.ManualTransfer
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityCreateManualTransfer, transfer).Get(ctx, &stored); err != nil {
+		return err
+	}
+	requestMeta, err := auditMetadata(map[string]any{
+		"transfer_type": params.TransferType,
+		"amount":        params.Amount,
+		"currency":      params.Currency,
+		"reason":        params.Reason,
+	})
+	if err != nil {
+		return err
+	}
+	requestEvent := walletstore.AuditEvent{
+		TenantID:   params.TenantID,
+		EventType:  "wallet.manual_transfer",
+		ActorType:  "admin",
+		ActorID:    fmt.Sprintf("%d", params.RequestedBy),
+		TargetType: sql.NullString{String: "wallet", Valid: true},
+		TargetID:   sql.NullString{String: params.WalletID, Valid: params.WalletID != ""},
+		Action:     "requested",
+		Metadata:   requestMeta,
+		WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RequestID:  sql.NullString{String: params.IdempotencyKey, Valid: params.IdempotencyKey != ""},
+	}
+	if err := recordAuditEvent(ctx, requestEvent); err != nil {
 		return err
 	}
 
@@ -713,7 +1267,31 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			Status:      ManualTransferStatusCompleted,
 			CompletedAt: sql.NullTime{Time: workflow.Now(ctx), Valid: true},
 		}
-		return workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, complete).Get(ctx, nil)
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, complete).Get(ctx, nil); err != nil {
+			return err
+		}
+		completeMeta, err := auditMetadata(map[string]any{
+			"transfer_type": params.TransferType,
+			"amount":        params.Amount,
+			"currency":      params.Currency,
+			"approver_id":   decision.ApproverID,
+		})
+		if err != nil {
+			return err
+		}
+		completeEvent := walletstore.AuditEvent{
+			TenantID:   params.TenantID,
+			EventType:  "wallet.manual_transfer",
+			ActorType:  "admin",
+			ActorID:    fmt.Sprintf("%d", decision.ApproverID),
+			TargetType: sql.NullString{String: "wallet", Valid: true},
+			TargetID:   sql.NullString{String: params.WalletID, Valid: params.WalletID != ""},
+			Action:     "completed",
+			Metadata:   completeMeta,
+			WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+			RequestID:  sql.NullString{String: params.IdempotencyKey, Valid: params.IdempotencyKey != ""},
+		}
+		return recordAuditEvent(ctx, completeEvent)
 	}
 
 	if decision.Reason == "" {
@@ -727,6 +1305,31 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		Reason:           sql.NullString{String: decision.Reason, Valid: true},
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, rejection).Get(ctx, nil); err != nil {
+		return err
+	}
+	rejectMeta, err := auditMetadata(map[string]any{
+		"transfer_type": params.TransferType,
+		"amount":        params.Amount,
+		"currency":      params.Currency,
+		"approver_id":   decision.ApproverID,
+		"reason":        decision.Reason,
+	})
+	if err != nil {
+		return err
+	}
+	rejectEvent := walletstore.AuditEvent{
+		TenantID:   params.TenantID,
+		EventType:  "wallet.manual_transfer",
+		ActorType:  "admin",
+		ActorID:    fmt.Sprintf("%d", decision.ApproverID),
+		TargetType: sql.NullString{String: "wallet", Valid: true},
+		TargetID:   sql.NullString{String: params.WalletID, Valid: params.WalletID != ""},
+		Action:     "rejected",
+		Metadata:   rejectMeta,
+		WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RequestID:  sql.NullString{String: params.IdempotencyKey, Valid: params.IdempotencyKey != ""},
+	}
+	if err := recordAuditEvent(ctx, rejectEvent); err != nil {
 		return err
 	}
 	if holdID > 0 {
@@ -766,6 +1369,11 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
+	info := workflow.GetInfo(ctx)
+	workflowID := ""
+	if info != nil {
+		workflowID = info.WorkflowExecution.ID
+	}
 
 	listParams := walletactivity.ListPSPTransactionsByStatusParams{
 		TenantID: params.TenantID,
@@ -795,6 +1403,28 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 		}
 	}
 	if len(missing) > 0 {
+		meta, err := auditMetadata(map[string]any{
+			"status":            params.Status,
+			"start_time":        params.StartTime.Format(time.RFC3339),
+			"end_time":          params.EndTime.Format(time.RFC3339),
+			"missing_count":     len(missing),
+			"missing_references": missing,
+		})
+		if err != nil {
+			return err
+		}
+		event := walletstore.AuditEvent{
+			TenantID:   params.TenantID,
+			EventType:  "wallet.reconciliation",
+			ActorType:  "workflow",
+			ActorID:    "reconciliation",
+			Action:     "mismatch",
+			Metadata:   meta,
+			WorkflowID: sql.NullString{String: workflowID, Valid: workflowID != ""},
+		}
+		if err := recordAuditEvent(ctx, event); err != nil {
+			return err
+		}
 		return fmt.Errorf("reconciliation mismatch: %d missing ledger entries", len(missing))
 	}
 	return nil
@@ -917,6 +1547,103 @@ func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferPara
 		return ManualTransferDecision{}, walletstore.ErrMissingApproverID
 	}
 	return decision, nil
+}
+
+func awaitWithdrawalApproval(ctx workflow.Context, params WithdrawalParams) (WithdrawalApprovalDecision, error) {
+	timeout := time.Duration(params.ApprovalTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		return WithdrawalApprovalDecision{}, walletstore.ErrMissingApprovalTimeout
+	}
+	decisionCh := workflow.GetSignalChannel(ctx, WithdrawalApprovalSignal)
+	timer := workflow.NewTimer(ctx, timeout)
+
+	var decision WithdrawalApprovalDecision
+	timedOut := false
+	selector := workflow.NewSelector(ctx)
+	selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
+		c.Receive(ctx, &decision)
+	})
+	selector.AddFuture(timer, func(f workflow.Future) {
+		timedOut = true
+	})
+	selector.Select(ctx)
+	if timedOut {
+		return WithdrawalApprovalDecision{}, ErrWithdrawalApprovalTimedOut
+	}
+	if decision.ApproverID <= 0 {
+		return WithdrawalApprovalDecision{}, walletstore.ErrMissingApproverID
+	}
+	return decision, nil
+}
+
+func awaitDestinationVerificationDecision(ctx workflow.Context, verificationID int64, timeoutSeconds int) (DestinationVerificationDecision, error) {
+	if verificationID <= 0 {
+		return DestinationVerificationDecision{}, walletstore.ErrMissingVerificationID
+	}
+	timeout := time.Duration(timeoutSeconds) * time.Second
+	if timeout <= 0 {
+		return DestinationVerificationDecision{}, walletstore.ErrMissingVerificationTimeout
+	}
+	decisionCh := workflow.GetSignalChannel(ctx, WithdrawalVerificationSignal)
+	timer := workflow.NewTimer(ctx, timeout)
+
+	var decision DestinationVerificationDecision
+	timedOut := false
+	selector := workflow.NewSelector(ctx)
+	selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
+		c.Receive(ctx, &decision)
+	})
+	selector.AddFuture(timer, func(f workflow.Future) {
+		timedOut = true
+	})
+	selector.Select(ctx)
+	if timedOut {
+		return DestinationVerificationDecision{}, ErrWithdrawalVerificationTimedOut
+	}
+	if decision.VerificationID != verificationID {
+		return DestinationVerificationDecision{}, walletstore.ErrMissingVerificationID
+	}
+	return decision, nil
+}
+
+func selectReturnToSource(sources []walletstore.FundingSource, currency string) (*walletstore.FundingSource, map[string]any, error) {
+	for _, source := range sources {
+		if currency != "" && source.Currency != currency {
+			continue
+		}
+		if len(source.WithdrawalMethod) == 0 {
+			continue
+		}
+		var details map[string]any
+		if err := json.Unmarshal(source.WithdrawalMethod, &details); err != nil {
+			return nil, nil, err
+		}
+		selected := source
+		return &selected, details, nil
+	}
+	return nil, nil, nil
+}
+
+func auditMetadata(values map[string]any) (json.RawMessage, error) {
+	if values == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(data), nil
+}
+
+func recordAuditEvent(ctx workflow.Context, event walletstore.AuditEvent) error {
+	return workflow.ExecuteActivity(ctx, walletactivity.ActivityRecordAuditEvent, event).Get(ctx, nil)
+}
+
+func fundingSourceID(source *walletstore.FundingSource) int64 {
+	if source == nil {
+		return 0
+	}
+	return source.ID
 }
 
 func isManualTransferDebit(transferType string) bool {

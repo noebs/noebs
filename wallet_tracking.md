@@ -74,6 +74,7 @@ Last updated: 2026-02-01
 - [x] Added deposit/withdraw ledger postings (treasury + fees) on PSP success
 - [x] Recorded funding sources and linked deposit ledger credits
 - [x] Made PSP amount inserts idempotent via upserts
+- [x] Added P2P fee ledger postings to system fees wallet
 - [x] Added gRPC wallet service handlers and generated proto stubs/OpenAPI
 - [x] Added gRPC gateway helpers for public wallet service
 - [x] Wired gRPC server/gateway startup hooks in CLI config
@@ -81,6 +82,10 @@ Last updated: 2026-02-01
 - [x] Mounted gRPC gateway routes on Fiber instead of standalone HTTP server
 - [x] Implemented manual transfer workflow with approval/hold/ledger posting
 - [x] Added reconciliation workflow to detect missing ledger entries
+- [x] Added funding source/destination usage updates and ownership verification status updates
+- [x] Added user 2FA verification activity and wired it into wallet worker setup
+- [x] Implemented withdrawal flow with PIN/2FA, return-to-source, destination verification, holds, and approvals
+- [x] Added audit events across deposit/withdrawal/P2P/manual transfer/reconciliation workflows
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
