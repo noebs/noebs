@@ -21,6 +21,8 @@ func RegisterWallet(w worker.Worker, deps RegisterDeps) {
 		w.RegisterActivity(ledger)
 		funding := walletactivity.NewFundingActivities(deps.Store)
 		w.RegisterActivity(funding)
+		ownership := walletactivity.NewOwnershipActivities(deps.Store)
+		w.RegisterActivity(ownership)
 	}
 	if deps.PSPActivities != nil {
 		w.RegisterActivity(deps.PSPActivities)
