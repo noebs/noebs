@@ -424,6 +424,8 @@ github.com/tklauser/numcpus v0.6.1 h1:ng9scYS7az0Bk4OZLvrNXNSAO2Pxr1XXRAPyjhIx+F
 github.com/tklauser/numcpus v0.6.1/go.mod h1:1XfjsgE2zo8GVw7POkMbHENHzVg3GzmoZ9fESEdAacY=
 github.com/tutipay/ws v0.1.2 h1:3kv1t9KAZ8At3c/rftCzHk1OozgSuKqLIpYZ7t4YkcQ=
 github.com/tutipay/ws v0.1.2/go.mod h1:dzLTs3EGcEQkdidILuK38bXNyGAFxAA2CyJ+JYKdwt0=
+github.com/tutipay/ws v0.1.3 h1:ZEo4bsKcNQct5MuA7/gXLx5fuJQekrnPZ6sGtF3a5zo=
+github.com/tutipay/ws v0.1.3/go.mod h1:dzLTs3EGcEQkdidILuK38bXNyGAFxAA2CyJ+JYKdwt0=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.51.0 h1:8b30A5JlZ6C7AS81RsWjYMQmrZG6feChmgAolCl1SqA=

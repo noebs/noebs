@@ -78,6 +78,16 @@ All of these will be implemented in a microservice architectural design pattern,
 
 If YOU are interested in other services, please reach out and we will be more than happy to discuss them with you.
 
+## Chat WebSocket
+The chat service runs over `/ws` and now requires a JWT in the `Authorization` header (token or `Bearer <token>`). Client IDs are derived from the JWT `mobile` claim.
+
+Example:
+
+```
+GET /ws
+Authorization: Bearer <jwt>
+```
+
 
 # Consultancy
 While everything you see here is very and open source; we don't hide any fees or charges, we expect that some might be interested in a commercial plans. We offer our consultancy services via Gndi. We have a team with variety of proficiency, from backend engineers, mobile developers to UX/UI and QA testing engineers. Some of our team members have worked at EBS, while most of the team have a huge experience in e-payment systems.

@@ -390,13 +390,33 @@ func initConfig() {
 	// 	// We recommend adjusting this value in production,
 	// 	TracesSampleRate: 1.0,
 	// })
-	if database != nil && database.DB != nil {
-		hub = chat.NewHub(database.DB)
-	}
-
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
-
 	auth.Init()
+	if database != nil && database.DB != nil {
+		chatCfg := chat.DefaultHubConfig()
+		chatCfg.MaxUnreadMessages = 1000
+		chatCfg.UnreadBatchSize = 200
+		chatCfg.PersistBatchSize = 128
+		chatCfg.PersistFlushInterval = 10 * time.Millisecond
+		chatCfg.ClientIDFromRequest = func(r *http.Request) (string, error) {
+			token := strings.TrimSpace(r.Header.Get("Authorization"))
+			if strings.HasPrefix(strings.ToLower(token), "bearer ") {
+				token = strings.TrimSpace(token[7:])
+			}
+			if token == "" {
+				return "", chat.ErrUnauthorized
+			}
+			claims, err := auth.VerifyJWT(token)
+			if err != nil {
+				return "", chat.ErrUnauthorized
+			}
+			if claims.Mobile == "" {
+				return "", chat.ErrUnauthorized
+			}
+			return claims.Mobile, nil
+		}
+		hub = chat.NewHubWithConfig(database.DB, chatCfg)
+	}
 	consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
 	dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
