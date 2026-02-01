@@ -157,3 +157,29 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 	}
 	return nil
 }
+
+func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID string, limit int) ([]PSPTransaction, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	stmt := db.Rebind(`SELECT * FROM psp_transactions
+		WHERE tenant_id = ?
+		AND status IN ('initiated', 'processing', 'pending')
+		AND (next_poll_at IS NULL OR next_poll_at <= ?)
+		AND (lock_expires_at IS NULL OR lock_expires_at <= ?)
+		ORDER BY next_poll_at NULLS FIRST, created_at ASC
+		LIMIT ?`)
+	var rows []PSPTransaction
+	if err := db.SelectContext(ctx, &rows, stmt, tenantID, now, now, limit); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}

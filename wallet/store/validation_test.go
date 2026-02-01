@@ -205,6 +205,15 @@ func TestUpdatePSPTransactionStatusValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingStatus)
 }
 
+func TestListPSPTransactionsForPollingValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListPSPTransactionsForPolling(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactionsForPolling(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrInvalidLimit)
+}
+
 func assertErrorIs(t *testing.T, err, want error) {
 	t.Helper()
 	if !errors.Is(err, want) {
