@@ -14,10 +14,11 @@ Last updated: 2026-02-01
 - [x] Added admin/manual transfer/audit tables migration
 - [x] Added funding/withdrawal/ownership tables migration (AML)
 - [x] Added wallet/Temporal config fields + defaults
+- [x] Added SOPS secrets skeleton for Temporal + PSP
 
 ## Next steps (short-term)
-- [ ] Add secrets skeleton for PSP/Temporal to `secrets.yaml`
 - [ ] Decide migration for system wallet seeding (if required)
+- [ ] Add wallet store layer (wallet CRUD + ledger posting)
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.
