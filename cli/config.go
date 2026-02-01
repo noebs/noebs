@@ -17,6 +17,8 @@ import (
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/wallet"
+	wallethandler "github.com/adonese/noebs/wallet/handler"
 	"github.com/bradfitz/iter"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/contrib/otelfiber"
@@ -315,6 +317,15 @@ func GetMainEngine() *fiber.App {
 			})(c)
 		})
 	}
+
+	if walletService != nil {
+		walletUserHandler := wallethandler.NewUserHandler(walletService)
+		walletAdminHandler := wallethandler.NewAdminHandler(walletService)
+		userWalletGroup := route.Group("/wallet")
+		adminWalletGroup := route.Group("/admin/wallet", adminGuard)
+		wallethandler.RegisterUserRoutes(userWalletGroup, walletUserHandler)
+		wallethandler.RegisterAdminRoutes(adminWalletGroup, walletAdminHandler)
+	}
 	return route
 }
 
@@ -420,6 +431,7 @@ func initConfig() {
 	consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
 	dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
+	walletService = wallet.NewService(database, noebsConfig)
 	dataConfigs.DB = database
 
 }

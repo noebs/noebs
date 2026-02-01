@@ -1,0 +1,90 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/adonese/noebs/apperr"
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/wallet"
+	walletstore "github.com/adonese/noebs/wallet/store"
+	"github.com/gofiber/fiber/v2"
+)
+
+func bindJSON(c *fiber.Ctx, dst interface{}) error {
+	if len(c.Body()) == 0 {
+		return apperr.ErrEmptyBody
+	}
+	if err := json.Unmarshal(c.Body(), dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	}
+	if err := ebs_fields.ValidateStruct(dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrValidation, err.Error())
+	}
+	return nil
+}
+
+func jsonResponse(c *fiber.Ctx, code int, payload interface{}) error {
+	if err, ok := payload.(error); ok {
+		status := code
+		if status == 0 {
+			status = apperr.Status(err)
+		}
+		return c.Status(status).JSON(apperr.Payload(err))
+	}
+	if code == 0 {
+		code = http.StatusOK
+	}
+	return c.Status(code).JSON(payload)
+}
+
+func mapWalletError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, wallet.ErrMissingStore):
+		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
+	case errors.Is(err, walletstore.ErrWalletNotFound), errors.Is(err, walletstore.ErrHoldNotFound):
+		return apperr.Wrap(err, apperr.ErrNotFound, err.Error())
+	case errors.Is(err, walletstore.ErrMissingTenantID),
+		errors.Is(err, walletstore.ErrMissingCurrency),
+		errors.Is(err, walletstore.ErrMissingOwnerType),
+		errors.Is(err, walletstore.ErrMissingOwnerID),
+		errors.Is(err, walletstore.ErrMissingWalletID),
+		errors.Is(err, walletstore.ErrInvalidUserID),
+		errors.Is(err, walletstore.ErrMissingIdempotencyKey),
+		errors.Is(err, walletstore.ErrMissingReferenceType),
+		errors.Is(err, walletstore.ErrMissingReferenceID),
+		errors.Is(err, walletstore.ErrMissingHoldReason),
+		errors.Is(err, walletstore.ErrMissingHoldExpiry),
+		errors.Is(err, walletstore.ErrInvalidHoldID),
+		errors.Is(err, walletstore.ErrInvalidAmount),
+		errors.Is(err, walletstore.ErrInvalidWalletPair),
+		errors.Is(err, walletstore.ErrInsufficientFunds),
+		errors.Is(err, walletstore.ErrCurrencyMismatch):
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	default:
+		return apperr.Wrap(err, apperr.ErrInternal, err.Error())
+	}
+}
+
+func resolveTenantID(cfg ebs_fields.NoebsConfig, tenantID string) (string, error) {
+	if tenantID == "" {
+		tenantID = cfg.DefaultTenantID
+	}
+	if tenantID == "" {
+		return "", walletstore.ErrMissingTenantID
+	}
+	return tenantID, nil
+}
+
+func resolveCurrency(cfg ebs_fields.NoebsConfig, currency string) (string, error) {
+	if currency == "" {
+		currency = cfg.WalletDefaultCurrency
+	}
+	if currency == "" {
+		return "", walletstore.ErrMissingCurrency
+	}
+	return currency, nil
+}

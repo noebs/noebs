@@ -18,9 +18,10 @@ Last updated: 2026-02-01
 - [x] Added wallet store scaffold + system wallet ensure helpers
 - [x] Added ledger posting + holds helpers with validation tests (no defaults)
 - [x] Added wallet service wiring over store layer
+- [x] Added wallet user/admin handler skeletons + route registration
 
 ## Next steps (short-term)
-- [ ] Add wallet handlers + route registration (user/admin skeletons)
+- [ ] Add PSP + Temporal wiring (service + worker setup)
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.
