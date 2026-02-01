@@ -16,9 +16,10 @@ Last updated: 2026-02-01
 - [x] Added wallet/Temporal config fields + defaults
 - [x] Added SOPS secrets skeleton for Temporal + PSP
 - [x] Added wallet store scaffold + system wallet ensure helpers
+- [x] Added ledger posting + holds helpers with validation tests (no defaults)
 
 ## Next steps (short-term)
-- [ ] Add ledger posting helpers (double-entry + holds)
+- [ ] Wire store layer into wallet service/handlers
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.

@@ -1,0 +1,26 @@
+package store
+
+import "errors"
+
+var (
+	ErrMissingTenantID       = errors.New("missing tenant_id")
+	ErrMissingCurrency       = errors.New("missing currency")
+	ErrMissingOwnerType      = errors.New("missing owner_type")
+	ErrMissingOwnerID        = errors.New("missing owner_id")
+	ErrMissingWalletID       = errors.New("missing wallet_id")
+	ErrInvalidUserID         = errors.New("invalid user_id")
+	ErrMissingIdempotencyKey = errors.New("missing idempotency_key")
+	ErrMissingReferenceType  = errors.New("missing reference_type")
+	ErrMissingReferenceID    = errors.New("missing reference_id")
+	ErrMissingHoldReason     = errors.New("missing hold reason")
+	ErrMissingHoldExpiry     = errors.New("missing hold expiry")
+	ErrInvalidHoldID         = errors.New("invalid hold id")
+	ErrInvalidAmount         = errors.New("invalid amount")
+	ErrInvalidWalletPair     = errors.New("invalid wallet pair")
+	ErrWalletNotFound        = errors.New("wallet not found")
+	ErrCurrencyMismatch      = errors.New("currency mismatch")
+	ErrInsufficientFunds     = errors.New("insufficient funds")
+	ErrDuplicateTransaction  = errors.New("duplicate transaction")
+	ErrDuplicateHold         = errors.New("duplicate hold")
+	ErrHoldNotFound          = errors.New("hold not found")
+)

@@ -5,21 +5,33 @@ import (
 	"database/sql"
 	"time"
 
-	basestore "github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
 	"github.com/google/uuid"
 )
 
 func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, currency string, userID *int64) (*wallet.Wallet, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if ownerType == "" {
+		return nil, ErrMissingOwnerType
+	}
+	if ownerID == "" {
+		return nil, ErrMissingOwnerID
+	}
+	if currency == "" {
+		return nil, ErrMissingCurrency
+	}
+	if ownerType == wallet.OwnerTypeUser {
+		if userID == nil || *userID <= 0 {
+			return nil, ErrInvalidUserID
+		}
+	} else if userID != nil {
+		return nil, ErrInvalidUserID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
-	}
-	if tenantID == "" {
-		tenantID = basestore.DefaultTenantID
-	}
-	if currency == "" {
-		currency = "USD"
 	}
 	var uid sql.NullInt64
 	if userID != nil {
@@ -38,6 +50,12 @@ func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, 
 }
 
 func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*wallet.Wallet, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if currency == "" {
+		return nil, ErrMissingCurrency
+	}
 	systemWallets := make(map[string]*wallet.Wallet, len(wallet.SystemWalletCodes()))
 	for _, code := range wallet.SystemWalletCodes() {
 		w, err := s.EnsureWallet(ctx, tenantID, wallet.OwnerTypeSystem, code, currency, nil)
@@ -50,12 +68,15 @@ func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency stri
 }
 
 func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UUID) (*wallet.Wallet, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if walletID == uuid.Nil {
+		return nil, ErrMissingWalletID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
-	}
-	if tenantID == "" {
-		tenantID = basestore.DefaultTenantID
 	}
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND id = ?")
 	var w wallet.Wallet
@@ -66,15 +87,21 @@ func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UU
 }
 
 func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, ownerID, currency string) (*wallet.Wallet, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if ownerType == "" {
+		return nil, ErrMissingOwnerType
+	}
+	if ownerID == "" {
+		return nil, ErrMissingOwnerID
+	}
+	if currency == "" {
+		return nil, ErrMissingCurrency
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
-	}
-	if tenantID == "" {
-		tenantID = basestore.DefaultTenantID
-	}
-	if currency == "" {
-		currency = "USD"
 	}
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND owner_type = ? AND owner_id = ? AND currency = ?")
 	var w wallet.Wallet
