@@ -67,10 +67,19 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if !allowReturnToSource && req.DestinationId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationID.Error())
 	}
-	if req.HoldExpirySeconds <= 0 {
+	holdExpirySeconds := int(req.HoldExpirySeconds)
+	if holdExpirySeconds <= 0 {
+		holdExpirySeconds = s.Service.Config.WalletHoldExpirySeconds
+	}
+	if holdExpirySeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingHoldExpiry.Error())
 	}
-	if req.DestinationId > 0 && req.VerificationTimeoutSeconds <= 0 {
+
+	verificationTimeoutSeconds := int(req.VerificationTimeoutSeconds)
+	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
+		verificationTimeoutSeconds = s.Service.Config.WalletVerificationTimeoutSeconds
+	}
+	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationTimeout.Error())
 	}
 
@@ -86,7 +95,11 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
 		}
 	}
-	if approvalRequired && req.ApprovalTimeoutSeconds <= 0 {
+	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
+	if approvalRequired && approvalTimeoutSeconds <= 0 {
+		approvalTimeoutSeconds = s.Service.Config.WalletApprovalTimeoutSeconds
+	}
+	if approvalRequired && approvalTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
 	}
 
@@ -151,9 +164,9 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		DestinationID:              req.DestinationId,
 		AllowReturnToSource:        allowReturnToSource,
 		ApprovalRequired:           approvalRequired,
-		ApprovalTimeoutSeconds:     int(req.ApprovalTimeoutSeconds),
-		VerificationTimeoutSeconds: int(req.VerificationTimeoutSeconds),
-		HoldExpirySeconds:          int(req.HoldExpirySeconds),
+		ApprovalTimeoutSeconds:     approvalTimeoutSeconds,
+		VerificationTimeoutSeconds: verificationTimeoutSeconds,
+		HoldExpirySeconds:          holdExpirySeconds,
 		Request: walletpsp.PayoutRequest{
 			ClientReference: req.ClientReference,
 			Amount:          req.Amount,

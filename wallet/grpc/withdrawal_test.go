@@ -110,9 +110,11 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}
 
 	cfg := ebs_fields.NoebsConfig{
-		WalletPINRequired:       true,
-		Wallet2FAThreshold:      1,
-		WalletApprovalThreshold: 0,
+		WalletPINRequired:                true,
+		Wallet2FAThreshold:               1,
+		WalletApprovalThreshold:          0,
+		WalletHoldExpirySeconds:          3600,
+		WalletVerificationTimeoutSeconds: 300,
 	}
 	svc := wallet.NewService(db, cfg)
 	server := NewServer(svc)
@@ -142,6 +144,12 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 			if params.Request.Amount != 500 || params.Request.Currency != "USD" {
 				t.Fatalf("unexpected request params")
 			}
+			if params.HoldExpirySeconds != cfg.WalletHoldExpirySeconds {
+				t.Fatalf("expected hold expiry %d, got %d", cfg.WalletHoldExpirySeconds, params.HoldExpirySeconds)
+			}
+			if params.VerificationTimeoutSeconds != cfg.WalletVerificationTimeoutSeconds {
+				t.Fatalf("expected verification timeout %d, got %d", cfg.WalletVerificationTimeoutSeconds, params.VerificationTimeoutSeconds)
+			}
 			return run, nil
 		})
 
@@ -160,9 +168,9 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		AllowReturnToSource:        &allowReturn,
 		WalletPin:                  "1234",
 		TwoFaCode:                  "000000",
-		HoldExpirySeconds:          3600,
+		HoldExpirySeconds:          0,
 		ApprovalTimeoutSeconds:     0,
-		VerificationTimeoutSeconds: 300,
+		VerificationTimeoutSeconds: 0,
 	}
 
 	resp, err := server.RequestWithdrawal(ctx, req)

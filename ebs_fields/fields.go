@@ -1000,11 +1000,15 @@ type NoebsConfig struct {
 	TemporalNamespace string `json:"temporal_namespace"`
 
 	// Wallet
-	WalletEnabled           bool   `json:"wallet_enabled"`
-	WalletPINRequired       bool   `json:"wallet_pin_required"`
-	Wallet2FAThreshold      int64  `json:"wallet_2fa_threshold"`
-	WalletApprovalThreshold int64  `json:"wallet_approval_threshold"`
-	WalletDefaultCurrency   string `json:"wallet_default_currency"`
+	WalletEnabled                              bool   `json:"wallet_enabled"`
+	WalletPINRequired                          bool   `json:"wallet_pin_required"`
+	Wallet2FAThreshold                         int64  `json:"wallet_2fa_threshold"`
+	WalletApprovalThreshold                    int64  `json:"wallet_approval_threshold"`
+	WalletDefaultCurrency                      string `json:"wallet_default_currency"`
+	WalletHoldExpirySeconds                    int    `json:"wallet_hold_expiry_seconds"`
+	WalletApprovalTimeoutSeconds               int    `json:"wallet_approval_timeout_seconds"`
+	WalletVerificationTimeoutSeconds           int    `json:"wallet_verification_timeout_seconds"`
+	WalletManualTransferApprovalTimeoutSeconds int    `json:"wallet_manual_approval_timeout_seconds"`
 
 	// gRPC
 	GRPCEnabled        bool   `json:"grpc_enabled"`
@@ -1038,6 +1042,18 @@ func (n *NoebsConfig) Defaults() {
 	}
 	if n.OtelSampleRate == 0 {
 		n.OtelSampleRate = 0.1
+	}
+	if n.WalletHoldExpirySeconds == 0 {
+		n.WalletHoldExpirySeconds = 3600
+	}
+	if n.WalletApprovalTimeoutSeconds == 0 {
+		n.WalletApprovalTimeoutSeconds = 3600
+	}
+	if n.WalletVerificationTimeoutSeconds == 0 {
+		n.WalletVerificationTimeoutSeconds = 86400
+	}
+	if n.WalletManualTransferApprovalTimeoutSeconds == 0 {
+		n.WalletManualTransferApprovalTimeoutSeconds = 86400
 	}
 	if n.GRPCEnabled && n.GRPCPort == "" {
 		n.GRPCPort = ":9090"

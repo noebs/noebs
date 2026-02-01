@@ -49,7 +49,11 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if req.RequestedBy <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApproverID.Error())
 	}
-	if req.ApprovalTimeoutSeconds <= 0 {
+	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
+	if approvalTimeoutSeconds <= 0 {
+		approvalTimeoutSeconds = s.Service.Config.WalletManualTransferApprovalTimeoutSeconds
+	}
+	if approvalTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
 	}
 	if _, err := uuid.Parse(req.WalletId); err != nil {
@@ -78,7 +82,7 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 		RequestedBy:            req.RequestedBy,
 		PSPProvider:            req.PspProvider,
 		PSPReference:           req.PspReference,
-		ApprovalTimeoutSeconds: int(req.ApprovalTimeoutSeconds),
+		ApprovalTimeoutSeconds: approvalTimeoutSeconds,
 	}
 	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:                    workflowID,

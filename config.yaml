@@ -13,6 +13,10 @@ noebs:
   wallet_2fa_threshold: 10000
   wallet_approval_threshold: 100000
   wallet_default_currency: "USD"
+  wallet_hold_expiry_seconds: 3600
+  wallet_approval_timeout_seconds: 3600
+  wallet_verification_timeout_seconds: 86400
+  wallet_manual_approval_timeout_seconds: 86400
   grpc_enabled: false
   grpc_port: ":9090"
   grpc_gateway_enabled: false
