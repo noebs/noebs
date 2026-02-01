@@ -88,6 +88,7 @@ Last updated: 2026-02-01
 - [x] Added audit events across deposit/withdrawal/P2P/manual transfer/reconciliation workflows
 - [x] Added withdrawal request + approval/verification gRPC endpoints with Temporal workflow start/signals
 - [x] Wired gRPC server Temporal client options + workflow ID persistence in PSP transactions
+- [x] Added GoMock Temporal client + withdrawal gRPC tests (validation + workflow start)
 
 ## Next steps (short-term)
 - [ ] Implement PSP provider integrations beyond noop

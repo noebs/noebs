@@ -1,3 +1,5 @@
+//go:generate go run github.com/golang/mock/mockgen@v1.6.0 -source=temporal.go -destination=mock/mock_temporal_client.go -package=mock
+
 package walletgrpc
 
 import (

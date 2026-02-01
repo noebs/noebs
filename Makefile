@@ -15,7 +15,7 @@ generate: generate-enums generate-mocks generate-proto
 	@go generate ./...
 
 generate-mocks:
-	@go generate ./wallet/psp
+	@go generate ./wallet/psp ./wallet/grpc
 
 generate-enums:
 	@go generate ./wallet/activity ./wallet/worker
