@@ -2,6 +2,7 @@ package activity
 
 import (
 	"context"
+	"time"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 )
@@ -20,6 +21,13 @@ type UpdatePSPTransactionStatusParams struct {
 	TenantID        string
 	ClientReference string
 	Update          walletstore.PSPStatusUpdate
+}
+
+type TryAcquirePSPTransactionLockParams struct {
+	TenantID        string
+	ClientReference string
+	LockToken       string
+	LockExpiresAt   time.Time
 }
 
 func NewPSPTransactionActivities(store *walletstore.Store) *PSPTransactionActivities {
@@ -52,4 +60,11 @@ func (a *PSPTransactionActivities) UpdatePSPTransactionStatus(ctx context.Contex
 		return ErrMissingStore
 	}
 	return a.Store.UpdatePSPTransactionStatus(ctx, params.TenantID, params.ClientReference, params.Update)
+}
+
+func (a *PSPTransactionActivities) TryAcquirePSPTransactionLock(ctx context.Context, params TryAcquirePSPTransactionLockParams) (bool, error) {
+	if a == nil || a.Store == nil {
+		return false, ErrMissingStore
+	}
+	return a.Store.TryAcquirePSPTransactionLock(ctx, params.TenantID, params.ClientReference, params.LockToken, params.LockExpiresAt)
 }

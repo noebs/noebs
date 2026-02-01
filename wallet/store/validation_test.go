@@ -216,6 +216,23 @@ func TestListPSPTransactionsForPollingValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidLimit)
 }
 
+func TestTryAcquirePSPTransactionLockValidation(t *testing.T) {
+	s := &Store{}
+	now := time.Now().UTC()
+
+	_, err := s.TryAcquirePSPTransactionLock(t.Context(), "", "ref-1", "token", now)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.TryAcquirePSPTransactionLock(t.Context(), "tenant", "", "token", now)
+	assertErrorIs(t, err, ErrMissingClientReference)
+
+	_, err = s.TryAcquirePSPTransactionLock(t.Context(), "tenant", "ref-1", "", now)
+	assertErrorIs(t, err, ErrMissingLockToken)
+
+	_, err = s.TryAcquirePSPTransactionLock(t.Context(), "tenant", "ref-1", "token", time.Time{})
+	assertErrorIs(t, err, ErrMissingLockExpiry)
+}
+
 func TestAddPSPTransactionAmountValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPTransactionAmount{

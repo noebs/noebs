@@ -183,3 +183,47 @@ func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID stri
 	}
 	return rows, nil
 }
+
+func (s *Store) TryAcquirePSPTransactionLock(ctx context.Context, tenantID, clientReference, lockToken string, lockExpiresAt time.Time) (bool, error) {
+	if tenantID == "" {
+		return false, ErrMissingTenantID
+	}
+	if clientReference == "" {
+		return false, ErrMissingClientReference
+	}
+	if lockToken == "" {
+		return false, ErrMissingLockToken
+	}
+	if lockExpiresAt.IsZero() {
+		return false, ErrMissingLockExpiry
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return false, err
+	}
+	now := time.Now().UTC()
+	stmt := db.Rebind(`UPDATE psp_transactions
+		SET lock_token = ?, lock_expires_at = ?
+		WHERE tenant_id = ? AND client_reference = ?
+		AND (lock_expires_at IS NULL OR lock_expires_at <= ?)`)
+	result, err := db.ExecContext(ctx, stmt, lockToken, lockExpiresAt, tenantID, clientReference, now)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if affected == 0 {
+		checkStmt := db.Rebind("SELECT 1 FROM psp_transactions WHERE tenant_id = ? AND client_reference = ?")
+		var exists int
+		if err := db.GetContext(ctx, &exists, checkStmt, tenantID, clientReference); err != nil {
+			if err == sql.ErrNoRows {
+				return false, ErrPSPTransactionNotFound
+			}
+			return false, err
+		}
+		return false, nil
+	}
+	return true, nil
+}

@@ -36,4 +36,5 @@ const (
 	ActivityAddPSPTransactionAmounts      ActivityName = "AddPSPTransactionAmounts"
 	ActivityListPSPTransactionsForPolling ActivityName = "ListPSPTransactionsForPolling"
 	ActivityUpdatePSPTransactionStatus    ActivityName = "UpdatePSPTransactionStatus"
+	ActivityTryAcquirePSPTransactionLock  ActivityName = "TryAcquirePSPTransactionLock"
 )

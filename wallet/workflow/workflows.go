@@ -53,9 +53,9 @@ type ManualTransferParams struct{}
 type ReconciliationParams struct{}
 
 type PSPStatusPollerParams struct {
-	TenantID             string
-	Limit                int
-	PollIntervalSeconds  int
+	TenantID            string
+	Limit               int
+	PollIntervalSeconds int
 }
 
 func Deposit(ctx workflow.Context, params DepositParams) error {
@@ -327,9 +327,26 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 	if params.PollIntervalSeconds > 0 {
 		nextPoll = sql.NullTime{Time: now.Add(time.Duration(params.PollIntervalSeconds) * time.Second), Valid: true}
 	}
+	lockExpiry := now.Add(time.Minute)
+	if params.PollIntervalSeconds > 0 {
+		lockExpiry = now.Add(time.Duration(params.PollIntervalSeconds) * time.Second)
+	}
 
 	for _, txn := range txns {
 		if !txn.PSPTransactionID.Valid {
+			continue
+		}
+		lockParams := walletactivity.TryAcquirePSPTransactionLockParams{
+			TenantID:        params.TenantID,
+			ClientReference: txn.ClientReference,
+			LockToken:       newLockToken(ctx),
+			LockExpiresAt:   lockExpiry,
+		}
+		var acquired bool
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityTryAcquirePSPTransactionLock, lockParams).Get(ctx, &acquired); err != nil {
+			return err
+		}
+		if !acquired {
 			continue
 		}
 		statusParams := walletactivity.GetStatusParams{
@@ -379,6 +396,14 @@ func recordPSPAmounts(ctx workflow.Context, tenantID string, pspTransactionID in
 	}
 	var stored []walletstore.PSPTransactionAmount
 	return workflow.ExecuteActivity(ctx, walletactivity.ActivityAddPSPTransactionAmounts, params).Get(ctx, &stored)
+}
+
+func newLockToken(ctx workflow.Context) string {
+	var token string
+	workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
+		return uuid.NewString()
+	}).Get(&token)
+	return token
 }
 
 func absInt64(value int64) int64 {

@@ -14,6 +14,8 @@ var (
 	ErrMissingReferenceID        = errors.New("missing reference_id")
 	ErrMissingHoldReason         = errors.New("missing hold reason")
 	ErrMissingHoldExpiry         = errors.New("missing hold expiry")
+	ErrMissingLockToken          = errors.New("missing lock token")
+	ErrMissingLockExpiry         = errors.New("missing lock expiry")
 	ErrInvalidHoldID             = errors.New("invalid hold id")
 	ErrInvalidAmount             = errors.New("invalid amount")
 	ErrInvalidWalletPair         = errors.New("invalid wallet pair")

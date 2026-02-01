@@ -73,6 +73,7 @@ Last updated: 2026-02-01
 - [x] Added gRPC wallet service handlers and generated proto stubs/OpenAPI
 - [x] Added gRPC gateway helpers for public wallet service
 - [x] Wired gRPC server/gateway startup hooks in CLI config
+- [x] Added PSP transaction lock acquisition for poller safety
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

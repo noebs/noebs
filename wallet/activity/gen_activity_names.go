@@ -41,6 +41,7 @@ var activityNames = []string{
 	"AddPSPTransactionAmounts",
 	"ListPSPTransactionsForPolling",
 	"UpdatePSPTransactionStatus",
+	"TryAcquirePSPTransactionLock",
 }
 
 func main() {
