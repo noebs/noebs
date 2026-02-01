@@ -66,3 +66,6 @@ Last updated: 2026-02-01
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.
 - Wallet IDs will use UUIDs; migration includes pgcrypto extension for `gen_random_uuid()`.
+- PSP resolution today is tenant+provider only (per `psp_configs` + SOPS secrets at `noebs.psp.<tenant>.<provider>`). Missing row => not registered.
+- Follow-up needed: add scoped PSP config overrides for region/currency/direction (e.g., `psp_config_overrides` with scope columns + priority), and update loader to resolve most-specific match then fall back.
+- Follow-up needed: add per-scope enablement checks (region/currency/direction) in validation service and PSP dispatch; surface clear errors when config exists but disabled for scope.
