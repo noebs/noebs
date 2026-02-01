@@ -5,6 +5,7 @@ import (
 	"time"
 
 	walletactivity "github.com/adonese/noebs/wallet/activity"
+	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/workflow"
@@ -12,7 +13,11 @@ import (
 
 var ErrNotImplemented = errors.New("workflow not implemented")
 
-type DepositParams struct{}
+type DepositParams struct {
+	TenantID      string
+	ProviderCode  string
+	TransactionID string
+}
 
 type WithdrawalParams struct{}
 
@@ -34,9 +39,20 @@ type ReconciliationParams struct{}
 type PSPStatusPollerParams struct{}
 
 func Deposit(ctx workflow.Context, params DepositParams) error {
-	_ = ctx
-	_ = params
-	return ErrNotImplemented
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+	})
+
+	verifyParams := walletactivity.VerifyDepositParams{
+		TenantID:      params.TenantID,
+		ProviderCode:  params.ProviderCode,
+		TransactionID: params.TransactionID,
+	}
+	var result walletpsp.DepositVerification
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
+		return err
+	}
+	return nil
 }
 
 func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
