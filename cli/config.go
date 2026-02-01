@@ -446,7 +446,7 @@ func initConfig() {
 		}); err != nil {
 			logrusLogger.Printf("error registering noop PSP provider: %v", err)
 		}
-		secretResolver := walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
+		var secretResolver walletpsp.SecretResolver = walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
 			return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
 		})
 		if mapResolver := walletpsp.NewMapSecretResolver(rawSecrets); mapResolver != nil {
