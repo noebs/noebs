@@ -26,6 +26,12 @@ type SendPayoutParams struct {
 	Request      psp.PayoutRequest
 }
 
+type GetStatusParams struct {
+	TenantID      string
+	ProviderCode  string
+	TransactionID string
+}
+
 func NewPSPActivities(loader *psp.Loader, registry *psp.Registry) *PSPActivities {
 	return &PSPActivities{Loader: loader, Registry: registry}
 }
@@ -44,6 +50,14 @@ func (a *PSPActivities) SendPayout(ctx context.Context, params SendPayoutParams)
 		return nil, err
 	}
 	return provider.SendPayout(ctx, params.Request)
+}
+
+func (a *PSPActivities) GetTransactionStatus(ctx context.Context, params GetStatusParams) (*psp.TxStatus, error) {
+	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode)
+	if err != nil {
+		return nil, err
+	}
+	return provider.GetTransactionStatus(ctx, params.TransactionID)
 }
 
 func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerCode string) (psp.Provider, *psp.Config, error) {

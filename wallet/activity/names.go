@@ -6,6 +6,7 @@ const (
 	ActivityReleaseHold                   = "ReleaseHold"
 	ActivityVerifyDeposit                 = "VerifyDeposit"
 	ActivitySendPayout                    = "SendPayout"
+	ActivityGetTransactionStatus          = "GetTransactionStatus"
 	ActivityVerifyWalletPIN               = "VerifyWalletPIN"
 	ActivityRecordFundingSource           = "RecordFundingSource"
 	ActivityLinkLedgerToFundingSource     = "LinkLedgerToFundingSource"

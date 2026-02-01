@@ -50,6 +50,7 @@ Last updated: 2026-02-01
 - [x] Added ownership verification activities for Temporal workflows
 - [x] Added wallet PIN verification activity
 - [x] Added audit event activity
+- [x] Added PSP transaction status activity
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
