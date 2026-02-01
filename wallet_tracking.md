@@ -69,6 +69,7 @@ Last updated: 2026-02-01
 - [x] Added PSP amount resolution logic (accept under/overpayment by default; credit converted amount)
 - [x] Added PSP transaction amount batch insert API + activity
 - [x] Wired PSP amount resolution + recording into deposit/withdraw workflows
+- [x] Implemented PSP status poller workflow + polling activities
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

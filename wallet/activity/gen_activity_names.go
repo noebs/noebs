@@ -39,6 +39,8 @@ var activityNames = []string{
 	"ResolvePSPDepositAmounts",
 	"GetPSPTransactionByReference",
 	"AddPSPTransactionAmounts",
+	"ListPSPTransactionsForPolling",
+	"UpdatePSPTransactionStatus",
 }
 
 func main() {

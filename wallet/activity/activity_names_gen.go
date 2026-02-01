@@ -34,4 +34,6 @@ const (
 	ActivityResolvePSPDepositAmounts      ActivityName = "ResolvePSPDepositAmounts"
 	ActivityGetPSPTransactionByReference  ActivityName = "GetPSPTransactionByReference"
 	ActivityAddPSPTransactionAmounts      ActivityName = "AddPSPTransactionAmounts"
+	ActivityListPSPTransactionsForPolling ActivityName = "ListPSPTransactionsForPolling"
+	ActivityUpdatePSPTransactionStatus    ActivityName = "UpdatePSPTransactionStatus"
 )

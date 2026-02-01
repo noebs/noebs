@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"database/sql"
 	"errors"
 	"time"
 
@@ -51,7 +52,11 @@ type ManualTransferParams struct{}
 
 type ReconciliationParams struct{}
 
-type PSPStatusPollerParams struct{}
+type PSPStatusPollerParams struct {
+	TenantID             string
+	Limit                int
+	PollIntervalSeconds  int
+}
 
 func Deposit(ctx workflow.Context, params DepositParams) error {
 	walletID, err := uuid.Parse(params.WalletID)
@@ -302,9 +307,60 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 }
 
 func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
-	_ = ctx
-	_ = params
-	return ErrNotImplemented
+	if params.TenantID == "" {
+		return walletstore.ErrMissingTenantID
+	}
+	if params.Limit <= 0 {
+		return walletstore.ErrInvalidLimit
+	}
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+	})
+
+	var txns []walletstore.PSPTransaction
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityListPSPTransactionsForPolling, params.TenantID, params.Limit).Get(ctx, &txns); err != nil {
+		return err
+	}
+
+	now := workflow.Now(ctx)
+	nextPoll := sql.NullTime{}
+	if params.PollIntervalSeconds > 0 {
+		nextPoll = sql.NullTime{Time: now.Add(time.Duration(params.PollIntervalSeconds) * time.Second), Valid: true}
+	}
+
+	for _, txn := range txns {
+		if !txn.PSPTransactionID.Valid {
+			continue
+		}
+		statusParams := walletactivity.GetStatusParams{
+			TenantID:      params.TenantID,
+			ProviderCode:  txn.PSPProvider,
+			TransactionID: txn.PSPTransactionID.String,
+		}
+		var status walletpsp.TxStatus
+		pollErr := workflow.ExecuteActivity(ctx, walletactivity.ActivityGetTransactionStatus, statusParams).Get(ctx, &status)
+		update := walletstore.PSPStatusUpdate{
+			Status:       txn.Status,
+			LastPolledAt: sql.NullTime{Time: now, Valid: true},
+			NextPollAt:   nextPoll,
+			RetryCount:   txn.RetryCount + 1,
+		}
+		if pollErr != nil || status.Status == "" {
+			update.LastErrorType = sql.NullString{String: "poll_error", Valid: true}
+			update.LastErrorAt = sql.NullTime{Time: now, Valid: true}
+		} else {
+			update.Status = status.Status
+		}
+		updateParams := walletactivity.UpdatePSPTransactionStatusParams{
+			TenantID:        params.TenantID,
+			ClientReference: txn.ClientReference,
+			Update:          update,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdatePSPTransactionStatus, updateParams).Get(ctx, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func loadPSPTransaction(ctx workflow.Context, tenantID, clientReference string) (*walletstore.PSPTransaction, error) {
