@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package noebs.wallet.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/adonese/noebs/gen/noebs/wallet/v1;walletv1";
+
+service WalletInternalService {
+  rpc GetWallet(GetWalletRequest) returns (Wallet) {}
+  rpc EnsureWallet(EnsureWalletRequest) returns (Wallet) {}
+  rpc ValidateP2P(ValidateP2PRequest) returns (ValidateP2PResponse) {}
+}
+
+service WalletPublicService {
+  rpc GetWalletPublic(GetWalletRequest) returns (Wallet) {
+    option (google.api.http) = {
+      get: "/wallet/{wallet_id}"
+    };
+  }
+  rpc EnsureWalletPublic(EnsureWalletRequest) returns (Wallet) {
+    option (google.api.http) = {
+      post: "/wallet"
+      body: "*"
+    };
+  }
+}
+
+message Wallet {
+  string id = 1;
+  string tenant_id = 2;
+  string owner_type = 3;
+  string owner_id = 4;
+  string currency = 5;
+  int64 balance = 6;
+  int64 available_balance = 7;
+  string status = 8;
+  string kyc_tier = 9;
+}
+
+message GetWalletRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+}
+
+message EnsureWalletRequest {
+  string tenant_id = 1;
+  int64 user_id = 2;
+  string currency = 3;
+}
+
+message ValidateP2PRequest {
+  string tenant_id = 1;
+  string from_wallet_id = 2;
+  string to_wallet_id = 3;
+  string currency = 4;
+  int64 amount = 5;
+}
+
+message ValidateP2PResponse {
+  bool allowed = 1;
+  string reason = 2;
+  int64 total_debit = 3;
+  int64 fee = 4;
+}

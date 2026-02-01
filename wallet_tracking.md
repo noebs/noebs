@@ -63,6 +63,7 @@ Last updated: 2026-02-01
 - [x] Added deposit/withdrawal validation service + activities
 - [x] Generated typed enums for activity names and task queues
 - [x] Added global HTTP client with override options for service-to-service calls
+- [x] Added gRPC proto + Buf configs for internal S2S and public JSON/OpenAPI generation
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

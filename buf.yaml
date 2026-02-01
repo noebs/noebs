@@ -1,0 +1,8 @@
+version: v1
+name: buf.build/adonese/noebs
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
