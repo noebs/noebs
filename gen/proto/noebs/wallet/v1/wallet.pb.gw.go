@@ -116,6 +116,33 @@ func local_request_WalletInternalService_ValidateP2P_0(ctx context.Context, mars
 	return msg, metadata, err
 }
 
+func request_WalletInternalService_RequestP2PTransfer_0(ctx context.Context, marshaler runtime.Marshaler, client WalletInternalServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq P2PTransferRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RequestP2PTransfer(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_WalletInternalService_RequestP2PTransfer_0(ctx context.Context, marshaler runtime.Marshaler, server WalletInternalServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq P2PTransferRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RequestP2PTransfer(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_WalletInternalService_RequestWithdrawal_0(ctx context.Context, marshaler runtime.Marshaler, client WalletInternalServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq WithdrawalRequest
@@ -274,6 +301,33 @@ func local_request_WalletPublicService_EnsureWalletPublic_0(ctx context.Context,
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := server.EnsureWalletPublic(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_WalletPublicService_RequestP2PTransfer_0(ctx context.Context, marshaler runtime.Marshaler, client WalletPublicServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq P2PTransferRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.RequestP2PTransfer(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_WalletPublicService_RequestP2PTransfer_0(ctx context.Context, marshaler runtime.Marshaler, server WalletPublicServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq P2PTransferRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.RequestP2PTransfer(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -460,6 +514,26 @@ func RegisterWalletInternalServiceHandlerServer(ctx context.Context, mux *runtim
 		}
 		forward_WalletInternalService_ValidateP2P_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_WalletInternalService_RequestP2PTransfer_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/noebs.wallet.v1.WalletInternalService/RequestP2PTransfer", runtime.WithHTTPPathPattern("/noebs.wallet.v1.WalletInternalService/RequestP2PTransfer"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_WalletInternalService_RequestP2PTransfer_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_WalletInternalService_RequestP2PTransfer_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_WalletInternalService_RequestWithdrawal_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -569,6 +643,26 @@ func RegisterWalletPublicServiceHandlerServer(ctx context.Context, mux *runtime.
 			return
 		}
 		forward_WalletPublicService_EnsureWalletPublic_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_WalletPublicService_RequestP2PTransfer_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/noebs.wallet.v1.WalletPublicService/RequestP2PTransfer", runtime.WithHTTPPathPattern("/wallet/p2p"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_WalletPublicService_RequestP2PTransfer_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_WalletPublicService_RequestP2PTransfer_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_WalletPublicService_RequestWithdrawal_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -721,6 +815,23 @@ func RegisterWalletInternalServiceHandlerClient(ctx context.Context, mux *runtim
 		}
 		forward_WalletInternalService_ValidateP2P_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_WalletInternalService_RequestP2PTransfer_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/noebs.wallet.v1.WalletInternalService/RequestP2PTransfer", runtime.WithHTTPPathPattern("/noebs.wallet.v1.WalletInternalService/RequestP2PTransfer"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_WalletInternalService_RequestP2PTransfer_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_WalletInternalService_RequestP2PTransfer_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_WalletInternalService_RequestWithdrawal_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -779,6 +890,7 @@ var (
 	pattern_WalletInternalService_GetWallet_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "GetWallet"}, ""))
 	pattern_WalletInternalService_EnsureWallet_0                 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "EnsureWallet"}, ""))
 	pattern_WalletInternalService_ValidateP2P_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "ValidateP2P"}, ""))
+	pattern_WalletInternalService_RequestP2PTransfer_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "RequestP2PTransfer"}, ""))
 	pattern_WalletInternalService_RequestWithdrawal_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "RequestWithdrawal"}, ""))
 	pattern_WalletInternalService_SignalWithdrawalApproval_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "SignalWithdrawalApproval"}, ""))
 	pattern_WalletInternalService_SignalWithdrawalVerification_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"noebs.wallet.v1.WalletInternalService", "SignalWithdrawalVerification"}, ""))
@@ -788,6 +900,7 @@ var (
 	forward_WalletInternalService_GetWallet_0                    = runtime.ForwardResponseMessage
 	forward_WalletInternalService_EnsureWallet_0                 = runtime.ForwardResponseMessage
 	forward_WalletInternalService_ValidateP2P_0                  = runtime.ForwardResponseMessage
+	forward_WalletInternalService_RequestP2PTransfer_0           = runtime.ForwardResponseMessage
 	forward_WalletInternalService_RequestWithdrawal_0            = runtime.ForwardResponseMessage
 	forward_WalletInternalService_SignalWithdrawalApproval_0     = runtime.ForwardResponseMessage
 	forward_WalletInternalService_SignalWithdrawalVerification_0 = runtime.ForwardResponseMessage
@@ -863,6 +976,23 @@ func RegisterWalletPublicServiceHandlerClient(ctx context.Context, mux *runtime.
 		}
 		forward_WalletPublicService_EnsureWalletPublic_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_WalletPublicService_RequestP2PTransfer_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/noebs.wallet.v1.WalletPublicService/RequestP2PTransfer", runtime.WithHTTPPathPattern("/wallet/p2p"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_WalletPublicService_RequestP2PTransfer_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_WalletPublicService_RequestP2PTransfer_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_WalletPublicService_RequestWithdrawal_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -920,6 +1050,7 @@ func RegisterWalletPublicServiceHandlerClient(ctx context.Context, mux *runtime.
 var (
 	pattern_WalletPublicService_GetWalletPublic_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 1, 0, 4, 1, 5, 1}, []string{"wallet", "wallet_id"}, ""))
 	pattern_WalletPublicService_EnsureWalletPublic_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0}, []string{"wallet"}, ""))
+	pattern_WalletPublicService_RequestP2PTransfer_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"wallet", "p2p"}, ""))
 	pattern_WalletPublicService_RequestWithdrawal_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"wallet", "withdrawals"}, ""))
 	pattern_WalletPublicService_SignalWithdrawalApproval_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"wallet", "withdrawals", "workflow_id", "approval"}, ""))
 	pattern_WalletPublicService_SignalWithdrawalVerification_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"wallet", "withdrawals", "workflow_id", "verification"}, ""))
@@ -928,6 +1059,7 @@ var (
 var (
 	forward_WalletPublicService_GetWalletPublic_0              = runtime.ForwardResponseMessage
 	forward_WalletPublicService_EnsureWalletPublic_0           = runtime.ForwardResponseMessage
+	forward_WalletPublicService_RequestP2PTransfer_0           = runtime.ForwardResponseMessage
 	forward_WalletPublicService_RequestWithdrawal_0            = runtime.ForwardResponseMessage
 	forward_WalletPublicService_SignalWithdrawalApproval_0     = runtime.ForwardResponseMessage
 	forward_WalletPublicService_SignalWithdrawalVerification_0 = runtime.ForwardResponseMessage

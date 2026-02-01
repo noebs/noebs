@@ -188,6 +188,8 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingDestinationID),
 		errors.Is(err, walletstore.ErrInvalidUserID),
 		errors.Is(err, walletstore.ErrInvalidAmount),
+		errors.Is(err, walletstore.ErrInvalidWalletPair),
+		errors.Is(err, walletstore.ErrMissingIdempotencyKey),
 		errors.Is(err, walletstore.ErrInvalidLimit),
 		errors.Is(err, walletstore.ErrMissingReferenceType),
 		errors.Is(err, walletstore.ErrMissingReferenceID),

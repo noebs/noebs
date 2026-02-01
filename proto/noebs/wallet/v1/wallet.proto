@@ -12,6 +12,7 @@ service WalletInternalService {
   rpc GetWallet(GetWalletRequest) returns (Wallet) {}
   rpc EnsureWallet(EnsureWalletRequest) returns (Wallet) {}
   rpc ValidateP2P(ValidateP2PRequest) returns (ValidateP2PResponse) {}
+  rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {}
   rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {}
   rpc SignalWithdrawalApproval(WithdrawalApprovalRequest) returns (google.protobuf.Empty) {}
   rpc SignalWithdrawalVerification(WithdrawalDestinationVerificationRequest) returns (google.protobuf.Empty) {}
@@ -26,6 +27,12 @@ service WalletPublicService {
   rpc EnsureWalletPublic(EnsureWalletRequest) returns (Wallet) {
     option (google.api.http) = {
       post: "/wallet"
+      body: "*"
+    };
+  }
+  rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {
+    option (google.api.http) = {
+      post: "/wallet/p2p"
       body: "*"
     };
   }
@@ -90,6 +97,21 @@ message ValidateP2PResponse {
 message WorkflowRun {
   string workflow_id = 1;
   string run_id = 2;
+}
+
+message P2PTransferRequest {
+  string tenant_id = 1;
+  string idempotency_key = 2;
+  string currency = 3;
+  string from_wallet_id = 4;
+  string to_wallet_id = 5;
+  int64 amount = 6;
+  string description = 7;
+  string reference_id = 8;
+  string from_owner_type = 9;
+  string from_owner_id = 10;
+  string to_owner_type = 11;
+  string to_owner_id = 12;
 }
 
 message WithdrawalRequest {

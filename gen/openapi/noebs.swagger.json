@@ -51,6 +51,38 @@
         ]
       }
     },
+    "/wallet/p2p": {
+      "post": {
+        "operationId": "WalletPublicService_RequestP2PTransfer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WorkflowRun"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1P2PTransferRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
     "/wallet/withdrawals": {
       "post": {
         "operationId": "WalletPublicService_RequestWithdrawal",
@@ -246,6 +278,48 @@
           "format": "int64"
         },
         "currency": {
+          "type": "string"
+        }
+      }
+    },
+    "v1P2PTransferRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "fromWalletId": {
+          "type": "string"
+        },
+        "toWalletId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "description": {
+          "type": "string"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "fromOwnerType": {
+          "type": "string"
+        },
+        "fromOwnerId": {
+          "type": "string"
+        },
+        "toOwnerType": {
+          "type": "string"
+        },
+        "toOwnerId": {
           "type": "string"
         }
       }
