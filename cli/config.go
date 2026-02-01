@@ -177,6 +177,10 @@ func GetMainEngine() *fiber.App {
 
 	route.Get("/wrk", wrapHandler(merchantServices.IsAliveWrk))
 	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
+	if grpcGatewayHandler != nil {
+		route.All("/wallet", adaptor.HTTPHandler(grpcGatewayHandler))
+		route.All("/wallet/*", adaptor.HTTPHandler(grpcGatewayHandler))
+	}
 
 	dashboardGroup := route.Group("/dashboard", adminGuard)
 	{

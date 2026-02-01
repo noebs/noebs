@@ -14,7 +14,7 @@ import (
 
 var grpcServer *grpc.Server
 var grpcListener net.Listener
-var grpcGateway *http.Server
+var grpcGatewayHandler http.Handler
 
 func initGRPCServers() error {
 	if !noebsConfig.GRPCEnabled && !noebsConfig.GRPCGatewayEnabled {
@@ -41,17 +41,11 @@ func initGRPCServers() error {
 	}
 
 	if noebsConfig.GRPCGatewayEnabled {
-		if noebsConfig.GRPCGatewayPort == "" {
-			return errors.New("missing grpc_gateway_port")
-		}
 		mux := runtime.NewServeMux()
 		if err := walletgrpc.RegisterPublicGatewayServer(context.Background(), mux, walletSrv); err != nil {
 			return err
 		}
-		grpcGateway = &http.Server{
-			Addr:    noebsConfig.GRPCGatewayPort,
-			Handler: mux,
-		}
+		grpcGatewayHandler = mux
 	}
 
 	return nil
