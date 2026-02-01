@@ -56,6 +56,8 @@ var (
 	ErrMissingVerificationType   = errors.New("missing verification type")
 	ErrMissingVerificationExpiry = errors.New("missing verification expiry")
 	ErrVerificationNotFound      = errors.New("verification not found")
+	ErrInvalidLimit              = errors.New("invalid limit")
+	ErrInvalidOffset             = errors.New("invalid offset")
 	ErrInsufficientFunds         = errors.New("insufficient funds")
 	ErrDuplicateTransaction      = errors.New("duplicate transaction")
 	ErrDuplicateHold             = errors.New("duplicate hold")

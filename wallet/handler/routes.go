@@ -15,4 +15,5 @@ func RegisterAdminRoutes(router fiber.Router, handler *AdminHandler) {
 		return
 	}
 	router.Get("/", handler.Dashboard)
+	router.Get("/wallets", handler.ListWallets)
 }
