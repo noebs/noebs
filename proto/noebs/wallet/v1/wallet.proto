@@ -13,6 +13,7 @@ service WalletInternalService {
   rpc EnsureWallet(EnsureWalletRequest) returns (Wallet) {}
   rpc ValidateP2P(ValidateP2PRequest) returns (ValidateP2PResponse) {}
   rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {}
+  rpc RequestDeposit(DepositRequest) returns (WorkflowRun) {}
   rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {}
   rpc RequestManualTransfer(ManualTransferRequest) returns (WorkflowRun) {}
   rpc SignalWithdrawalApproval(WithdrawalApprovalRequest) returns (google.protobuf.Empty) {}
@@ -35,6 +36,12 @@ service WalletPublicService {
   rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {
     option (google.api.http) = {
       post: "/wallet/p2p"
+      body: "*"
+    };
+  }
+  rpc RequestDeposit(DepositRequest) returns (WorkflowRun) {
+    option (google.api.http) = {
+      post: "/wallet/deposits"
       body: "*"
     };
   }
@@ -126,6 +133,22 @@ message P2PTransferRequest {
   string from_owner_id = 10;
   string to_owner_type = 11;
   string to_owner_id = 12;
+}
+
+message DepositRequest {
+  string tenant_id = 1;
+  string client_reference = 2;
+  string provider_code = 3;
+  string wallet_id = 4;
+  string owner_type = 5;
+  string owner_id = 6;
+  string psp_transaction_id = 7;
+  int64 amount = 8;
+  string currency = 9;
+  optional int64 fee_amount = 10;
+  optional int64 net_amount = 11;
+  string idempotency_key = 12;
+  google.protobuf.Struct metadata = 13;
 }
 
 message ManualTransferRequest {

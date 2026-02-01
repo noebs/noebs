@@ -185,6 +185,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingOwnerType),
 		errors.Is(err, walletstore.ErrMissingProviderCode),
 		errors.Is(err, walletstore.ErrMissingClientReference),
+		errors.Is(err, walletstore.ErrMissingPSPTransactionID),
 		errors.Is(err, walletstore.ErrMissingDestinationID),
 		errors.Is(err, walletstore.ErrInvalidUserID),
 		errors.Is(err, walletstore.ErrInvalidAmount),

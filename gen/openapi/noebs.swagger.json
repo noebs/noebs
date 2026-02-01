@@ -51,6 +51,38 @@
         ]
       }
     },
+    "/wallet/deposits": {
+      "post": {
+        "operationId": "WalletPublicService_RequestDeposit",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WorkflowRun"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DepositRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
     "/wallet/manual_transfers": {
       "post": {
         "operationId": "WalletPublicService_RequestManualTransfer",
@@ -335,6 +367,53 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "v1DepositRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "clientReference": {
+          "type": "string"
+        },
+        "providerCode": {
+          "type": "string"
+        },
+        "walletId": {
+          "type": "string"
+        },
+        "ownerType": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "pspTransactionId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "feeAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "netAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
         }
       }
     },

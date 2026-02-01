@@ -24,6 +24,7 @@ const (
 	WalletInternalService_EnsureWallet_FullMethodName                 = "/noebs.wallet.v1.WalletInternalService/EnsureWallet"
 	WalletInternalService_ValidateP2P_FullMethodName                  = "/noebs.wallet.v1.WalletInternalService/ValidateP2P"
 	WalletInternalService_RequestP2PTransfer_FullMethodName           = "/noebs.wallet.v1.WalletInternalService/RequestP2PTransfer"
+	WalletInternalService_RequestDeposit_FullMethodName               = "/noebs.wallet.v1.WalletInternalService/RequestDeposit"
 	WalletInternalService_RequestWithdrawal_FullMethodName            = "/noebs.wallet.v1.WalletInternalService/RequestWithdrawal"
 	WalletInternalService_RequestManualTransfer_FullMethodName        = "/noebs.wallet.v1.WalletInternalService/RequestManualTransfer"
 	WalletInternalService_SignalWithdrawalApproval_FullMethodName     = "/noebs.wallet.v1.WalletInternalService/SignalWithdrawalApproval"
@@ -39,6 +40,7 @@ type WalletInternalServiceClient interface {
 	EnsureWallet(ctx context.Context, in *EnsureWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	ValidateP2P(ctx context.Context, in *ValidateP2PRequest, opts ...grpc.CallOption) (*ValidateP2PResponse, error)
 	RequestP2PTransfer(ctx context.Context, in *P2PTransferRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
+	RequestDeposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
 	RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
 	RequestManualTransfer(ctx context.Context, in *ManualTransferRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
 	SignalWithdrawalApproval(ctx context.Context, in *WithdrawalApprovalRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -88,6 +90,16 @@ func (c *walletInternalServiceClient) RequestP2PTransfer(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WorkflowRun)
 	err := c.cc.Invoke(ctx, WalletInternalService_RequestP2PTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletInternalServiceClient) RequestDeposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkflowRun)
+	err := c.cc.Invoke(ctx, WalletInternalService_RequestDeposit_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +164,7 @@ type WalletInternalServiceServer interface {
 	EnsureWallet(context.Context, *EnsureWalletRequest) (*Wallet, error)
 	ValidateP2P(context.Context, *ValidateP2PRequest) (*ValidateP2PResponse, error)
 	RequestP2PTransfer(context.Context, *P2PTransferRequest) (*WorkflowRun, error)
+	RequestDeposit(context.Context, *DepositRequest) (*WorkflowRun, error)
 	RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error)
 	RequestManualTransfer(context.Context, *ManualTransferRequest) (*WorkflowRun, error)
 	SignalWithdrawalApproval(context.Context, *WithdrawalApprovalRequest) (*emptypb.Empty, error)
@@ -175,6 +188,9 @@ func (UnimplementedWalletInternalServiceServer) ValidateP2P(context.Context, *Va
 }
 func (UnimplementedWalletInternalServiceServer) RequestP2PTransfer(context.Context, *P2PTransferRequest) (*WorkflowRun, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestP2PTransfer not implemented")
+}
+func (UnimplementedWalletInternalServiceServer) RequestDeposit(context.Context, *DepositRequest) (*WorkflowRun, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestDeposit not implemented")
 }
 func (UnimplementedWalletInternalServiceServer) RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestWithdrawal not implemented")
@@ -272,6 +288,24 @@ func _WalletInternalService_RequestP2PTransfer_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WalletInternalServiceServer).RequestP2PTransfer(ctx, req.(*P2PTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletInternalService_RequestDeposit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DepositRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletInternalServiceServer).RequestDeposit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletInternalService_RequestDeposit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletInternalServiceServer).RequestDeposit(ctx, req.(*DepositRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -390,6 +424,10 @@ var WalletInternalService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WalletInternalService_RequestP2PTransfer_Handler,
 		},
 		{
+			MethodName: "RequestDeposit",
+			Handler:    _WalletInternalService_RequestDeposit_Handler,
+		},
+		{
 			MethodName: "RequestWithdrawal",
 			Handler:    _WalletInternalService_RequestWithdrawal_Handler,
 		},
@@ -418,6 +456,7 @@ const (
 	WalletPublicService_GetWalletPublic_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/GetWalletPublic"
 	WalletPublicService_EnsureWalletPublic_FullMethodName           = "/noebs.wallet.v1.WalletPublicService/EnsureWalletPublic"
 	WalletPublicService_RequestP2PTransfer_FullMethodName           = "/noebs.wallet.v1.WalletPublicService/RequestP2PTransfer"
+	WalletPublicService_RequestDeposit_FullMethodName               = "/noebs.wallet.v1.WalletPublicService/RequestDeposit"
 	WalletPublicService_RequestManualTransfer_FullMethodName        = "/noebs.wallet.v1.WalletPublicService/RequestManualTransfer"
 	WalletPublicService_RequestWithdrawal_FullMethodName            = "/noebs.wallet.v1.WalletPublicService/RequestWithdrawal"
 	WalletPublicService_SignalWithdrawalApproval_FullMethodName     = "/noebs.wallet.v1.WalletPublicService/SignalWithdrawalApproval"
@@ -432,6 +471,7 @@ type WalletPublicServiceClient interface {
 	GetWalletPublic(ctx context.Context, in *GetWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	EnsureWalletPublic(ctx context.Context, in *EnsureWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	RequestP2PTransfer(ctx context.Context, in *P2PTransferRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
+	RequestDeposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
 	RequestManualTransfer(ctx context.Context, in *ManualTransferRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
 	RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
 	SignalWithdrawalApproval(ctx context.Context, in *WithdrawalApprovalRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -471,6 +511,16 @@ func (c *walletPublicServiceClient) RequestP2PTransfer(ctx context.Context, in *
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(WorkflowRun)
 	err := c.cc.Invoke(ctx, WalletPublicService_RequestP2PTransfer_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) RequestDeposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkflowRun)
+	err := c.cc.Invoke(ctx, WalletPublicService_RequestDeposit_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -534,6 +584,7 @@ type WalletPublicServiceServer interface {
 	GetWalletPublic(context.Context, *GetWalletRequest) (*Wallet, error)
 	EnsureWalletPublic(context.Context, *EnsureWalletRequest) (*Wallet, error)
 	RequestP2PTransfer(context.Context, *P2PTransferRequest) (*WorkflowRun, error)
+	RequestDeposit(context.Context, *DepositRequest) (*WorkflowRun, error)
 	RequestManualTransfer(context.Context, *ManualTransferRequest) (*WorkflowRun, error)
 	RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error)
 	SignalWithdrawalApproval(context.Context, *WithdrawalApprovalRequest) (*emptypb.Empty, error)
@@ -554,6 +605,9 @@ func (UnimplementedWalletPublicServiceServer) EnsureWalletPublic(context.Context
 }
 func (UnimplementedWalletPublicServiceServer) RequestP2PTransfer(context.Context, *P2PTransferRequest) (*WorkflowRun, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestP2PTransfer not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) RequestDeposit(context.Context, *DepositRequest) (*WorkflowRun, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestDeposit not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) RequestManualTransfer(context.Context, *ManualTransferRequest) (*WorkflowRun, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestManualTransfer not implemented")
@@ -633,6 +687,24 @@ func _WalletPublicService_RequestP2PTransfer_Handler(srv interface{}, ctx contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WalletPublicServiceServer).RequestP2PTransfer(ctx, req.(*P2PTransferRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_RequestDeposit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DepositRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).RequestDeposit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_RequestDeposit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).RequestDeposit(ctx, req.(*DepositRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -745,6 +817,10 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestP2PTransfer",
 			Handler:    _WalletPublicService_RequestP2PTransfer_Handler,
+		},
+		{
+			MethodName: "RequestDeposit",
+			Handler:    _WalletPublicService_RequestDeposit_Handler,
 		},
 		{
 			MethodName: "RequestManualTransfer",
