@@ -18,11 +18,19 @@ type DepositParams struct {
 	TenantID      string
 	ProviderCode  string
 	TransactionID string
+	WalletID      string
+	Currency      string
+	Amount        int64
+	OwnerType     string
+	OwnerID       string
 }
 
 type WithdrawalParams struct {
 	TenantID     string
 	ProviderCode string
+	WalletID     string
+	OwnerType    string
+	OwnerID      string
 	Request      walletpsp.PayoutRequest
 }
 
@@ -48,9 +56,29 @@ type ReconciliationParams struct{}
 type PSPStatusPollerParams struct{}
 
 func Deposit(ctx workflow.Context, params DepositParams) error {
+	walletID, err := uuid.Parse(params.WalletID)
+	if err != nil {
+		return err
+	}
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
+
+	validationReq := walletvalidation.DepositValidationRequest{
+		TenantID:        params.TenantID,
+		TransactionType: "deposit",
+		ProviderCode:    params.ProviderCode,
+		TransactionID:   params.TransactionID,
+		WalletID:        walletID,
+		Currency:        params.Currency,
+		Amount:          params.Amount,
+		OwnerType:       params.OwnerType,
+		OwnerID:         params.OwnerID,
+	}
+	var validation walletvalidation.DepositValidationResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDeposit, validationReq).Get(ctx, &validation); err != nil {
+		return err
+	}
 
 	verifyParams := walletactivity.VerifyDepositParams{
 		TenantID:      params.TenantID,
@@ -65,9 +93,28 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 }
 
 func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
+	walletID, err := uuid.Parse(params.WalletID)
+	if err != nil {
+		return err
+	}
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
+
+	validationReq := walletvalidation.WithdrawalValidationRequest{
+		TenantID:        params.TenantID,
+		TransactionType: "withdrawal",
+		ProviderCode:    params.ProviderCode,
+		WalletID:        walletID,
+		Currency:        params.Request.Currency,
+		Amount:          params.Request.Amount,
+		OwnerType:       params.OwnerType,
+		OwnerID:         params.OwnerID,
+	}
+	var validation walletvalidation.WithdrawalValidationResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateWithdrawal, validationReq).Get(ctx, &validation); err != nil {
+		return err
+	}
 
 	payoutParams := walletactivity.SendPayoutParams{
 		TenantID:     params.TenantID,

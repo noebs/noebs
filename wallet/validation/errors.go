@@ -6,10 +6,15 @@ import (
 )
 
 var (
-	ErrMissingStore        = errors.New("missing validation store")
-	ErrWalletInactive      = errors.New("wallet not active")
-	ErrWalletOwnerMismatch = errors.New("wallet owner mismatch")
-	ErrLimitExceeded       = errors.New("limit exceeded")
+	ErrMissingStore            = errors.New("missing validation store")
+	ErrWalletInactive          = errors.New("wallet not active")
+	ErrWalletOwnerMismatch     = errors.New("wallet owner mismatch")
+	ErrLimitExceeded           = errors.New("limit exceeded")
+	ErrPSPConfigDisabled       = errors.New("psp config disabled")
+	ErrPSPDirectionInvalid     = errors.New("psp direction not supported")
+	ErrPSPCurrencyInvalid      = errors.New("psp currency not supported")
+	ErrFeeExceedsAmount        = errors.New("fee exceeds amount")
+	ErrMissingPSPTransactionID = errors.New("missing psp transaction id")
 )
 
 type LimitExceededError struct {

@@ -21,3 +21,17 @@ func (a *ValidationActivities) ValidateP2PTransfer(ctx context.Context, req wall
 	}
 	return a.Service.ValidateP2P(ctx, req)
 }
+
+func (a *ValidationActivities) ValidateDeposit(ctx context.Context, req walletvalidation.DepositValidationRequest) (*walletvalidation.DepositValidationResult, error) {
+	if a == nil || a.Service == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Service.ValidateDeposit(ctx, req)
+}
+
+func (a *ValidationActivities) ValidateWithdrawal(ctx context.Context, req walletvalidation.WithdrawalValidationRequest) (*walletvalidation.WithdrawalValidationResult, error) {
+	if a == nil || a.Service == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Service.ValidateWithdrawal(ctx, req)
+}
