@@ -143,6 +143,53 @@ func TestReleaseHoldValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidHoldID)
 }
 
+func TestCreatePSPTransactionValidation(t *testing.T) {
+	s := &Store{}
+	base := PSPTransaction{
+		TenantID:        "tenant",
+		PSPProvider:     "coinsbuy",
+		IdempotencyKey:  "idem-1",
+		ClientReference: "ref-1",
+		Direction:       "inbound",
+		Amount:          100,
+		Currency:        "USD",
+		Status:          "initiated",
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(txn *PSPTransaction)
+		wantErr error
+	}{
+		{"missing-tenant", func(txn *PSPTransaction) { txn.TenantID = "" }, ErrMissingTenantID},
+		{"missing-provider", func(txn *PSPTransaction) { txn.PSPProvider = "" }, ErrMissingProviderCode},
+		{"missing-idempotency", func(txn *PSPTransaction) { txn.IdempotencyKey = "" }, ErrMissingIdempotencyKey},
+		{"missing-reference", func(txn *PSPTransaction) { txn.ClientReference = "" }, ErrMissingClientReference},
+		{"missing-direction", func(txn *PSPTransaction) { txn.Direction = "" }, ErrMissingDirection},
+		{"invalid-amount", func(txn *PSPTransaction) { txn.Amount = 0 }, ErrInvalidAmount},
+		{"missing-currency", func(txn *PSPTransaction) { txn.Currency = "" }, ErrMissingCurrency},
+		{"missing-status", func(txn *PSPTransaction) { txn.Status = "" }, ErrMissingStatus},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			txn := base
+			tc.mutate(&txn)
+			_, err := s.CreatePSPTransaction(t.Context(), txn)
+			assertErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestGetPSPTransactionByReferenceValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetPSPTransactionByReference(t.Context(), "", "ref-1")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetPSPTransactionByReference(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingClientReference)
+}
+
 func assertErrorIs(t *testing.T, err, want error) {
 	t.Helper()
 	if !errors.Is(err, want) {
