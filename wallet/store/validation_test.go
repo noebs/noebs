@@ -1,11 +1,13 @@
 package store
 
 import (
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 func TestEnsureWalletValidation(t *testing.T) {
@@ -212,6 +214,90 @@ func TestListPSPTransactionsForPollingValidation(t *testing.T) {
 
 	_, err = s.ListPSPTransactionsForPolling(t.Context(), "tenant", 0)
 	assertErrorIs(t, err, ErrInvalidLimit)
+}
+
+func TestAddPSPTransactionAmountValidation(t *testing.T) {
+	s := &Store{}
+	base := PSPTransactionAmount{
+		TenantID:         "tenant",
+		PSPTransactionID: 1,
+		AmountKind:       PSPAmountReported,
+		Amount:           100,
+		Currency:         "USD",
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(a *PSPTransactionAmount)
+		wantErr error
+	}{
+		{"missing-tenant", func(a *PSPTransactionAmount) { a.TenantID = "" }, ErrMissingTenantID},
+		{"missing-psp-tx", func(a *PSPTransactionAmount) { a.PSPTransactionID = 0 }, ErrMissingPSPTransactionID},
+		{"missing-kind", func(a *PSPTransactionAmount) { a.AmountKind = "" }, ErrMissingAmountKind},
+		{"invalid-kind", func(a *PSPTransactionAmount) { a.AmountKind = PSPAmountKind("bogus") }, ErrInvalidAmountKind},
+		{"invalid-amount", func(a *PSPTransactionAmount) { a.Amount = 0 }, ErrInvalidAmount},
+		{"missing-currency", func(a *PSPTransactionAmount) { a.Currency = "" }, ErrMissingCurrency},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			amount := base
+			tc.mutate(&amount)
+			_, err := s.AddPSPTransactionAmount(t.Context(), amount)
+			assertErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestAddPSPTransactionAmountFXValidation(t *testing.T) {
+	s := &Store{}
+	amount := PSPTransactionAmount{
+		TenantID:         "tenant",
+		PSPTransactionID: 1,
+		AmountKind:       PSPAmountReported,
+		Amount:           100,
+		Currency:         "USD",
+	}
+
+	amount.FxRate = decimal.NullDecimal{Valid: true}
+	_, err := s.AddPSPTransactionAmount(t.Context(), amount)
+	assertErrorIs(t, err, ErrMissingFXCurrency)
+
+	amount = PSPTransactionAmount{
+		TenantID:         "tenant",
+		PSPTransactionID: 1,
+		AmountKind:       PSPAmountReported,
+		Amount:           100,
+		Currency:         "USD",
+		FxBaseCurrency:   sql.NullString{String: "USD", Valid: true},
+		FxQuoteCurrency:  sql.NullString{String: "EUR", Valid: true},
+	}
+	_, err = s.AddPSPTransactionAmount(t.Context(), amount)
+	assertErrorIs(t, err, ErrMissingFXRate)
+}
+
+func TestListPSPTransactionAmountsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListPSPTransactionAmounts(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactionAmounts(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrMissingPSPTransactionID)
+}
+
+func TestListPSPTransactionAmountsByKindValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListPSPTransactionAmountsByKind(t.Context(), "", 1, PSPAmountReported)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactionAmountsByKind(t.Context(), "tenant", 0, PSPAmountReported)
+	assertErrorIs(t, err, ErrMissingPSPTransactionID)
+
+	_, err = s.ListPSPTransactionAmountsByKind(t.Context(), "tenant", 1, "")
+	assertErrorIs(t, err, ErrMissingAmountKind)
+
+	_, err = s.ListPSPTransactionAmountsByKind(t.Context(), "tenant", 1, PSPAmountKind("bogus"))
+	assertErrorIs(t, err, ErrInvalidAmountKind)
 }
 
 func assertErrorIs(t *testing.T, err, want error) {

@@ -65,6 +65,7 @@ Last updated: 2026-02-01
 - [x] Added global HTTP client with override options for service-to-service calls
 - [x] Added gRPC proto + Buf configs for internal S2S and public JSON/OpenAPI generation
 - [x] Added proto generation test + Temporal testcontainers smoke test
+- [x] Added PSP transaction amount ledger for multi-currency/over-under payment tracking
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
