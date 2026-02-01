@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	ErrNotImplemented               = errors.New("workflow not implemented")
-	ErrManualTransferTimedOut       = errors.New("manual transfer approval timed out")
-	ErrWithdrawalApprovalTimedOut   = errors.New("withdrawal approval timed out")
+	ErrNotImplemented                 = errors.New("workflow not implemented")
+	ErrManualTransferTimedOut         = errors.New("manual transfer approval timed out")
+	ErrWithdrawalApprovalTimedOut     = errors.New("withdrawal approval timed out")
 	ErrWithdrawalVerificationTimedOut = errors.New("withdrawal destination verification timed out")
 )
 
@@ -53,7 +53,7 @@ type WithdrawalParams struct {
 	TwoFACode                  string
 	Require2FA                 bool
 	DestinationID              int64
-	AllowReturnToSource         bool
+	AllowReturnToSource        bool
 	ApprovalRequired           bool
 	ApprovalTimeoutSeconds     int
 	VerificationTimeoutSeconds int
@@ -68,6 +68,11 @@ type P2PParams struct {
 	FromWalletID   string
 	ToWalletID     string
 	Amount         int64
+	UserID         int64
+	WalletPIN      string
+	RequirePIN     bool
+	TwoFACode      string
+	Require2FA     bool
 	Description    string
 	ReferenceID    string
 	FromOwnerType  string
@@ -363,16 +368,16 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		_ = feePosted
 	}
 	metadata, err := auditMetadata(map[string]any{
-		"client_reference":    params.ClientReference,
-		"provider_code":       providerCode,
-		"psp_transaction_id":  result.ProviderTxID,
-		"requested_amount":    pspTxn.Amount,
-		"requested_currency":  pspTxn.Currency,
+		"client_reference":     params.ClientReference,
+		"provider_code":        providerCode,
+		"psp_transaction_id":   result.ProviderTxID,
+		"requested_amount":     pspTxn.Amount,
+		"requested_currency":   pspTxn.Currency,
 		"wallet_credit_amount": resolved.WalletCreditAmount,
-		"wallet_currency":     resolved.WalletCurrency,
-		"fee_amount":          feeAmount,
-		"funding_source_id":   storedSource.ID,
-		"ledger_transaction":  posted.TransactionID,
+		"wallet_currency":      resolved.WalletCurrency,
+		"fee_amount":           feeAmount,
+		"funding_source_id":    storedSource.ID,
+		"ledger_transaction":   posted.TransactionID,
 	})
 	if err != nil {
 		return err
@@ -963,6 +968,25 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 		StartToCloseTimeout: 30 * time.Second,
 	})
 
+	if params.RequirePIN {
+		var ok bool
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyWalletPIN, params.TenantID, fromID, params.WalletPIN).Get(ctx, &ok); err != nil {
+			return err
+		}
+		if !ok {
+			return walletstore.ErrInvalidWalletPIN
+		}
+	}
+	if params.Require2FA {
+		var ok bool
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyUserTOTP, params.TenantID, params.UserID, params.TwoFACode).Get(ctx, &ok); err != nil {
+			return err
+		}
+		if !ok {
+			return walletstore.ErrInvalidTwoFACode
+		}
+	}
+
 	activityParams := walletstore.DoubleEntryParams{
 		TenantID:       params.TenantID,
 		IdempotencyKey: params.IdempotencyKey,
@@ -1031,10 +1055,10 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 		_ = feePosted
 	}
 	meta, err := auditMetadata(map[string]any{
-		"reference_id":      params.ReferenceID,
-		"amount":            params.Amount,
-		"currency":          params.Currency,
-		"fee_amount":        feeAmount,
+		"reference_id":       params.ReferenceID,
+		"amount":             params.Amount,
+		"currency":           params.Currency,
+		"fee_amount":         feeAmount,
 		"ledger_transaction": result.TransactionID,
 	})
 	if err != nil {
@@ -1404,10 +1428,10 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 	}
 	if len(missing) > 0 {
 		meta, err := auditMetadata(map[string]any{
-			"status":            params.Status,
-			"start_time":        params.StartTime.Format(time.RFC3339),
-			"end_time":          params.EndTime.Format(time.RFC3339),
-			"missing_count":     len(missing),
+			"status":             params.Status,
+			"start_time":         params.StartTime.Format(time.RFC3339),
+			"end_time":           params.EndTime.Format(time.RFC3339),
+			"missing_count":      len(missing),
 			"missing_references": missing,
 		})
 		if err != nil {

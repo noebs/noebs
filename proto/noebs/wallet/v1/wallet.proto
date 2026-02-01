@@ -133,6 +133,9 @@ message P2PTransferRequest {
   string from_owner_id = 10;
   string to_owner_type = 11;
   string to_owner_id = 12;
+  int64 user_id = 13;
+  string wallet_pin = 14;
+  string two_fa_code = 15;
 }
 
 message DepositRequest {

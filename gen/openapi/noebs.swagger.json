@@ -512,6 +512,16 @@
         },
         "toOwnerId": {
           "type": "string"
+        },
+        "userId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "walletPin": {
+          "type": "string"
+        },
+        "twoFaCode": {
+          "type": "string"
         }
       }
     },

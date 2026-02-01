@@ -92,6 +92,7 @@ Last updated: 2026-02-01
 - [x] Added P2P workflow gRPC endpoint + validation test
 - [x] Added manual transfer gRPC request + decision endpoints with validation tests
 - [x] Added deposit gRPC request endpoint + validation test
+- [x] Added P2P PIN/2FA enforcement in workflow + gRPC request validation
 
 ## Next steps (short-term)
 - [ ] Implement PSP provider integrations beyond noop
