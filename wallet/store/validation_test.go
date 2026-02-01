@@ -276,6 +276,36 @@ func TestAddPSPTransactionAmountFXValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingFXRate)
 }
 
+func TestAddPSPTransactionAmountsValidation(t *testing.T) {
+	s := &Store{}
+	inputs := []PSPTransactionAmountInput{
+		{
+			AmountKind: PSPAmountReported,
+			Amount:     100,
+			Currency:   "USD",
+		},
+	}
+
+	_, err := s.AddPSPTransactionAmounts(t.Context(), "", 1, inputs)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.AddPSPTransactionAmounts(t.Context(), "tenant", 0, inputs)
+	assertErrorIs(t, err, ErrMissingPSPTransactionID)
+
+	_, err = s.AddPSPTransactionAmounts(t.Context(), "tenant", 1, nil)
+	assertErrorIs(t, err, ErrMissingAmounts)
+
+	bad := []PSPTransactionAmountInput{
+		{
+			AmountKind: PSPAmountKind("bogus"),
+			Amount:     100,
+			Currency:   "USD",
+		},
+	}
+	_, err = s.AddPSPTransactionAmounts(t.Context(), "tenant", 1, bad)
+	assertErrorIs(t, err, ErrInvalidAmountKind)
+}
+
 func TestListPSPTransactionAmountsValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListPSPTransactionAmounts(t.Context(), "", 1)

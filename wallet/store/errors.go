@@ -23,6 +23,7 @@ var (
 	ErrMissingPSPTransactionID   = errors.New("missing psp transaction id")
 	ErrMissingClientReference    = errors.New("missing client reference")
 	ErrMissingAmountKind         = errors.New("missing amount kind")
+	ErrMissingAmounts            = errors.New("missing amounts")
 	ErrInvalidAmountKind         = errors.New("invalid amount kind")
 	ErrMissingFXCurrency         = errors.New("missing fx currency")
 	ErrMissingFXRate             = errors.New("missing fx rate")

@@ -35,3 +35,10 @@ func (a *ValidationActivities) ValidateWithdrawal(ctx context.Context, req walle
 	}
 	return a.Service.ValidateWithdrawal(ctx, req)
 }
+
+func (a *ValidationActivities) ResolvePSPDepositAmounts(ctx context.Context, req walletvalidation.PSPAmountResolutionRequest) (*walletvalidation.PSPAmountResolutionResult, error) {
+	if a == nil || a.Service == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Service.ResolvePSPDepositAmounts(ctx, req)
+}

@@ -67,6 +67,8 @@ Last updated: 2026-02-01
 - [x] Added proto generation test + Temporal testcontainers smoke test
 - [x] Added PSP transaction amount ledger for multi-currency/over-under payment tracking
 - [x] Added PSP amount resolution logic (accept under/overpayment by default; credit converted amount)
+- [x] Added PSP transaction amount batch insert API + activity
+- [x] Wired PSP amount resolution + recording into deposit/withdraw workflows
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

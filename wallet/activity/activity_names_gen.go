@@ -31,4 +31,7 @@ const (
 	ActivityValidateP2PTransfer           ActivityName = "ValidateP2PTransfer"
 	ActivityValidateDeposit               ActivityName = "ValidateDeposit"
 	ActivityValidateWithdrawal            ActivityName = "ValidateWithdrawal"
+	ActivityResolvePSPDepositAmounts      ActivityName = "ResolvePSPDepositAmounts"
+	ActivityGetPSPTransactionByReference  ActivityName = "GetPSPTransactionByReference"
+	ActivityAddPSPTransactionAmounts      ActivityName = "AddPSPTransactionAmounts"
 )

@@ -35,6 +35,16 @@ type PSPTransactionAmount struct {
 	CreatedAt        time.Time           `db:"created_at"`
 }
 
+type PSPTransactionAmountInput struct {
+	AmountKind      PSPAmountKind
+	Amount          int64
+	Currency        string
+	FxRate          decimal.NullDecimal
+	FxBaseCurrency  string
+	FxQuoteCurrency string
+	FxSource        string
+}
+
 func (k PSPAmountKind) Valid() bool {
 	switch k {
 	case PSPAmountRequested,

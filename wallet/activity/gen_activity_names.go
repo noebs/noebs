@@ -36,6 +36,9 @@ var activityNames = []string{
 	"ValidateP2PTransfer",
 	"ValidateDeposit",
 	"ValidateWithdrawal",
+	"ResolvePSPDepositAmounts",
+	"GetPSPTransactionByReference",
+	"AddPSPTransactionAmounts",
 }
 
 func main() {

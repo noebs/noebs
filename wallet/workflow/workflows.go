@@ -15,14 +15,12 @@ import (
 var ErrNotImplemented = errors.New("workflow not implemented")
 
 type DepositParams struct {
-	TenantID      string
-	ProviderCode  string
-	TransactionID string
-	WalletID      string
-	Currency      string
-	Amount        int64
-	OwnerType     string
-	OwnerID       string
+	TenantID        string
+	ProviderCode    string
+	ClientReference string
+	WalletID        string
+	OwnerType       string
+	OwnerID         string
 }
 
 type WithdrawalParams struct {
@@ -64,14 +62,28 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		StartToCloseTimeout: 30 * time.Second,
 	})
 
+	pspTxn, err := loadPSPTransaction(ctx, params.TenantID, params.ClientReference)
+	if err != nil {
+		return err
+	}
+
+	providerCode := params.ProviderCode
+	if providerCode == "" {
+		providerCode = pspTxn.PSPProvider
+	}
+	transactionID := ""
+	if pspTxn.PSPTransactionID.Valid {
+		transactionID = pspTxn.PSPTransactionID.String
+	}
+
 	validationReq := walletvalidation.DepositValidationRequest{
 		TenantID:        params.TenantID,
 		TransactionType: "deposit",
-		ProviderCode:    params.ProviderCode,
-		TransactionID:   params.TransactionID,
+		ProviderCode:    providerCode,
+		TransactionID:   transactionID,
 		WalletID:        walletID,
-		Currency:        params.Currency,
-		Amount:          params.Amount,
+		Currency:        pspTxn.Currency,
+		Amount:          pspTxn.Amount,
 		OwnerType:       params.OwnerType,
 		OwnerID:         params.OwnerID,
 	}
@@ -82,11 +94,72 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 
 	verifyParams := walletactivity.VerifyDepositParams{
 		TenantID:      params.TenantID,
-		ProviderCode:  params.ProviderCode,
-		TransactionID: params.TransactionID,
+		ProviderCode:  providerCode,
+		TransactionID: transactionID,
 	}
 	var result walletpsp.DepositVerification
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
+		return err
+	}
+
+	resolveReq := walletvalidation.PSPAmountResolutionRequest{
+		TenantID:           params.TenantID,
+		RequestedAmount:    pspTxn.Amount,
+		RequestedCurrency:  pspTxn.Currency,
+		SettlementAmount:   result.Amount,
+		SettlementCurrency: result.Currency,
+		WalletCurrency:     pspTxn.Currency,
+	}
+	var resolved walletvalidation.PSPAmountResolutionResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityResolvePSPDepositAmounts, resolveReq).Get(ctx, &resolved); err != nil {
+		return err
+	}
+
+	amounts := []walletstore.PSPTransactionAmountInput{
+		{
+			AmountKind: walletstore.PSPAmountRequested,
+			Amount:     pspTxn.Amount,
+			Currency:   pspTxn.Currency,
+		},
+		{
+			AmountKind: walletstore.PSPAmountSettlement,
+			Amount:     result.Amount,
+			Currency:   result.Currency,
+		},
+		{
+			AmountKind: walletstore.PSPAmountWalletCredit,
+			Amount:     resolved.WalletCreditAmount,
+			Currency:   resolved.WalletCurrency,
+			FxRate:     resolved.AppliedFXRate,
+			FxSource:   resolved.AppliedFXSource,
+		},
+	}
+	if resolved.AppliedFXRate.Valid {
+		amounts[2].FxBaseCurrency = resolveReq.SettlementCurrency
+		amounts[2].FxQuoteCurrency = resolved.WalletCurrency
+	}
+	if pspTxn.FeeAmount.Valid && pspTxn.FeeAmount.Int64 > 0 {
+		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
+			AmountKind: walletstore.PSPAmountFee,
+			Amount:     pspTxn.FeeAmount.Int64,
+			Currency:   pspTxn.Currency,
+		})
+	}
+	if pspTxn.NetAmount.Valid && pspTxn.NetAmount.Int64 > 0 {
+		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
+			AmountKind: walletstore.PSPAmountNet,
+			Amount:     pspTxn.NetAmount.Int64,
+			Currency:   pspTxn.Currency,
+		})
+	}
+	if resolved.VarianceKind != "" && resolved.VarianceAmount != 0 {
+		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
+			AmountKind: resolved.VarianceKind,
+			Amount:     absInt64(resolved.VarianceAmount),
+			Currency:   resolved.WalletCurrency,
+		})
+	}
+	if err := recordPSPAmounts(ctx, params.TenantID, pspTxn.ID, amounts); err != nil {
 		return err
 	}
 	return nil
@@ -101,10 +174,20 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		StartToCloseTimeout: 30 * time.Second,
 	})
 
+	pspTxn, err := loadPSPTransaction(ctx, params.TenantID, params.Request.ClientReference)
+	if err != nil {
+		return err
+	}
+
+	providerCode := params.ProviderCode
+	if providerCode == "" {
+		providerCode = pspTxn.PSPProvider
+	}
+
 	validationReq := walletvalidation.WithdrawalValidationRequest{
 		TenantID:        params.TenantID,
 		TransactionType: "withdrawal",
-		ProviderCode:    params.ProviderCode,
+		ProviderCode:    providerCode,
 		WalletID:        walletID,
 		Currency:        params.Request.Currency,
 		Amount:          params.Request.Amount,
@@ -118,11 +201,41 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 
 	payoutParams := walletactivity.SendPayoutParams{
 		TenantID:     params.TenantID,
-		ProviderCode: params.ProviderCode,
+		ProviderCode: providerCode,
 		Request:      params.Request,
 	}
 	var result walletpsp.PayoutResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivitySendPayout, payoutParams).Get(ctx, &result); err != nil {
+		return err
+	}
+
+	amounts := []walletstore.PSPTransactionAmountInput{
+		{
+			AmountKind: walletstore.PSPAmountRequested,
+			Amount:     params.Request.Amount,
+			Currency:   params.Request.Currency,
+		},
+		{
+			AmountKind: walletstore.PSPAmountWalletDebit,
+			Amount:     validation.TotalDebit,
+			Currency:   validation.Currency,
+		},
+	}
+	if pspTxn.FeeAmount.Valid && pspTxn.FeeAmount.Int64 > 0 {
+		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
+			AmountKind: walletstore.PSPAmountFee,
+			Amount:     pspTxn.FeeAmount.Int64,
+			Currency:   pspTxn.Currency,
+		})
+	}
+	if pspTxn.NetAmount.Valid && pspTxn.NetAmount.Int64 > 0 {
+		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
+			AmountKind: walletstore.PSPAmountNet,
+			Amount:     pspTxn.NetAmount.Int64,
+			Currency:   pspTxn.Currency,
+		})
+	}
+	if err := recordPSPAmounts(ctx, params.TenantID, pspTxn.ID, amounts); err != nil {
 		return err
 	}
 	return nil
@@ -192,4 +305,29 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 	_ = ctx
 	_ = params
 	return ErrNotImplemented
+}
+
+func loadPSPTransaction(ctx workflow.Context, tenantID, clientReference string) (*walletstore.PSPTransaction, error) {
+	var txn walletstore.PSPTransaction
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityGetPSPTransactionByReference, tenantID, clientReference).Get(ctx, &txn); err != nil {
+		return nil, err
+	}
+	return &txn, nil
+}
+
+func recordPSPAmounts(ctx workflow.Context, tenantID string, pspTransactionID int64, amounts []walletstore.PSPTransactionAmountInput) error {
+	params := walletactivity.AddPSPTransactionAmountsParams{
+		TenantID:         tenantID,
+		PSPTransactionID: pspTransactionID,
+		Amounts:          amounts,
+	}
+	var stored []walletstore.PSPTransactionAmount
+	return workflow.ExecuteActivity(ctx, walletactivity.ActivityAddPSPTransactionAmounts, params).Get(ctx, &stored)
+}
+
+func absInt64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
