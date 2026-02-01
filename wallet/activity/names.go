@@ -15,4 +15,7 @@ const (
 	ActivityInitiateOwnershipVerification = "InitiateOwnershipVerification"
 	ActivityGetOwnershipVerification      = "GetOwnershipVerification"
 	ActivityRecordAuditEvent              = "RecordAuditEvent"
+	ActivityCreateManualTransfer          = "CreateManualTransfer"
+	ActivityAddManualTransferApproval     = "AddManualTransferApproval"
+	ActivityGetManualTransferByWorkflow   = "GetManualTransferByWorkflow"
 )

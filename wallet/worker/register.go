@@ -27,6 +27,8 @@ func RegisterWallet(w worker.Worker, deps RegisterDeps) {
 		w.RegisterActivity(security)
 		audit := walletactivity.NewAuditActivities(deps.Store)
 		w.RegisterActivity(audit)
+		manualTransfers := walletactivity.NewManualTransferActivities(deps.Store)
+		w.RegisterActivity(manualTransfers)
 	}
 	if deps.PSPActivities != nil {
 		w.RegisterActivity(deps.PSPActivities)

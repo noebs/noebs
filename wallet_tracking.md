@@ -51,6 +51,7 @@ Last updated: 2026-02-01
 - [x] Added wallet PIN verification activity
 - [x] Added audit event activity
 - [x] Added PSP transaction status activity
+- [x] Added manual transfer activities for workflows
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
