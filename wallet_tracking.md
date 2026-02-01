@@ -48,6 +48,7 @@ Last updated: 2026-02-01
 - [x] Added PSP transaction model + store helpers
 - [x] Added funding source activities for Temporal workflows
 - [x] Added ownership verification activities for Temporal workflows
+- [x] Added wallet PIN verification activity
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
