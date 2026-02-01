@@ -19,7 +19,11 @@ type DepositParams struct {
 	TransactionID string
 }
 
-type WithdrawalParams struct{}
+type WithdrawalParams struct {
+	TenantID     string
+	ProviderCode string
+	Request      walletpsp.PayoutRequest
+}
 
 type P2PParams struct {
 	TenantID       string
@@ -56,9 +60,20 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 }
 
 func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
-	_ = ctx
-	_ = params
-	return ErrNotImplemented
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+	})
+
+	payoutParams := walletactivity.SendPayoutParams{
+		TenantID:     params.TenantID,
+		ProviderCode: params.ProviderCode,
+		Request:      params.Request,
+	}
+	var result walletpsp.PayoutResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivitySendPayout, payoutParams).Get(ctx, &result); err != nil {
+		return err
+	}
+	return nil
 }
 
 func P2P(ctx workflow.Context, params P2PParams) error {

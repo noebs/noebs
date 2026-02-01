@@ -31,6 +31,7 @@ Last updated: 2026-02-01
 - [x] Added mock PSP provider scaffold
 - [x] Implemented initial P2P workflow using ledger activity
 - [x] Implemented deposit workflow stub calling PSP verify activity
+- [x] Implemented withdrawal workflow stub calling PSP payout activity
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
