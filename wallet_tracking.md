@@ -28,6 +28,7 @@ Last updated: 2026-02-01
 - [x] Added workflow stubs + worker registration hook
 - [x] Added PSP activities + worker wiring hooks
 - [x] Added PSP map-based secret resolver
+- [x] Added mock PSP provider scaffold
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
