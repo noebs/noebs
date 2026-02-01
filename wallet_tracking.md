@@ -41,6 +41,7 @@ Last updated: 2026-02-01
 - [x] Added audit log store helper
 - [x] Added manual transfer store helpers
 - [x] Added funding source store helpers
+- [x] Added withdrawal destination + ownership store helpers
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
