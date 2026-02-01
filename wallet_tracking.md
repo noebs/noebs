@@ -96,8 +96,8 @@ Last updated: 2026-02-01
 
 ## Next steps (short-term)
 - [ ] Implement PSP provider integrations beyond noop
-- [ ] Add deposit/P2P workflow start APIs + admin approval flows
-- [ ] Add gRPC/HTTP tests for withdrawal request + signal paths
+- [ ] Add admin BO endpoints (HTMX/HATEOAS) for approvals, audit, and manual transfers
+- [ ] Add funding source + destination management APIs (create/list/verify)
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.
