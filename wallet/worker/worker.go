@@ -9,11 +9,6 @@ import (
 	"go.temporal.io/sdk/worker"
 )
 
-const (
-	TaskQueueMain           = "wallet-main"
-	TaskQueueReconciliation = "wallet-reconciliation"
-)
-
 var (
 	ErrMissingTemporalHost      = errors.New("missing temporal host")
 	ErrMissingTemporalNamespace = errors.New("missing temporal namespace")
@@ -24,7 +19,7 @@ type Options struct {
 	Host      string
 	Port      string
 	Namespace string
-	TaskQueue string
+	TaskQueue TaskQueue
 }
 
 func (o Options) Address() (string, error) {
@@ -73,7 +68,7 @@ func NewRunner(ctx context.Context, opts Options, register func(worker.Worker)) 
 	if err != nil {
 		return nil, err
 	}
-	w := worker.New(c, opts.TaskQueue, worker.Options{})
+	w := worker.New(c, string(opts.TaskQueue), worker.Options{})
 	if register != nil {
 		register(w)
 	}

@@ -61,6 +61,7 @@ Last updated: 2026-02-01
 - [x] Added validation service + activity for P2P business rules
 - [x] Switched PSP mocks to GoMock-generated implementation
 - [x] Added deposit/withdrawal validation service + activities
+- [x] Generated typed enums for activity names and task queues
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
