@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -56,6 +58,32 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if grpcServer != nil && grpcListener != nil {
+		go func() {
+			logrusLogger.Printf("grpc server listening on %s", grpcListener.Addr())
+			if err := grpcServer.Serve(grpcListener); err != nil {
+				logrusLogger.WithError(err).Error("grpc server stopped")
+			}
+		}()
+	}
+	if grpcGateway != nil {
+		go func() {
+			logrusLogger.Printf("grpc gateway listening on %s", grpcGateway.Addr)
+			if err := grpcGateway.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logrusLogger.WithError(err).Error("grpc gateway stopped")
+			}
+		}()
+	}
+	go func() {
+		<-ctx.Done()
+		if grpcGateway != nil {
+			_ = grpcGateway.Shutdown(context.Background())
+		}
+		if grpcServer != nil {
+			grpcServer.GracefulStop()
+		}
+	}()
 
 	if hub != nil {
 		go hub.Run()

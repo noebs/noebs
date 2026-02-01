@@ -478,6 +478,9 @@ func initConfig() {
 		}
 		walletWorker = runner
 	}
+	if err := initGRPCServers(); err != nil {
+		logrusLogger.Fatalf("error initializing grpc servers: %v", err)
+	}
 	dataConfigs.DB = database
 
 }

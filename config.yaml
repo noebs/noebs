@@ -13,6 +13,10 @@ noebs:
   wallet_2fa_threshold: 10000
   wallet_approval_threshold: 100000
   wallet_default_currency: "USD"
+  grpc_enabled: false
+  grpc_port: ":9090"
+  grpc_gateway_enabled: false
+  grpc_gateway_port: ":9091"
 
 litestream:
   dbs:

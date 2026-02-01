@@ -1006,6 +1006,12 @@ type NoebsConfig struct {
 	WalletApprovalThreshold int64  `json:"wallet_approval_threshold"`
 	WalletDefaultCurrency   string `json:"wallet_default_currency"`
 
+	// gRPC
+	GRPCEnabled        bool   `json:"grpc_enabled"`
+	GRPCPort           string `json:"grpc_port"`
+	GRPCGatewayEnabled bool   `json:"grpc_gateway_enabled"`
+	GRPCGatewayPort    string `json:"grpc_gateway_port"`
+
 	// This the base of the link for payment links
 	PaymentLinkBase string `json:"payment_link_base"`
 }
@@ -1032,6 +1038,12 @@ func (n *NoebsConfig) Defaults() {
 	}
 	if n.OtelSampleRate == 0 {
 		n.OtelSampleRate = 0.1
+	}
+	if n.GRPCEnabled && n.GRPCPort == "" {
+		n.GRPCPort = ":9090"
+	}
+	if n.GRPCGatewayEnabled && n.GRPCGatewayPort == "" {
+		n.GRPCGatewayPort = ":9091"
 	}
 }
 
