@@ -18,7 +18,9 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
+	walletactivity "github.com/adonese/noebs/wallet/activity"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
+	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/bradfitz/iter"
 	"github.com/gofiber/adaptor/v2"
@@ -435,6 +437,14 @@ func initConfig() {
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	walletService = wallet.NewService(database, noebsConfig)
 	if noebsConfig.TemporalEnabled {
+		pspRegistry := walletpsp.NewRegistry()
+		pspLoader := &walletpsp.Loader{
+			Store: walletService.Store,
+			Secrets: walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
+				return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
+			}),
+		}
+		pspActivities := walletactivity.NewPSPActivities(pspLoader, pspRegistry)
 		workerOpts := walletworker.Options{
 			Host:      noebsConfig.TemporalHost,
 			Port:      noebsConfig.TemporalPort,
@@ -442,7 +452,10 @@ func initConfig() {
 			TaskQueue: walletworker.TaskQueueMain,
 		}
 		register := func(w temporalworker.Worker) {
-			walletworker.RegisterWallet(w, walletService.Store)
+			walletworker.RegisterWallet(w, walletworker.RegisterDeps{
+				Store:         walletService.Store,
+				PSPActivities: pspActivities,
+			})
 		}
 		runner, err := walletworker.NewRunner(context.Background(), workerOpts, register)
 		if err != nil {

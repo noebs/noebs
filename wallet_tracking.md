@@ -26,9 +26,10 @@ Last updated: 2026-02-01
 - [x] Wired Temporal worker startup (config-gated)
 - [x] Added ledger activities wrapper (double-entry + holds)
 - [x] Added workflow stubs + worker registration hook
+- [x] Added PSP activities + worker wiring hooks
 
 ## Next steps (short-term)
-- [ ] Register wallet workflows/activities + PSP dispatch wiring
+- [ ] Implement workflow logic + PSP secret resolver
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.

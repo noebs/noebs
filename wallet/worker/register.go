@@ -7,13 +7,21 @@ import (
 	"go.temporal.io/sdk/worker"
 )
 
-func RegisterWallet(w worker.Worker, store *walletstore.Store) {
+type RegisterDeps struct {
+	Store         *walletstore.Store
+	PSPActivities *walletactivity.PSPActivities
+}
+
+func RegisterWallet(w worker.Worker, deps RegisterDeps) {
 	if w == nil {
 		return
 	}
-	if store != nil {
-		ledger := walletactivity.NewLedgerActivities(store)
+	if deps.Store != nil {
+		ledger := walletactivity.NewLedgerActivities(deps.Store)
 		w.RegisterActivity(ledger)
+	}
+	if deps.PSPActivities != nil {
+		w.RegisterActivity(deps.PSPActivities)
 	}
 	w.RegisterWorkflow(walletworkflow.Deposit)
 	w.RegisterWorkflow(walletworkflow.Withdrawal)

@@ -11,6 +11,12 @@ type SecretResolver interface {
 	Resolve(ctx context.Context, tenantID, providerCode string) (SecretBundle, error)
 }
 
+type SecretResolverFunc func(ctx context.Context, tenantID, providerCode string) (SecretBundle, error)
+
+func (f SecretResolverFunc) Resolve(ctx context.Context, tenantID, providerCode string) (SecretBundle, error) {
+	return f(ctx, tenantID, providerCode)
+}
+
 type Loader struct {
 	Store   *walletstore.Store
 	Secrets SecretResolver
