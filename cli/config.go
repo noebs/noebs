@@ -21,6 +21,7 @@ import (
 	walletactivity "github.com/adonese/noebs/wallet/activity"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
+	walletpspnoop "github.com/adonese/noebs/wallet/psp/noop"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/bradfitz/iter"
 	"github.com/gofiber/adaptor/v2"
@@ -439,6 +440,12 @@ func initConfig() {
 	walletService = wallet.NewService(database, noebsConfig)
 	if noebsConfig.TemporalEnabled {
 		pspRegistry := walletpsp.NewRegistry()
+		if err := pspRegistry.Register("noop", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
+			_ = cfg
+			return &walletpspnoop.Provider{}, nil
+		}); err != nil {
+			logrusLogger.Printf("error registering noop PSP provider: %v", err)
+		}
 		secretResolver := walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
 			return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
 		})
