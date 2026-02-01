@@ -56,6 +56,7 @@ Last updated: 2026-02-01
 - [x] Added PSP transaction status update store helper
 - [x] Added fee + limit activities for workflows
 - [x] Added exchange rate conversion activity
+- [x] Added explicit validation activities for ledger operations
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

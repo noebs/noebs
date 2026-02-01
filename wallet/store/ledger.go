@@ -34,26 +34,8 @@ type DoubleEntryResult struct {
 }
 
 func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (*DoubleEntryResult, error) {
-	if params.TenantID == "" {
-		return nil, ErrMissingTenantID
-	}
-	if params.Currency == "" {
-		return nil, ErrMissingCurrency
-	}
-	if params.IdempotencyKey == "" {
-		return nil, ErrMissingIdempotencyKey
-	}
-	if params.ReferenceType == "" {
-		return nil, ErrMissingReferenceType
-	}
-	if params.DebitWalletID == uuid.Nil || params.CreditWalletID == uuid.Nil {
-		return nil, ErrMissingWalletID
-	}
-	if params.DebitWalletID == params.CreditWalletID {
-		return nil, ErrInvalidWalletPair
-	}
-	if params.Amount <= 0 {
-		return nil, ErrInvalidAmount
+	if err := ValidateDoubleEntryParams(params); err != nil {
+		return nil, err
 	}
 	db, err := s.ensureDB()
 	if err != nil {

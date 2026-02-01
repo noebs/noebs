@@ -101,6 +101,10 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 		Amount:         params.Amount,
 		Description:    params.Description,
 	}
+	var validation struct{}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, activityParams).Get(ctx, &validation); err != nil {
+		return err
+	}
 	var result walletstore.DoubleEntryResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, activityParams).Get(ctx, &result); err != nil {
 		return err

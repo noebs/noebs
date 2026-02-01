@@ -24,29 +24,8 @@ type HoldParams struct {
 }
 
 func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold, error) {
-	if params.TenantID == "" {
-		return nil, ErrMissingTenantID
-	}
-	if params.ExpiresAt.IsZero() {
-		return nil, ErrMissingHoldExpiry
-	}
-	if params.WalletID == uuid.Nil {
-		return nil, ErrMissingWalletID
-	}
-	if params.ReferenceType == "" {
-		return nil, ErrMissingReferenceType
-	}
-	if params.ReferenceID == "" {
-		return nil, ErrMissingReferenceID
-	}
-	if params.IdempotencyKey == "" {
-		return nil, ErrMissingIdempotencyKey
-	}
-	if params.Reason == "" {
-		return nil, ErrMissingHoldReason
-	}
-	if params.Amount <= 0 {
-		return nil, ErrInvalidAmount
+	if err := ValidateHoldParams(params); err != nil {
+		return nil, err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -118,11 +97,8 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 }
 
 func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
-	}
-	if holdID <= 0 {
-		return ErrInvalidHoldID
+	if err := ValidateReleaseHold(tenantID, holdID); err != nil {
+		return err
 	}
 	db, err := s.ensureDB()
 	if err != nil {

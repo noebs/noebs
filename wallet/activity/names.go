@@ -2,8 +2,11 @@ package activity
 
 const (
 	ActivityExecuteDoubleEntry            = "ExecuteDoubleEntry"
+	ActivityValidateDoubleEntry           = "ValidateDoubleEntry"
 	ActivityCreateHold                    = "CreateHold"
+	ActivityValidateHold                  = "ValidateHold"
 	ActivityReleaseHold                   = "ReleaseHold"
+	ActivityValidateReleaseHold           = "ValidateReleaseHold"
 	ActivityVerifyDeposit                 = "VerifyDeposit"
 	ActivitySendPayout                    = "SendPayout"
 	ActivityGetTransactionStatus          = "GetTransactionStatus"
