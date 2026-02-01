@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -255,7 +256,44 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, depositEntry).Get(ctx, &posted); err != nil {
 		return err
 	}
-	_ = posted
+
+	now := workflow.Now(ctx)
+	externalRef := pspTxn.PSPTransactionID
+	if result.ProviderTxID != "" {
+		externalRef = sql.NullString{String: result.ProviderTxID, Valid: true}
+	}
+	if !externalRef.Valid {
+		externalRef = sql.NullString{String: params.ClientReference, Valid: true}
+	}
+	source := walletstore.FundingSource{
+		TenantID:           params.TenantID,
+		WalletID:           walletID,
+		SourceType:         "psp",
+		PSPProvider:        sql.NullString{String: pspTxn.PSPProvider, Valid: pspTxn.PSPProvider != ""},
+		ExternalReference:  externalRef,
+		VerificationStatus: "verified",
+		VerifiedAt:         sql.NullTime{Time: now, Valid: true},
+		Currency:           resolved.WalletCurrency,
+		SourceDetails:      json.RawMessage("{}"),
+		TotalFunded:        resolved.WalletCreditAmount,
+		LastFundedAt:       sql.NullTime{Time: now, Valid: true},
+		SupportsWithdrawal: validation.SupportsWithdrawal,
+	}
+	var storedSource walletstore.FundingSource
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityRecordFundingSource, source).Get(ctx, &storedSource); err != nil {
+		return err
+	}
+
+	link := walletstore.LedgerFundingLink{
+		TenantID:        params.TenantID,
+		LedgerEntryID:   posted.CreditEntry.ID,
+		FundingSourceID: storedSource.ID,
+		Amount:          resolved.WalletCreditAmount,
+		Currency:        resolved.WalletCurrency,
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityLinkLedgerToFundingSource, link).Get(ctx, nil); err != nil {
+		return err
+	}
 
 	feeAmount := int64(0)
 	if validation.Fee != nil {

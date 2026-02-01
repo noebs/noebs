@@ -72,6 +72,7 @@ Last updated: 2026-02-01
 - [x] Implemented PSP status poller workflow + polling activities
 - [x] Updated deposit/withdraw workflows to persist PSP status + provider transaction IDs
 - [x] Added deposit/withdraw ledger postings (treasury + fees) on PSP success
+- [x] Recorded funding sources and linked deposit ledger credits
 - [x] Added gRPC wallet service handlers and generated proto stubs/OpenAPI
 - [x] Added gRPC gateway helpers for public wallet service
 - [x] Wired gRPC server/gateway startup hooks in CLI config

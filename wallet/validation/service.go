@@ -48,12 +48,13 @@ type DepositValidationRequest struct {
 }
 
 type DepositValidationResult struct {
-	WalletID  uuid.UUID
-	Currency  string
-	Amount    int64
-	Fee       *walletfees.FeeResult
-	NetAmount int64
-	Limits    *walletlimits.CheckResult
+	WalletID           uuid.UUID
+	Currency           string
+	Amount             int64
+	Fee                *walletfees.FeeResult
+	NetAmount          int64
+	Limits             *walletlimits.CheckResult
+	SupportsWithdrawal bool
 }
 
 type DepositRule func(ctx context.Context, req DepositValidationRequest, wallet *walletstore.Wallet, cfg *walletstore.PSPConfig) error
@@ -284,12 +285,13 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	}
 
 	return &DepositValidationResult{
-		WalletID:  req.WalletID,
-		Currency:  req.Currency,
-		Amount:    req.Amount,
-		Fee:       feeResult,
-		NetAmount: netAmount,
-		Limits:    limitResult,
+		WalletID:           req.WalletID,
+		Currency:           req.Currency,
+		Amount:             req.Amount,
+		Fee:                feeResult,
+		NetAmount:          netAmount,
+		Limits:             limitResult,
+		SupportsWithdrawal: cfg.SupportsWithdrawal,
 	}, nil
 }
 
