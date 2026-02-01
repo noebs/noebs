@@ -24,6 +24,7 @@ Last updated: 2026-02-01
 - [x] Added PSP config merge + loader skeleton
 - [x] Added Temporal worker scaffold + task queue constants
 - [x] Wired Temporal worker startup (config-gated)
+- [x] Added ledger activities wrapper (double-entry + holds)
 
 ## Next steps (short-term)
 - [ ] Register wallet workflows/activities + PSP dispatch wiring
