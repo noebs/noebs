@@ -86,9 +86,13 @@ Last updated: 2026-02-01
 - [x] Added user 2FA verification activity and wired it into wallet worker setup
 - [x] Implemented withdrawal flow with PIN/2FA, return-to-source, destination verification, holds, and approvals
 - [x] Added audit events across deposit/withdrawal/P2P/manual transfer/reconciliation workflows
+- [x] Added withdrawal request + approval/verification gRPC endpoints with Temporal workflow start/signals
+- [x] Wired gRPC server Temporal client options + workflow ID persistence in PSP transactions
 
 ## Next steps (short-term)
-- [ ] Implement workflow logic + PSP provider implementations
+- [ ] Implement PSP provider integrations beyond noop
+- [ ] Add deposit/P2P workflow start APIs + admin approval flows
+- [ ] Add gRPC/HTTP tests for withdrawal request + signal paths
 
 ## Notes / decisions
 - Migrations will be split into small, focused files to keep changes atomic.

@@ -8,6 +8,7 @@ import (
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	walletgrpc "github.com/adonese/noebs/wallet/grpc"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 )
@@ -25,6 +26,15 @@ func initGRPCServers() error {
 	}
 
 	walletSrv := walletgrpc.NewServer(walletService)
+	walletSrv.TemporalOptions = walletworker.Options{
+		Host:      noebsConfig.TemporalHost,
+		Port:      noebsConfig.TemporalPort,
+		Namespace: noebsConfig.TemporalNamespace,
+		TaskQueue: walletworker.TaskQueueMain,
+	}
+	if walletWorker != nil {
+		walletSrv.TemporalClient = walletWorker.Client
+	}
 	if noebsConfig.GRPCEnabled {
 		if noebsConfig.GRPCPort == "" {
 			return errors.New("missing grpc_port")

@@ -3,6 +3,8 @@ syntax = "proto3";
 package noebs.wallet.v1;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
 
 option go_package = "github.com/adonese/noebs/gen/proto/noebs/wallet/v1;walletv1";
 
@@ -10,6 +12,9 @@ service WalletInternalService {
   rpc GetWallet(GetWalletRequest) returns (Wallet) {}
   rpc EnsureWallet(EnsureWalletRequest) returns (Wallet) {}
   rpc ValidateP2P(ValidateP2PRequest) returns (ValidateP2PResponse) {}
+  rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {}
+  rpc SignalWithdrawalApproval(WithdrawalApprovalRequest) returns (google.protobuf.Empty) {}
+  rpc SignalWithdrawalVerification(WithdrawalDestinationVerificationRequest) returns (google.protobuf.Empty) {}
 }
 
 service WalletPublicService {
@@ -21,6 +26,24 @@ service WalletPublicService {
   rpc EnsureWalletPublic(EnsureWalletRequest) returns (Wallet) {
     option (google.api.http) = {
       post: "/wallet"
+      body: "*"
+    };
+  }
+  rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {
+    option (google.api.http) = {
+      post: "/wallet/withdrawals"
+      body: "*"
+    };
+  }
+  rpc SignalWithdrawalApproval(WithdrawalApprovalRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/withdrawals/{workflow_id}/approval"
+      body: "*"
+    };
+  }
+  rpc SignalWithdrawalVerification(WithdrawalDestinationVerificationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/withdrawals/{workflow_id}/verification"
       body: "*"
     };
   }
@@ -62,4 +85,45 @@ message ValidateP2PResponse {
   string reason = 2;
   int64 total_debit = 3;
   int64 fee = 4;
+}
+
+message WorkflowRun {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message WithdrawalRequest {
+  string tenant_id = 1;
+  string client_reference = 2;
+  string provider_code = 3;
+  string wallet_id = 4;
+  int64 amount = 5;
+  string currency = 6;
+  int64 user_id = 7;
+  string owner_type = 8;
+  string owner_id = 9;
+  int64 destination_id = 10;
+  optional bool allow_return_to_source = 11;
+  string wallet_pin = 12;
+  string two_fa_code = 13;
+  int32 hold_expiry_seconds = 14;
+  int32 approval_timeout_seconds = 15;
+  int32 verification_timeout_seconds = 16;
+  string idempotency_key = 17;
+  google.protobuf.Struct metadata = 18;
+}
+
+message WithdrawalApprovalRequest {
+  string workflow_id = 1;
+  bool approved = 2;
+  int64 approver_id = 3;
+  string reason = 4;
+  string proof_of_payment = 5;
+}
+
+message WithdrawalDestinationVerificationRequest {
+  string workflow_id = 1;
+  int64 verification_id = 2;
+  bool verified = 3;
+  string reason = 4;
 }

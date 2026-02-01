@@ -3,11 +3,13 @@ package walletgrpc
 import (
 	"context"
 	"errors"
+	"sync"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletvalidation "github.com/adonese/noebs/wallet/validation"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,7 +18,11 @@ import (
 type Server struct {
 	walletv1.UnimplementedWalletInternalServiceServer
 	walletv1.UnimplementedWalletPublicServiceServer
-	Service *wallet.Service
+	Service         *wallet.Service
+	TemporalClient  temporalClient
+	TemporalOptions walletworker.Options
+	temporalOnce    sync.Once
+	temporalErr     error
 }
 
 func NewServer(service *wallet.Service) *Server {
@@ -177,11 +183,25 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingWalletID),
 		errors.Is(err, walletstore.ErrMissingOwnerID),
 		errors.Is(err, walletstore.ErrMissingOwnerType),
+		errors.Is(err, walletstore.ErrMissingProviderCode),
+		errors.Is(err, walletstore.ErrMissingClientReference),
+		errors.Is(err, walletstore.ErrMissingDestinationID),
 		errors.Is(err, walletstore.ErrInvalidUserID),
 		errors.Is(err, walletstore.ErrInvalidAmount),
 		errors.Is(err, walletstore.ErrInvalidLimit),
 		errors.Is(err, walletstore.ErrMissingReferenceType),
-		errors.Is(err, walletstore.ErrMissingReferenceID):
+		errors.Is(err, walletstore.ErrMissingReferenceID),
+		errors.Is(err, walletstore.ErrMissingWalletPIN),
+		errors.Is(err, walletstore.ErrInvalidWalletPIN),
+		errors.Is(err, walletstore.ErrMissingTwoFACode),
+		errors.Is(err, walletstore.ErrInvalidTwoFACode),
+		errors.Is(err, walletstore.ErrMissingApprovalTimeout),
+		errors.Is(err, walletstore.ErrMissingApprovalReason),
+		errors.Is(err, walletstore.ErrMissingProofOfPayment),
+		errors.Is(err, walletstore.ErrMissingVerificationTimeout),
+		errors.Is(err, walletstore.ErrMissingVerificationID),
+		errors.Is(err, walletstore.ErrMissingVerificationType),
+		errors.Is(err, walletstore.ErrMissingHoldExpiry):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, wallet.ErrMissingStore),
 		errors.Is(err, walletvalidation.ErrMissingStore):

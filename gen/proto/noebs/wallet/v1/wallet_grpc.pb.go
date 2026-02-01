@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,9 +20,12 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	WalletInternalService_GetWallet_FullMethodName    = "/noebs.wallet.v1.WalletInternalService/GetWallet"
-	WalletInternalService_EnsureWallet_FullMethodName = "/noebs.wallet.v1.WalletInternalService/EnsureWallet"
-	WalletInternalService_ValidateP2P_FullMethodName  = "/noebs.wallet.v1.WalletInternalService/ValidateP2P"
+	WalletInternalService_GetWallet_FullMethodName                    = "/noebs.wallet.v1.WalletInternalService/GetWallet"
+	WalletInternalService_EnsureWallet_FullMethodName                 = "/noebs.wallet.v1.WalletInternalService/EnsureWallet"
+	WalletInternalService_ValidateP2P_FullMethodName                  = "/noebs.wallet.v1.WalletInternalService/ValidateP2P"
+	WalletInternalService_RequestWithdrawal_FullMethodName            = "/noebs.wallet.v1.WalletInternalService/RequestWithdrawal"
+	WalletInternalService_SignalWithdrawalApproval_FullMethodName     = "/noebs.wallet.v1.WalletInternalService/SignalWithdrawalApproval"
+	WalletInternalService_SignalWithdrawalVerification_FullMethodName = "/noebs.wallet.v1.WalletInternalService/SignalWithdrawalVerification"
 )
 
 // WalletInternalServiceClient is the client API for WalletInternalService service.
@@ -31,6 +35,9 @@ type WalletInternalServiceClient interface {
 	GetWallet(ctx context.Context, in *GetWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	EnsureWallet(ctx context.Context, in *EnsureWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	ValidateP2P(ctx context.Context, in *ValidateP2PRequest, opts ...grpc.CallOption) (*ValidateP2PResponse, error)
+	RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
+	SignalWithdrawalApproval(ctx context.Context, in *WithdrawalApprovalRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SignalWithdrawalVerification(ctx context.Context, in *WithdrawalDestinationVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type walletInternalServiceClient struct {
@@ -71,6 +78,36 @@ func (c *walletInternalServiceClient) ValidateP2P(ctx context.Context, in *Valid
 	return out, nil
 }
 
+func (c *walletInternalServiceClient) RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkflowRun)
+	err := c.cc.Invoke(ctx, WalletInternalService_RequestWithdrawal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletInternalServiceClient) SignalWithdrawalApproval(ctx context.Context, in *WithdrawalApprovalRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, WalletInternalService_SignalWithdrawalApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletInternalServiceClient) SignalWithdrawalVerification(ctx context.Context, in *WithdrawalDestinationVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, WalletInternalService_SignalWithdrawalVerification_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WalletInternalServiceServer is the server API for WalletInternalService service.
 // All implementations must embed UnimplementedWalletInternalServiceServer
 // for forward compatibility
@@ -78,6 +115,9 @@ type WalletInternalServiceServer interface {
 	GetWallet(context.Context, *GetWalletRequest) (*Wallet, error)
 	EnsureWallet(context.Context, *EnsureWalletRequest) (*Wallet, error)
 	ValidateP2P(context.Context, *ValidateP2PRequest) (*ValidateP2PResponse, error)
+	RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error)
+	SignalWithdrawalApproval(context.Context, *WithdrawalApprovalRequest) (*emptypb.Empty, error)
+	SignalWithdrawalVerification(context.Context, *WithdrawalDestinationVerificationRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedWalletInternalServiceServer()
 }
 
@@ -93,6 +133,15 @@ func (UnimplementedWalletInternalServiceServer) EnsureWallet(context.Context, *E
 }
 func (UnimplementedWalletInternalServiceServer) ValidateP2P(context.Context, *ValidateP2PRequest) (*ValidateP2PResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateP2P not implemented")
+}
+func (UnimplementedWalletInternalServiceServer) RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestWithdrawal not implemented")
+}
+func (UnimplementedWalletInternalServiceServer) SignalWithdrawalApproval(context.Context, *WithdrawalApprovalRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignalWithdrawalApproval not implemented")
+}
+func (UnimplementedWalletInternalServiceServer) SignalWithdrawalVerification(context.Context, *WithdrawalDestinationVerificationRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignalWithdrawalVerification not implemented")
 }
 func (UnimplementedWalletInternalServiceServer) mustEmbedUnimplementedWalletInternalServiceServer() {}
 
@@ -161,6 +210,60 @@ func _WalletInternalService_ValidateP2P_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WalletInternalService_RequestWithdrawal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletInternalServiceServer).RequestWithdrawal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletInternalService_RequestWithdrawal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletInternalServiceServer).RequestWithdrawal(ctx, req.(*WithdrawalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletInternalService_SignalWithdrawalApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawalApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletInternalServiceServer).SignalWithdrawalApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletInternalService_SignalWithdrawalApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletInternalServiceServer).SignalWithdrawalApproval(ctx, req.(*WithdrawalApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletInternalService_SignalWithdrawalVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawalDestinationVerificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletInternalServiceServer).SignalWithdrawalVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletInternalService_SignalWithdrawalVerification_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletInternalServiceServer).SignalWithdrawalVerification(ctx, req.(*WithdrawalDestinationVerificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WalletInternalService_ServiceDesc is the grpc.ServiceDesc for WalletInternalService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -180,14 +283,29 @@ var WalletInternalService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ValidateP2P",
 			Handler:    _WalletInternalService_ValidateP2P_Handler,
 		},
+		{
+			MethodName: "RequestWithdrawal",
+			Handler:    _WalletInternalService_RequestWithdrawal_Handler,
+		},
+		{
+			MethodName: "SignalWithdrawalApproval",
+			Handler:    _WalletInternalService_SignalWithdrawalApproval_Handler,
+		},
+		{
+			MethodName: "SignalWithdrawalVerification",
+			Handler:    _WalletInternalService_SignalWithdrawalVerification_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/noebs/wallet/v1/wallet.proto",
 }
 
 const (
-	WalletPublicService_GetWalletPublic_FullMethodName    = "/noebs.wallet.v1.WalletPublicService/GetWalletPublic"
-	WalletPublicService_EnsureWalletPublic_FullMethodName = "/noebs.wallet.v1.WalletPublicService/EnsureWalletPublic"
+	WalletPublicService_GetWalletPublic_FullMethodName              = "/noebs.wallet.v1.WalletPublicService/GetWalletPublic"
+	WalletPublicService_EnsureWalletPublic_FullMethodName           = "/noebs.wallet.v1.WalletPublicService/EnsureWalletPublic"
+	WalletPublicService_RequestWithdrawal_FullMethodName            = "/noebs.wallet.v1.WalletPublicService/RequestWithdrawal"
+	WalletPublicService_SignalWithdrawalApproval_FullMethodName     = "/noebs.wallet.v1.WalletPublicService/SignalWithdrawalApproval"
+	WalletPublicService_SignalWithdrawalVerification_FullMethodName = "/noebs.wallet.v1.WalletPublicService/SignalWithdrawalVerification"
 )
 
 // WalletPublicServiceClient is the client API for WalletPublicService service.
@@ -196,6 +314,9 @@ const (
 type WalletPublicServiceClient interface {
 	GetWalletPublic(ctx context.Context, in *GetWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
 	EnsureWalletPublic(ctx context.Context, in *EnsureWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
+	RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
+	SignalWithdrawalApproval(ctx context.Context, in *WithdrawalApprovalRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SignalWithdrawalVerification(ctx context.Context, in *WithdrawalDestinationVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type walletPublicServiceClient struct {
@@ -226,12 +347,45 @@ func (c *walletPublicServiceClient) EnsureWalletPublic(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *walletPublicServiceClient) RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WorkflowRun)
+	err := c.cc.Invoke(ctx, WalletPublicService_RequestWithdrawal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) SignalWithdrawalApproval(ctx context.Context, in *WithdrawalApprovalRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, WalletPublicService_SignalWithdrawalApproval_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) SignalWithdrawalVerification(ctx context.Context, in *WithdrawalDestinationVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, WalletPublicService_SignalWithdrawalVerification_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WalletPublicServiceServer is the server API for WalletPublicService service.
 // All implementations must embed UnimplementedWalletPublicServiceServer
 // for forward compatibility
 type WalletPublicServiceServer interface {
 	GetWalletPublic(context.Context, *GetWalletRequest) (*Wallet, error)
 	EnsureWalletPublic(context.Context, *EnsureWalletRequest) (*Wallet, error)
+	RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error)
+	SignalWithdrawalApproval(context.Context, *WithdrawalApprovalRequest) (*emptypb.Empty, error)
+	SignalWithdrawalVerification(context.Context, *WithdrawalDestinationVerificationRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedWalletPublicServiceServer()
 }
 
@@ -244,6 +398,15 @@ func (UnimplementedWalletPublicServiceServer) GetWalletPublic(context.Context, *
 }
 func (UnimplementedWalletPublicServiceServer) EnsureWalletPublic(context.Context, *EnsureWalletRequest) (*Wallet, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EnsureWalletPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestWithdrawal not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) SignalWithdrawalApproval(context.Context, *WithdrawalApprovalRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignalWithdrawalApproval not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) SignalWithdrawalVerification(context.Context, *WithdrawalDestinationVerificationRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SignalWithdrawalVerification not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) mustEmbedUnimplementedWalletPublicServiceServer() {}
 
@@ -294,6 +457,60 @@ func _WalletPublicService_EnsureWalletPublic_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WalletPublicService_RequestWithdrawal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).RequestWithdrawal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_RequestWithdrawal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).RequestWithdrawal(ctx, req.(*WithdrawalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_SignalWithdrawalApproval_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawalApprovalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).SignalWithdrawalApproval(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_SignalWithdrawalApproval_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).SignalWithdrawalApproval(ctx, req.(*WithdrawalApprovalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_SignalWithdrawalVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WithdrawalDestinationVerificationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).SignalWithdrawalVerification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_SignalWithdrawalVerification_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).SignalWithdrawalVerification(ctx, req.(*WithdrawalDestinationVerificationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WalletPublicService_ServiceDesc is the grpc.ServiceDesc for WalletPublicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -308,6 +525,18 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EnsureWalletPublic",
 			Handler:    _WalletPublicService_EnsureWalletPublic_Handler,
+		},
+		{
+			MethodName: "RequestWithdrawal",
+			Handler:    _WalletPublicService_RequestWithdrawal_Handler,
+		},
+		{
+			MethodName: "SignalWithdrawalApproval",
+			Handler:    _WalletPublicService_SignalWithdrawalApproval_Handler,
+		},
+		{
+			MethodName: "SignalWithdrawalVerification",
+			Handler:    _WalletPublicService_SignalWithdrawalVerification_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
