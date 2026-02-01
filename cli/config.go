@@ -26,6 +26,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	temporalworker "go.temporal.io/sdk/worker"
 
 	chat "github.com/tutipay/ws"
 	"gopkg.in/yaml.v3"
@@ -440,7 +441,10 @@ func initConfig() {
 			Namespace: noebsConfig.TemporalNamespace,
 			TaskQueue: walletworker.TaskQueueMain,
 		}
-		runner, err := walletworker.NewRunner(context.Background(), workerOpts, nil)
+		register := func(w temporalworker.Worker) {
+			walletworker.RegisterWallet(w, walletService.Store)
+		}
+		runner, err := walletworker.NewRunner(context.Background(), workerOpts, register)
 		if err != nil {
 			logrusLogger.Fatalf("error creating wallet worker: %v", err)
 		}

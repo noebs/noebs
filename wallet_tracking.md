@@ -25,6 +25,7 @@ Last updated: 2026-02-01
 - [x] Added Temporal worker scaffold + task queue constants
 - [x] Wired Temporal worker startup (config-gated)
 - [x] Added ledger activities wrapper (double-entry + holds)
+- [x] Added workflow stubs + worker registration hook
 
 ## Next steps (short-term)
 - [ ] Register wallet workflows/activities + PSP dispatch wiring
