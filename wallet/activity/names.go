@@ -13,4 +13,5 @@ const (
 	ActivityGetReturnToSourceOptions      = "GetReturnToSourceOptions"
 	ActivityInitiateOwnershipVerification = "InitiateOwnershipVerification"
 	ActivityGetOwnershipVerification      = "GetOwnershipVerification"
+	ActivityRecordAuditEvent              = "RecordAuditEvent"
 )
