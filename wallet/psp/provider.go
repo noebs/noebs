@@ -1,5 +1,7 @@
 package psp
 
+//go:generate go run github.com/golang/mock/mockgen@v1.6.0 -destination=mock/mock_provider.go -package=mock github.com/adonese/noebs/wallet/psp Provider
+
 import "context"
 
 type Operation string
