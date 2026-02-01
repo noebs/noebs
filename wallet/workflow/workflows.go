@@ -223,6 +223,74 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if err := recordPSPAmounts(ctx, params.TenantID, pspTxn.ID, amounts); err != nil {
 		return err
 	}
+	if status != "success" {
+		return nil
+	}
+
+	var treasury walletstore.Wallet
+	treasuryParams := walletactivity.EnsureSystemWalletParams{
+		TenantID:   params.TenantID,
+		Currency:   resolved.WalletCurrency,
+		WalletCode: walletstore.SystemTreasury,
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
+		return err
+	}
+
+	depositEntry := walletstore.DoubleEntryParams{
+		TenantID:       params.TenantID,
+		IdempotencyKey: params.ClientReference + ":deposit",
+		Currency:       resolved.WalletCurrency,
+		ReferenceType:  "deposit",
+		ReferenceID:    params.ClientReference,
+		DebitWalletID:  treasury.ID,
+		CreditWalletID: walletID,
+		Amount:         resolved.WalletCreditAmount,
+		Description:    "deposit",
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, depositEntry).Get(ctx, nil); err != nil {
+		return err
+	}
+	var posted walletstore.DoubleEntryResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, depositEntry).Get(ctx, &posted); err != nil {
+		return err
+	}
+	_ = posted
+
+	feeAmount := int64(0)
+	if validation.Fee != nil {
+		feeAmount = validation.Fee.TotalFee
+	}
+	if feeAmount > 0 {
+		var feesWallet walletstore.Wallet
+		feesParams := walletactivity.EnsureSystemWalletParams{
+			TenantID:   params.TenantID,
+			Currency:   resolved.WalletCurrency,
+			WalletCode: walletstore.SystemFees,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
+			return err
+		}
+		feeEntry := walletstore.DoubleEntryParams{
+			TenantID:       params.TenantID,
+			IdempotencyKey: params.ClientReference + ":deposit_fee",
+			Currency:       resolved.WalletCurrency,
+			ReferenceType:  "fee",
+			ReferenceID:    params.ClientReference,
+			DebitWalletID:  walletID,
+			CreditWalletID: feesWallet.ID,
+			Amount:         feeAmount,
+			Description:    "deposit fee",
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, feeEntry).Get(ctx, nil); err != nil {
+			return err
+		}
+		var feePosted walletstore.DoubleEntryResult
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, feeEntry).Get(ctx, &feePosted); err != nil {
+			return err
+		}
+		_ = feePosted
+	}
 	return nil
 }
 
@@ -317,6 +385,74 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	}
 	if err := recordPSPAmounts(ctx, params.TenantID, pspTxn.ID, amounts); err != nil {
 		return err
+	}
+	if status != "success" {
+		return nil
+	}
+
+	var treasury walletstore.Wallet
+	treasuryParams := walletactivity.EnsureSystemWalletParams{
+		TenantID:   params.TenantID,
+		Currency:   validation.Currency,
+		WalletCode: walletstore.SystemTreasury,
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
+		return err
+	}
+
+	withdrawEntry := walletstore.DoubleEntryParams{
+		TenantID:       params.TenantID,
+		IdempotencyKey: params.Request.ClientReference + ":withdrawal",
+		Currency:       validation.Currency,
+		ReferenceType:  "withdrawal",
+		ReferenceID:    params.Request.ClientReference,
+		DebitWalletID:  walletID,
+		CreditWalletID: treasury.ID,
+		Amount:         params.Request.Amount,
+		Description:    "withdrawal",
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, withdrawEntry).Get(ctx, nil); err != nil {
+		return err
+	}
+	var posted walletstore.DoubleEntryResult
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, withdrawEntry).Get(ctx, &posted); err != nil {
+		return err
+	}
+	_ = posted
+
+	feeAmount := int64(0)
+	if validation.Fee != nil {
+		feeAmount = validation.Fee.TotalFee
+	}
+	if feeAmount > 0 {
+		var feesWallet walletstore.Wallet
+		feesParams := walletactivity.EnsureSystemWalletParams{
+			TenantID:   params.TenantID,
+			Currency:   validation.Currency,
+			WalletCode: walletstore.SystemFees,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
+			return err
+		}
+		feeEntry := walletstore.DoubleEntryParams{
+			TenantID:       params.TenantID,
+			IdempotencyKey: params.Request.ClientReference + ":withdrawal_fee",
+			Currency:       validation.Currency,
+			ReferenceType:  "fee",
+			ReferenceID:    params.Request.ClientReference,
+			DebitWalletID:  walletID,
+			CreditWalletID: feesWallet.ID,
+			Amount:         feeAmount,
+			Description:    "withdrawal fee",
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, feeEntry).Get(ctx, nil); err != nil {
+			return err
+		}
+		var feePosted walletstore.DoubleEntryResult
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, feeEntry).Get(ctx, &feePosted); err != nil {
+			return err
+		}
+		_ = feePosted
 	}
 	return nil
 }
