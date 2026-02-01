@@ -20,4 +20,5 @@ const (
 	ActivityGetManualTransferByWorkflow   = "GetManualTransferByWorkflow"
 	ActivityCalculateFee                  = "CalculateFee"
 	ActivityCheckLimits                   = "CheckLimits"
+	ActivityConvertCurrency               = "ConvertCurrency"
 )

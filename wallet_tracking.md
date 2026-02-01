@@ -55,6 +55,7 @@ Last updated: 2026-02-01
 - [x] Registered noop PSP provider for Temporal workflows
 - [x] Added PSP transaction status update store helper
 - [x] Added fee + limit activities for workflows
+- [x] Added exchange rate conversion activity
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
