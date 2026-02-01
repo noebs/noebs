@@ -4,7 +4,7 @@ package noebs.wallet.v1;
 
 import "google/api/annotations.proto";
 
-option go_package = "github.com/adonese/noebs/gen/noebs/wallet/v1;walletv1";
+option go_package = "github.com/adonese/noebs/gen/proto/noebs/wallet/v1;walletv1";
 
 service WalletInternalService {
   rpc GetWallet(GetWalletRequest) returns (Wallet) {}
