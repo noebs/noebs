@@ -993,6 +993,19 @@ type NoebsConfig struct {
 	// SMS message
 	SMSMessage string `json:"sms_message"`
 
+	// Temporal
+	TemporalEnabled   bool   `json:"temporal_enabled"`
+	TemporalHost      string `json:"temporal_host"`
+	TemporalPort      string `json:"temporal_port"`
+	TemporalNamespace string `json:"temporal_namespace"`
+
+	// Wallet
+	WalletEnabled           bool   `json:"wallet_enabled"`
+	WalletPINRequired       bool   `json:"wallet_pin_required"`
+	Wallet2FAThreshold      int64  `json:"wallet_2fa_threshold"`
+	WalletApprovalThreshold int64  `json:"wallet_approval_threshold"`
+	WalletDefaultCurrency   string `json:"wallet_default_currency"`
+
 	// This the base of the link for payment links
 	PaymentLinkBase string `json:"payment_link_base"`
 }
