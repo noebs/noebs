@@ -44,6 +44,7 @@ Last updated: 2026-02-01
 - [x] Added withdrawal destination + ownership store helpers
 - [x] Added wallet list store helper + admin list handler
 - [x] Refactored wallet store queries to use ensured DB handle
+- [x] Added Temporal services to docker-compose
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
