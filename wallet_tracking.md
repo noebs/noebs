@@ -46,6 +46,7 @@ Last updated: 2026-02-01
 - [x] Refactored wallet store queries to use ensured DB handle
 - [x] Added Temporal services to docker-compose
 - [x] Added PSP transaction model + store helpers
+- [x] Added funding source activities for Temporal workflows
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
