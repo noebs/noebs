@@ -190,6 +190,21 @@ func TestGetPSPTransactionByReferenceValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingClientReference)
 }
 
+func TestUpdatePSPTransactionStatusValidation(t *testing.T) {
+	s := &Store{}
+	update := PSPStatusUpdate{Status: "success"}
+
+	err := s.UpdatePSPTransactionStatus(t.Context(), "", "ref-1", update)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdatePSPTransactionStatus(t.Context(), "tenant", "", update)
+	assertErrorIs(t, err, ErrMissingClientReference)
+
+	update.Status = ""
+	err = s.UpdatePSPTransactionStatus(t.Context(), "tenant", "ref-1", update)
+	assertErrorIs(t, err, ErrMissingStatus)
+}
+
 func assertErrorIs(t *testing.T, err, want error) {
 	t.Helper()
 	if !errors.Is(err, want) {

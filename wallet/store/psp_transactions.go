@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+type PSPStatusUpdate struct {
+	Status          string
+	ResponseCode    sql.NullString
+	ResponseMessage sql.NullString
+	ConfirmedAt     sql.NullTime
+	LastPolledAt    sql.NullTime
+	NextPollAt      sql.NullTime
+	RetryCount      int
+	LastErrorType   sql.NullString
+	LastErrorAt     sql.NullTime
+}
+
 func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*PSPTransaction, error) {
 	if txn.TenantID == "" {
 		return nil, ErrMissingTenantID
@@ -100,4 +112,48 @@ func (s *Store) GetPSPTransactionByReference(ctx context.Context, tenantID, clie
 		return nil, err
 	}
 	return &txn, nil
+}
+
+func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, clientReference string, update PSPStatusUpdate) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if clientReference == "" {
+		return ErrMissingClientReference
+	}
+	if update.Status == "" {
+		return ErrMissingStatus
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE psp_transactions
+		SET status = ?, response_code = ?, response_message = ?, confirmed_at = ?,
+			last_polled_at = ?, next_poll_at = ?, retry_count = ?, last_error_type = ?, last_error_at = ?
+		WHERE tenant_id = ? AND client_reference = ?`)
+	result, err := db.ExecContext(ctx, stmt,
+		update.Status,
+		update.ResponseCode,
+		update.ResponseMessage,
+		update.ConfirmedAt,
+		update.LastPolledAt,
+		update.NextPollAt,
+		update.RetryCount,
+		update.LastErrorType,
+		update.LastErrorAt,
+		tenantID,
+		clientReference,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrPSPTransactionNotFound
+	}
+	return nil
 }
