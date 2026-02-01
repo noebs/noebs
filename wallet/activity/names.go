@@ -18,4 +18,6 @@ const (
 	ActivityCreateManualTransfer          = "CreateManualTransfer"
 	ActivityAddManualTransferApproval     = "AddManualTransferApproval"
 	ActivityGetManualTransferByWorkflow   = "GetManualTransferByWorkflow"
+	ActivityCalculateFee                  = "CalculateFee"
+	ActivityCheckLimits                   = "CheckLimits"
 )
