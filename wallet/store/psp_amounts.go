@@ -70,6 +70,12 @@ func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransacti
 		tenant_id, psp_transaction_id, amount_kind, amount, currency,
 		fx_rate, fx_base_currency, fx_quote_currency, fx_source
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(tenant_id, psp_transaction_id, amount_kind, currency) DO UPDATE
+		SET amount = EXCLUDED.amount,
+			fx_rate = EXCLUDED.fx_rate,
+			fx_base_currency = EXCLUDED.fx_base_currency,
+			fx_quote_currency = EXCLUDED.fx_quote_currency,
+			fx_source = EXCLUDED.fx_source
 	RETURNING *`)
 	var stored PSPTransactionAmount
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -120,6 +126,12 @@ func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, p
 		tenant_id, psp_transaction_id, amount_kind, amount, currency,
 		fx_rate, fx_base_currency, fx_quote_currency, fx_source
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT(tenant_id, psp_transaction_id, amount_kind, currency) DO UPDATE
+		SET amount = EXCLUDED.amount,
+			fx_rate = EXCLUDED.fx_rate,
+			fx_base_currency = EXCLUDED.fx_base_currency,
+			fx_quote_currency = EXCLUDED.fx_quote_currency,
+			fx_source = EXCLUDED.fx_source
 	RETURNING *`)
 	stored := make([]PSPTransactionAmount, 0, len(prepared))
 	for _, amount := range prepared {
