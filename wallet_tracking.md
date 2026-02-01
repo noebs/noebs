@@ -36,6 +36,7 @@ Last updated: 2026-02-01
 - [x] Added fee/rate/limit store query helpers
 - [x] Added fee engine, rate service, and limit enforcer helpers
 - [x] Added wallet PIN + TOTP helpers
+- [x] Added RBAC permission constants + role helper
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations
