@@ -3,6 +3,7 @@ package workflow
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	walletactivity "github.com/adonese/noebs/wallet/activity"
@@ -532,9 +533,59 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 }
 
 func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
-	_ = ctx
-	_ = params
-	return ErrNotImplemented
+	if params.TenantID == "" {
+		return walletstore.ErrMissingTenantID
+	}
+	if params.Status == "" {
+		return walletstore.ErrMissingStatus
+	}
+	if params.StartTime.IsZero() {
+		return walletstore.ErrMissingStartTime
+	}
+	if params.EndTime.IsZero() {
+		return walletstore.ErrMissingEndTime
+	}
+	if params.StartTime.After(params.EndTime) {
+		return walletstore.ErrInvalidTimeRange
+	}
+	if params.Limit <= 0 {
+		return walletstore.ErrInvalidLimit
+	}
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+	})
+
+	listParams := walletactivity.ListPSPTransactionsByStatusParams{
+		TenantID: params.TenantID,
+		Status:   params.Status,
+		Start:    params.StartTime,
+		End:      params.EndTime,
+		Limit:    params.Limit,
+	}
+	var txns []walletstore.PSPTransaction
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityListPSPTransactionsByStatus, listParams).Get(ctx, &txns); err != nil {
+		return err
+	}
+
+	logger := workflow.GetLogger(ctx)
+	missing := make([]string, 0)
+	for _, txn := range txns {
+		if txn.ClientReference == "" {
+			continue
+		}
+		var exists bool
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityLedgerTransactionExists, params.TenantID, txn.ClientReference).Get(ctx, &exists); err != nil {
+			return err
+		}
+		if !exists {
+			missing = append(missing, txn.ClientReference)
+			logger.Warn("missing ledger transaction for psp transaction", "client_reference", txn.ClientReference)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("reconciliation mismatch: %d missing ledger entries", len(missing))
+	}
+	return nil
 }
 
 func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {

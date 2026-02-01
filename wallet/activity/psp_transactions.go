@@ -23,6 +23,14 @@ type UpdatePSPTransactionStatusParams struct {
 	Update          walletstore.PSPStatusUpdate
 }
 
+type ListPSPTransactionsByStatusParams struct {
+	TenantID string
+	Status   string
+	Start    time.Time
+	End      time.Time
+	Limit    int
+}
+
 type TryAcquirePSPTransactionLockParams struct {
 	TenantID        string
 	ClientReference string
@@ -53,6 +61,13 @@ func (a *PSPTransactionActivities) ListPSPTransactionsForPolling(ctx context.Con
 		return nil, ErrMissingStore
 	}
 	return a.Store.ListPSPTransactionsForPolling(ctx, tenantID, limit)
+}
+
+func (a *PSPTransactionActivities) ListPSPTransactionsByStatus(ctx context.Context, params ListPSPTransactionsByStatusParams) ([]walletstore.PSPTransaction, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Store.ListPSPTransactionsByStatus(ctx, params.TenantID, params.Status, params.Start, params.End, params.Limit)
 }
 
 func (a *PSPTransactionActivities) UpdatePSPTransactionStatus(ctx context.Context, params UpdatePSPTransactionStatusParams) error {

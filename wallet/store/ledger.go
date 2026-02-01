@@ -175,6 +175,28 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 	return result, nil
 }
 
+func (s *Store) LedgerTransactionExists(ctx context.Context, tenantID, idempotencyKey string) (bool, error) {
+	if tenantID == "" {
+		return false, ErrMissingTenantID
+	}
+	if idempotencyKey == "" {
+		return false, ErrMissingIdempotencyKey
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return false, err
+	}
+	stmt := db.Rebind("SELECT 1 FROM ledger_transactions WHERE tenant_id = ? AND idempotency_key = ?")
+	var exists int
+	if err := db.GetContext(ctx, &exists, stmt, tenantID, idempotencyKey); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *Store) loadExistingEntries(ctx context.Context, tx *sqlx.Tx, tenantID, idempotencyKey string) (*DoubleEntryResult, error) {
 	stmt := s.DB.Rebind("SELECT id FROM ledger_transactions WHERE tenant_id = ? AND idempotency_key = ?")
 	var txID int64

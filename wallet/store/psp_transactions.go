@@ -184,6 +184,40 @@ func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID stri
 	return rows, nil
 }
 
+func (s *Store) ListPSPTransactionsByStatus(ctx context.Context, tenantID, status string, start, end time.Time, limit int) ([]PSPTransaction, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if status == "" {
+		return nil, ErrMissingStatus
+	}
+	if start.IsZero() {
+		return nil, ErrMissingStartTime
+	}
+	if end.IsZero() {
+		return nil, ErrMissingEndTime
+	}
+	if start.After(end) {
+		return nil, ErrInvalidTimeRange
+	}
+	if limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind(`SELECT * FROM psp_transactions
+		WHERE tenant_id = ? AND status = ? AND created_at >= ? AND created_at <= ?
+		ORDER BY created_at ASC
+		LIMIT ?`)
+	var rows []PSPTransaction
+	if err := db.SelectContext(ctx, &rows, stmt, tenantID, status, start, end, limit); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func (s *Store) TryAcquirePSPTransactionLock(ctx context.Context, tenantID, clientReference, lockToken string, lockExpiresAt time.Time) (bool, error) {
 	if tenantID == "" {
 		return false, ErrMissingTenantID

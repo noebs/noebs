@@ -76,6 +76,7 @@ Last updated: 2026-02-01
 - [x] Added PSP transaction lock acquisition for poller safety
 - [x] Mounted gRPC gateway routes on Fiber instead of standalone HTTP server
 - [x] Implemented manual transfer workflow with approval/hold/ledger posting
+- [x] Added reconciliation workflow to detect missing ledger entries
 
 ## Next steps (short-term)
 - [ ] Implement workflow logic + PSP provider implementations

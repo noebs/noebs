@@ -231,6 +231,30 @@ func TestListPSPTransactionsForPollingValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidLimit)
 }
 
+func TestListPSPTransactionsByStatusValidation(t *testing.T) {
+	s := &Store{}
+	start := time.Now().UTC().Add(-time.Hour)
+	end := time.Now().UTC()
+
+	_, err := s.ListPSPTransactionsByStatus(t.Context(), "", "success", start, end, 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "", start, end, 1)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "success", time.Time{}, end, 1)
+	assertErrorIs(t, err, ErrMissingStartTime)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "success", start, time.Time{}, 1)
+	assertErrorIs(t, err, ErrMissingEndTime)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "success", end, start, 1)
+	assertErrorIs(t, err, ErrInvalidTimeRange)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "success", start, end, 0)
+	assertErrorIs(t, err, ErrInvalidLimit)
+}
+
 func TestTryAcquirePSPTransactionLockValidation(t *testing.T) {
 	s := &Store{}
 	now := time.Now().UTC()
@@ -246,6 +270,15 @@ func TestTryAcquirePSPTransactionLockValidation(t *testing.T) {
 
 	_, err = s.TryAcquirePSPTransactionLock(t.Context(), "tenant", "ref-1", "token", time.Time{})
 	assertErrorIs(t, err, ErrMissingLockExpiry)
+}
+
+func TestLedgerTransactionExistsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.LedgerTransactionExists(t.Context(), "", "idem-1")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.LedgerTransactionExists(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingIdempotencyKey)
 }
 
 func TestAddPSPTransactionAmountValidation(t *testing.T) {

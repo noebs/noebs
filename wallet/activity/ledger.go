@@ -61,3 +61,10 @@ func (a *LedgerActivities) ValidateReleaseHold(ctx context.Context, tenantID str
 	}
 	return struct{}{}, walletstore.ValidateReleaseHold(tenantID, holdID)
 }
+
+func (a *LedgerActivities) LedgerTransactionExists(ctx context.Context, tenantID, idempotencyKey string) (bool, error) {
+	if a == nil || a.Store == nil {
+		return false, ErrMissingStore
+	}
+	return a.Store.LedgerTransactionExists(ctx, tenantID, idempotencyKey)
+}
