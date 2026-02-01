@@ -19,6 +19,8 @@ var (
 	ErrInvalidWalletPair     = errors.New("invalid wallet pair")
 	ErrWalletNotFound        = errors.New("wallet not found")
 	ErrCurrencyMismatch      = errors.New("currency mismatch")
+	ErrMissingProviderCode   = errors.New("missing provider code")
+	ErrPSPConfigNotFound     = errors.New("psp config not found")
 	ErrInsufficientFunds     = errors.New("insufficient funds")
 	ErrDuplicateTransaction  = errors.New("duplicate transaction")
 	ErrDuplicateHold         = errors.New("duplicate hold")

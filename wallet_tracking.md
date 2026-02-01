@@ -20,6 +20,7 @@ Last updated: 2026-02-01
 - [x] Added wallet service wiring over store layer
 - [x] Added wallet user/admin handler skeletons + route registration
 - [x] Added PSP provider interface + registry skeleton
+- [x] Added PSP config store query helper
 
 ## Next steps (short-term)
 - [ ] Add PSP + Temporal wiring (service + worker setup)
