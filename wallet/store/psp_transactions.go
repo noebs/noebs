@@ -7,15 +7,16 @@ import (
 )
 
 type PSPStatusUpdate struct {
-	Status          string
-	ResponseCode    sql.NullString
-	ResponseMessage sql.NullString
-	ConfirmedAt     sql.NullTime
-	LastPolledAt    sql.NullTime
-	NextPollAt      sql.NullTime
-	RetryCount      int
-	LastErrorType   sql.NullString
-	LastErrorAt     sql.NullTime
+	Status           string
+	PSPTransactionID sql.NullString
+	ResponseCode     sql.NullString
+	ResponseMessage  sql.NullString
+	ConfirmedAt      sql.NullTime
+	LastPolledAt     sql.NullTime
+	NextPollAt       sql.NullTime
+	RetryCount       int
+	LastErrorType    sql.NullString
+	LastErrorAt      sql.NullTime
 }
 
 func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*PSPTransaction, error) {
@@ -129,11 +130,13 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 		return err
 	}
 	stmt := db.Rebind(`UPDATE psp_transactions
-		SET status = ?, response_code = ?, response_message = ?, confirmed_at = ?,
+		SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
+			response_code = ?, response_message = ?, confirmed_at = ?,
 			last_polled_at = ?, next_poll_at = ?, retry_count = ?, last_error_type = ?, last_error_at = ?
 		WHERE tenant_id = ? AND client_reference = ?`)
 	result, err := db.ExecContext(ctx, stmt,
 		update.Status,
+		update.PSPTransactionID,
 		update.ResponseCode,
 		update.ResponseMessage,
 		update.ConfirmedAt,

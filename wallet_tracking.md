@@ -70,6 +70,7 @@ Last updated: 2026-02-01
 - [x] Added PSP transaction amount batch insert API + activity
 - [x] Wired PSP amount resolution + recording into deposit/withdraw workflows
 - [x] Implemented PSP status poller workflow + polling activities
+- [x] Updated deposit/withdraw workflows to persist PSP status + provider transaction IDs
 - [x] Added gRPC wallet service handlers and generated proto stubs/OpenAPI
 - [x] Added gRPC gateway helpers for public wallet service
 - [x] Wired gRPC server/gateway startup hooks in CLI config

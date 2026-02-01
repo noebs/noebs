@@ -143,6 +143,25 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
 		return err
 	}
+	status := result.Status
+	if status == "" {
+		status = pspTxn.Status
+	}
+	update := walletstore.PSPStatusUpdate{Status: status}
+	if result.ProviderTxID != "" {
+		update.PSPTransactionID = sql.NullString{String: result.ProviderTxID, Valid: true}
+	}
+	if status == "success" {
+		update.ConfirmedAt = sql.NullTime{Time: workflow.Now(ctx), Valid: true}
+	}
+	updateParams := walletactivity.UpdatePSPTransactionStatusParams{
+		TenantID:        params.TenantID,
+		ClientReference: params.ClientReference,
+		Update:          update,
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdatePSPTransactionStatus, updateParams).Get(ctx, nil); err != nil {
+		return err
+	}
 
 	resolveReq := walletvalidation.PSPAmountResolutionRequest{
 		TenantID:           params.TenantID,
@@ -248,6 +267,25 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	}
 	var result walletpsp.PayoutResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivitySendPayout, payoutParams).Get(ctx, &result); err != nil {
+		return err
+	}
+	status := result.Status
+	if status == "" {
+		status = pspTxn.Status
+	}
+	update := walletstore.PSPStatusUpdate{Status: status}
+	if result.ProviderTxID != "" {
+		update.PSPTransactionID = sql.NullString{String: result.ProviderTxID, Valid: true}
+	}
+	if status == "success" {
+		update.ConfirmedAt = sql.NullTime{Time: workflow.Now(ctx), Valid: true}
+	}
+	updateParams := walletactivity.UpdatePSPTransactionStatusParams{
+		TenantID:        params.TenantID,
+		ClientReference: params.Request.ClientReference,
+		Update:          update,
+	}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdatePSPTransactionStatus, updateParams).Get(ctx, nil); err != nil {
 		return err
 	}
 
