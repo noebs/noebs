@@ -407,20 +407,21 @@ func (s *Store) DeleteCard(ctx context.Context, tenantID string, userID int64, c
 }
 
 func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, cardIdx string) error {
-	if _, err := s.ensureDB(); err != nil {
-		return err
-	}
-	tx, err := s.DB.BeginTxx(ctx, nil)
+	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	resetStmt := s.DB.Rebind("UPDATE cards SET is_main = FALSE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL")
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	resetStmt := db.Rebind("UPDATE cards SET is_main = FALSE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL")
 	if _, err := tx.ExecContext(ctx, resetStmt, time.Now().UTC(), tenantID, userID); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	panClause := s.panLookupClause("pan")
-	setStmt := s.DB.Rebind("UPDATE cards SET is_main = TRUE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND " + panClause + " AND deleted_at IS NULL")
+	setStmt := db.Rebind("UPDATE cards SET is_main = TRUE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND " + panClause + " AND deleted_at IS NULL")
 	args := []any{time.Now().UTC(), tenantID, userID}
 	args = append(args, s.panLookupArgs(cardIdx)...)
 	if _, err := tx.ExecContext(ctx, setStmt, args...); err != nil {
@@ -826,15 +827,16 @@ func (s *Store) GetMeterName(ctx context.Context, tenantID, nec string) (string,
 }
 
 func (s *Store) UpdateKYC(ctx context.Context, tenantID string, kyc *ebs_fields.KYC, passport *ebs_fields.Passport) error {
-	if _, err := s.ensureDB(); err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	tx, err := s.DB.BeginTxx(ctx, nil)
+	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	kycStmt := s.DB.Rebind(`INSERT INTO kyc(tenant_id, user_mobile, mobile, selfie, passport_img, created_at, updated_at)
+	now := time.Now().UTC()
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	kycStmt := db.Rebind(`INSERT INTO kyc(tenant_id, user_mobile, mobile, selfie, passport_img, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(tenant_id, mobile) DO UPDATE SET user_mobile = excluded.user_mobile, selfie = excluded.selfie, passport_img = excluded.passport_img, updated_at = excluded.updated_at`)
 	if _, err := tx.ExecContext(ctx, kycStmt, tenantID, kyc.UserMobile, kyc.Mobile, kyc.Selfie, kyc.PassportImg, now, now); err != nil {
@@ -842,7 +844,7 @@ func (s *Store) UpdateKYC(ctx context.Context, tenantID string, kyc *ebs_fields.
 		return err
 	}
 	if passport != nil {
-		passStmt := s.DB.Rebind(`INSERT INTO passports(tenant_id, mobile, birth_date, issue_date, expiration_date, national_number, passport_number, gender, nationality, holder_name, created_at, updated_at)
+		passStmt := db.Rebind(`INSERT INTO passports(tenant_id, mobile, birth_date, issue_date, expiration_date, national_number, passport_number, gender, nationality, holder_name, created_at, updated_at)
 			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(tenant_id, mobile) DO UPDATE SET birth_date = excluded.birth_date, issue_date = excluded.issue_date, expiration_date = excluded.expiration_date,
 			national_number = excluded.national_number, passport_number = excluded.passport_number, gender = excluded.gender, nationality = excluded.nationality, holder_name = excluded.holder_name, updated_at = excluded.updated_at`)
