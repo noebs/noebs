@@ -1,9 +1,12 @@
 package dashboard
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 
+	"github.com/a-h/templ"
 	"github.com/adonese/noebs/apperr"
 	"github.com/gofiber/fiber/v2"
 )
@@ -31,4 +34,28 @@ func parseJSON(c *fiber.Ctx, dst interface{}) error {
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	}
 	return nil
+}
+
+func renderComponent(c *fiber.Ctx, status int, component templ.Component) {
+	if c == nil {
+		return
+	}
+	if status == 0 {
+		status = http.StatusOK
+	}
+	if component == nil {
+		_ = c.SendStatus(status)
+		return
+	}
+	ctx := c.UserContext()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var buf bytes.Buffer
+	if err := component.Render(ctx, &buf); err != nil {
+		jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
+		return
+	}
+	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
+	_ = c.Status(status).Send(buf.Bytes())
 }

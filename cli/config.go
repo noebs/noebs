@@ -21,14 +21,16 @@ import (
 	walletactivity "github.com/adonese/noebs/wallet/activity"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
+	walletpsphttpjson "github.com/adonese/noebs/wallet/psp/httpjson"
 	walletpspnoop "github.com/adonese/noebs/wallet/psp/noop"
 	walletworker "github.com/adonese/noebs/wallet/worker"
-	"github.com/bradfitz/iter"
+	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/template/html/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
 
 	chat "github.com/tutipay/ws"
@@ -110,15 +112,88 @@ func resolveDashboardTemplateDir() string {
 	return "./dashboard/template"
 }
 
+func buildPSPDeps(service *wallet.Service, secrets map[string]interface{}) (*walletpsp.Registry, *walletpsp.Loader) {
+	if service == nil || service.Store == nil {
+		return nil, nil
+	}
+	pspRegistry := walletpsp.NewRegistry()
+	if err := pspRegistry.Register("noop", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
+		_ = cfg
+		return &walletpspnoop.Provider{}, nil
+	}); err != nil {
+		logrusLogger.Printf("error registering noop PSP provider: %v", err)
+	}
+	if err := pspRegistry.Register("httpjson", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
+		return walletpsphttpjson.NewProvider(cfg)
+	}); err != nil {
+		logrusLogger.Printf("error registering httpjson PSP provider: %v", err)
+	}
+
+	var secretResolver walletpsp.SecretResolver = walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
+		return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
+	})
+	if mapResolver := walletpsp.NewMapSecretResolver(secrets); mapResolver != nil {
+		secretResolver = mapResolver
+	}
+	pspLoader := &walletpsp.Loader{
+		Store:   service.Store,
+		Secrets: secretResolver,
+	}
+	return pspRegistry, pspLoader
+}
+
+func startCronWorkflow(ctx context.Context, temporalClient client.Client, workflowID, cron string, taskQueue string, workflowFn interface{}, args ...interface{}) {
+	if temporalClient == nil || workflowID == "" || cron == "" || taskQueue == "" {
+		return
+	}
+	_, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+		ID:           workflowID,
+		TaskQueue:    taskQueue,
+		CronSchedule: cron,
+	}, workflowFn, args...)
+	if err == nil {
+		logrusLogger.Printf("started cron workflow %s (%s)", workflowID, cron)
+		return
+	}
+	if _, ok := err.(*serviceerror.WorkflowExecutionAlreadyStarted); ok {
+		return
+	}
+	logrusLogger.Printf("error starting cron workflow %s: %v", workflowID, err)
+}
+
+func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client, tenants []string, cfg ebs_fields.NoebsConfig) {
+	if temporalClient == nil {
+		return
+	}
+	taskQueue := string(walletworker.TaskQueueMain)
+	for _, tenantID := range tenants {
+		if tenantID == "" {
+			continue
+		}
+		pollerID := fmt.Sprintf("wallet-psp-poller-%s", tenantID)
+		pollerParams := walletworkflow.PSPStatusPollerParams{
+			TenantID:            tenantID,
+			Limit:               cfg.WalletPSPPollerBatchSize,
+			PollIntervalSeconds: cfg.WalletPSPPollerIntervalSeconds,
+		}
+		startCronWorkflow(ctx, temporalClient, pollerID, cfg.WalletPSPPollerCron, taskQueue, walletworkflow.PSPStatusPoller, pollerParams)
+
+		reconID := fmt.Sprintf("wallet-reconciliation-%s", tenantID)
+		reconParams := walletworkflow.ReconciliationParams{
+			TenantID:      tenantID,
+			Status:        "success",
+			Limit:         cfg.WalletReconciliationBatchSize,
+			LookbackHours: cfg.WalletReconciliationLookbackHours,
+		}
+		startCronWorkflow(ctx, temporalClient, reconID, cfg.WalletReconciliationCron, taskQueue, walletworkflow.Reconciliation, reconParams)
+	}
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
 	templateDir := resolveDashboardTemplateDir()
-	engine := html.New(templateDir, ".html")
-	engine.AddFunc("N", iter.N)
-	engine.AddFunc("time", dashboard.TimeFormatter)
-
-	route := fiber.New(fiber.Config{Views: engine, ViewsLayout: "base"})
+	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
 	if otelEnabled {
 		route.Use(otelfiber.Middleware(
@@ -329,12 +404,20 @@ func GetMainEngine() *fiber.App {
 	}
 
 	if walletService != nil {
+		var temporalSignaler wallethandler.TemporalSignaler
+		var temporalClient wallethandler.TemporalClient
+		if walletWorker != nil {
+			temporalSignaler = walletWorker.Client
+			temporalClient = walletWorker.Client
+		}
 		walletUserHandler := wallethandler.NewUserHandler(walletService)
-		walletAdminHandler := wallethandler.NewAdminHandler(walletService)
+		walletAdminHandler := wallethandler.NewAdminHandler(walletService, temporalClient)
+		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(walletService, walletPSPLoader, walletPSPRegistry, temporalSignaler)
 		userWalletGroup := route.Group("/wallet")
 		adminWalletGroup := route.Group("/admin/wallet", adminGuard)
 		wallethandler.RegisterUserRoutes(userWalletGroup, walletUserHandler)
 		wallethandler.RegisterAdminRoutes(adminWalletGroup, walletAdminHandler)
+		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
 	}
 	return route
 }
@@ -442,25 +525,12 @@ func initConfig() {
 	dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	walletService = wallet.NewService(database, noebsConfig)
+	walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
 	if noebsConfig.TemporalEnabled {
-		pspRegistry := walletpsp.NewRegistry()
-		if err := pspRegistry.Register("noop", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
-			_ = cfg
-			return &walletpspnoop.Provider{}, nil
-		}); err != nil {
-			logrusLogger.Printf("error registering noop PSP provider: %v", err)
+		if walletPSPRegistry == nil || walletPSPLoader == nil {
+			logrusLogger.Printf("wallet PSP dependencies not initialized; PSP activities disabled")
 		}
-		var secretResolver walletpsp.SecretResolver = walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
-			return walletpsp.SecretBundle{}, walletpsp.ErrPSPSecretMissing
-		})
-		if mapResolver := walletpsp.NewMapSecretResolver(rawSecrets); mapResolver != nil {
-			secretResolver = mapResolver
-		}
-		pspLoader := &walletpsp.Loader{
-			Store:   walletService.Store,
-			Secrets: secretResolver,
-		}
-		pspActivities := walletactivity.NewPSPActivities(pspLoader, pspRegistry)
+		pspActivities := walletactivity.NewPSPActivities(walletPSPLoader, walletPSPRegistry)
 		workerOpts := walletworker.Options{
 			Host:      noebsConfig.TemporalHost,
 			Port:      noebsConfig.TemporalPort,
@@ -482,6 +552,18 @@ func initConfig() {
 			logrusLogger.Fatalf("error starting wallet worker: %v", err)
 		}
 		walletWorker = runner
+		var tenants []string
+		if storeSvc != nil {
+			if list, err := storeSvc.ListTenants(context.Background()); err == nil {
+				tenants = list
+			} else {
+				logrusLogger.Printf("error listing tenants for wallet schedules: %v", err)
+			}
+		}
+		if len(tenants) == 0 && noebsConfig.DefaultTenantID != "" {
+			tenants = []string{noebsConfig.DefaultTenantID}
+		}
+		startWalletCronWorkflows(context.Background(), runner.Client, tenants, noebsConfig)
 	}
 	if err := initGRPCServers(); err != nil {
 		logrusLogger.Fatalf("error initializing grpc servers: %v", err)

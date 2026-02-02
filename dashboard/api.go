@@ -68,7 +68,11 @@ func (s *Service) MerchantViews(c *fiber.Ctx) {
 		log.WithFields(logrus.Fields{"code": err.Error()}).Info("error loading issues")
 	}
 
-	_ = c.Render("merchants", fiber.Map{"tran": tran, "issues": issues}, "base")
+	view := MerchantView{
+		Transactions: tran,
+		Issues:       issues,
+	}
+	renderComponent(c, http.StatusOK, MerchantPage(view))
 
 	//TODO get merchant profile
 
@@ -308,16 +312,24 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 
 	pager := pagination(int(count), 50)
 	errors := errorsCounter(tran)
-	stats := map[string]int{
-		"NumberTransactions":     int(count),
-		"SuccessfulTransactions": int(count) - errors,
-		"FailedTransactions":     errors,
+	stats := DashboardStatsView{
+		NumberTransactions:     int(count),
+		SuccessfulTransactions: int(count) - errors,
+		FailedTransactions:     errors,
 	}
 
 	sumFees := computeSum(terminalFees)
-	_ = c.Render("table", fiber.Map{"transactions": tran, "count": pager + 1,
-		"stats": stats, "amounts": totAmount, "merchant_stats": mStats, "least_merchants": leastMerchants,
-		"terminal_fees": terminalFees, "sum_fees": sumFees}, "base")
+	view := DashboardTableView{
+		Transactions:   tran,
+		PageCount:      pager + 1,
+		Stats:          stats,
+		Amounts:        totAmount,
+		MerchantStats:  mStats,
+		LeastMerchants: leastMerchants,
+		TerminalFees:   terminalFees,
+		SumFees:        sumFees,
+	}
+	renderComponent(c, http.StatusOK, DashboardTablePage(view))
 }
 
 func (s *Service) QRStatus(c *fiber.Ctx) {
@@ -334,7 +346,12 @@ func (s *Service) QRStatus(c *fiber.Ctx) {
 		return
 	}
 
-	_ = c.Render("qr_status", fiber.Map{"transactions": data}, "base")
+	pageCount := pagination(len(data), 50) + 1
+	view := QRStatusView{
+		Transactions: data,
+		PageCount:    pageCount,
+	}
+	renderComponent(c, http.StatusOK, QRStatusPage(view))
 }
 
 func (s *Service) getLastTransactions(ctx context.Context, tenantID, merchantID string) ([]ebs_fields.EBSResponse, error) {
@@ -354,7 +371,7 @@ func (s *Service) getLastTransactions(ctx context.Context, tenantID, merchantID 
 }
 
 func (s *Service) IndexPage(c *fiber.Ctx) {
-	_ = c.Render("index", fiber.Map{}, "base")
+	renderComponent(c, http.StatusOK, DashboardIndexPage())
 }
 
 func (s *Service) Stream(c *fiber.Ctx) {
