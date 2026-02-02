@@ -15,6 +15,7 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
