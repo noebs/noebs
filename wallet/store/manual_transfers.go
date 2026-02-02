@@ -128,6 +128,25 @@ func (s *Store) GetManualTransferByWorkflow(ctx context.Context, tenantID, workf
 	return &transfer, nil
 }
 
+func (s *Store) GetManualTransferByWorkflowID(ctx context.Context, workflowID string) (*ManualTransfer, error) {
+	if workflowID == "" {
+		return nil, ErrMissingWorkflowID
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM manual_transfers WHERE workflow_id = ?")
+	var transfer ManualTransfer
+	if err := db.GetContext(ctx, &transfer, stmt, workflowID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrManualTransferNotFound
+		}
+		return nil, err
+	}
+	return &transfer, nil
+}
+
 func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workflowID string, update ManualTransferStatusUpdate) error {
 	if tenantID == "" {
 		return ErrMissingTenantID

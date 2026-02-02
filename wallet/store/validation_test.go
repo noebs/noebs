@@ -160,6 +160,12 @@ func TestUpdateManualTransferStatusValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingStatus)
 }
 
+func TestGetManualTransferByWorkflowIDValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetManualTransferByWorkflowID(t.Context(), "")
+	assertErrorIs(t, err, ErrMissingWorkflowID)
+}
+
 func TestListManualTransfersValidation(t *testing.T) {
 	s := &Store{}
 	filter := ManualTransferFilter{TenantID: "", Limit: 10}

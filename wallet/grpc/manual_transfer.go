@@ -2,6 +2,7 @@ package walletgrpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
@@ -121,6 +122,16 @@ func (s *Server) SignalManualTransferDecision(ctx context.Context, req *walletv1
 		}
 	} else if req.Reason == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
+	}
+
+	if s.Service.Store != nil && s.Service.Store.DB != nil && s.Service.Store.DB.DB != nil {
+		transfer, err := s.Service.Store.GetManualTransferByWorkflowID(ctx, req.WorkflowId)
+		if err == nil && transfer.RequestedBy.Valid && transfer.RequestedBy.Int64 == req.ApproverId {
+			return nil, status.Error(codes.InvalidArgument, walletstore.ErrApproverIsRequester.Error())
+		}
+		if err != nil && !errors.Is(err, walletstore.ErrManualTransferNotFound) {
+			return nil, mapError(err)
+		}
 	}
 
 	temporalClient, err := s.ensureTemporalClient()

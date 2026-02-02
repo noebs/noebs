@@ -208,7 +208,8 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingTransferType),
 		errors.Is(err, walletstore.ErrMissingReason),
 		errors.Is(err, walletstore.ErrMissingApproverID),
-		errors.Is(err, walletstore.ErrMissingWorkflowID):
+		errors.Is(err, walletstore.ErrMissingWorkflowID),
+		errors.Is(err, walletstore.ErrApproverIsRequester):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, wallet.ErrMissingStore),
 		errors.Is(err, walletvalidation.ErrMissingStore):
