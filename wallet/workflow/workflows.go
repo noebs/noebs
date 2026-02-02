@@ -30,6 +30,7 @@ const (
 	ManualTransferStatusCompleted = "completed"
 	WithdrawalApprovalSignal      = "withdrawal_approval"
 	WithdrawalVerificationSignal  = "withdrawal_destination_verification"
+	PSPStatusUpdateSignal         = "psp_status_update"
 )
 
 type DepositParams struct {
@@ -39,6 +40,7 @@ type DepositParams struct {
 	WalletID        string
 	OwnerType       string
 	OwnerID         string
+	Region          string
 }
 
 type WithdrawalParams struct {
@@ -58,6 +60,7 @@ type WithdrawalParams struct {
 	ApprovalTimeoutSeconds     int
 	VerificationTimeoutSeconds int
 	HoldExpirySeconds          int
+	Region                     string
 	Request                    walletpsp.PayoutRequest
 }
 
@@ -116,11 +119,12 @@ type DestinationVerificationDecision struct {
 }
 
 type ReconciliationParams struct {
-	TenantID  string
-	Status    string
-	StartTime time.Time
-	EndTime   time.Time
-	Limit     int
+	TenantID      string
+	Status        string
+	StartTime     time.Time
+	EndTime       time.Time
+	Limit         int
+	LookbackHours int
 }
 
 type PSPStatusPollerParams struct {
@@ -167,6 +171,7 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		Amount:          pspTxn.Amount,
 		OwnerType:       params.OwnerType,
 		OwnerID:         params.OwnerID,
+		Region:          params.Region,
 	}
 	var validation walletvalidation.DepositValidationResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDeposit, validationReq).Get(ctx, &validation); err != nil {
@@ -177,6 +182,8 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		TenantID:      params.TenantID,
 		ProviderCode:  providerCode,
 		TransactionID: transactionID,
+		Currency:      pspTxn.Currency,
+		Region:        params.Region,
 	}
 	var result walletpsp.DepositVerification
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
@@ -496,6 +503,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		Amount:          params.Request.Amount,
 		OwnerType:       params.OwnerType,
 		OwnerID:         params.OwnerID,
+		Region:          params.Region,
 	}
 	var validation walletvalidation.WithdrawalValidationResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateWithdrawal, validationReq).Get(ctx, &validation); err != nil {
@@ -722,6 +730,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		TenantID:     params.TenantID,
 		ProviderCode: providerCode,
 		Request:      payout,
+		Region:       params.Region,
 	}
 	var result walletpsp.PayoutResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivitySendPayout, payoutParams).Get(ctx, &result); err != nil {
@@ -1218,6 +1227,17 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil)
 		return err
 	}
+	if err := validateManualTransferDecision(params.RequestedBy, decision); err != nil {
+		if holdID > 0 {
+			_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityReleaseHold, params.TenantID, holdID).Get(ctx, nil)
+		}
+		update := walletstore.ManualTransferStatusUpdate{
+			Status:          ManualTransferStatusRejected,
+			RejectionReason: sql.NullString{String: err.Error(), Valid: true},
+		}
+		_ = workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil)
+		return err
+	}
 
 	now := workflow.Now(ctx)
 	if decision.Approved {
@@ -1378,17 +1398,27 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 	if params.Status == "" {
 		return walletstore.ErrMissingStatus
 	}
-	if params.StartTime.IsZero() {
-		return walletstore.ErrMissingStartTime
-	}
-	if params.EndTime.IsZero() {
-		return walletstore.ErrMissingEndTime
-	}
-	if params.StartTime.After(params.EndTime) {
-		return walletstore.ErrInvalidTimeRange
-	}
 	if params.Limit <= 0 {
 		return walletstore.ErrInvalidLimit
+	}
+	startTime := params.StartTime
+	endTime := params.EndTime
+	if startTime.IsZero() || endTime.IsZero() {
+		lookback := params.LookbackHours
+		if lookback <= 0 {
+			lookback = 24
+		}
+		endTime = workflow.Now(ctx)
+		startTime = endTime.Add(time.Duration(-lookback) * time.Hour)
+	}
+	if startTime.IsZero() {
+		return walletstore.ErrMissingStartTime
+	}
+	if endTime.IsZero() {
+		return walletstore.ErrMissingEndTime
+	}
+	if startTime.After(endTime) {
+		return walletstore.ErrInvalidTimeRange
 	}
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -1402,8 +1432,8 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 	listParams := walletactivity.ListPSPTransactionsByStatusParams{
 		TenantID: params.TenantID,
 		Status:   params.Status,
-		Start:    params.StartTime,
-		End:      params.EndTime,
+		Start:    startTime,
+		End:      endTime,
 		Limit:    params.Limit,
 	}
 	var txns []walletstore.PSPTransaction
@@ -1501,6 +1531,9 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 			TenantID:      params.TenantID,
 			ProviderCode:  txn.PSPProvider,
 			TransactionID: txn.PSPTransactionID.String,
+			Currency:      txn.Currency,
+			Direction:     txn.Direction,
+			Region:        regionFromRawRequest(txn.RawRequest),
 		}
 		var status walletpsp.TxStatus
 		pollErr := workflow.ExecuteActivity(ctx, walletactivity.ActivityGetTransactionStatus, statusParams).Get(ctx, &status)
@@ -1571,6 +1604,13 @@ func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferPara
 		return ManualTransferDecision{}, walletstore.ErrMissingApproverID
 	}
 	return decision, nil
+}
+
+func validateManualTransferDecision(requestedBy int64, decision ManualTransferDecision) error {
+	if requestedBy > 0 && decision.ApproverID == requestedBy {
+		return walletstore.ErrApproverIsRequester
+	}
+	return nil
 }
 
 func awaitWithdrawalApproval(ctx workflow.Context, params WithdrawalParams) (WithdrawalApprovalDecision, error) {
@@ -1657,6 +1697,24 @@ func auditMetadata(values map[string]any) (json.RawMessage, error) {
 		return nil, err
 	}
 	return json.RawMessage(data), nil
+}
+
+func regionFromRawRequest(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return ""
+	}
+	region, ok := payload["region"]
+	if !ok {
+		return ""
+	}
+	if value, ok := region.(string); ok {
+		return value
+	}
+	return ""
 }
 
 func recordAuditEvent(ctx workflow.Context, event walletstore.AuditEvent) error {

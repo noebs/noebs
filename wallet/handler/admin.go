@@ -841,9 +841,26 @@ func (h *AdminHandler) handleDecision(c *fiber.Ctx, approved bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	tenantID := strings.TrimSpace(c.FormValue("tenant_id"))
+	if tenantID == "" {
+		tenantID = strings.TrimSpace(c.Query("tenant_id"))
+	}
+	resolvedTenantID := tenantID
+	if resolved, err := resolveTenantID(h.Service.Config, tenantID); err == nil {
+		resolvedTenantID = resolved
+	}
 	var signalErr error
 	switch kind {
 	case "manual_transfer":
+		if resolvedTenantID != "" {
+			transfer, err := h.Service.Store.GetManualTransferByWorkflow(ctx, resolvedTenantID, workflowID)
+			if err == nil && transfer.RequestedBy.Valid && transfer.RequestedBy.Int64 == approverID {
+				return jsonResponse(c, 0, mapWalletError(walletstore.ErrApproverIsRequester))
+			}
+			if err != nil && !errors.Is(err, walletstore.ErrManualTransferNotFound) && !errors.Is(err, walletstore.ErrMissingTenantID) {
+				return jsonResponse(c, 0, mapWalletError(err))
+			}
+		}
 		decision := walletworkflow.ManualTransferDecision{
 			Approved:       approved,
 			ApproverID:     approverID,
@@ -870,10 +887,6 @@ func (h *AdminHandler) handleDecision(c *fiber.Ctx, approved bool) error {
 		return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(signalErr, apperr.ErrInternal, signalErr.Error()))
 	}
 
-	tenantID := strings.TrimSpace(c.FormValue("tenant_id"))
-	if tenantID == "" {
-		tenantID = strings.TrimSpace(c.Query("tenant_id"))
-	}
 	redirect := "/admin/wallet/pending"
 	if tenantID != "" {
 		redirect += "?tenant_id=" + url.QueryEscape(tenantID)

@@ -92,6 +92,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingProofOfPayment),
 		errors.Is(err, walletstore.ErrMissingStatus),
 		errors.Is(err, walletstore.ErrMissingSetBy),
+		errors.Is(err, walletstore.ErrApproverIsRequester),
 		errors.Is(err, walletstore.ErrMissingStartTime),
 		errors.Is(err, walletstore.ErrMissingEndTime),
 		errors.Is(err, walletstore.ErrInvalidTimeRange),

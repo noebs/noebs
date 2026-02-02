@@ -45,6 +45,7 @@ var (
 	ErrMissingApprovalTimeout     = errors.New("missing approval timeout")
 	ErrMissingVerificationTimeout = errors.New("missing verification timeout")
 	ErrMissingStatusTimeout       = errors.New("missing status timeout")
+	ErrApproverIsRequester        = errors.New("approver matches requester")
 	ErrApprovalRejected           = errors.New("approval rejected")
 	ErrDestinationNotVerified     = errors.New("destination not verified")
 	ErrMissingKYCTier             = errors.New("missing kyc tier")
