@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/wallet"
+	"github.com/adonese/noebs/wallet/rbac"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/gofiber/fiber/v2"
 )
@@ -143,4 +145,57 @@ func resolveCurrency(cfg ebs_fields.NoebsConfig, currency string) (string, error
 		return "", walletstore.ErrMissingCurrency
 	}
 	return currency, nil
+}
+
+func requirePermission(c *fiber.Ctx, perm rbac.Permission) error {
+	if perm == "" {
+		return nil
+	}
+	if c == nil {
+		return apperr.ErrForbidden
+	}
+	if hasAdminAuthHeader(c) {
+		return nil
+	}
+	if hasPermissionHeader(c, perm) {
+		return nil
+	}
+	roleName := strings.TrimSpace(c.Get("X-Admin-Role"))
+	if roleName != "" {
+		if role := rbac.RoleForName(roleName); role != nil && role.HasPermission(perm) {
+			return nil
+		}
+	}
+	return apperr.ErrForbidden
+}
+
+func hasAdminAuthHeader(c *fiber.Ctx) bool {
+	if c == nil {
+		return false
+	}
+	if strings.TrimSpace(c.Get("X-Admin-Key")) != "" {
+		return true
+	}
+	return isBasicAuthHeader(c.Get("Authorization"))
+}
+
+func isBasicAuthHeader(header string) bool {
+	parts := strings.SplitN(strings.TrimSpace(header), " ", 2)
+	return len(parts) == 2 && strings.EqualFold(parts[0], "basic") && strings.TrimSpace(parts[1]) != ""
+}
+
+func hasPermissionHeader(c *fiber.Ctx, perm rbac.Permission) bool {
+	if c == nil {
+		return false
+	}
+	header := strings.TrimSpace(c.Get("X-Admin-Permissions"))
+	if header == "" {
+		return false
+	}
+	for _, raw := range strings.Split(header, ",") {
+		if strings.TrimSpace(raw) == string(perm) {
+			return true
+		}
+	}
+	return false
 }

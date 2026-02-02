@@ -13,6 +13,7 @@ import (
 
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/wallet"
+	"github.com/adonese/noebs/wallet/rbac"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
@@ -552,6 +553,9 @@ func (h *AdminHandler) Fees(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
+	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
+		return jsonResponse(c, 0, err)
+	}
 	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
@@ -596,6 +600,9 @@ func (h *AdminHandler) CreateFeeConfig(c *fiber.Ctx) error {
 	}
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
+		return jsonResponse(c, 0, err)
 	}
 	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
 	if err != nil {
@@ -691,6 +698,9 @@ func (h *AdminHandler) Rates(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
+	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
+		return jsonResponse(c, 0, err)
+	}
 	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
@@ -731,6 +741,9 @@ func (h *AdminHandler) CreateRate(c *fiber.Ctx) error {
 	}
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
+		return jsonResponse(c, 0, err)
 	}
 	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
 	if err != nil {
