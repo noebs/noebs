@@ -37,6 +37,18 @@ type ManualTransferApproval struct {
 	DecidedAt        time.Time      `db:"decided_at"`
 }
 
+type ManualTransferFilter struct {
+	TenantID     string
+	Status       string
+	TransferType string
+	WalletID     string
+	RequestedBy  int64
+	Start        time.Time
+	End          time.Time
+	Limit        int
+	Offset       int
+}
+
 type ManualTransferStatusUpdate struct {
 	Status          string
 	ApprovedBy      sql.NullInt64

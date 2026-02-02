@@ -160,6 +160,43 @@ func TestUpdateManualTransferStatusValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingStatus)
 }
 
+func TestListManualTransfersValidation(t *testing.T) {
+	s := &Store{}
+	filter := ManualTransferFilter{TenantID: "", Limit: 10}
+	_, err := s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	filter = ManualTransferFilter{TenantID: "tenant", Limit: 0}
+	_, err = s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	filter = ManualTransferFilter{TenantID: "tenant", Limit: 10, Offset: -1}
+	_, err = s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrInvalidOffset)
+
+	now := time.Now().UTC()
+	filter = ManualTransferFilter{TenantID: "tenant", Limit: 10, Offset: 0, Start: now}
+	_, err = s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrMissingEndTime)
+
+	filter = ManualTransferFilter{TenantID: "tenant", Limit: 10, Offset: 0, End: now}
+	_, err = s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrMissingStartTime)
+
+	filter = ManualTransferFilter{TenantID: "tenant", Limit: 10, Offset: 0, Start: now.Add(time.Hour), End: now}
+	_, err = s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrInvalidTimeRange)
+}
+
+func TestListManualTransferApprovalsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListManualTransferApprovals(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListManualTransferApprovals(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrMissingManualTransferID)
+}
+
 func TestCreatePSPTransactionValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPTransaction{
@@ -335,6 +372,40 @@ func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingVerificationTime)
 }
 
+func TestListPendingWithdrawalApprovalsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListPendingWithdrawalApprovals(t.Context(), "", 10, 0)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPendingWithdrawalApprovals(t.Context(), "tenant", 0, 0)
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListPendingWithdrawalApprovals(t.Context(), "tenant", 10, -1)
+	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
+func TestListPSPTransactionsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListPSPTransactions(t.Context(), PSPTransactionFilter{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 0})
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 10, Offset: -1})
+	assertErrorIs(t, err, ErrInvalidOffset)
+
+	now := time.Now().UTC()
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 10, Offset: 0, Start: now})
+	assertErrorIs(t, err, ErrMissingEndTime)
+
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 10, Offset: 0, End: now})
+	assertErrorIs(t, err, ErrMissingStartTime)
+
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 10, Offset: 0, Start: now.Add(time.Hour), End: now})
+	assertErrorIs(t, err, ErrInvalidTimeRange)
+}
+
 func TestAddPSPTransactionAmountValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPTransactionAmount{
@@ -447,6 +518,99 @@ func TestListPSPTransactionAmountsByKindValidation(t *testing.T) {
 
 	_, err = s.ListPSPTransactionAmountsByKind(t.Context(), "tenant", 1, PSPAmountKind("bogus"))
 	assertErrorIs(t, err, ErrInvalidAmountKind)
+}
+
+func TestUpdateWalletPINValidation(t *testing.T) {
+	s := &Store{}
+	err := s.UpdateWalletPIN(t.Context(), "", uuid.New(), "hash", time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.Nil, "hash", time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.New(), "", time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingWalletPIN)
+
+	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.New(), "hash", time.Time{})
+	assertErrorIs(t, err, ErrMissingUpdatedAt)
+}
+
+func TestDeactivateWithdrawalDestinationValidation(t *testing.T) {
+	s := &Store{}
+	err := s.DeactivateWithdrawalDestination(t.Context(), "", 1, time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.DeactivateWithdrawalDestination(t.Context(), "tenant", 0, time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingDestinationID)
+
+	err = s.DeactivateWithdrawalDestination(t.Context(), "tenant", 1, time.Time{})
+	assertErrorIs(t, err, ErrMissingUpdatedAt)
+}
+
+func TestListManualTransfersByStatusValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListManualTransfersByStatus(t.Context(), "", "pending", 10, 0)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "", 10, 0)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "pending", 0, 0)
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "pending", 10, -1)
+	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
+func TestListAuditEventsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "", Limit: 10})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "tenant", Limit: 0})
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "tenant", Limit: 10, Offset: -1})
+	assertErrorIs(t, err, ErrInvalidOffset)
+
+	_, err = s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "tenant", Limit: 10, Start: time.Now().UTC()})
+	assertErrorIs(t, err, ErrMissingEndTime)
+}
+
+func TestUserTwoFAValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.CreateOrResetUserTwoFA(t.Context(), "", 1, "secret")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.CreateOrResetUserTwoFA(t.Context(), "tenant", 0, "secret")
+	assertErrorIs(t, err, ErrInvalidUserID)
+
+	_, err = s.CreateOrResetUserTwoFA(t.Context(), "tenant", 1, "")
+	assertErrorIs(t, err, ErrMissingTwoFASecret)
+
+	_, err = s.GetUserTwoFA(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetUserTwoFA(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrInvalidUserID)
+
+	err = s.SetUserTwoFAEnabled(t.Context(), "", 1, true, time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.SetUserTwoFAEnabled(t.Context(), "tenant", 0, true, time.Now().UTC())
+	assertErrorIs(t, err, ErrInvalidUserID)
+
+	err = s.SetUserTwoFAEnabled(t.Context(), "tenant", 1, true, time.Time{})
+	assertErrorIs(t, err, ErrMissingUpdatedAt)
+}
+
+func TestGetPSPConfigOverrideValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetPSPConfigOverride(t.Context(), "", "provider", PSPConfigScope{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetPSPConfigOverride(t.Context(), "tenant", "", PSPConfigScope{})
+	assertErrorIs(t, err, ErrMissingProviderCode)
 }
 
 func assertErrorIs(t *testing.T, err, want error) {

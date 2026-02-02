@@ -1,0 +1,622 @@
+package handler
+
+templ adminNav(tenantID string) {
+	<div class="btn-group" role="group" aria-label="Wallet admin navigation">
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet" + tenantQuery(tenantID)}>Overview</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/wallets" + tenantQuery(tenantID)}>Wallets</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/transactions" + tenantQuery(tenantID)}>Transactions</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/pending" + tenantQuery(tenantID)}>Pending</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/manual" + tenantQuery(tenantID)}>Manual</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/audit" + tenantQuery(tenantID)}>Audit</a>
+	</div>
+}
+
+templ adminLayout(title string, tenantID string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<title>{ title }</title>
+			<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+			<link rel="stylesheet" href="/dashboard/assets/style.css">
+		</head>
+		<body>
+			<nav class="navbar navbar-dark fixed-top bg-dark">
+				<div class="container">
+					<a class="navbar-brand" href={"/admin/wallet" + tenantQuery(tenantID)}>Wallet Admin</a>
+				</div>
+			</nav>
+			<main role="main" class="container" style="padding-top: 4rem;">
+				<div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
+					<div>
+						<h1 class="h3 mb-1">{ title }</h1>
+						<div class="text-muted">Tenant: { displayTenant(tenantID) }</div>
+					</div>
+					<div class="mt-2 mt-sm-0">
+						@adminNav(tenantID)
+					</div>
+				</div>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+templ WalletDashboardPage(data WalletDashboardView) {
+	@adminLayout("Wallet Admin", data.TenantID) {
+		<div class="list-group">
+			<a class="list-group-item list-group-item-action" href={"/admin/wallet/wallets" + tenantQuery(data.TenantID)}>Wallets</a>
+			<a class="list-group-item list-group-item-action" href={"/admin/wallet/pending" + tenantQuery(data.TenantID)}>Pending Approvals</a>
+			<a class="list-group-item list-group-item-action" href={"/admin/wallet/audit" + tenantQuery(data.TenantID)}>Audit Log</a>
+		</div>
+	}
+}
+
+templ WalletListPage(data WalletListView) {
+	@adminLayout("Wallets", data.TenantID) {
+		if len(data.Wallets) == 0 {
+			<div class="alert alert-secondary">No wallets found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>ID</th>
+							<th>Owner</th>
+							<th>Currency</th>
+							<th>Balance</th>
+							<th>Available</th>
+							<th>Status</th>
+							<th>KYC</th>
+							<th>Created</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, w := range data.Wallets {
+							<tr>
+								<td><a href={"/admin/wallet/wallets/" + w.ID.String() + tenantQuery(data.TenantID)}>{ w.ID.String() }</a></td>
+								<td>{ w.OwnerType }/{ w.OwnerID }</td>
+								<td>{ w.Currency }</td>
+								<td>{ w.Balance }</td>
+								<td>{ w.AvailableBalance }</td>
+								<td>{ w.Status }</td>
+								<td>{ w.KYCTier }</td>
+								<td>{ formatTime(w.CreatedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ WalletDetailPage(data WalletDetailView) {
+	@adminLayout("Wallet Detail", data.TenantID) {
+		<div class="card mb-4">
+			<div class="card-body">
+				<h5 class="card-title">Wallet { data.Wallet.ID.String() }</h5>
+				<p class="card-text">Owner: { data.Wallet.OwnerType }/{ data.Wallet.OwnerID }</p>
+				<p class="card-text">Currency: { data.Wallet.Currency }</p>
+				<p class="card-text">Balance: { data.Wallet.Balance } (Available: { data.Wallet.AvailableBalance })</p>
+				<p class="card-text">Status: { data.Wallet.Status }</p>
+				<p class="card-text">KYC: { data.Wallet.KYCTier }</p>
+			</div>
+		</div>
+
+		<h3 class="h5">Funding Sources</h3>
+		if len(data.FundingSources) == 0 {
+			<div class="alert alert-secondary">No funding sources found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>ID</th>
+							<th>Type</th>
+							<th>Provider</th>
+							<th>External Ref</th>
+							<th>Currency</th>
+							<th>Total Funded</th>
+							<th>Total Withdrawn</th>
+							<th>Verified</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, source := range data.FundingSources {
+							<tr>
+								<td>{ source.ID }</td>
+								<td>{ source.SourceType }</td>
+								<td>{ formatNullString(source.PSPProvider) }</td>
+								<td>{ formatNullString(source.ExternalReference) }</td>
+								<td>{ source.Currency }</td>
+								<td>{ source.TotalFunded }</td>
+								<td>{ source.TotalWithdrawn }</td>
+								<td>{ source.VerificationStatus }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<h3 class="h5 mt-4">Withdrawal Destinations</h3>
+		if len(data.Destinations) == 0 {
+			<div class="alert alert-secondary">No destinations found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>ID</th>
+							<th>Type</th>
+							<th>Provider</th>
+							<th>Currency</th>
+							<th>Status</th>
+							<th>Active</th>
+							<th>Total Withdrawn</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, dest := range data.Destinations {
+							<tr>
+								<td>{ dest.ID }</td>
+								<td>{ dest.DestinationType }</td>
+								<td>{ formatNullString(dest.PSPProvider) }</td>
+								<td>{ dest.Currency }</td>
+								<td>{ dest.OwnershipStatus }</td>
+								<td>{ dest.IsActive }</td>
+								<td>{ dest.TotalWithdrawn }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ PendingApprovalsPage(data PendingApprovalsView) {
+	@adminLayout("Pending Approvals", data.TenantID) {
+		<h2 class="h5">Manual Transfers</h2>
+		if len(data.ManualTransfers) == 0 {
+			<div class="alert alert-secondary">No pending manual transfers.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Workflow</th>
+							<th>Type</th>
+							<th>Wallet</th>
+							<th>Requested By</th>
+							<th>Amount</th>
+							<th>Currency</th>
+							<th>Requested</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, transfer := range data.ManualTransfers {
+							<tr>
+								<td><a href={"/admin/wallet/manual/" + transfer.WorkflowID + tenantQuery(data.TenantID)}>{ transfer.WorkflowID }</a></td>
+								<td>{ transfer.TransferType }</td>
+								<td>{ formatNullString(transfer.WalletID) }</td>
+								<td>{ formatNullInt64(transfer.RequestedBy) }</td>
+								<td>{ transfer.Amount }</td>
+								<td>{ transfer.Currency }</td>
+								<td>{ formatTime(transfer.RequestedAt) }</td>
+								<td>
+									<form method="post" class="form-inline">
+										<input type="hidden" name="tenant_id" value={ data.TenantID }>
+										<input type="hidden" name="kind" value="manual_transfer">
+										<input type="number" min="1" name="approver_id" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Approver ID">
+										<input type="text" name="proof_of_payment" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Proof">
+										<input type="text" name="reason" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Reason">
+										<button class="btn btn-sm btn-success mb-2 mr-1" formaction={"/admin/wallet/approve/" + transfer.WorkflowID}>Approve</button>
+										<button class="btn btn-sm btn-danger mb-2" formaction={"/admin/wallet/reject/" + transfer.WorkflowID}>Reject</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<h2 class="h5 mt-4">Withdrawals</h2>
+		if len(data.Withdrawals) == 0 {
+			<div class="alert alert-secondary">No pending withdrawal approvals.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Workflow</th>
+							<th>Client Ref</th>
+							<th>Wallet</th>
+							<th>Amount</th>
+							<th>Currency</th>
+							<th>Provider</th>
+							<th>Requested</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, item := range data.Withdrawals {
+							<tr>
+								<td>{ item.WorkflowID }</td>
+								<td>{ item.ClientRef }</td>
+								<td>{ item.WalletID }</td>
+								<td>{ item.Amount }</td>
+								<td>{ item.Currency }</td>
+								<td>{ item.Provider }</td>
+								<td>{ formatTime(item.RequestedAt) }</td>
+								<td>
+									<form method="post" class="form-inline">
+										<input type="hidden" name="tenant_id" value={ data.TenantID }>
+										<input type="hidden" name="kind" value="withdrawal">
+										<input type="number" min="1" name="approver_id" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Approver ID">
+										<input type="text" name="proof_of_payment" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Proof">
+										<input type="text" name="reason" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Reason">
+										<button class="btn btn-sm btn-success mb-2 mr-1" formaction={"/admin/wallet/approve/" + item.WorkflowID}>Approve</button>
+										<button class="btn btn-sm btn-danger mb-2" formaction={"/admin/wallet/reject/" + item.WorkflowID}>Reject</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ AuditLogPage(data AuditLogView) {
+	@adminLayout("Audit Log", data.TenantID) {
+		<form method="get" class="mb-3">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="event_type" placeholder="Event type" value={ data.Filter.EventType }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="actor_type" placeholder="Actor type" value={ data.Filter.ActorType }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="actor_id" placeholder="Actor ID" value={ data.Filter.ActorID }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="target_type" placeholder="Target type" value={ data.Filter.TargetType }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="target_id" placeholder="Target ID" value={ data.Filter.TargetID }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="action" placeholder="Action" value={ data.Filter.Action }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="start" placeholder="Start (RFC3339)" value={ data.Filter.Start }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="end" placeholder="End (RFC3339)" value={ data.Filter.End }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="limit" placeholder="Limit" value={ data.Filter.Limit }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="offset" placeholder="Offset" value={ data.Filter.Offset }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Filter</button>
+				</div>
+			</div>
+		</form>
+
+		if len(data.Events) == 0 {
+			<div class="alert alert-secondary">No audit events found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Time</th>
+							<th>Event</th>
+							<th>Actor</th>
+							<th>Action</th>
+							<th>Target</th>
+							<th>Workflow</th>
+							<th>Request</th>
+							<th>Metadata</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, evt := range data.Events {
+							<tr>
+								<td>{ formatTime(evt.CreatedAt) }</td>
+								<td>{ evt.EventType }</td>
+								<td>{ evt.ActorType }/{ evt.ActorID }</td>
+								<td>{ evt.Action }</td>
+								<td>{ formatNullString(evt.TargetType) }/{ formatNullString(evt.TargetID) }</td>
+								<td>{ formatNullString(evt.WorkflowID) }</td>
+								<td>{ formatNullString(evt.RequestID) }</td>
+								<td><code>{ formatJSON(evt.Metadata) }</code></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ PSPTransactionsPage(data PSPTransactionsView) {
+	@adminLayout("PSP Transactions", data.TenantID) {
+		<form method="get" class="mb-3">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="status" placeholder="Status" value={ data.Filter.Status }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="provider" placeholder="Provider" value={ data.Filter.Provider }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="direction" placeholder="Direction" value={ data.Filter.Direction }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="client_reference" placeholder="Client ref" value={ data.Filter.ClientRef }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="start" placeholder="Start (RFC3339)" value={ data.Filter.Start }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="end" placeholder="End (RFC3339)" value={ data.Filter.End }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="limit" placeholder="Limit" value={ data.Filter.Limit }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="offset" placeholder="Offset" value={ data.Filter.Offset }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Filter</button>
+				</div>
+			</div>
+		</form>
+
+		if len(data.Transactions) == 0 {
+			<div class="alert alert-secondary">No transactions found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Client Ref</th>
+							<th>Provider</th>
+							<th>Direction</th>
+							<th>Status</th>
+							<th>Amount</th>
+							<th>Currency</th>
+							<th>Workflow</th>
+							<th>Created</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, txn := range data.Transactions {
+							<tr>
+								<td><a href={"/admin/wallet/transactions/" + txn.ClientReference + tenantQuery(data.TenantID)}>{ txn.ClientReference }</a></td>
+								<td>{ txn.PSPProvider }</td>
+								<td>{ txn.Direction }</td>
+								<td>{ txn.Status }</td>
+								<td>{ txn.Amount }</td>
+								<td>{ txn.Currency }</td>
+								<td>{ formatNullString(txn.WorkflowID) }</td>
+								<td>{ formatTime(txn.CreatedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ PSPTransactionDetailPage(data PSPTransactionDetailView) {
+	@adminLayout("PSP Transaction", data.TenantID) {
+		<div class="card mb-3">
+			<div class="card-body">
+				<h5 class="card-title">Client Ref { data.Transaction.ClientReference }</h5>
+				<p class="card-text">Provider: { data.Transaction.PSPProvider }</p>
+				<p class="card-text">Direction: { data.Transaction.Direction }</p>
+				<p class="card-text">Status: { data.Transaction.Status }</p>
+				<p class="card-text">Amount: { data.Transaction.Amount } { data.Transaction.Currency }</p>
+				<p class="card-text">Workflow: { formatNullString(data.Transaction.WorkflowID) }</p>
+				<p class="card-text">PSP Txn: { formatNullString(data.Transaction.PSPTransactionID) }</p>
+				<p class="card-text">Response: { formatNullString(data.Transaction.ResponseCode) } { formatNullString(data.Transaction.ResponseMessage) }</p>
+				<p class="card-text">Created: { formatTime(data.Transaction.CreatedAt) }</p>
+				<p class="card-text">Confirmed: { formatNullTime(data.Transaction.ConfirmedAt) }</p>
+				<p class="card-text">Last Polled: { formatNullTime(data.Transaction.LastPolledAt) }</p>
+				<p class="card-text">Next Poll: { formatNullTime(data.Transaction.NextPollAt) }</p>
+			</div>
+		</div>
+
+		<h3 class="h6">Raw Request</h3>
+		<pre class="bg-light p-3 border rounded"><code>{ formatJSON(data.Transaction.RawRequest) }</code></pre>
+		<h3 class="h6 mt-3">Raw Response</h3>
+		<pre class="bg-light p-3 border rounded"><code>{ formatJSON(data.Transaction.RawResponse) }</code></pre>
+	}
+}
+
+templ ManualTransferFormPage(data ManualTransferFormView) {
+	@adminLayout("Manual Transfers", data.TenantID) {
+		<form method="post" class="mb-4">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="idempotency_key" placeholder="Idempotency key" value={ data.Values.IdempotencyKey }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="wallet_id" placeholder="Wallet ID" value={ data.Values.WalletID }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="transfer_type" placeholder="manual_credit/manual_debit" value={ data.Values.TransferType }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="amount" placeholder="Amount" value={ data.Values.Amount }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="currency" placeholder="Currency" value={ data.Values.Currency }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="reason" placeholder="Reason" value={ data.Values.Reason }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="requested_by" placeholder="Requested by (admin id)" value={ data.Values.RequestedBy }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="psp_provider" placeholder="PSP provider (optional)" value={ data.Values.PSPProvider }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="psp_reference" placeholder="PSP reference (optional)" value={ data.Values.PSPReference }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="approval_timeout_seconds" placeholder="Approval timeout seconds" value={ data.Values.ApprovalTTL }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Submit</button>
+				</div>
+			</div>
+		</form>
+
+		<form method="get" class="mb-3">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="status" placeholder="Status" value={ data.Filter.Status }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="transfer_type" placeholder="Transfer type" value={ data.Filter.TransferType }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="wallet_id" placeholder="Wallet ID" value={ data.Filter.WalletID }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="requested_by" placeholder="Requested by" value={ data.Filter.RequestedBy }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="start" placeholder="Start (RFC3339)" value={ data.Filter.Start }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="end" placeholder="End (RFC3339)" value={ data.Filter.End }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="limit" placeholder="Limit" value={ data.Filter.Limit }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="offset" placeholder="Offset" value={ data.Filter.Offset }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Filter</button>
+				</div>
+			</div>
+		</form>
+
+		if len(data.Transfers) == 0 {
+			<div class="alert alert-secondary">No manual transfers found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Workflow</th>
+							<th>Status</th>
+							<th>Type</th>
+							<th>Wallet</th>
+							<th>Requested By</th>
+							<th>Amount</th>
+							<th>Currency</th>
+							<th>Requested</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, transfer := range data.Transfers {
+							<tr>
+								<td><a href={"/admin/wallet/manual/" + transfer.WorkflowID + tenantQuery(data.TenantID)}>{ transfer.WorkflowID }</a></td>
+								<td>{ transfer.Status }</td>
+								<td>{ transfer.TransferType }</td>
+								<td>{ formatNullString(transfer.WalletID) }</td>
+								<td>{ formatNullInt64(transfer.RequestedBy) }</td>
+								<td>{ transfer.Amount }</td>
+								<td>{ transfer.Currency }</td>
+								<td>{ formatTime(transfer.RequestedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ ManualTransferDetailPage(data ManualTransferDetailView) {
+	@adminLayout("Manual Transfer Detail", data.TenantID) {
+		<div class="card mb-4">
+			<div class="card-body">
+				<h5 class="card-title">Workflow { data.Transfer.WorkflowID }</h5>
+				<p class="card-text">Status: { data.Transfer.Status }</p>
+				<p class="card-text">Type: { data.Transfer.TransferType }</p>
+				<p class="card-text">Wallet: { formatNullString(data.Transfer.WalletID) }</p>
+				<p class="card-text">Requested By: { formatNullInt64(data.Transfer.RequestedBy) }</p>
+				<p class="card-text">Amount: { data.Transfer.Amount } { data.Transfer.Currency }</p>
+				<p class="card-text">Reason: { data.Transfer.Reason }</p>
+				<p class="card-text">Requested At: { formatTime(data.Transfer.RequestedAt) }</p>
+				<p class="card-text">Approved By: { formatNullInt64(data.Transfer.ApprovedBy) }</p>
+				<p class="card-text">Approved At: { formatNullTime(data.Transfer.ApprovedAt) }</p>
+				<p class="card-text">Completed At: { formatNullTime(data.Transfer.CompletedAt) }</p>
+				<p class="card-text">Proof: { formatNullString(data.Transfer.ProofOfPayment) }</p>
+				<p class="card-text">Rejection Reason: { formatNullString(data.Transfer.RejectionReason) }</p>
+			</div>
+		</div>
+
+		<h3 class="h6">Approvals</h3>
+		if len(data.Approvals) == 0 {
+			<div class="alert alert-secondary">No approvals recorded.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Approver</th>
+							<th>Decision</th>
+							<th>Reason</th>
+							<th>Decided At</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, approval := range data.Approvals {
+							<tr>
+								<td>{ approval.ApproverID }</td>
+								<td>{ approval.Decision }</td>
+								<td>{ formatNullString(approval.Reason) }</td>
+								<td>{ formatTime(approval.DecidedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}

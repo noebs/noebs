@@ -168,3 +168,107 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 	}
 	return nil
 }
+
+func (s *Store) ListManualTransfers(ctx context.Context, filter ManualTransferFilter) ([]ManualTransfer, error) {
+	if filter.TenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if filter.Limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	if filter.Offset < 0 {
+		return nil, ErrInvalidOffset
+	}
+	if filter.Start.IsZero() != filter.End.IsZero() {
+		if filter.Start.IsZero() {
+			return nil, ErrMissingStartTime
+		}
+		return nil, ErrMissingEndTime
+	}
+	if !filter.Start.IsZero() && filter.Start.After(filter.End) {
+		return nil, ErrInvalidTimeRange
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	query := `SELECT * FROM manual_transfers WHERE tenant_id = ?`
+	args := []any{filter.TenantID}
+	if filter.Status != "" {
+		query += " AND status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.TransferType != "" {
+		query += " AND transfer_type = ?"
+		args = append(args, filter.TransferType)
+	}
+	if filter.WalletID != "" {
+		query += " AND wallet_id = ?"
+		args = append(args, filter.WalletID)
+	}
+	if filter.RequestedBy > 0 {
+		query += " AND requested_by = ?"
+		args = append(args, filter.RequestedBy)
+	}
+	if !filter.Start.IsZero() && !filter.End.IsZero() {
+		query += " AND requested_at >= ? AND requested_at <= ?"
+		args = append(args, filter.Start, filter.End)
+	}
+	query += " ORDER BY requested_at DESC LIMIT ? OFFSET ?"
+	args = append(args, filter.Limit, filter.Offset)
+	stmt := db.Rebind(query)
+	var transfers []ManualTransfer
+	if err := db.SelectContext(ctx, &transfers, stmt, args...); err != nil {
+		return nil, err
+	}
+	return transfers, nil
+}
+
+func (s *Store) ListManualTransferApprovals(ctx context.Context, tenantID string, manualTransferID int64) ([]ManualTransferApproval, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if manualTransferID <= 0 {
+		return nil, ErrMissingManualTransferID
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind(`SELECT * FROM manual_transfer_approvals
+		WHERE tenant_id = ? AND manual_transfer_id = ?
+		ORDER BY decided_at ASC`)
+	var approvals []ManualTransferApproval
+	if err := db.SelectContext(ctx, &approvals, stmt, tenantID, manualTransferID); err != nil {
+		return nil, err
+	}
+	return approvals, nil
+}
+
+func (s *Store) ListManualTransfersByStatus(ctx context.Context, tenantID, status string, limit, offset int) ([]ManualTransfer, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if status == "" {
+		return nil, ErrMissingStatus
+	}
+	if limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	if offset < 0 {
+		return nil, ErrInvalidOffset
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind(`SELECT * FROM manual_transfers
+		WHERE tenant_id = ? AND status = ?
+		ORDER BY requested_at DESC
+		LIMIT ? OFFSET ?`)
+	var transfers []ManualTransfer
+	if err := db.SelectContext(ctx, &transfers, stmt, tenantID, status, limit, offset); err != nil {
+		return nil, err
+	}
+	return transfers, nil
+}
