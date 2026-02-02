@@ -166,6 +166,10 @@ templ DashboardTablePage(data DashboardTableView) {
 							}
 						</ul>
 					</div>
+					<div class="col-sm">
+						<ul class="pagination pagination-sm" id="custom-pagination">
+						</ul>
+					</div>
 				</div>
 
 				<hr>
@@ -255,6 +259,20 @@ templ DashboardTablePage(data DashboardTableView) {
 			</div>
 		</main>
 
+		<script>
+			var currentPage = 1;
+			function paginate(index, items) {
+				for (i = index; i <= items; i++) {
+					document.getElementById("custom-pagination").innerHTML += `<li class="page-item"><a class="page-link" href="?page=$i">$i</a></li>`
+				}
+			}
+
+			function updateId(id) {
+				currentPage = id;
+			}
+
+			paginate(currentPage, { data.PageCount });
+		</script>
 	}
 }
 
