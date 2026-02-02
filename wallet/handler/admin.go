@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
@@ -541,6 +543,263 @@ func (h *AdminHandler) ManualTransferDetail(c *fiber.Ctx) error {
 		Approvals: approvals,
 	}
 	return renderComponent(c, http.StatusOK, ManualTransferDetailPage(view))
+}
+
+func (h *AdminHandler) Fees(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil || h.Service.Store == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if !h.Service.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	limit, offset, err := parseLimitOffset(c, 100)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	filter := walletstore.FeeConfigFilter{
+		TenantID:        tenantID,
+		TransactionType: strings.TrimSpace(c.Query("transaction_type")),
+		Currency:        strings.TrimSpace(c.Query("currency")),
+		ActiveOnly:      c.Query("active_only") == "on" || c.Query("active_only") == "true",
+		Limit:           limit,
+		Offset:          offset,
+	}
+	cfgs, err := h.Service.Store.ListFeeConfigs(c.Context(), filter)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	view := FeeConfigView{
+		TenantID: tenantID,
+		Configs:  cfgs,
+		Filter: FeeConfigFilterView{
+			TransactionType: filter.TransactionType,
+			Currency:        filter.Currency,
+			ActiveOnly:      filter.ActiveOnly,
+			Limit:           limit,
+			Offset:          offset,
+		},
+		Form: FeeConfigFormValues{
+			Currency: h.Service.Config.WalletDefaultCurrency,
+			IsActive: true,
+		},
+	}
+	return renderComponent(c, http.StatusOK, FeesPage(view))
+}
+
+func (h *AdminHandler) CreateFeeConfig(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil || h.Service.Store == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if !h.Service.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	txType := strings.TrimSpace(c.FormValue("transaction_type"))
+	if txType == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingTransactionType))
+	}
+	currency, err := resolveCurrency(h.Service.Config, strings.TrimSpace(c.FormValue("currency")))
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	tierMinRaw := strings.TrimSpace(c.FormValue("tier_min"))
+	if tierMinRaw == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+	}
+	tierMin, err := strconv.ParseInt(tierMinRaw, 10, 64)
+	if err != nil || tierMin < 0 {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+	}
+	tierMaxRaw := strings.TrimSpace(c.FormValue("tier_max"))
+	tierMax := sql.NullInt64{}
+	if tierMaxRaw != "" {
+		value, err := strconv.ParseInt(tierMaxRaw, 10, 64)
+		if err != nil || value < 0 {
+			return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+		}
+		tierMax = sql.NullInt64{Int64: value, Valid: true}
+	}
+	percentageRaw := strings.TrimSpace(c.FormValue("percentage_fee"))
+	if percentageRaw == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidPercentage))
+	}
+	percentageFee, err := decimal.NewFromString(percentageRaw)
+	if err != nil {
+		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid percentage fee"))
+	}
+	flatFee := int64(0)
+	if raw := strings.TrimSpace(c.FormValue("flat_fee")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+		}
+		flatFee = value
+	}
+	minFee := int64(0)
+	if raw := strings.TrimSpace(c.FormValue("min_fee")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+		}
+		minFee = value
+	}
+	maxFeeRaw := strings.TrimSpace(c.FormValue("max_fee"))
+	maxFee := sql.NullInt64{}
+	if maxFeeRaw != "" {
+		value, err := strconv.ParseInt(maxFeeRaw, 10, 64)
+		if err != nil || value < 0 {
+			return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+		}
+		maxFee = sql.NullInt64{Int64: value, Valid: true}
+	}
+	feeAccount := strings.TrimSpace(c.FormValue("fee_account_code"))
+	isActive := c.FormValue("is_active") == "on" || c.FormValue("is_active") == "true"
+	cfg := walletstore.FeeConfig{
+		TenantID:        tenantID,
+		TransactionType: txType,
+		Currency:        currency,
+		TierMin:         tierMin,
+		TierMax:         tierMax,
+		PercentageFee:   percentageFee,
+		FlatFee:         flatFee,
+		MinFee:          minFee,
+		MaxFee:          maxFee,
+		FeeAccountCode:  sql.NullString{String: feeAccount, Valid: feeAccount != ""},
+		IsActive:        isActive,
+	}
+	if _, err := h.Service.Store.CreateFeeConfig(c.Context(), cfg); err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	redirect := "/admin/wallet/fees"
+	if tenantID != "" {
+		redirect += "?tenant_id=" + url.QueryEscape(tenantID)
+	}
+	return c.Redirect(redirect, http.StatusSeeOther)
+}
+
+func (h *AdminHandler) Rates(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil || h.Service.Store == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if !h.Service.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	limit, offset, err := parseLimitOffset(c, 100)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	filter := walletstore.ExchangeRateFilter{
+		TenantID:      tenantID,
+		BaseCurrency:  strings.TrimSpace(c.Query("base_currency")),
+		QuoteCurrency: strings.TrimSpace(c.Query("quote_currency")),
+		ActiveOnly:    c.Query("active_only") == "on" || c.Query("active_only") == "true",
+		Limit:         limit,
+		Offset:        offset,
+	}
+	rates, err := h.Service.Store.ListExchangeRates(c.Context(), filter)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	view := RateView{
+		TenantID: tenantID,
+		Rates:    rates,
+		Filter: RateFilterView{
+			BaseCurrency:  filter.BaseCurrency,
+			QuoteCurrency: filter.QuoteCurrency,
+			ActiveOnly:    filter.ActiveOnly,
+			Limit:         limit,
+			Offset:        offset,
+		},
+	}
+	return renderComponent(c, http.StatusOK, RatesPage(view))
+}
+
+func (h *AdminHandler) CreateRate(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil || h.Service.Store == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if !h.Service.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	base := strings.TrimSpace(c.FormValue("base_currency"))
+	if base == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingBaseCurrency))
+	}
+	quote := strings.TrimSpace(c.FormValue("quote_currency"))
+	if quote == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingQuoteCurrency))
+	}
+	buyRaw := strings.TrimSpace(c.FormValue("buy_rate"))
+	if buyRaw == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidRate))
+	}
+	buyRate, err := decimal.NewFromString(buyRaw)
+	if err != nil {
+		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid buy rate"))
+	}
+	sellRaw := strings.TrimSpace(c.FormValue("sell_rate"))
+	if sellRaw == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidRate))
+	}
+	sellRate, err := decimal.NewFromString(sellRaw)
+	if err != nil {
+		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid sell rate"))
+	}
+	spreadRaw := strings.TrimSpace(c.FormValue("spread"))
+	spread := decimal.NullDecimal{}
+	if spreadRaw != "" {
+		value, err := decimal.NewFromString(spreadRaw)
+		if err != nil {
+			return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid spread"))
+		}
+		spread = decimal.NullDecimal{Decimal: value, Valid: true}
+	}
+	setBy := strings.TrimSpace(c.FormValue("set_by"))
+	if setBy == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingSetBy))
+	}
+	effectiveRaw := strings.TrimSpace(c.FormValue("effective_from"))
+	effectiveFrom := time.Now().UTC()
+	if effectiveRaw != "" {
+		parsed, err := time.Parse(time.RFC3339, effectiveRaw)
+		if err != nil {
+			return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid effective_from"))
+		}
+		effectiveFrom = parsed
+	}
+	rate := walletstore.ExchangeRate{
+		TenantID:      tenantID,
+		BaseCurrency:  base,
+		QuoteCurrency: quote,
+		BuyRate:       buyRate,
+		SellRate:      sellRate,
+		Spread:        spread,
+		SetBy:         setBy,
+		EffectiveFrom: effectiveFrom,
+	}
+	if _, err := h.Service.Store.CreateExchangeRate(c.Context(), rate); err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	redirect := "/admin/wallet/rates"
+	if tenantID != "" {
+		redirect += "?tenant_id=" + url.QueryEscape(tenantID)
+	}
+	return c.Redirect(redirect, http.StatusSeeOther)
 }
 
 func (h *AdminHandler) handleDecision(c *fiber.Ctx, approved bool) error {

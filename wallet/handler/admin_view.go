@@ -9,6 +9,7 @@ import (
 	"time"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
+	"github.com/shopspring/decimal"
 )
 
 type WalletDashboardView struct {
@@ -114,6 +115,59 @@ type ManualTransferDetailView struct {
 	Approvals []walletstore.ManualTransferApproval
 }
 
+type FeeConfigView struct {
+	TenantID string
+	Configs  []walletstore.FeeConfig
+	Filter   FeeConfigFilterView
+	Form     FeeConfigFormValues
+}
+
+type FeeConfigFilterView struct {
+	TransactionType string
+	Currency        string
+	ActiveOnly      bool
+	Limit           int
+	Offset          int
+}
+
+type FeeConfigFormValues struct {
+	TransactionType string
+	Currency        string
+	TierMin         string
+	TierMax         string
+	PercentageFee   string
+	FlatFee         string
+	MinFee          string
+	MaxFee          string
+	FeeAccountCode  string
+	IsActive        bool
+}
+
+type RateView struct {
+	TenantID string
+	Rates    []walletstore.ExchangeRate
+	Filter   RateFilterView
+	Form     RateFormValues
+}
+
+type RateFilterView struct {
+	BaseCurrency  string
+	QuoteCurrency string
+	ActiveOnly    bool
+	Limit         int
+	Offset        int
+}
+
+type RateFormValues struct {
+	BaseCurrency  string
+	QuoteCurrency string
+	BuyRate       string
+	SellRate      string
+	Spread        string
+	SetBy         string
+	EffectiveFrom string
+}
+
 type AuditFilterView struct {
 	EventType  string
 	ActorType  string
@@ -160,6 +214,13 @@ func formatJSON(raw json.RawMessage) string {
 		return "-"
 	}
 	return strings.TrimSpace(string(raw))
+}
+
+func formatNullDecimal(nd decimal.NullDecimal) string {
+	if !nd.Valid {
+		return "-"
+	}
+	return nd.Decimal.String()
 }
 
 func tenantQuery(tenantID string) string {

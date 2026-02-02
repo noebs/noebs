@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 
+	"github.com/a-h/templ"
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/wallet"
@@ -45,7 +48,13 @@ func mapWalletError(err error) error {
 		return nil
 	case errors.Is(err, wallet.ErrMissingStore):
 		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
-	case errors.Is(err, walletstore.ErrWalletNotFound), errors.Is(err, walletstore.ErrHoldNotFound):
+	case errors.Is(err, walletstore.ErrWalletNotFound),
+		errors.Is(err, walletstore.ErrHoldNotFound),
+		errors.Is(err, walletstore.ErrDestinationNotFound),
+		errors.Is(err, walletstore.ErrVerificationNotFound),
+		errors.Is(err, walletstore.ErrFundingSourceNotFound),
+		errors.Is(err, walletstore.ErrPSPTransactionNotFound),
+		errors.Is(err, walletstore.ErrUserTwoFANotFound):
 		return apperr.Wrap(err, apperr.ErrNotFound, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrMissingCurrency),
@@ -53,6 +62,15 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingOwnerID),
 		errors.Is(err, walletstore.ErrMissingWalletID),
 		errors.Is(err, walletstore.ErrInvalidUserID),
+		errors.Is(err, walletstore.ErrMissingProviderCode),
+		errors.Is(err, walletstore.ErrMissingTransferType),
+		errors.Is(err, walletstore.ErrMissingSourceType),
+		errors.Is(err, walletstore.ErrMissingDestinationType),
+		errors.Is(err, walletstore.ErrMissingDestinationDetails),
+		errors.Is(err, walletstore.ErrMissingVerificationType),
+		errors.Is(err, walletstore.ErrMissingVerificationTimeout),
+		errors.Is(err, walletstore.ErrMissingApprovalTimeout),
+		errors.Is(err, walletstore.ErrMissingVerificationID),
 		errors.Is(err, walletstore.ErrMissingIdempotencyKey),
 		errors.Is(err, walletstore.ErrMissingReferenceType),
 		errors.Is(err, walletstore.ErrMissingReferenceID),
@@ -60,13 +78,50 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingHoldExpiry),
 		errors.Is(err, walletstore.ErrInvalidHoldID),
 		errors.Is(err, walletstore.ErrInvalidAmount),
+		errors.Is(err, walletstore.ErrInvalidPercentage),
+		errors.Is(err, walletstore.ErrInvalidRate),
 		errors.Is(err, walletstore.ErrInvalidWalletPair),
+		errors.Is(err, walletstore.ErrMissingWalletPIN),
+		errors.Is(err, walletstore.ErrInvalidWalletPIN),
+		errors.Is(err, walletstore.ErrMissingTwoFACode),
+		errors.Is(err, walletstore.ErrInvalidTwoFACode),
+		errors.Is(err, walletstore.ErrMissingTwoFASecret),
+		errors.Is(err, walletstore.ErrMissingApproverID),
+		errors.Is(err, walletstore.ErrMissingDecision),
+		errors.Is(err, walletstore.ErrMissingReason),
+		errors.Is(err, walletstore.ErrMissingProofOfPayment),
+		errors.Is(err, walletstore.ErrMissingStatus),
+		errors.Is(err, walletstore.ErrMissingSetBy),
+		errors.Is(err, walletstore.ErrMissingStartTime),
+		errors.Is(err, walletstore.ErrMissingEndTime),
+		errors.Is(err, walletstore.ErrInvalidTimeRange),
+		errors.Is(err, walletstore.ErrInvalidLimit),
+		errors.Is(err, walletstore.ErrInvalidOffset),
 		errors.Is(err, walletstore.ErrInsufficientFunds),
 		errors.Is(err, walletstore.ErrCurrencyMismatch):
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	default:
 		return apperr.Wrap(err, apperr.ErrInternal, err.Error())
 	}
+}
+
+func renderComponent(c *fiber.Ctx, status int, component templ.Component) error {
+	if status == 0 {
+		status = http.StatusOK
+	}
+	if component == nil {
+		return c.SendStatus(status)
+	}
+	ctx := c.UserContext()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var buf bytes.Buffer
+	if err := component.Render(ctx, &buf); err != nil {
+		return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
+	}
+	c.Set(fiber.HeaderContentType, "text/html; charset=utf-8")
+	return c.Status(status).Send(buf.Bytes())
 }
 
 func resolveTenantID(cfg ebs_fields.NoebsConfig, tenantID string) (string, error) {

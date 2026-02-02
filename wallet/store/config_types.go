@@ -23,6 +23,15 @@ type FeeConfig struct {
 	CreatedAt       time.Time       `db:"created_at"`
 }
 
+type FeeConfigFilter struct {
+	TenantID        string
+	TransactionType string
+	Currency        string
+	ActiveOnly      bool
+	Limit           int
+	Offset          int
+}
+
 type ExchangeRate struct {
 	ID            int64               `db:"id"`
 	TenantID      string              `db:"tenant_id"`
@@ -35,6 +44,15 @@ type ExchangeRate struct {
 	EffectiveFrom time.Time           `db:"effective_from"`
 	EffectiveTo   sql.NullTime        `db:"effective_to"`
 	CreatedAt     time.Time           `db:"created_at"`
+}
+
+type ExchangeRateFilter struct {
+	TenantID      string
+	BaseCurrency  string
+	QuoteCurrency string
+	ActiveOnly    bool
+	Limit         int
+	Offset        int
 }
 
 type TransactionLimit struct {

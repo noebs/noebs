@@ -406,6 +406,108 @@ func TestListPSPTransactionsValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidTimeRange)
 }
 
+func TestListFeeConfigsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListFeeConfigs(t.Context(), FeeConfigFilter{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", Limit: 0})
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", Limit: 10, Offset: -1})
+	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
+func TestCreateFeeConfigValidation(t *testing.T) {
+	s := &Store{}
+	cfg := FeeConfig{
+		TenantID:        "tenant",
+		TransactionType: "deposit",
+		Currency:        "USD",
+		TierMin:         0,
+		PercentageFee:   decimal.NewFromFloat(1.5),
+		FlatFee:         0,
+		MinFee:          0,
+		IsActive:        true,
+	}
+
+	_, err := s.CreateFeeConfig(t.Context(), FeeConfig{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := cfg
+	bad.TransactionType = ""
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingTransactionType)
+
+	bad = cfg
+	bad.Currency = ""
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrency)
+
+	bad = cfg
+	bad.TierMin = -1
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	bad = cfg
+	bad.PercentageFee = decimal.NewFromFloat(-1)
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidPercentage)
+}
+
+func TestListExchangeRatesValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListExchangeRates(t.Context(), ExchangeRateFilter{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", Limit: 0})
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", Limit: 10, Offset: -1})
+	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
+func TestCreateExchangeRateValidation(t *testing.T) {
+	s := &Store{}
+	rate := ExchangeRate{
+		TenantID:      "tenant",
+		BaseCurrency:  "USD",
+		QuoteCurrency: "EUR",
+		BuyRate:       decimal.NewFromFloat(1.1),
+		SellRate:      decimal.NewFromFloat(1.2),
+		SetBy:         "admin",
+		EffectiveFrom: time.Now().UTC(),
+	}
+
+	_, err := s.CreateExchangeRate(t.Context(), ExchangeRate{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := rate
+	bad.BaseCurrency = ""
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingBaseCurrency)
+
+	bad = rate
+	bad.QuoteCurrency = ""
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingQuoteCurrency)
+
+	bad = rate
+	bad.SetBy = ""
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingSetBy)
+
+	bad = rate
+	bad.EffectiveFrom = time.Time{}
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingStartTime)
+
+	bad = rate
+	bad.BuyRate = decimal.NewFromInt(0)
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidRate)
+}
+
 func TestAddPSPTransactionAmountValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPTransactionAmount{

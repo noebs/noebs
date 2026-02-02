@@ -7,6 +7,8 @@ templ adminNav(tenantID string) {
 		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/transactions" + tenantQuery(tenantID)}>Transactions</a>
 		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/pending" + tenantQuery(tenantID)}>Pending</a>
 		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/manual" + tenantQuery(tenantID)}>Manual</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/fees" + tenantQuery(tenantID)}>Fees</a>
+		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/rates" + tenantQuery(tenantID)}>Rates</a>
 		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/audit" + tenantQuery(tenantID)}>Audit</a>
 	</div>
 }
@@ -612,6 +614,220 @@ templ ManualTransferDetailPage(data ManualTransferDetailView) {
 								<td>{ approval.Decision }</td>
 								<td>{ formatNullString(approval.Reason) }</td>
 								<td>{ formatTime(approval.DecidedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ FeesPage(data FeeConfigView) {
+	@adminLayout("Fee Configs", data.TenantID) {
+		<form method="post" class="mb-4">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="transaction_type" placeholder="Transaction type" value={ data.Form.TransactionType }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="currency" placeholder="Currency" value={ data.Form.Currency }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="tier_min" placeholder="Tier min" value={ data.Form.TierMin }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="tier_max" placeholder="Tier max" value={ data.Form.TierMax }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="percentage_fee" placeholder="Percentage fee" value={ data.Form.PercentageFee }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="flat_fee" placeholder="Flat fee" value={ data.Form.FlatFee }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="min_fee" placeholder="Min fee" value={ data.Form.MinFee }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="max_fee" placeholder="Max fee" value={ data.Form.MaxFee }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="fee_account_code" placeholder="Fee account code" value={ data.Form.FeeAccountCode }>
+				</div>
+				<div class="col">
+					<div class="form-check mt-2">
+						<input class="form-check-input" type="checkbox" name="is_active" id="fee-active" checked={ data.Form.IsActive }>
+						<label class="form-check-label" for="fee-active">Active</label>
+					</div>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary mt-1" type="submit">Add Fee Config</button>
+				</div>
+			</div>
+		</form>
+
+		<form method="get" class="mb-3">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="transaction_type" placeholder="Transaction type" value={ data.Filter.TransactionType }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="currency" placeholder="Currency" value={ data.Filter.Currency }>
+				</div>
+				<div class="col">
+					<div class="form-check mt-2">
+						<input class="form-check-input" type="checkbox" name="active_only" id="fee-active-only" checked={ data.Filter.ActiveOnly }>
+						<label class="form-check-label" for="fee-active-only">Active only</label>
+					</div>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="limit" placeholder="Limit" value={ data.Filter.Limit }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="offset" placeholder="Offset" value={ data.Filter.Offset }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Filter</button>
+				</div>
+			</div>
+		</form>
+
+		if len(data.Configs) == 0 {
+			<div class="alert alert-secondary">No fee configs found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Type</th>
+							<th>Currency</th>
+							<th>Tier Min</th>
+							<th>Tier Max</th>
+							<th>Percent</th>
+							<th>Flat</th>
+							<th>Min</th>
+							<th>Max</th>
+							<th>Account</th>
+							<th>Active</th>
+							<th>Created</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, cfg := range data.Configs {
+							<tr>
+								<td>{ cfg.TransactionType }</td>
+								<td>{ cfg.Currency }</td>
+								<td>{ cfg.TierMin }</td>
+								<td>{ formatNullInt64(cfg.TierMax) }</td>
+								<td>{ cfg.PercentageFee.String() }</td>
+								<td>{ cfg.FlatFee }</td>
+								<td>{ cfg.MinFee }</td>
+								<td>{ formatNullInt64(cfg.MaxFee) }</td>
+								<td>{ formatNullString(cfg.FeeAccountCode) }</td>
+								<td>{ cfg.IsActive }</td>
+								<td>{ formatTime(cfg.CreatedAt) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}
+
+templ RatesPage(data RateView) {
+	@adminLayout("Exchange Rates", data.TenantID) {
+		<form method="post" class="mb-4">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="base_currency" placeholder="Base currency" value={ data.Form.BaseCurrency }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="quote_currency" placeholder="Quote currency" value={ data.Form.QuoteCurrency }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="buy_rate" placeholder="Buy rate" value={ data.Form.BuyRate }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="sell_rate" placeholder="Sell rate" value={ data.Form.SellRate }>
+				</div>
+			</div>
+			<div class="form-row mt-2">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="spread" placeholder="Spread (optional)" value={ data.Form.Spread }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="set_by" placeholder="Set by" value={ data.Form.SetBy }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="effective_from" placeholder="Effective from (RFC3339)" value={ data.Form.EffectiveFrom }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Add Rate</button>
+				</div>
+			</div>
+		</form>
+
+		<form method="get" class="mb-3">
+			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<div class="form-row">
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="base_currency" placeholder="Base currency" value={ data.Filter.BaseCurrency }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="text" name="quote_currency" placeholder="Quote currency" value={ data.Filter.QuoteCurrency }>
+				</div>
+				<div class="col">
+					<div class="form-check mt-2">
+						<input class="form-check-input" type="checkbox" name="active_only" id="rate-active-only" checked={ data.Filter.ActiveOnly }>
+						<label class="form-check-label" for="rate-active-only">Active only</label>
+					</div>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="limit" placeholder="Limit" value={ data.Filter.Limit }>
+				</div>
+				<div class="col">
+					<input class="form-control form-control-sm" type="number" name="offset" placeholder="Offset" value={ data.Filter.Offset }>
+				</div>
+				<div class="col">
+					<button class="btn btn-sm btn-primary" type="submit">Filter</button>
+				</div>
+			</div>
+		</form>
+
+		if len(data.Rates) == 0 {
+			<div class="alert alert-secondary">No exchange rates found.</div>
+		} else {
+			<div class="table-responsive">
+				<table class="table table-striped table-sm">
+					<thead class="thead-dark">
+						<tr>
+							<th>Pair</th>
+							<th>Buy</th>
+							<th>Sell</th>
+							<th>Spread</th>
+							<th>Set By</th>
+							<th>Effective From</th>
+							<th>Effective To</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, rate := range data.Rates {
+							<tr>
+								<td>{ rate.BaseCurrency }/{ rate.QuoteCurrency }</td>
+								<td>{ rate.BuyRate.String() }</td>
+								<td>{ rate.SellRate.String() }</td>
+								<td>{ formatNullDecimal(rate.Spread) }</td>
+								<td>{ rate.SetBy }</td>
+								<td>{ formatTime(rate.EffectiveFrom) }</td>
+								<td>{ formatNullTime(rate.EffectiveTo) }</td>
 							</tr>
 						}
 					</tbody>
