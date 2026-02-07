@@ -5,7 +5,8 @@ test1.db
 *.sublime-project
 .noebs
 *.log
-noebs
+# Ignore built binaries, but do NOT exclude proto namespaces like proto/noebs or gen/proto/noebs.
+/noebs
 *.exe
 *.db
 ebs_fields/.secrets.json
