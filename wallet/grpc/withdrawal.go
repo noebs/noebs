@@ -213,7 +213,7 @@ func (s *Server) SignalWithdrawalApproval(ctx context.Context, req *walletv1.Wit
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
 	}
 	if req.ApproverId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApproverID.Error())
 	}
 	if req.Approved {
 		if req.ProofOfPayment == "" {
