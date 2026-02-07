@@ -2,6 +2,8 @@ package activity
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	basestore "github.com/adonese/noebs/store"
 	walletsecurity "github.com/adonese/noebs/wallet/security"
@@ -48,6 +50,22 @@ func (a *SecurityActivities) VerifyUserTOTP(ctx context.Context, tenantID string
 	}
 	if code == "" {
 		return false, walletstore.ErrMissingTwoFACode
+	}
+	if a.Store != nil {
+		record, err := a.Store.GetUserTwoFA(ctx, tenantID, userID)
+		if err == nil {
+			if !record.Enabled {
+				return false, walletstore.ErrMissingTwoFACode
+			}
+			ok := walletsecurity.VerifyTOTP(record.Secret, code)
+			if ok {
+				_ = a.Store.TouchUserTwoFALastUsed(ctx, tenantID, userID, time.Now().UTC())
+			}
+			return ok, nil
+		}
+		if !errors.Is(err, walletstore.ErrUserTwoFANotFound) {
+			return false, err
+		}
 	}
 	user, err := a.UserStore.FindUserByID(ctx, tenantID, userID)
 	if err != nil {
