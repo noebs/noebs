@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -11,12 +12,25 @@ type PSPStatusUpdate struct {
 	PSPTransactionID sql.NullString
 	ResponseCode     sql.NullString
 	ResponseMessage  sql.NullString
+	RawResponse      json.RawMessage
 	ConfirmedAt      sql.NullTime
 	LastPolledAt     sql.NullTime
 	NextPollAt       sql.NullTime
 	RetryCount       int
 	LastErrorType    sql.NullString
 	LastErrorAt      sql.NullTime
+}
+
+type PSPTransactionFilter struct {
+	TenantID        string
+	Status          string
+	Provider        string
+	Direction       string
+	ClientReference string
+	Start           time.Time
+	End             time.Time
+	Limit           int
+	Offset          int
 }
 
 func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*PSPTransaction, error) {
@@ -130,19 +144,22 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 		return err
 	}
 	stmt := db.Rebind(`UPDATE psp_transactions
-		SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
-			response_code = ?, response_message = ?,
-			confirmed_at = COALESCE(?, confirmed_at),
-			last_polled_at = COALESCE(?, last_polled_at),
-			next_poll_at = COALESCE(?, next_poll_at),
-			retry_count = CASE WHEN ? = 0 THEN retry_count ELSE ? END,
-			last_error_type = ?, last_error_at = ?
-		WHERE tenant_id = ? AND client_reference = ?`)
+			SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
+				response_code = COALESCE(?, response_code),
+				response_message = COALESCE(?, response_message),
+				raw_response = COALESCE(?, raw_response),
+				confirmed_at = COALESCE(?, confirmed_at),
+				last_polled_at = COALESCE(?, last_polled_at),
+				next_poll_at = COALESCE(?, next_poll_at),
+				retry_count = CASE WHEN ? = 0 THEN retry_count ELSE ? END,
+				last_error_type = ?, last_error_at = ?
+			WHERE tenant_id = ? AND client_reference = ?`)
 	result, err := db.ExecContext(ctx, stmt,
 		update.Status,
 		update.PSPTransactionID,
 		update.ResponseCode,
 		update.ResponseMessage,
+		update.RawResponse,
 		update.ConfirmedAt,
 		update.LastPolledAt,
 		update.NextPollAt,
@@ -187,6 +204,89 @@ func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID stri
 		LIMIT ?`)
 	var rows []PSPTransaction
 	if err := db.SelectContext(ctx, &rows, stmt, tenantID, now, now, limit); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (s *Store) ListPSPTransactions(ctx context.Context, filter PSPTransactionFilter) ([]PSPTransaction, error) {
+	if filter.TenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if filter.Limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	if filter.Offset < 0 {
+		return nil, ErrInvalidOffset
+	}
+	if filter.Start.IsZero() != filter.End.IsZero() {
+		if filter.Start.IsZero() {
+			return nil, ErrMissingStartTime
+		}
+		return nil, ErrMissingEndTime
+	}
+	if !filter.Start.IsZero() && filter.Start.After(filter.End) {
+		return nil, ErrInvalidTimeRange
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	query := `SELECT * FROM psp_transactions WHERE tenant_id = ?`
+	args := []any{filter.TenantID}
+	if filter.Status != "" {
+		query += " AND status = ?"
+		args = append(args, filter.Status)
+	}
+	if filter.Provider != "" {
+		query += " AND psp_provider = ?"
+		args = append(args, filter.Provider)
+	}
+	if filter.Direction != "" {
+		query += " AND direction = ?"
+		args = append(args, filter.Direction)
+	}
+	if filter.ClientReference != "" {
+		query += " AND client_reference = ?"
+		args = append(args, filter.ClientReference)
+	}
+	if !filter.Start.IsZero() && !filter.End.IsZero() {
+		query += " AND created_at >= ? AND created_at <= ?"
+		args = append(args, filter.Start, filter.End)
+	}
+	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+	args = append(args, filter.Limit, filter.Offset)
+	stmt := db.Rebind(query)
+	var rows []PSPTransaction
+	if err := db.SelectContext(ctx, &rows, stmt, args...); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (s *Store) ListPendingWithdrawalApprovals(ctx context.Context, tenantID string, limit, offset int) ([]PSPTransaction, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if limit <= 0 {
+		return nil, ErrInvalidLimit
+	}
+	if offset < 0 {
+		return nil, ErrInvalidOffset
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind(`SELECT * FROM psp_transactions
+		WHERE tenant_id = ?
+		AND direction = 'outbound'
+		AND status IN ('initiated', 'pending', 'held')
+		AND (raw_request->>'approval_required') = 'true'
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`)
+	var rows []PSPTransaction
+	if err := db.SelectContext(ctx, &rows, stmt, tenantID, limit, offset); err != nil {
 		return nil, err
 	}
 	return rows, nil

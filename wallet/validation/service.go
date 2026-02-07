@@ -45,6 +45,7 @@ type DepositValidationRequest struct {
 	Amount          int64
 	OwnerType       string
 	OwnerID         string
+	Region          string
 }
 
 type DepositValidationResult struct {
@@ -68,6 +69,7 @@ type WithdrawalValidationRequest struct {
 	Amount          int64
 	OwnerType       string
 	OwnerID         string
+	Region          string
 }
 
 type WithdrawalValidationResult struct {
@@ -248,11 +250,15 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 		return nil, err
 	}
 
-	cfg, err := s.Store.GetPSPConfig(ctx, req.TenantID, req.ProviderCode)
+	cfg, _, err := s.Store.ResolvePSPConfig(ctx, req.TenantID, req.ProviderCode, walletstore.PSPConfigScope{
+		Region:    req.Region,
+		Currency:  req.Currency,
+		Direction: "deposit",
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := validatePSPConfig(cfg, req.Currency, "deposit"); err != nil {
+	if err := ValidatePSPConfig(cfg, req.Currency, "deposit"); err != nil {
 		return nil, err
 	}
 
@@ -311,11 +317,15 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 		return nil, err
 	}
 
-	cfg, err := s.Store.GetPSPConfig(ctx, req.TenantID, req.ProviderCode)
+	cfg, _, err := s.Store.ResolvePSPConfig(ctx, req.TenantID, req.ProviderCode, walletstore.PSPConfigScope{
+		Region:    req.Region,
+		Currency:  req.Currency,
+		Direction: "withdrawal",
+	})
 	if err != nil {
 		return nil, err
 	}
-	if err := validatePSPConfig(cfg, req.Currency, "withdrawal"); err != nil {
+	if err := ValidatePSPConfig(cfg, req.Currency, "withdrawal"); err != nil {
 		return nil, err
 	}
 
@@ -373,7 +383,7 @@ func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID str
 	return nil
 }
 
-func validatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) error {
+func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) error {
 	if cfg == nil {
 		return walletstore.ErrPSPConfigNotFound
 	}

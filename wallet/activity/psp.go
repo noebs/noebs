@@ -3,6 +3,7 @@ package activity
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/adonese/noebs/wallet/psp"
 )
@@ -18,18 +19,24 @@ type VerifyDepositParams struct {
 	TenantID      string
 	ProviderCode  string
 	TransactionID string
+	Currency      string
+	Region        string
 }
 
 type SendPayoutParams struct {
 	TenantID     string
 	ProviderCode string
 	Request      psp.PayoutRequest
+	Region       string
 }
 
 type GetStatusParams struct {
 	TenantID      string
 	ProviderCode  string
 	TransactionID string
+	Currency      string
+	Direction     string
+	Region        string
 }
 
 func NewPSPActivities(loader *psp.Loader, registry *psp.Registry) *PSPActivities {
@@ -37,7 +44,7 @@ func NewPSPActivities(loader *psp.Loader, registry *psp.Registry) *PSPActivities
 }
 
 func (a *PSPActivities) VerifyDeposit(ctx context.Context, params VerifyDepositParams) (*psp.DepositVerification, error) {
-	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode)
+	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Currency, "deposit", params.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +52,7 @@ func (a *PSPActivities) VerifyDeposit(ctx context.Context, params VerifyDepositP
 }
 
 func (a *PSPActivities) SendPayout(ctx context.Context, params SendPayoutParams) (*psp.PayoutResult, error) {
-	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode)
+	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Request.Currency, "withdrawal", params.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -53,18 +60,35 @@ func (a *PSPActivities) SendPayout(ctx context.Context, params SendPayoutParams)
 }
 
 func (a *PSPActivities) GetTransactionStatus(ctx context.Context, params GetStatusParams) (*psp.TxStatus, error) {
-	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode)
+	direction := normalizeScopeDirection(params.Direction)
+	provider, _, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Currency, direction, params.Region)
 	if err != nil {
 		return nil, err
 	}
 	return provider.GetTransactionStatus(ctx, params.TransactionID)
 }
 
-func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerCode string) (psp.Provider, *psp.Config, error) {
+func normalizeScopeDirection(direction string) string {
+	normalized := strings.ToLower(strings.TrimSpace(direction))
+	switch normalized {
+	case "", "deposit", "inbound":
+		return "deposit"
+	case "withdrawal", "outbound", "payout":
+		return "withdrawal"
+	default:
+		return normalized
+	}
+}
+
+func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerCode, currency, direction, region string) (psp.Provider, *psp.Config, error) {
 	if a == nil || a.Loader == nil || a.Registry == nil {
 		return nil, nil, ErrMissingPSPDependencies
 	}
-	cfg, err := a.Loader.Load(ctx, tenantID, providerCode)
+	cfg, err := a.Loader.LoadForScope(ctx, tenantID, providerCode, psp.Scope{
+		Region:    region,
+		Currency:  currency,
+		Direction: direction,
+	})
 	if err != nil {
 		return nil, nil, err
 	}

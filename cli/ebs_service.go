@@ -13,6 +13,7 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
+	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/sirupsen/logrus"
 	chat "github.com/tutipay/ws"
@@ -30,6 +31,8 @@ var dashService dashboard.Service
 var merchantServices = merchant.Service{}
 var walletService *wallet.Service
 var walletWorker *walletworker.Runner
+var walletPSPRegistry *walletpsp.Registry
+var walletPSPLoader *walletpsp.Loader
 var rawSecrets map[string]interface{}
 var hub *chat.Hub
 var logSampling gateway.LogSamplingConfig

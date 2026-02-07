@@ -378,6 +378,48 @@ func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingVerificationTime)
 }
 
+func TestCreateOwnershipVerificationValidation(t *testing.T) {
+	s := &Store{}
+	now := time.Now().UTC()
+	base := OwnershipVerification{
+		TenantID:         "tenant",
+		DestinationID:    1,
+		VerificationType: "micro_deposit",
+		Status:           "pending",
+		Attempts:         0,
+		MaxAttempts:      3,
+		ExpiresAt:        now.Add(time.Hour),
+	}
+
+	_, err := s.CreateOwnershipVerification(t.Context(), OwnershipVerification{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := base
+	bad.DestinationID = 0
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingDestinationID)
+
+	bad = base
+	bad.VerificationType = ""
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingVerificationType)
+
+	bad = base
+	bad.Status = ""
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	bad = base
+	bad.MaxAttempts = 0
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingMaxAttempts)
+
+	bad = base
+	bad.ExpiresAt = time.Time{}
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingVerificationExpiry)
+}
+
 func TestListPendingWithdrawalApprovalsValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListPendingWithdrawalApprovals(t.Context(), "", 10, 0)

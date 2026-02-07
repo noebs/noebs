@@ -17,6 +17,12 @@ noebs:
   wallet_approval_timeout_seconds: 3600
   wallet_verification_timeout_seconds: 86400
   wallet_manual_approval_timeout_seconds: 86400
+  wallet_psp_poller_cron: "*/5 * * * *"
+  wallet_psp_poller_batch_size: 100
+  wallet_psp_poller_interval_seconds: 300
+  wallet_reconciliation_cron: "0 3 * * *"
+  wallet_reconciliation_batch_size: 500
+  wallet_reconciliation_lookback_hours: 24
   grpc_enabled: false
   grpc_port: ":9090"
   grpc_gateway_enabled: false

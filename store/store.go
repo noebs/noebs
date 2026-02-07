@@ -52,6 +52,19 @@ func (s *Store) EnsureTenant(ctx context.Context, tenantID string) error {
 	return err
 }
 
+func (s *Store) ListTenants(ctx context.Context) ([]string, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := s.DB.Rebind("SELECT id FROM tenants ORDER BY id ASC")
+	var tenants []string
+	if err := db.SelectContext(ctx, &tenants, stmt); err != nil {
+		return nil, err
+	}
+	return tenants, nil
+}
+
 func (s *Store) CreateAPIKey(ctx context.Context, tenantID, email, apiKey string) error {
 	db, err := s.ensureDB()
 	if err != nil {

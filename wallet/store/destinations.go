@@ -188,3 +188,34 @@ func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenant
 	}
 	return nil
 }
+
+func (s *Store) DeactivateWithdrawalDestination(ctx context.Context, tenantID string, destinationID int64, updatedAt time.Time) error {
+	if tenantID == "" {
+		return ErrMissingTenantID
+	}
+	if destinationID <= 0 {
+		return ErrMissingDestinationID
+	}
+	if updatedAt.IsZero() {
+		return ErrMissingUpdatedAt
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := db.Rebind(`UPDATE withdrawal_destinations
+		SET is_active = FALSE, updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := db.ExecContext(ctx, stmt, updatedAt, tenantID, destinationID)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrDestinationNotFound
+	}
+	return nil
+}

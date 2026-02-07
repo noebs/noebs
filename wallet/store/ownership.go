@@ -19,6 +19,9 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	if verification.Status == "" {
 		return nil, ErrMissingStatus
 	}
+	if verification.MaxAttempts <= 0 {
+		return nil, ErrMissingMaxAttempts
+	}
 	if verification.ExpiresAt.IsZero() {
 		return nil, ErrMissingVerificationExpiry
 	}

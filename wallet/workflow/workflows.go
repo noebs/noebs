@@ -1528,12 +1528,16 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 		if !acquired {
 			continue
 		}
+		direction := "deposit"
+		if txn.Direction == "outbound" {
+			direction = "withdrawal"
+		}
 		statusParams := walletactivity.GetStatusParams{
 			TenantID:      params.TenantID,
 			ProviderCode:  txn.PSPProvider,
 			TransactionID: txn.PSPTransactionID.String,
 			Currency:      txn.Currency,
-			Direction:     txn.Direction,
+			Direction:     direction,
 			Region:        regionFromRawRequest(txn.RawRequest),
 		}
 		var status walletpsp.TxStatus

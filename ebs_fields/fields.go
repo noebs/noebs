@@ -1009,6 +1009,12 @@ type NoebsConfig struct {
 	WalletApprovalTimeoutSeconds               int    `json:"wallet_approval_timeout_seconds"`
 	WalletVerificationTimeoutSeconds           int    `json:"wallet_verification_timeout_seconds"`
 	WalletManualTransferApprovalTimeoutSeconds int    `json:"wallet_manual_approval_timeout_seconds"`
+	WalletPSPPollerCron                        string `json:"wallet_psp_poller_cron"`
+	WalletPSPPollerBatchSize                   int    `json:"wallet_psp_poller_batch_size"`
+	WalletPSPPollerIntervalSeconds             int    `json:"wallet_psp_poller_interval_seconds"`
+	WalletReconciliationCron                   string `json:"wallet_reconciliation_cron"`
+	WalletReconciliationBatchSize              int    `json:"wallet_reconciliation_batch_size"`
+	WalletReconciliationLookbackHours          int    `json:"wallet_reconciliation_lookback_hours"`
 
 	// gRPC
 	GRPCEnabled        bool   `json:"grpc_enabled"`
@@ -1054,6 +1060,24 @@ func (n *NoebsConfig) Defaults() {
 	}
 	if n.WalletManualTransferApprovalTimeoutSeconds == 0 {
 		n.WalletManualTransferApprovalTimeoutSeconds = 86400
+	}
+	if n.WalletPSPPollerCron == "" {
+		n.WalletPSPPollerCron = "*/5 * * * *"
+	}
+	if n.WalletPSPPollerBatchSize == 0 {
+		n.WalletPSPPollerBatchSize = 100
+	}
+	if n.WalletPSPPollerIntervalSeconds == 0 {
+		n.WalletPSPPollerIntervalSeconds = 300
+	}
+	if n.WalletReconciliationCron == "" {
+		n.WalletReconciliationCron = "0 3 * * *"
+	}
+	if n.WalletReconciliationBatchSize == 0 {
+		n.WalletReconciliationBatchSize = 500
+	}
+	if n.WalletReconciliationLookbackHours == 0 {
+		n.WalletReconciliationLookbackHours = 24
 	}
 	if n.GRPCEnabled && n.GRPCPort == "" {
 		n.GRPCPort = ":9090"
