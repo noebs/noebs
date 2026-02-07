@@ -137,6 +137,8 @@ services:
       db:
         condition: service_healthy
     ports:
+      # `:8080` is a common host port and is already used on our server.
+      # Keep the app listening on `:8080` in-container, but publish it on `:8081` on the host.
       - "0.0.0.0:8081:8080"
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
