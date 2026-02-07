@@ -1,5 +1,5 @@
 api.noebs.sd, dsa.adonese.sd {
-    reverse_proxy web:8080
+    reverse_proxy web:8081
 
     encode gzip zstd
 
