@@ -1494,6 +1494,7 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
+	confirmedAtVersion := workflow.GetVersion(ctx, "psp_status_poller_confirmed_at", workflow.DefaultVersion, 1)
 
 	var txns []walletstore.PSPTransaction
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityListPSPTransactionsForPolling, params.TenantID, params.Limit).Get(ctx, &txns); err != nil {
@@ -1548,6 +1549,9 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 			update.LastErrorAt = sql.NullTime{Time: now, Valid: true}
 		} else {
 			update.Status = status.Status
+		}
+		if confirmedAtVersion == 1 && update.Status == "success" && !txn.ConfirmedAt.Valid {
+			update.ConfirmedAt = sql.NullTime{Time: now, Valid: true}
 		}
 		updateParams := walletactivity.UpdatePSPTransactionStatusParams{
 			TenantID:        params.TenantID,

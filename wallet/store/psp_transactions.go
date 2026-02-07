@@ -131,8 +131,12 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 	}
 	stmt := db.Rebind(`UPDATE psp_transactions
 		SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
-			response_code = ?, response_message = ?, confirmed_at = ?,
-			last_polled_at = ?, next_poll_at = ?, retry_count = ?, last_error_type = ?, last_error_at = ?
+			response_code = ?, response_message = ?,
+			confirmed_at = COALESCE(?, confirmed_at),
+			last_polled_at = COALESCE(?, last_polled_at),
+			next_poll_at = COALESCE(?, next_poll_at),
+			retry_count = CASE WHEN ? = 0 THEN retry_count ELSE ? END,
+			last_error_type = ?, last_error_at = ?
 		WHERE tenant_id = ? AND client_reference = ?`)
 	result, err := db.ExecContext(ctx, stmt,
 		update.Status,
@@ -142,6 +146,7 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 		update.ConfirmedAt,
 		update.LastPolledAt,
 		update.NextPollAt,
+		update.RetryCount,
 		update.RetryCount,
 		update.LastErrorType,
 		update.LastErrorAt,
