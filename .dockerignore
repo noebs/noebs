@@ -6,7 +6,10 @@
 **/*.sublime-project
 **/.noebs
 **/*.log
-**/noebs
+# Ignore built binaries, but do NOT exclude proto namespaces like gen/proto/noebs.
+/noebs
+/cli/noebs
+/cli/cli
 **/*.exe
 **/*.db
 **/ebs_fields/.secrets.jsontmp
