@@ -137,7 +137,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "0.0.0.0:8081:8081"
+      - "0.0.0.0:8081:8080"
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
     secrets:
@@ -159,7 +159,7 @@ services:
       - public
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/test || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
       interval: 30s
       timeout: 3s
       retries: 3

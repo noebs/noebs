@@ -1,6 +1,6 @@
 noebs:
   db_driver: pgx
-  port: ":8081"
+  port: ":8080"
   grpc_enabled: false
   grpc_port: ":9090"
   grpc_gateway_enabled: false
