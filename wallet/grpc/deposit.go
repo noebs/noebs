@@ -128,6 +128,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		WalletID:        req.WalletId,
 		OwnerType:       req.OwnerType,
 		OwnerID:         req.OwnerId,
+		Region:          req.Region,
 	}
 	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:                    workflowID,
@@ -173,6 +174,7 @@ func depositRawRequest(req *walletv1.DepositRequest, metadata map[string]any) (j
 		"currency":           req.Currency,
 		"fee_amount":         req.FeeAmount,
 		"net_amount":         req.NetAmount,
+		"region":             req.Region,
 		"metadata":           metadata,
 	}
 	return json.Marshal(payload)

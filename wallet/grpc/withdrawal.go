@@ -167,6 +167,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		ApprovalTimeoutSeconds:     approvalTimeoutSeconds,
 		VerificationTimeoutSeconds: verificationTimeoutSeconds,
 		HoldExpirySeconds:          holdExpirySeconds,
+		Region:                     req.Region,
 		Request: walletpsp.PayoutRequest{
 			ClientReference: req.ClientReference,
 			Amount:          req.Amount,
@@ -310,6 +311,7 @@ func withdrawalRawRequest(req *walletv1.WithdrawalRequest, allowReturnToSource, 
 		"require_pin":            requirePIN,
 		"require_2fa":            require2FA,
 		"approval_required":      approvalRequired,
+		"region":                 req.Region,
 		"metadata":               metadata,
 	}
 	return json.Marshal(payload)

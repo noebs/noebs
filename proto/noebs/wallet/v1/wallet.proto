@@ -19,6 +19,18 @@ service WalletInternalService {
   rpc SignalWithdrawalApproval(WithdrawalApprovalRequest) returns (google.protobuf.Empty) {}
   rpc SignalWithdrawalVerification(WithdrawalDestinationVerificationRequest) returns (google.protobuf.Empty) {}
   rpc SignalManualTransferDecision(ManualTransferDecisionRequest) returns (google.protobuf.Empty) {}
+  rpc CreateFundingSource(CreateFundingSourceRequest) returns (FundingSource) {}
+  rpc ListFundingSources(ListFundingSourcesRequest) returns (FundingSourceList) {}
+  rpc CreateWithdrawalDestination(CreateWithdrawalDestinationRequest) returns (WithdrawalDestination) {}
+  rpc ListWithdrawalDestinations(ListWithdrawalDestinationsRequest) returns (WithdrawalDestinationList) {}
+  rpc DeactivateWithdrawalDestination(DeactivateWithdrawalDestinationRequest) returns (google.protobuf.Empty) {}
+  rpc RequestOwnershipVerification(RequestOwnershipVerificationRequest) returns (OwnershipVerification) {}
+  rpc CompleteOwnershipVerification(CompleteOwnershipVerificationRequest) returns (google.protobuf.Empty) {}
+  rpc SetWalletPIN(SetWalletPINRequest) returns (google.protobuf.Empty) {}
+  rpc ResetWalletPIN(ResetWalletPINRequest) returns (google.protobuf.Empty) {}
+  rpc EnrollUser2FA(EnrollUser2FARequest) returns (User2FASetup) {}
+  rpc ConfirmUser2FA(ConfirmUser2FARequest) returns (google.protobuf.Empty) {}
+  rpc DisableUser2FA(DisableUser2FARequest) returns (google.protobuf.Empty) {}
 }
 
 service WalletPublicService {
@@ -72,6 +84,64 @@ service WalletPublicService {
   rpc SignalManualTransferDecision(ManualTransferDecisionRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       post: "/wallet/manual_transfers/{workflow_id}/decision"
+      body: "*"
+    };
+  }
+  rpc ListFundingSources(ListFundingSourcesRequest) returns (FundingSourceList) {
+    option (google.api.http) = {
+      get: "/wallet/{wallet_id}/funding_sources"
+    };
+  }
+  rpc CreateWithdrawalDestination(CreateWithdrawalDestinationRequest) returns (WithdrawalDestination) {
+    option (google.api.http) = {
+      post: "/wallet/{wallet_id}/destinations"
+      body: "*"
+    };
+  }
+  rpc ListWithdrawalDestinations(ListWithdrawalDestinationsRequest) returns (WithdrawalDestinationList) {
+    option (google.api.http) = {
+      get: "/wallet/{wallet_id}/destinations"
+    };
+  }
+  rpc DeactivateWithdrawalDestination(DeactivateWithdrawalDestinationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/destinations/{destination_id}/deactivate"
+      body: "*"
+    };
+  }
+  rpc RequestOwnershipVerification(RequestOwnershipVerificationRequest) returns (OwnershipVerification) {
+    option (google.api.http) = {
+      post: "/wallet/destinations/{destination_id}/verify"
+      body: "*"
+    };
+  }
+  rpc CompleteOwnershipVerification(CompleteOwnershipVerificationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/ownership_verifications/{verification_id}/complete"
+      body: "*"
+    };
+  }
+  rpc SetWalletPIN(SetWalletPINRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/{wallet_id}/pin"
+      body: "*"
+    };
+  }
+  rpc EnrollUser2FA(EnrollUser2FARequest) returns (User2FASetup) {
+    option (google.api.http) = {
+      post: "/wallet/users/{user_id}/2fa/enroll"
+      body: "*"
+    };
+  }
+  rpc ConfirmUser2FA(ConfirmUser2FARequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/users/{user_id}/2fa/confirm"
+      body: "*"
+    };
+  }
+  rpc DisableUser2FA(DisableUser2FARequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/wallet/users/{user_id}/2fa/disable"
       body: "*"
     };
   }
@@ -152,6 +222,7 @@ message DepositRequest {
   optional int64 net_amount = 11;
   string idempotency_key = 12;
   google.protobuf.Struct metadata = 13;
+  string region = 14;
 }
 
 message ManualTransferRequest {
@@ -195,6 +266,7 @@ message WithdrawalRequest {
   int32 verification_timeout_seconds = 16;
   string idempotency_key = 17;
   google.protobuf.Struct metadata = 18;
+  string region = 19;
 }
 
 message WithdrawalApprovalRequest {
@@ -210,4 +282,156 @@ message WithdrawalDestinationVerificationRequest {
   int64 verification_id = 2;
   bool verified = 3;
   string reason = 4;
+}
+
+message FundingSource {
+  int64 id = 1;
+  string tenant_id = 2;
+  string wallet_id = 3;
+  string source_type = 4;
+  string psp_provider = 5;
+  string external_reference = 6;
+  string verification_status = 7;
+  string currency = 8;
+  google.protobuf.Struct source_details = 9;
+  int64 total_funded = 10;
+  int64 total_withdrawn = 11;
+  bool supports_withdrawal = 12;
+  google.protobuf.Struct withdrawal_method = 13;
+}
+
+message FundingSourceList {
+  repeated FundingSource sources = 1;
+}
+
+message CreateFundingSourceRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+  string source_type = 3;
+  string psp_provider = 4;
+  string external_reference = 5;
+  string verification_status = 6;
+  string currency = 7;
+  google.protobuf.Struct source_details = 8;
+  bool supports_withdrawal = 9;
+  google.protobuf.Struct withdrawal_method = 10;
+}
+
+message ListFundingSourcesRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+}
+
+message WithdrawalDestination {
+  int64 id = 1;
+  string tenant_id = 2;
+  string wallet_id = 3;
+  string destination_type = 4;
+  string psp_provider = 5;
+  google.protobuf.Struct destination_details = 6;
+  string display_name = 7;
+  string currency = 8;
+  string country = 9;
+  string ownership_status = 10;
+  string ownership_verification_method = 11;
+  int64 linked_funding_source_id = 12;
+  bool is_return_to_source = 13;
+  bool is_active = 14;
+  int64 total_withdrawn = 15;
+}
+
+message WithdrawalDestinationList {
+  repeated WithdrawalDestination destinations = 1;
+}
+
+message CreateWithdrawalDestinationRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+  string destination_type = 3;
+  string psp_provider = 4;
+  google.protobuf.Struct destination_details = 5;
+  string display_name = 6;
+  string currency = 7;
+  string country = 8;
+  string ownership_verification_method = 9;
+  int64 linked_funding_source_id = 10;
+  bool is_return_to_source = 11;
+}
+
+message ListWithdrawalDestinationsRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+  bool active_only = 3;
+}
+
+message DeactivateWithdrawalDestinationRequest {
+  string tenant_id = 1;
+  int64 destination_id = 2;
+}
+
+message OwnershipVerification {
+  int64 id = 1;
+  string tenant_id = 2;
+  int64 destination_id = 3;
+  string verification_type = 4;
+  string status = 5;
+  int32 attempts = 6;
+  int32 max_attempts = 7;
+  string workflow_id = 8;
+  string reference_id = 9;
+}
+
+message RequestOwnershipVerificationRequest {
+  string tenant_id = 1;
+  int64 destination_id = 2;
+  string verification_type = 3;
+  int32 verification_timeout_seconds = 4;
+  string workflow_id = 5;
+  string reference_id = 6;
+}
+
+message CompleteOwnershipVerificationRequest {
+  string tenant_id = 1;
+  int64 verification_id = 2;
+  bool verified = 3;
+  string reason = 4;
+}
+
+message SetWalletPINRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+  string new_pin = 3;
+  string current_pin = 4;
+}
+
+message ResetWalletPINRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+  string new_pin = 3;
+  int64 admin_id = 4;
+}
+
+message EnrollUser2FARequest {
+  string tenant_id = 1;
+  int64 user_id = 2;
+}
+
+message User2FASetup {
+  string tenant_id = 1;
+  int64 user_id = 2;
+  string secret = 3;
+  string otp_auth_url = 4;
+  bool enabled = 5;
+}
+
+message ConfirmUser2FARequest {
+  string tenant_id = 1;
+  int64 user_id = 2;
+  string code = 3;
+}
+
+message DisableUser2FARequest {
+  string tenant_id = 1;
+  int64 user_id = 2;
+  string code = 3;
 }
