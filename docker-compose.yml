@@ -111,7 +111,7 @@ services:
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: temporal-postgres
     ports:
-      - "7233:7233"
+      - "127.0.0.1:7233:7233"
     networks:
       - backend
 
@@ -124,7 +124,7 @@ services:
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
-      - "8233:8233"
+      - "127.0.0.1:8233:8233"
     networks:
       - backend
 
