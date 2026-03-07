@@ -25,9 +25,6 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.Currency == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
@@ -40,17 +37,41 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := bindUserIDToClaims(req.UserId, claims)
+	if err != nil {
+		return nil, err
+	}
+	fromOwnerType, fromOwnerID, err := bindOwnerToClaims(req.FromOwnerType, req.FromOwnerId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.UserId = userID
+	req.FromOwnerType = fromOwnerType
+	req.FromOwnerId = fromOwnerID
 	if req.FromOwnerType == "" || req.ToOwnerType == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerType.Error())
 	}
 	if req.FromOwnerId == "" || req.ToOwnerId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
-	if _, err := uuid.Parse(req.FromWalletId); err != nil {
+	fromWalletID, err := uuid.Parse(req.FromWalletId)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
 	if _, err := uuid.Parse(req.ToWalletId); err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	if err := s.authorizeWalletForClaims(ctx, tenantID, fromWalletID, claims); err != nil {
+		return nil, err
 	}
 
 	requirePIN, require2FA := p2pRequirements(s.Service.Config, req.Amount)

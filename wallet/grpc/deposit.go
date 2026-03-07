@@ -55,8 +55,27 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if req.Currency == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
-	if _, err := uuid.Parse(req.WalletId); err != nil {
+	walletID, err := uuid.Parse(req.WalletId)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	ownerType, ownerID, err := bindOwnerToClaims(req.OwnerType, req.OwnerId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.OwnerType = ownerType
+	req.OwnerId = ownerID
+	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
+		return nil, err
 	}
 
 	temporalClient, err := s.ensureTemporalClient()

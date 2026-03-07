@@ -29,69 +29,72 @@ func configureTestAuth(t *testing.T) string {
 	return token
 }
 
-func TestManualTransferMethodRequiresAuth(t *testing.T) {
+func configureAdminAuth(t *testing.T) string {
+	t.Helper()
+	originalCfg := noebsConfig
+	t.Cleanup(func() {
+		noebsConfig = originalCfg
+	})
+	noebsConfig.AdminKey = "test-admin-key"
+	noebsConfig.AdminUser = ""
+	noebsConfig.AdminPassword = ""
+	return noebsConfig.AdminKey
+}
+
+func TestWalletMethodAuthRequirement(t *testing.T) {
 	tests := []struct {
 		name       string
 		fullMethod string
-		want       bool
+		want       walletAuthRequirement
 	}{
 		{
-			name:       "public request manual transfer",
-			fullMethod: walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
-			want:       true,
-		},
-		{
-			name:       "public signal manual transfer decision",
-			fullMethod: walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
-			want:       true,
-		},
-		{
-			name:       "internal request manual transfer",
-			fullMethod: walletv1.WalletInternalService_RequestManualTransfer_FullMethodName,
-			want:       true,
-		},
-		{
-			name:       "internal signal manual transfer decision",
-			fullMethod: walletv1.WalletInternalService_SignalManualTransferDecision_FullMethodName,
-			want:       true,
-		},
-		{
-			name:       "other public method",
+			name:       "public user method uses jwt",
 			fullMethod: walletv1.WalletPublicService_RequestWithdrawal_FullMethodName,
-			want:       false,
+			want:       walletAuthJWT,
 		},
 		{
-			name:       "other internal method",
+			name:       "public admin method uses admin auth",
+			fullMethod: walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
+			want:       walletAuthAdmin,
+		},
+		{
+			name:       "internal method uses admin auth",
 			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
-			want:       false,
+			want:       walletAuthAdmin,
+		},
+		{
+			name:       "unknown method has no auth requirement",
+			fullMethod: "/other.Service/Method",
+			want:       walletAuthNone,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := manualTransferMethodRequiresAuth(tt.fullMethod); got != tt.want {
-				t.Fatalf("manualTransferMethodRequiresAuth(%q) = %v, want %v", tt.fullMethod, got, tt.want)
+			if got := walletMethodAuthRequirement(tt.fullMethod); got != tt.want {
+				t.Fatalf("walletMethodAuthRequirement(%q) = %v, want %v", tt.fullMethod, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestManualTransferPathRequiresAuth(t *testing.T) {
+func TestWalletPathAuthRequirement(t *testing.T) {
 	tests := []struct {
 		name string
 		path string
-		want bool
+		want walletAuthRequirement
 	}{
-		{name: "manual transfer request route", path: "/wallet/manual_transfers", want: true},
-		{name: "manual transfer decision route", path: "/wallet/manual_transfers/workflow-id/decision", want: true},
-		{name: "different manual transfer route", path: "/wallet/manual_transfers/workflow-id", want: false},
-		{name: "withdrawal route", path: "/wallet/withdrawals", want: false},
+		{name: "manual transfer request route", path: "/wallet/manual_transfers", want: walletAuthAdmin},
+		{name: "manual transfer decision route", path: "/wallet/manual_transfers/workflow-id/decision", want: walletAuthAdmin},
+		{name: "withdrawal approval route", path: "/wallet/withdrawals/workflow-id/approval", want: walletAuthAdmin},
+		{name: "user withdrawal route", path: "/wallet/withdrawals", want: walletAuthJWT},
+		{name: "other route", path: "/other", want: walletAuthNone},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := manualTransferPathRequiresAuth(tt.path); got != tt.want {
-				t.Fatalf("manualTransferPathRequiresAuth(%q) = %v, want %v", tt.path, got, tt.want)
+			if got := walletPathAuthRequirement(tt.path); got != tt.want {
+				t.Fatalf("walletPathAuthRequirement(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}
@@ -121,8 +124,9 @@ func TestContextHasValidBearerToken(t *testing.T) {
 	}
 }
 
-func TestRequireAuthForManualTransferMethods(t *testing.T) {
+func TestRequireAuthForWalletMethods(t *testing.T) {
 	token := configureTestAuth(t)
+	adminKey := configureAdminAuth(t)
 
 	tests := []struct {
 		name       string
@@ -132,32 +136,46 @@ func TestRequireAuthForManualTransferMethods(t *testing.T) {
 		wantCalled bool
 	}{
 		{
-			name:       "allows unprotected method without token",
+			name:       "rejects public user method without token",
 			ctx:        context.Background(),
+			fullMethod: walletv1.WalletPublicService_RequestWithdrawal_FullMethodName,
+			wantCode:   codes.Unauthenticated,
+			wantCalled: false,
+		},
+		{
+			name:       "allows public user method with valid token",
+			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token)),
 			fullMethod: walletv1.WalletPublicService_RequestWithdrawal_FullMethodName,
 			wantCode:   codes.OK,
 			wantCalled: true,
 		},
 		{
-			name:       "rejects protected method without token",
-			ctx:        context.Background(),
+			name:       "rejects public admin method without admin auth",
+			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token)),
 			fullMethod: walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
-			wantCode:   codes.Unauthenticated,
+			wantCode:   codes.PermissionDenied,
 			wantCalled: false,
 		},
 		{
-			name:       "allows protected method with valid token",
-			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token)),
+			name:       "allows public admin method with admin key",
+			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", adminKey)),
 			fullMethod: walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
 			wantCode:   codes.OK,
 			wantCalled: true,
 		},
 		{
-			name:       "rejects internal protected method without token",
-			ctx:        context.Background(),
-			fullMethod: walletv1.WalletInternalService_SignalManualTransferDecision_FullMethodName,
-			wantCode:   codes.Unauthenticated,
+			name:       "rejects internal method without admin auth",
+			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token)),
+			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
+			wantCode:   codes.PermissionDenied,
 			wantCalled: false,
+		},
+		{
+			name:       "allows internal method with admin auth",
+			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", adminKey)),
+			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
+			wantCode:   codes.OK,
+			wantCalled: true,
 		},
 	}
 
@@ -168,7 +186,7 @@ func TestRequireAuthForManualTransferMethods(t *testing.T) {
 				called = true
 				return "ok", nil
 			}
-			_, err := requireAuthForManualTransferMethods(tt.ctx, struct{}{}, &grpc.UnaryServerInfo{
+			_, err := requireAuthForWalletMethods(tt.ctx, struct{}{}, &grpc.UnaryServerInfo{
 				FullMethod: tt.fullMethod,
 			}, handler)
 
@@ -182,39 +200,41 @@ func TestRequireAuthForManualTransferMethods(t *testing.T) {
 	}
 }
 
-func TestRequireAuthForManualTransferHTTP(t *testing.T) {
+func TestRequireAuthForWalletHTTP(t *testing.T) {
 	token := configureTestAuth(t)
+	adminKey := configureAdminAuth(t)
 
 	tests := []struct {
 		name         string
 		path         string
 		authHeader   string
+		adminKey     string
 		wantStatus   int
 		wantNextCall bool
 	}{
 		{
-			name:         "allows unprotected path without token",
+			name:         "rejects user path without token",
 			path:         "/wallet/withdrawals",
+			wantStatus:   http.StatusUnauthorized,
+			wantNextCall: false,
+		},
+		{
+			name:         "allows user path with valid token",
+			path:         "/wallet/withdrawals",
+			authHeader:   "Bearer " + token,
 			wantStatus:   http.StatusNoContent,
 			wantNextCall: true,
 		},
 		{
-			name:         "rejects protected request path without token",
+			name:         "rejects admin path without admin auth",
 			path:         "/wallet/manual_transfers",
 			wantStatus:   http.StatusUnauthorized,
 			wantNextCall: false,
 		},
 		{
-			name:         "rejects protected decision path with invalid token",
-			path:         "/wallet/manual_transfers/workflow-id/decision",
-			authHeader:   "Bearer invalid",
-			wantStatus:   http.StatusUnauthorized,
-			wantNextCall: false,
-		},
-		{
-			name:         "allows protected request path with valid token",
+			name:         "allows admin path with admin key",
 			path:         "/wallet/manual_transfers",
-			authHeader:   "Bearer " + token,
+			adminKey:     adminKey,
 			wantStatus:   http.StatusNoContent,
 			wantNextCall: true,
 		},
@@ -232,9 +252,12 @@ func TestRequireAuthForManualTransferHTTP(t *testing.T) {
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
+			if tt.adminKey != "" {
+				req.Header.Set("X-Admin-Key", tt.adminKey)
+			}
 			rec := httptest.NewRecorder()
 
-			requireAuthForManualTransferHTTP(next).ServeHTTP(rec, req)
+			requireAuthForWalletHTTP(next).ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)

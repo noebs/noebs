@@ -34,7 +34,32 @@ func (s *Server) GetWallet(ctx context.Context, req *walletv1.GetWalletRequest) 
 }
 
 func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
-	return s.getWallet(ctx, req)
+	claims, err := s.requireJWTClaims(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing request")
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	if req.WalletId == "" {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	walletID, err := uuid.Parse(req.WalletId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	w, err := s.Service.GetWallet(ctx, tenantID, walletID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if !walletOwnedByClaims(w, claims) {
+		return nil, status.Error(codes.NotFound, walletstore.ErrWalletNotFound.Error())
+	}
+	return toWalletProto(w), nil
 }
 
 func (s *Server) EnsureWallet(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
@@ -42,7 +67,25 @@ func (s *Server) EnsureWallet(ctx context.Context, req *walletv1.EnsureWalletReq
 }
 
 func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
-	return s.ensureWallet(ctx, req)
+	claims, err := s.requireJWTClaims(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing request")
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := bindUserIDToClaims(req.UserId, claims)
+	if err != nil {
+		return nil, err
+	}
+	reqCopy := *req
+	reqCopy.TenantId = tenantID
+	reqCopy.UserId = userID
+	return s.ensureWallet(ctx, &reqCopy)
 }
 
 func (s *Server) ValidateP2P(ctx context.Context, req *walletv1.ValidateP2PRequest) (*walletv1.ValidateP2PResponse, error) {

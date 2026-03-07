@@ -57,8 +57,32 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
-	if _, err := uuid.Parse(req.WalletId); err != nil {
+	walletID, err := uuid.Parse(req.WalletId)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := bindUserIDToClaims(req.UserId, claims)
+	if err != nil {
+		return nil, err
+	}
+	ownerType, ownerID, err := bindOwnerToClaims(req.OwnerType, req.OwnerId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.UserId = userID
+	req.OwnerType = ownerType
+	req.OwnerId = ownerID
+	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
+		return nil, err
 	}
 
 	allowReturnToSource := true

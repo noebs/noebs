@@ -107,6 +107,34 @@ func TestWalletRoutesRequireAuth(t *testing.T) {
 	_ = authorizedResp.Body.Close()
 }
 
+func TestWalletRoutesTakePrecedenceOverGRPCGateway(t *testing.T) {
+	configureWalletRouteTest(t)
+
+	originalGatewayHandler := grpcGatewayHandler
+	t.Cleanup(func() {
+		grpcGatewayHandler = originalGatewayHandler
+	})
+	grpcGatewayHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+
+	token := walletToken(t, 42)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	_ = resp.Body.Close()
+}
+
 func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	configureWalletRouteTest(t)
 

@@ -86,9 +86,6 @@ func (s *Server) ListFundingSources(ctx context.Context, req *walletv1.ListFundi
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
@@ -96,8 +93,20 @@ func (s *Server) ListFundingSources(ctx context.Context, req *walletv1.ListFundi
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
+		return nil, err
+	}
 
-	sources, err := s.Service.Store.ListFundingSources(ctx, req.TenantId, walletID)
+	sources, err := s.Service.Store.ListFundingSources(ctx, tenantID, walletID)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -148,9 +157,6 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
@@ -169,6 +175,18 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 	}
 	if !req.IsReturnToSource && req.OwnershipVerificationMethod == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationType.Error())
+	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
+		return nil, err
 	}
 
 	details, err := rawFromStruct(req.DestinationDetails)
@@ -212,9 +230,6 @@ func (s *Server) ListWithdrawalDestinations(ctx context.Context, req *walletv1.L
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
@@ -222,8 +237,20 @@ func (s *Server) ListWithdrawalDestinations(ctx context.Context, req *walletv1.L
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
+		return nil, err
+	}
 
-	dests, err := s.Service.Store.ListWithdrawalDestinations(ctx, req.TenantId, walletID, req.ActiveOnly)
+	dests, err := s.Service.Store.ListWithdrawalDestinations(ctx, tenantID, walletID, req.ActiveOnly)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -245,14 +272,23 @@ func (s *Server) DeactivateWithdrawalDestination(ctx context.Context, req *walle
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.DestinationId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationID.Error())
 	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	if err := s.authorizeDestinationForClaims(ctx, tenantID, req.DestinationId, claims); err != nil {
+		return nil, err
+	}
 
-	if err := s.Service.Store.DeactivateWithdrawalDestination(ctx, req.TenantId, req.DestinationId, time.Now().UTC()); err != nil {
+	if err := s.Service.Store.DeactivateWithdrawalDestination(ctx, tenantID, req.DestinationId, time.Now().UTC()); err != nil {
 		return nil, mapError(err)
 	}
 	return &emptypb.Empty{}, nil
@@ -265,9 +301,6 @@ func (s *Server) RequestOwnershipVerification(ctx context.Context, req *walletv1
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.DestinationId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationID.Error())
 	}
@@ -276,6 +309,18 @@ func (s *Server) RequestOwnershipVerification(ctx context.Context, req *walletv1
 	}
 	if req.VerificationTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationTimeout.Error())
+	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	if err := s.authorizeDestinationForClaims(ctx, tenantID, req.DestinationId, claims); err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
@@ -308,19 +353,31 @@ func (s *Server) CompleteOwnershipVerification(ctx context.Context, req *walletv
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.VerificationId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationID.Error())
 	}
 	if !req.Verified && req.Reason == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
-
-	verification, err := s.Service.Store.GetOwnershipVerification(ctx, req.TenantId, req.VerificationId)
+	claims, err := s.claimsFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	verification, err := s.authorizeVerificationForClaims(ctx, tenantID, req.VerificationId, claims)
+	if err != nil {
+		return nil, err
+	}
+
+	if verification == nil {
+		verification, err = s.Service.Store.GetOwnershipVerification(ctx, tenantID, req.VerificationId)
+		if err != nil {
+			return nil, mapError(err)
+		}
 	}
 
 	now := time.Now().UTC()
@@ -445,9 +502,6 @@ func (s *Server) SetWalletPIN(ctx context.Context, req *walletv1.SetWalletPINReq
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
-	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
@@ -458,10 +512,22 @@ func (s *Server) SetWalletPIN(ctx context.Context, req *walletv1.SetWalletPINReq
 	if req.NewPin == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
 	}
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
 
-	walletRow, err := s.Service.Store.GetWallet(ctx, req.TenantId, walletID)
+	walletRow, err := s.Service.Store.GetWallet(ctx, tenantID, walletID)
 	if err != nil {
 		return nil, mapError(err)
+	}
+	if !walletOwnedByClaims(walletRow, claims) {
+		return nil, status.Error(codes.NotFound, walletstore.ErrWalletNotFound.Error())
 	}
 	if walletRow.WalletPinHash.Valid {
 		if req.CurrentPin == "" {
@@ -476,7 +542,7 @@ func (s *Server) SetWalletPIN(ctx context.Context, req *walletv1.SetWalletPINReq
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if err := s.Service.Store.UpdateWalletPIN(ctx, req.TenantId, walletID, hash, time.Now().UTC()); err != nil {
+	if err := s.Service.Store.UpdateWalletPIN(ctx, tenantID, walletID, hash, time.Now().UTC()); err != nil {
 		return nil, mapError(err)
 	}
 	return &emptypb.Empty{}, nil
@@ -489,22 +555,33 @@ func (s *Server) EnrollUser2FA(ctx context.Context, req *walletv1.EnrollUser2FAR
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := bindUserIDToClaims(req.UserId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.UserId = userID
 	if req.UserId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 	}
 
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      "Noebs",
-		AccountName: req.TenantId + ":" + fmt.Sprint(req.UserId),
+		AccountName: tenantID + ":" + fmt.Sprint(req.UserId),
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	secret := key.Secret()
-	stored, err := s.Service.Store.CreateOrResetUserTwoFA(ctx, req.TenantId, req.UserId, secret)
+	stored, err := s.Service.Store.CreateOrResetUserTwoFA(ctx, tenantID, req.UserId, secret)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -524,9 +601,20 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := bindUserIDToClaims(req.UserId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.UserId = userID
 	if req.UserId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 	}
@@ -534,7 +622,7 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
 	}
 
-	record, err := s.Service.Store.GetUserTwoFA(ctx, req.TenantId, req.UserId)
+	record, err := s.Service.Store.GetUserTwoFA(ctx, tenantID, req.UserId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -542,10 +630,10 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidTwoFACode.Error())
 	}
 	now := time.Now().UTC()
-	if err := s.Service.Store.SetUserTwoFAEnabled(ctx, req.TenantId, req.UserId, true, now); err != nil {
+	if err := s.Service.Store.SetUserTwoFAEnabled(ctx, tenantID, req.UserId, true, now); err != nil {
 		return nil, mapError(err)
 	}
-	_ = s.Service.Store.TouchUserTwoFALastUsed(ctx, req.TenantId, req.UserId, now)
+	_ = s.Service.Store.TouchUserTwoFALastUsed(ctx, tenantID, req.UserId, now)
 	return &emptypb.Empty{}, nil
 }
 
@@ -556,9 +644,20 @@ func (s *Server) DisableUser2FA(ctx context.Context, req *walletv1.DisableUser2F
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := bindUserIDToClaims(req.UserId, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.UserId = userID
 	if req.UserId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 	}
@@ -566,7 +665,7 @@ func (s *Server) DisableUser2FA(ctx context.Context, req *walletv1.DisableUser2F
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
 	}
 
-	record, err := s.Service.Store.GetUserTwoFA(ctx, req.TenantId, req.UserId)
+	record, err := s.Service.Store.GetUserTwoFA(ctx, tenantID, req.UserId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -574,7 +673,7 @@ func (s *Server) DisableUser2FA(ctx context.Context, req *walletv1.DisableUser2F
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidTwoFACode.Error())
 	}
 	now := time.Now().UTC()
-	if err := s.Service.Store.SetUserTwoFAEnabled(ctx, req.TenantId, req.UserId, false, now); err != nil {
+	if err := s.Service.Store.SetUserTwoFAEnabled(ctx, tenantID, req.UserId, false, now); err != nil {
 		return nil, mapError(err)
 	}
 	return &emptypb.Empty{}, nil

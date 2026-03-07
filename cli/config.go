@@ -238,10 +238,6 @@ func GetMainEngine() *fiber.App {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 	})
 	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
-	if grpcGatewayHandler != nil {
-		route.All("/wallet", adaptor.HTTPHandler(grpcGatewayHandler))
-		route.All("/wallet/*", adaptor.HTTPHandler(grpcGatewayHandler))
-	}
 
 	dashboardGroup := route.Group("/dashboard", adminGuard)
 	{
@@ -307,6 +303,10 @@ func GetMainEngine() *fiber.App {
 		wallethandler.RegisterUserRoutes(userWalletGroup, walletUserHandler)
 		wallethandler.RegisterAdminRoutes(adminWalletGroup, walletAdminHandler)
 		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
+	}
+	if grpcGatewayHandler != nil {
+		route.All("/wallet", adaptor.HTTPHandler(grpcGatewayHandler))
+		route.All("/wallet/*", adaptor.HTTPHandler(grpcGatewayHandler))
 	}
 	return route
 }
