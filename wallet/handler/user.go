@@ -2,9 +2,12 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/apperr"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/gofiber/fiber/v2"
@@ -17,7 +20,7 @@ type UserHandler struct {
 
 type ensureWalletRequest struct {
 	TenantID string `json:"tenant_id"`
-	UserID   int64  `json:"user_id" binding:"required"`
+	UserID   int64  `json:"user_id"`
 	Currency string `json:"currency"`
 }
 
@@ -53,16 +56,26 @@ func (h *UserHandler) EnsureWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, err)
 	}
 
-	tenantID, err := resolveTenantID(h.Service.Config, req.TenantID)
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	tenantID, err := authenticatedTenantID(c, h.Service.Config)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	if req.TenantID != "" && req.TenantID != tenantID {
+		return jsonResponse(c, 0, apperr.ErrForbidden)
+	}
+	if req.UserID > 0 && req.UserID != userID {
+		return jsonResponse(c, 0, apperr.ErrForbidden)
 	}
 	currency, err := resolveCurrency(h.Service.Config, req.Currency)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
-	w, err := h.Service.EnsureUserWallet(c.Context(), tenantID, req.UserID, currency)
+	w, err := h.Service.EnsureUserWallet(c.Context(), tenantID, userID, currency)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -87,17 +100,63 @@ func (h *UserHandler) GetWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid wallet id"))
 	}
 
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	tenantID, err := authenticatedTenantID(c, h.Service.Config)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	if requestedTenantID := strings.TrimSpace(c.Query("tenant_id")); requestedTenantID != "" && requestedTenantID != tenantID {
+		return jsonResponse(c, 0, apperr.ErrForbidden)
 	}
 
 	w, err := h.Service.GetWallet(c.Context(), tenantID, walletID)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
+	if !walletOwnedByUser(w, tenantID, userID) {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrWalletNotFound))
+	}
 
 	return jsonResponse(c, http.StatusOK, walletResponseFromModel(w))
+}
+
+func authenticatedUserID(c *fiber.Ctx) (int64, error) {
+	if c == nil {
+		return 0, apperr.ErrUnauthorized
+	}
+	raw := c.Locals("user_id")
+	userID, ok := raw.(int64)
+	if !ok || userID <= 0 {
+		return 0, apperr.ErrUnauthorized
+	}
+	return userID, nil
+}
+
+func authenticatedTenantID(c *fiber.Ctx, cfg ebs_fields.NoebsConfig) (string, error) {
+	if c != nil {
+		if raw := c.Locals("tenant_id"); raw != nil {
+			if tenantID, ok := raw.(string); ok && strings.TrimSpace(tenantID) != "" {
+				return tenantID, nil
+			}
+		}
+	}
+	return resolveTenantID(cfg, "")
+}
+
+func walletOwnedByUser(w *walletstore.Wallet, tenantID string, userID int64) bool {
+	if w == nil || userID <= 0 {
+		return false
+	}
+	if w.TenantID != tenantID || w.OwnerType != walletstore.OwnerTypeUser {
+		return false
+	}
+	if w.UserID.Valid {
+		return w.UserID.Int64 == userID
+	}
+	return w.OwnerID == strconv.FormatInt(userID, 10)
 }
 
 func walletResponseFromModel(w *walletstore.Wallet) walletResponse {
