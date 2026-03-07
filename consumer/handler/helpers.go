@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -123,6 +123,7 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
+		errors.Is(err, store.ErrMissingDataKey),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable
 	default:

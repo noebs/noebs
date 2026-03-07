@@ -2,10 +2,30 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 )
+
+func (s *Store) requireDataKeyForSensitiveValue(values ...string) error {
+	if s == nil || s.crypto != nil {
+		return nil
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if strings.HasPrefix(value, hashPrefix) || strings.HasPrefix(value, encPrefix) {
+			continue
+		}
+		if value != "" {
+			return ErrMissingDataKey
+		}
+	}
+	return nil
+}
 
 func (s *Store) encryptUserFields(user *ebs_fields.User) {
 	if s.crypto == nil || user == nil {

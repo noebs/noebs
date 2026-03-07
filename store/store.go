@@ -122,6 +122,9 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 	if user == nil {
 		return ErrMissingUser
 	}
+	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
+		return err
+	}
 	s.encryptUserFields(user)
 	now := time.Now().UTC()
 	stmt := `INSERT INTO users(
@@ -278,6 +281,9 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 	if user.ID <= 0 {
 		return ErrInvalidUserID
 	}
+	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
+		return err
+	}
 	s.encryptUserFields(user)
 	user.UpdatedAt = time.Now().UTC()
 	stmt := s.DB.Rebind(`UPDATE users SET
@@ -324,6 +330,11 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 	}
 	if len(updates) == 0 {
 		return nil
+	}
+	if value, ok := updates["main_card"].(string); ok {
+		if err := s.requireDataKeyForSensitiveValue(value); err != nil {
+			return err
+		}
 	}
 	if s.crypto != nil {
 		if value, ok := updates["main_card"].(string); ok {
@@ -421,6 +432,9 @@ func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, car
 	}
 	now := time.Now().UTC()
 	for _, card := range cards {
+		if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
+			return err
+		}
 		s.encryptCardFields(&card)
 		stmt := s.DB.Rebind(`INSERT INTO cards(
 			tenant_id, user_id, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
@@ -455,6 +469,9 @@ func (s *Store) UpdateCard(ctx context.Context, tenantID string, userID int64, c
 	}
 	if userID <= 0 {
 		return ErrInvalidUserID
+	}
+	if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
+		return err
 	}
 	s.encryptCardFields(&card)
 	panClause := s.panLookupClause("pan")
@@ -606,6 +623,9 @@ func (s *Store) UpsertCacheCard(ctx context.Context, tenantID string, card ebs_f
 	if tenantID == "" {
 		return ErrMissingTenantID
 	}
+	if err := s.requireDataKeyForSensitiveValue(card.Pan); err != nil {
+		return err
+	}
 	s.encryptCacheCardFields(&card)
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO cache_cards(tenant_id, pan, pan_enc, expiry, name, is_valid, created_at, updated_at)
@@ -749,6 +769,9 @@ func (s *Store) CreateToken(ctx context.Context, tenantID string, token *ebs_fie
 	}
 	if token.UUID == "" {
 		return ErrMissingUUID
+	}
+	if err := s.requireDataKeyForSensitiveValue(token.ToCard); err != nil {
+		return err
 	}
 	toCardValue := token.ToCard
 	toCardEnc := ""
@@ -1311,6 +1334,9 @@ func (s *Store) UpdateTokenCard(ctx context.Context, tenantID string, uuid, toCa
 	}
 	if uuid == "" {
 		return ErrMissingUUID
+	}
+	if err := s.requireDataKeyForSensitiveValue(toCard); err != nil {
+		return err
 	}
 	toCardValue := toCard
 	toCardEnc := ""

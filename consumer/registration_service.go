@@ -85,7 +85,9 @@ func (s *Service) RegisterWithCard(ctx context.Context, tenantID string, card eb
 	ucard := card.NewCardFromCached(int(user.ID))
 	ucard.ID = 0
 	ucard.IsMain = true
-	_ = s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{ucard})
+	if err := s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{ucard}); err != nil {
+		return "", err
+	}
 
 	go utils.SendSMS(&s.NoebsConfig, utils.SMS{
 		Mobile:  card.Mobile,
@@ -114,7 +116,9 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 
 	// Create the local user first (matches legacy behavior).
 	user := ebs_fields.User{Mobile: mobile, Username: mobile, Password: password}
-	_ = user.HashPassword()
+	if err := user.HashPassword(); err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
 	user.SanitizeName()
 	if err := s.Store.CreateUser(ctx, tenantID, &user); err != nil {
 		return ebs_fields.EBSParserFields{}, err
@@ -145,21 +149,27 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 	// Associate the issued card to that user.
 	if issuedPan != "" {
 		card := ebs_fields.CacheCards{Pan: issuedPan, Expiry: issuedExp}
-		_ = s.Store.UpsertCacheCard(ctx, tenantID, card)
+		if err := s.Store.UpsertCacheCard(ctx, tenantID, card); err != nil {
+			return res, err
+		}
 
 		user.MainCard = issuedPan
 		user.ExpDate = issuedExp
-		_ = s.Store.UpdateUserColumns(ctx, tenantID, user.ID, map[string]any{
-			"main_card":     issuedPan,
-			"main_expdate":  issuedExp,
-			"is_verified":   true,
+		if err := s.Store.UpdateUserColumns(ctx, tenantID, user.ID, map[string]any{
+			"main_card":       issuedPan,
+			"main_expdate":    issuedExp,
+			"is_verified":     true,
 			"is_password_otp": true,
-		})
+		}); err != nil {
+			return res, err
+		}
 
 		newCard := card.NewCardFromCached(int(user.ID))
 		newCard.ID = 0
 		newCard.IsMain = true
-		_ = s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{newCard})
+		if err := s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{newCard}); err != nil {
+			return res, err
+		}
 	}
 
 	return res, nil

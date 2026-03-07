@@ -15,6 +15,16 @@ func newTestStore(t *testing.T) *Store {
 		t.Fatalf("open db: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	return New(db, WithDataKey("test-data-key"))
+}
+
+func newTestStoreWithoutDataKey(t *testing.T) *Store {
+	t.Helper()
+	db, err := OpenFromConfig("", ":memory:", "sqlite")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
 	return New(db)
 }
 
@@ -55,5 +65,29 @@ func TestStore_CreateToken_MissingUUID(t *testing.T) {
 	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{})
 	if !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("expected ErrMissingUUID, got %v", err)
+	}
+}
+
+func TestStore_AddCards_RequiresDataKey(t *testing.T) {
+	s := newTestStoreWithoutDataKey(t)
+	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000", IPIN: "1234"}})
+	if !errors.Is(err, ErrMissingDataKey) {
+		t.Fatalf("expected ErrMissingDataKey, got %v", err)
+	}
+}
+
+func TestStore_UpsertCacheCard_RequiresDataKey(t *testing.T) {
+	s := newTestStoreWithoutDataKey(t)
+	err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: "9222081700000000"})
+	if !errors.Is(err, ErrMissingDataKey) {
+		t.Fatalf("expected ErrMissingDataKey, got %v", err)
+	}
+}
+
+func TestStore_CreateToken_RequiresDataKeyForDestinationPAN(t *testing.T) {
+	s := newTestStoreWithoutDataKey(t)
+	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", ToCard: "9222081700000000"})
+	if !errors.Is(err, ErrMissingDataKey) {
+		t.Fatalf("expected ErrMissingDataKey, got %v", err)
 	}
 }

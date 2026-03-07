@@ -67,7 +67,7 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 	if err := store.Migrate(ctx, db, store.DefaultTenantID); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	storeSvc := store.New(db)
+	storeSvc := store.New(db, store.WithDataKey("test-data-key"))
 	tenantID := "test-tenant"
 	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
 		t.Fatalf("ensure tenant: %v", err)
