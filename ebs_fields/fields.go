@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -613,8 +614,8 @@ type ConsumerRegistrationFields struct {
 
 type ConsumerCompleteRegistrationFields struct {
 	ConsumerCommonFields
-	OTP              string `json:"otp" binding:"required"`  // encrypted for fucks sake. fuck ebs
-	IPIN             string `json:"IPIN" binding:"required"` // also encrypted fml forever
+	OTP              string `json:"otp" binding:"required"`  // NOTE: OTP is expected to be encrypted in transit (see EBS docs).
+	IPIN             string `json:"IPIN" binding:"required"` // NOTE: IPIN is expected to be encrypted in transit (see EBS docs).
 	ExtraInfo        string `json:"extraInfo,omitempty"`
 	OriginalTranUUID string `json:"originalTranUUID" binding:"required"`
 	Password         string `json:"userPassword" binding:"required"`
@@ -973,9 +974,18 @@ type NoebsConfig struct {
 	EBSConsumerKey     string `json:"pub_key"`
 	EBSIpinKey         string `json:"ipin_key"`
 
+	// EBS HTTP client behavior.
+	//
+	// NOTE: keep this secure-by-default. Only enable in local/dev if the EBS endpoint
+	// uses a self-signed cert.
+	EBSInsecureSkipVerify bool `json:"ebs_insecure_skip_verify"`
+
 	// server config
 	Cors    []string `json:"cors"`
 	IsDebug bool     `json:"is_debug"` // set as true if you want to have more debug options
+
+	// Optional outbound callback for biller confirmations (disabled when empty).
+	ConsumerBillerHooksURL string `json:"consumer_biller_hooks_url"`
 
 	// test behavior toggles
 	IntegrationTests bool `json:"integration_tests"`
@@ -1027,6 +1037,9 @@ type NoebsConfig struct {
 }
 
 func (n *NoebsConfig) Defaults() {
+	if strings.TrimSpace(n.DefaultTenantID) == "" {
+		n.DefaultTenantID = "default"
+	}
 	if n.IsConsumerProd {
 		n.ConsumerIP = n.ConsumerProd
 		n.IPINIp = n.IPIN

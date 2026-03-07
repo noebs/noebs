@@ -10,10 +10,9 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-var apiKey = make([]byte, 16)
 
 // AuthMiddleware is a JWT authorization middleware. It is used in our consumer services
 // to get a username from the payload (maybe change it to mobile number at somepoint)
@@ -61,26 +60,36 @@ func GenerateSecretKey(n int) ([]byte, error) {
 
 // NoebsCors reads from noebs config to setup cors headers for the server
 func NoebsCors(headers []string) fiber.Handler {
-	cors := strings.Join(headers, ",")
-	return func(c *fiber.Ctx) error {
-		if c.Method() != fiber.MethodOptions {
-			c.Set("Access-Control-Allow-Origin", cors)
-			return c.Next()
-		} else {
-			c.Set("Access-Control-Allow-Origin", cors)
-			c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-			c.Set("Access-Control-Allow-Headers", "authorization, origin, content-type, accept, X-CSRF-TOKEN")
-			c.Set("Allow", "HEAD,GET,POST,PUT,PATCH,DELETE,OPTIONS")
-			c.Set("Content-Type", "application/json")
-			return c.SendStatus(http.StatusOK)
-		}
+	if len(headers) == 0 {
+		// No CORS headers when no allowlist is configured.
+		return func(c *fiber.Ctx) error { return c.Next() }
 	}
+	allowOrigins := strings.Join(headers, ",")
+	return cors.New(cors.Config{
+		AllowOrigins: allowOrigins,
+		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowHeaders: strings.Join([]string{
+			"Authorization",
+			"Origin",
+			"Content-Type",
+			"Accept",
+			"X-CSRF-Token",
+			"X-Tenant-ID",
+			"X-Email",
+			"X-API-Key",
+			"X-Admin-Key",
+			"X-Admin-Role",
+			"X-Admin-Permissions",
+		}, ","),
+		ExposeHeaders: "Authorization",
+		MaxAge:        600,
+	})
 }
 
 func GenerateAPIKey() (string, error) {
+	apiKey := make([]byte, 16)
 	_, err := rand.Read(apiKey)
-	a := fmt.Sprintf("%x", apiKey)
-	return a, err
+	return fmt.Sprintf("%x", apiKey), err
 }
 
 var (

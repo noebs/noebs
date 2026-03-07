@@ -1,0 +1,108 @@
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/adonese/noebs/consumer"
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/gofiber/fiber/v2"
+)
+
+func (h *Handler) GeneratePaymentToken(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	}
+	mobile := getMobile(c)
+	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+
+	var token ebs_fields.Token
+	if err := bindJSON(c, &token); err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
+	}
+
+	created, encoded, paymentLink, err := h.Service.GeneratePaymentToken(c.UserContext(), tenantID, mobile, token)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
+	}
+	return jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": created.UUID, "payment_link": paymentLink})
+}
+
+func (h *Handler) PaymentRequest(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	}
+	mobile := getMobile(c)
+	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+
+	var data consumer.PaymentRequestData
+	if err := bindJSON(c, &data); err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
+	}
+
+	created, encoded, paymentLink, err := h.Service.PaymentRequest(c.UserContext(), tenantID, mobile, data)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
+	}
+	return jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": created.UUID, "payment_link": paymentLink})
+}
+
+func (h *Handler) GetPaymentToken(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	}
+	username := getMobile(c)
+	if username == "" {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Empty payment id", "code": "empty_uuid"})
+	}
+	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+	uuid := strings.TrimSpace(c.Query("uuid"))
+
+	tokens, token, err := h.Service.GetPaymentToken(c.UserContext(), tenantID, username, uuid)
+	if err != nil {
+		if uuid != "" {
+			return jsonResponse(c, http.StatusNotFound, fiber.Map{"code": "record_not_found", "message": "token not found"})
+		}
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "error_retrieving_tokens", "message": err.Error()})
+	}
+	if uuid == "" {
+		return jsonResponse(c, http.StatusOK, fiber.Map{"token": tokens, "count": len(tokens)})
+	}
+	return jsonResponse(c, http.StatusOK, token)
+}
+
+func (h *Handler) NoebsQuickPayment(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	}
+	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+
+	uuidQuery := strings.TrimSpace(c.Query("uuid"))
+	tokenQuery := strings.TrimSpace(c.Query("token"))
+
+	var req ebs_fields.QuickPaymentFields
+	_ = parseJSON(c, &req) // allow body-less quick pay
+
+	res, err := h.Service.NoebsQuickPayment(c.UserContext(), tenantID, req, uuidQuery, tokenQuery)
+	if err != nil {
+		var callErr *ebs_fields.CallError
+		if errors.As(err, &callErr) && callErr != nil {
+			return jsonResponse(c, statusForError(err), ebsErrorDetails(callErr.Response))
+		}
+		return jsonResponse(c, statusForError(err), fiber.Map{"code": "bad_request", "message": err.Error()})
+	}
+	return jsonResponse(c, http.StatusOK, fiber.Map{"ebs_response": res})
+}

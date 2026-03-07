@@ -37,7 +37,6 @@ type billerForm struct {
 	ID           string                 `json:"id"`
 	IsSuccessful bool                   `json:"is_successful"`
 	Token        string                 `json:"payment_token"`
-	to           string
 }
 
 func (bf *billerForm) MarshalBinary() ([]byte, error) {

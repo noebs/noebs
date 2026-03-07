@@ -5,7 +5,7 @@ run: build
 	@./noebs
 
 test:
-	@go test -v .
+	@go test -v ./...
 
 lint:
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint is required"; exit 1; }

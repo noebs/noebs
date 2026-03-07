@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
 )
@@ -41,7 +40,7 @@ func (s *Service) resolveTenantID(c *fiber.Ctx) string {
 	if s != nil && s.NoebsConfig.DefaultTenantID != "" {
 		return s.NoebsConfig.DefaultTenantID
 	}
-	return store.DefaultTenantID
+	return ""
 }
 
 func decodeTransactionRows(rows []transactionRow) []ebs_fields.EBSResponse {

@@ -56,7 +56,7 @@ const (
 	ConsumerPurchaseEndpoint          = "specialPayment"
 	ConsumerStatusEndpoint            = "getTransactionStatus"
 	ConsumerQRPaymentEndpoint         = "doQRPurchase"
-	ConsumerQRGenerationEndpoint      = "doMerchantsRegistration" // the fuck is wrong with you guys
+	ConsumerQRGenerationEndpoint      = "doMerchantsRegistration" // NOTE: EBS naming is inconsistent; kept for compatibility.
 	ConsumerQRRefundEndpoint          = "doQRRefund"
 	ConsumerPANFromMobile             = "checkMsisdnAganistPAN"
 	ConsumerCardInfo                  = "getCustomerInfo"

@@ -6,5 +6,9 @@ noebs:
   grpc_gateway_enabled: false
   grpc_gateway_port: ":9091"
   is_debug: false
+  # Only enable for local/dev when the EBS endpoint uses a self-signed cert.
+  ebs_insecure_skip_verify: false
   cors:
     - "*"
+  # Optional outbound callback (disabled when empty).
+  consumer_biller_hooks_url: ""

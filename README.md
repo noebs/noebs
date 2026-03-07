@@ -163,7 +163,9 @@ I'm very committed to this project.
     "exp_date": "",
     "pin": "",
     "ipin": "",
+    "ebs_insecure_skip_verify": false,
     "cors": ["noebs.dev", "api.2t.sd", "staging.app.2t.sd", "beta.app.2t.sd"],
+    "consumer_biller_hooks_url": "",
     "is_debug": false
 }
 ```

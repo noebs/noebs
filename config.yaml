@@ -2,8 +2,12 @@ noebs:
   db_path: /data/noebs.db
   port: ":8080"
   is_debug: false
+  # Only enable for local/dev when the EBS endpoint uses a self-signed cert.
+  ebs_insecure_skip_verify: false
   cors:
     - "*"
+  # Optional outbound callback (disabled when empty).
+  consumer_biller_hooks_url: ""
   temporal_enabled: false
   temporal_host: "localhost"
   temporal_port: "7233"

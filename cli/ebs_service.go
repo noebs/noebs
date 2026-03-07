@@ -80,7 +80,7 @@ func main() {
 	} else {
 		logrusLogger.Warn("chat hub disabled (db unavailable)")
 	}
-	go consumerService.BillerHooks(ctx)
+	go consumerService.BillerHooks(ctx, noebsConfig.DefaultTenantID)
 	go consumerService.Pusher(ctx)
 	if noebsConfig.Port == "" {
 		noebsConfig.Port = ":8080"

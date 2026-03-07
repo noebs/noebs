@@ -13,12 +13,10 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/testdb"
 	"github.com/adonese/noebs/store"
-	"github.com/gofiber/fiber/v2"
 	"github.com/sirupsen/logrus"
 )
 
 type testEnv struct {
-	Router  *fiber.App
 	Service *Service
 	Auth    *gateway.JWTAuth
 	Store   *store.Store
@@ -108,27 +106,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Auth:        auth,
 	}
 
-	r := fiber.New()
-	r.Post("/register", service.CreateUser)
-	r.Post("/login", service.LoginHandler)
-	r.Post("/register_with_card", wrapTestHandler(service.RegisterWithCard))
-	r.Get("/notifications", auth.AuthMiddleware(), service.Notifications)
-
-	return &testEnv{Router: r, Service: service, Auth: auth, Store: storeSvc, DB: db, Tenant: tenantID}
-}
-
-func wrapTestHandler(h interface{}) fiber.Handler {
-	switch v := h.(type) {
-	case func(*fiber.Ctx) error:
-		return v
-	case func(*fiber.Ctx):
-		return func(c *fiber.Ctx) error {
-			v(c)
-			return nil
-		}
-	default:
-		panic("unsupported handler type")
-	}
+	return &testEnv{Service: service, Auth: auth, Store: storeSvc, DB: db, Tenant: tenantID}
 }
 
 func seedUser(t *testing.T, storeSvc *store.Store, tenantID, mobile, password string) ebs_fields.User {

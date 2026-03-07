@@ -19,12 +19,23 @@ import (
 var log = logrus.New()
 
 var ebsTransport = &http.Transport{
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 }
 
 var ebsHTTPClient = &http.Client{
 	Timeout:   3 * 30 * time.Second,
 	Transport: otelhttp.NewTransport(ebsTransport),
+}
+
+// ConfigureEBSHTTPClient applies runtime configuration to the shared EBS client.
+//
+// This should be called once at the app boundary after loading config.
+func ConfigureEBSHTTPClient(cfg NoebsConfig) {
+	if ebsTransport.TLSClientConfig == nil {
+		ebsTransport.TLSClientConfig = &tls.Config{}
+	}
+	ebsTransport.TLSClientConfig.MinVersion = tls.VersionTLS12
+	ebsTransport.TLSClientConfig.InsecureSkipVerify = cfg.EBSInsecureSkipVerify
 }
 
 // EBSHttpClient the client to interact with EBS

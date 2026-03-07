@@ -1,0 +1,310 @@
+package consumer
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	noebsCrypto "github.com/adonese/crypto"
+	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/apperr"
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/utils"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/pquerna/otp/totp"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type Auther interface {
+	VerifyJWT(token string) (*gateway.TokenClaims, error)
+	GenerateJWT(userID int64, mobile, tenantID string) (string, error)
+}
+
+// GenerateAPIKey creates an API key for a given email (admin-only at the HTTP layer).
+func (s *Service) GenerateAPIKey(ctx context.Context, tenantID, email string) (string, error) {
+	if s == nil || s.Store == nil {
+		return "", ErrMissingStore
+	}
+	if tenantID == "" {
+		return "", store.ErrMissingTenantID
+	}
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return "", errors.New("missing email")
+	}
+	k, _ := gateway.GenerateAPIKey()
+	if err := s.Store.CreateAPIKey(ctx, tenantID, email, k); err != nil {
+		return "", err
+	}
+	return k, nil
+}
+
+func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password string) (string, ebs_fields.User, error) {
+	var empty ebs_fields.User
+	if s == nil || s.Store == nil {
+		return "", empty, ErrMissingStore
+	}
+	if tenantID == "" {
+		return "", empty, store.ErrMissingTenantID
+	}
+	emailOrMobile = strings.TrimSpace(emailOrMobile)
+	if emailOrMobile == "" {
+		return "", empty, errors.New("missing mobile/email")
+	}
+	u, err := s.Store.GetUserByEmailOrMobile(ctx, tenantID, emailOrMobile)
+	if err != nil {
+		return "", empty, err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
+		return "", empty, ErrWrongPassword
+	}
+	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
+	if err != nil {
+		return "", empty, err
+	}
+	return token, sanitizeUser(*u), nil
+}
+
+func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.Token) (string, ebs_fields.User, error) {
+	var empty ebs_fields.User
+	if s == nil || s.Store == nil {
+		return "", empty, ErrMissingStore
+	}
+	if tenantID == "" {
+		return "", empty, store.ErrMissingTenantID
+	}
+	if strings.TrimSpace(req.Mobile) == "" {
+		return "", empty, errors.New("missing mobile")
+	}
+
+	u, err := s.Store.GetUserByUsernameEmailOrMobile(ctx, tenantID, req.Mobile)
+	if err != nil {
+		return "", empty, err
+	}
+
+	if _, encErr := noebsCrypto.VerifyWithHeaders(u.PublicKey, req.Signature, req.Message); encErr != nil {
+		return "", empty, encErr
+	}
+	if !totp.Validate(req.Message, u.EncodePublickey32()) {
+		return "", empty, ErrWrongOTP
+	}
+
+	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
+	if err != nil {
+		return "", empty, err
+	}
+	return token, sanitizeUser(*u), nil
+}
+
+// RefreshJWT generates a new access token using the provided JWT + signature.
+func (s *Service) RefreshJWT(ctx context.Context, fallbackTenantID string, req gateway.Token) (string, error) {
+	if s == nil || s.Store == nil {
+		return "", ErrMissingStore
+	}
+	claims, err := s.Auth.VerifyJWT(req.JWT)
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) && claims != nil {
+			tenantID := strings.TrimSpace(claims.TenantID)
+			if tenantID == "" {
+				tenantID = strings.TrimSpace(fallbackTenantID)
+			}
+			if tenantID == "" {
+				return "", store.ErrMissingTenantID
+			}
+
+			var user *ebs_fields.User
+			if claims.UserID != 0 {
+				user, err = s.Store.FindUserByID(ctx, tenantID, claims.UserID)
+			} else {
+				user, err = s.Store.GetUserByMobile(ctx, tenantID, claims.Mobile)
+			}
+			if err != nil {
+				return "", err
+			}
+			if _, encErr := noebsCrypto.VerifyWithHeaders(user.PublicKey, req.Signature, req.Message); encErr != nil {
+				return "", encErr
+			}
+			return s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+		}
+		return "", err
+	}
+
+	tenantID := strings.TrimSpace(claims.TenantID)
+	if tenantID == "" {
+		tenantID = strings.TrimSpace(fallbackTenantID)
+	}
+	if tenantID == "" {
+		return "", store.ErrMissingTenantID
+	}
+	return s.Auth.GenerateJWT(claims.UserID, claims.Mobile, tenantID)
+}
+
+func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.User) (ebs_fields.User, error) {
+	if s == nil || s.Store == nil {
+		return ebs_fields.User{}, ErrMissingStore
+	}
+	if tenantID == "" {
+		return ebs_fields.User{}, store.ErrMissingTenantID
+	}
+
+	// Make sure user is unique
+	if _, err := s.Store.GetUserByMobile(ctx, tenantID, u.Mobile); err == nil {
+		return ebs_fields.User{}, errors.New("mobile already exists")
+	}
+	// Make sure username is unique
+	if u.Username != "" {
+		if _, err := s.Store.FindUserByUsername(ctx, tenantID, u.Username); err == nil {
+			return ebs_fields.User{}, errors.New("username already exists")
+		}
+	} else {
+		u.Username = u.Mobile
+	}
+
+	if !validatePassword(u.Password) {
+		return ebs_fields.User{}, ErrPasswordInvalid
+	}
+	if err := u.HashPassword(); err != nil {
+		return ebs_fields.User{}, err
+	}
+	if err := s.Store.CreateUser(ctx, tenantID, &u); err != nil {
+		return ebs_fields.User{}, err
+	}
+	go gateway.SyncLedger(u)
+	return sanitizeUser(u), nil
+}
+
+func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (ebs_fields.User, error) {
+	if s == nil || s.Store == nil {
+		return ebs_fields.User{}, ErrMissingStore
+	}
+	if tenantID == "" {
+		return ebs_fields.User{}, store.ErrMissingTenantID
+	}
+	mobile = strings.ToLower(strings.TrimSpace(mobile))
+	if mobile == "" || strings.TrimSpace(otp) == "" {
+		return ebs_fields.User{}, ErrEmptyOTP
+	}
+
+	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	if !u.VerifyOtp(otp) {
+		return ebs_fields.User{}, ErrInvalidOTP
+	}
+	_ = s.Store.UpdateUserColumns(ctx, tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true})
+	return sanitizeUser(*u), nil
+}
+
+type BalanceStepRequest struct {
+	ebs_fields.ConsumerBalanceFields
+	Mobile string `json:"mobile,omitempty"`
+}
+
+// BalanceStep validates card credentials against EBS, then issues a JWT for account recovery.
+func (s *Service) BalanceStep(ctx context.Context, tenantID string, req BalanceStepRequest) (string, error) {
+	if s == nil || s.Store == nil {
+		return "", ErrMissingStore
+	}
+	if tenantID == "" {
+		return "", store.ErrMissingTenantID
+	}
+
+	user, _ := s.Store.GetUserWithCards(ctx, tenantID, req.Mobile)
+	if user == nil || user.Cards == nil {
+		return "", ErrCardNotMatched
+	}
+
+	var isMatched bool
+	for _, card := range user.Cards {
+		if req.Pan == card.Pan {
+			isMatched = true
+			req.ExpDate = card.Expiry
+		}
+	}
+	if !isMatched {
+		return "", ErrCardNotMatched
+	}
+
+	// Make an EBS balance transaction to validate cardholder info.
+	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
+	mobile := req.Mobile
+	req.Mobile = ""
+	req.ApplicationId = s.NoebsConfig.ConsumerID
+	jsonBuffer, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+	_, _, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	if ebsErr != nil {
+		return "", ErrTransactionFailed
+	}
+	return s.Auth.GenerateJWT(user.ID, mobile, tenantID)
+}
+
+func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassword string) (ebs_fields.User, error) {
+	if s == nil || s.Store == nil {
+		return ebs_fields.User{}, ErrMissingStore
+	}
+	if tenantID == "" {
+		return ebs_fields.User{}, store.ErrMissingTenantID
+	}
+	mobile = strings.ToLower(strings.TrimSpace(mobile))
+	if mobile == "" {
+		return ebs_fields.User{}, ErrMissingMobile
+	}
+	if strings.TrimSpace(newPassword) == "" {
+		return ebs_fields.User{}, errors.New("missing new password")
+	}
+
+	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 8)
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	if err := s.Store.UpdateUserPassword(ctx, tenantID, u.ID, string(hashedPassword)); err != nil {
+		return ebs_fields.User{}, err
+	}
+	return sanitizeUser(*u), nil
+}
+
+// SendPush is a no-op placeholder while push delivery is disabled.
+func (s *Service) SendPush(ctx context.Context, data PushData) error {
+	_ = ctx
+	if s.Logger != nil {
+		s.Logger.Printf("push disabled: drop notification type=%s uuid=%s", data.Type, data.UUID)
+	}
+	return apperr.ErrUnavailable
+}
+
+func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile string) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
+	if tenantID == "" {
+		return store.ErrMissingTenantID
+	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
+	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	if err != nil {
+		return err
+	}
+	key, err := user.GenerateOtp()
+	if err != nil {
+		return err
+	}
+	go utils.SendSMS(&s.NoebsConfig, utils.SMS{
+		Mobile:  mobile,
+		Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key),
+	})
+	return nil
+}

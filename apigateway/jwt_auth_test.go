@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -31,36 +32,18 @@ func TestVerifyJWT(t *testing.T) {
 	}
 }
 
-func TestJWTAuth_GenerateJWT(t *testing.T) {
-	type fields struct {
-		Key []byte
+func TestJWTAuth_GenerateJWT_MissingTenantID(t *testing.T) {
+	j := &JWTAuth{Key: []byte("test-key")}
+	_, err := j.GenerateJWT(42, "0990000000", "")
+	if !errors.Is(err, ErrMissingTenantID) {
+		t.Fatalf("expected ErrMissingTenantID, got %v", err)
 	}
-	type args struct {
-		userID int64
-		mobile string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    string
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			j := &JWTAuth{
-				Key: tt.fields.Key,
-			}
-			got, err := j.GenerateJWT(tt.args.userID, tt.args.mobile, "default")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("JWTAuth.GenerateJWT() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("JWTAuth.GenerateJWT() = %v, want %v", got, tt.want)
-			}
-		})
+}
+
+func TestJWTAuth_VerifyJWT_MissingKey(t *testing.T) {
+	j := &JWTAuth{}
+	_, err := j.VerifyJWT("token")
+	if !errors.Is(err, ErrMissingJWTKey) {
+		t.Fatalf("expected ErrMissingJWTKey, got %v", err)
 	}
 }

@@ -34,7 +34,7 @@ Well, it is really simple and I shouldn't be worried about it that much. But...
 - Handle the response messages. They are not clean at all
 - Handle the cases where the client didn't send any request!
 
-** Fuck all of that, or the last section of it. I'm smart ass!
+** Ignore the last section; these notes are stale and need refactoring.
 
 # Let's move towards a new layer
 - add Redis

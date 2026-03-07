@@ -18,7 +18,6 @@ import (
 	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/utils"
 	"github.com/pquerna/otp/totp"
 )
@@ -78,7 +77,7 @@ func (s *Service) ToDatabasename(url string) string {
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerChangeIPinEndpoint:      "change_ipin",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPurchaseEndpoint:        "purchase",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerStatusEndpoint:          "status",
-		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint:       "qr_purchase", // the fuck is wrong with you guys
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRPaymentEndpoint:       "qr_purchase", // NOTE: EBS naming is inconsistent; kept for compatibility.
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerQRRefundEndpoint:        "qr_refund",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerPANFromMobile:           "msisdn_pan",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCardInfo:                "customer_info",
@@ -86,11 +85,15 @@ func (s *Service) ToDatabasename(url string) string {
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashInEndpoint:          "cashin",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashOutEndpoint:         "cashout",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerComplete:                "complete_tran",
-		s.NoebsConfig.ConsumerIP + ebs_fields.IPinGeneration:                  "generate_ipin",
-		s.NoebsConfig.ConsumerIP + ebs_fields.IPinCompletion:                  "ipin_completion",
-		s.NoebsConfig.ConsumerIP + ebs_fields.MerchantTransactionStatus:       "merchant_status",
-		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerRegister:                "register",
-		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration:    "complete_card_issuance",
+		// IPIN endpoints have their own base URL (cfg.IPIN), but historically some setups routed them via cfg.ConsumerIP.
+		s.NoebsConfig.ConsumerIP + ebs_fields.IPinGeneration:               "generate_ipin",
+		s.NoebsConfig.ConsumerIP + ebs_fields.IPinCompletion:               "ipin_completion",
+		s.NoebsConfig.IPIN + ebs_fields.IPinGeneration:                     "generate_ipin",
+		s.NoebsConfig.IPIN + ebs_fields.IPinCompletion:                     "ipin_completion",
+		s.NoebsConfig.IPIN + ebs_fields.QRPublicKey:                        "ipin_public_key",
+		s.NoebsConfig.ConsumerIP + ebs_fields.MerchantTransactionStatus:    "merchant_status",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerRegister:             "register",
+		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration: "complete_card_issuance",
 	}
 	return data[url]
 }
@@ -108,16 +111,17 @@ func (s *Service) Pusher(ctx context.Context) {
 			if !ok {
 				return
 			}
+			tenantID := strings.TrimSpace(data.TenantID)
+			if tenantID == "" {
+				s.Logger.Printf("push dropped: missing tenant_id uuid=%s type=%s", data.UUID, data.Type)
+				continue
+			}
 			// In the case we want to send a push notification to the receipient
 			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
 			// But the problem, is that we have lost the reference to the original sender
 			s.Logger.Infof("push queued type=%s uuid=%s", data.Type, data.UUID)
 			// we are doing too much of db and logic here, let's simplify it
 			if data.Phone != "" {
-				tenantID := s.NoebsConfig.DefaultTenantID
-				if tenantID == "" {
-					tenantID = store.DefaultTenantID
-				}
 				user, err := s.Store.GetUserByMobile(ctx, tenantID, data.Phone)
 				if err != nil {
 					// not a tutipay user
@@ -147,10 +151,6 @@ func (s *Service) Pusher(ctx context.Context) {
 					s.SendPush(ctx, data)
 				}
 			} else {
-				tenantID := s.NoebsConfig.DefaultTenantID
-				if tenantID == "" {
-					tenantID = store.DefaultTenantID
-				}
 				user, err := s.Store.GetUserByCard(ctx, tenantID, data.EBSData.PAN)
 				if err != nil {
 					s.Logger.Printf("error finding user: %v", err)

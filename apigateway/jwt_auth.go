@@ -3,11 +3,15 @@ package gateway
 import (
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrMissingTenantID = errors.New("missing tenant_id")
+	ErrMissingJWTKey   = errors.New("missing jwt key")
 )
 
 // JWTAuth provides an encapsulation for jwt auth
@@ -27,7 +31,7 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 	// you would like it to contain.
 	expiresAt := time.Now().Add(10 * time.Hour).UTC()
 	if tenantID == "" {
-		tenantID = "default"
+		return "", ErrMissingTenantID
 	}
 	claims := TokenClaims{
 		UserID:   userID,
@@ -42,8 +46,8 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	// Sign and get the complete encoded token as a string using the secret
-	if j.Key == nil {
-		return "", errors.New("empty jwt key")
+	if len(j.Key) == 0 {
+		return "", ErrMissingJWTKey
 	}
 	if tokenString, err := token.SignedString(j.Key); err == nil {
 		return tokenString, nil
@@ -54,12 +58,14 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 
 // VerifyJWT giving a jwt token and a secret it validates the token against a hard coded TokenClaims struct
 func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
+	if len(j.Key) == 0 {
+		return nil, ErrMissingJWTKey
+	}
 	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	token, err := parser.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return j.Key, nil
 	})
 	if token == nil {
-		log.Println(err)
 		return nil, err
 	}
 

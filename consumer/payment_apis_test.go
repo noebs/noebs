@@ -1,10 +1,7 @@
 package consumer
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -29,31 +26,28 @@ func TestService_RegisterWithCard(t *testing.T) {
 		Name:      "Test User",
 	}
 
-	payload, _ := json.Marshal(card)
-	req := httptest.NewRequest("POST", "/register_with_card", bytes.NewBuffer(payload))
-	resp, err := env.Router.Test(req)
+	otp, err := env.Service.RegisterWithCard(ctx, env.Tenant, card)
 	if err != nil {
-		t.Fatalf("request failed: %v", err)
+		t.Fatalf("register with card: %v", err)
 	}
-
-	if resp.StatusCode != 200 {
-		t.Errorf("expected: %d, got: %d", 200, resp.StatusCode)
+	if otp == "" {
+		t.Fatalf("expected otp to be non-empty")
 	}
 }
 
 func TestService_CreateUser(t *testing.T) {
 	env := newTestEnv(t)
 
-	card := ebs_fields.User{Mobile: "0912141660", Password: "me@Suckit1"}
-	payload, _ := json.Marshal(card)
-	req := httptest.NewRequest("POST", "/register", bytes.NewBuffer(payload))
-	resp, err := env.Router.Test(req)
+	user, err := env.Service.CreateUser(context.Background(), env.Tenant, ebs_fields.User{
+		Mobile:   "0912141660",
+		Username: "0912141660",
+		Password: "me@Suckit1",
+	})
 	if err != nil {
-		t.Fatalf("request failed: %v", err)
+		t.Fatalf("create user: %v", err)
 	}
-
-	if resp.StatusCode != 201 {
-		t.Errorf("expected: %d, got: %d", 201, resp.StatusCode)
+	if user.ID == 0 {
+		t.Fatalf("expected created user id to be set")
 	}
 }
 
@@ -61,20 +55,12 @@ func TestService_LoginHandler(t *testing.T) {
 	env := newTestEnv(t)
 	seedUser(t, env.Store, env.Tenant, "0912141660", "me@Suckit1")
 
-	card := ebs_fields.User{Mobile: "0912141660", Password: "me@Suckit1"}
-	payload, _ := json.Marshal(card)
-	req := httptest.NewRequest("POST", "/login", bytes.NewBuffer(payload))
-	resp, err := env.Router.Test(req)
+	token, _, err := env.Service.Login(context.Background(), env.Tenant, "0912141660", "me@Suckit1")
 	if err != nil {
-		t.Fatalf("request failed: %v", err)
+		t.Fatalf("login: %v", err)
 	}
-
-	if resp.StatusCode != 200 {
-		t.Errorf("expected: %d, got: %d", 200, resp.StatusCode)
-	}
-	token := resp.Header.Get("Authorization")
 	if token == "" {
-		t.Fatal("expected Authorization header to be set")
+		t.Fatal("expected token to be set")
 	}
 	claims, err := env.Auth.VerifyJWT(token)
 	if err != nil {

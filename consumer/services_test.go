@@ -2,9 +2,6 @@ package consumer
 
 import (
 	"context"
-	"encoding/json"
-	"io"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -57,29 +54,18 @@ func TestService_Notifications(t *testing.T) {
 		t.Fatalf("seed notification: %v", err)
 	}
 
-	token, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
-	if err != nil {
-		t.Fatalf("generate token: %v", err)
-	}
-
-	req := httptest.NewRequest("GET", "/notifications", nil)
-	req.Header.Set("Authorization", token)
-
-	resp, err := env.Router.Test(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-
 	var data []PushData
-	res, _ := io.ReadAll(resp.Body)
-	json.Unmarshal(res, &data)
+	records, err := env.Service.Notifications(context.Background(), env.Tenant, user.Mobile)
+	if err != nil {
+		t.Fatalf("notifications: %v", err)
+	}
+	for _, rec := range records {
+		data = append(data, PushData(rec))
+	}
 	if len(data) == 0 {
 		t.Errorf("no response")
 	}
 	if data[0].Body != "test me" {
 		t.Error("wrong data")
-	}
-	if resp.StatusCode != 200 {
-		t.Errorf("expected: %d, got: %d", 200, resp.StatusCode)
 	}
 }

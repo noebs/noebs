@@ -24,7 +24,7 @@ func backfillUp(ctx context.Context, tx *sql.Tx) error {
 	}
 	tenantID := migrationDefaultTenant
 	if tenantID == "" {
-		tenantID = DefaultTenantID
+		return ErrMissingTenantID
 	}
 
 	tablesWithTenant := []string{
