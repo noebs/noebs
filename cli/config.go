@@ -302,7 +302,7 @@ func GetMainEngine() *fiber.App {
 		walletUserHandler := wallethandler.NewUserHandler(walletService)
 		walletAdminHandler := wallethandler.NewAdminHandler(walletService, temporalClient)
 		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(walletService, walletPSPLoader, walletPSPRegistry, temporalSignaler)
-		userWalletGroup := route.Group("/wallet")
+		userWalletGroup := route.Group("/wallet", auth.AuthMiddleware())
 		adminWalletGroup := route.Group("/admin/wallet", adminGuard)
 		wallethandler.RegisterUserRoutes(userWalletGroup, walletUserHandler)
 		wallethandler.RegisterAdminRoutes(adminWalletGroup, walletAdminHandler)
