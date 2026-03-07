@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -74,6 +75,39 @@ func TestRequestWithdrawalRequiresPin(t *testing.T) {
 	}
 	if err.Error() == "" {
 		t.Fatalf("expected error message")
+	}
+}
+
+func TestWithdrawalSignalsRequireAdminAuth(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{AdminKey: "test-admin-key"},
+	}
+	server := NewServer(svc)
+
+	if _, err := server.SignalWithdrawalApproval(context.Background(), &walletv1.WithdrawalApprovalRequest{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("expected permission denied for approval signal, got %v", status.Code(err))
+	}
+
+	if _, err := server.SignalWithdrawalVerification(context.Background(), &walletv1.WithdrawalDestinationVerificationRequest{}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("expected permission denied for verification signal, got %v", status.Code(err))
+	}
+}
+
+func TestWithdrawalSignalsValidateAfterAdminAuth(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{AdminKey: "test-admin-key"},
+	}
+	server := NewServer(svc)
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", "test-admin-key"))
+
+	if _, err := server.SignalWithdrawalApproval(ctx, &walletv1.WithdrawalApprovalRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected invalid argument for approval signal, got %v", status.Code(err))
+	}
+
+	if _, err := server.SignalWithdrawalVerification(ctx, &walletv1.WithdrawalDestinationVerificationRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected invalid argument for verification signal, got %v", status.Code(err))
 	}
 }
 

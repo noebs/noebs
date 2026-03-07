@@ -20,6 +20,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -207,6 +208,10 @@ func (s *Server) SignalWithdrawalApproval(ctx context.Context, req *walletv1.Wit
 	if s == nil || s.Service == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	if err := s.requireAdmin(md); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -244,6 +249,10 @@ func (s *Server) SignalWithdrawalApproval(ctx context.Context, req *walletv1.Wit
 func (s *Server) SignalWithdrawalVerification(ctx context.Context, req *walletv1.WithdrawalDestinationVerificationRequest) (*emptypb.Empty, error) {
 	if s == nil || s.Service == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	if err := s.requireAdmin(md); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
