@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type walletRouteResponse struct {
@@ -44,6 +46,24 @@ func walletToken(t *testing.T, userID int64) string {
 		t.Fatalf("GenerateJWT() error = %v", err)
 	}
 	return token
+}
+
+func walletTokenWithoutTenant(t *testing.T, userID int64) string {
+	t.Helper()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, gateway.TokenClaims{
+		UserID: userID,
+		Mobile: "0990000000",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "noebs",
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Hour).UTC()),
+		},
+	})
+	signed, err := token.SignedString(auth.Key)
+	if err != nil {
+		t.Fatalf("SignedString() error = %v", err)
+	}
+	return signed
 }
 
 func decodeWalletRouteResponse(t *testing.T, resp *http.Response) walletRouteResponse {
@@ -157,4 +177,109 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 		t.Fatalf("owner get wallet status = %d, want %d", ownerGetResp.StatusCode, http.StatusOK)
 	}
 	_ = ownerGetResp.Body.Close()
+}
+
+func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {
+	configureWalletRouteTest(t)
+
+	token := walletToken(t, 42)
+	route := GetMainEngine()
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "zero user id override",
+			method:     http.MethodPost,
+			path:       "/wallet/wallets",
+			body:       `{"user_id":0,"currency":"USD"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "negative user id override",
+			method:     http.MethodPost,
+			path:       "/wallet/wallets",
+			body:       `{"user_id":-1,"currency":"USD"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "blank tenant override",
+			method:     http.MethodPost,
+			path:       "/wallet/wallets",
+			body:       `{"tenant_id":"   ","currency":"USD"}`,
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+token)
+
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			if resp.StatusCode != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
+			}
+			_ = resp.Body.Close()
+		})
+	}
+}
+
+func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
+	configureWalletRouteTest(t)
+
+	token := walletToken(t, 42)
+	route := GetMainEngine()
+
+	ownerWalletReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
+	ownerWalletReq.Header.Set("Content-Type", "application/json")
+	ownerWalletReq.Header.Set("Authorization", "Bearer "+token)
+	ownerWalletResp, err := route.Test(ownerWalletReq)
+	if err != nil {
+		t.Fatalf("owner wallet request failed: %v", err)
+	}
+	if ownerWalletResp.StatusCode != http.StatusOK {
+		t.Fatalf("owner wallet status = %d, want %d", ownerWalletResp.StatusCode, http.StatusOK)
+	}
+	ownerWallet := decodeWalletRouteResponse(t, ownerWalletResp)
+
+	req := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"?tenant_id=", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("blank tenant query request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("blank tenant query status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestWalletRoutesRequireTenantClaim(t *testing.T) {
+	configureWalletRouteTest(t)
+
+	token := walletTokenWithoutTenant(t, 42)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+	_ = resp.Body.Close()
 }
