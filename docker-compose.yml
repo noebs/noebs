@@ -100,16 +100,18 @@ services:
 
   temporal:
     <<: *service-defaults
-    image: temporalio/auto-setup:1.23.1
+    image: temporalio/auto-setup:1.29.1
     depends_on:
       temporal-postgres:
         condition: service_healthy
     environment:
-      DB: postgresql
+      DB: postgres12
       DB_PORT: 5432
       POSTGRES_USER: temporal
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: temporal-postgres
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CLI_ADDRESS: temporal:7233
     ports:
       - "127.0.0.1:7233:7233"
     networks:
@@ -117,14 +119,14 @@ services:
 
   temporal-ui:
     <<: *service-defaults
-    image: temporalio/ui:2.23.1
+    image: temporalio/ui:2.34.0
     depends_on:
       temporal:
         condition: service_started
     environment:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
-      - "127.0.0.1:8233:8233"
+      - "127.0.0.1:8233:8080"
     networks:
       - backend
 
