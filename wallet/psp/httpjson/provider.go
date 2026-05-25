@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -53,17 +54,21 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 	if p == nil || p.config == nil {
 		return nil, psp.ErrPSPConfigInvalid
 	}
-	payload := map[string]any{"transaction_id": txID}
+	canonical := map[string]any{"transaction_id": txID}
+	payload := psp.MapRequest(canonical, p.config.DepositRequestMapping)
 	resp := map[string]any{}
-	if err := p.doJSON(ctx, http.MethodPost, verifyDepositPath, payload, "", &resp); err != nil {
+	method := methodOrDefault(p.config.DepositRequestMethod, http.MethodPost)
+	path := renderRequestPath(pathOrDefault(p.config.DepositRequestPath, verifyDepositPath), canonical)
+	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
+	mapped := psp.MapResponse(resp, p.config.DepositResponseMapping, p.config.ResponseDefaultCurrency)
 	return &psp.DepositVerification{
-		ProviderTxID: stringFromMap(resp, "transaction_id", "psp_transaction_id", "id"),
-		Amount:       int64FromMap(resp, "amount"),
-		Currency:     stringFromMap(resp, "currency"),
-		Status:       strings.ToLower(stringFromMap(resp, "status")),
-		Metadata:     mapFrom(resp, "metadata", "meta"),
+		ProviderTxID: mapped.TransactionID,
+		Amount:       mapped.Amount,
+		Currency:     mapped.Currency,
+		Status:       mapped.Status,
+		Metadata:     mapped.Metadata,
 	}, nil
 }
 
@@ -71,21 +76,25 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 	if p == nil || p.config == nil {
 		return nil, psp.ErrPSPConfigInvalid
 	}
-	payload := map[string]any{
+	canonical := map[string]any{
 		"client_reference": req.ClientReference,
 		"amount":           req.Amount,
 		"currency":         req.Currency,
 		"destination":      req.Destination,
 		"metadata":         req.Metadata,
 	}
+	payload := psp.MapRequest(canonical, p.config.PayoutRequestMapping)
 	resp := map[string]any{}
 	idempotencyKey := req.ClientReference
-	if err := p.doJSON(ctx, http.MethodPost, payoutPath, payload, idempotencyKey, &resp); err != nil {
+	method := methodOrDefault(p.config.PayoutRequestMethod, http.MethodPost)
+	path := renderRequestPath(pathOrDefault(p.config.PayoutRequestPath, payoutPath), canonical)
+	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), idempotencyKey, &resp); err != nil {
 		return nil, err
 	}
+	mapped := psp.MapResponse(resp, p.config.PayoutResponseMapping, p.config.ResponseDefaultCurrency)
 	return &psp.PayoutResult{
-		ProviderTxID: stringFromMap(resp, "transaction_id", "psp_transaction_id", "id"),
-		Status:       strings.ToLower(stringFromMap(resp, "status")),
+		ProviderTxID: mapped.TransactionID,
+		Status:       mapped.Status,
 		RawResponse:  resp,
 	}, nil
 }
@@ -95,15 +104,68 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 		return nil, psp.ErrPSPConfigInvalid
 	}
 	resp := map[string]any{}
-	path := statusPath + txID
-	if err := p.doJSON(ctx, http.MethodGet, path, nil, "", &resp); err != nil {
+	canonical := map[string]any{"transaction_id": txID}
+	payload := psp.MapRequest(canonical, p.config.StatusRequestMapping)
+	method := methodOrDefault(p.config.StatusRequestMethod, http.MethodGet)
+	path := renderRequestPath(pathOrDefault(p.config.StatusRequestPath, statusPath+"{transaction_id}"), canonical)
+	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
+	mapped := psp.MapResponse(resp, p.config.StatusResponseMapping, p.config.ResponseDefaultCurrency)
 	return &psp.TxStatus{
-		ProviderTxID: stringFromMap(resp, "transaction_id", "psp_transaction_id", "id"),
-		Status:       strings.ToLower(stringFromMap(resp, "status")),
+		ProviderTxID: mapped.TransactionID,
+		Amount:       mapped.Amount,
+		Currency:     mapped.Currency,
+		Status:       mapped.Status,
 		RawResponse:  resp,
 	}, nil
+}
+
+func methodOrDefault(method, fallback string) string {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if method == "" {
+		return fallback
+	}
+	return method
+}
+
+func pathOrDefault(path, fallback string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fallback
+	}
+	return path
+}
+
+func payloadForMethod(method string, payload map[string]any) any {
+	if len(payload) == 0 {
+		return nil
+	}
+	switch methodOrDefault(method, http.MethodGet) {
+	case http.MethodGet, http.MethodHead:
+		return nil
+	default:
+		return payload
+	}
+}
+
+func renderRequestPath(path string, values map[string]any) string {
+	for key, value := range values {
+		replacement := url.PathEscape(stringValue(value))
+		path = strings.ReplaceAll(path, "{"+key+"}", replacement)
+	}
+	return path
+}
+
+func stringValue(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return fmt.Sprint(typed)
+	}
 }
 
 func (p *Provider) VerifyWebhook(payload []byte, signature string) bool {
@@ -170,59 +232,6 @@ func (p *Provider) doJSON(ctx context.Context, method, path string, payload any,
 	}
 	if out != nil && len(respBody) > 0 {
 		_ = json.Unmarshal(respBody, out)
-	}
-	return nil
-}
-
-func stringFromMap(m map[string]any, keys ...string) string {
-	for _, key := range keys {
-		value, ok := m[key]
-		if !ok {
-			continue
-		}
-		switch typed := value.(type) {
-		case string:
-			if typed != "" {
-				return typed
-			}
-		case json.Number:
-			return typed.String()
-		case float64:
-			return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.0f", typed), "0"), ".")
-		}
-	}
-	return ""
-}
-
-func int64FromMap(m map[string]any, keys ...string) int64 {
-	for _, key := range keys {
-		value, ok := m[key]
-		if !ok {
-			continue
-		}
-		switch typed := value.(type) {
-		case int64:
-			return typed
-		case int:
-			return int64(typed)
-		case float64:
-			return int64(typed)
-		case json.Number:
-			if parsed, err := typed.Int64(); err == nil {
-				return parsed
-			}
-		}
-	}
-	return 0
-}
-
-func mapFrom(m map[string]any, keys ...string) map[string]any {
-	for _, key := range keys {
-		if value, ok := m[key]; ok {
-			if cast, ok := value.(map[string]any); ok {
-				return cast
-			}
-		}
 	}
 	return nil
 }

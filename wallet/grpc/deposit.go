@@ -46,9 +46,6 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if req.OwnerId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
-	if req.PspTransactionId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingPSPTransactionID.Error())
-	}
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
@@ -74,6 +71,9 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	req.TenantId = tenantID
 	req.OwnerType = ownerType
 	req.OwnerId = ownerID
+	if req.PspTransactionId == "" {
+		req.PspTransactionId = uuid.NewString()
+	}
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
 	}

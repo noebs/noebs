@@ -241,6 +241,34 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 	}
 }
 
+func TestRecordPSPInteractionValidation(t *testing.T) {
+	s := &Store{}
+	base := PSPInteraction{
+		TenantID:        "tenant",
+		PSPProvider:     "coinsbuy",
+		InteractionType: "status_check",
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(interaction *PSPInteraction)
+		wantErr error
+	}{
+		{"missing-tenant", func(interaction *PSPInteraction) { interaction.TenantID = "" }, ErrMissingTenantID},
+		{"missing-provider", func(interaction *PSPInteraction) { interaction.PSPProvider = "" }, ErrMissingProviderCode},
+		{"missing-interaction-type", func(interaction *PSPInteraction) { interaction.InteractionType = "" }, ErrMissingInteractionType},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			interaction := base
+			tc.mutate(&interaction)
+			_, err := s.RecordPSPInteraction(t.Context(), interaction)
+			assertErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
 func TestGetPSPTransactionByReferenceValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetPSPTransactionByReference(t.Context(), "", "ref-1")
@@ -356,6 +384,15 @@ func TestUpdateFundingSourceUsageValidation(t *testing.T) {
 
 	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 1, 100, time.Time{})
 	assertErrorIs(t, err, ErrMissingUsageTime)
+}
+
+func TestGetFundingSourceByIDValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetFundingSourceByID(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetFundingSourceByID(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrMissingFundingSourceID)
 }
 
 func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
@@ -761,6 +798,27 @@ func TestGetPSPConfigOverrideValidation(t *testing.T) {
 
 	_, err = s.GetPSPConfigOverride(t.Context(), "tenant", "", PSPConfigScope{})
 	assertErrorIs(t, err, ErrMissingProviderCode)
+}
+
+func TestListAvailablePSPMethodsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{Direction: "deposit", Limit: 10})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "tenant", Limit: 10})
+	assertErrorIs(t, err, ErrMissingDirection)
+
+	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "tenant", Direction: "refund", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidDirection)
+
+	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "tenant", Direction: "deposit", Amount: -1, Limit: 10})
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "tenant", Direction: "deposit"})
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "tenant", Direction: "deposit", Limit: 10, Offset: -1})
+	assertErrorIs(t, err, ErrInvalidOffset)
 }
 
 func assertErrorIs(t *testing.T, err, want error) {

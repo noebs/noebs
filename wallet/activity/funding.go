@@ -37,6 +37,13 @@ func (a *FundingActivities) ResolveWithdrawalDestination(ctx context.Context, te
 	return a.Store.GetWithdrawalDestination(ctx, tenantID, destinationID)
 }
 
+func (a *FundingActivities) ResolveFundingSource(ctx context.Context, tenantID string, sourceID int64) (*walletstore.FundingSource, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Store.GetFundingSourceByID(ctx, tenantID, sourceID)
+}
+
 func (a *FundingActivities) GetReturnToSourceOptions(ctx context.Context, tenantID string, walletID uuid.UUID) ([]walletstore.FundingSource, error) {
 	if a == nil || a.Store == nil {
 		return nil, ErrMissingStore
@@ -47,7 +54,7 @@ func (a *FundingActivities) GetReturnToSourceOptions(ctx context.Context, tenant
 	}
 	options := make([]walletstore.FundingSource, 0, len(sources))
 	for _, source := range sources {
-		if source.SupportsWithdrawal {
+		if source.SupportsWithdrawal && source.VerificationStatus == "verified" && len(source.WithdrawalMethod) > 0 {
 			options = append(options, source)
 		}
 	}

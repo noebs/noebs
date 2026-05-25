@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -36,6 +37,22 @@ type walletResponse struct {
 	KYCTier          string    `json:"kyc_tier"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type paymentMethodResponse struct {
+	ProviderCode     string          `json:"provider_code"`
+	ProviderName     string          `json:"provider_name"`
+	DisplayName      string          `json:"display_name,omitempty"`
+	MethodType       string          `json:"method_type"`
+	Direction        string          `json:"direction"`
+	Currencies       []string        `json:"currencies,omitempty"`
+	Regions          []string        `json:"regions,omitempty"`
+	MinAmount        *int64          `json:"min_amount,omitempty"`
+	MaxAmount        *int64          `json:"max_amount,omitempty"`
+	InputSchema      json.RawMessage `json:"input_schema,omitempty"`
+	Presentation     json.RawMessage `json:"presentation,omitempty"`
+	SupportsDeposit  bool            `json:"supports_deposit"`
+	SupportsWithdraw bool            `json:"supports_withdrawal"`
 }
 
 func NewUserHandler(service *wallet.Service) *UserHandler {
@@ -122,6 +139,51 @@ func (h *UserHandler) GetWallet(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, walletResponseFromModel(w))
 }
 
+func (h *UserHandler) ListPaymentMethods(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil || h.Service.Store == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if !h.Service.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	tenantID, err := authenticatedTenantID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	amount, err := optionalInt64Query(c, "amount")
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
+	}
+	limit, err := optionalIntQuery(c, "limit", 100)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidLimit))
+	}
+	offset, err := optionalIntQuery(c, "offset", 0)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
+	}
+	methods, err := h.Service.Store.ListAvailablePSPMethods(c.Context(), walletstore.PSPMethodFilter{
+		TenantID:  tenantID,
+		Direction: c.Query("direction"),
+		Currency:  c.Query("currency"),
+		Region:    c.Query("region"),
+		Amount:    amount,
+		Limit:     limit,
+		Offset:    offset,
+	})
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	resp := make([]paymentMethodResponse, 0, len(methods))
+	for _, method := range methods {
+		resp = append(resp, paymentMethodResponseFromModel(method))
+	}
+	return jsonResponse(c, http.StatusOK, fiber.Map{"methods": resp})
+}
+
 func authenticatedUserID(c *fiber.Ctx) (int64, error) {
 	if c == nil {
 		return 0, apperr.ErrUnauthorized
@@ -185,6 +247,26 @@ func requestedTenantIDFromQuery(c *fiber.Ctx) *string {
 	return &tenantID
 }
 
+func optionalIntQuery(c *fiber.Ctx, key string, defaultValue int) (int, error) {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return defaultValue, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+func optionalInt64Query(c *fiber.Ctx, key string) (int64, error) {
+	raw := strings.TrimSpace(c.Query(key))
+	if raw == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(raw, 10, 64)
+}
+
 func walletOwnedByUser(w *walletstore.Wallet, tenantID string, userID int64) bool {
 	if w == nil || userID <= 0 {
 		return false
@@ -216,5 +298,31 @@ func walletResponseFromModel(w *walletstore.Wallet) walletResponse {
 		KYCTier:          w.KYCTier,
 		CreatedAt:        w.CreatedAt,
 		UpdatedAt:        w.UpdatedAt,
+	}
+}
+
+func paymentMethodResponseFromModel(method walletstore.PSPPaymentMethod) paymentMethodResponse {
+	var minAmount *int64
+	if method.MinAmount.Valid {
+		minAmount = &method.MinAmount.Int64
+	}
+	var maxAmount *int64
+	if method.MaxAmount.Valid {
+		maxAmount = &method.MaxAmount.Int64
+	}
+	return paymentMethodResponse{
+		ProviderCode:     method.ProviderCode,
+		ProviderName:     method.ProviderName,
+		DisplayName:      method.DisplayName,
+		MethodType:       method.MethodType,
+		Direction:        method.Direction,
+		Currencies:       method.Currencies,
+		Regions:          method.Regions,
+		MinAmount:        minAmount,
+		MaxAmount:        maxAmount,
+		InputSchema:      json.RawMessage(method.InputSchema),
+		Presentation:     json.RawMessage(method.Presentation),
+		SupportsDeposit:  method.SupportsDeposit,
+		SupportsWithdraw: method.SupportsWithdraw,
 	}
 }

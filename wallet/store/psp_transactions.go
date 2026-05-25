@@ -152,7 +152,8 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 				next_poll_at = COALESCE(?, next_poll_at),
 				retry_count = CASE WHEN ? = 0 THEN retry_count ELSE ? END,
 				last_error_type = ?, last_error_at = ?
-			WHERE tenant_id = ? AND client_reference = ?`)
+			WHERE tenant_id = ? AND client_reference = ?
+			AND (status NOT IN ('success', 'failed', 'cancelled') OR status = ?)`)
 	result, err := db.ExecContext(ctx, stmt,
 		update.Status,
 		update.PSPTransactionID,
@@ -168,6 +169,7 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 		update.LastErrorAt,
 		tenantID,
 		clientReference,
+		update.Status,
 	)
 	if err != nil {
 		return err
@@ -177,9 +179,29 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 		return err
 	}
 	if affected == 0 {
+		stmt := db.Rebind("SELECT status FROM psp_transactions WHERE tenant_id = ? AND client_reference = ?")
+		var currentStatus string
+		if err := db.GetContext(ctx, &currentStatus, stmt, tenantID, clientReference); err != nil {
+			if err == sql.ErrNoRows {
+				return ErrPSPTransactionNotFound
+			}
+			return err
+		}
+		if isTerminalPSPTransactionStatus(currentStatus) {
+			return nil
+		}
 		return ErrPSPTransactionNotFound
 	}
 	return nil
+}
+
+func isTerminalPSPTransactionStatus(status string) bool {
+	switch status {
+	case "success", "failed", "cancelled":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID string, limit int) ([]PSPTransaction, error) {

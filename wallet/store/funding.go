@@ -126,6 +126,28 @@ func (s *Store) ListFundingSources(ctx context.Context, tenantID string, walletI
 	return sources, nil
 }
 
+func (s *Store) GetFundingSourceByID(ctx context.Context, tenantID string, sourceID int64) (*FundingSource, error) {
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	if sourceID <= 0 {
+		return nil, ErrMissingFundingSourceID
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM funding_sources WHERE tenant_id = ? AND id = ?")
+	var source FundingSource
+	if err := db.GetContext(ctx, &source, stmt, tenantID, sourceID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrFundingSourceNotFound
+		}
+		return nil, err
+	}
+	return &source, nil
+}
+
 func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (*LedgerFundingLink, error) {
 	if link.TenantID == "" {
 		return nil, ErrMissingTenantID

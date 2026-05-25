@@ -234,6 +234,8 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingProviderCode),
 		errors.Is(err, walletstore.ErrMissingClientReference),
 		errors.Is(err, walletstore.ErrMissingPSPTransactionID),
+		errors.Is(err, walletstore.ErrMissingDirection),
+		errors.Is(err, walletstore.ErrInvalidDirection),
 		errors.Is(err, walletstore.ErrMissingDestinationID),
 		errors.Is(err, walletstore.ErrMissingDestinationType),
 		errors.Is(err, walletstore.ErrMissingDestinationDetails),
@@ -262,6 +264,10 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingReason),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingWorkflowID),
+		errors.Is(err, walletstore.ErrMissingInteractionType),
+		errors.Is(err, walletstore.ErrFundingSourceNotVerified),
+		errors.Is(err, walletstore.ErrFundingSourceNotWithdrawable),
+		errors.Is(err, walletstore.ErrFundingSourceLimitExceeded),
 		errors.Is(err, walletstore.ErrApproverIsRequester):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, wallet.ErrMissingStore),

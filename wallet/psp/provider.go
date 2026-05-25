@@ -35,6 +35,8 @@ type PayoutResult struct {
 
 type TxStatus struct {
 	ProviderTxID string
+	Amount       int64
+	Currency     string
 	Status       string
 	RawResponse  map[string]any
 }

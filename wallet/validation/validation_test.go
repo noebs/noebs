@@ -116,6 +116,51 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 	}
 }
 
+func TestConvertWithdrawalAmountUsesRateLookup(t *testing.T) {
+	service := &Service{
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+			if tenantID != "tenant" || baseCurrency != "USD" || quoteCurrency != "AED" {
+				t.Fatalf("unexpected rate lookup: tenant=%s base=%s quote=%s", tenantID, baseCurrency, quoteCurrency)
+			}
+			return decimal.RequireFromString("3.67"), nil
+		},
+	}
+
+	amount, rate, source, err := service.convertWithdrawalAmount(t.Context(), "tenant", 100, "USD", "AED")
+	if err != nil {
+		t.Fatalf("convert withdrawal amount: %v", err)
+	}
+	if amount != 367 {
+		t.Fatalf("expected converted amount 367, got %d", amount)
+	}
+	if !rate.Valid || !rate.Decimal.Equal(decimal.RequireFromString("3.67")) {
+		t.Fatalf("unexpected applied rate: %+v", rate)
+	}
+	if source != "rates" {
+		t.Fatalf("expected rates source, got %q", source)
+	}
+}
+
+func TestConvertWithdrawalAmountSameCurrencySkipsRateLookup(t *testing.T) {
+	service := &Service{
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+			t.Fatal("rate lookup should not be called for same-currency withdrawals")
+			return decimal.Zero, nil
+		},
+	}
+
+	amount, rate, source, err := service.convertWithdrawalAmount(t.Context(), "tenant", 100, "AED", "AED")
+	if err != nil {
+		t.Fatalf("convert withdrawal amount: %v", err)
+	}
+	if amount != 100 {
+		t.Fatalf("expected same-currency amount 100, got %d", amount)
+	}
+	if rate.Valid || source != "" {
+		t.Fatalf("expected no fx metadata, got rate=%+v source=%q", rate, source)
+	}
+}
+
 func TestResolvePSPDepositAmountsSameCurrency(t *testing.T) {
 	service := &Service{
 		Store: &walletstore.Store{},

@@ -73,12 +73,18 @@ type WithdrawalValidationRequest struct {
 }
 
 type WithdrawalValidationResult struct {
-	WalletID   uuid.UUID
-	Currency   string
-	Amount     int64
-	Fee        *walletfees.FeeResult
-	TotalDebit int64
-	Limits     *walletlimits.CheckResult
+	WalletID          uuid.UUID
+	Currency          string
+	Amount            int64
+	Fee               *walletfees.FeeResult
+	TotalDebit        int64
+	Limits            *walletlimits.CheckResult
+	PayoutAmount      int64
+	PayoutCurrency    string
+	WalletDebitAmount int64
+	WalletCurrency    string
+	AppliedFXRate     decimal.NullDecimal
+	AppliedFXSource   string
 }
 
 type WithdrawalRule func(ctx context.Context, req WithdrawalValidationRequest, wallet *walletstore.Wallet, cfg *walletstore.PSPConfig) error
@@ -246,7 +252,7 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	if err != nil {
 		return nil, err
 	}
-	if err := validateWallet(wallet, req.Currency, req.OwnerType, req.OwnerID); err != nil {
+	if err := validateWallet(wallet, "", req.OwnerType, req.OwnerID); err != nil {
 		return nil, err
 	}
 
@@ -329,18 +335,23 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 		return nil, err
 	}
 
-	feeEngine := walletfees.FeeEngine{Store: s.Store}
-	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, req.Amount)
+	walletDebitAmount, appliedRate, appliedSource, err := s.convertWithdrawalAmount(ctx, req.TenantID, req.Amount, req.Currency, wallet.Currency)
 	if err != nil {
 		return nil, err
 	}
-	totalDebit := req.Amount + feeResult.TotalFee
+
+	feeEngine := walletfees.FeeEngine{Store: s.Store}
+	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, wallet.Currency, walletDebitAmount)
+	if err != nil {
+		return nil, err
+	}
+	totalDebit := walletDebitAmount + feeResult.TotalFee
 	if wallet.AvailableBalance < totalDebit {
 		return nil, walletstore.ErrInsufficientFunds
 	}
 
 	limitEnforcer := walletlimits.Enforcer{Store: s.Store}
-	limitResult, err := limitEnforcer.Check(ctx, req.TenantID, req.WalletID, req.TransactionType, req.Currency, req.Amount)
+	limitResult, err := limitEnforcer.Check(ctx, req.TenantID, req.WalletID, req.TransactionType, wallet.Currency, walletDebitAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -358,13 +369,40 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 	}
 
 	return &WithdrawalValidationResult{
-		WalletID:   req.WalletID,
-		Currency:   req.Currency,
-		Amount:     req.Amount,
-		Fee:        feeResult,
-		TotalDebit: totalDebit,
-		Limits:     limitResult,
+		WalletID:          req.WalletID,
+		Currency:          wallet.Currency,
+		Amount:            walletDebitAmount,
+		Fee:               feeResult,
+		TotalDebit:        totalDebit,
+		Limits:            limitResult,
+		PayoutAmount:      req.Amount,
+		PayoutCurrency:    req.Currency,
+		WalletDebitAmount: walletDebitAmount,
+		WalletCurrency:    wallet.Currency,
+		AppliedFXRate:     appliedRate,
+		AppliedFXSource:   appliedSource,
 	}, nil
+}
+
+func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, payoutAmount int64, payoutCurrency, walletCurrency string) (int64, decimal.NullDecimal, string, error) {
+	if payoutCurrency == walletCurrency {
+		return payoutAmount, decimal.NullDecimal{}, "", nil
+	}
+	if s.RateLookup != nil {
+		rate, err := s.RateLookup(ctx, tenantID, payoutCurrency, walletCurrency)
+		if err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
+		return decimal.NewFromInt(payoutAmount).Mul(rate).Round(0).IntPart(), decimal.NullDecimal{Decimal: rate, Valid: true}, "rates", nil
+	}
+	if s.Store == nil {
+		return 0, decimal.NullDecimal{}, "", ErrMissingStore
+	}
+	rate, err := s.Store.GetActiveRate(ctx, tenantID, payoutCurrency, walletCurrency)
+	if err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
+	return decimal.NewFromInt(payoutAmount).Mul(rate.SellRate).Round(0).IntPart(), decimal.NullDecimal{Decimal: rate.SellRate, Valid: true}, "rates", nil
 }
 
 func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID string) error {

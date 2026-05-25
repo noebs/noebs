@@ -26,6 +26,7 @@ var activityNames = []string{
 	"RecordFundingSource",
 	"LinkLedgerToFundingSource",
 	"ResolveWithdrawalDestination",
+	"ResolveFundingSource",
 	"GetReturnToSourceOptions",
 	"UpdateFundingSourceUsage",
 	"UpdateWithdrawalDestinationUsage",

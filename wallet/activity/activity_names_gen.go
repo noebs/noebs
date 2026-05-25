@@ -21,6 +21,7 @@ const (
 	ActivityRecordFundingSource               ActivityName = "RecordFundingSource"
 	ActivityLinkLedgerToFundingSource         ActivityName = "LinkLedgerToFundingSource"
 	ActivityResolveWithdrawalDestination      ActivityName = "ResolveWithdrawalDestination"
+	ActivityResolveFundingSource              ActivityName = "ResolveFundingSource"
 	ActivityGetReturnToSourceOptions          ActivityName = "GetReturnToSourceOptions"
 	ActivityUpdateFundingSourceUsage          ActivityName = "UpdateFundingSourceUsage"
 	ActivityUpdateWithdrawalDestinationUsage  ActivityName = "UpdateWithdrawalDestinationUsage"
