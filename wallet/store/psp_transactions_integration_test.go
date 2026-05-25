@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -26,7 +27,8 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 		_ = container.Terminate(context.Background())
 	}()
 
-	dbURL, err := container.CreateDatabase(ctx, "")
+	dbName := fmt.Sprintf("noebs_wallet_store_%d", time.Now().UnixNano())
+	dbURL, err := container.CreateDatabase(ctx, dbName)
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -37,6 +39,9 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 	}
 	defer func() {
 		_ = db.Close()
+		dropCtx, dropCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer dropCancel()
+		_ = container.DropDatabase(dropCtx, dbName)
 	}()
 
 	if err := basestore.Migrate(ctx, db, basestore.DefaultTenantID); err != nil {

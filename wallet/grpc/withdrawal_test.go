@@ -3,6 +3,7 @@ package walletgrpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -126,7 +127,8 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		_ = container.Terminate(context.Background())
 	}()
 
-	dbURL, err := container.CreateDatabase(ctx, "")
+	dbName := fmt.Sprintf("noebs_wallet_withdrawal_%d", time.Now().UnixNano())
+	dbURL, err := container.CreateDatabase(ctx, dbName)
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -137,6 +139,9 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}
 	defer func() {
 		_ = db.Close()
+		dropCtx, dropCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer dropCancel()
+		_ = container.DropDatabase(dropCtx, dbName)
 	}()
 
 	if err := store.Migrate(ctx, db, store.DefaultTenantID); err != nil {

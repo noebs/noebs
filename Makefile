@@ -1,5 +1,5 @@
 build:
-	@go build .
+	@go build -buildvcs=false -o noebs ./cli
 
 run: build
 	@./noebs

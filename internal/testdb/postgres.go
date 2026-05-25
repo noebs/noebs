@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/docker/go-connections/nat"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -35,7 +37,7 @@ func StartPostgresContainer(ctx context.Context) (pc *PostgresContainer, err err
 		postgres.WithUsername("noebs"),
 		postgres.WithPassword("noebs"),
 		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort("5432/tcp").WithStartupTimeout(60*time.Second),
+			wait.ForSQL("5432/tcp", "pgx", postgresAdminURL).WithStartupTimeout(90*time.Second),
 		),
 	)
 	if err != nil {
@@ -63,7 +65,7 @@ func (p *PostgresContainer) CreateDatabase(ctx context.Context, name string) (st
 		return "", fmt.Errorf("postgres container is nil")
 	}
 	if name == "" {
-		name = fmt.Sprintf("noebs_test_%d", time.Now().UnixNano())
+		return "", fmt.Errorf("database name is required")
 	}
 	admin, err := sql.Open("pgx", p.adminURL)
 	if err != nil {
@@ -105,4 +107,8 @@ func (p *PostgresContainer) databaseURL(name string) (string, error) {
 
 func quoteIdent(value string) string {
 	return "\"" + strings.ReplaceAll(value, "\"", "\"\"") + "\""
+}
+
+func postgresAdminURL(host string, port nat.Port) string {
+	return fmt.Sprintf("postgres://noebs:noebs@%s/postgres?sslmode=disable", net.JoinHostPort(host, port.Port()))
 }
