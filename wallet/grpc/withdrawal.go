@@ -166,7 +166,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		Currency:        req.Currency,
 		Status:          "initiated",
 		WorkflowID:      sql.NullString{String: workflowID, Valid: workflowID != ""},
-		RawRequest:      rawRequest,
+		RawRequest:      walletstore.RawJSON(rawRequest),
 	}
 	if _, err := s.Service.Store.CreatePSPTransaction(ctx, txn); err != nil {
 		if existing, getErr := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); getErr == nil {

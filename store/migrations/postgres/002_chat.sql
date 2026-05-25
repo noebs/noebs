@@ -12,8 +12,8 @@ CREATE INDEX IF NOT EXISTS idx_chats_to_delivered_date ON chats("to", is_deliver
 CREATE TABLE IF NOT EXISTS contacts (
   first TEXT NOT NULL,
   second TEXT NOT NULL,
-  both TEXT NOT NULL,
-  PRIMARY KEY (both)
+  "both" TEXT NOT NULL,
+  PRIMARY KEY ("both")
 );
 CREATE INDEX IF NOT EXISTS idx_contacts_second ON contacts(second);
 

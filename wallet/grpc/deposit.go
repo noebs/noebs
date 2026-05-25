@@ -127,7 +127,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		Currency:         req.Currency,
 		Status:           "initiated",
 		WorkflowID:       sql.NullString{String: workflowID, Valid: workflowID != ""},
-		RawRequest:       rawRequest,
+		RawRequest:       walletstore.RawJSON(rawRequest),
 	}
 	if _, err := s.Service.Store.CreatePSPTransaction(ctx, txn); err != nil {
 		if existing, getErr := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); getErr == nil {

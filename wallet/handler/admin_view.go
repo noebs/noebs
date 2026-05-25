@@ -2,7 +2,6 @@ package handler
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/url"
 	"strconv"
 	"strings"
@@ -209,7 +208,7 @@ func formatNullTime(nt sql.NullTime) string {
 	return formatTime(nt.Time)
 }
 
-func formatJSON(raw json.RawMessage) string {
+func formatJSON(raw []byte) string {
 	if len(raw) == 0 {
 		return "-"
 	}

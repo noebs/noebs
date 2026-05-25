@@ -1707,7 +1707,7 @@ func auditMetadata(values map[string]any) (json.RawMessage, error) {
 	return json.RawMessage(data), nil
 }
 
-func regionFromRawRequest(raw json.RawMessage) string {
+func regionFromRawRequest(raw []byte) string {
 	if len(raw) == 0 {
 		return ""
 	}

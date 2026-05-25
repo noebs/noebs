@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"time"
 )
 
@@ -12,7 +11,7 @@ type PSPStatusUpdate struct {
 	PSPTransactionID sql.NullString
 	ResponseCode     sql.NullString
 	ResponseMessage  sql.NullString
-	RawResponse      json.RawMessage
+	RawResponse      RawJSON
 	ConfirmedAt      sql.NullTime
 	LastPolledAt     sql.NullTime
 	NextPollAt       sql.NullTime

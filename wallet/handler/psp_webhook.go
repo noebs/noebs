@@ -114,7 +114,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			Amount:          amount,
 			Currency:        currency,
 			Status:          "held",
-			RawResponse:     json.RawMessage(payload),
+			RawResponse:     walletstore.RawJSON(payload),
 		}
 		if pspTransactionID != "" {
 			txn.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
@@ -141,7 +141,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 				Amount:          amount,
 				Currency:        currency,
 				Status:          status,
-				RawResponse:     json.RawMessage(payload),
+				RawResponse:     walletstore.RawJSON(payload),
 			}
 			if pspTransactionID != "" {
 				txn.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
@@ -165,7 +165,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	if message != "" {
 		update.ResponseMessage = sql.NullString{String: message, Valid: true}
 	}
-	update.RawResponse = json.RawMessage(payload)
+	update.RawResponse = walletstore.RawJSON(payload)
 	if update.Status == "success" {
 		update.ConfirmedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
 	}
