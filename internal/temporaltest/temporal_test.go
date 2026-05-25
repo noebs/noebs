@@ -3,6 +3,7 @@ package temporaltest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"testing"
@@ -42,7 +43,7 @@ func TestTemporalContainer(t *testing.T) {
 		postgres.WithPassword("temporal"),
 		network.WithNetwork([]string{"temporal-postgres"}, nw),
 		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").WithStartupTimeout(90*time.Second),
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(90*time.Second),
 		),
 	)
 	if err != nil {
@@ -92,9 +93,42 @@ func TestTemporalContainer(t *testing.T) {
 	}
 
 	addr := net.JoinHostPort(host, port.Port())
-	c, err := client.Dial(client.Options{HostPort: addr, Namespace: "default"})
+	readyCtx, readyCancel := context.WithTimeout(ctx, 90*time.Second)
+	defer readyCancel()
+
+	c, err := dialTemporalWhenReady(readyCtx, client.Options{HostPort: addr, Namespace: "default"})
 	if err != nil {
 		t.Fatalf("temporal dial failed: %v", err)
 	}
 	c.Close()
+}
+
+func dialTemporalWhenReady(ctx context.Context, options client.Options) (client.Client, error) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		dialCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		c, err := client.DialContext(dialCtx, options)
+		cancel()
+		if err == nil {
+			healthCtx, healthCancel := context.WithTimeout(ctx, 5*time.Second)
+			_, healthErr := c.CheckHealth(healthCtx, nil)
+			healthCancel()
+			if healthErr == nil {
+				return c, nil
+			}
+			c.Close()
+			lastErr = healthErr
+		} else {
+			lastErr = err
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%w; last readiness error: %v", ctx.Err(), lastErr)
+		case <-ticker.C:
+		}
+	}
 }
