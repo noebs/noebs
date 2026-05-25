@@ -371,7 +371,15 @@ func initConfig() {
 		logrusLogger.Fatalf("error ensuring tenant: %v", err)
 	}
 
-	logrusLogger.Printf("The final config file is: %#v", noebsConfig)
+	logrusLogger.Printf(
+		"Runtime config loaded: driver=%s default_tenant=%s port=%s temporal=%t grpc=%t wallet=%t",
+		noebsConfig.DatabaseDriver,
+		noebsConfig.DefaultTenantID,
+		noebsConfig.Port,
+		noebsConfig.TemporalEnabled,
+		noebsConfig.GRPCEnabled,
+		noebsConfig.WalletEnabled,
+	)
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{
