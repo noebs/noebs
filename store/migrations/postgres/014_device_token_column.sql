@@ -1,4 +1,5 @@
 -- +goose Up
+-- +goose StatementBegin
 DO $$
 BEGIN
   IF EXISTS (
@@ -38,8 +39,10 @@ BEGIN
     ALTER TABLE users ADD COLUMN device_token TEXT;
   END IF;
 END $$;
+-- +goose StatementEnd
 
 -- +goose Down
+-- +goose StatementBegin
 DO $$
 BEGIN
   IF EXISTS (
@@ -72,3 +75,4 @@ BEGIN
     ALTER TABLE users DROP COLUMN device_token;
   END IF;
 END $$;
+-- +goose StatementEnd
