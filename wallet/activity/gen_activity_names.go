@@ -17,6 +17,7 @@ var activityNames = []string{
 	"ReleaseHold",
 	"ValidateReleaseHold",
 	"LedgerTransactionExists",
+	"LedgerTransactionExistsByReference",
 	"VerifyDeposit",
 	"SendPayout",
 	"GetTransactionStatus",

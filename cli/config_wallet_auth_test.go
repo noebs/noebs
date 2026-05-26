@@ -17,6 +17,10 @@ type walletRouteResponse struct {
 	UserID *int64 `json:"user_id"`
 }
 
+type walletTransactionsRouteResponse struct {
+	Transactions []any `json:"transactions"`
+}
+
 func configureWalletRouteTest(t *testing.T) {
 	t.Helper()
 	ensureInit()
@@ -205,6 +209,35 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 		t.Fatalf("owner get wallet status = %d, want %d", ownerGetResp.StatusCode, http.StatusOK)
 	}
 	_ = ownerGetResp.Body.Close()
+
+	ownerHistoryReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"/transactions", nil)
+	ownerHistoryReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	ownerHistoryResp, err := route.Test(ownerHistoryReq)
+	if err != nil {
+		t.Fatalf("owner wallet history request failed: %v", err)
+	}
+	if ownerHistoryResp.StatusCode != http.StatusOK {
+		t.Fatalf("owner wallet history status = %d, want %d", ownerHistoryResp.StatusCode, http.StatusOK)
+	}
+	var history walletTransactionsRouteResponse
+	if err := json.NewDecoder(ownerHistoryResp.Body).Decode(&history); err != nil {
+		t.Fatalf("decode wallet history: %v", err)
+	}
+	_ = ownerHistoryResp.Body.Close()
+	if history.Transactions == nil {
+		t.Fatalf("wallet history transactions is nil")
+	}
+
+	foreignHistoryReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"/transactions", nil)
+	foreignHistoryReq.Header.Set("Authorization", "Bearer "+otherToken)
+	foreignHistoryResp, err := route.Test(foreignHistoryReq)
+	if err != nil {
+		t.Fatalf("foreign wallet history request failed: %v", err)
+	}
+	if foreignHistoryResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("foreign wallet history status = %d, want %d", foreignHistoryResp.StatusCode, http.StatusNotFound)
+	}
+	_ = foreignHistoryResp.Body.Close()
 }
 
 func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {

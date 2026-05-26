@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestRequestDepositGeneratesHiddenPSPTransactionID(t *testing.T) {
+func TestRequestDepositDoesNotGenerateProviderTransactionID(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},
 		Config: ebs_fields.NoebsConfig{},
@@ -38,7 +38,7 @@ func TestRequestDepositGeneratesHiddenPSPTransactionID(t *testing.T) {
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("expected failed precondition, got %v", status.Code(err))
 	}
-	if req.PspTransactionId == "" {
-		t.Fatal("expected boundary to generate hidden psp transaction id")
+	if req.PspTransactionId != "" {
+		t.Fatalf("expected provider transaction id to remain absent, got %q", req.PspTransactionId)
 	}
 }

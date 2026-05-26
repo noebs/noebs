@@ -8,6 +8,7 @@ func RegisterUserRoutes(router fiber.Router, handler *UserHandler) {
 	}
 	router.Get("/methods", handler.ListPaymentMethods)
 	router.Post("/wallets", handler.EnsureWallet)
+	router.Get("/wallets/:id/transactions", handler.ListWalletTransactions)
 	router.Get("/wallets/:id", handler.GetWallet)
 }
 

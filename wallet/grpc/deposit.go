@@ -71,9 +71,6 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	req.TenantId = tenantID
 	req.OwnerType = ownerType
 	req.OwnerId = ownerID
-	if req.PspTransactionId == "" {
-		req.PspTransactionId = uuid.NewString()
-	}
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
 	}
@@ -117,7 +114,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	txn := walletstore.PSPTransaction{
 		TenantID:         req.TenantId,
 		PSPProvider:      req.ProviderCode,
-		PSPTransactionID: sql.NullString{String: req.PspTransactionId, Valid: true},
+		PSPTransactionID: sql.NullString{String: req.PspTransactionId, Valid: req.PspTransactionId != ""},
 		IdempotencyKey:   idempotencyKey,
 		ClientReference:  req.ClientReference,
 		Direction:        "inbound",
@@ -182,19 +179,21 @@ func depositWorkflowID(tenantID, clientReference string) string {
 
 func depositRawRequest(req *walletv1.DepositRequest, metadata map[string]any) (json.RawMessage, error) {
 	payload := map[string]any{
-		"tenant_id":          req.TenantId,
-		"client_reference":   req.ClientReference,
-		"provider_code":      req.ProviderCode,
-		"wallet_id":          req.WalletId,
-		"owner_type":         req.OwnerType,
-		"owner_id":           req.OwnerId,
-		"psp_transaction_id": req.PspTransactionId,
-		"amount":             req.Amount,
-		"currency":           req.Currency,
-		"fee_amount":         req.FeeAmount,
-		"net_amount":         req.NetAmount,
-		"region":             req.Region,
-		"metadata":           metadata,
+		"tenant_id":        req.TenantId,
+		"client_reference": req.ClientReference,
+		"provider_code":    req.ProviderCode,
+		"wallet_id":        req.WalletId,
+		"owner_type":       req.OwnerType,
+		"owner_id":         req.OwnerId,
+		"amount":           req.Amount,
+		"currency":         req.Currency,
+		"fee_amount":       req.FeeAmount,
+		"net_amount":       req.NetAmount,
+		"region":           req.Region,
+		"metadata":         metadata,
+	}
+	if req.PspTransactionId != "" {
+		payload["psp_transaction_id"] = req.PspTransactionId
 	}
 	return json.Marshal(payload)
 }

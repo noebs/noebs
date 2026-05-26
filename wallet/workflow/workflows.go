@@ -179,20 +179,23 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		return err
 	}
 
-	verifyParams := walletactivity.VerifyDepositParams{
-		TenantID:      params.TenantID,
-		ProviderCode:  providerCode,
-		TransactionID: transactionID,
-		Currency:      pspTxn.Currency,
-		Region:        params.Region,
-	}
-	var result walletpsp.DepositVerification
-	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
-		return err
-	}
-	statusResult := statusFromDepositVerification(result, pspTxn.Status)
-	if err := updatePSPTransactionFromStatus(ctx, params.TenantID, params.ClientReference, statusResult); err != nil {
-		return err
+	statusResult := statusFromPSPTransaction(pspTxn)
+	if transactionID != "" {
+		verifyParams := walletactivity.VerifyDepositParams{
+			TenantID:      params.TenantID,
+			ProviderCode:  providerCode,
+			TransactionID: transactionID,
+			Currency:      pspTxn.Currency,
+			Region:        params.Region,
+		}
+		var result walletpsp.DepositVerification
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
+			return err
+		}
+		statusResult = statusFromDepositVerification(result, pspTxn.Status)
+		if err := updatePSPTransactionFromStatus(ctx, params.TenantID, params.ClientReference, statusResult); err != nil {
+			return err
+		}
 	}
 	if !isTerminalPSPStatus(statusResult.Status) {
 		latest, err := loadPSPTransaction(ctx, params.TenantID, params.ClientReference)
@@ -312,7 +315,7 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if !externalRef.Valid {
 		externalRef = sql.NullString{String: params.ClientReference, Valid: true}
 	}
-	source, err := depositFundingSource(pspTxn, walletID, resolved.WalletCurrency, resolved.WalletCreditAmount, externalRef, validation.SupportsWithdrawal, now, result.Metadata, finalStatus.RawResponse)
+	source, err := depositFundingSource(pspTxn, walletID, resolved.WalletCurrency, resolved.WalletCreditAmount, externalRef, validation.SupportsWithdrawal, now, finalStatus.RawResponse)
 	if err != nil {
 		return err
 	}
@@ -1467,8 +1470,14 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 		if txn.ClientReference == "" {
 			continue
 		}
+		referenceType := referenceTypeForPSPDirection(txn.Direction)
+		if referenceType == "" {
+			missing = append(missing, txn.ClientReference)
+			logger.Warn("missing ledger transaction for psp transaction with unknown direction", "client_reference", txn.ClientReference, "direction", txn.Direction)
+			continue
+		}
 		var exists bool
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityLedgerTransactionExists, params.TenantID, txn.ClientReference).Get(ctx, &exists); err != nil {
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityLedgerTransactionExistsByReference, params.TenantID, referenceType, txn.ClientReference).Get(ctx, &exists); err != nil {
 			return err
 		}
 		if !exists {
@@ -1502,6 +1511,17 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 		return fmt.Errorf("reconciliation mismatch: %d missing ledger entries", len(missing))
 	}
 	return nil
+}
+
+func referenceTypeForPSPDirection(direction string) string {
+	switch direction {
+	case "inbound":
+		return "deposit"
+	case "outbound":
+		return "withdrawal"
+	default:
+		return ""
+	}
 }
 
 func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {

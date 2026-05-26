@@ -47,6 +47,36 @@ func TestGetWalletValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingWalletID)
 }
 
+func TestListWalletLedgerEntriesValidation(t *testing.T) {
+	s := &Store{}
+	filter := WalletLedgerEntryFilter{TenantID: "tenant", WalletID: uuid.New(), Limit: 10}
+
+	invalid := filter
+	invalid.TenantID = ""
+	_, err := s.ListWalletLedgerEntries(t.Context(), invalid)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	invalid = filter
+	invalid.WalletID = uuid.Nil
+	_, err = s.ListWalletLedgerEntries(t.Context(), invalid)
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	invalid = filter
+	invalid.EntryType = "inbound"
+	_, err = s.ListWalletLedgerEntries(t.Context(), invalid)
+	assertErrorIs(t, err, ErrInvalidDirection)
+
+	invalid = filter
+	invalid.Limit = 0
+	_, err = s.ListWalletLedgerEntries(t.Context(), invalid)
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	invalid = filter
+	invalid.Offset = -1
+	_, err = s.ListWalletLedgerEntries(t.Context(), invalid)
+	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
 func TestGetWalletByOwnerValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetWalletByOwner(t.Context(), "", OwnerTypeUser, "user-1", "USD")
@@ -350,6 +380,18 @@ func TestLedgerTransactionExistsValidation(t *testing.T) {
 
 	_, err = s.LedgerTransactionExists(t.Context(), "tenant", "")
 	assertErrorIs(t, err, ErrMissingIdempotencyKey)
+}
+
+func TestLedgerTransactionExistsByReferenceValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.LedgerTransactionExistsByReference(t.Context(), "", "deposit", "ref-1")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.LedgerTransactionExistsByReference(t.Context(), "tenant", "", "ref-1")
+	assertErrorIs(t, err, ErrMissingReferenceType)
+
+	_, err = s.LedgerTransactionExistsByReference(t.Context(), "tenant", "deposit", "")
+	assertErrorIs(t, err, ErrMissingReferenceID)
 }
 
 func TestUpdateWithdrawalDestinationUsageValidation(t *testing.T) {

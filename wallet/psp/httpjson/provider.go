@@ -59,6 +59,7 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 	resp := map[string]any{}
 	method := methodOrDefault(p.config.DepositRequestMethod, http.MethodPost)
 	path := renderRequestPath(pathOrDefault(p.config.DepositRequestPath, verifyDepositPath), canonical)
+	path = appendQueryForMethod(method, path, payload)
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
@@ -88,6 +89,7 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 	idempotencyKey := req.ClientReference
 	method := methodOrDefault(p.config.PayoutRequestMethod, http.MethodPost)
 	path := renderRequestPath(pathOrDefault(p.config.PayoutRequestPath, payoutPath), canonical)
+	path = appendQueryForMethod(method, path, payload)
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), idempotencyKey, &resp); err != nil {
 		return nil, err
 	}
@@ -108,6 +110,7 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	payload := psp.MapRequest(canonical, p.config.StatusRequestMapping)
 	method := methodOrDefault(p.config.StatusRequestMethod, http.MethodGet)
 	path := renderRequestPath(pathOrDefault(p.config.StatusRequestPath, statusPath+"{transaction_id}"), canonical)
+	path = appendQueryForMethod(method, path, payload)
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
@@ -146,6 +149,44 @@ func payloadForMethod(method string, payload map[string]any) any {
 		return nil
 	default:
 		return payload
+	}
+}
+
+func appendQueryForMethod(method, path string, payload map[string]any) string {
+	if len(payload) == 0 {
+		return path
+	}
+	switch methodOrDefault(method, http.MethodGet) {
+	case http.MethodGet, http.MethodHead:
+	default:
+		return path
+	}
+	parts := strings.SplitN(path, "?", 2)
+	values := url.Values{}
+	if len(parts) == 2 {
+		parsed, err := url.ParseQuery(parts[1])
+		if err == nil {
+			values = parsed
+		}
+	}
+	addQueryValues(values, "", payload)
+	if encoded := values.Encode(); encoded != "" {
+		return parts[0] + "?" + encoded
+	}
+	return parts[0]
+}
+
+func addQueryValues(values url.Values, prefix string, payload map[string]any) {
+	for key, value := range payload {
+		queryKey := key
+		if prefix != "" {
+			queryKey = prefix + "." + key
+		}
+		if nested, ok := value.(map[string]any); ok {
+			addQueryValues(values, queryKey, nested)
+			continue
+		}
+		values.Set(queryKey, stringValue(value))
 	}
 }
 

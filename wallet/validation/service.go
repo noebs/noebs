@@ -129,9 +129,6 @@ func ValidateDepositRequest(req DepositValidationRequest) error {
 	if req.ProviderCode == "" {
 		return walletstore.ErrMissingProviderCode
 	}
-	if req.TransactionID == "" {
-		return ErrMissingPSPTransactionID
-	}
 	if req.Currency == "" {
 		return walletstore.ErrMissingCurrency
 	}

@@ -80,6 +80,9 @@ func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UU
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND id = ?")
 	var w Wallet
 	if err := db.GetContext(ctx, &w, stmt, tenantID, walletID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrWalletNotFound
+		}
 		return nil, err
 	}
 	return &w, nil
@@ -105,6 +108,9 @@ func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, owner
 	stmt := s.DB.Rebind("SELECT * FROM wallets WHERE tenant_id = ? AND owner_type = ? AND owner_id = ? AND currency = ?")
 	var w Wallet
 	if err := db.GetContext(ctx, &w, stmt, tenantID, ownerType, ownerID, currency); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrWalletNotFound
+		}
 		return nil, err
 	}
 	return &w, nil

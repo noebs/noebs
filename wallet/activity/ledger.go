@@ -68,3 +68,10 @@ func (a *LedgerActivities) LedgerTransactionExists(ctx context.Context, tenantID
 	}
 	return a.Store.LedgerTransactionExists(ctx, tenantID, idempotencyKey)
 }
+
+func (a *LedgerActivities) LedgerTransactionExistsByReference(ctx context.Context, tenantID, referenceType, referenceID string) (bool, error) {
+	if a == nil || a.Store == nil {
+		return false, ErrMissingStore
+	}
+	return a.Store.LedgerTransactionExistsByReference(ctx, tenantID, referenceType, referenceID)
+}

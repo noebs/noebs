@@ -63,7 +63,6 @@ func TestValidateDepositRequest(t *testing.T) {
 		{"missing-tenant", func(req *DepositValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
 		{"missing-tx-type", func(req *DepositValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
 		{"missing-provider", func(req *DepositValidationRequest) { req.ProviderCode = "" }, walletstore.ErrMissingProviderCode},
-		{"missing-transaction", func(req *DepositValidationRequest) { req.TransactionID = "" }, ErrMissingPSPTransactionID},
 		{"missing-currency", func(req *DepositValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
 		{"missing-wallet", func(req *DepositValidationRequest) { req.WalletID = uuid.Nil }, walletstore.ErrMissingWalletID},
 		{"invalid-amount", func(req *DepositValidationRequest) { req.Amount = 0 }, walletstore.ErrInvalidAmount},
@@ -78,6 +77,21 @@ func TestValidateDepositRequest(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestValidateDepositRequestAllowsMissingProviderTransactionID(t *testing.T) {
+	req := DepositValidationRequest{
+		TenantID:        "tenant",
+		TransactionType: "deposit",
+		ProviderCode:    "coinsbuy",
+		WalletID:        uuid.New(),
+		Currency:        "USD",
+		Amount:          100,
+	}
+
+	if err := ValidateDepositRequest(req); err != nil {
+		t.Fatalf("expected missing provider transaction id to be allowed, got %v", err)
 	}
 }
 

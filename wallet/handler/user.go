@@ -55,6 +55,24 @@ type paymentMethodResponse struct {
 	SupportsWithdraw bool            `json:"supports_withdrawal"`
 }
 
+type walletTransactionResponse struct {
+	ID             int64           `json:"id"`
+	TenantID       string          `json:"tenant_id"`
+	TransactionID  int64           `json:"transaction_id"`
+	WalletID       string          `json:"wallet_id"`
+	EntryType      string          `json:"entry_type"`
+	Amount         int64           `json:"amount"`
+	Currency       string          `json:"currency"`
+	BalanceAfter   int64           `json:"balance_after"`
+	WalletSequence int64           `json:"wallet_sequence"`
+	Status         string          `json:"status"`
+	ReferenceType  string          `json:"reference_type"`
+	ReferenceID    *string         `json:"reference_id,omitempty"`
+	Description    *string         `json:"description,omitempty"`
+	Metadata       json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+}
+
 func NewUserHandler(service *wallet.Service) *UserHandler {
 	return &UserHandler{Service: service}
 }
@@ -137,6 +155,68 @@ func (h *UserHandler) GetWallet(c *fiber.Ctx) error {
 	}
 
 	return jsonResponse(c, http.StatusOK, walletResponseFromModel(w))
+}
+
+func (h *UserHandler) ListWalletTransactions(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil || h.Service.Store == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	if !h.Service.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+
+	walletIDRaw := c.Params("id")
+	if walletIDRaw == "" {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingWalletID))
+	}
+	walletID, err := uuid.Parse(walletIDRaw)
+	if err != nil {
+		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid wallet id"))
+	}
+
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	tenantID, err := authenticatedTenantID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+		return jsonResponse(c, 0, err)
+	}
+
+	w, err := h.Service.GetWallet(c.Context(), tenantID, walletID)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	if !walletOwnedByUser(w, tenantID, userID) {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrWalletNotFound))
+	}
+
+	limit, err := optionalIntQuery(c, "limit", 100)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidLimit))
+	}
+	offset, err := optionalIntQuery(c, "offset", 0)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
+	}
+	entries, err := h.Service.Store.ListWalletLedgerEntries(c.Context(), walletstore.WalletLedgerEntryFilter{
+		TenantID:  tenantID,
+		WalletID:  walletID,
+		EntryType: c.Query("entry_type"),
+		Limit:     limit,
+		Offset:    offset,
+	})
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	resp := make([]walletTransactionResponse, 0, len(entries))
+	for _, entry := range entries {
+		resp = append(resp, walletTransactionResponseFromModel(entry))
+	}
+	return jsonResponse(c, http.StatusOK, fiber.Map{"transactions": resp})
 }
 
 func (h *UserHandler) ListPaymentMethods(c *fiber.Ctx) error {
@@ -324,5 +404,33 @@ func paymentMethodResponseFromModel(method walletstore.PSPPaymentMethod) payment
 		Presentation:     json.RawMessage(method.Presentation),
 		SupportsDeposit:  method.SupportsDeposit,
 		SupportsWithdraw: method.SupportsWithdraw,
+	}
+}
+
+func walletTransactionResponseFromModel(entry walletstore.WalletLedgerEntry) walletTransactionResponse {
+	var referenceID *string
+	if entry.ReferenceID.Valid {
+		referenceID = &entry.ReferenceID.String
+	}
+	var description *string
+	if entry.Description.Valid {
+		description = &entry.Description.String
+	}
+	return walletTransactionResponse{
+		ID:             entry.ID,
+		TenantID:       entry.TenantID,
+		TransactionID:  entry.TransactionID,
+		WalletID:       entry.WalletID.String(),
+		EntryType:      entry.EntryType,
+		Amount:         entry.Amount,
+		Currency:       entry.Currency,
+		BalanceAfter:   entry.BalanceAfter,
+		WalletSequence: entry.WalletSequence,
+		Status:         entry.Status,
+		ReferenceType:  entry.ReferenceType,
+		ReferenceID:    referenceID,
+		Description:    description,
+		Metadata:       json.RawMessage(entry.Metadata),
+		CreatedAt:      entry.CreatedAt,
 	}
 }
