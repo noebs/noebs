@@ -26,8 +26,9 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.IdempotencyKey == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingIdempotencyKey.Error())
@@ -71,9 +72,9 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 		taskQueue = walletworker.TaskQueueMain
 	}
 
-	workflowID := manualTransferWorkflowID(req.TenantId, req.IdempotencyKey)
+	workflowID := manualTransferWorkflowID(tenantID, req.IdempotencyKey)
 	params := walletworkflow.ManualTransferParams{
-		TenantID:               req.TenantId,
+		TenantID:               tenantID,
 		IdempotencyKey:         req.IdempotencyKey,
 		TransferType:           req.TransferType,
 		WalletID:               req.WalletId,

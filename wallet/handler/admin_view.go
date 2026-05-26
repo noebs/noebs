@@ -231,7 +231,7 @@ func tenantQuery(tenantID string) string {
 
 func displayTenant(tenantID string) string {
 	if tenantID == "" {
-		return "default"
+		return "-"
 	}
 	return tenantID
 }

@@ -36,6 +36,34 @@ func TestStore_EnsureTenant_MissingTenantID(t *testing.T) {
 	}
 }
 
+func TestStore_EnsureTenant_RejectsReservedTenantID(t *testing.T) {
+	s := newTestStore(t)
+	err := s.EnsureTenant(context.Background(), "default")
+	if !errors.Is(err, ErrInvalidTenantID) {
+		t.Fatalf("expected ErrInvalidTenantID, got %v", err)
+	}
+}
+
+func TestValidateTenantID(t *testing.T) {
+	got, err := ValidateTenantID(" tenant_1 ")
+	if err != nil {
+		t.Fatalf("ValidateTenantID() error = %v", err)
+	}
+	if got != "tenant_1" {
+		t.Fatalf("tenantID = %q, want tenant_1", got)
+	}
+	for _, tenantID := range []string{"", "   "} {
+		if _, err := ValidateTenantID(tenantID); !errors.Is(err, ErrMissingTenantID) {
+			t.Fatalf("ValidateTenantID(%q) = %v, want ErrMissingTenantID", tenantID, err)
+		}
+	}
+	for _, tenantID := range []string{"default", "Default", " default "} {
+		if _, err := ValidateTenantID(tenantID); !errors.Is(err, ErrInvalidTenantID) {
+			t.Fatalf("ValidateTenantID(%q) = %v, want ErrInvalidTenantID", tenantID, err)
+		}
+	}
+}
+
 func TestStore_CreateUser_MissingTenantID(t *testing.T) {
 	s := newTestStore(t)
 	err := s.CreateUser(context.Background(), "", &ebs_fields.User{Mobile: "0990000000"})

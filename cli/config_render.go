@@ -62,6 +62,10 @@ func renderConfigFiles() error {
 	if noebs == nil {
 		noebs = map[string]interface{}{}
 	}
+	defaultTenantID, _ := noebs["default_tenant_id"].(string)
+	if _, err := validateTenantID(defaultTenantID); err != nil {
+		return fmt.Errorf("runtime config default_tenant_id: %w", err)
+	}
 	if isEmptyValue(noebs["db_path"]) {
 		noebs["db_path"] = "/data/noebs.db"
 	}

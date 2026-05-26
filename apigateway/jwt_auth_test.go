@@ -13,7 +13,7 @@ var jj = &JWTAuth{}
 
 func TestVerifyJWT(t *testing.T) {
 	jj.Key = []byte("test-key")
-	token, err := jj.GenerateJWT(42, "0990000000", "default")
+	token, err := jj.GenerateJWT(42, "0990000000", "tenant")
 	if err != nil {
 		t.Fatalf("GenerateJWT error: %v", err)
 	}
@@ -37,6 +37,14 @@ func TestJWTAuth_GenerateJWT_MissingTenantID(t *testing.T) {
 	_, err := j.GenerateJWT(42, "0990000000", "")
 	if !errors.Is(err, ErrMissingTenantID) {
 		t.Fatalf("expected ErrMissingTenantID, got %v", err)
+	}
+}
+
+func TestJWTAuth_GenerateJWT_RejectsDefaultTenantID(t *testing.T) {
+	j := &JWTAuth{Key: []byte("test-key")}
+	_, err := j.GenerateJWT(42, "0990000000", "default")
+	if !errors.Is(err, ErrInvalidTenantID) {
+		t.Fatalf("expected ErrInvalidTenantID, got %v", err)
 	}
 }
 

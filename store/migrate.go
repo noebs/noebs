@@ -19,12 +19,13 @@ func Migrate(ctx context.Context, db *DB, defaultTenantID string) error {
 	if db == nil || db.DB == nil {
 		return fmt.Errorf("db is nil")
 	}
-	if defaultTenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(defaultTenantID)
+	if err != nil {
+		return err
 	}
 
 	migrationDriver = db.Driver
-	migrationDefaultTenant = defaultTenantID
+	migrationDefaultTenant = tenantID
 
 	if db.Driver != DriverPostgres {
 		return fmt.Errorf("unsupported migration driver %q (postgres only)", db.Driver)

@@ -59,19 +59,31 @@ func bearerToken(header string) string {
 func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if claims == nil {
-		return tenantID, nil
+		return validateGRPCTenantID(tenantID)
 	}
-	authenticated := strings.TrimSpace(claims.TenantID)
-	if authenticated == "" {
+	authenticated, err := validateGRPCTenantID(claims.TenantID)
+	if err != nil {
 		return "", status.Error(codes.Unauthenticated, "missing tenant in authorization token")
 	}
 	if tenantID == "" {
 		return authenticated, nil
 	}
+	tenantID, err = validateGRPCTenantID(tenantID)
+	if err != nil {
+		return "", err
+	}
 	if tenantID != authenticated {
 		return "", status.Error(codes.PermissionDenied, "tenant mismatch")
 	}
 	return authenticated, nil
+}
+
+func validateGRPCTenantID(tenantID string) (string, error) {
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", status.Error(codes.InvalidArgument, err.Error())
+	}
+	return tenantID, nil
 }
 
 func bindUserIDToClaims(userID int64, claims *gateway.TokenClaims) (int64, error) {

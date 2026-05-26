@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -1037,9 +1036,6 @@ type NoebsConfig struct {
 }
 
 func (n *NoebsConfig) Defaults() {
-	if strings.TrimSpace(n.DefaultTenantID) == "" {
-		n.DefaultTenantID = "default"
-	}
 	if n.IsConsumerProd {
 		n.ConsumerIP = n.ConsumerProd
 		n.IPINIp = n.IPIN

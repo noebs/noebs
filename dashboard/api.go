@@ -37,7 +37,10 @@ func (s *Service) MerchantViews(c *fiber.Ctx) {
 		return
 	}
 	terminal := c.Params("id")
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 
 	pageSize := 50
 	page := c.Query("page", "0")
@@ -84,7 +87,10 @@ func (s *Service) TransactionsCount(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	var count int64
 	stmt := db.Rebind("SELECT COUNT(*) FROM transactions WHERE tenant_id = ?")
 	if err := db.GetContext(c.UserContext(), &count, stmt, tenantID); err != nil {
@@ -102,7 +108,10 @@ func (s *Service) TransactionByTid(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	tid := c.Query("tid")
 	if tid == "" {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "tid is required"})
@@ -132,7 +141,10 @@ func (s *Service) MakeDummyTransaction(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": "db_not_configured"})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	tran := ebs_fields.EBSResponse{}
 	if err := s.Store.CreateTransaction(c.UserContext(), tenantID, tran); err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": err.Error()})
@@ -164,7 +176,10 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	tran, count, err := sortTable(db, tenantID, searchField, search, sortField, sortCase, int(offset), pageSize)
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
@@ -187,7 +202,10 @@ func (s *Service) GetID(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	tran, err := fetchTransactions(
 		c.UserContext(),
 		db,
@@ -208,7 +226,10 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 
 	page := 1
 	if q := c.Query("page", "1"); q != "" {
@@ -339,7 +360,10 @@ func (s *Service) QRStatus(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "id is required"})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	data, err := s.getLastTransactions(c.UserContext(), tenantID, q)
 	if err != nil {
 		jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error()})
@@ -382,7 +406,10 @@ func (s *Service) Stream(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	trans, err := fetchTransactions(
 		c.UserContext(),
 		db,
@@ -424,7 +451,10 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	tenantID := s.resolveTenantID(c)
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
 	var stats MerchantTransactions
 	stmt := `SELECT
 		COALESCE(SUM(tran_amount), 0) AS purchase_amount,
@@ -450,7 +480,10 @@ func (s *Service) ReportIssueEndpoint(c *fiber.Ctx) {
 			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 			return
 		}
-		tenantID := s.resolveTenantID(c)
+		tenantID, ok := s.requireTenantID(c)
+		if !ok {
+			return
+		}
 		if err := insertIssue(c.UserContext(), db, tenantID, issue); err != nil {
 			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 			return

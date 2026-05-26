@@ -237,6 +237,7 @@ func GetMainEngine() *fiber.App {
 	route.Get("/test", func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 	})
+	route.Get("/app/config", appConfigHandler)
 	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
 
 	dashboardGroup := route.Group("/dashboard", adminGuard)
@@ -341,10 +342,13 @@ func initConfig() {
 	}
 
 	noebsConfig.Defaults()
+	tenantID, err := configuredTenantID(noebsConfig)
+	if err != nil {
+		logrusLogger.Fatalf("error in runtime config: %v", err)
+	}
 	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
 	configureLogger(noebsConfig)
 	initOTel(context.Background(), noebsConfig, logrusLogger)
-	tenantID := noebsConfig.DefaultTenantID
 	dbpath := "test.db"
 	if noebsConfig.DatabasePath != "" {
 		dbpath = noebsConfig.DatabasePath
@@ -370,9 +374,12 @@ func initConfig() {
 	if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
 		logrusLogger.Fatalf("error ensuring tenant: %v", err)
 	}
+	if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
+		logrusLogger.Fatalf("error validating tenants: %v", err)
+	}
 
 	logrusLogger.Printf(
-		"Runtime config loaded: driver=%s default_tenant=%s port=%s temporal=%t grpc=%t wallet=%t",
+		"Runtime config loaded: driver=%s tenant=%s port=%s temporal=%t grpc=%t wallet=%t",
 		noebsConfig.DatabaseDriver,
 		noebsConfig.DefaultTenantID,
 		noebsConfig.Port,

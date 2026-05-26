@@ -22,9 +22,9 @@ func backfillUp(ctx context.Context, tx *sql.Tx) error {
 	if driver != DriverPostgres {
 		return fmt.Errorf("unsupported migration driver %q (postgres only)", driver)
 	}
-	tenantID := migrationDefaultTenant
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(migrationDefaultTenant)
+	if err != nil {
+		return err
 	}
 
 	tablesWithTenant := []string{

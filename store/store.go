@@ -13,8 +13,6 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-const DefaultTenantID = "default"
-
 // Store provides manual-SQL data access.
 type Store struct {
 	DB     *DB
@@ -45,8 +43,9 @@ func (s *Store) EnsureTenant(ctx context.Context, tenantID string) error {
 	if err != nil {
 		return err
 	}
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err = ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	stmt := s.DB.Rebind("INSERT INTO tenants(id, name, created_at) VALUES(?, ?, ?) ON CONFLICT(id) DO NOTHING")
 	_, err = db.ExecContext(ctx, stmt, tenantID, tenantID, time.Now().UTC())

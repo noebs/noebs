@@ -52,7 +52,8 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 		defer dropCancel()
 		_ = container.DropDatabase(dropCtx, dbName)
 	})
-	if err := basestore.Migrate(context.Background(), db, basestore.DefaultTenantID); err != nil {
+	tenantID := "tenant"
+	if err := basestore.Migrate(context.Background(), db, tenantID); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 
@@ -64,7 +65,6 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 	service := wallet.NewService(db, cfg)
 	server := NewServer(service)
 
-	tenantID := "tenant"
 	if err := basestore.New(db).EnsureTenant(context.Background(), tenantID); err != nil {
 		t.Fatalf("ensure tenant: %v", err)
 	}

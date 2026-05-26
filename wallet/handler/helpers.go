@@ -59,6 +59,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrUserTwoFANotFound):
 		return apperr.Wrap(err, apperr.ErrNotFound, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
+		errors.Is(err, walletstore.ErrInvalidTenantID),
 		errors.Is(err, walletstore.ErrMissingCurrency),
 		errors.Is(err, walletstore.ErrMissingOwnerType),
 		errors.Is(err, walletstore.ErrMissingOwnerID),
@@ -134,13 +135,11 @@ func renderComponent(c *fiber.Ctx, status int, component templ.Component) error 
 }
 
 func resolveTenantID(cfg ebs_fields.NoebsConfig, tenantID string) (string, error) {
+	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
 		tenantID = cfg.DefaultTenantID
 	}
-	if tenantID == "" {
-		return "", walletstore.ErrMissingTenantID
-	}
-	return tenantID, nil
+	return walletstore.ValidateTenantID(tenantID)
 }
 
 func resolveCurrency(cfg ebs_fields.NoebsConfig, currency string) (string, error) {

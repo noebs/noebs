@@ -6,11 +6,13 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	basestore "github.com/adonese/noebs/store"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
 	ErrMissingTenantID = errors.New("missing tenant_id")
+	ErrInvalidTenantID = errors.New("invalid tenant_id")
 	ErrMissingJWTKey   = errors.New("missing jwt key")
 )
 
@@ -25,13 +27,14 @@ func (j *JWTAuth) Init() {
 	j.Key = []byte(j.NoebsConfig.JWTKey)
 }
 
-// GenerateJWT generates a JWT standard token with default values hardcoded. FIXME
+// GenerateJWT generates a JWT token for an explicit tenant.
 func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 	expiresAt := time.Now().Add(10 * time.Hour).UTC()
-	if tenantID == "" {
-		return "", ErrMissingTenantID
+	tenantID, err := validateTenantID(tenantID)
+	if err != nil {
+		return "", err
 	}
 	claims := TokenClaims{
 		UserID:   userID,
@@ -52,6 +55,20 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 	if tokenString, err := token.SignedString(j.Key); err == nil {
 		return tokenString, nil
 	} else {
+		return "", err
+	}
+}
+
+func validateTenantID(tenantID string) (string, error) {
+	tenantID, err := basestore.ValidateTenantID(tenantID)
+	switch {
+	case err == nil:
+		return tenantID, nil
+	case errors.Is(err, basestore.ErrMissingTenantID):
+		return "", ErrMissingTenantID
+	case errors.Is(err, basestore.ErrInvalidTenantID):
+		return "", ErrInvalidTenantID
+	default:
 		return "", err
 	}
 }

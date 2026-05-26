@@ -61,8 +61,9 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	if tenantID == "" {
 		tenantID = stringFromMap(payloadMap, "tenant_id", "tenantId")
 	}
-	if tenantID == "" {
-		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingTenantID))
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
 	clientRef := stringFromMap(payloadMap, "client_reference", "clientReference", "client_ref", "reference")

@@ -285,8 +285,8 @@ func authenticatedTenantID(c *fiber.Ctx) (string, error) {
 	if !ok {
 		return "", apperr.ErrUnauthorized
 	}
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
 		return "", apperr.ErrUnauthorized
 	}
 	return tenantID, nil
@@ -297,8 +297,9 @@ func validateRequestedTenantID(requested *string, authenticated string) error {
 		return nil
 	}
 	tenantID := strings.TrimSpace(*requested)
-	if tenantID == "" {
-		return mapWalletError(walletstore.ErrMissingTenantID)
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
+		return mapWalletError(err)
 	}
 	if tenantID != authenticated {
 		return apperr.ErrForbidden

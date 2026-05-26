@@ -40,9 +40,11 @@ func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 				c.Locals("mobile", claims.Mobile)
 				c.Locals("username", claims.Mobile)
 			}
-			if claims.TenantID != "" {
-				c.Locals("tenant_id", claims.TenantID)
+			tenantID, err := validateTenantID(claims.TenantID)
+			if err != nil {
+				return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 			}
+			c.Locals("tenant_id", tenantID)
 			return c.Next()
 		}
 	}

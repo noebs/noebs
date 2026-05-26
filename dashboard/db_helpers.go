@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
 )
@@ -26,21 +29,35 @@ func (s *Service) ensureDB() (*sqlx.DB, error) {
 	return s.Store.DB.DB, nil
 }
 
-func (s *Service) resolveTenantID(c *fiber.Ctx) string {
+func (s *Service) resolveTenantID(c *fiber.Ctx) (string, error) {
+	tenantID := ""
 	if c != nil {
-		if t := c.Get("X-Tenant-ID"); t != "" {
-			return t
+		if t := strings.TrimSpace(c.Get("X-Tenant-ID")); t != "" {
+			tenantID = t
 		}
-		if v := c.Locals("tenant_id"); v != nil {
+		if tenantID == "" && c.Locals("tenant_id") != nil {
+			v := c.Locals("tenant_id")
 			if t, ok := v.(string); ok && t != "" {
-				return t
+				tenantID = t
 			}
 		}
 	}
-	if s != nil && s.NoebsConfig.DefaultTenantID != "" {
-		return s.NoebsConfig.DefaultTenantID
+	if tenantID == "" && s != nil {
+		tenantID = s.NoebsConfig.DefaultTenantID
 	}
-	return ""
+	return store.ValidateTenantID(tenantID)
+}
+
+func (s *Service) requireTenantID(c *fiber.Ctx) (string, bool) {
+	tenantID, err := s.resolveTenantID(c)
+	if err == nil {
+		return tenantID, true
+	}
+	jsonResponse(c, http.StatusBadRequest, fiber.Map{
+		"code":    "invalid_tenant_id",
+		"message": err.Error(),
+	})
+	return "", false
 }
 
 func decodeTransactionRows(rows []transactionRow) []ebs_fields.EBSResponse {

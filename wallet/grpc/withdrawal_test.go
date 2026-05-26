@@ -144,7 +144,8 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		_ = container.DropDatabase(dropCtx, dbName)
 	}()
 
-	if err := store.Migrate(ctx, db, store.DefaultTenantID); err != nil {
+	tenantID := "tenant"
+	if err := store.Migrate(ctx, db, tenantID); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 

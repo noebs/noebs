@@ -1,10 +1,29 @@
 package store
 
-import "github.com/google/uuid"
+import (
+	"errors"
+
+	basestore "github.com/adonese/noebs/store"
+	"github.com/google/uuid"
+)
+
+func ValidateTenantID(tenantID string) (string, error) {
+	tenantID, err := basestore.ValidateTenantID(tenantID)
+	switch {
+	case err == nil:
+		return tenantID, nil
+	case errors.Is(err, basestore.ErrMissingTenantID):
+		return "", ErrMissingTenantID
+	case errors.Is(err, basestore.ErrInvalidTenantID):
+		return "", ErrInvalidTenantID
+	default:
+		return "", err
+	}
+}
 
 func ValidateDoubleEntryParams(params DoubleEntryParams) error {
-	if params.TenantID == "" {
-		return ErrMissingTenantID
+	if _, err := ValidateTenantID(params.TenantID); err != nil {
+		return err
 	}
 	if params.Currency == "" {
 		return ErrMissingCurrency
@@ -28,8 +47,8 @@ func ValidateDoubleEntryParams(params DoubleEntryParams) error {
 }
 
 func ValidateHoldParams(params HoldParams) error {
-	if params.TenantID == "" {
-		return ErrMissingTenantID
+	if _, err := ValidateTenantID(params.TenantID); err != nil {
+		return err
 	}
 	if params.ExpiresAt.IsZero() {
 		return ErrMissingHoldExpiry
@@ -56,8 +75,8 @@ func ValidateHoldParams(params HoldParams) error {
 }
 
 func ValidateReleaseHold(tenantID string, holdID int64) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	if _, err := ValidateTenantID(tenantID); err != nil {
+		return err
 	}
 	if holdID <= 0 {
 		return ErrInvalidHoldID

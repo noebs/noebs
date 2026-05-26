@@ -92,10 +92,7 @@ func resolveTenantID(c *fiber.Ctx, cfg ebs_fields.NoebsConfig) (string, error) {
 	if tenantID == "" {
 		tenantID = strings.TrimSpace(cfg.DefaultTenantID)
 	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
-	}
-	return tenantID, nil
+	return store.ValidateTenantID(tenantID)
 }
 
 func statusForError(err error) int {
@@ -108,6 +105,7 @@ func statusForError(err error) int {
 	}
 	switch {
 	case errors.Is(err, store.ErrMissingTenantID),
+		errors.Is(err, store.ErrInvalidTenantID),
 		errors.Is(err, store.ErrMissingUser),
 		errors.Is(err, store.ErrMissingToken),
 		errors.Is(err, store.ErrMissingUUID),

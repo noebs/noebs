@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrMissingTenantID              = errors.New("missing tenant_id")
+	ErrInvalidTenantID              = errors.New("invalid tenant_id")
 	ErrMissingCurrency              = errors.New("missing currency")
 	ErrMissingOwnerType             = errors.New("missing owner_type")
 	ErrMissingOwnerID               = errors.New("missing owner_id")

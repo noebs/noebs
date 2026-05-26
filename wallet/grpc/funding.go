@@ -25,8 +25,9 @@ func (s *Server) CreateFundingSource(ctx context.Context, req *walletv1.CreateFu
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
@@ -56,7 +57,7 @@ func (s *Server) CreateFundingSource(ctx context.Context, req *walletv1.CreateFu
 	}
 
 	source := walletstore.FundingSource{
-		TenantID:           req.TenantId,
+		TenantID:           tenantID,
 		WalletID:           walletID,
 		SourceType:         req.SourceType,
 		PSPProvider:        sql.NullString{String: req.PspProvider, Valid: req.PspProvider != ""},
@@ -468,8 +469,9 @@ func (s *Server) ResetWalletPIN(ctx context.Context, req *walletv1.ResetWalletPI
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
@@ -489,7 +491,7 @@ func (s *Server) ResetWalletPIN(ctx context.Context, req *walletv1.ResetWalletPI
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if err := s.Service.Store.UpdateWalletPIN(ctx, req.TenantId, walletID, hash, time.Now().UTC()); err != nil {
+	if err := s.Service.Store.UpdateWalletPIN(ctx, tenantID, walletID, hash, time.Now().UTC()); err != nil {
 		return nil, mapError(err)
 	}
 	return &emptypb.Empty{}, nil

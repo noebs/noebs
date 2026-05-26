@@ -95,8 +95,9 @@ func (s *Server) ValidateP2P(ctx context.Context, req *walletv1.ValidateP2PReque
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.FromWalletId == "" || req.ToWalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
@@ -118,7 +119,7 @@ func (s *Server) ValidateP2P(ctx context.Context, req *walletv1.ValidateP2PReque
 
 	validator := walletvalidation.Service{Store: s.Service.Store}
 	result, err := validator.ValidateP2P(ctx, walletvalidation.P2PValidationRequest{
-		TenantID:        req.TenantId,
+		TenantID:        tenantID,
 		TransactionType: "p2p",
 		FromWalletID:    fromID,
 		ToWalletID:      toID,
@@ -153,8 +154,9 @@ func (s *Server) getWallet(ctx context.Context, req *walletv1.GetWalletRequest) 
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
@@ -163,7 +165,7 @@ func (s *Server) getWallet(ctx context.Context, req *walletv1.GetWalletRequest) 
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	w, err := s.Service.GetWallet(ctx, req.TenantId, walletID)
+	w, err := s.Service.GetWallet(ctx, tenantID, walletID)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -177,8 +179,9 @@ func (s *Server) ensureWallet(ctx context.Context, req *walletv1.EnsureWalletReq
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.UserId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
@@ -190,7 +193,7 @@ func (s *Server) ensureWallet(ctx context.Context, req *walletv1.EnsureWalletReq
 	if currency == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
-	w, err := s.Service.EnsureUserWallet(ctx, req.TenantId, req.UserId, currency)
+	w, err := s.Service.EnsureUserWallet(ctx, tenantID, req.UserId, currency)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -227,6 +230,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrUserTwoFANotFound):
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
+		errors.Is(err, walletstore.ErrInvalidTenantID),
 		errors.Is(err, walletstore.ErrMissingCurrency),
 		errors.Is(err, walletstore.ErrMissingWalletID),
 		errors.Is(err, walletstore.ErrMissingOwnerID),

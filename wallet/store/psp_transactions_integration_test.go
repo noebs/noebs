@@ -45,7 +45,7 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 		_ = container.DropDatabase(dropCtx, dbName)
 	}()
 
-	if err := basestore.Migrate(ctx, db, basestore.DefaultTenantID); err != nil {
+	if err := basestore.Migrate(ctx, db, "tenant"); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 

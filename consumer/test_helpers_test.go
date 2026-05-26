@@ -64,11 +64,11 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 		defer dropCancel()
 		_ = container.DropDatabase(dropCtx, dbName)
 	})
-	if err := store.Migrate(ctx, db, store.DefaultTenantID); err != nil {
+	tenantID := "test-tenant"
+	if err := store.Migrate(ctx, db, tenantID); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	storeSvc := store.New(db, store.WithDataKey("test-data-key"))
-	tenantID := "test-tenant"
 	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
 		t.Fatalf("ensure tenant: %v", err)
 	}
