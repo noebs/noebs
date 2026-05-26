@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/go-connections/nat"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -109,6 +108,7 @@ func quoteIdent(value string) string {
 	return "\"" + strings.ReplaceAll(value, "\"", "\"\"") + "\""
 }
 
-func postgresAdminURL(host string, port nat.Port) string {
-	return fmt.Sprintf("postgres://noebs:noebs@%s/postgres?sslmode=disable", net.JoinHostPort(host, port.Port()))
+func postgresAdminURL(host string, port string) string {
+	port, _, _ = strings.Cut(port, "/")
+	return fmt.Sprintf("postgres://noebs:noebs@%s/postgres?sslmode=disable", net.JoinHostPort(host, port))
 }
