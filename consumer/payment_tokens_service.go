@@ -35,14 +35,35 @@ func (s *Service) GeneratePaymentToken(ctx context.Context, tenantID, mobile str
 		return ebs_fields.Token{}, "", "", err
 	}
 
+	return s.generatePaymentTokenForCards(ctx, tenantID, user.ID, user.Cards, token)
+}
+
+func (s *Service) GeneratePaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, token ebs_fields.Token) (ebs_fields.Token, string, string, error) {
+	if s == nil || s.Store == nil {
+		return ebs_fields.Token{}, "", "", ErrMissingStore
+	}
+	if tenantID == "" {
+		return ebs_fields.Token{}, "", "", store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return ebs_fields.Token{}, "", "", store.ErrInvalidUserID
+	}
+	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, userID)
+	if err != nil {
+		return ebs_fields.Token{}, "", "", err
+	}
+	return s.generatePaymentTokenForCards(ctx, tenantID, userID, cards, token)
+}
+
+func (s *Service) generatePaymentTokenForCards(ctx context.Context, tenantID string, userID int64, cards []ebs_fields.Card, token ebs_fields.Token) (ebs_fields.Token, string, string, error) {
 	fullPan := ""
 	if token.ToCard == "" {
-		if len(user.Cards) == 0 {
+		if len(cards) == 0 {
 			return ebs_fields.Token{}, "", "", errors.New("no card found")
 		}
-		fullPan = user.Cards[0].Pan
+		fullPan = cards[0].Pan
 	} else {
-		pan, err := ebs_fields.ExpandCard(token.ToCard, user.Cards)
+		pan, err := ebs_fields.ExpandCard(token.ToCard, cards)
 		if err != nil {
 			return ebs_fields.Token{}, "", "", err
 		}
@@ -51,8 +72,7 @@ func (s *Service) GeneratePaymentToken(ctx context.Context, tenantID, mobile str
 
 	token.ToCard = fullPan
 	token.UUID = uuid.New().String()
-	token.UserID = user.ID
-	token.User = *user
+	token.UserID = userID
 	if err := s.Store.CreateToken(ctx, tenantID, &token); err != nil {
 		return ebs_fields.Token{}, "", "", err
 	}
@@ -186,6 +206,39 @@ func (s *Service) GetPaymentToken(ctx context.Context, tenantID, mobile, uuid st
 	result, err := s.Store.GetTokenByUUID(ctx, tenantID, uuid)
 	if err != nil {
 		return nil, nil, err
+	}
+	result.ToCard = utils.MaskPAN(result.ToCard)
+	return nil, result, nil
+}
+
+func (s *Service) GetPaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, uuid string) ([]ebs_fields.Token, *ebs_fields.Token, error) {
+	if s == nil || s.Store == nil {
+		return nil, nil, ErrMissingStore
+	}
+	if tenantID == "" {
+		return nil, nil, store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return nil, nil, store.ErrInvalidUserID
+	}
+
+	if strings.TrimSpace(uuid) == "" {
+		tokens, err := s.Store.GetAllTokensByUserID(ctx, tenantID, userID)
+		if err != nil {
+			return nil, nil, err
+		}
+		for i := range tokens {
+			tokens[i].ToCard = utils.MaskPAN(tokens[i].ToCard)
+		}
+		return tokens, nil, nil
+	}
+
+	result, err := s.Store.GetTokenByUUID(ctx, tenantID, uuid)
+	if err != nil {
+		return nil, nil, err
+	}
+	if result.UserID != userID {
+		return nil, nil, store.ErrInvalidUserID
 	}
 	result.ToCard = utils.MaskPAN(result.ToCard)
 	return nil, result, nil

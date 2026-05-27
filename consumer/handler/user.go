@@ -32,15 +32,12 @@ func (h *Handler) GetCards(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	username := getMobile(c)
-	if username == "" {
-		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
-	}
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	cards, main, err := h.Service.GetCards(c.UserContext(), tenantID, username)
+	cards, main, err := h.Service.GetCardsByUserID(c.UserContext(), tenantID, userID)
 	if err != nil {
 		return jsonResponse(c, http.StatusNotFound, fiber.Map{"cards": nil, "main_card": nil})
 	}
@@ -130,7 +127,7 @@ func (h *Handler) AddCards(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	username := getMobile(c)
+	userID := getUserID(c)
 	var list []ebs_fields.Card
 	if err := parseJSON(c, &list); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
@@ -139,7 +136,7 @@ func (h *Handler) AddCards(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.AddCards(c.UserContext(), tenantID, username, list); err != nil {
+	if err := h.Service.AddCardsForUserID(c.UserContext(), tenantID, userID, list); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"code": "ok", "message": "cards added"})
@@ -153,15 +150,12 @@ func (h *Handler) EditCard(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
-	username := getMobile(c)
-	if username == "" {
-		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
-	}
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.EditCard(c.UserContext(), tenantID, username, req); err != nil {
+	if err := h.Service.EditCardForUserID(c.UserContext(), tenantID, userID, req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusCreated, fiber.Map{"result": "ok"})
@@ -171,10 +165,7 @@ func (h *Handler) RemoveCard(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	username := getMobile(c)
-	if username == "" {
-		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
-	}
+	userID := getUserID(c)
 	var card ebs_fields.Card
 	if err := bindJSON(c, &card); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
@@ -183,7 +174,7 @@ func (h *Handler) RemoveCard(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.RemoveCard(c.UserContext(), tenantID, username, card.CardIdx); err != nil {
+	if err := h.Service.RemoveCardForUserID(c.UserContext(), tenantID, userID, card.CardIdx); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})

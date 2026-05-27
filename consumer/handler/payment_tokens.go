@@ -14,7 +14,7 @@ func (h *Handler) GeneratePaymentToken(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	mobile := getMobile(c)
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -25,7 +25,7 @@ func (h *Handler) GeneratePaymentToken(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
 	}
 
-	created, encoded, paymentLink, err := h.Service.GeneratePaymentToken(c.UserContext(), tenantID, mobile, token)
+	created, encoded, paymentLink, err := h.Service.GeneratePaymentTokenForUserID(c.UserContext(), tenantID, userID, token)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
 	}
@@ -58,17 +58,14 @@ func (h *Handler) GetPaymentToken(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	username := getMobile(c)
-	if username == "" {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Empty payment id", "code": "empty_uuid"})
-	}
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 	uuid := strings.TrimSpace(c.Query("uuid"))
 
-	tokens, token, err := h.Service.GetPaymentToken(c.UserContext(), tenantID, username, uuid)
+	tokens, token, err := h.Service.GetPaymentTokenForUserID(c.UserContext(), tenantID, userID, uuid)
 	if err != nil {
 		if uuid != "" {
 			return jsonResponse(c, http.StatusNotFound, fiber.Map{"code": "record_not_found", "message": "token not found"})

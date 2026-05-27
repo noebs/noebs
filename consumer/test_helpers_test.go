@@ -45,6 +45,17 @@ func ensurePostgresContainer(t *testing.T) *testdb.PostgresContainer {
 
 func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 	t.Helper()
+	return newTestDBWithScopes(t, []string{
+		store.MigrationScopeIdentityAuth,
+		store.MigrationScopeCardVault,
+		store.MigrationScopeEBSAdapter,
+		store.MigrationScopeNotificationChat,
+		store.MigrationScopeConsumerBeneficiary,
+	})
+}
+
+func newTestDBWithScopes(t *testing.T, scopes []string) (*store.DB, *store.Store, string) {
+	t.Helper()
 	container := ensurePostgresContainer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -65,7 +76,7 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 		_ = container.DropDatabase(dropCtx, dbName)
 	})
 	tenantID := "test-tenant"
-	if err := migrateConsumerTestScopes(ctx, db, tenantID); err != nil {
+	if err := migrateConsumerTestScopes(ctx, db, tenantID, scopes); err != nil {
 		t.Fatalf("migrate service scopes: %v", err)
 	}
 	storeSvc := store.New(db, store.WithDataKey("test-data-key"))
@@ -75,14 +86,8 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 	return db, storeSvc, tenantID
 }
 
-func migrateConsumerTestScopes(ctx context.Context, db *store.DB, tenantID string) error {
-	for _, scope := range []string{
-		store.MigrationScopeIdentityAuth,
-		store.MigrationScopeCardVault,
-		store.MigrationScopeEBSAdapter,
-		store.MigrationScopeNotificationChat,
-		store.MigrationScopeConsumerBeneficiary,
-	} {
+func migrateConsumerTestScopes(ctx context.Context, db *store.DB, tenantID string, scopes []string) error {
+	for _, scope := range scopes {
 		if err := store.MigrateScope(ctx, db, tenantID, scope); err != nil {
 			return fmt.Errorf("%s: %w", scope, err)
 		}

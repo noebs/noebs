@@ -50,6 +50,27 @@ func (s *Service) GetCards(ctx context.Context, tenantID, mobile string) ([]ebs_
 	return user.Cards, &main, nil
 }
 
+func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Card, *ebs_fields.Card, error) {
+	if s == nil || s.Store == nil {
+		return nil, nil, ErrMissingStore
+	}
+	if tenantID == "" {
+		return nil, nil, store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return nil, nil, store.ErrInvalidUserID
+	}
+	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(cards) == 0 {
+		return nil, nil, errors.New("no cards found")
+	}
+	main := cards[0]
+	return cards, &main, nil
+}
+
 func (s *Service) AddDeviceToken(ctx context.Context, tenantID, mobile, token string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
@@ -145,6 +166,23 @@ func (s *Service) AddCards(ctx context.Context, tenantID, mobile string, cards [
 	return s.Store.AddCards(ctx, tenantID, user.ID, cards)
 }
 
+func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID int64, cards []ebs_fields.Card) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
+	if tenantID == "" {
+		return store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return store.ErrInvalidUserID
+	}
+	for i := range cards {
+		cards[i].ID = 0
+		cards[i].UserID = userID
+	}
+	return s.Store.AddCards(ctx, tenantID, userID, cards)
+}
+
 func (s *Service) EditCard(ctx context.Context, tenantID, mobile string, card ebs_fields.Card) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
@@ -167,6 +205,23 @@ func (s *Service) EditCard(ctx context.Context, tenantID, mobile string, card eb
 	return s.Store.UpdateCard(ctx, tenantID, user.ID, card)
 }
 
+func (s *Service) EditCardForUserID(ctx context.Context, tenantID string, userID int64, card ebs_fields.Card) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
+	if tenantID == "" {
+		return store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return store.ErrInvalidUserID
+	}
+	if strings.TrimSpace(card.CardIdx) == "" {
+		return errors.New("card idx is empty")
+	}
+	card.UserID = userID
+	return s.Store.UpdateCard(ctx, tenantID, userID, card)
+}
+
 func (s *Service) RemoveCard(ctx context.Context, tenantID, mobile, cardIdx string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
@@ -187,6 +242,23 @@ func (s *Service) RemoveCard(ctx context.Context, tenantID, mobile, cardIdx stri
 		return err
 	}
 	return s.Store.DeleteCard(ctx, tenantID, user.ID, cardIdx)
+}
+
+func (s *Service) RemoveCardForUserID(ctx context.Context, tenantID string, userID int64, cardIdx string) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
+	if tenantID == "" {
+		return store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return store.ErrInvalidUserID
+	}
+	cardIdx = strings.TrimSpace(cardIdx)
+	if cardIdx == "" {
+		return errors.New("card idx is empty")
+	}
+	return s.Store.DeleteCard(ctx, tenantID, userID, cardIdx)
 }
 
 func (s *Service) NecToName(ctx context.Context, tenantID, nec string) (string, error) {

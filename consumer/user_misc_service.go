@@ -91,6 +91,29 @@ func (s *Service) SetMainCard(ctx context.Context, tenantID, mobile, pan string)
 	return s.Store.UpdateUserColumns(ctx, tenantID, user.ID, map[string]any{"main_card": pan})
 }
 
+func (s *Service) SetMainCardForUserID(ctx context.Context, tenantID string, userID int64, pan string) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
+	if tenantID == "" {
+		return store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return store.ErrInvalidUserID
+	}
+	pan = strings.TrimSpace(pan)
+	if pan == "" {
+		return errors.New("missing pan")
+	}
+	if ok, err := s.Store.CardExists(ctx, tenantID, pan); err != nil || !ok {
+		if err != nil {
+			return err
+		}
+		return errors.New("card does not exist")
+	}
+	return s.Store.SetMainCard(ctx, tenantID, userID, pan)
+}
+
 func (s *Service) GetTransactions(ctx context.Context, tenantID, mobile string) ([]ebs_fields.EBSResponse, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
@@ -118,4 +141,3 @@ func (s *Service) GetTransactions(ctx context.Context, tenantID, mobile string) 
 	}
 	return trans, nil
 }
-
