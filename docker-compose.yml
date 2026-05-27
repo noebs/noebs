@@ -32,21 +32,87 @@ x-migrate-defaults: &migrate-defaults
   depends_on:
     db:
       condition: service_healthy
-  secrets:
-    - source: noebs_secrets
-      target: /app/secrets.yaml
-      uid: "10001"
-      gid: "10001"
-      mode: 0400
-    - source: sops_age_key
-      target: /app/.sops/age-key.txt
-      uid: "10001"
-      gid: "10001"
-      mode: 0400
   networks:
     - backend
   restart: "no"
   user: "10001:10001"
+
+x-sops-age-key-secret: &sops-age-key-secret
+  source: sops_age_key
+  target: /app/.sops/age-key.txt
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-api-gateway-secret: &api-gateway-secret
+  source: api-gateway-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-identity-auth-secret: &identity-auth-secret
+  source: identity-auth-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-card-vault-secret: &card-vault-secret
+  source: card-vault-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-ebs-adapter-secret: &ebs-adapter-secret
+  source: ebs-adapter-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-psp-webhook-secret: &psp-webhook-secret
+  source: psp-webhook-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-admin-reporting-secret: &admin-reporting-secret
+  source: admin-reporting-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-notification-chat-secret: &notification-chat-secret
+  source: notification-chat-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-consumer-beneficiary-secret: &consumer-beneficiary-secret
+  source: consumer-beneficiary-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-wallet-api-secret: &wallet-api-secret
+  source: wallet-api-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
+x-wallet-ledger-secret: &wallet-ledger-secret
+  source: wallet-ledger-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
 
 services:
   runtime-init:
@@ -69,7 +135,7 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - noebs-runtime:/app/runtime
     secrets:
-      - source: noebs_secrets
+      - source: postgres-bootstrap-secrets
         target: /app/secrets.yaml
       - source: sops_age_key
         target: /app/.sops/age-key.txt
@@ -206,48 +272,72 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *identity-auth-secret
+      - *sops-age-key-secret
 
   card-vault-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/card-vault-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *card-vault-secret
+      - *sops-age-key-secret
 
   ebs-adapter-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *ebs-adapter-secret
+      - *sops-age-key-secret
 
   psp-webhook-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/psp-webhook-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *psp-webhook-secret
+      - *sops-age-key-secret
 
   admin-reporting-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *admin-reporting-secret
+      - *sops-age-key-secret
 
   notification-chat-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *notification-chat-secret
+      - *sops-age-key-secret
 
   consumer-beneficiary-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/consumer-beneficiary-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *consumer-beneficiary-secret
+      - *sops-age-key-secret
 
   wallet-ledger-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-ledger-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - *wallet-ledger-secret
+      - *sops-age-key-secret
 
   api-gateway:
     <<: [*service-defaults, *web-hardening]
@@ -262,16 +352,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/api-gateway.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *api-gateway-secret
+      - *sops-age-key-secret
     networks:
       - backend
       - public
@@ -296,16 +378,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *identity-auth-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -329,16 +403,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/card-vault.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *card-vault-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -362,16 +428,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *ebs-adapter-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -397,16 +455,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-api.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *wallet-api-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -432,16 +482,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/psp-webhook.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *psp-webhook-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -465,16 +507,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *admin-reporting-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -498,16 +532,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *notification-chat-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -531,16 +557,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/consumer-beneficiary.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *consumer-beneficiary-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -566,16 +584,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-ledger.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *wallet-ledger-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -601,16 +611,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-worker.yaml:/app/service.yaml:ro"
     secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
+      - *wallet-ledger-secret
+      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -658,8 +660,28 @@ volumes:
   caddy_config:
 
 secrets:
-  noebs_secrets:
+  postgres-bootstrap-secrets:
     file: ./secrets.yaml
+  api-gateway-secrets:
+    file: ./deploy/docker/secrets/api-gateway.secrets.yaml
+  identity-auth-secrets:
+    file: ./deploy/docker/secrets/identity-auth.secrets.yaml
+  card-vault-secrets:
+    file: ./deploy/docker/secrets/card-vault.secrets.yaml
+  ebs-adapter-secrets:
+    file: ./deploy/docker/secrets/ebs-adapter.secrets.yaml
+  psp-webhook-secrets:
+    file: ./deploy/docker/secrets/psp-webhook.secrets.yaml
+  admin-reporting-secrets:
+    file: ./deploy/docker/secrets/admin-reporting.secrets.yaml
+  notification-chat-secrets:
+    file: ./deploy/docker/secrets/notification-chat.secrets.yaml
+  consumer-beneficiary-secrets:
+    file: ./deploy/docker/secrets/consumer-beneficiary.secrets.yaml
+  wallet-api-secrets:
+    file: ./deploy/docker/secrets/wallet-api.secrets.yaml
+  wallet-ledger-secrets:
+    file: ./deploy/docker/secrets/wallet-ledger.secrets.yaml
   sops_age_key:
     file: ./.sops/age-key.txt
   keycloak_config:

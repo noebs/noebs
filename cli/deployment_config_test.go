@@ -62,6 +62,7 @@ type manifestMount struct {
 
 type composeDocument struct {
 	Services map[string]composeService `yaml:"services"`
+	Secrets  map[string]composeSecret  `yaml:"secrets"`
 }
 
 type composeService struct {
@@ -74,6 +75,7 @@ type composeService struct {
 type composeSecret struct {
 	Source string `yaml:"source"`
 	Target string `yaml:"target"`
+	File   string `yaml:"file"`
 }
 
 func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
@@ -127,6 +129,16 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 
 func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+	if _, ok := compose.Secrets["noebs_secrets"]; ok {
+		t.Fatalf("docker-compose.yml must not define shared noebs_secrets for service runtimes")
+	}
+	secretsInit, ok := compose.Services["secrets-init"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing secrets-init service")
+	}
+	requireComposeSecret(t, "secrets-init", secretsInit.Secrets, "postgres-bootstrap-secrets", "/app/secrets.yaml")
+	requireComposeTopLevelSecret(t, compose.Secrets, "postgres-bootstrap-secrets", "./secrets.yaml")
+
 	serviceFiles, err := filepath.Glob(filepath.Join("..", "deploy", "docker", "services", "*.yaml"))
 	if err != nil {
 		t.Fatalf("list docker service configs: %v", err)
@@ -150,7 +162,11 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 
 		requireComposeVolume(t, serviceName, service.Volumes, "./config.docker.yaml", "/app/config.yaml")
 		requireComposeVolume(t, serviceName, service.Volumes, "./deploy/docker/services/"+filepath.Base(serviceFile), "/app/service.yaml")
-		requireComposeSecret(t, serviceName, service.Secrets, "noebs_secrets", "/app/secrets.yaml")
+		secretSource := composeSecretSourceForService(serviceName)
+		requireComposeSecret(t, serviceName, service.Secrets, secretSource, "/app/secrets.yaml")
+		requireComposeSecret(t, serviceName, service.Secrets, "sops_age_key", "/app/.sops/age-key.txt")
+		rejectComposeSecret(t, serviceName, service.Secrets, "postgres-bootstrap-secrets")
+		requireComposeTopLevelSecret(t, compose.Secrets, secretSource, "./deploy/docker/secrets/"+strings.TrimSuffix(secretSource, "-secrets")+".secrets.yaml")
 	}
 }
 
@@ -338,6 +354,49 @@ func requireComposeSecret(t *testing.T, serviceName string, secrets []composeSec
 		}
 	}
 	t.Fatalf("%s secrets = %v; missing %s target %s", serviceName, secrets, source, target)
+}
+
+func rejectComposeSecret(t *testing.T, serviceName string, secrets []composeSecret, source string) {
+	t.Helper()
+	for _, secret := range secrets {
+		if secret.Source == source {
+			t.Fatalf("%s must not mount %s", serviceName, source)
+		}
+	}
+}
+
+func requireComposeTopLevelSecret(t *testing.T, secrets map[string]composeSecret, source, file string) {
+	t.Helper()
+	secret, ok := secrets[source]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing top-level secret %q", source)
+	}
+	if secret.File != file {
+		t.Fatalf("secret %s file = %q, want %q", source, secret.File, file)
+	}
+}
+
+func composeSecretSourceForService(serviceName string) string {
+	switch serviceName {
+	case "identity-auth-migrate":
+		return "identity-auth-secrets"
+	case "card-vault-migrate":
+		return "card-vault-secrets"
+	case "ebs-adapter-migrate":
+		return "ebs-adapter-secrets"
+	case "psp-webhook-migrate":
+		return "psp-webhook-secrets"
+	case "admin-reporting-migrate":
+		return "admin-reporting-secrets"
+	case "notification-chat-migrate":
+		return "notification-chat-secrets"
+	case "consumer-beneficiary-migrate":
+		return "consumer-beneficiary-secrets"
+	case "wallet-ledger-migrate", "wallet-worker":
+		return "wallet-ledger-secrets"
+	default:
+		return serviceName + "-secrets"
+	}
 }
 
 func findMount(container manifestContainer, mountPath string) *manifestMount {
