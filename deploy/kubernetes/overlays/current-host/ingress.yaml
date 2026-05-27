@@ -535,6 +535,20 @@ spec:
                 name: ebs-adapter
                 port:
                   name: http
+          - path: /wallet
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-api
+                port:
+                  name: http
+          - path: /admin/wallet
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-api
+                port:
+                  name: http
           - path: /psp/webhooks
             pathType: Prefix
             backend:
@@ -1096,6 +1110,20 @@ spec:
             backend:
               service:
                 name: ebs-adapter
+                port:
+                  name: http
+          - path: /wallet
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-api
+                port:
+                  name: http
+          - path: /admin/wallet
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-api
                 port:
                   name: http
           - path: /psp/webhooks

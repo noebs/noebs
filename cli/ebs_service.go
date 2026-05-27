@@ -102,7 +102,7 @@ func main() {
 	}
 	go func() {
 		<-ctx.Done()
-		closePSPTemporalClient()
+		closeWalletWorkflowClient()
 	}()
 
 	if role.startsChat() {

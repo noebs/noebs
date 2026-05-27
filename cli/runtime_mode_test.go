@@ -39,6 +39,7 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
+		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleMigrate,
@@ -77,6 +78,9 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	}
 	if !serviceRoleNotification.startsHTTP() || !serviceRoleNotification.startsChat() || serviceRoleNotification.startsGRPC() || serviceRoleNotification.startsWalletWorker() || serviceRoleNotification.runsMigrations() {
 		t.Fatalf("notification-chat role should own only the HTTP chat process")
+	}
+	if !serviceRoleWalletAPI.startsHTTP() || serviceRoleWalletAPI.startsGRPC() || serviceRoleWalletAPI.startsWalletWorker() || serviceRoleWalletAPI.runsMigrations() {
+		t.Fatalf("wallet-api role should own only the HTTP process")
 	}
 	if serviceRoleWalletLedger.startsHTTP() || !serviceRoleWalletLedger.startsGRPC() || serviceRoleWalletLedger.startsWalletWorker() || serviceRoleWalletLedger.runsMigrations() {
 		t.Fatalf("wallet-ledger role should own only the gRPC process")

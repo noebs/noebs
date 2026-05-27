@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/golang-jwt/jwt/v5"
+	"go.temporal.io/sdk/client"
 )
 
 type walletRouteResponse struct {
@@ -19,6 +21,16 @@ type walletRouteResponse struct {
 
 type walletTransactionsRouteResponse struct {
 	Transactions []any `json:"transactions"`
+}
+
+type walletRouteTemporalClient struct{}
+
+func (walletRouteTemporalClient) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
+	return nil
+}
+
+func (walletRouteTemporalClient) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, workflow interface{}, args ...interface{}) (client.WorkflowRun, error) {
+	return nil, nil
 }
 
 func configureWalletRouteTest(t *testing.T) {
@@ -31,16 +43,23 @@ func configureWalletRouteTest(t *testing.T) {
 	originalAuth := auth
 	originalCfg := noebsConfig
 	originalWalletCfg := walletService.Config
+	originalWorkflowClient := walletWorkflowClient
+	originalWorkflowCloser := walletWorkflowCloser
 	t.Cleanup(func() {
 		auth = originalAuth
 		noebsConfig = originalCfg
 		walletService.Config = originalWalletCfg
+		walletWorkflowClient = originalWorkflowClient
+		walletWorkflowCloser = originalWorkflowCloser
 	})
 
 	noebsConfig.WalletEnabled = true
 	noebsConfig.WalletDefaultCurrency = "USD"
+	noebsConfig.ServiceRole = string(serviceRoleWalletAPI)
 	auth = gateway.JWTAuth{Key: []byte("test-key")}
 	walletService.Config = noebsConfig
+	walletWorkflowClient = walletRouteTemporalClient{}
+	walletWorkflowCloser = nil
 }
 
 func walletToken(t *testing.T, userID int64) string {
@@ -109,6 +128,38 @@ func TestWalletRoutesRequireAuth(t *testing.T) {
 		t.Fatalf("authorized status = %d, want %d", authorizedResp.StatusCode, http.StatusOK)
 	}
 	_ = authorizedResp.Body.Close()
+}
+
+func TestWalletRoutesAreNotOwnedByAPIGateway(t *testing.T) {
+	configureWalletRouteTest(t)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+
+	token := walletToken(t, 42)
+	route := GetMainEngine()
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "user wallet", method: http.MethodPost, path: "/wallet/wallets"},
+		{name: "wallet methods", method: http.MethodGet, path: "/wallet/methods"},
+		{name: "wallet admin", method: http.MethodGet, path: "/admin/wallet"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+			}
+		})
+	}
 }
 
 func TestWalletRoutesTakePrecedenceOverGRPCGateway(t *testing.T) {

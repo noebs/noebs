@@ -59,6 +59,9 @@ data:
   notification-chat.service.yaml: |
     noebs:
       service_role: notification-chat
+  wallet-api.service.yaml: |
+    noebs:
+      service_role: wallet-api
   wallet-ledger.service.yaml: |
     noebs:
       service_role: wallet-ledger
