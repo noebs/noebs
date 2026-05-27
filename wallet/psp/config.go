@@ -7,36 +7,35 @@ import (
 )
 
 type Config struct {
-	TenantID                string
-	ProviderCode            string
-	ProviderName            string
-	APIBaseURL              string
-	EnabledCurrencies       []string
-	IdempotencyHeaderName   string
-	IsActive                bool
-	SupportsDeposit         bool
-	SupportsWithdrawal      bool
-	WebhookAuthMode         string
-	WebhookAllowedCIDRs     []string
-	StatusCheckWebhook      bool
-	ResponseDefaultCurrency string
-	DepositRequestMethod    string
-	DepositRequestPath      string
-	DepositRequestMapping   RequestMapping
-	PayoutRequestMethod     string
-	PayoutRequestPath       string
-	PayoutRequestMapping    RequestMapping
-	StatusRequestMethod     string
-	StatusRequestPath       string
-	StatusRequestMapping    RequestMapping
-	DepositResponseMapping  ResponseMapping
-	PayoutResponseMapping   ResponseMapping
-	StatusResponseMapping   ResponseMapping
-	WebhookResponseMapping  ResponseMapping
-	APIKey                  string
-	APISecret               string
-	WebhookSecret           string
-	WebhookPublicKey        string
+	TenantID               string
+	ProviderCode           string
+	ProviderName           string
+	APIBaseURL             string
+	EnabledCurrencies      []string
+	IdempotencyHeaderName  string
+	IsActive               bool
+	SupportsDeposit        bool
+	SupportsWithdrawal     bool
+	WebhookAuthMode        string
+	WebhookAllowedCIDRs    []string
+	StatusCheckWebhook     bool
+	DepositRequestMethod   string
+	DepositRequestPath     string
+	DepositRequestMapping  RequestMapping
+	PayoutRequestMethod    string
+	PayoutRequestPath      string
+	PayoutRequestMapping   RequestMapping
+	StatusRequestMethod    string
+	StatusRequestPath      string
+	StatusRequestMapping   RequestMapping
+	DepositResponseMapping ResponseMapping
+	PayoutResponseMapping  ResponseMapping
+	StatusResponseMapping  ResponseMapping
+	WebhookResponseMapping ResponseMapping
+	APIKey                 string
+	APISecret              string
+	WebhookSecret          string
+	WebhookPublicKey       string
 }
 
 type SecretBundle struct {
@@ -73,10 +72,6 @@ func MergeConfig(cfg *store.PSPConfig, secrets SecretBundle) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defaultCurrency := ""
-	if cfg.ResponseDefaultCurrency.Valid {
-		defaultCurrency = cfg.ResponseDefaultCurrency.String
-	}
 	depositRequestMapping, err := parseRequestMapping(cfg.DepositRequestMapping)
 	if err != nil {
 		return nil, err
@@ -90,36 +85,35 @@ func MergeConfig(cfg *store.PSPConfig, secrets SecretBundle) (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		TenantID:                cfg.TenantID,
-		ProviderCode:            cfg.ProviderCode,
-		ProviderName:            cfg.ProviderName,
-		APIBaseURL:              cfg.APIBaseURL,
-		EnabledCurrencies:       []string(cfg.EnabledCurrencies),
-		IdempotencyHeaderName:   idempotencyHeader,
-		IsActive:                cfg.IsActive,
-		SupportsDeposit:         cfg.SupportsDeposit,
-		SupportsWithdrawal:      cfg.SupportsWithdrawal,
-		WebhookAuthMode:         cfg.WebhookAuthMode,
-		WebhookAllowedCIDRs:     []string(cfg.WebhookAllowedCIDRs),
-		StatusCheckWebhook:      cfg.StatusCheckWebhook,
-		ResponseDefaultCurrency: defaultCurrency,
-		DepositRequestMethod:    cfg.DepositRequestMethod,
-		DepositRequestPath:      cfg.DepositRequestPath,
-		DepositRequestMapping:   depositRequestMapping,
-		PayoutRequestMethod:     cfg.PayoutRequestMethod,
-		PayoutRequestPath:       cfg.PayoutRequestPath,
-		PayoutRequestMapping:    payoutRequestMapping,
-		StatusRequestMethod:     cfg.StatusRequestMethod,
-		StatusRequestPath:       cfg.StatusRequestPath,
-		StatusRequestMapping:    statusRequestMapping,
-		DepositResponseMapping:  depositMapping,
-		PayoutResponseMapping:   payoutMapping,
-		StatusResponseMapping:   statusMapping,
-		WebhookResponseMapping:  webhookMapping,
-		APIKey:                  secrets.APIKey,
-		APISecret:               secrets.APISecret,
-		WebhookSecret:           secrets.WebhookSecret,
-		WebhookPublicKey:        secrets.WebhookPublicKey,
+		TenantID:               cfg.TenantID,
+		ProviderCode:           cfg.ProviderCode,
+		ProviderName:           cfg.ProviderName,
+		APIBaseURL:             cfg.APIBaseURL,
+		EnabledCurrencies:      []string(cfg.EnabledCurrencies),
+		IdempotencyHeaderName:  idempotencyHeader,
+		IsActive:               cfg.IsActive,
+		SupportsDeposit:        cfg.SupportsDeposit,
+		SupportsWithdrawal:     cfg.SupportsWithdrawal,
+		WebhookAuthMode:        cfg.WebhookAuthMode,
+		WebhookAllowedCIDRs:    []string(cfg.WebhookAllowedCIDRs),
+		StatusCheckWebhook:     cfg.StatusCheckWebhook,
+		DepositRequestMethod:   cfg.DepositRequestMethod,
+		DepositRequestPath:     cfg.DepositRequestPath,
+		DepositRequestMapping:  depositRequestMapping,
+		PayoutRequestMethod:    cfg.PayoutRequestMethod,
+		PayoutRequestPath:      cfg.PayoutRequestPath,
+		PayoutRequestMapping:   payoutRequestMapping,
+		StatusRequestMethod:    cfg.StatusRequestMethod,
+		StatusRequestPath:      cfg.StatusRequestPath,
+		StatusRequestMapping:   statusRequestMapping,
+		DepositResponseMapping: depositMapping,
+		PayoutResponseMapping:  payoutMapping,
+		StatusResponseMapping:  statusMapping,
+		WebhookResponseMapping: webhookMapping,
+		APIKey:                 secrets.APIKey,
+		APISecret:              secrets.APISecret,
+		WebhookSecret:          secrets.WebhookSecret,
+		WebhookPublicKey:       secrets.WebhookPublicKey,
 	}, nil
 }
 

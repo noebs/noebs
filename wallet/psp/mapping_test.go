@@ -2,12 +2,13 @@ package psp
 
 import "testing"
 
-func TestMapResponseUsesConfiguredPathsAndDefaultCurrency(t *testing.T) {
+func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 	payload := map[string]any{
 		"result": map[string]any{
 			"provider_id": "psp-123",
 			"state":       "SUCCESS",
 			"minor_units": float64(2500),
+			"currency":    "AED",
 		},
 		"meta": map[string]any{"card_last4": "4242"},
 	}
@@ -17,7 +18,7 @@ func TestMapResponseUsesConfiguredPathsAndDefaultCurrency(t *testing.T) {
 		Amount:        []string{"result.minor_units"},
 		Currency:      []string{"result.currency"},
 		Metadata:      []string{"meta"},
-	}, "AED")
+	})
 
 	if mapped.TransactionID != "psp-123" {
 		t.Fatalf("expected provider id psp-123, got %q", mapped.TransactionID)
@@ -29,10 +30,29 @@ func TestMapResponseUsesConfiguredPathsAndDefaultCurrency(t *testing.T) {
 		t.Fatalf("expected amount 2500, got %d", mapped.Amount)
 	}
 	if mapped.Currency != "AED" {
-		t.Fatalf("expected default currency AED, got %q", mapped.Currency)
+		t.Fatalf("expected mapped currency AED, got %q", mapped.Currency)
 	}
 	if mapped.Metadata["card_last4"] != "4242" {
 		t.Fatalf("expected mapped metadata, got %v", mapped.Metadata)
+	}
+}
+
+func TestMapResponseDoesNotDefaultMissingCurrency(t *testing.T) {
+	payload := map[string]any{
+		"result": map[string]any{
+			"minor_units": float64(2500),
+		},
+	}
+	mapped := MapResponse(payload, ResponseMapping{
+		Amount:   []string{"result.minor_units"},
+		Currency: []string{"result.currency"},
+	})
+
+	if mapped.Amount != 2500 {
+		t.Fatalf("expected amount 2500, got %d", mapped.Amount)
+	}
+	if mapped.Currency != "" {
+		t.Fatalf("expected empty currency without mapped provider value, got %q", mapped.Currency)
 	}
 }
 
@@ -44,7 +64,7 @@ func TestMapResponseRequiresConfiguredPaths(t *testing.T) {
 		"amount":             "1200",
 		"currency":           "USD",
 	}
-	mapped := MapResponse(payload, ResponseMapping{}, "")
+	mapped := MapResponse(payload, ResponseMapping{})
 	if mapped.ClientReference != "" || mapped.TransactionID != "" || mapped.Status != "" || mapped.Amount != 0 || mapped.Currency != "" {
 		t.Fatalf("MapResponse() = %+v, want empty fields without configured paths", mapped)
 	}

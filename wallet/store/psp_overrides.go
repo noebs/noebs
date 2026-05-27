@@ -89,9 +89,6 @@ func (s *Store) ResolvePSPConfig(ctx context.Context, tenantID, providerCode str
 	if len(override.PresentationSchema) > 0 {
 		merged.PresentationSchema = override.PresentationSchema
 	}
-	if override.ResponseDefaultCurrency.Valid {
-		merged.ResponseDefaultCurrency = override.ResponseDefaultCurrency
-	}
 	if override.DepositRequestMethod.Valid {
 		merged.DepositRequestMethod = override.DepositRequestMethod.String
 	}

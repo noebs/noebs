@@ -60,7 +60,7 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
-	mapped := psp.MapResponse(resp, p.config.DepositResponseMapping, p.config.ResponseDefaultCurrency)
+	mapped := psp.MapResponse(resp, p.config.DepositResponseMapping)
 	return &psp.DepositVerification{
 		ProviderTxID: mapped.TransactionID,
 		Amount:       mapped.Amount,
@@ -90,7 +90,7 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), idempotencyKey, &resp); err != nil {
 		return nil, err
 	}
-	mapped := psp.MapResponse(resp, p.config.PayoutResponseMapping, p.config.ResponseDefaultCurrency)
+	mapped := psp.MapResponse(resp, p.config.PayoutResponseMapping)
 	return &psp.PayoutResult{
 		ProviderTxID: mapped.TransactionID,
 		Status:       mapped.Status,
@@ -111,7 +111,7 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
-	mapped := psp.MapResponse(resp, p.config.StatusResponseMapping, p.config.ResponseDefaultCurrency)
+	mapped := psp.MapResponse(resp, p.config.StatusResponseMapping)
 	return &psp.TxStatus{
 		ProviderTxID: mapped.TransactionID,
 		Amount:       mapped.Amount,

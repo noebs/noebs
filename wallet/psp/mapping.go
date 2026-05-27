@@ -25,26 +25,15 @@ type MappedResponse struct {
 	Metadata        map[string]any
 }
 
-func MapResponse(payload map[string]any, mapping ResponseMapping, defaultCurrency string) MappedResponse {
+func MapResponse(payload map[string]any, mapping ResponseMapping) MappedResponse {
 	return MappedResponse{
 		ClientReference: stringFromPaths(payload, mapping.ClientReference),
 		TransactionID:   stringFromPaths(payload, mapping.TransactionID),
 		Status:          strings.ToLower(stringFromPaths(payload, mapping.Status)),
 		Amount:          int64FromPaths(payload, mapping.Amount),
-		Currency:        responseCurrency(payload, mapping, defaultCurrency),
+		Currency:        stringFromPaths(payload, mapping.Currency),
 		Metadata:        mapFromPaths(payload, mapping.Metadata),
 	}
-}
-
-func responseCurrency(payload map[string]any, mapping ResponseMapping, defaultCurrency string) string {
-	currency := stringFromPaths(payload, mapping.Currency)
-	if currency != "" {
-		return currency
-	}
-	if len(mapping.Currency) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(defaultCurrency)
 }
 
 func valueFromPaths(payload map[string]any, paths []string) any {

@@ -91,7 +91,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
 		}
 	}
-	mappedWebhook := walletpsp.MapResponse(payloadMap, cfg.WebhookResponseMapping, cfg.ResponseDefaultCurrency)
+	mappedWebhook := walletpsp.MapResponse(payloadMap, cfg.WebhookResponseMapping)
 	if mappedWebhook.ClientReference != "" {
 		clientRef = mappedWebhook.ClientReference
 	}
@@ -125,7 +125,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		}
 		payloadMap = checkedMap
 		payload = checkedPayload
-		mappedWebhook = walletpsp.MapResponse(payloadMap, cfg.WebhookResponseMapping, cfg.ResponseDefaultCurrency)
+		mappedWebhook = walletpsp.MapResponse(payloadMap, cfg.WebhookResponseMapping)
 		if mappedWebhook.ClientReference != "" {
 			clientRef = mappedWebhook.ClientReference
 		}
