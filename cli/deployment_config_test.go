@@ -134,11 +134,26 @@ type composeSecret struct {
 
 type mountedNoebsConfig struct {
 	Noebs struct {
-		ServiceDiscovery     map[string]string `yaml:"service_discovery"`
-		GRPCServiceDiscovery map[string]string `yaml:"grpc_service_discovery"`
-		TemporalHost         string            `yaml:"temporal_host"`
-		TemporalPort         string            `yaml:"temporal_port"`
-		RenderDBPasswordFile string            `yaml:"render_db_password_file"`
+		ServiceDiscovery                           map[string]string `yaml:"service_discovery"`
+		GRPCServiceDiscovery                       map[string]string `yaml:"grpc_service_discovery"`
+		TemporalHost                               string            `yaml:"temporal_host"`
+		TemporalPort                               string            `yaml:"temporal_port"`
+		RenderDBPasswordFile                       string            `yaml:"render_db_password_file"`
+		WalletEnabled                              bool              `yaml:"wallet_enabled"`
+		WalletPINRequired                          bool              `yaml:"wallet_pin_required"`
+		Wallet2FAThreshold                         int64             `yaml:"wallet_2fa_threshold"`
+		WalletApprovalThreshold                    int64             `yaml:"wallet_approval_threshold"`
+		WalletDefaultCurrency                      string            `yaml:"wallet_default_currency"`
+		WalletHoldExpirySeconds                    int               `yaml:"wallet_hold_expiry_seconds"`
+		WalletApprovalTimeoutSeconds               int               `yaml:"wallet_approval_timeout_seconds"`
+		WalletVerificationTimeoutSeconds           int               `yaml:"wallet_verification_timeout_seconds"`
+		WalletManualTransferApprovalTimeoutSeconds int               `yaml:"wallet_manual_approval_timeout_seconds"`
+		WalletPSPPollerCron                        string            `yaml:"wallet_psp_poller_cron"`
+		WalletPSPPollerBatchSize                   int               `yaml:"wallet_psp_poller_batch_size"`
+		WalletPSPPollerIntervalSeconds             int               `yaml:"wallet_psp_poller_interval_seconds"`
+		WalletReconciliationCron                   string            `yaml:"wallet_reconciliation_cron"`
+		WalletReconciliationBatchSize              int               `yaml:"wallet_reconciliation_batch_size"`
+		WalletReconciliationLookbackHours          int               `yaml:"wallet_reconciliation_lookback_hours"`
 	} `yaml:"noebs"`
 }
 
@@ -814,6 +829,38 @@ func TestNoebsPostgresDockerComposeUsesMountedBootstrapFiles(t *testing.T) {
 	}
 }
 
+func TestDockerComposeWalletRuntimeConfigMatchesKubernetes(t *testing.T) {
+	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
+	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
+
+	checks := []struct {
+		name   string
+		docker any
+		k8s    any
+	}{
+		{"wallet_enabled", dockerConfig.Noebs.WalletEnabled, kubernetesConfig.Noebs.WalletEnabled},
+		{"wallet_pin_required", dockerConfig.Noebs.WalletPINRequired, kubernetesConfig.Noebs.WalletPINRequired},
+		{"wallet_2fa_threshold", dockerConfig.Noebs.Wallet2FAThreshold, kubernetesConfig.Noebs.Wallet2FAThreshold},
+		{"wallet_approval_threshold", dockerConfig.Noebs.WalletApprovalThreshold, kubernetesConfig.Noebs.WalletApprovalThreshold},
+		{"wallet_default_currency", dockerConfig.Noebs.WalletDefaultCurrency, kubernetesConfig.Noebs.WalletDefaultCurrency},
+		{"wallet_hold_expiry_seconds", dockerConfig.Noebs.WalletHoldExpirySeconds, kubernetesConfig.Noebs.WalletHoldExpirySeconds},
+		{"wallet_approval_timeout_seconds", dockerConfig.Noebs.WalletApprovalTimeoutSeconds, kubernetesConfig.Noebs.WalletApprovalTimeoutSeconds},
+		{"wallet_verification_timeout_seconds", dockerConfig.Noebs.WalletVerificationTimeoutSeconds, kubernetesConfig.Noebs.WalletVerificationTimeoutSeconds},
+		{"wallet_manual_approval_timeout_seconds", dockerConfig.Noebs.WalletManualTransferApprovalTimeoutSeconds, kubernetesConfig.Noebs.WalletManualTransferApprovalTimeoutSeconds},
+		{"wallet_psp_poller_cron", dockerConfig.Noebs.WalletPSPPollerCron, kubernetesConfig.Noebs.WalletPSPPollerCron},
+		{"wallet_psp_poller_batch_size", dockerConfig.Noebs.WalletPSPPollerBatchSize, kubernetesConfig.Noebs.WalletPSPPollerBatchSize},
+		{"wallet_psp_poller_interval_seconds", dockerConfig.Noebs.WalletPSPPollerIntervalSeconds, kubernetesConfig.Noebs.WalletPSPPollerIntervalSeconds},
+		{"wallet_reconciliation_cron", dockerConfig.Noebs.WalletReconciliationCron, kubernetesConfig.Noebs.WalletReconciliationCron},
+		{"wallet_reconciliation_batch_size", dockerConfig.Noebs.WalletReconciliationBatchSize, kubernetesConfig.Noebs.WalletReconciliationBatchSize},
+		{"wallet_reconciliation_lookback_hours", dockerConfig.Noebs.WalletReconciliationLookbackHours, kubernetesConfig.Noebs.WalletReconciliationLookbackHours},
+	}
+	for _, check := range checks {
+		if check.docker != check.k8s {
+			t.Fatalf("config.docker.yaml %s = %v, want Kubernetes value %v", check.name, check.docker, check.k8s)
+		}
+	}
+}
+
 func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 
@@ -1192,6 +1239,27 @@ func decodeMountedNoebsConfigFile(t *testing.T, path string) mountedNoebsConfig 
 		t.Fatalf("decode %s: %v", path, err)
 	}
 	return config
+}
+
+func decodeKubernetesBaseNoebsConfig(t *testing.T) mountedNoebsConfig {
+	t.Helper()
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	for _, object := range objects {
+		if object.Kind != "ConfigMap" || object.Metadata.Name != "noebs-config" {
+			continue
+		}
+		configData := object.Data["config.yaml"]
+		if configData == "" {
+			t.Fatalf("noebs-config missing config.yaml")
+		}
+		var config mountedNoebsConfig
+		if err := yaml.Unmarshal([]byte(configData), &config); err != nil {
+			t.Fatalf("parse noebs-config config.yaml: %v", err)
+		}
+		return config
+	}
+	t.Fatalf("noebs-config ConfigMap not found")
+	return mountedNoebsConfig{}
 }
 
 func isKubernetesWorkloadKind(kind string) bool {
