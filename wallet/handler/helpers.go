@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/wallet"
@@ -157,13 +158,10 @@ func requirePermission(c *fiber.Ctx, perm rbac.Permission) error {
 	if c == nil {
 		return apperr.ErrForbidden
 	}
-	if hasAdminAuthHeader(c) {
-		return nil
-	}
 	if hasPermissionHeader(c, perm) {
 		return nil
 	}
-	roleName := strings.TrimSpace(c.Get("X-Admin-Role"))
+	roleName := strings.TrimSpace(c.Get(gateway.GatewayAdminRoleHeader))
 	if roleName != "" {
 		if role := rbac.RoleForName(roleName); role != nil && role.HasPermission(perm) {
 			return nil
@@ -172,26 +170,11 @@ func requirePermission(c *fiber.Ctx, perm rbac.Permission) error {
 	return apperr.ErrForbidden
 }
 
-func hasAdminAuthHeader(c *fiber.Ctx) bool {
-	if c == nil {
-		return false
-	}
-	if strings.TrimSpace(c.Get("X-Admin-Key")) != "" {
-		return true
-	}
-	return isBasicAuthHeader(c.Get("Authorization"))
-}
-
-func isBasicAuthHeader(header string) bool {
-	parts := strings.SplitN(strings.TrimSpace(header), " ", 2)
-	return len(parts) == 2 && strings.EqualFold(parts[0], "basic") && strings.TrimSpace(parts[1]) != ""
-}
-
 func hasPermissionHeader(c *fiber.Ctx, perm rbac.Permission) bool {
 	if c == nil {
 		return false
 	}
-	header := strings.TrimSpace(c.Get("X-Admin-Permissions"))
+	header := strings.TrimSpace(c.Get(gateway.GatewayAdminPermissionsHeader))
 	if header == "" {
 		return false
 	}

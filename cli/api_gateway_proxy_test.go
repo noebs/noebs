@@ -110,6 +110,53 @@ func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 	})
 }
 
+func TestAdminServiceRolesRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.T) {
+	ensureInit()
+	adminKey := setAdminKeyForTest(t)
+	tests := []struct {
+		name   string
+		role   serviceRole
+		method string
+		path   string
+	}{
+		{name: "identity api key", role: serviceRoleIdentityAuth, method: http.MethodPost, path: "/generate_api_key"},
+		{name: "admin reporting", role: serviceRoleAdminReporting, method: http.MethodGet, path: "/dashboard/count"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setServiceRoleForTest(t, tt.role)
+			route := GetMainEngine()
+
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set("X-Admin-Key", adminKey)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+			}
+		})
+	}
+
+	t.Run("wallet api", func(t *testing.T) {
+		configureWalletRouteTest(t)
+		route := GetMainEngine()
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
+		req.Header.Set("X-Admin-Key", adminKey)
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("route.Test() error = %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+		}
+	})
+}
+
 func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	ensureInit()
 	var hits atomic.Int64
@@ -183,7 +230,10 @@ func TestAPIGatewayClearsUserIdentityHeadersOnPublicRoutes(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		observed <- r.Header.Get(gateway.GatewayTenantIDHeader) == "" &&
 			r.Header.Get(gateway.GatewayUserIDHeader) == "" &&
-			r.Header.Get(gateway.GatewayMobileHeader) == ""
+			r.Header.Get(gateway.GatewayMobileHeader) == "" &&
+			r.Header.Get(gateway.GatewayAdminIdentityHeader) == "" &&
+			r.Header.Get(gateway.GatewayAdminRoleHeader) == "" &&
+			r.Header.Get(gateway.GatewayAdminPermissionsHeader) == ""
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	t.Cleanup(upstream.Close)
@@ -194,6 +244,8 @@ func TestAPIGatewayClearsUserIdentityHeadersOnPublicRoutes(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
 	setTestGatewayUserIdentityHeaders(req)
+	setGatewayAdminIdentityHeader(req)
+	req.Header.Set(gateway.GatewayAdminPermissionsHeader, "config:manage")
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
@@ -242,5 +294,58 @@ func TestAPIGatewayEnforcesAdminAuthBeforeProxy(t *testing.T) {
 	}
 	if hits.Load() != 0 {
 		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	}
+}
+
+func TestAPIGatewayPropagatesVerifiedAdminIdentity(t *testing.T) {
+	ensureInit()
+	adminKey := setAdminKeyForTest(t)
+	type observedHeaders struct {
+		identity    string
+		role        string
+		key         string
+		auth        string
+		publicRole  string
+		permissions string
+	}
+	observed := make(chan observedHeaders, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- observedHeaders{
+			identity:    r.Header.Get(gateway.GatewayAdminIdentityHeader),
+			role:        r.Header.Get(gateway.GatewayAdminRoleHeader),
+			key:         r.Header.Get("X-Admin-Key"),
+			auth:        r.Header.Get("Authorization"),
+			publicRole:  r.Header.Get("X-Admin-Role"),
+			permissions: r.Header.Get("X-Admin-Permissions"),
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set(gateway.GatewayAdminIdentityHeader, "spoofed")
+	req.Header.Set(gateway.GatewayAdminRoleHeader, "viewer")
+	req.Header.Set(gateway.GatewayAdminPermissionsHeader, "wallet:view")
+	req.Header.Set("X-Admin-Role", "viewer")
+	req.Header.Set("X-Admin-Permissions", "wallet:view")
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	assertGatewayProxied(t, resp)
+	got := <-observed
+	if got.identity != gateway.GatewayAdminIdentityValue {
+		t.Fatalf("forwarded admin identity = %q, want %q", got.identity, gateway.GatewayAdminIdentityValue)
+	}
+	if got.role != gateway.GatewayAdminRoleValue {
+		t.Fatalf("forwarded admin role = %q, want %q", got.role, gateway.GatewayAdminRoleValue)
+	}
+	if got.key != "" || got.auth != "" || got.publicRole != "" || got.permissions != "" {
+		t.Fatalf("gateway forwarded public admin credentials or permissions: %+v", got)
 	}
 }

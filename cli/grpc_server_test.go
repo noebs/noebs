@@ -14,18 +14,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func configureAdminAuth(t *testing.T) string {
-	t.Helper()
-	originalCfg := noebsConfig
-	t.Cleanup(func() {
-		noebsConfig = originalCfg
-	})
-	noebsConfig.AdminKey = "test-admin-key"
-	noebsConfig.AdminUser = ""
-	noebsConfig.AdminPassword = ""
-	return noebsConfig.AdminKey
-}
-
 func TestWalletMethodAuthRequirement(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -91,12 +79,12 @@ func TestWalletPathAuthRequirement(t *testing.T) {
 }
 
 func TestGRPCGatewayIncomingHeaderMatcher(t *testing.T) {
-	key, ok := grpcGatewayIncomingHeaderMatcher("X-Admin-Key")
+	key, ok := grpcGatewayIncomingHeaderMatcher(gateway.GatewayAdminIdentityHeader)
 	if !ok {
-		t.Fatalf("grpcGatewayIncomingHeaderMatcher(X-Admin-Key) ok = false, want true")
+		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) ok = false, want true", gateway.GatewayAdminIdentityHeader)
 	}
-	if key != "x-admin-key" {
-		t.Fatalf("grpcGatewayIncomingHeaderMatcher(X-Admin-Key) = %q, want %q", key, "x-admin-key")
+	if key != "x-noebs-admin-identity" {
+		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) = %q, want %q", gateway.GatewayAdminIdentityHeader, key, "x-noebs-admin-identity")
 	}
 	key, ok = grpcGatewayIncomingHeaderMatcher(gateway.GatewayTenantIDHeader)
 	if !ok {
@@ -119,9 +107,17 @@ func TestContextHasGatewayUserIdentity(t *testing.T) {
 	}
 }
 
-func TestRequireAuthForWalletMethods(t *testing.T) {
-	adminKey := configureAdminAuth(t)
+func TestContextHasGatewayAdminIdentity(t *testing.T) {
+	if !contextHasGatewayAdminIdentity(gatewayAdminIdentityContext()) {
+		t.Fatalf("contextHasGatewayAdminIdentity(validCtx) = false, want true")
+	}
+	invalidCtx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-noebs-admin-identity", "wrong"))
+	if contextHasGatewayAdminIdentity(invalidCtx) {
+		t.Fatalf("contextHasGatewayAdminIdentity(invalidCtx) = true, want false")
+	}
+}
 
+func TestRequireAuthForWalletMethods(t *testing.T) {
 	tests := []struct {
 		name       string
 		ctx        context.Context
@@ -151,8 +147,8 @@ func TestRequireAuthForWalletMethods(t *testing.T) {
 			wantCalled: false,
 		},
 		{
-			name:       "allows public admin method with admin key",
-			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", adminKey)),
+			name:       "allows public admin method with gateway admin identity",
+			ctx:        gatewayAdminIdentityContext(),
 			fullMethod: walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
 			wantCode:   codes.OK,
 			wantCalled: true,
@@ -166,7 +162,7 @@ func TestRequireAuthForWalletMethods(t *testing.T) {
 		},
 		{
 			name:       "allows internal method with admin auth",
-			ctx:        metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", adminKey)),
+			ctx:        gatewayAdminIdentityContext(),
 			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
 			wantCode:   codes.OK,
 			wantCalled: true,
@@ -195,15 +191,13 @@ func TestRequireAuthForWalletMethods(t *testing.T) {
 }
 
 func TestRequireAuthForWalletHTTP(t *testing.T) {
-	adminKey := configureAdminAuth(t)
-
 	tests := []struct {
-		name         string
-		path         string
-		userIdentity bool
-		adminKey     string
-		wantStatus   int
-		wantNextCall bool
+		name          string
+		path          string
+		userIdentity  bool
+		adminIdentity bool
+		wantStatus    int
+		wantNextCall  bool
 	}{
 		{
 			name:         "rejects user path without gateway identity",
@@ -225,11 +219,11 @@ func TestRequireAuthForWalletHTTP(t *testing.T) {
 			wantNextCall: false,
 		},
 		{
-			name:         "allows admin path with admin key",
-			path:         "/wallet/manual_transfers",
-			adminKey:     adminKey,
-			wantStatus:   http.StatusNoContent,
-			wantNextCall: true,
+			name:          "allows admin path with gateway admin identity",
+			path:          "/wallet/manual_transfers",
+			adminIdentity: true,
+			wantStatus:    http.StatusNoContent,
+			wantNextCall:  true,
 		},
 	}
 
@@ -245,8 +239,8 @@ func TestRequireAuthForWalletHTTP(t *testing.T) {
 			if tt.userIdentity {
 				setGatewayUserIdentityHeaders(req, 42, "tenant", "0990000000")
 			}
-			if tt.adminKey != "" {
-				req.Header.Set("X-Admin-Key", tt.adminKey)
+			if tt.adminIdentity {
+				setGatewayAdminIdentityHeader(req)
 			}
 			rec := httptest.NewRecorder()
 
@@ -259,6 +253,20 @@ func TestRequireAuthForWalletHTTP(t *testing.T) {
 				t.Fatalf("next called = %v, want %v", called, tt.wantNextCall)
 			}
 		})
+	}
+}
+
+func TestRequestHasGatewayAdminIdentity(t *testing.T) {
+	validReq := httptest.NewRequest(http.MethodPost, "/wallet/manual_transfers", nil)
+	setGatewayAdminIdentityHeader(validReq)
+	if !requestHasGatewayAdminIdentity(validReq) {
+		t.Fatalf("requestHasGatewayAdminIdentity(validReq) = false, want true")
+	}
+
+	invalidReq := httptest.NewRequest(http.MethodPost, "/wallet/manual_transfers", nil)
+	invalidReq.Header.Set(gateway.GatewayAdminIdentityHeader, "wrong")
+	if requestHasGatewayAdminIdentity(invalidReq) {
+		t.Fatalf("requestHasGatewayAdminIdentity(invalidReq) = true, want false")
 	}
 }
 

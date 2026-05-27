@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"net"
 	"net/http"
@@ -91,11 +89,7 @@ func requireAuthForWalletMethods(
 			return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
 		}
 	case walletAuthAdmin:
-		ok, configured := contextHasValidAdminCredentials(ctx)
-		if !configured {
-			return nil, status.Error(codes.Unavailable, "admin auth not configured")
-		}
-		if !ok {
+		if !contextHasGatewayAdminIdentity(ctx) {
 			return nil, status.Error(codes.PermissionDenied, "unauthorized")
 		}
 	}
@@ -118,12 +112,7 @@ func requireAuthForWalletHTTP(next http.Handler) http.Handler {
 				return
 			}
 		case walletAuthAdmin:
-			ok, configured := requestHasValidAdminCredentials(r)
-			if !configured {
-				http.Error(w, "admin auth not configured", http.StatusServiceUnavailable)
-				return
-			}
-			if !ok {
+			if !requestHasGatewayAdminIdentity(r) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -185,100 +174,28 @@ func walletPathAuthRequirement(path string) walletAuthRequirement {
 	}
 }
 
-func contextHasValidAdminCredentials(ctx context.Context) (bool, bool) {
+func contextHasGatewayAdminIdentity(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return false, adminAuthConfigured()
+		return false
 	}
-	configured := adminAuthConfigured()
-	if !configured {
-		return false, false
+	values := md.Get(strings.ToLower(gateway.GatewayAdminIdentityHeader))
+	if len(values) != 1 {
+		return false
 	}
-	if adminKeyConfigured() {
-		for _, candidate := range md.Get("x-admin-key") {
-			if validAdminKey(candidate) {
-				return true, true
-			}
-		}
-	}
-	if adminBasicConfigured() {
-		for _, header := range md.Get("authorization") {
-			if validAdminBasicAuth(header) {
-				return true, true
-			}
-		}
-	}
-	return false, true
+	return values[0] == gateway.GatewayAdminIdentityValue
 }
 
-func requestHasValidAdminCredentials(r *http.Request) (bool, bool) {
+func requestHasGatewayAdminIdentity(r *http.Request) bool {
 	if r == nil {
-		return false, adminAuthConfigured()
-	}
-	configured := adminAuthConfigured()
-	if !configured {
-		return false, false
-	}
-	if validAdminKey(r.Header.Get("X-Admin-Key")) {
-		return true, true
-	}
-	if validAdminBasicAuth(r.Header.Get("Authorization")) {
-		return true, true
-	}
-	return false, true
-}
-
-func adminAuthConfigured() bool {
-	return adminKeyConfigured() || adminBasicConfigured()
-}
-
-func adminKeyConfigured() bool {
-	return strings.TrimSpace(noebsConfig.AdminKey) != ""
-}
-
-func adminBasicConfigured() bool {
-	return strings.TrimSpace(noebsConfig.AdminUser) != "" && strings.TrimSpace(noebsConfig.AdminPassword) != ""
-}
-
-func validAdminKey(candidate string) bool {
-	if !adminKeyConfigured() {
 		return false
 	}
-	key := strings.TrimSpace(candidate)
-	if key == "" {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(key), []byte(noebsConfig.AdminKey)) == 1
-}
-
-func validAdminBasicAuth(header string) bool {
-	if !adminBasicConfigured() {
-		return false
-	}
-	parts := strings.SplitN(strings.TrimSpace(header), " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "basic") {
-		return false
-	}
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(parts[1]))
-	if err != nil {
-		return false
-	}
-	creds := strings.SplitN(string(decoded), ":", 2)
-	if len(creds) != 2 {
-		return false
-	}
-	if subtle.ConstantTimeCompare([]byte(creds[0]), []byte(noebsConfig.AdminUser)) != 1 {
-		return false
-	}
-	if subtle.ConstantTimeCompare([]byte(creds[1]), []byte(noebsConfig.AdminPassword)) != 1 {
-		return false
-	}
-	return true
+	return r.Header.Get(gateway.GatewayAdminIdentityHeader) == gateway.GatewayAdminIdentityValue
 }
 
 func grpcGatewayIncomingHeaderMatcher(key string) (string, bool) {
-	if strings.EqualFold(key, "X-Admin-Key") {
-		return "x-admin-key", true
+	if strings.EqualFold(key, gateway.GatewayAdminIdentityHeader) {
+		return strings.ToLower(gateway.GatewayAdminIdentityHeader), true
 	}
 	if strings.EqualFold(key, gateway.GatewayTenantIDHeader) {
 		return strings.ToLower(gateway.GatewayTenantIDHeader), true

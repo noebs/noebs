@@ -24,11 +24,10 @@ func TestDashboardRouteIsProxiedByAPIGateway(t *testing.T) {
 func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	adminKey := setAdminKeyForTest(t)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	req.Header.Set("X-Admin-Key", adminKey)
+	setGatewayAdminIdentityHeader(req)
 	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
 	resp, err := route.Test(req)
 	if err != nil {
@@ -43,11 +42,10 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 func TestAdminReportingRequiresExplicitTenantAtHTTPBoundary(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	adminKey := setAdminKeyForTest(t)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	req.Header.Set("X-Admin-Key", adminKey)
+	setGatewayAdminIdentityHeader(req)
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
@@ -61,11 +59,10 @@ func TestAdminReportingRequiresExplicitTenantAtHTTPBoundary(t *testing.T) {
 func TestAdminReportingAcceptsExplicitTenantHeader(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	adminKey := setAdminKeyForTest(t)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	req.Header.Set("X-Admin-Key", adminKey)
+	setGatewayAdminIdentityHeader(req)
 	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
 	resp, err := route.Test(req)
 	if err != nil {
@@ -98,6 +95,7 @@ func TestAdminReportingDoesNotOwnDashboardWriteRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
+			setGatewayAdminIdentityHeader(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

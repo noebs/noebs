@@ -9,9 +9,14 @@ import (
 )
 
 const (
-	GatewayTenantIDHeader = "X-Noebs-Tenant-ID"
-	GatewayUserIDHeader   = "X-Noebs-User-ID"
-	GatewayMobileHeader   = "X-Noebs-Mobile"
+	GatewayTenantIDHeader         = "X-Noebs-Tenant-ID"
+	GatewayUserIDHeader           = "X-Noebs-User-ID"
+	GatewayMobileHeader           = "X-Noebs-Mobile"
+	GatewayAdminIdentityHeader    = "X-Noebs-Admin-Identity"
+	GatewayAdminIdentityValue     = "gateway-admin"
+	GatewayAdminRoleHeader        = "X-Noebs-Admin-Role"
+	GatewayAdminRoleValue         = "admin"
+	GatewayAdminPermissionsHeader = "X-Noebs-Admin-Permissions"
 )
 
 type UserIdentity struct {
@@ -38,6 +43,15 @@ func InternalUserIdentityMiddleware() fiber.Handler {
 		if identity.Mobile != "" {
 			c.Locals("mobile", identity.Mobile)
 			c.Locals("username", identity.Mobile)
+		}
+		return c.Next()
+	}
+}
+
+func InternalAdminIdentityMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if c.Get(GatewayAdminIdentityHeader) != GatewayAdminIdentityValue {
+			return unauthorizedGatewayIdentity(c)
 		}
 		return c.Next()
 	}

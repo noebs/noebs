@@ -80,8 +80,6 @@ func NoebsCors(headers []string) fiber.Handler {
 			"X-Email",
 			"X-API-Key",
 			"X-Admin-Key",
-			"X-Admin-Role",
-			"X-Admin-Permissions",
 		}, ","),
 		ExposeHeaders: "Authorization",
 		MaxAge:        600,

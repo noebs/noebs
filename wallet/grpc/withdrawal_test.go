@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/internal/testdb"
@@ -82,7 +83,7 @@ func TestRequestWithdrawalRequiresPin(t *testing.T) {
 func TestWithdrawalSignalsRequireAdminAuth(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{AdminKey: "test-admin-key"},
+		Config: ebs_fields.NoebsConfig{},
 	}
 	server := NewServer(svc)
 
@@ -98,10 +99,10 @@ func TestWithdrawalSignalsRequireAdminAuth(t *testing.T) {
 func TestWithdrawalSignalsValidateAfterAdminAuth(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{AdminKey: "test-admin-key"},
+		Config: ebs_fields.NoebsConfig{},
 	}
 	server := NewServer(svc)
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", "test-admin-key"))
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-noebs-admin-identity", gateway.GatewayAdminIdentityValue))
 
 	if _, err := server.SignalWithdrawalApproval(ctx, &walletv1.WithdrawalApprovalRequest{}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected invalid argument for approval signal, got %v", status.Code(err))

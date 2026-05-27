@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"strings"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet/rbac"
 	"github.com/gofiber/fiber/v2"
@@ -134,12 +136,11 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 }
 
 func adminOutgoingContext(c *fiber.Ctx) context.Context {
-	ctx := c.UserContext()
-	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", c.Get(fiber.HeaderAuthorization))
-	if key := c.Get("X-Admin-Key"); key != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "x-admin-key", key)
-	}
-	return ctx
+	return metadata.AppendToOutgoingContext(
+		c.UserContext(),
+		strings.ToLower(gateway.GatewayAdminIdentityHeader),
+		c.Get(gateway.GatewayAdminIdentityHeader),
+	)
 }
 
 func queryArgs(c *fiber.Ctx) map[string]string {

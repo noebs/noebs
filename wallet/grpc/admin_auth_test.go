@@ -1,10 +1,10 @@
 package walletgrpc
 
 import (
-	"context"
-	"encoding/base64"
+	"strings"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -13,13 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func adminContext(key string) context.Context {
-	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-admin-key", key))
-}
-
-func basicAdminContext(user, pass string) context.Context {
-	creds := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
-	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Basic "+creds))
+func adminMetadata() metadata.MD {
+	return metadata.Pairs(strings.ToLower(gateway.GatewayAdminIdentityHeader), gateway.GatewayAdminIdentityValue)
 }
 
 func TestRequireAdmin(t *testing.T) {
@@ -30,33 +25,21 @@ func TestRequireAdmin(t *testing.T) {
 		want codes.Code
 	}{
 		{
-			name: "debug bypass",
-			cfg:  ebs_fields.NoebsConfig{IsDebug: true},
-			md:   metadata.MD{},
+			name: "gateway admin identity accepted",
+			cfg:  ebs_fields.NoebsConfig{},
+			md:   adminMetadata(),
 			want: codes.OK,
 		},
 		{
-			name: "admin key accepted",
-			cfg:  ebs_fields.NoebsConfig{AdminKey: "secret"},
-			md:   metadata.Pairs("x-admin-key", "secret"),
-			want: codes.OK,
-		},
-		{
-			name: "basic auth accepted",
-			cfg:  ebs_fields.NoebsConfig{AdminUser: "admin", AdminPassword: "password"},
-			md:   metadata.New(map[string]string{"authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte("admin:password"))}),
-			want: codes.OK,
-		},
-		{
-			name: "auth not configured",
+			name: "missing gateway admin identity denied",
 			cfg:  ebs_fields.NoebsConfig{},
 			md:   metadata.MD{},
-			want: codes.Unavailable,
+			want: codes.PermissionDenied,
 		},
 		{
-			name: "invalid key denied",
-			cfg:  ebs_fields.NoebsConfig{AdminKey: "secret"},
-			md:   metadata.Pairs("x-admin-key", "wrong"),
+			name: "invalid gateway admin identity denied",
+			cfg:  ebs_fields.NoebsConfig{},
+			md:   metadata.Pairs(strings.ToLower(gateway.GatewayAdminIdentityHeader), "wrong"),
 			want: codes.PermissionDenied,
 		},
 	}

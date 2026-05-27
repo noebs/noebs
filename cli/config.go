@@ -325,9 +325,9 @@ func roleNeedsWalletPSPDeps(role serviceRole) bool {
 		role == serviceRoleWalletWorker
 }
 
-func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, templateDir string) {
+func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler, templateDir string) {
 	route.Static("/dashboard/assets", templateDir)
-	dashboardGroup := route.Group("/dashboard", adminGuard)
+	dashboardGroup := route.Group("/dashboard", adminIdentity)
 	{
 		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
 		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
@@ -366,8 +366,8 @@ func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Hand
 	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
-func registerIdentityAuthRoutes(route *fiber.App, userIdentity fiber.Handler, adminGuard fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
+func registerIdentityAuthRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+	route.Post("/generate_api_key", adminIdentity, consumerHandler.GenerateAPIKey)
 
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterIdentityPublicRoutes(cons, consumerHandler)
@@ -388,7 +388,7 @@ func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, cons
 	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerWalletAPIRoutes(route *fiber.App, userIdentity fiber.Handler, adminGuard fiber.Handler) {
+func registerWalletAPIRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler) {
 	if walletPublicClient == nil {
 		logrusLogger.Fatal("wallet-api role requires an initialized wallet-ledger grpc client")
 	}
@@ -398,7 +398,7 @@ func registerWalletAPIRoutes(route *fiber.App, userIdentity fiber.Handler, admin
 	walletUserHandler := wallethandler.NewGRPCUserHandler(walletPublicClient, noebsConfig)
 	walletAdminHandler := wallethandler.NewGRPCAdminHandler(walletAdminClient)
 	wallethandler.RegisterGRPCUserRoutes(route.Group("/wallet", userIdentity), walletUserHandler)
-	wallethandler.RegisterGRPCAdminRoutes(route.Group("/admin/wallet", adminGuard), walletAdminHandler)
+	wallethandler.RegisterGRPCAdminRoutes(route.Group("/admin/wallet", adminIdentity), walletAdminHandler)
 }
 
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
@@ -412,6 +412,7 @@ func GetMainEngine() *fiber.App {
 	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
 	userIdentity := gateway.InternalUserIdentityMiddleware()
+	adminIdentity := gateway.InternalAdminIdentityMiddleware()
 	if otelEnabled {
 		route.Use(otelfiber.Middleware(
 			otelfiber.WithServerName(noebsConfig.OtelServiceName),
@@ -448,7 +449,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleIdentityAuth {
-		registerIdentityAuthRoutes(route, userIdentity, adminGuard, consumerHandler)
+		registerIdentityAuthRoutes(route, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleCardVault {
@@ -460,7 +461,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleAdminReporting {
-		registerAdminReportingRoutes(route, adminGuard, templateDir)
+		registerAdminReportingRoutes(route, adminIdentity, templateDir)
 		return route
 	}
 	if role == serviceRoleNotification {
@@ -472,7 +473,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleWalletAPI {
-		registerWalletAPIRoutes(route, userIdentity, adminGuard)
+		registerWalletAPIRoutes(route, userIdentity, adminIdentity)
 		return route
 	}
 	if role != serviceRoleAPIGateway {

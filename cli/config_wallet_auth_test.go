@@ -458,11 +458,10 @@ func TestWalletMethodsRouteUsesLedgerGRPC(t *testing.T) {
 
 func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 	configureWalletRouteTest(t)
-	adminKey := setAdminKeyForTest(t)
 
 	route := GetMainEngine()
 	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/?tenant_id="+url.QueryEscape(noebsConfig.DefaultTenantID), nil)
-	req.Header.Set("X-Admin-Key", adminKey)
+	setGatewayAdminIdentityHeader(req)
 
 	resp, err := route.Test(req)
 	if err != nil {
@@ -479,11 +478,10 @@ func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 
 func TestWalletAdminRouteRequiresTenantQuery(t *testing.T) {
 	configureWalletRouteTest(t)
-	adminKey := setAdminKeyForTest(t)
 
 	route := GetMainEngine()
 	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
-	req.Header.Set("X-Admin-Key", adminKey)
+	setGatewayAdminIdentityHeader(req)
 
 	resp, err := route.Test(req)
 	if err != nil {

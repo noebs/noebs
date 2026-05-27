@@ -22,6 +22,11 @@ func setGatewayUserIdentityHeaders(req *http.Request, userID int64, tenantID, mo
 	}
 }
 
+func setGatewayAdminIdentityHeader(req *http.Request) {
+	req.Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
+	req.Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
+}
+
 func gatewayUserIdentityContext(userID int64, tenantID, mobile string) context.Context {
 	values := []string{
 		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,
@@ -31,4 +36,10 @@ func gatewayUserIdentityContext(userID int64, tenantID, mobile string) context.C
 		values = append(values, strings.ToLower(gateway.GatewayMobileHeader), mobile)
 	}
 	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(values...))
+}
+
+func gatewayAdminIdentityContext() context.Context {
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		strings.ToLower(gateway.GatewayAdminIdentityHeader), gateway.GatewayAdminIdentityValue,
+	))
 }
