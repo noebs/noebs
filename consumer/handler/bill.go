@@ -18,7 +18,7 @@ func (h *Handler) BillPayment(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -43,7 +43,7 @@ func (h *Handler) GetBills(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -68,7 +68,7 @@ func (h *Handler) GetBiller(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "empty_mobile", "code": "empty_mobile"})
 	}
 
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}

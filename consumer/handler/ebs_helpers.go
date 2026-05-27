@@ -34,7 +34,7 @@ func handleEBS[Req any](
 	if err := bindJSON(c, req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}

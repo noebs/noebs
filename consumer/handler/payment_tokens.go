@@ -15,7 +15,7 @@ func (h *Handler) GeneratePaymentToken(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -37,7 +37,7 @@ func (h *Handler) PaymentRequest(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -62,7 +62,7 @@ func (h *Handler) GetPaymentToken(c *fiber.Ctx) error {
 	if username == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Empty payment id", "code": "empty_uuid"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -85,7 +85,7 @@ func (h *Handler) NoebsQuickPayment(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}

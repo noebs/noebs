@@ -19,7 +19,7 @@ func (h *Handler) IsAliveWrk(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -136,7 +136,7 @@ func (h *Handler) EBS(c *fiber.Ctx) error {
 	}
 	endpoint := parts[1]
 
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}

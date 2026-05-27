@@ -17,7 +17,7 @@ func (h *Handler) CardFromNumber(c *fiber.Ctx) error {
 	if q == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "mobile number is empty", "code": "empty_mobile_number"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -36,7 +36,7 @@ func (h *Handler) GetCards(c *fiber.Ctx) error {
 	if username == "" {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -59,7 +59,7 @@ func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -74,7 +74,7 @@ func (h *Handler) CreateBeneficiary(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -94,7 +94,7 @@ func (h *Handler) ListBeneficiaries(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -111,7 +111,7 @@ func (h *Handler) DeleteBeneficiary(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -135,7 +135,7 @@ func (h *Handler) AddCards(c *fiber.Ctx) error {
 	if err := parseJSON(c, &list); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -157,7 +157,7 @@ func (h *Handler) EditCard(c *fiber.Ctx) error {
 	if username == "" {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "unauthorized access", "code": "unauthorized_access"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -179,7 +179,7 @@ func (h *Handler) RemoveCard(c *fiber.Ctx) error {
 	if err := bindJSON(c, &card); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -197,7 +197,7 @@ func (h *Handler) NecToName(c *fiber.Ctx) error {
 	if nec == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "missing nec", "code": "bad_request"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -213,7 +213,7 @@ func (h *Handler) Notifications(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -229,7 +229,7 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -249,7 +249,7 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "binding_error"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -267,7 +267,7 @@ func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -284,7 +284,7 @@ func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
 	}
 	mobile := getMobile(c)
 	language := strings.TrimSpace(c.Query("language"))
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -305,7 +305,7 @@ func (h *Handler) KYC(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -320,7 +320,7 @@ func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	id := strings.TrimSpace(c.Query("uuid"))
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
@@ -336,7 +336,7 @@ func (h *Handler) CardsByMobile(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
 	mobile := strings.TrimSpace(c.Query("mobile"))
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
