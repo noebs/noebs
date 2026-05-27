@@ -50,6 +50,14 @@ locals {
       port     = 7233
       protocol = "grpc"
     }
+    "temporal-postgres" = {
+      port     = 5432
+      protocol = "postgres"
+    }
+    "temporal-ui" = {
+      port     = 8080
+      protocol = "http"
+    }
     postgres = {
       port     = 5432
       protocol = "postgres"
@@ -109,6 +117,18 @@ locals {
       database    = "keycloak"
       secret_name = "keycloak-secrets"
       managed_by  = "keycloak"
+    }
+    temporal = {
+      database       = "temporal"
+      secret_name    = "temporal-postgres-credentials"
+      migration_role = "temporal-schema-migrate"
+      managed_by     = "temporal"
+    }
+    "temporal-visibility" = {
+      database       = "temporal_visibility"
+      secret_name    = "temporal-postgres-credentials"
+      migration_role = "temporal-schema-migrate"
+      managed_by     = "temporal"
     }
   }
 }

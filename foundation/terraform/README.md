@@ -41,3 +41,5 @@ Runtime secrets are not stored in OpenTofu. Before syncing the Argo CD applicati
 `api-gateway-secrets` carries edge auth/admin material only; it must not include `noebs.db_url`.
 `wallet-api-secrets` carries wallet HTTP facade auth/admin material only; it must not include `noebs.db_url`.
 `keycloak-secrets` carries Keycloak's own `keycloak.conf`; no noebs auth data is wired to Keycloak yet.
+
+The `noebs_service_discovery` output is the explicit platform service catalog for every Kubernetes Service in the noebs base. The `noebs_database_ownership` output lists each service-owned database, including Temporal's `temporal` and `temporal_visibility` schemas migrated by `temporal-schema-migrate`.

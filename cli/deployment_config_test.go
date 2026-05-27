@@ -147,6 +147,13 @@ type terraformServiceCatalogEntry struct {
 	Protocol string
 }
 
+type terraformDatabaseCatalogEntry struct {
+	Database      string
+	SecretName    string
+	MigrationRole string
+	ManagedBy     string
+}
+
 func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	baseDir := filepath.Join("..", "deploy", "kubernetes", "base")
 	entries, err := os.ReadDir(baseDir)
@@ -341,6 +348,15 @@ func TestFoundationServiceCatalogMatchesKubernetesDiscovery(t *testing.T) {
 	for name, entry := range catalog {
 		requireKubernetesServicePort(t, services, name, entry.Port)
 	}
+	for name, ports := range services {
+		entry, ok := catalog[name]
+		if !ok {
+			t.Fatalf("Terraform service catalog missing Kubernetes Service %q", name)
+		}
+		if !ports[entry.Port] {
+			t.Fatalf("Terraform service catalog %s port = %d; Kubernetes ports = %v", name, entry.Port, ports)
+		}
+	}
 	for role, endpoint := range config.Noebs.ServiceDiscovery {
 		name, port := parseHTTPDiscoveryEndpoint(t, role, endpoint)
 		requireTerraformServiceCatalogEntry(t, catalog, name, port, "http")
@@ -354,6 +370,37 @@ func TestFoundationServiceCatalogMatchesKubernetesDiscovery(t *testing.T) {
 		t.Fatalf("temporal_port = %q: %v", config.Noebs.TemporalPort, err)
 	}
 	requireTerraformServiceCatalogEntry(t, catalog, config.Noebs.TemporalHost, temporalPort, "grpc")
+}
+
+func TestFoundationDatabaseCatalogDeclaresOwnedDatabases(t *testing.T) {
+	catalog := parseTerraformDatabaseCatalog(t, filepath.Join("..", "foundation", "terraform", "locals.tf"))
+	serviceDatabases := parseNoebsServiceDatabases(t, filepath.Join("..", "deploy", "docker", "postgres", "001-service-databases.sql"))
+
+	for _, database := range serviceDatabases {
+		serviceName := strings.ReplaceAll(database, "_", "-")
+		requireTerraformDatabaseCatalogEntry(t, catalog, serviceName, terraformDatabaseCatalogEntry{
+			Database:      database,
+			SecretName:    serviceName + "-secrets",
+			MigrationRole: serviceName + "-migrate",
+		})
+	}
+	requireTerraformDatabaseCatalogEntry(t, catalog, "keycloak", terraformDatabaseCatalogEntry{
+		Database:   "keycloak",
+		SecretName: "keycloak-secrets",
+		ManagedBy:  "keycloak",
+	})
+	requireTerraformDatabaseCatalogEntry(t, catalog, "temporal", terraformDatabaseCatalogEntry{
+		Database:      "temporal",
+		SecretName:    "temporal-postgres-credentials",
+		MigrationRole: "temporal-schema-migrate",
+		ManagedBy:     "temporal",
+	})
+	requireTerraformDatabaseCatalogEntry(t, catalog, "temporal-visibility", terraformDatabaseCatalogEntry{
+		Database:      "temporal_visibility",
+		SecretName:    "temporal-postgres-credentials",
+		MigrationRole: "temporal-schema-migrate",
+		ManagedBy:     "temporal",
+	})
 }
 
 func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
@@ -1381,6 +1428,73 @@ func parseTerraformServiceCatalog(t *testing.T, path string) map[string]terrafor
 	return catalog
 }
 
+func parseTerraformDatabaseCatalog(t *testing.T, path string) map[string]terraformDatabaseCatalogEntry {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+	entryRe := regexp.MustCompile(`^\s*"?([A-Za-z0-9_-]+)"?\s*=\s*\{\s*$`)
+	databaseRe := regexp.MustCompile(`^\s*database\s*=\s*"([^"]+)"\s*$`)
+	secretNameRe := regexp.MustCompile(`^\s*secret_name\s*=\s*"([^"]+)"\s*$`)
+	migrationRoleRe := regexp.MustCompile(`^\s*migration_role\s*=\s*"([^"]+)"\s*$`)
+	managedByRe := regexp.MustCompile(`^\s*managed_by\s*=\s*"([^"]+)"\s*$`)
+
+	catalog := map[string]terraformDatabaseCatalogEntry{}
+	inCatalog := false
+	catalogDepth := 0
+	currentName := ""
+	current := terraformDatabaseCatalogEntry{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inCatalog {
+			if trimmed == "noebs_database_catalog = {" {
+				inCatalog = true
+				catalogDepth = 1
+			}
+			continue
+		}
+
+		if currentName == "" && catalogDepth == 1 {
+			if match := entryRe.FindStringSubmatch(line); len(match) == 2 {
+				currentName = match[1]
+				current = terraformDatabaseCatalogEntry{}
+			}
+		} else if currentName != "" {
+			if match := databaseRe.FindStringSubmatch(line); len(match) == 2 {
+				current.Database = match[1]
+			}
+			if match := secretNameRe.FindStringSubmatch(line); len(match) == 2 {
+				current.SecretName = match[1]
+			}
+			if match := migrationRoleRe.FindStringSubmatch(line); len(match) == 2 {
+				current.MigrationRole = match[1]
+			}
+			if match := managedByRe.FindStringSubmatch(line); len(match) == 2 {
+				current.ManagedBy = match[1]
+			}
+		}
+
+		catalogDepth += strings.Count(line, "{")
+		catalogDepth -= strings.Count(line, "}")
+		if currentName != "" && catalogDepth == 1 {
+			if current.Database == "" || current.SecretName == "" {
+				t.Fatalf("incomplete Terraform database catalog entry %s: %+v", currentName, current)
+			}
+			catalog[currentName] = current
+			currentName = ""
+		}
+		if catalogDepth == 0 {
+			break
+		}
+	}
+	if len(catalog) == 0 {
+		t.Fatalf("noebs_database_catalog not found in %s", path)
+	}
+	return catalog
+}
+
 func requireTerraformServiceCatalogEntry(t *testing.T, catalog map[string]terraformServiceCatalogEntry, name string, port int, protocol string) {
 	t.Helper()
 	entry, ok := catalog[name]
@@ -1389,5 +1503,43 @@ func requireTerraformServiceCatalogEntry(t *testing.T, catalog map[string]terraf
 	}
 	if entry.Port != port || entry.Protocol != protocol {
 		t.Fatalf("Terraform service catalog %s = %+v, want port=%d protocol=%s", name, entry, port, protocol)
+	}
+}
+
+func parseNoebsServiceDatabases(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	databaseRe := regexp.MustCompile(`CREATE DATABASE ([a-z_]+) OWNER noebs`)
+	matches := databaseRe.FindAllStringSubmatch(string(data), -1)
+	if len(matches) == 0 {
+		t.Fatalf("%s declares no noebs service databases", path)
+	}
+	databases := make([]string, 0, len(matches))
+	for _, match := range matches {
+		databases = append(databases, match[1])
+	}
+	return databases
+}
+
+func requireTerraformDatabaseCatalogEntry(t *testing.T, catalog map[string]terraformDatabaseCatalogEntry, name string, want terraformDatabaseCatalogEntry) {
+	t.Helper()
+	entry, ok := catalog[name]
+	if !ok {
+		t.Fatalf("Terraform database catalog missing %q", name)
+	}
+	if entry.Database != want.Database {
+		t.Fatalf("Terraform database catalog %s database = %q, want %q", name, entry.Database, want.Database)
+	}
+	if entry.SecretName != want.SecretName {
+		t.Fatalf("Terraform database catalog %s secret_name = %q, want %q", name, entry.SecretName, want.SecretName)
+	}
+	if entry.MigrationRole != want.MigrationRole {
+		t.Fatalf("Terraform database catalog %s migration_role = %q, want %q", name, entry.MigrationRole, want.MigrationRole)
+	}
+	if entry.ManagedBy != want.ManagedBy {
+		t.Fatalf("Terraform database catalog %s managed_by = %q, want %q", name, entry.ManagedBy, want.ManagedBy)
 	}
 }
