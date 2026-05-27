@@ -259,6 +259,72 @@ func closeWalletWorkflowClient() {
 	}
 }
 
+var errRoleDatabaseNotInitialized = errors.New("role database not initialized")
+
+func initRoleServices(role serviceRole) error {
+	consumerService = consumer.Service{}
+	dashService = dashboard.Service{}
+	merchantServices = merchant.Service{}
+	walletService = nil
+	walletPSPRegistry = nil
+	walletPSPLoader = nil
+
+	if roleNeedsConsumerService(role) || roleNeedsDashboardService(role) || roleNeedsMerchantService(role) {
+		if storeSvc == nil {
+			return fmt.Errorf("%w: %s", errRoleDatabaseNotInitialized, role)
+		}
+	}
+	if roleNeedsWalletService(role) {
+		if database == nil {
+			return fmt.Errorf("%w: %s", errRoleDatabaseNotInitialized, role)
+		}
+	}
+
+	if roleNeedsConsumerService(role) {
+		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
+	}
+	if roleNeedsDashboardService(role) {
+		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
+	}
+	if roleNeedsMerchantService(role) {
+		merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
+	}
+	if roleNeedsWalletService(role) {
+		walletService = wallet.NewService(database, noebsConfig)
+	}
+	if roleNeedsWalletPSPDeps(role) {
+		walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
+	}
+	return nil
+}
+
+func roleNeedsConsumerService(role serviceRole) bool {
+	return role == serviceRoleIdentityAuth ||
+		role == serviceRoleCardVault ||
+		role == serviceRoleEBSAdapter ||
+		role == serviceRoleNotification ||
+		role == serviceRoleBeneficiary
+}
+
+func roleNeedsDashboardService(role serviceRole) bool {
+	return role == serviceRoleAdminReporting
+}
+
+func roleNeedsMerchantService(role serviceRole) bool {
+	return role == serviceRoleEBSAdapter
+}
+
+func roleNeedsWalletService(role serviceRole) bool {
+	return role == serviceRolePSPWebhook ||
+		role == serviceRoleWalletLedger ||
+		role == serviceRoleWalletWorker
+}
+
+func roleNeedsWalletPSPDeps(role serviceRole) bool {
+	return role == serviceRolePSPWebhook ||
+		role == serviceRoleWalletWorker
+}
+
 func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, templateDir string) {
 	route.Static("/dashboard/assets", templateDir)
 	dashboardGroup := route.Group("/dashboard", adminGuard, defaultTenantBoundary(noebsConfig.DefaultTenantID))
@@ -563,12 +629,8 @@ func initConfig() {
 	if role.startsChat() && (database == nil || database.DB == nil) {
 		logrusLogger.Fatalf("%s role requires an initialized database", role)
 	}
-	if role.opensDatabase() {
-		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
-		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
-		merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
-		walletService = wallet.NewService(database, noebsConfig)
-		walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
+	if err := initRoleServices(role); err != nil {
+		logrusLogger.Fatalf("error initializing role services: %v", err)
 	}
 	if (role == serviceRolePSPWebhook || role == serviceRoleWalletAPI) && !noebsConfig.WalletEnabled {
 		logrusLogger.Fatalf("%s role requires wallet_enabled", role)

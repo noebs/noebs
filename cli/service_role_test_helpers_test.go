@@ -4,15 +4,55 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/adonese/noebs/consumer"
+	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/merchant"
+	"github.com/adonese/noebs/wallet"
+	walletpsp "github.com/adonese/noebs/wallet/psp"
 )
 
 func setServiceRoleForTest(t *testing.T, role serviceRole) {
 	t.Helper()
 	previousRole := noebsConfig.ServiceRole
+	previousServices := captureRoleServices()
 	noebsConfig.ServiceRole = string(role)
+	if err := initRoleServices(role); err != nil {
+		t.Fatalf("initRoleServices(%s): %v", role, err)
+	}
 	t.Cleanup(func() {
 		noebsConfig.ServiceRole = previousRole
+		previousServices.restore()
 	})
+}
+
+type roleServicesSnapshot struct {
+	consumerService   consumer.Service
+	dashService       dashboard.Service
+	merchantServices  merchant.Service
+	walletService     *wallet.Service
+	walletPSPRegistry *walletpsp.Registry
+	walletPSPLoader   *walletpsp.Loader
+}
+
+func captureRoleServices() roleServicesSnapshot {
+	return roleServicesSnapshot{
+		consumerService:   consumerService,
+		dashService:       dashService,
+		merchantServices:  merchantServices,
+		walletService:     walletService,
+		walletPSPRegistry: walletPSPRegistry,
+		walletPSPLoader:   walletPSPLoader,
+	}
+}
+
+func (s roleServicesSnapshot) restore() {
+	consumerService = s.consumerService
+	dashService = s.dashService
+	merchantServices = s.merchantServices
+	walletService = s.walletService
+	walletPSPRegistry = s.walletPSPRegistry
+	walletPSPLoader = s.walletPSPLoader
 }
 
 func configureGatewayProxyForTest(t *testing.T) {

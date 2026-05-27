@@ -46,6 +46,11 @@ func (walletRouteTemporalClient) ExecuteWorkflow(ctx context.Context, options cl
 func configureWalletRouteTest(t *testing.T) {
 	t.Helper()
 	ensureInit()
+	previousRoleServices := captureRoleServices()
+	t.Cleanup(previousRoleServices.restore)
+	if err := initRoleServices(serviceRoleWalletLedger); err != nil {
+		t.Fatalf("init wallet-ledger services: %v", err)
+	}
 	if walletService == nil {
 		t.Fatal("wallet service not initialized")
 	}

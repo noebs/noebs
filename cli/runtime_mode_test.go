@@ -244,3 +244,56 @@ func TestServiceRoleTemporalOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
+	ensureInit()
+	previousServices := captureRoleServices()
+	t.Cleanup(previousServices.restore)
+
+	tests := []struct {
+		role          serviceRole
+		consumer      bool
+		dashboard     bool
+		merchant      bool
+		wallet        bool
+		walletPSPDeps bool
+	}{
+		{role: serviceRoleAPIGateway},
+		{role: serviceRoleIdentityAuth, consumer: true},
+		{role: serviceRoleCardVault, consumer: true},
+		{role: serviceRoleEBSAdapter, consumer: true, merchant: true},
+		{role: serviceRolePSPWebhook, wallet: true, walletPSPDeps: true},
+		{role: serviceRoleAdminReporting, dashboard: true},
+		{role: serviceRoleNotification, consumer: true},
+		{role: serviceRoleBeneficiary, consumer: true},
+		{role: serviceRoleWalletAPI},
+		{role: serviceRoleWalletLedger, wallet: true},
+		{role: serviceRoleWalletWorker, wallet: true, walletPSPDeps: true},
+		{role: serviceRoleIdentityAuthMigrate},
+		{role: serviceRoleWalletLedgerMigrate},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			if err := initRoleServices(tt.role); err != nil {
+				t.Fatalf("initRoleServices(%s): %v", tt.role, err)
+			}
+			if got := consumerService.Store != nil; got != tt.consumer {
+				t.Fatalf("consumerService initialized = %t, want %t", got, tt.consumer)
+			}
+			if got := dashService.Store != nil; got != tt.dashboard {
+				t.Fatalf("dashService initialized = %t, want %t", got, tt.dashboard)
+			}
+			if got := merchantServices.Store != nil; got != tt.merchant {
+				t.Fatalf("merchantServices initialized = %t, want %t", got, tt.merchant)
+			}
+			if got := walletService != nil; got != tt.wallet {
+				t.Fatalf("walletService initialized = %t, want %t", got, tt.wallet)
+			}
+			pspDeps := walletPSPRegistry != nil && walletPSPLoader != nil
+			if pspDeps != tt.walletPSPDeps {
+				t.Fatalf("wallet PSP deps initialized = %t, want %t", pspDeps, tt.walletPSPDeps)
+			}
+		})
+	}
+}
