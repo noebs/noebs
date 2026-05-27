@@ -43,7 +43,7 @@ Initial package owner: card/token functions currently in `consumer` and `store`.
 
 Owns EBS HTTP protocol details, merchant and consumer EBS calls, IPIN protocol calls, retry policy, circuit breakers, EBS endpoint selection, and raw EBS interaction logs. Merchant and consumer APIs become compatibility clients of this adapter rather than owners of EBS protocol logic.
 
-Initial package owner: `ebs_fields`, `consumer/*_service.go`, `merchant/*`.
+Initial package owner: `ebs_fields`, `consumer/*_service.go`, `merchant/*`. The first split owns merchant EBS passthrough, merchant EBS operations, consumer EBS operations, QR/IPIN calls, voucher generation, EBS transaction lookups, and mobile-transfer compatibility routes.
 
 ### Wallet/Ledger Service
 
@@ -100,6 +100,7 @@ Kubernetes provides service discovery through ClusterIP services:
 - `api-gateway.noebs.svc.cluster.local:8080`
 - `identity-auth.noebs.svc.cluster.local:8080`
 - `card-vault.noebs.svc.cluster.local:8080`
+- `ebs-adapter.noebs.svc.cluster.local:8080`
 - `psp-webhook.noebs.svc.cluster.local:8080`
 - `admin-reporting.noebs.svc.cluster.local:8080`
 - `notification-chat.noebs.svc.cluster.local:8080`
@@ -116,7 +117,7 @@ Service identity is config-driven. Each noebs workload mounts the shared `/app/c
 
 ## Migration Plan
 
-1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `ebs-adapter`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
 2. Run database migrations only through the Kubernetes/k3s migration Job.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
@@ -124,8 +125,8 @@ Service identity is config-driven. Each noebs workload mounts the shared `/app/c
 6. Move notification/chat traffic into the `notification-chat` workload. It owns websocket contacts and notification reads at the public path level.
 7. Move Identity/Auth traffic into the `identity-auth` workload. It owns JWT issuance, OAuth, user/profile, API-key, KYC/check-user, and device-token update routes.
 8. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
-9. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
-10. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
+9. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS transaction lookup, and mobile-transfer compatibility routes.
+10. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
 11. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
 12. Split migrations by owned schema and enforce table ownership in tests.
 

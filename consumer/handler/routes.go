@@ -2,7 +2,7 @@ package handler
 
 import "github.com/gofiber/fiber/v2"
 
-func RegisterPublicRoutes(router fiber.Router, h *Handler) {
+func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	// EBS operations (public, matches legacy behavior)
 	router.Post("/balance", h.Balance)
 	router.Post("/status", h.TransactionStatus)
@@ -68,15 +68,17 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
-	// Transactions / payment compatibility
-	router.Get("/transaction", h.TransactionByUUID)
-	router.Get("/transactions", h.GetTransactions)
-	router.Post("/p2p_mobile", h.MobileTransfer)
-
 	// Beneficiaries
 	router.Post("/beneficiary", h.CreateBeneficiary)
 	router.Get("/beneficiary", h.ListBeneficiaries)
 	router.Delete("/beneficiary", h.DeleteBeneficiary)
+}
+
+func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
+	// Transactions / payment compatibility
+	router.Get("/transaction", h.TransactionByUUID)
+	router.Get("/transactions", h.GetTransactions)
+	router.Post("/p2p_mobile", h.MobileTransfer)
 }
 
 func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {

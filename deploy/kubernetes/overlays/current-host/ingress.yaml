@@ -199,6 +199,342 @@ spec:
                 name: card-vault
                 port:
                   name: http
+          - path: /ebs
+            pathType: Prefix
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /workingKey
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cardTransfer
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /voucher
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /voucher/cash_in
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cashout
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /voucher/cash_out
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /purchase
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cashIn
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cashOut
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /billInquiry
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /billPayment
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /bills
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /changePin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /miniStatement
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /isAlive
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /balance
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /refund
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /toAccount
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /statement
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /wrk
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/balance
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/status
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/is_alive
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/bill_payment
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/bills
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/guess_biller
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/bill_inquiry
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/p2p
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/cashIn
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/cashOut
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/account
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/purchase
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/n/status
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/key
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/ipin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/generate_qr
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_payment
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_status
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_refund
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_complete
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/ipin_key
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/generate_ipin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/complete_ipin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/vouchers/generate
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/transaction
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/transactions
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/p2p_mobile
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
           - path: /psp/webhooks
             pathType: Prefix
             backend:
@@ -424,6 +760,342 @@ spec:
             backend:
               service:
                 name: card-vault
+                port:
+                  name: http
+          - path: /ebs
+            pathType: Prefix
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /workingKey
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cardTransfer
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /voucher
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /voucher/cash_in
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cashout
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /voucher/cash_out
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /purchase
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cashIn
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /cashOut
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /billInquiry
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /billPayment
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /bills
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /changePin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /miniStatement
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /isAlive
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /balance
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /refund
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /toAccount
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /statement
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /wrk
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/balance
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/status
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/is_alive
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/bill_payment
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/bills
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/guess_biller
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/bill_inquiry
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/p2p
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/cashIn
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/cashOut
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/account
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/purchase
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/n/status
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/key
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/ipin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/generate_qr
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_payment
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_status
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_refund
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/qr_complete
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/ipin_key
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/generate_ipin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/complete_ipin
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/vouchers/generate
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/transaction
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/transactions
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/p2p_mobile
+            pathType: Exact
+            backend:
+              service:
+                name: ebs-adapter
                 port:
                   name: http
           - path: /psp/webhooks

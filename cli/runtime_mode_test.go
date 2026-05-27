@@ -35,6 +35,7 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 		serviceRoleAPIGateway,
 		serviceRoleIdentityAuth,
 		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
@@ -64,6 +65,9 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	}
 	if !serviceRoleCardVault.startsHTTP() || serviceRoleCardVault.startsGRPC() || serviceRoleCardVault.startsWalletWorker() || serviceRoleCardVault.runsMigrations() {
 		t.Fatalf("card-vault role should own only the HTTP process")
+	}
+	if !serviceRoleEBSAdapter.startsHTTP() || serviceRoleEBSAdapter.startsGRPC() || serviceRoleEBSAdapter.startsWalletWorker() || serviceRoleEBSAdapter.runsMigrations() {
+		t.Fatalf("ebs-adapter role should own only the HTTP process")
 	}
 	if !serviceRolePSPWebhook.startsHTTP() || serviceRolePSPWebhook.startsGRPC() || serviceRolePSPWebhook.startsWalletWorker() || serviceRolePSPWebhook.runsMigrations() {
 		t.Fatalf("psp-webhook role should own only the HTTP process")

@@ -3,10 +3,6 @@ package handler
 import "github.com/gofiber/fiber/v2"
 
 func RegisterRoutes(router fiber.Router, h *Handler) {
-	if router == nil || h == nil {
-		return
-	}
-
 	// EBS passthrough (merchant)
 	router.Post("/ebs/*", h.EBS)
 

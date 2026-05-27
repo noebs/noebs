@@ -262,6 +262,14 @@ func registerCardVaultRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHan
 	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
 }
 
+func registerEBSAdapterRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
+	merchanthandler.RegisterRoutes(route, merchantHandler)
+
+	cons := route.Group("/consumer")
+	consumerhandler.RegisterEBSAdapterPublicRoutes(cons, consumerHandler)
+	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
@@ -315,6 +323,10 @@ func GetMainEngine() *fiber.App {
 		registerCardVaultRoutes(route, auth, consumerHandler)
 		return route
 	}
+	if role == serviceRoleEBSAdapter {
+		registerEBSAdapterRoutes(route, auth, consumerHandler, merchantHandler)
+		return route
+	}
 	if role == serviceRoleAdminReporting {
 		registerAdminReportingRoutes(route, adminGuard, templateDir)
 		return route
@@ -327,14 +339,11 @@ func GetMainEngine() *fiber.App {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
 
-	merchanthandler.RegisterRoutes(route, merchantHandler)
-
 	route.Get("/app/config", appConfigHandler)
 
 	cons := route.Group("/consumer")
 
 	{
-		consumerhandler.RegisterPublicRoutes(cons, consumerHandler)
 		cons.Post("/test", func(c *fiber.Ctx) error {
 			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 		})

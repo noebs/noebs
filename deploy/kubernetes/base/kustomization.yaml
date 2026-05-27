@@ -12,6 +12,7 @@ resources:
   - api-gateway.yaml
   - identity-auth.yaml
   - card-vault.yaml
+  - ebs-adapter.yaml
   - psp-webhook.yaml
   - admin-reporting.yaml
   - notification-chat.yaml

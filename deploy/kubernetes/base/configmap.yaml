@@ -47,6 +47,9 @@ data:
   card-vault.service.yaml: |
     noebs:
       service_role: card-vault
+  ebs-adapter.service.yaml: |
+    noebs:
+      service_role: ebs-adapter
   psp-webhook.service.yaml: |
     noebs:
       service_role: psp-webhook

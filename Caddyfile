@@ -9,6 +9,11 @@ api.noebs.sd, dsa.adonese.sd {
         reverse_proxy card-vault:8080
     }
 
+    @ebsAdapter path /ebs/* /workingKey /cardTransfer /voucher /voucher/cash_in /cashout /voucher/cash_out /purchase /cashIn /cashOut /billInquiry /billPayment /bills /changePin /miniStatement /isAlive /balance /refund /toAccount /statement /wrk /consumer/balance /consumer/status /consumer/is_alive /consumer/bill_payment /consumer/bills /consumer/guess_biller /consumer/bill_inquiry /consumer/p2p /consumer/cashIn /consumer/cashOut /consumer/account /consumer/purchase /consumer/n/status /consumer/key /consumer/ipin /consumer/generate_qr /consumer/qr_payment /consumer/qr_status /consumer/qr_refund /consumer/qr_complete /consumer/ipin_key /consumer/generate_ipin /consumer/complete_ipin /consumer/vouchers/generate /consumer/transaction /consumer/transactions /consumer/p2p_mobile
+    handle @ebsAdapter {
+        reverse_proxy ebs-adapter:8080
+    }
+
     handle /psp/webhooks* {
         reverse_proxy psp-webhook:8080
     }
