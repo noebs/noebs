@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	ErrMissingTenantID = errors.New("missing tenant_id")
-	ErrInvalidTenantID = errors.New("invalid tenant_id")
-	ErrMissingJWTKey   = errors.New("missing jwt key")
+	ErrMissingTenantID     = errors.New("missing tenant_id")
+	ErrInvalidTenantID     = errors.New("invalid tenant_id")
+	ErrInvalidUserIdentity = errors.New("invalid user identity")
+	ErrMissingJWTKey       = errors.New("missing jwt key")
 )
 
 // JWTAuth provides an encapsulation for jwt auth

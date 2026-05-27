@@ -9,12 +9,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	walletgrpc "github.com/adonese/noebs/wallet/grpc"
-	"github.com/golang-jwt/jwt/v5"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -130,22 +128,8 @@ func walletToken(t *testing.T, userID int64) string {
 	return token
 }
 
-func walletTokenWithoutTenant(t *testing.T, userID int64) string {
-	t.Helper()
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, gateway.TokenClaims{
-		UserID: userID,
-		Mobile: "0990000000",
-		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "noebs",
-			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Hour).UTC()),
-		},
-	})
-	signed, err := token.SignedString(auth.Key)
-	if err != nil {
-		t.Fatalf("SignedString() error = %v", err)
-	}
-	return signed
+func setWalletGatewayIdentity(req *http.Request, userID int64) {
+	setGatewayUserIdentityHeaders(req, userID, noebsConfig.DefaultTenantID, "0990000000")
 }
 
 func decodeWalletRouteResponse(t *testing.T, resp *http.Response) walletRouteResponse {
@@ -162,7 +146,6 @@ func decodeWalletRouteResponse(t *testing.T, resp *http.Response) walletRouteRes
 func TestWalletRoutesRequireAuth(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	token := walletToken(t, 42)
 	route := GetMainEngine()
 
 	unauthorizedReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
@@ -178,7 +161,7 @@ func TestWalletRoutesRequireAuth(t *testing.T) {
 
 	authorizedReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
 	authorizedReq.Header.Set("Content-Type", "application/json")
-	authorizedReq.Header.Set("Authorization", "Bearer "+token)
+	setWalletGatewayIdentity(authorizedReq, 42)
 	authorizedResp, err := route.Test(authorizedReq)
 	if err != nil {
 		t.Fatalf("authorized request failed: %v", err)
@@ -192,12 +175,11 @@ func TestWalletRoutesRequireAuth(t *testing.T) {
 func TestWalletRoutesRequireExplicitCurrency(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	token := walletToken(t, 42)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	setWalletGatewayIdentity(req, 42)
 
 	resp, err := route.Test(req)
 	if err != nil {
@@ -251,12 +233,11 @@ func TestWalletRoutesTakePrecedenceOverGRPCGateway(t *testing.T) {
 		w.WriteHeader(http.StatusTeapot)
 	})
 
-	token := walletToken(t, 42)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	setWalletGatewayIdentity(req, 42)
 
 	resp, err := route.Test(req)
 	if err != nil {
@@ -268,16 +249,14 @@ func TestWalletRoutesTakePrecedenceOverGRPCGateway(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestWalletRoutesUseJWTIdentity(t *testing.T) {
+func TestWalletRoutesUseGatewayIdentity(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	ownerToken := walletToken(t, 42)
-	otherToken := walletToken(t, 7)
 	route := GetMainEngine()
 
 	mismatchUserReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"user_id":99,"currency":"USD"}`))
 	mismatchUserReq.Header.Set("Content-Type", "application/json")
-	mismatchUserReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	setWalletGatewayIdentity(mismatchUserReq, 42)
 	mismatchUserResp, err := route.Test(mismatchUserReq, 5_000)
 	if err != nil {
 		t.Fatalf("mismatch user request failed: %v", err)
@@ -289,7 +268,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 
 	mismatchTenantReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"tenant_id":"other-tenant","currency":"USD"}`))
 	mismatchTenantReq.Header.Set("Content-Type", "application/json")
-	mismatchTenantReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	setWalletGatewayIdentity(mismatchTenantReq, 42)
 	mismatchTenantResp, err := route.Test(mismatchTenantReq, 5_000)
 	if err != nil {
 		t.Fatalf("mismatch tenant request failed: %v", err)
@@ -301,7 +280,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 
 	ownerWalletReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
 	ownerWalletReq.Header.Set("Content-Type", "application/json")
-	ownerWalletReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	setWalletGatewayIdentity(ownerWalletReq, 42)
 	ownerWalletResp, err := route.Test(ownerWalletReq, 5_000)
 	if err != nil {
 		t.Fatalf("owner wallet request failed: %v", err)
@@ -318,7 +297,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	}
 
 	foreignWalletReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID, nil)
-	foreignWalletReq.Header.Set("Authorization", "Bearer "+otherToken)
+	setWalletGatewayIdentity(foreignWalletReq, 7)
 	foreignWalletResp, err := route.Test(foreignWalletReq, 5_000)
 	if err != nil {
 		t.Fatalf("foreign wallet request failed: %v", err)
@@ -329,7 +308,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	_ = foreignWalletResp.Body.Close()
 
 	ownerGetReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID, nil)
-	ownerGetReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	setWalletGatewayIdentity(ownerGetReq, 42)
 	ownerGetResp, err := route.Test(ownerGetReq, 5_000)
 	if err != nil {
 		t.Fatalf("owner get wallet request failed: %v", err)
@@ -340,7 +319,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	_ = ownerGetResp.Body.Close()
 
 	ownerHistoryReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"/transactions", nil)
-	ownerHistoryReq.Header.Set("Authorization", "Bearer "+ownerToken)
+	setWalletGatewayIdentity(ownerHistoryReq, 42)
 	ownerHistoryResp, err := route.Test(ownerHistoryReq, 5_000)
 	if err != nil {
 		t.Fatalf("owner wallet history request failed: %v", err)
@@ -358,7 +337,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	}
 
 	foreignHistoryReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"/transactions", nil)
-	foreignHistoryReq.Header.Set("Authorization", "Bearer "+otherToken)
+	setWalletGatewayIdentity(foreignHistoryReq, 7)
 	foreignHistoryResp, err := route.Test(foreignHistoryReq, 5_000)
 	if err != nil {
 		t.Fatalf("foreign wallet history request failed: %v", err)
@@ -372,7 +351,6 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	token := walletToken(t, 42)
 	route := GetMainEngine()
 
 	tests := []struct {
@@ -409,7 +387,7 @@ func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+token)
+			setWalletGatewayIdentity(req, 42)
 
 			resp, err := route.Test(req)
 			if err != nil {
@@ -426,12 +404,11 @@ func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {
 func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	token := walletToken(t, 42)
 	route := GetMainEngine()
 
 	ownerWalletReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
 	ownerWalletReq.Header.Set("Content-Type", "application/json")
-	ownerWalletReq.Header.Set("Authorization", "Bearer "+token)
+	setWalletGatewayIdentity(ownerWalletReq, 42)
 	ownerWalletResp, err := route.Test(ownerWalletReq)
 	if err != nil {
 		t.Fatalf("owner wallet request failed: %v", err)
@@ -442,7 +419,7 @@ func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
 	ownerWallet := decodeWalletRouteResponse(t, ownerWalletResp)
 
 	req := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"?tenant_id=", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	setWalletGatewayIdentity(req, 42)
 
 	resp, err := route.Test(req)
 	if err != nil {
@@ -457,11 +434,10 @@ func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
 func TestWalletMethodsRouteUsesLedgerGRPC(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	token := walletToken(t, 42)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/wallet/methods?direction=deposit", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	setWalletGatewayIdentity(req, 42)
 
 	resp, err := route.Test(req)
 	if err != nil {
@@ -519,15 +495,14 @@ func TestWalletAdminRouteRequiresTenantQuery(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestWalletRoutesRequireTenantClaim(t *testing.T) {
+func TestWalletRoutesRequireGatewayTenantIdentity(t *testing.T) {
 	configureWalletRouteTest(t)
 
-	token := walletTokenWithoutTenant(t, 42)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(gateway.GatewayUserIDHeader, "42")
 
 	resp, err := route.Test(req)
 	if err != nil {

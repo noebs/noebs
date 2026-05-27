@@ -344,12 +344,12 @@ func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, te
 	}
 }
 
-func registerNotificationChatRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler) {
+func registerNotificationChatRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		chat.ServeWs(hub, w, r)
 	}))
 
-	cons := route.Group("/consumer", auth.AuthMiddleware())
+	cons := route.Group("/consumer", userIdentity)
 	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
 	cons.Post("/submit_contacts", func(c *fiber.Ctx) error {
 		mobile, ok := c.Locals("mobile").(string)
@@ -362,33 +362,33 @@ func registerNotificationChatRoutes(route *fiber.App, auth gateway.JWTAuth, cons
 	})
 }
 
-func registerConsumerBeneficiaryRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler) {
-	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", auth.AuthMiddleware()), consumerHandler)
+func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
-func registerIdentityAuthRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerIdentityAuthRoutes(route *fiber.App, userIdentity fiber.Handler, adminGuard fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
 
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterIdentityPublicRoutes(cons, consumerHandler)
-	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
+	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerCardVaultRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler) {
+func registerCardVaultRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterCardVaultPublicRoutes(cons, consumerHandler)
-	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
+	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerEBSAdapterRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
+func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
 	merchanthandler.RegisterRoutes(route, merchantHandler)
 
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterEBSAdapterPublicRoutes(cons, consumerHandler)
-	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
+	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerWalletAPIRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard fiber.Handler) {
+func registerWalletAPIRoutes(route *fiber.App, userIdentity fiber.Handler, adminGuard fiber.Handler) {
 	if walletPublicClient == nil {
 		logrusLogger.Fatal("wallet-api role requires an initialized wallet-ledger grpc client")
 	}
@@ -397,7 +397,7 @@ func registerWalletAPIRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard 
 	}
 	walletUserHandler := wallethandler.NewGRPCUserHandler(walletPublicClient, noebsConfig)
 	walletAdminHandler := wallethandler.NewGRPCAdminHandler(walletAdminClient)
-	wallethandler.RegisterGRPCUserRoutes(route.Group("/wallet", auth.AuthMiddleware()), walletUserHandler)
+	wallethandler.RegisterGRPCUserRoutes(route.Group("/wallet", userIdentity), walletUserHandler)
 	wallethandler.RegisterGRPCAdminRoutes(route.Group("/admin/wallet", adminGuard), walletAdminHandler)
 }
 
@@ -411,6 +411,7 @@ func GetMainEngine() *fiber.App {
 	templateDir := resolveDashboardTemplateDir()
 	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
+	userIdentity := gateway.InternalUserIdentityMiddleware()
 	if otelEnabled {
 		route.Use(otelfiber.Middleware(
 			otelfiber.WithServerName(noebsConfig.OtelServiceName),
@@ -447,15 +448,15 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleIdentityAuth {
-		registerIdentityAuthRoutes(route, auth, adminGuard, consumerHandler)
+		registerIdentityAuthRoutes(route, userIdentity, adminGuard, consumerHandler)
 		return route
 	}
 	if role == serviceRoleCardVault {
-		registerCardVaultRoutes(route, auth, consumerHandler)
+		registerCardVaultRoutes(route, userIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleEBSAdapter {
-		registerEBSAdapterRoutes(route, auth, consumerHandler, merchantHandler)
+		registerEBSAdapterRoutes(route, userIdentity, consumerHandler, merchantHandler)
 		return route
 	}
 	if role == serviceRoleAdminReporting {
@@ -463,15 +464,15 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleNotification {
-		registerNotificationChatRoutes(route, auth, consumerHandler)
+		registerNotificationChatRoutes(route, userIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleBeneficiary {
-		registerConsumerBeneficiaryRoutes(route, auth, consumerHandler)
+		registerConsumerBeneficiaryRoutes(route, userIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleWalletAPI {
-		registerWalletAPIRoutes(route, auth, adminGuard)
+		registerWalletAPIRoutes(route, userIdentity, adminGuard)
 		return route
 	}
 	if role != serviceRoleAPIGateway {

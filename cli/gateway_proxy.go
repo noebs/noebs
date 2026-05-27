@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -40,11 +41,12 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			proxies[spec.role] = handler
 		}
 
-		handlers := make([]fiber.Handler, 0, 2)
+		handlers := make([]fiber.Handler, 0, 3)
+		handlers = append(handlers, clearGatewayUserIdentityHeaders)
 		switch spec.auth {
 		case gatewayAuthPublic:
 		case gatewayAuthUser:
-			handlers = append(handlers, jwt.AuthMiddleware())
+			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
 		case gatewayAuthAdmin:
 			handlers = append(handlers, adminGuard)
 		default:
@@ -82,6 +84,30 @@ func gatewayProxyHandler(endpoint string) fiber.Handler {
 		}
 		return nil
 	}
+}
+
+func clearGatewayUserIdentityHeaders(c *fiber.Ctx) error {
+	c.Request().Header.Del(gateway.GatewayTenantIDHeader)
+	c.Request().Header.Del(gateway.GatewayUserIDHeader)
+	c.Request().Header.Del(gateway.GatewayMobileHeader)
+	return c.Next()
+}
+
+func propagateGatewayUserIdentity(c *fiber.Ctx) error {
+	tenantID, ok := c.Locals("tenant_id").(string)
+	if !ok || strings.TrimSpace(tenantID) == "" {
+		return fiber.NewError(http.StatusUnauthorized, "missing gateway tenant identity")
+	}
+	userID, ok := c.Locals("user_id").(int64)
+	if !ok || userID <= 0 {
+		return fiber.NewError(http.StatusUnauthorized, "missing gateway user identity")
+	}
+	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	c.Request().Header.Set(gateway.GatewayUserIDHeader, strconv.FormatInt(userID, 10))
+	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
+		c.Request().Header.Set(gateway.GatewayMobileHeader, mobile)
+	}
+	return c.Next()
 }
 
 func gatewayProxyRouteSpecs() []gatewayRouteSpec {

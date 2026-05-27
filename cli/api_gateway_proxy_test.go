@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
 )
@@ -59,6 +60,56 @@ func TestAPIGatewayProxiesEveryServiceOwnedRoute(t *testing.T) {
 	}
 }
 
+func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
+	ensureInit()
+	authorization := testAuthorizationHeader(t)
+	tests := []struct {
+		name   string
+		role   serviceRole
+		method string
+		path   string
+	}{
+		{name: "identity", role: serviceRoleIdentityAuth, method: http.MethodGet, path: "/consumer/auth/me"},
+		{name: "card vault", role: serviceRoleCardVault, method: http.MethodGet, path: "/consumer/get_cards"},
+		{name: "ebs adapter", role: serviceRoleEBSAdapter, method: http.MethodGet, path: "/consumer/transactions"},
+		{name: "notification", role: serviceRoleNotification, method: http.MethodGet, path: "/consumer/notifications"},
+		{name: "beneficiary", role: serviceRoleBeneficiary, method: http.MethodGet, path: "/consumer/beneficiary"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setServiceRoleForTest(t, tt.role)
+			route := GetMainEngine()
+
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set("Authorization", authorization)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+			}
+		})
+	}
+
+	t.Run("wallet api", func(t *testing.T) {
+		configureWalletRouteTest(t)
+		route := GetMainEngine()
+
+		req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", nil)
+		req.Header.Set("Authorization", authorization)
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("route.Test() error = %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+		}
+	})
+}
+
 func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	ensureInit()
 	var hits atomic.Int64
@@ -83,6 +134,73 @@ func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	}
 	if hits.Load() != 0 {
 		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	}
+}
+
+func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
+	ensureInit()
+	authorization := testAuthorizationHeader(t)
+	type observedHeaders struct {
+		tenant string
+		userID string
+		mobile string
+	}
+	observed := make(chan observedHeaders, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- observedHeaders{
+			tenant: r.Header.Get(gateway.GatewayTenantIDHeader),
+			userID: r.Header.Get(gateway.GatewayUserIDHeader),
+			mobile: r.Header.Get(gateway.GatewayMobileHeader),
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/consumer/get_cards", nil)
+	req.Header.Set("Authorization", authorization)
+	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
+	req.Header.Set(gateway.GatewayUserIDHeader, "999")
+	req.Header.Set(gateway.GatewayMobileHeader, "0911111111")
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	assertGatewayProxied(t, resp)
+
+	got := <-observed
+	if got.tenant != "test-tenant" || got.userID != "1" || got.mobile != "0912345678" {
+		t.Fatalf("forwarded identity = %+v, want tenant=test-tenant userID=1 mobile=0912345678", got)
+	}
+}
+
+func TestAPIGatewayClearsUserIdentityHeadersOnPublicRoutes(t *testing.T) {
+	ensureInit()
+	observed := make(chan bool, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- r.Header.Get(gateway.GatewayTenantIDHeader) == "" &&
+			r.Header.Get(gateway.GatewayUserIDHeader) == "" &&
+			r.Header.Get(gateway.GatewayMobileHeader) == ""
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
+	setTestGatewayUserIdentityHeaders(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	assertGatewayProxied(t, resp)
+	if cleared := <-observed; !cleared {
+		t.Fatalf("gateway forwarded caller-supplied identity headers on public route")
 	}
 }
 

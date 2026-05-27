@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	walletgrpc "github.com/adonese/noebs/wallet/grpc"
 	walletworker "github.com/adonese/noebs/wallet/worker"
@@ -27,7 +28,7 @@ type walletAuthRequirement uint8
 
 const (
 	walletAuthNone walletAuthRequirement = iota
-	walletAuthJWT
+	walletAuthUserIdentity
 	walletAuthAdmin
 )
 
@@ -85,9 +86,9 @@ func requireAuthForWalletMethods(
 	switch walletMethodAuthRequirement(info.FullMethod) {
 	case walletAuthNone:
 		return handler(ctx, req)
-	case walletAuthJWT:
-		if !contextHasValidBearerToken(ctx) {
-			return nil, status.Error(codes.Unauthenticated, "missing or invalid authorization token")
+	case walletAuthUserIdentity:
+		if !contextHasGatewayUserIdentity(ctx) {
+			return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
 		}
 	case walletAuthAdmin:
 		ok, configured := contextHasValidAdminCredentials(ctx)
@@ -111,13 +112,8 @@ func requireAuthForWalletHTTP(next http.Handler) http.Handler {
 		case walletAuthNone:
 			next.ServeHTTP(w, r)
 			return
-		case walletAuthJWT:
-			token := extractBearerToken(r.Header.Get("Authorization"))
-			if token == "" {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-			if _, err := auth.VerifyJWT(token); err != nil {
+		case walletAuthUserIdentity:
+			if !requestHasGatewayUserIdentity(r) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -166,7 +162,7 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		walletv1.WalletPublicService_EnrollUser2FA_FullMethodName,
 		walletv1.WalletPublicService_ConfirmUser2FA_FullMethodName,
 		walletv1.WalletPublicService_DisableUser2FA_FullMethodName:
-		return walletAuthJWT
+		return walletAuthUserIdentity
 	default:
 		return walletAuthNone
 	}
@@ -183,7 +179,7 @@ func walletPathAuthRequirement(path string) walletAuthRequirement {
 	case strings.HasPrefix(path, "/wallet/withdrawals/") && strings.HasSuffix(path, "/verification"):
 		return walletAuthAdmin
 	case path == "/wallet" || strings.HasPrefix(path, "/wallet/"):
-		return walletAuthJWT
+		return walletAuthUserIdentity
 	default:
 		return walletAuthNone
 	}
@@ -284,31 +280,47 @@ func grpcGatewayIncomingHeaderMatcher(key string) (string, bool) {
 	if strings.EqualFold(key, "X-Admin-Key") {
 		return "x-admin-key", true
 	}
+	if strings.EqualFold(key, gateway.GatewayTenantIDHeader) {
+		return strings.ToLower(gateway.GatewayTenantIDHeader), true
+	}
+	if strings.EqualFold(key, gateway.GatewayUserIDHeader) {
+		return strings.ToLower(gateway.GatewayUserIDHeader), true
+	}
+	if strings.EqualFold(key, gateway.GatewayMobileHeader) {
+		return strings.ToLower(gateway.GatewayMobileHeader), true
+	}
 	return runtime.DefaultHeaderMatcher(key)
 }
 
-func contextHasValidBearerToken(ctx context.Context) bool {
+func contextHasGatewayUserIdentity(ctx context.Context) bool {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return false
 	}
-	vals := md.Get("authorization")
-	for _, val := range vals {
-		token := extractBearerToken(val)
-		if token == "" {
-			continue
-		}
-		if _, err := auth.VerifyJWT(token); err == nil {
-			return true
-		}
-	}
-	return false
+	_, err := gateway.ParseInternalUserIdentity(
+		singleMetadataValue(md, gateway.GatewayTenantIDHeader),
+		singleMetadataValue(md, gateway.GatewayUserIDHeader),
+		singleMetadataValue(md, gateway.GatewayMobileHeader),
+	)
+	return err == nil
 }
 
-func extractBearerToken(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if strings.HasPrefix(strings.ToLower(raw), "bearer ") {
-		return strings.TrimSpace(raw[7:])
+func requestHasGatewayUserIdentity(r *http.Request) bool {
+	if r == nil {
+		return false
 	}
-	return ""
+	_, err := gateway.ParseInternalUserIdentity(
+		r.Header.Get(gateway.GatewayTenantIDHeader),
+		r.Header.Get(gateway.GatewayUserIDHeader),
+		r.Header.Get(gateway.GatewayMobileHeader),
+	)
+	return err == nil
+}
+
+func singleMetadataValue(md metadata.MD, header string) string {
+	values := md.Get(strings.ToLower(header))
+	if len(values) != 1 {
+		return ""
+	}
+	return values[0]
 }

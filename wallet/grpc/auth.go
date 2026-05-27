@@ -21,39 +21,52 @@ func (s *Server) claimsFromContext(ctx context.Context) (*gateway.TokenClaims, e
 	if !ok {
 		return nil, nil
 	}
-	for _, header := range md.Get("authorization") {
-		token := bearerToken(header)
-		if token == "" {
-			continue
-		}
-		auth := gateway.JWTAuth{NoebsConfig: s.Service.Config}
-		auth.Init()
-		claims, err := auth.VerifyJWT(token)
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "missing or invalid authorization token")
-		}
-		return claims, nil
+	tenantID, err := singleGatewayMetadataValue(md, gateway.GatewayTenantIDHeader)
+	if err != nil {
+		return nil, err
 	}
-	return nil, nil
+	userID, err := singleGatewayMetadataValue(md, gateway.GatewayUserIDHeader)
+	if err != nil {
+		return nil, err
+	}
+	mobile, err := singleGatewayMetadataValue(md, gateway.GatewayMobileHeader)
+	if err != nil {
+		return nil, err
+	}
+	if tenantID == "" && userID == "" && mobile == "" {
+		return nil, nil
+	}
+	identity, err := gateway.ParseInternalUserIdentity(tenantID, userID, mobile)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
+	}
+	return &gateway.TokenClaims{
+		UserID:   identity.UserID,
+		Mobile:   identity.Mobile,
+		TenantID: identity.TenantID,
+	}, nil
 }
 
-func (s *Server) requireJWTClaims(ctx context.Context) (*gateway.TokenClaims, error) {
+func (s *Server) requireGatewayClaims(ctx context.Context) (*gateway.TokenClaims, error) {
 	claims, err := s.claimsFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if claims == nil {
-		return nil, status.Error(codes.Unauthenticated, "missing or invalid authorization token")
+		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
 	}
 	return claims, nil
 }
 
-func bearerToken(header string) string {
-	header = strings.TrimSpace(header)
-	if strings.HasPrefix(strings.ToLower(header), "bearer ") {
-		return strings.TrimSpace(header[7:])
+func singleGatewayMetadataValue(md metadata.MD, header string) (string, error) {
+	values := md.Get(strings.ToLower(header))
+	if len(values) == 0 {
+		return "", nil
 	}
-	return ""
+	if len(values) > 1 {
+		return "", status.Error(codes.Unauthenticated, "duplicate gateway identity header")
+	}
+	return values[0], nil
 }
 
 func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, error) {
@@ -63,7 +76,7 @@ func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, e
 	}
 	authenticated, err := validateGRPCTenantID(claims.TenantID)
 	if err != nil {
-		return "", status.Error(codes.Unauthenticated, "missing tenant in authorization token")
+		return "", status.Error(codes.Unauthenticated, "missing tenant in gateway identity")
 	}
 	if tenantID == "" {
 		return authenticated, nil
@@ -91,7 +104,7 @@ func bindUserIDToClaims(userID int64, claims *gateway.TokenClaims) (int64, error
 		return userID, nil
 	}
 	if claims.UserID <= 0 {
-		return 0, status.Error(codes.Unauthenticated, "missing user in authorization token")
+		return 0, status.Error(codes.Unauthenticated, "missing user in gateway identity")
 	}
 	if userID == 0 {
 		return claims.UserID, nil
@@ -109,7 +122,7 @@ func bindOwnerToClaims(ownerType, ownerID string, claims *gateway.TokenClaims) (
 		return ownerType, ownerID, nil
 	}
 	if claims.UserID <= 0 {
-		return "", "", status.Error(codes.Unauthenticated, "missing user in authorization token")
+		return "", "", status.Error(codes.Unauthenticated, "missing user in gateway identity")
 	}
 	authenticatedType := walletstore.OwnerTypeUser
 	authenticatedID := strconv.FormatInt(claims.UserID, 10)

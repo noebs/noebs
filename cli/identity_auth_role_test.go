@@ -57,6 +57,7 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
@@ -72,7 +73,6 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	tests := []struct {
@@ -87,7 +87,7 @@ func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

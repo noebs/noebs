@@ -6,8 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
@@ -216,7 +218,14 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 }
 
 func walletOutgoingContext(c *fiber.Ctx) context.Context {
-	return metadata.AppendToOutgoingContext(c.UserContext(), "authorization", c.Get(fiber.HeaderAuthorization))
+	values := []string{
+		strings.ToLower(gateway.GatewayTenantIDHeader), c.Get(gateway.GatewayTenantIDHeader),
+		strings.ToLower(gateway.GatewayUserIDHeader), c.Get(gateway.GatewayUserIDHeader),
+	}
+	if mobile := c.Get(gateway.GatewayMobileHeader); mobile != "" {
+		values = append(values, strings.ToLower(gateway.GatewayMobileHeader), mobile)
+	}
+	return metadata.AppendToOutgoingContext(c.UserContext(), values...)
 }
 
 func walletResponseFromProto(w *walletv1.Wallet) (walletResponse, error) {

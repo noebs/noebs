@@ -103,13 +103,12 @@ func TestEBSAdapterRoutesAreProxiedByAPIGateway(t *testing.T) {
 func TestEBSAdapterRoutesAreOwnedByEBSAdapter(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleEBSAdapter)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	for _, tt := range ebsAdapterRoutes() {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req, 5_000)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
@@ -123,7 +122,6 @@ func TestEBSAdapterRoutesAreOwnedByEBSAdapter(t *testing.T) {
 func TestEBSAdapterDoesNotOwnIdentityCardNotificationOrWalletRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleEBSAdapter)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	tests := []ebsAdapterRoute{
@@ -135,7 +133,7 @@ func TestEBSAdapterDoesNotOwnIdentityCardNotificationOrWalletRoutes(t *testing.T
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

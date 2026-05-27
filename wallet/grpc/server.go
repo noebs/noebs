@@ -36,7 +36,7 @@ func (s *Server) GetWallet(ctx context.Context, req *walletv1.GetWalletRequest) 
 }
 
 func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
-	claims, err := s.requireJWTClaims(ctx)
+	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *Server) EnsureWallet(ctx context.Context, req *walletv1.EnsureWalletReq
 }
 
 func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
-	claims, err := s.requireJWTClaims(ctx)
+	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return nil, err
 	}

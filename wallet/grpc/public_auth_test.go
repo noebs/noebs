@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/internal/testdb"
@@ -58,7 +57,6 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 	}
 
 	cfg := ebs_fields.NoebsConfig{
-		JWTKey:                "test-jwt-key",
 		WalletEnabled:         true,
 		WalletDefaultCurrency: "USD",
 	}
@@ -80,20 +78,17 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 	return server, tenantID, wallet42, wallet7
 }
 
-func walletAuthContext(t *testing.T, jwtKey string, userID int64, tenantID string) context.Context {
-	t.Helper()
-	auth := gateway.JWTAuth{NoebsConfig: ebs_fields.NoebsConfig{JWTKey: jwtKey}}
-	auth.Init()
-	token, err := auth.GenerateJWT(userID, "0990000000", tenantID)
-	if err != nil {
-		t.Fatalf("GenerateJWT() error = %v", err)
-	}
-	return metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "Bearer "+token))
+func walletGatewayIdentityContext(userID int64, tenantID string) context.Context {
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		"x-noebs-tenant-id", tenantID,
+		"x-noebs-user-id", fmt.Sprintf("%d", userID),
+		"x-noebs-mobile", "0990000000",
+	))
 }
 
-func TestGetWalletPublicEnforcesJWTWalletOwnership(t *testing.T) {
+func TestGetWalletPublicEnforcesGatewayIdentityOwnership(t *testing.T) {
 	server, tenantID, wallet42, wallet7 := newWalletServerWithUsers(t)
-	ctx := walletAuthContext(t, server.Service.Config.JWTKey, 42, tenantID)
+	ctx := walletGatewayIdentityContext(42, tenantID)
 
 	resp, err := server.GetWalletPublic(ctx, &walletv1.GetWalletRequest{
 		WalletId: wallet42.ID.String(),
@@ -114,9 +109,9 @@ func TestGetWalletPublicEnforcesJWTWalletOwnership(t *testing.T) {
 	}
 }
 
-func TestRequestWithdrawalRejectsJWTIdentityMismatch(t *testing.T) {
+func TestRequestWithdrawalRejectsGatewayIdentityMismatch(t *testing.T) {
 	server, tenantID, wallet42, _ := newWalletServerWithUsers(t)
-	ctx := walletAuthContext(t, server.Service.Config.JWTKey, 42, tenantID)
+	ctx := walletGatewayIdentityContext(42, tenantID)
 
 	req := &walletv1.WithdrawalRequest{
 		TenantId:                   tenantID,

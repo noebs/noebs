@@ -1,0 +1,76 @@
+package gateway
+
+import (
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+)
+
+const (
+	GatewayTenantIDHeader = "X-Noebs-Tenant-ID"
+	GatewayUserIDHeader   = "X-Noebs-User-ID"
+	GatewayMobileHeader   = "X-Noebs-Mobile"
+)
+
+type UserIdentity struct {
+	TenantID string
+	UserID   int64
+	Mobile   string
+}
+
+// InternalUserIdentityMiddleware binds the gateway-issued user identity headers
+// to Fiber locals for service-owned user routes.
+func InternalUserIdentityMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		identity, err := ParseInternalUserIdentity(
+			c.Get(GatewayTenantIDHeader),
+			c.Get(GatewayUserIDHeader),
+			c.Get(GatewayMobileHeader),
+		)
+		if err != nil {
+			return unauthorizedGatewayIdentity(c)
+		}
+
+		c.Locals("tenant_id", identity.TenantID)
+		c.Locals("user_id", identity.UserID)
+		if identity.Mobile != "" {
+			c.Locals("mobile", identity.Mobile)
+			c.Locals("username", identity.Mobile)
+		}
+		return c.Next()
+	}
+}
+
+func ParseInternalUserIdentity(rawTenantID, rawUserID, rawMobile string) (UserIdentity, error) {
+	tenantID, err := validateTenantID(rawTenantID)
+	if err != nil {
+		return UserIdentity{}, err
+	}
+	userID, err := parseGatewayUserID(rawUserID)
+	if err != nil {
+		return UserIdentity{}, err
+	}
+	mobile := strings.TrimSpace(rawMobile)
+	if mobile != "" && !isValidMobile(mobile) {
+		return UserIdentity{}, ErrInvalidUserIdentity
+	}
+	return UserIdentity{TenantID: tenantID, UserID: userID, Mobile: mobile}, nil
+}
+
+func parseGatewayUserID(raw string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	userID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	if userID <= 0 {
+		return 0, ErrInvalidUserIdentity
+	}
+	return userID, nil
+}
+
+func unauthorizedGatewayIdentity(c *fiber.Ctx) error {
+	return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "missing gateway identity", "code": "unauthorized"})
+}

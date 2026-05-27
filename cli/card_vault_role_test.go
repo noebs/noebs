@@ -52,7 +52,6 @@ func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {
 func TestCardVaultRoutesAreOwnedByCardVault(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleCardVault)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	tests := []struct {
@@ -80,7 +79,7 @@ func TestCardVaultRoutesAreOwnedByCardVault(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
@@ -102,7 +101,6 @@ func TestCardVaultRoutesAreOwnedByCardVault(t *testing.T) {
 func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleCardVault)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	tests := []struct {
@@ -119,7 +117,7 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

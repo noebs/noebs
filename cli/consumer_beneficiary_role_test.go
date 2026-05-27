@@ -44,13 +44,12 @@ func TestConsumerBeneficiaryRoutesAreProxiedByAPIGateway(t *testing.T) {
 func TestConsumerBeneficiaryRoutesAreOwnedByConsumerBeneficiary(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleBeneficiary)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	for _, tt := range consumerBeneficiaryRoutes() {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
@@ -64,7 +63,6 @@ func TestConsumerBeneficiaryRoutesAreOwnedByConsumerBeneficiary(t *testing.T) {
 func TestConsumerBeneficiaryDoesNotOwnOtherServiceRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleBeneficiary)
-	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
 	tests := []struct {
@@ -81,7 +79,7 @@ func TestConsumerBeneficiaryDoesNotOwnOtherServiceRoutes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
+			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

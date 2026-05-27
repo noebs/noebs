@@ -17,7 +17,7 @@ func (s *Server) ListPaymentMethodsPublic(ctx context.Context, req *walletv1.Lis
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
-	claims, err := s.requireJWTClaims(ctx)
+	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
-	claims, err := s.requireJWTClaims(ctx)
+	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
