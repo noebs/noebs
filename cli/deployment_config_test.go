@@ -420,6 +420,9 @@ func TestDockerComposeSecretExamplesMatchServiceOwnership(t *testing.T) {
 		}
 		requirePlaceholderStrings(t, path, example.Noebs)
 		requireServiceDatabaseOwners(t, path, example.Noebs, owners)
+		if serviceName == "ebs-adapter" {
+			requireEBSAdapterSecrets(t, path, example.Noebs)
+		}
 	}
 }
 
@@ -1864,6 +1867,41 @@ func requireServiceDatabaseOwners(t *testing.T, path string, noebs map[string]an
 		dbURL, ok := value.(string)
 		if !ok || !strings.HasPrefix(dbURL, "REPLACE_WITH_") {
 			t.Fatalf("%s noebs.service_databases.%s = %v, want placeholder", path, owner, value)
+		}
+	}
+}
+
+func requireEBSAdapterSecrets(t *testing.T, path string, noebs map[string]any) {
+	t.Helper()
+	for _, key := range []string{
+		"consumer_endpoint",
+		"merchant_endpoint",
+		"ipin_endpoint",
+		"consumer_app_id",
+		"merchant_app_id",
+	} {
+		value, ok := noebs[key]
+		text, isString := value.(string)
+		if !ok || !isString || !strings.HasPrefix(text, "REPLACE_WITH_") {
+			t.Fatalf("%s missing explicit noebs.%s placeholder", path, key)
+		}
+	}
+	for _, rejected := range []string{
+		"is_consumer_prod",
+		"is_merchant_prod",
+		"consumer_qa",
+		"consumer_prod",
+		"merchant_qa",
+		"merchant_prod",
+		"ipin_qa",
+		"ipin_prod",
+		"consumer_qa_id",
+		"consumer_prod_id",
+		"merchant_qa_id",
+		"merchant_prod_id",
+	} {
+		if _, ok := noebs[rejected]; ok {
+			t.Fatalf("%s must not use noebs.%s to derive EBS runtime endpoints", path, rejected)
 		}
 	}
 }

@@ -548,7 +548,6 @@ func initConfig() {
 		logrusLogger.Fatalf("error in unmarshaling config file: %v", err)
 	}
 
-	noebsConfig.Defaults()
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)

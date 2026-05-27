@@ -24,6 +24,8 @@ var (
 	errMissingGRPCPort     = errors.New("missing noebs.grpc_port")
 	errMissingGRPCGateway  = errors.New("missing noebs.grpc_gateway_port")
 	errInvalidWalletConfig = errors.New("invalid wallet runtime config")
+	errMissingEBSConfig    = errors.New("missing ebs-adapter runtime config")
+	errLegacyEBSConfig     = errors.New("legacy ebs-adapter runtime selector not allowed")
 )
 
 const (
@@ -132,6 +134,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	if err := validateOTelRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
+	if err := validateEBSRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
 	if roleUsesWalletFeature(role) && !cfg.WalletEnabled {
 		return fmt.Errorf("%w: %s", errWalletNotEnabled, role)
 	}
@@ -175,6 +180,51 @@ func roleUsesWalletFeature(role serviceRole) bool {
 		role == serviceRoleWalletAPI ||
 		role == serviceRoleWalletLedger ||
 		role == serviceRoleWalletWorker
+}
+
+func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if role != serviceRoleEBSAdapter {
+		return nil
+	}
+	legacySelectors := map[string]bool{
+		"is_consumer_prod": cfg.IsConsumerProd,
+		"is_merchant_prod": cfg.IsMerchantProd,
+	}
+	for key, value := range legacySelectors {
+		if value {
+			return fmt.Errorf("%w: noebs.%s", errLegacyEBSConfig, key)
+		}
+	}
+	legacyValues := map[string]string{
+		"consumer_qa":      cfg.ConsumerQAIP,
+		"consumer_prod":    cfg.ConsumerProd,
+		"merchant_qa":      cfg.MerchantQAIP,
+		"merchant_prod":    cfg.MerchantProd,
+		"ipin_qa":          cfg.IPINQA,
+		"ipin_prod":        cfg.IPIN,
+		"consumer_qa_id":   cfg.ConsumerQAID,
+		"consumer_prod_id": cfg.ConsumerProdID,
+		"merchant_qa_id":   cfg.MerchantQAID,
+		"merchant_prod_id": cfg.MerchantProdID,
+	}
+	for key, value := range legacyValues {
+		if strings.TrimSpace(value) != "" {
+			return fmt.Errorf("%w: noebs.%s", errLegacyEBSConfig, key)
+		}
+	}
+	required := map[string]string{
+		"consumer_endpoint": cfg.ConsumerIP,
+		"merchant_endpoint": cfg.MerchantIP,
+		"ipin_endpoint":     cfg.IPINIp,
+		"consumer_app_id":   cfg.ConsumerID,
+		"merchant_app_id":   cfg.MerchantID,
+	}
+	for key, value := range required {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%w: noebs.%s", errMissingEBSConfig, key)
+		}
+	}
+	return nil
 }
 
 func validateWalletRuntimeSettings(cfg ebs_fields.NoebsConfig) error {

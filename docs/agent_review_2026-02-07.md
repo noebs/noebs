@@ -41,7 +41,7 @@ Validation:
 ## Additional Changes (2026-02-08)
 
 - **Config-driven tenant selection (boundary-only)**:
-  - Later microservice work made `default_tenant_id` explicit runtime config; `ebs_fields.NoebsConfig.Defaults()` must not invent it.
+  - Later microservice work made `default_tenant_id` explicit runtime config and removed the `ebs_fields.NoebsConfig.Defaults()` runtime mutator.
   - Removed the remaining runtime fallback to `store.DefaultTenantID` in `dashboard/db_helpers.go`.
 - **Handler slimming / separation work (ongoing)**:
   - Merchant EBS proxy handlers were refactored to a generic helper (`merchant/ebs_proxy.go`) and `merchant/payment_apis.go` was reduced to mostly one-liners.

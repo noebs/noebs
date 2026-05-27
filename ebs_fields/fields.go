@@ -948,16 +948,16 @@ type NoebsConfig struct {
 	ConsumerProd string `json:"consumer_prod"`
 	MerchantProd string `json:"merchant_prod"`
 
-	ConsumerIP string
-	MerchantIP string
-	IPINIp     string
+	ConsumerIP string `json:"consumer_endpoint"`
+	MerchantIP string `json:"merchant_endpoint"`
+	IPINIp     string `json:"ipin_endpoint"`
 
 	// Those should be depricated they are confusing with no good use case
 	IPIN   string `json:"ipin_prod"`
 	IPINQA string `json:"ipin_qa"`
 
-	ConsumerID string `json:"-"` // The ID that will be used within noebs to identify the consumer
-	MerchantID string `json:"-"` // The ID that will be used within noebs to identify the merchant
+	ConsumerID string `json:"consumer_app_id"` // The ID that will be used within noebs to identify the consumer
+	MerchantID string `json:"merchant_app_id"` // The ID that will be used within noebs to identify the merchant
 
 	ConsumerQAID string `json:"consumer_qa_id"` // EBS application ID for mobile and card not present services prod)
 	MerchantQAID string `json:"merchant_qa_id"` // EBS client ID for pos and merchant services (prod)
@@ -1038,25 +1038,6 @@ type NoebsConfig struct {
 
 	// This the base of the link for payment links
 	PaymentLinkBase string `json:"payment_link_base"`
-}
-
-func (n *NoebsConfig) Defaults() {
-	if n.IsConsumerProd {
-		n.ConsumerIP = n.ConsumerProd
-		n.IPINIp = n.IPIN
-		n.ConsumerID = n.ConsumerProdID
-	} else {
-		n.ConsumerIP = n.ConsumerQAIP
-		n.IPINIp = n.IPINQA
-		n.ConsumerID = n.ConsumerQAID
-	}
-	if n.IsMerchantProd {
-		n.MerchantIP = n.MerchantProd
-		n.MerchantID = n.MerchantProdID
-	} else {
-		n.MerchantIP = n.MerchantQAIP
-		n.MerchantID = n.MerchantQAID
-	}
 }
 
 type QuickPaymentFields struct {

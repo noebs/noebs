@@ -85,12 +85,12 @@ func (s *Service) ToDatabasename(url string) string {
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashInEndpoint:          "cashin",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCashOutEndpoint:         "cashout",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerComplete:                "complete_tran",
-		// IPIN endpoints have their own base URL (cfg.IPIN), but historically some setups routed them via cfg.ConsumerIP.
+		// IPIN endpoints have their own explicit base URL, but historically some setups routed them via cfg.ConsumerIP.
 		s.NoebsConfig.ConsumerIP + ebs_fields.IPinGeneration:               "generate_ipin",
 		s.NoebsConfig.ConsumerIP + ebs_fields.IPinCompletion:               "ipin_completion",
-		s.NoebsConfig.IPIN + ebs_fields.IPinGeneration:                     "generate_ipin",
-		s.NoebsConfig.IPIN + ebs_fields.IPinCompletion:                     "ipin_completion",
-		s.NoebsConfig.IPIN + ebs_fields.QRPublicKey:                        "ipin_public_key",
+		s.NoebsConfig.IPINIp + ebs_fields.IPinGeneration:                   "generate_ipin",
+		s.NoebsConfig.IPINIp + ebs_fields.IPinCompletion:                   "ipin_completion",
+		s.NoebsConfig.IPINIp + ebs_fields.QRPublicKey:                      "ipin_public_key",
 		s.NoebsConfig.ConsumerIP + ebs_fields.MerchantTransactionStatus:    "merchant_status",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerRegister:             "register",
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration: "complete_card_issuance",

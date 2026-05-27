@@ -317,6 +317,58 @@ func TestServiceRoleRuntimeConfigRequiresExplicitOTelConfigWhenEnabled(t *testin
 	}
 }
 
+func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) {
+	legacy := explicitEBSRuntimeConfig()
+	legacy.ConsumerQAIP = "https://consumer.qa.example"
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, legacy); !errors.Is(err, errLegacyEBSConfig) {
+		t.Fatalf("legacy ebs-adapter runtime config error = %v, want %v", err, errLegacyEBSConfig)
+	}
+
+	legacy = explicitEBSRuntimeConfig()
+	legacy.IsConsumerProd = true
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, legacy); !errors.Is(err, errLegacyEBSConfig) {
+		t.Fatalf("legacy ebs-adapter mode error = %v, want %v", err, errLegacyEBSConfig)
+	}
+
+	required := []struct {
+		name   string
+		mutate func(*ebs_fields.NoebsConfig)
+	}{
+		{name: "consumer_endpoint", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.ConsumerIP = "" }},
+		{name: "merchant_endpoint", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.MerchantIP = "" }},
+		{name: "ipin_endpoint", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.IPINIp = "" }},
+		{name: "consumer_app_id", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.ConsumerID = "" }},
+		{name: "merchant_app_id", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.MerchantID = "" }},
+	}
+
+	for _, tt := range required {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := explicitEBSRuntimeConfig()
+			tt.mutate(&cfg)
+			if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, cfg); !errors.Is(err, errMissingEBSConfig) {
+				t.Fatalf("ebs-adapter runtime config error = %v, want %v", err, errMissingEBSConfig)
+			}
+		})
+	}
+
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, explicitEBSRuntimeConfig()); err != nil {
+		t.Fatalf("explicit ebs-adapter runtime config error = %v", err)
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
+		t.Fatalf("identity-auth should not require EBS endpoint config: %v", err)
+	}
+}
+
+func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
+	return ebs_fields.NoebsConfig{
+		ConsumerIP: "https://consumer.ebs.example",
+		MerchantIP: "https://merchant.ebs.example",
+		IPINIp:     "https://ipin.ebs.example",
+		ConsumerID: "consumer-app",
+		MerchantID: "merchant-app",
+	}
+}
+
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
 		t.Fatalf("identity-auth runtime config error = %v", err)
