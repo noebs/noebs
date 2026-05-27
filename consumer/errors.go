@@ -19,6 +19,7 @@ var (
 	ErrReceiverHasNoCard     = errors.New("receiver has no card")
 	ErrInvalidPaymentToken   = errors.New("invalid_payment_token")
 	ErrAmbiguousPaymentToken = errors.New("ambiguous_payment_token")
+	ErrInvalidPaymentInfo    = errors.New("invalid_payment_info")
 	ErrMissingHTTPClient     = errors.New("missing_http_client")
 	ErrMissingCardVault      = errors.New("missing_card_vault_service_discovery")
 	ErrInvalidCardVault      = errors.New("invalid_card_vault_service_discovery")
@@ -26,6 +27,9 @@ var (
 	ErrMissingIdentityAuth   = errors.New("missing_identity_auth_service_discovery")
 	ErrInvalidIdentityAuth   = errors.New("invalid_identity_auth_service_discovery")
 	ErrIdentityAuthCommand   = errors.New("identity_auth_command_failed")
+	ErrMissingNotification   = errors.New("missing_notification_chat_service_discovery")
+	ErrInvalidNotification   = errors.New("invalid_notification_chat_service_discovery")
+	ErrNotificationCommand   = errors.New("notification_chat_command_failed")
 
 	// Registration
 	ErrMissingPassword  = errors.New("missing password")

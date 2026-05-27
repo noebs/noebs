@@ -987,8 +987,8 @@ func (s *Store) GetNotifications(ctx context.Context, tenantID, userMobile strin
 	if userMobile == "" {
 		return nil, ErrMissingMobile
 	}
-	stmt := s.DB.Rebind("SELECT * FROM push_data WHERE tenant_id = ? AND user_mobile = ? AND deleted_at IS NULL ORDER BY date DESC")
-	rows, err := db.QueryxContext(ctx, stmt, tenantID, userMobile)
+	stmt := s.DB.Rebind("SELECT * FROM push_data WHERE tenant_id = ? AND (user_mobile = ? OR phone = ?) AND deleted_at IS NULL ORDER BY date DESC")
+	rows, err := db.QueryxContext(ctx, stmt, tenantID, userMobile, userMobile)
 	if err != nil {
 		return nil, err
 	}

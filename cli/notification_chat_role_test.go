@@ -84,6 +84,22 @@ func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 	}
 }
 
+func TestNotificationChatOwnsInternalPushDataCommand(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleNotification)
+	route := GetMainEngine()
+
+	path := "/internal/notification-chat/push-data"
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	setGatewayAdminIdentityHeader(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertFiberRouteRegistered(t, resp, http.MethodPost, path)
+}
+
 func TestNotificationWebsocketRejectsBearerWithoutGatewayIdentity(t *testing.T) {
 	ensureInit()
 	authorization := testAuthorizationHeader(t)

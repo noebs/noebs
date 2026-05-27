@@ -364,6 +364,11 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingIdentityAuth); err == nil {
 		t.Fatalf("ebs-adapter should require identity-auth service discovery")
 	}
+	missingNotification := explicitEBSRuntimeConfig()
+	delete(missingNotification.ServiceDiscovery, string(serviceRoleNotification))
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingNotification); err == nil {
+		t.Fatalf("ebs-adapter should require notification-chat service discovery")
+	}
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
 		t.Fatalf("identity-auth should not require EBS endpoint config: %v", err)
 	}
@@ -394,6 +399,7 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 		ServiceDiscovery: map[string]string{
 			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
 			string(serviceRoleCardVault):    "http://card-vault:8080",
+			string(serviceRoleNotification): "http://notification-chat:8080",
 		},
 	}
 }

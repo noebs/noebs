@@ -9,11 +9,25 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
 )
 
 func (s *Service) BillPayment(ctx context.Context, tenantID string, fields ebs_fields.ConsumerBillPaymentFields) (ebs_fields.EBSParserFields, error) {
+	if s == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingService
+	}
+	if s.HTTPClient == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
+	}
+	if tenantID == "" {
+		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	}
+	if _, err := s.serviceDiscoveryEndpoint(notificationCommandTarget); err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
+
 	req := fields
 	deviceID := req.DeviceID
 	req.ConsumerCommonFields.DelDeviceID()
@@ -45,9 +59,8 @@ func (s *Service) BillPayment(ctx context.Context, tenantID string, fields ebs_f
 		}
 	})
 
-	// Push notification (async).
 	data := PushData{
-		TenantID:      tenantID,
+		TenantID:     tenantID,
 		Type:         EBS_NOTIFICATION,
 		Date:         time.Now().Unix(),
 		CallToAction: CTA_BILL_PAYMENT,
@@ -59,45 +72,42 @@ func (s *Service) BillPayment(ctx context.Context, tenantID string, fields ebs_f
 	if err != nil {
 		data.Title = "Payment Failure"
 		data.EBSData.PAN = fields.Pan // Use the unmasked PAN for internal lookup.
+		data.To = deviceID
 		data.Body = fmt.Sprintf("Payment failed due to: %v.", res.ResponseMessage)
-		tranData <- data
-		return res, err
+		notifyErr := s.StoreNotificationEventsInNotificationChat(ctx, tenantID, notificationEvent{name: "sender-failure", data: data})
+		return res, errors.Join(err, notifyErr)
 	}
 
 	data.Title = "Payment Success"
 	data.EBSData.PAN = fields.Pan // Use the unmasked PAN for internal lookup.
+	data.To = deviceID
+	events := []notificationEvent{}
 
 	switch res.PayeeID {
 	case "0010010001", "0010010002", "0010010003", "0010010004", "0010010005", "0010010006": // telecom
-		// EBS returns payment info like "MPHONE=249..." (or similar). The old code sliced at [7:].
-		phone := ""
-		if len(res.PaymentInfo) > 7 {
-			phone = "0" + res.PaymentInfo[7:]
+		phone, err := telecomPaymentPhone(res.PaymentInfo)
+		if err != nil {
+			return res, err
 		}
-		if phone != "" {
-			data.Phone = phone
-			data.Body = fmt.Sprintf("You have received %v %v on your phone: %v.", res.TranAmount, res.AccountCurrency, phone)
-			tranData <- data
-			data.Phone = ""
-		}
+		recipient := data
+		recipient.Phone = phone
+		recipient.UserMobile = phone
+		recipient.Body = fmt.Sprintf("You have received %v %v on your phone: %v.", res.TranAmount, res.AccountCurrency, phone)
+		events = append(events, notificationEvent{name: "recipient", data: recipient})
 		data.Body = fmt.Sprintf("You have sent %v %v to phone: %v successfully.", res.TranAmount, res.AccountCurrency, phone)
 	case "0010030002": // mohe
 		data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
 	case "0010030004": // mohe arab
-		// paymentInfo includes embedded data; old code used strings.Split(...)[1][10:].
-		phone := ""
-		parts := strings.Split(res.PaymentInfo, "/")
-		if len(parts) > 1 && len(parts[1]) > 10 {
-			phone = parts[1][10:]
+		phone, err := moheArabicPaymentPhone(res.PaymentInfo)
+		if err != nil {
+			return res, err
 		}
-		if phone != "" {
-			data.Phone = phone
-			data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
-			tranData <- data
-			data.Phone = ""
-		} else {
-			data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
-		}
+		recipient := data
+		recipient.Phone = phone
+		recipient.UserMobile = phone
+		recipient.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
+		events = append(events, notificationEvent{name: "recipient", data: recipient})
+		data.Body = fmt.Sprintf("%v %v has been paid successfully for Education.", res.TranAmount, res.AccountCurrency)
 	case "0010030003": // Customs
 		data.Body = fmt.Sprintf("%v %v has been paid successfully for Customs.", res.TranAmount, res.AccountCurrency)
 	case "0010050001": // e-15
@@ -110,8 +120,40 @@ func (s *Service) BillPayment(ctx context.Context, tenantID string, fields ebs_f
 		data.Body = fmt.Sprintf("%v %v has been paid successfully for Electricity Meter No. %v", res.TranAmount, res.AccountCurrency, meter)
 	}
 
-	tranData <- data
+	events = append(events, notificationEvent{name: "sender", data: data})
+	if notifyErr := s.StoreNotificationEventsInNotificationChat(ctx, tenantID, events...); notifyErr != nil {
+		return res, notifyErr
+	}
 	return res, nil
+}
+
+func telecomPaymentPhone(paymentInfo string) (string, error) {
+	paymentInfo = strings.TrimSpace(paymentInfo)
+	const prefix = "MPHONE="
+	if !strings.HasPrefix(paymentInfo, prefix) {
+		return "", fmt.Errorf("%w: telecom paymentInfo", ErrInvalidPaymentInfo)
+	}
+	phone := strings.TrimSpace(strings.TrimPrefix(paymentInfo, prefix))
+	if phone == "" {
+		return "", fmt.Errorf("%w: telecom paymentInfo", ErrInvalidPaymentInfo)
+	}
+	return "0" + phone, nil
+}
+
+func moheArabicPaymentPhone(paymentInfo string) (string, error) {
+	parts := strings.Split(paymentInfo, "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("%w: mohe paymentInfo", ErrInvalidPaymentInfo)
+	}
+	phonePart := strings.TrimSpace(parts[1])
+	if len(phonePart) <= 10 {
+		return "", fmt.Errorf("%w: mohe paymentInfo", ErrInvalidPaymentInfo)
+	}
+	phone := strings.TrimSpace(phonePart[10:])
+	if phone == "" {
+		return "", fmt.Errorf("%w: mohe paymentInfo", ErrInvalidPaymentInfo)
+	}
+	return phone, nil
 }
 
 // GetBills inquires a bill (telecoms, utilities, government, etc.) and maintains a per-MSISDN cache.

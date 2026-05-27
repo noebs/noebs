@@ -119,6 +119,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, consumer.ErrCardVaultCommand),
 		errors.Is(err, consumer.ErrIdentityAuthCommand),
+		errors.Is(err, consumer.ErrNotificationCommand),
+		errors.Is(err, consumer.ErrInvalidPaymentInfo),
 		errors.Is(err, consumer.ErrMissingIssuedPAN):
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
@@ -128,6 +130,8 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidCardVault),
 		errors.Is(err, consumer.ErrMissingIdentityAuth),
 		errors.Is(err, consumer.ErrInvalidIdentityAuth),
+		errors.Is(err, consumer.ErrMissingNotification),
+		errors.Is(err, consumer.ErrInvalidNotification),
 		errors.Is(err, store.ErrMissingDataKey),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable

@@ -11,14 +11,12 @@
 package consumer
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/utils"
 	"github.com/pquerna/otp/totp"
 )
 
@@ -96,85 +94,4 @@ func (s *Service) ToDatabasename(url string) string {
 		s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerCompleteRegistration: "complete_card_issuance",
 	}
 	return data[url]
-}
-
-// The buffer of the tranData channel must be greater than the maximum number of
-// concurrnet clients that are connected to all services that use this channel
-var tranData = make(chan PushData, 2048)
-
-func (s *Service) Pusher(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case data, ok := <-tranData:
-			if !ok {
-				return
-			}
-			tenantID := strings.TrimSpace(data.TenantID)
-			if tenantID == "" {
-				s.Logger.Printf("push dropped: missing tenant_id uuid=%s type=%s", data.UUID, data.Type)
-				continue
-			}
-			// In the case we want to send a push notification to the receipient
-			//  (typically for telecom operations, or any operation that a user adds a phone number in the transfer field)
-			// But the problem, is that we have lost the reference to the original sender
-			s.Logger.Infof("push queued type=%s uuid=%s", data.Type, data.UUID)
-			// we are doing too much of db and logic here, let's simplify it
-			if data.Phone != "" {
-				user, err := s.Store.GetUserByMobile(ctx, tenantID, data.Phone)
-				if err != nil {
-					// not a tutipay user
-					utils.SendSMS(&s.NoebsConfig, utils.SMS{Mobile: data.Phone, Message: data.Body})
-				} else {
-					data.To = user.DeviceID
-					data.EBSData = ebs_fields.EBSResponse{}
-					data.UserMobile = user.Mobile
-					record := ebs_fields.PushDataRecord{
-						UUID:           data.UUID,
-						Type:           data.Type,
-						Date:           data.Date,
-						To:             data.To,
-						Title:          data.Title,
-						Body:           data.Body,
-						CallToAction:   data.CallToAction,
-						Phone:          data.Phone,
-						IsRead:         data.IsRead,
-						DeviceID:       data.DeviceID,
-						UserMobile:     data.UserMobile,
-						PaymentRequest: data.PaymentRequest,
-					}
-					_ = s.Store.CreatePushData(ctx, tenantID, &record)
-					s.SendPush(ctx, data)
-					// FIXME(adonese): fallback option, maybe there is not need for the duplication
-					data.To = data.DeviceID // Sender DeviceID
-					s.SendPush(ctx, data)
-				}
-			} else {
-				user, err := s.Store.GetUserByCard(ctx, tenantID, data.EBSData.PAN)
-				if err != nil {
-					s.Logger.Printf("error finding user: %v", err)
-					continue
-				}
-				data.To = user.DeviceID
-				data.UserMobile = user.Mobile
-				record := ebs_fields.PushDataRecord{
-					UUID:           data.UUID,
-					Type:           data.Type,
-					Date:           data.Date,
-					To:             data.To,
-					Title:          data.Title,
-					Body:           data.Body,
-					CallToAction:   data.CallToAction,
-					Phone:          data.Phone,
-					IsRead:         data.IsRead,
-					DeviceID:       data.DeviceID,
-					UserMobile:     data.UserMobile,
-					PaymentRequest: data.PaymentRequest,
-				}
-				_ = s.Store.CreatePushData(ctx, tenantID, &record)
-				s.SendPush(ctx, data)
-			}
-		}
-	}
 }

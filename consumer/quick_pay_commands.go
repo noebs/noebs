@@ -19,6 +19,7 @@ import (
 const (
 	cardVaultServiceDiscoveryKey    = "card-vault"
 	identityAuthServiceDiscoveryKey = "identity-auth"
+	notificationServiceDiscoveryKey = "notification-chat"
 	internalTenantIDHeader          = "X-Tenant-ID"
 )
 
@@ -41,6 +42,12 @@ var (
 		missingErr:   ErrMissingIdentityAuth,
 		invalidErr:   ErrInvalidIdentityAuth,
 		commandErr:   ErrIdentityAuthCommand,
+	}
+	notificationCommandTarget = serviceCommandTarget{
+		discoveryKey: notificationServiceDiscoveryKey,
+		missingErr:   ErrMissingNotification,
+		invalidErr:   ErrInvalidNotification,
+		commandErr:   ErrNotificationCommand,
 	}
 )
 
@@ -278,8 +285,12 @@ func errorForServiceCommandCode(code string) error {
 		return ErrInvalidPaymentToken
 	case ErrAmbiguousPaymentToken.Error():
 		return ErrAmbiguousPaymentToken
+	case ErrInvalidPaymentInfo.Error():
+		return ErrInvalidPaymentInfo
 	case ErrMissingStore.Error():
 		return ErrMissingStore
+	case ErrNotificationCommand.Error():
+		return ErrNotificationCommand
 	case ErrMissingMobile.Error():
 		return ErrMissingMobile
 	case ErrMissingPassword.Error():

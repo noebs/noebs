@@ -59,13 +59,29 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	}))
 	t.Cleanup(ebsServer.Close)
 
+	var notifications []StorePushDataCommand
+	notificationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/notification-chat/push-data" {
+			t.Fatalf("notification path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		var cmd StorePushDataCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode notification command: %v", err)
+		}
+		notifications = append(notifications, cmd)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(notificationServer.Close)
+
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: testHTTPClient(),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP: ebsServer.URL + "/",
 			ServiceDiscovery: map[string]string{
-				cardVaultServiceDiscoveryKey: cardVaultServer.URL,
+				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
+				notificationServiceDiscoveryKey: notificationServer.URL,
 			},
 		},
 	}
@@ -95,5 +111,20 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	}
 	if !sawCardVault || !sawEBS {
 		t.Fatalf("sawCardVault=%v sawEBS=%v", sawCardVault, sawEBS)
+	}
+	if len(notifications) != 2 {
+		t.Fatalf("notification commands = %d, want 2", len(notifications))
+	}
+	if got, want := notifications[0].Data.UUID, "transfer-uuid:receiver"; got != want {
+		t.Fatalf("receiver notification uuid = %q, want %q", got, want)
+	}
+	if got, want := notifications[0].Data.UserMobile, "0912141660"; got != want {
+		t.Fatalf("receiver notification user_mobile = %q, want %q", got, want)
+	}
+	if got, want := notifications[1].Data.UUID, "transfer-uuid:sender"; got != want {
+		t.Fatalf("sender notification uuid = %q, want %q", got, want)
+	}
+	if got, want := notifications[1].Data.To, "sender-device"; got != want {
+		t.Fatalf("sender notification to = %q, want %q", got, want)
 	}
 }

@@ -389,10 +389,12 @@ func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler)
 	}
 }
 
-func registerNotificationChatRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerNotificationChatRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Get("/ws", userIdentity, adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		chat.ServeWs(hub, w, r)
 	}))
+
+	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", adminIdentity), consumerHandler)
 
 	cons := route.Group("/consumer", userIdentity)
 	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
@@ -530,7 +532,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleNotification {
-		registerNotificationChatRoutes(route, userIdentity, consumerHandler)
+		registerNotificationChatRoutes(route, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleBeneficiary {

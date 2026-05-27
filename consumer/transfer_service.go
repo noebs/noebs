@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,13 +11,22 @@ import (
 	"github.com/adonese/noebs/store"
 )
 
-// CardTransfer performs a P2P card transfer and enqueues push notifications.
+// CardTransfer performs a P2P card transfer and stores notification events through notification-chat.
 func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_fields.ConsumerCardTransferAndMobileFields) (ebs_fields.EBSParserFields, error) {
-	if s == nil || s.Store == nil {
+	if s == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingService
+	}
+	if s.Store == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingStore
+	}
+	if s.HTTPClient == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	}
+	if _, err := s.serviceDiscoveryEndpoint(notificationCommandTarget); err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
 	req := fields
@@ -36,7 +46,6 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 		},
 	)
 
-	// Push notification (async).
 	data := PushData{
 		TenantID:       tenantID,
 		Type:           EBS_NOTIFICATION,
@@ -50,22 +59,35 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 	}
 
 	if err != nil {
-		// Sender notification.
-		data.EBSData.PAN = fields.Pan
-		data.Body = fmt.Sprintf("Card Transfer failed due to: %v.", res.ResponseMessage)
-		tranData <- data
-		return res, err
+		sender := data
+		sender.EBSData.PAN = fields.Pan
+		sender.To = deviceID
+		sender.Body = fmt.Sprintf("Card Transfer failed due to: %v.", res.ResponseMessage)
+		notifyErr := s.StoreNotificationEventsInNotificationChat(ctx, tenantID, notificationEvent{name: "sender-failure", data: sender})
+		return res, errors.Join(err, notifyErr)
 	}
 
-	// Receiver notification.
-	data.EBSData.PAN = fields.ToCard
-	data.Body = fmt.Sprintf("You have received %v %v from %v.", fields.TranAmount, res.AccountCurrency, res.PAN)
-	tranData <- data
+	receiver := data
+	receiver.EBSData.PAN = fields.ToCard
+	receiver.Body = fmt.Sprintf("You have received %v %v from %v.", fields.TranAmount, res.AccountCurrency, res.PAN)
+	receiverMobile := strings.TrimSpace(fields.Mobile)
+	if receiverMobile != "" {
+		receiver.Phone = receiverMobile
+		receiver.UserMobile = receiverMobile
+	}
 
-	// Sender notification.
-	data.EBSData.PAN = fields.Pan
-	data.Body = fmt.Sprintf("%v %v has been transferred successfully from your account to %v.", fields.TranAmount, res.AccountCurrency, res.ToCard)
-	tranData <- data
+	sender := data
+	sender.EBSData.PAN = fields.Pan
+	sender.To = deviceID
+	sender.Body = fmt.Sprintf("%v %v has been transferred successfully from your account to %v.", fields.TranAmount, res.AccountCurrency, res.ToCard)
+	if notifyErr := s.StoreNotificationEventsInNotificationChat(
+		ctx,
+		tenantID,
+		notificationEvent{name: "receiver", data: receiver},
+		notificationEvent{name: "sender", data: sender},
+	); notifyErr != nil {
+		return res, notifyErr
+	}
 
 	return res, nil
 }
@@ -85,6 +107,9 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 	receiverMobile := strings.TrimSpace(fields.Mobile)
 	if receiverMobile == "" {
 		return ebs_fields.EBSParserFields{}, ErrMissingMobile
+	}
+	if _, err := s.serviceDiscoveryEndpoint(notificationCommandTarget); err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
 	card, err := s.ResolveCardByMobileInCardVault(ctx, tenantID, receiverMobile)
@@ -113,7 +138,6 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 		},
 	)
 
-	// Push notifications (async).
 	data := PushData{
 		TenantID:     tenantID,
 		Type:         EBS_NOTIFICATION,
@@ -126,22 +150,32 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 	}
 
 	if err != nil {
-		// Sender notification.
-		data.EBSData.PAN = fields.Pan
-		data.Body = fmt.Sprintf("Card Transfer failed due to: %v.", res.ResponseMessage)
-		tranData <- data
-		return res, err
+		sender := data
+		sender.EBSData.PAN = fields.Pan
+		sender.To = deviceID
+		sender.Body = fmt.Sprintf("Card Transfer failed due to: %v.", res.ResponseMessage)
+		notifyErr := s.StoreNotificationEventsInNotificationChat(ctx, tenantID, notificationEvent{name: "sender-failure", data: sender})
+		return res, errors.Join(err, notifyErr)
 	}
 
-	// Receiver notification.
-	data.EBSData.PAN = toCard
-	data.Body = fmt.Sprintf("You have received %v %v from %v.", fields.TranAmount, res.AccountCurrency, res.PAN)
-	tranData <- data
+	receiver := data
+	receiver.EBSData.PAN = toCard
+	receiver.Phone = receiverMobile
+	receiver.UserMobile = receiverMobile
+	receiver.Body = fmt.Sprintf("You have received %v %v from %v.", fields.TranAmount, res.AccountCurrency, res.PAN)
 
-	// Sender notification.
-	data.EBSData.PAN = fields.Pan
-	data.Body = fmt.Sprintf("%v %v has been transferred successfully from your account to %v.", fields.TranAmount, res.AccountCurrency, res.ToCard)
-	tranData <- data
+	sender := data
+	sender.EBSData.PAN = fields.Pan
+	sender.To = deviceID
+	sender.Body = fmt.Sprintf("%v %v has been transferred successfully from your account to %v.", fields.TranAmount, res.AccountCurrency, res.ToCard)
+	if notifyErr := s.StoreNotificationEventsInNotificationChat(
+		ctx,
+		tenantID,
+		notificationEvent{name: "receiver", data: receiver},
+		notificationEvent{name: "sender", data: sender},
+	); notifyErr != nil {
+		return res, notifyErr
+	}
 
 	return res, nil
 }

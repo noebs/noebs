@@ -125,3 +125,7 @@ func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
 func RegisterNotificationRoutes(router fiber.Router, h *Handler) {
 	router.Get("/notifications", h.Notifications)
 }
+
+func RegisterNotificationAdminInternalRoutes(router fiber.Router, h *Handler) {
+	router.Post("/push-data", h.StoreNotificationPushData)
+}

@@ -91,3 +91,24 @@ func TestService_NotificationsUseNotificationScopeOnly(t *testing.T) {
 		t.Fatalf("body = %q", records[0].Body)
 	}
 }
+
+func TestService_NotificationsMatchExplicitPhone(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeNotificationChat})
+	service := &Service{Store: storeSvc}
+	mobile := "0129751986"
+	seed := PushData{UUID: "uuid-phone-notification", Body: "phone scope", Phone: mobile}
+	if err := storeSvc.CreatePushData(context.Background(), tenantID, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
+		t.Fatalf("seed notification: %v", err)
+	}
+
+	records, err := service.Notifications(context.Background(), tenantID, mobile)
+	if err != nil {
+		t.Fatalf("notifications: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
+	}
+	if records[0].Body != "phone scope" {
+		t.Fatalf("body = %q", records[0].Body)
+	}
+}
