@@ -91,7 +91,11 @@ func (h *Handler) NoebsQuickPayment(c *fiber.Ctx) error {
 	tokenQuery := strings.TrimSpace(c.Query("token"))
 
 	var req ebs_fields.QuickPaymentFields
-	_ = parseJSON(c, &req) // allow body-less quick pay
+	if len(c.Body()) != 0 {
+		if err := parseJSON(c, &req); err != nil {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
+		}
+	}
 
 	res, err := h.Service.NoebsQuickPayment(c.UserContext(), tenantID, req, uuidQuery, tokenQuery)
 	if err != nil {

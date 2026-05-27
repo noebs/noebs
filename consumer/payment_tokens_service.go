@@ -174,27 +174,12 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, req eb
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
 	}
 
-	var noebsToken ebs_fields.Token
-	if strings.TrimSpace(req.EncodedPaymentToken) != "" {
-		if t, err := ebs_fields.Decode(req.EncodedPaymentToken); err == nil {
-			noebsToken = t
-		}
-	}
-	if noebsToken.UUID == "" && strings.TrimSpace(tokenQuery) != "" {
-		if t, err := ebs_fields.Decode(tokenQuery); err == nil {
-			noebsToken = t
-		}
-	}
-	if noebsToken.UUID == "" && strings.TrimSpace(uuidQuery) != "" {
-		if t, err := s.Store.GetTokenByUUID(ctx, tenantID, uuidQuery); err == nil && t != nil {
-			noebsToken = *t
-		}
-	}
-	if noebsToken.UUID == "" {
-		return ebs_fields.EBSParserFields{}, ErrMissingUUID
+	tokenUUID, err := quickPaymentTokenUUID(req, uuidQuery, tokenQuery)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
-	storedToken, err := s.Store.GetTokenByUUID(ctx, tenantID, noebsToken.UUID)
+	storedToken, err := s.Store.GetTokenByUUID(ctx, tenantID, tokenUUID)
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
@@ -231,4 +216,41 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, req eb
 	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: err == nil, Token: storedToken.UUID}
 
 	return res, err
+}
+
+func quickPaymentTokenUUID(req ebs_fields.QuickPaymentFields, uuidQuery, tokenQuery string) (string, error) {
+	bodyToken := strings.TrimSpace(req.EncodedPaymentToken)
+	queryToken := strings.TrimSpace(tokenQuery)
+	queryUUID := strings.TrimSpace(uuidQuery)
+
+	count := 0
+	for _, value := range []string{bodyToken, queryToken, queryUUID} {
+		if value != "" {
+			count++
+		}
+	}
+	if count == 0 {
+		return "", ErrMissingUUID
+	}
+	if count > 1 {
+		return "", ErrAmbiguousPaymentToken
+	}
+
+	if queryUUID != "" {
+		return queryUUID, nil
+	}
+
+	encoded := bodyToken
+	if encoded == "" {
+		encoded = queryToken
+	}
+	token, err := ebs_fields.Decode(encoded)
+	if err != nil {
+		return "", ErrInvalidPaymentToken
+	}
+	tokenUUID := strings.TrimSpace(token.UUID)
+	if tokenUUID == "" {
+		return "", ErrInvalidPaymentToken
+	}
+	return tokenUUID, nil
 }

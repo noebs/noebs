@@ -15,8 +15,10 @@ var (
 	ErrTransactionFailed = errors.New("transaction_failed")
 
 	// Payments / transfers
-	ErrAmountMismatch    = errors.New("amount_mismatch")
-	ErrReceiverHasNoCard = errors.New("receiver has no card")
+	ErrAmountMismatch        = errors.New("amount_mismatch")
+	ErrReceiverHasNoCard     = errors.New("receiver has no card")
+	ErrInvalidPaymentToken   = errors.New("invalid_payment_token")
+	ErrAmbiguousPaymentToken = errors.New("ambiguous_payment_token")
 
 	// Registration
 	ErrMissingPassword = errors.New("missing password")
