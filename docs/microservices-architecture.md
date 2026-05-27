@@ -67,7 +67,7 @@ Initial package owner: `wallet/psp`, `wallet/handler/psp_webhook.go`.
 
 Owns websocket hub, persisted push data, biller callback delivery, notification projections, and device-token fanout. It consumes domain events from wallet/EBS/auth rather than reading write models directly.
 
-Initial package owner: current `github.com/tutipay/ws` integration plus notification methods in `consumer`.
+Initial package owner: current `github.com/tutipay/ws` integration plus notification methods in `consumer`. The first split owns `/ws`, `GET /consumer/notifications`, `POST /consumer/user/device`, and `POST /consumer/submit_contacts`.
 
 ### Admin/Reporting Service
 
@@ -100,6 +100,7 @@ Kubernetes provides service discovery through ClusterIP services:
 - `api-gateway.noebs.svc.cluster.local:8080`
 - `psp-webhook.noebs.svc.cluster.local:8080`
 - `admin-reporting.noebs.svc.cluster.local:8080`
+- `notification-chat.noebs.svc.cluster.local:8080`
 - `wallet-ledger.noebs.svc.cluster.local:9090`
 - `wallet-worker` has no service; it is a worker deployment.
 - `temporal-frontend.noebs.svc.cluster.local:7233`
@@ -111,16 +112,17 @@ Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an 
 
 ## Migration Plan
 
-1. Add explicit runtime roles to the current binary: `api-gateway`, `psp-webhook`, `admin-reporting`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+1. Add explicit runtime roles to the current binary: `api-gateway`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
 2. Run database migrations only through the Kubernetes/k3s migration Job.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
 5. Move dashboard traffic into the `admin-reporting` workload. It owns read-only dashboard, settlement, merchant-view, status, and stream routes. `GET /dashboard/create` and `POST /dashboard/issues` are not registered by the reporting service.
-6. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
-7. Extract Identity/Auth and Card/Vault behind internal APIs. Remove direct card/user table access from consumer/merchant flows.
-8. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
-9. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
-10. Split migrations by owned schema and enforce table ownership in tests.
+6. Move notification/chat traffic into the `notification-chat` workload. It owns websocket contacts, notification reads, and device-token updates at the public path level.
+7. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
+8. Extract Identity/Auth and Card/Vault behind internal APIs. Remove direct card/user table access from consumer/merchant flows.
+9. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
+10. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
+11. Split migrations by owned schema and enforce table ownership in tests.
 
 ## Verification Gates
 
@@ -135,3 +137,4 @@ Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an 
   - Temporal worker polling the configured task queue.
   - one PSP webhook signature rejection test.
   - one admin/reporting read-only dashboard load.
+  - one notification/chat websocket upgrade or notification read through `notification-chat`.

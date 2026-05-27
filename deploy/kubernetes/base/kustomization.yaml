@@ -12,6 +12,7 @@ resources:
   - api-gateway.yaml
   - psp-webhook.yaml
   - admin-reporting.yaml
+  - notification-chat.yaml
   - wallet-ledger.yaml
   - wallet-worker.yaml
 

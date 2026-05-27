@@ -105,10 +105,11 @@ func main() {
 		closePSPTemporalClient()
 	}()
 
-	if role.startsChat() && hub != nil {
+	if role.startsChat() {
+		if hub == nil {
+			logrusLogger.Fatal("notification-chat role requires an initialized chat hub")
+		}
 		go hub.Run()
-	} else {
-		logrusLogger.Warn("chat hub disabled (db unavailable)")
 	}
 	if role.startsBackgroundJobs() {
 		go consumerService.BillerHooks(ctx, noebsConfig.DefaultTenantID)

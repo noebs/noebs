@@ -93,11 +93,7 @@ func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
 	// Transactions / notifications
 	router.Get("/transaction", h.TransactionByUUID)
 	router.Get("/transactions", h.GetTransactions)
-	router.Get("/notifications", h.Notifications)
 	router.Post("/p2p_mobile", h.MobileTransfer)
-
-	// Devices
-	router.Post("/user/device", h.AddDeviceToken)
 
 	// Beneficiaries
 	router.Post("/beneficiary", h.CreateBeneficiary)
@@ -109,4 +105,9 @@ func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Post("/payment_token", h.GeneratePaymentToken)
 	router.Post("/payment_request", h.PaymentRequest)
 	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
+}
+
+func RegisterNotificationRoutes(router fiber.Router, h *Handler) {
+	router.Get("/notifications", h.Notifications)
+	router.Post("/user/device", h.AddDeviceToken)
 }

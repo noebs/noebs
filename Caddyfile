@@ -7,6 +7,22 @@ api.noebs.sd, dsa.adonese.sd {
         reverse_proxy admin-reporting:8080
     }
 
+    handle /ws {
+        reverse_proxy notification-chat:8080
+    }
+
+    handle /consumer/notifications* {
+        reverse_proxy notification-chat:8080
+    }
+
+    handle /consumer/user/device* {
+        reverse_proxy notification-chat:8080
+    }
+
+    handle /consumer/submit_contacts* {
+        reverse_proxy notification-chat:8080
+    }
+
     handle {
         reverse_proxy api-gateway:8080
     }

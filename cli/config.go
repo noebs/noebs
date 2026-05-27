@@ -219,6 +219,24 @@ func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, te
 	}
 }
 
+func registerNotificationChatRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler) {
+	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chat.ServeWs(hub, w, r)
+	}))
+
+	cons := route.Group("/consumer", auth.AuthMiddleware())
+	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
+	cons.Post("/submit_contacts", func(c *fiber.Ctx) error {
+		mobile, ok := c.Locals("mobile").(string)
+		if !ok || strings.TrimSpace(mobile) == "" {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "missing_mobile", "message": "missing mobile claim"})
+		}
+		return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			chat.SubmitContacts(mobile, database.DB, w, r)
+		})(c)
+	})
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
@@ -268,18 +286,15 @@ func GetMainEngine() *fiber.App {
 		registerAdminReportingRoutes(route, adminGuard, templateDir)
 		return route
 	}
+	if role == serviceRoleNotification {
+		registerNotificationChatRoutes(route, auth, consumerHandler)
+		return route
+	}
 	if role != serviceRoleAPIGateway {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
 
 	merchanthandler.RegisterRoutes(route, merchantHandler)
-	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hub == nil {
-			http.Error(w, "chat disabled", http.StatusServiceUnavailable)
-			return
-		}
-		chat.ServeWs(hub, w, r)
-	}))
 
 	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
 	route.Get("/app/config", appConfigHandler)
@@ -294,25 +309,6 @@ func GetMainEngine() *fiber.App {
 
 		authedCons := cons.Group("", auth.AuthMiddleware())
 		consumerhandler.RegisterAuthedRoutes(authedCons, consumerHandler)
-		authedCons.Post("/submit_contacts", func(c *fiber.Ctx) error {
-			if hub == nil {
-				return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"code": "chat_disabled", "message": "chat disabled"})
-			}
-			mobile := c.Locals("mobile")
-			var m string
-			if mobile != nil {
-				if s, ok := mobile.(string); ok {
-					m = s
-				}
-			}
-			return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if database == nil || database.DB == nil {
-					http.Error(w, "chat disabled", http.StatusServiceUnavailable)
-					return
-				}
-				chat.SubmitContacts(m, database.DB, w, r)
-			})(c)
-		})
 	}
 
 	if walletService != nil {

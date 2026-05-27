@@ -24,6 +24,34 @@ spec:
                 name: psp-webhook
                 port:
                   name: http
+          - path: /ws
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
+          - path: /consumer/notifications
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
+          - path: /consumer/user/device
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
+          - path: /consumer/submit_contacts
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
           - path: /dashboard
             pathType: Prefix
             backend:
@@ -46,6 +74,34 @@ spec:
             backend:
               service:
                 name: psp-webhook
+                port:
+                  name: http
+          - path: /ws
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
+          - path: /consumer/notifications
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
+          - path: /consumer/user/device
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
+                port:
+                  name: http
+          - path: /consumer/submit_contacts
+            pathType: Exact
+            backend:
+              service:
+                name: notification-chat
                 port:
                   name: http
           - path: /dashboard
