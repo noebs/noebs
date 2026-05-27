@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
@@ -131,19 +131,6 @@ func loadConfig() ([]byte, error) {
 
 	logrusLogger.Printf("Loaded config from %s", configPath)
 	return payload, nil
-}
-
-func resolveDashboardTemplateDir() string {
-	candidates := []string{
-		"./dashboard/template",
-		"../dashboard/template",
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return filepath.Clean(candidate)
-		}
-	}
-	return "./dashboard/template"
 }
 
 func buildPSPDeps(service *wallet.Service, secrets map[string]interface{}) (*walletpsp.Registry, *walletpsp.Loader) {
@@ -342,8 +329,10 @@ func roleNeedsWalletPSPDeps(role serviceRole) bool {
 		role == serviceRoleWalletWorker
 }
 
-func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler, templateDir string) {
-	route.Static("/dashboard/assets", templateDir)
+func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler) {
+	route.Use("/dashboard/assets", filesystem.New(filesystem.Config{
+		Root: dashboard.AssetFileSystem(),
+	}))
 	dashboardGroup := route.Group("/dashboard", adminIdentity)
 	{
 		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
@@ -440,7 +429,6 @@ func GetMainEngine() *fiber.App {
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
 	}
-	templateDir := resolveDashboardTemplateDir()
 	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
 	userIdentity := gateway.InternalUserIdentityMiddleware()
@@ -497,7 +485,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleAdminReporting {
-		registerAdminReportingRoutes(route, adminIdentity, templateDir)
+		registerAdminReportingRoutes(route, adminIdentity)
 		return route
 	}
 	if role == serviceRoleNotification {

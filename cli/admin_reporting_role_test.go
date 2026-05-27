@@ -1,8 +1,11 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -33,9 +36,46 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode == http.StatusNotFound {
 		t.Fatalf("admin-reporting did not register dashboard read route")
+	}
+}
+
+func TestAdminReportingServesEmbeddedDashboardAssets(t *testing.T) {
+	ensureInit()
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/style.css", nil)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), "padding-top") {
+		t.Fatalf("embedded dashboard asset body = %q", body)
 	}
 }
 
