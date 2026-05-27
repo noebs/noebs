@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  labels:
+    app.kubernetes.io/name: api-gateway
+spec:
+  ingressClassName: traefik
+  tls:
+    - secretName: noebs-tls
+      hosts:
+        - api.noebs.sd
+        - dsa.adonese.sd
+  rules:
+    - host: api.noebs.sd
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  name: http
+    - host: dsa.adonese.sd
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  name: http

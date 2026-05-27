@@ -1,0 +1,134 @@
+# noebs Microservices Architecture Plan
+
+Status: reviewed foundation, microservices-only runtime.
+Deployment target: existing host `100.102.164.34`.
+
+## Current Shape
+
+The pre-split runtime was a single Go binary built from `./cli`. `cli/config.go` initialized the database, migrations, Fiber routes, auth, consumer handlers, merchant handlers, dashboard, chat hub, wallet HTTP handlers, wallet gRPC server, PSP webhook handling, and the Temporal wallet worker in one process.
+
+The target runtime is microservices-only. There is no supported monolith runtime role, no mixed monolith/microservice deployment mode, and no silent fallback to an all-in-one process. The same image can be reused while packages are being extracted, but every process must declare a single service role and own only that role's process lifecycle. If a split exposes a bug, we fix forward.
+
+The code already has useful extraction points:
+
+- `apigateway`: Fiber middleware for request IDs, CORS, auth enforcement, metrics, and logging.
+- `consumer/handler` and `merchant/handler`: legacy public REST surfaces.
+- `wallet/grpc` plus `proto/noebs/wallet/v1/wallet.proto`: existing wallet gRPC contract.
+- `wallet/worker` and `wallet/workflow`: Temporal workflow/worker package.
+- `wallet/psp` and `wallet/handler/psp_webhook.go`: PSP config, mapping, verification, and webhook handling.
+- `dashboard`: admin/reporting views.
+- `store` and `wallet/store`: shared Postgres migration set today, with tenant/currency validation already asserted by tests.
+
+## Service Boundaries
+
+### API Gateway/BFF
+
+Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state. It calls internal services over gRPC/HTTP and maps their typed errors to the public REST contract.
+
+Initial package owner: `apigateway`, route composition from `cli`.
+
+### Identity/Auth Service
+
+Owns users, mobile auth, Google OAuth linking, JWT issuance, auth accounts, profiles, API keys, and device identity. Tenancy should stay here initially as tenant identity/configuration, not as a separate service, until tenant lifecycle needs its own API and operators.
+
+Initial package owner: existing user/auth code in `consumer` plus `store` user/auth tables.
+
+### Card/Vault Service
+
+Owns PAN/IPIN/card storage, encryption, tokenization, fingerprints, card lookup, and mobile-to-card mappings. Only this service can read decrypted card data. Other services receive tokenized references or last-four metadata.
+
+Initial package owner: card/token functions currently in `consumer` and `store`.
+
+### EBS Adapter Service
+
+Owns EBS HTTP protocol details, merchant and consumer EBS calls, IPIN protocol calls, retry policy, circuit breakers, EBS endpoint selection, and raw EBS interaction logs. Merchant and consumer APIs become compatibility clients of this adapter rather than owners of EBS protocol logic.
+
+Initial package owner: `ebs_fields`, `consumer/*_service.go`, `merchant/*`.
+
+### Wallet/Ledger Service
+
+Owns wallets, balances, holds, double-entry posting, fees, limits, rates, funding sources, withdrawal destinations, wallet PIN/2FA state, and wallet gRPC APIs. Wallet and ledger stay together because balance correctness depends on local transactional invariants.
+
+Initial package owner: `wallet`, `wallet/store`, `wallet/grpc`, `proto/noebs/wallet/v1`.
+
+### Wallet Worker Service
+
+Owns Temporal workers and scheduled wallet workflows. It uses the same wallet codebase at first, but runs as a separate process with no public HTTP listener. It executes PSP polling, reconciliation, P2P, deposit, withdrawal, and manual-transfer workflows.
+
+Initial package owner: `wallet/worker`, `wallet/workflow`, `wallet/activity`.
+
+### PSP/Webhook Service
+
+Owns PSP config loading, webhook signature verification, PSP request/response mapping, idempotent webhook persistence, and workflow signaling. It must not post ledger entries directly; successful webhooks signal wallet workflows.
+
+Initial package owner: `wallet/psp`, `wallet/handler/psp_webhook.go`.
+
+### Notification/Chat Service
+
+Owns websocket hub, persisted push data, biller callback delivery, notification projections, and device-token fanout. It consumes domain events from wallet/EBS/auth rather than reading write models directly.
+
+Initial package owner: current `github.com/tutipay/ws` integration plus notification methods in `consumer`.
+
+### Admin/Reporting Service
+
+Owns read-only dashboards, settlement reports, issue reports, and operational projections. It consumes events or reporting tables. It must not own payment writes.
+
+Initial package owner: `dashboard` plus wallet admin templates as a transitional read surface.
+
+### Frontend
+
+The first split should keep frontend delivery behind the API Gateway/BFF. Admin UI can later move into a separate static frontend served by the gateway or an object store/CDN.
+
+## Invariants
+
+- Tenant ID is required at the API boundary and must be explicit for every service call.
+- Currency is required at the API boundary for money movement and must be explicit below handlers.
+- JWT tenant/user claims bind to request tenant/user fields; a mismatch is an auth failure.
+- Store and service layers return typed validation errors for missing tenant, missing currency, invalid user ID, invalid wallet ID, and missing idempotency keys.
+- The Card/Vault service is the only owner of PAN/IPIN decryption.
+- The Wallet/Ledger service is the only owner of wallet balances and double-entry writes.
+- Wallet writes are idempotent by caller-provided idempotency key.
+- PSP webhooks must be verified or explicitly authorized by provider config before they can signal workflows.
+- EBS calls are logged with tenant, service, request reference, response code, and raw adapter metadata.
+- Migrations run only as a Kubernetes/k3s `Job` deployment step, not from service replicas.
+- Each service owns its tables after extraction. During the transition, shared Postgres is allowed only with clear table ownership.
+
+## Deployment Shape
+
+Kubernetes provides service discovery through ClusterIP services:
+
+- `api-gateway.noebs.svc.cluster.local:8080`
+- `wallet-ledger.noebs.svc.cluster.local:9090`
+- `wallet-worker` has no service; it is a worker deployment.
+- `temporal-frontend.noebs.svc.cluster.local:7233`
+- `postgres.noebs.svc.cluster.local:5432`
+
+Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Terraform under `foundation/terraform` owns platform installation and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
+
+Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an Argo CD PreSync hook. Service Deployments must not run migrations in their startup path.
+
+## Migration Plan
+
+1. Add explicit runtime roles to the current binary: `api-gateway`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+2. Run database migrations only through the Kubernetes/k3s migration Job.
+3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
+4. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
+5. Extract PSP/Webhook as a separate workload that verifies provider input and signals Temporal workflows.
+6. Extract Identity/Auth and Card/Vault behind internal APIs. Remove direct card/user table access from consumer/merchant flows.
+7. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
+8. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
+9. Split migrations by owned schema and enforce table ownership in tests.
+
+## Verification Gates
+
+- `go test ./...`
+- `go test ./cli ./apigateway ./store ./wallet/...`
+- `kubectl kustomize deploy/kubernetes/overlays/current-host`
+- `terraform -chdir=foundation/terraform fmt -check`
+- `terraform -chdir=foundation/terraform validate`
+- Smoke checks after deployment:
+  - `GET /test` on the public gateway.
+  - wallet gRPC health from inside the cluster.
+  - Temporal worker polling the configured task queue.
+  - one PSP webhook signature rejection test.
+  - one admin/reporting read-only dashboard load.

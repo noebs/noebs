@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-worker
+  labels:
+    app.kubernetes.io/name: wallet-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wallet-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wallet-worker
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: wallet-worker
+          image: ghcr.io/adonese/noebs:master
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NOEBS_SERVICE
+              value: wallet-worker
+            - name: NOEBS_RUNTIME_DIR
+              value: /app/runtime
+            - name: SOPS_AGE_KEY_FILE
+              value: /app/.sops/age-key.txt
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: noebs-secrets
+              mountPath: /app/secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: sops-age-key
+              mountPath: /app/.sops/age-key.txt
+              subPath: age-key.txt
+              readOnly: true
+            - name: runtime
+              mountPath: /app/runtime
+      volumes:
+        - name: config
+          configMap:
+            name: noebs-config
+        - name: noebs-secrets
+          secret:
+            secretName: noebs-secrets
+        - name: sops-age-key
+          secret:
+            secretName: sops-age-key
+        - name: runtime
+          emptyDir: {}

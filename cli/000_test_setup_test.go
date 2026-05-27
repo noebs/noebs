@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/internal/testdb"
+	"github.com/adonese/noebs/store"
 )
 
 var testPostgres *testdb.PostgresContainer
@@ -16,6 +17,10 @@ var testDBName string
 var testConfigPath string
 
 func TestMain(m *testing.M) {
+	if err := os.Setenv("NOEBS_SERVICE", string(serviceRoleAPIGateway)); err != nil {
+		panic(fmt.Sprintf("set NOEBS_SERVICE: %v", err))
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -40,6 +45,19 @@ func TestMain(m *testing.M) {
 `, dbURL, "postgres", "test-tenant")
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))
+	}
+	db, err := store.OpenFromConfig(dbURL, "", store.DriverPostgres)
+	if err != nil {
+		panic(fmt.Sprintf("open test db for migration job: %v", err))
+	}
+	if err := store.Migrate(ctx, db, "test-tenant"); err != nil {
+		panic(fmt.Sprintf("run test migration job: %v", err))
+	}
+	if err := store.New(db).EnsureTenant(ctx, "test-tenant"); err != nil {
+		panic(fmt.Sprintf("ensure test tenant: %v", err))
+	}
+	if err := db.Close(); err != nil {
+		panic(fmt.Sprintf("close migration db: %v", err))
 	}
 
 	code := m.Run()

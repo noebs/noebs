@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: noebs
+  namespace: argocd
+spec:
+  sourceRepos:
+    - https://github.com/adonese/noebs.git
+  destinations:
+    - namespace: noebs
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: noebs
+  namespace: argocd
+spec:
+  project: noebs
+  source:
+    repoURL: https://github.com/adonese/noebs.git
+    targetRevision: master
+    path: deploy/kubernetes/overlays/current-host
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: noebs
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true

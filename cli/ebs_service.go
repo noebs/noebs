@@ -46,6 +46,10 @@ func main() {
 		}
 		return
 	}
+	role, err := currentServiceRole()
+	if err != nil {
+		logrusLogger.Fatalf("error in runtime service role: %v", err)
+	}
 
 	if otelShutdown != nil {
 		defer func() {
@@ -56,11 +60,15 @@ func main() {
 			}
 		}()
 	}
+	if role == serviceRoleMigrate {
+		logrusLogger.Print("migration service role completed")
+		return
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if grpcServer != nil && grpcListener != nil {
+	if role.startsGRPC() && grpcServer != nil && grpcListener != nil {
 		go func() {
 			logrusLogger.Printf("grpc server listening on %s", grpcListener.Addr())
 			if err := grpcServer.Serve(grpcListener); err != nil {
@@ -74,16 +82,36 @@ func main() {
 			grpcServer.GracefulStop()
 		}
 	}()
+	if role == serviceRoleWalletLedger {
+		if grpcServer == nil || grpcListener == nil {
+			logrusLogger.Fatal("wallet-ledger role requires an initialized grpc server")
+		}
+		<-ctx.Done()
+		return
+	}
+	if role == serviceRoleWalletWorker {
+		if walletWorker == nil {
+			logrusLogger.Fatal("wallet-worker role requires an initialized temporal worker")
+		}
+		<-ctx.Done()
+		walletWorker.Stop()
+		return
+	}
+	if !role.startsHTTP() {
+		logrusLogger.Fatalf("service role %s has no runnable process", role)
+	}
 
-	if hub != nil {
+	if role.startsChat() && hub != nil {
 		go hub.Run()
 	} else {
 		logrusLogger.Warn("chat hub disabled (db unavailable)")
 	}
-	go consumerService.BillerHooks(ctx, noebsConfig.DefaultTenantID)
-	go consumerService.Pusher(ctx)
+	if role.startsBackgroundJobs() {
+		go consumerService.BillerHooks(ctx, noebsConfig.DefaultTenantID)
+		go consumerService.Pusher(ctx)
+	}
 	if noebsConfig.Port == "" {
-		noebsConfig.Port = ":8080"
+		logrusLogger.Fatal("api-gateway role requires port")
 	}
 	logrusLogger.Fatal(GetMainEngine().Listen(noebsConfig.Port))
 }

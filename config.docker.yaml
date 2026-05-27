@@ -1,7 +1,14 @@
 noebs:
   db_driver: pgx
   port: ":8080"
-  grpc_enabled: false
+  temporal_enabled: true
+  temporal_host: "temporal"
+  temporal_port: "7233"
+  temporal_namespace: "default"
+  wallet_enabled: true
+  wallet_pin_required: true
+  wallet_default_currency: "SDG"
+  grpc_enabled: true
   grpc_port: ":9090"
   grpc_gateway_enabled: false
   grpc_gateway_port: ":9091"

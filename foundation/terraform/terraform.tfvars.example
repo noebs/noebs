@@ -1,0 +1,7 @@
+deployment_host       = "100.102.164.34"
+kubeconfig_path       = "~/.kube/noebs-current-host.yaml"
+argocd_namespace      = "argocd"
+argocd_chart_version  = "8.5.7"
+noebs_repo_url        = "https://github.com/adonese/noebs.git"
+noebs_target_revision = "master"
+noebs_manifest_path   = "deploy/kubernetes/overlays/current-host"

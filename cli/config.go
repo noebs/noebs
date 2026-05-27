@@ -330,6 +330,10 @@ func init() {
 
 func initConfig() {
 	var err error
+	role, err := currentServiceRole()
+	if err != nil {
+		logrusLogger.Fatalf("error in runtime service role: %v", err)
+	}
 
 	// load the secrets file
 	configData, err := loadConfig()
@@ -368,18 +372,23 @@ func initConfig() {
 	storeSvc = store.New(database, store.WithDataKey(noebsConfig.DataKey))
 	migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelMigrate()
-	if err := store.Migrate(migrateCtx, database, tenantID); err != nil {
-		logrusLogger.Fatalf("error in migrations: %v", err)
-	}
-	if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
-		logrusLogger.Fatalf("error ensuring tenant: %v", err)
-	}
-	if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
-		logrusLogger.Fatalf("error validating tenants: %v", err)
+	if role.runsMigrations() {
+		if err := store.Migrate(migrateCtx, database, tenantID); err != nil {
+			logrusLogger.Fatalf("error in migrations: %v", err)
+		}
+		if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
+			logrusLogger.Fatalf("error ensuring tenant: %v", err)
+		}
+		if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
+			logrusLogger.Fatalf("error validating tenants: %v", err)
+		}
+	} else {
+		logrusLogger.Printf("Migrations are owned by service role %s; current role is %s", serviceRoleMigrate, role)
 	}
 
 	logrusLogger.Printf(
-		"Runtime config loaded: driver=%s tenant=%s port=%s temporal=%t grpc=%t wallet=%t",
+		"Runtime config loaded: role=%s driver=%s tenant=%s port=%s temporal=%t grpc=%t wallet=%t",
+		role,
 		noebsConfig.DatabaseDriver,
 		noebsConfig.DefaultTenantID,
 		noebsConfig.Port,
@@ -387,6 +396,10 @@ func initConfig() {
 		noebsConfig.GRPCEnabled,
 		noebsConfig.WalletEnabled,
 	)
+	if role == serviceRoleMigrate {
+		dataConfigs.DB = database
+		return
+	}
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{
@@ -398,7 +411,7 @@ func initConfig() {
 	// })
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 	auth.Init()
-	if database != nil && database.DB != nil {
+	if role.startsChat() && database != nil && database.DB != nil {
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000
 		chatCfg.UnreadBatchSize = 200
@@ -428,7 +441,10 @@ func initConfig() {
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	walletService = wallet.NewService(database, noebsConfig)
 	walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
-	if noebsConfig.TemporalEnabled {
+	if role == serviceRoleWalletWorker && !noebsConfig.TemporalEnabled {
+		logrusLogger.Fatalf("wallet-worker role requires temporal_enabled")
+	}
+	if role.startsWalletWorker() && noebsConfig.TemporalEnabled {
 		if walletPSPRegistry == nil || walletPSPLoader == nil {
 			logrusLogger.Printf("wallet PSP dependencies not initialized; PSP activities disabled")
 		}
@@ -467,8 +483,13 @@ func initConfig() {
 		}
 		startWalletCronWorkflows(context.Background(), runner.Client, tenants, noebsConfig)
 	}
-	if err := initGRPCServers(); err != nil {
-		logrusLogger.Fatalf("error initializing grpc servers: %v", err)
+	if role == serviceRoleWalletLedger && !noebsConfig.GRPCEnabled {
+		logrusLogger.Fatalf("wallet-ledger role requires grpc_enabled")
+	}
+	if role.startsGRPC() {
+		if err := initGRPCServers(); err != nil {
+			logrusLogger.Fatalf("error initializing grpc servers: %v", err)
+		}
 	}
 	dataConfigs.DB = database
 

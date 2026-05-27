@@ -116,6 +116,12 @@ services:
       - "127.0.0.1:7233:7233"
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/7233' || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
 
   temporal-ui:
     <<: *service-defaults
@@ -130,7 +136,7 @@ services:
     networks:
       - backend
 
-  web:
+  noebs-migrate:
     <<: [*service-defaults, *web-hardening]
     build:
       context: .
@@ -138,6 +144,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+    secrets:
+      - source: noebs_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: sops_age_key
+        target: /app/.sops/age-key.txt
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    environment:
+      NOEBS_SERVICE: migrate
+      NOEBS_RUNTIME_DIR: /app/runtime
+      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
+    networks:
+      - backend
+    restart: "no"
+    user: "10001:10001"
+
+  api-gateway:
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
+    init: true
+    depends_on:
+      noebs-migrate:
+        condition: service_completed_successfully
     ports:
       # `:8080` is a common host port and is already used on our server.
       # Keep the app listening on `:8080` in-container, but publish it on `:8081` on the host.
@@ -156,6 +192,7 @@ services:
         gid: "10001"
         mode: 0400
     environment:
+      NOEBS_SERVICE: api-gateway
       NOEBS_RUNTIME_DIR: /app/runtime
       SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
@@ -170,11 +207,81 @@ services:
       start_period: 10s
     user: "10001:10001"
 
+  wallet-ledger:
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
+    init: true
+    depends_on:
+      noebs-migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+    secrets:
+      - source: noebs_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: sops_age_key
+        target: /app/.sops/age-key.txt
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    environment:
+      NOEBS_SERVICE: wallet-ledger
+      NOEBS_RUNTIME_DIR: /app/runtime
+      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
+    networks:
+      - backend
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9090' || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    user: "10001:10001"
+
+  wallet-worker:
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
+    init: true
+    depends_on:
+      noebs-migrate:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+    secrets:
+      - source: noebs_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: sops_age_key
+        target: /app/.sops/age-key.txt
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    environment:
+      NOEBS_SERVICE: wallet-worker
+      NOEBS_RUNTIME_DIR: /app/runtime
+      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
+    networks:
+      - backend
+    stop_grace_period: 30s
+    user: "10001:10001"
+
   caddy:
     <<: *service-defaults
     image: caddy:2-alpine
     depends_on:
-      web:
+      api-gateway:
         condition: service_healthy
     ports:
       - "80:80"

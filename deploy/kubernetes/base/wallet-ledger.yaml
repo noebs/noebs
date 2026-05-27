@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-ledger
+  labels:
+    app.kubernetes.io/name: wallet-ledger
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wallet-ledger
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wallet-ledger
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: wallet-ledger
+          image: ghcr.io/adonese/noebs:master
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NOEBS_SERVICE
+              value: wallet-ledger
+            - name: NOEBS_RUNTIME_DIR
+              value: /app/runtime
+            - name: SOPS_AGE_KEY_FILE
+              value: /app/.sops/age-key.txt
+          ports:
+            - name: grpc
+              containerPort: 9090
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: noebs-secrets
+              mountPath: /app/secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: sops-age-key
+              mountPath: /app/.sops/age-key.txt
+              subPath: age-key.txt
+              readOnly: true
+            - name: runtime
+              mountPath: /app/runtime
+      volumes:
+        - name: config
+          configMap:
+            name: noebs-config
+        - name: noebs-secrets
+          secret:
+            secretName: noebs-secrets
+        - name: sops-age-key
+          secret:
+            secretName: sops-age-key
+        - name: runtime
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wallet-ledger
+  labels:
+    app.kubernetes.io/name: wallet-ledger
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: wallet-ledger
+  ports:
+    - name: grpc
+      port: 9090
+      targetPort: grpc
