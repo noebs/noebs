@@ -615,6 +615,14 @@ func (s *Store) UpsertBeneficiary(ctx context.Context, tenantID string, userID i
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
+	b.Data = strings.TrimSpace(b.Data)
+	if b.Data == "" {
+		return ErrMissingData
+	}
+	b.BillType = strings.TrimSpace(b.BillType)
+	if b.BillType == "" {
+		return ErrMissingBillType
+	}
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO beneficiaries(tenant_id, user_id, data, bill_type, name, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?)`)
@@ -632,6 +640,10 @@ func (s *Store) DeleteBeneficiary(ctx context.Context, tenantID string, userID i
 	}
 	if userID <= 0 {
 		return ErrInvalidUserID
+	}
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return ErrMissingData
 	}
 	stmt := s.DB.Rebind("DELETE FROM beneficiaries WHERE tenant_id = ? AND user_id = ? AND data = ?")
 	_, err = db.ExecContext(ctx, stmt, tenantID, userID, data)

@@ -149,6 +149,29 @@ func TestStore_AddCards_RequiresMobile(t *testing.T) {
 	}
 }
 
+func TestStore_UpsertBeneficiary_RequiresExplicitFields(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.UpsertBeneficiary(context.Background(), "t1", 0, ebs_fields.Beneficiary{Data: "0912141660", BillType: "0010010001"}); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("expected ErrInvalidUserID, got %v", err)
+	}
+	if err := s.UpsertBeneficiary(context.Background(), "t1", 1, ebs_fields.Beneficiary{BillType: "0010010001"}); !errors.Is(err, ErrMissingData) {
+		t.Fatalf("expected ErrMissingData, got %v", err)
+	}
+	if err := s.UpsertBeneficiary(context.Background(), "t1", 1, ebs_fields.Beneficiary{Data: "0912141660"}); !errors.Is(err, ErrMissingBillType) {
+		t.Fatalf("expected ErrMissingBillType, got %v", err)
+	}
+}
+
+func TestStore_DeleteBeneficiary_RequiresExplicitFields(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.DeleteBeneficiary(context.Background(), "t1", 0, "0912141660"); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("expected ErrInvalidUserID, got %v", err)
+	}
+	if err := s.DeleteBeneficiary(context.Background(), "t1", 1, " "); !errors.Is(err, ErrMissingData) {
+		t.Fatalf("expected ErrMissingData, got %v", err)
+	}
+}
+
 func TestStore_UpsertCacheCard_RequiresDataKey(t *testing.T) {
 	s := newTestStoreWithoutDataKey(t)
 	err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: "9222081700000000"})

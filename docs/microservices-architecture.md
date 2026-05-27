@@ -45,7 +45,7 @@ Initial package owner: official Keycloak container. The first split only makes t
 
 Owns consumer beneficiary/contact payment targets at the public compatibility path level. It keeps beneficiary CRUD out of the API Gateway while the legacy consumer package is being carved into explicit owners.
 
-Initial package owner: beneficiary methods in `consumer` and `store`. The first split owns `POST /consumer/beneficiary`, `GET /consumer/beneficiary`, and `DELETE /consumer/beneficiary`.
+Initial package owner: beneficiary methods in `consumer` and `store`. The first split owns `POST /consumer/beneficiary`, `GET /consumer/beneficiary`, and `DELETE /consumer/beneficiary` using the gateway-propagated user ID rather than identity-owned `users` rows.
 
 ### Card/Vault Service
 
@@ -155,7 +155,7 @@ For local Docker Compose, each Noebs service mounts its own SOPS secret file fro
 9. Move Card/Vault traffic into the `card-vault` workload. It owns stored card management, payment-token routes, payment-request token creation by gateway user ID, internal quick-pay token resolution/paid-marking commands, internal completed-registration card persistence by explicit mobile/user/card inputs, and mobile-to-card lookups from card-vault owned mappings.
 10. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS card-info/PAN lookup/card-registration-start/card-registration-completion routes, NEC meter lookup, EBS transaction lookup, mobile-transfer compatibility routes, and quick-pay execution through card-vault commands. Completion no longer writes identity or card tables directly; it commands identity-auth and card-vault after EBS returns the issued PAN. Mobile-transfer no longer reads identity/card tables; it commands card-vault for recipient PAN resolution.
 11. Move wallet HTTP traffic into the `wallet-api` workload. Public `/wallet` and operational `/admin/wallet` routes call `wallet-ledger` over gRPC; wallet-ledger remains the database and workflow boundary for wallet state.
-12. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
+12. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level using gateway user IDs and does not open identity tables.
 13. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
 14. Keep migration scopes service-owned as schemas move forward; do not add new tables to the legacy monolith scope.
 

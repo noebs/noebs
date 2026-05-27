@@ -70,7 +70,7 @@ func (h *Handler) CreateBeneficiary(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	mobile := getMobile(c)
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -80,7 +80,7 @@ func (h *Handler) CreateBeneficiary(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	if err := h.Service.UpsertBeneficiary(c.UserContext(), tenantID, mobile, req); err != nil {
+	if err := h.Service.UpsertBeneficiaryForUserID(c.UserContext(), tenantID, userID, req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	return jsonResponse(c, http.StatusCreated, nil)
@@ -90,13 +90,13 @@ func (h *Handler) ListBeneficiaries(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	mobile := getMobile(c)
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	list, err := h.Service.ListBeneficiaries(c.UserContext(), tenantID, mobile)
+	list, err := h.Service.ListBeneficiariesForUserID(c.UserContext(), tenantID, userID)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
@@ -107,7 +107,7 @@ func (h *Handler) DeleteBeneficiary(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	mobile := getMobile(c)
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -117,7 +117,7 @@ func (h *Handler) DeleteBeneficiary(c *fiber.Ctx) error {
 	if err := parseJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	if err := h.Service.DeleteBeneficiary(c.UserContext(), tenantID, mobile, req.Data); err != nil {
+	if err := h.Service.DeleteBeneficiaryForUserID(c.UserContext(), tenantID, userID, req.Data); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	return jsonResponse(c, http.StatusNoContent, nil)

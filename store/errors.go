@@ -12,6 +12,8 @@ var (
 	ErrMissingAccount  = errors.New("missing auth account")
 	ErrMissingUUID     = errors.New("missing uuid")
 	ErrMissingMobile   = errors.New("missing mobile")
+	ErrMissingData     = errors.New("missing data")
+	ErrMissingBillType = errors.New("missing bill_type")
 	ErrInvalidUserID   = errors.New("invalid user_id")
 	ErrMissingDataKey  = errors.New("missing data_key")
 )

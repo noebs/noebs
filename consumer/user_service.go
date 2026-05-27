@@ -92,59 +92,44 @@ func (s *Service) AddDeviceToken(ctx context.Context, tenantID, mobile, token st
 	return s.Store.UpsertDeviceToken(ctx, tenantID, mobile, token)
 }
 
-func (s *Service) ListBeneficiaries(ctx context.Context, tenantID, mobile string) ([]ebs_fields.Beneficiary, error) {
+func (s *Service) ListBeneficiariesForUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Beneficiary, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
 	if tenantID == "" {
 		return nil, store.ErrMissingTenantID
 	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return nil, ErrMissingMobile
+	if userID <= 0 {
+		return nil, store.ErrInvalidUserID
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, err
-	}
-	return s.Store.ListBeneficiaries(ctx, tenantID, user.ID)
+	return s.Store.ListBeneficiaries(ctx, tenantID, userID)
 }
 
-func (s *Service) UpsertBeneficiary(ctx context.Context, tenantID, mobile string, b ebs_fields.Beneficiary) error {
+func (s *Service) UpsertBeneficiaryForUserID(ctx context.Context, tenantID string, userID int64, b ebs_fields.Beneficiary) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
 	if tenantID == "" {
 		return store.ErrMissingTenantID
 	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
+	if userID <= 0 {
+		return store.ErrInvalidUserID
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	b.UserID = user.ID
-	return s.Store.UpsertBeneficiary(ctx, tenantID, user.ID, b)
+	b.UserID = userID
+	return s.Store.UpsertBeneficiary(ctx, tenantID, userID, b)
 }
 
-func (s *Service) DeleteBeneficiary(ctx context.Context, tenantID, mobile, data string) error {
+func (s *Service) DeleteBeneficiaryForUserID(ctx context.Context, tenantID string, userID int64, data string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
 	if tenantID == "" {
 		return store.ErrMissingTenantID
 	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
+	if userID <= 0 {
+		return store.ErrInvalidUserID
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	return s.Store.DeleteBeneficiary(ctx, tenantID, user.ID, data)
+	return s.Store.DeleteBeneficiary(ctx, tenantID, userID, data)
 }
 
 func (s *Service) AddCards(ctx context.Context, tenantID, mobile string, cards []ebs_fields.Card) error {
