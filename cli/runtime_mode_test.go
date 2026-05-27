@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"testing"
+
+	"github.com/adonese/noebs/store"
 )
 
 func TestParseServiceRoleRequiresExplicitRole(t *testing.T) {
@@ -167,6 +169,12 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 			}
 			if err := validateRoleDatabaseConfig(role, "", "", "sqlite3"); !errors.Is(err, errMissingDatabasePath) {
 				t.Fatalf("%s sqlite database error = %v, want %v", role, err, errMissingDatabasePath)
+			}
+			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", "", ""); !errors.Is(err, store.ErrMissingDatabaseDriver) {
+				t.Fatalf("%s missing driver error = %v, want %v", role, err, store.ErrMissingDatabaseDriver)
+			}
+			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", "", "mysql"); !errors.Is(err, store.ErrUnsupportedDatabaseDriver) {
+				t.Fatalf("%s unsupported driver error = %v, want %v", role, err, store.ErrUnsupportedDatabaseDriver)
 			}
 		})
 	}

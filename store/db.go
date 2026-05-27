@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +19,13 @@ const (
 	DriverSQLite   = "sqlite3"
 )
 
+var (
+	ErrMissingDatabaseDriver     = errors.New("missing database driver")
+	ErrMissingDatabaseURL        = errors.New("missing database URL")
+	ErrMissingDatabasePath       = errors.New("missing database path")
+	ErrUnsupportedDatabaseDriver = errors.New("unsupported database driver")
+)
+
 // DB wraps sqlx.DB with metadata.
 type DB struct {
 	*sqlx.DB
@@ -28,42 +36,26 @@ type DB struct {
 func OpenFromConfig(dbURL, sqlitePath, driverOverride string) (*DB, error) {
 	sqlx.NameMapper = toSnake
 
-	driver := strings.TrimSpace(driverOverride)
+	driver := strings.ToLower(strings.TrimSpace(driverOverride))
 	dsn := ""
 
-	switch strings.ToLower(driver) {
-	case "", "default":
-		if dbURL != "" {
-			driver = DriverPostgres
-			dsn = dbURL
-		} else {
-			driver = DriverSQLite
-			if sqlitePath == "" {
-				sqlitePath = "test.db"
-			}
-			dsn = sqlitePath
-		}
+	switch driver {
+	case "":
+		return nil, ErrMissingDatabaseDriver
 	case "postgres", "pgx":
 		if dbURL == "" {
-			return nil, fmt.Errorf("db_url required for %s driver", driver)
+			return nil, fmt.Errorf("%w: db_url required for %s driver", ErrMissingDatabaseURL, driver)
 		}
 		driver = DriverPostgres
 		dsn = dbURL
 	case "sqlite", "sqlite3":
-		driver = DriverSQLite
 		if sqlitePath == "" {
-			sqlitePath = "test.db"
+			return nil, fmt.Errorf("%w: db_path required for %s driver", ErrMissingDatabasePath, driver)
 		}
+		driver = DriverSQLite
 		dsn = sqlitePath
 	default:
-		if dbURL != "" {
-			dsn = dbURL
-		} else {
-			if sqlitePath == "" {
-				sqlitePath = "test.db"
-			}
-			dsn = sqlitePath
-		}
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedDatabaseDriver, driver)
 	}
 
 	db, err := sqlx.Open(driver, dsn)
