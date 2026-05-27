@@ -100,19 +100,16 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 }
 
 // RefreshJWT generates a new access token using the provided JWT + signature.
-func (s *Service) RefreshJWT(ctx context.Context, fallbackTenantID string, req gateway.Token) (string, error) {
+func (s *Service) RefreshJWT(ctx context.Context, req gateway.Token) (string, error) {
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) && claims != nil {
-			tenantID := strings.TrimSpace(claims.TenantID)
-			if tenantID == "" {
-				tenantID = strings.TrimSpace(fallbackTenantID)
-			}
-			if tenantID == "" {
-				return "", store.ErrMissingTenantID
+			tenantID, tenantErr := store.ValidateTenantID(claims.TenantID)
+			if tenantErr != nil {
+				return "", tenantErr
 			}
 
 			var user *ebs_fields.User
@@ -132,12 +129,9 @@ func (s *Service) RefreshJWT(ctx context.Context, fallbackTenantID string, req g
 		return "", err
 	}
 
-	tenantID := strings.TrimSpace(claims.TenantID)
-	if tenantID == "" {
-		tenantID = strings.TrimSpace(fallbackTenantID)
-	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(claims.TenantID)
+	if err != nil {
+		return "", err
 	}
 	return s.Auth.GenerateJWT(claims.UserID, claims.Mobile, tenantID)
 }

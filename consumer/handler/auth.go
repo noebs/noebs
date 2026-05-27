@@ -101,15 +101,14 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
-	tenantID, err := resolveTenantID(c, h.Service.NoebsConfig)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
 
-	token, err := h.Service.RefreshJWT(c.UserContext(), tenantID, req)
+	token, err := h.Service.RefreshJWT(c.UserContext(), req)
 	if err != nil {
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
+		}
+		if errors.Is(err, store.ErrMissingTenantID) || errors.Is(err, store.ErrInvalidTenantID) {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 		}
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 	}
