@@ -69,7 +69,7 @@ func (a *PSPActivities) VerifyDeposit(ctx context.Context, params VerifyDepositP
 	if err != nil {
 		return nil, err
 	}
-	auditErr := a.recordInteraction(ctx, cfg, walletstore.PSPInteraction{
+	auditErr := a.recordInteraction(ctx, walletstore.PSPInteraction{
 		TenantID:         params.TenantID,
 		PSPProvider:      cfg.ProviderCode,
 		PSPTransactionID: sql.NullString{String: params.TransactionID, Valid: params.TransactionID != ""},
@@ -110,7 +110,7 @@ func (a *PSPActivities) SendPayout(ctx context.Context, params SendPayoutParams)
 	if err != nil {
 		return nil, err
 	}
-	auditErr := a.recordInteraction(ctx, cfg, walletstore.PSPInteraction{
+	auditErr := a.recordInteraction(ctx, walletstore.PSPInteraction{
 		TenantID:         params.TenantID,
 		PSPProvider:      cfg.ProviderCode,
 		PSPTransactionID: sql.NullString{String: pspTransactionID, Valid: pspTransactionID != ""},
@@ -153,7 +153,7 @@ func (a *PSPActivities) GetTransactionStatus(ctx context.Context, params GetStat
 	if err != nil {
 		return nil, err
 	}
-	auditErr := a.recordInteraction(ctx, cfg, walletstore.PSPInteraction{
+	auditErr := a.recordInteraction(ctx, walletstore.PSPInteraction{
 		TenantID:         params.TenantID,
 		PSPProvider:      cfg.ProviderCode,
 		PSPTransactionID: sql.NullString{String: pspTransactionID, Valid: pspTransactionID != ""},
@@ -203,12 +203,9 @@ func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerC
 	return provider, cfg, nil
 }
 
-func (a *PSPActivities) recordInteraction(ctx context.Context, cfg *psp.Config, interaction walletstore.PSPInteraction) error {
+func (a *PSPActivities) recordInteraction(ctx context.Context, interaction walletstore.PSPInteraction) error {
 	if a == nil || a.Store == nil {
 		return ErrMissingStore
-	}
-	if cfg != nil && interaction.PSPProvider == "" {
-		interaction.PSPProvider = cfg.ProviderCode
 	}
 	_, err := a.Store.RecordPSPInteraction(ctx, interaction)
 	return err
