@@ -75,8 +75,6 @@ func renderConfigFiles() error {
 	if runtimeDir := firstString(noebs, "runtime_dir"); runtimeDir != "" {
 		outputDir = runtimeDir
 	}
-	outputDBPath := filepath.Join(outputDir, ".db_path")
-	outputLitestream := litestreamOutputPath(outputDir)
 	defaultTenantID, _ := noebs["default_tenant_id"].(string)
 	if _, err := validateTenantID(defaultTenantID); err != nil {
 		return fmt.Errorf("runtime config default_tenant_id: %w", err)
@@ -84,15 +82,6 @@ func renderConfigFiles() error {
 
 	if err := os.MkdirAll(outputDir, 0700); err != nil {
 		return fmt.Errorf("create runtime config dir: %w", err)
-	}
-	if !isEmptyValue(noebs["db_path"]) {
-		if err := os.WriteFile(outputDBPath, []byte(fmt.Sprint(noebs["db_path"])), 0600); err != nil {
-			return fmt.Errorf("write db path: %w", err)
-		}
-	}
-
-	if err := writeLitestreamConfig(merged, noebs, outputLitestream); err != nil {
-		return err
 	}
 
 	if err := writeDatabasePassword(noebs); err != nil {
@@ -109,13 +98,6 @@ func firstExistingPath(paths ...string) string {
 		}
 	}
 	return ""
-}
-
-func litestreamOutputPath(fallbackDir string) string {
-	if os.Geteuid() == 0 {
-		return "/etc/litestream.yml"
-	}
-	return filepath.Join(fallbackDir, "litestream.yml")
 }
 
 func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
@@ -234,96 +216,6 @@ func getMap(source map[string]interface{}, key string) map[string]interface{} {
 	if typed, ok := value.(map[string]interface{}); ok {
 		return typed
 	}
-	return nil
-}
-
-func isEmptyValue(value interface{}) bool {
-	if value == nil {
-		return true
-	}
-	switch typed := value.(type) {
-	case string:
-		return typed == ""
-	case []interface{}:
-		return len(typed) == 0
-	default:
-		return false
-	}
-}
-
-func writeLitestreamConfig(merged map[string]interface{}, noebs map[string]interface{}, outputPath string) error {
-	litestream := getMap(merged, "litestream")
-	if litestream == nil {
-		return nil
-	}
-
-	dbs, ok := litestream["dbs"].([]interface{})
-	if !ok || len(dbs) == 0 {
-		return nil
-	}
-
-	r2 := getMap(merged, "cloudflare_r2")
-	if r2 == nil {
-		r2 = getMap(merged, "cloudflare")
-	}
-
-	accessKey := firstString(r2, "access_key_id", "access-key-id")
-	secretKey := firstString(r2, "secret_access_key", "secret-access-key")
-	endpoint := firstString(r2, "endpoint")
-
-	if accessKey == "" || secretKey == "" {
-		return nil
-	}
-
-	dbPath := ""
-	if !isEmptyValue(noebs["db_path"]) {
-		dbPath = fmt.Sprint(noebs["db_path"])
-	}
-
-	for _, dbEntry := range dbs {
-		dbMap, ok := dbEntry.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if isEmptyValue(dbMap["path"]) {
-			if dbPath == "" {
-				return errors.New("noebs.db_path is required when litestream db path is empty")
-			}
-			dbMap["path"] = dbPath
-		}
-		replicas, ok := dbMap["replicas"].([]interface{})
-		if !ok {
-			continue
-		}
-		for _, replicaEntry := range replicas {
-			replica, ok := replicaEntry.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if replicaType, _ := replica["type"].(string); replicaType != "s3" {
-				continue
-			}
-			if isEmptyValue(replica["access-key-id"]) {
-				replica["access-key-id"] = accessKey
-			}
-			if isEmptyValue(replica["secret-access-key"]) {
-				replica["secret-access-key"] = secretKey
-			}
-			if endpoint != "" && isEmptyValue(replica["endpoint"]) {
-				replica["endpoint"] = endpoint
-			}
-		}
-	}
-
-	litestreamOut := map[string]interface{}{"dbs": dbs}
-	payload, err := yaml.Marshal(litestreamOut)
-	if err != nil {
-		return fmt.Errorf("encode litestream config: %w", err)
-	}
-	if err := os.WriteFile(outputPath, payload, 0600); err != nil {
-		return fmt.Errorf("write litestream config: %w", err)
-	}
-
 	return nil
 }
 

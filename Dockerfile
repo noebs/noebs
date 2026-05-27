@@ -1,4 +1,4 @@
-# Build stage - using bookworm for glibc compatibility with mattn/go-sqlite3
+# Build stage - using bookworm for glibc compatibility with CGO packages
 FROM golang:1.25-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && rm -rf /var/lib/apt/lists/*
@@ -13,13 +13,10 @@ RUN CGO_ENABLED=1 go build -buildvcs=false -ldflags "-s -w" -o /usr/local/bin/no
 # Final stage - using slim debian for runtime
 FROM debian:bookworm-slim
 
-# Install runtime dependencies + litestream + sops + age
+# Install runtime dependencies + sops + age
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash sqlite3 ca-certificates curl wget \
+    bash ca-certificates curl wget \
     && rm -rf /var/lib/apt/lists/* \
-    && wget -q https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.deb \
-    && dpkg -i litestream-v0.3.13-linux-amd64.deb \
-    && rm litestream-v0.3.13-linux-amd64.deb \
     && wget -q https://github.com/getsops/sops/releases/download/v3.9.4/sops-v3.9.4.linux.amd64 -O /usr/local/bin/sops \
     && chmod +x /usr/local/bin/sops \
     && wget -q https://github.com/FiloSottile/age/releases/download/v1.2.0/age-v1.2.0-linux-amd64.tar.gz \
@@ -32,8 +29,6 @@ RUN useradd -u 10001 -m -s /usr/sbin/nologin -U noebs
 # Copy application binary
 COPY --from=builder /usr/local/bin/noebs /usr/local/bin/noebs
 
-# Copy configs
-COPY config.yaml /app/config.yaml
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

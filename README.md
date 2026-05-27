@@ -43,16 +43,15 @@ You will have a binary that after running it will spawn a production ready serve
 We provide an easier way to build and run noebs using Docker.
 - Fork this repository (e.g., `git clone https://github.com/adonese/noebs`)
 - `cd` to noebs root directory (E.g., $HOME/src/noebs)
-- `docker build -t noebs .`  # -t for giving it a name
-- `docker run -v /home/adonese/src/noebs:/database -p 8080:8080 -it noebs:latest` # This is recommended to mount the sqlite3 database
-- Open `localhost:8000/test` in your browser to interact with noebs
+- `docker compose up --build`
+- Open `localhost:8081/test` in your browser to reach the API gateway
 
 ## Notes on installation
 noebs needs to be connected with EBS merchant server in order to get useful responses. For tests and local development, use a dedicated test config file (for example `config.test.yaml`) to point at mock services and a local database.
 
 - Using Docker
 ```shell
-`docker run -it -p 8000:8000 noebs:latest`
+docker compose up --build
 ```
 
 - Using `go get` method
@@ -142,30 +141,35 @@ I opted to the second one. Go is cool!
 I'm very committed to this project.
 
 
-## Sample for .secrets
+## Sample for secrets.yaml
 
-```json
-{
-    "jwt_secret": "my_top_secret",
-    "db_path": "/database/test.db",
-    "is_consumer_prod": false,
-    "redis_port": "100.89.231.117:6379",
-    "sms_gateway": "endpoint",
-    "sms_key": "key==",
-    "sms_sender": "tutipay",
-    "sentry": "",
-    "port": ":8080",
-    "consumer_qa_id": "YourConsumerID",
-    "merchant_qa_id": "YourConsumerID",
-    "consumer_prod_id": "",
-    "merchant_prod_id": "",
-    "pan": "",
-    "exp_date": "",
-    "pin": "",
-    "ipin": "",
-    "ebs_insecure_skip_verify": false,
-    "cors": ["noebs.dev", "api.2t.sd", "staging.app.2t.sd", "beta.app.2t.sd"],
-    "consumer_biller_hooks_url": "",
-    "is_debug": false
-}
+```yaml
+noebs:
+    jwt_secret: my_top_secret
+    db_driver: pgx
+    service_databases:
+        identity-auth: postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable
+    is_consumer_prod: false
+    redis_port: 100.89.231.117:6379
+    sms_gateway: endpoint
+    sms_key: key==
+    sms_sender: tutipay
+    sentry: ""
+    port: :8080
+    consumer_qa_id: YourConsumerID
+    merchant_qa_id: YourConsumerID
+    consumer_prod_id: ""
+    merchant_prod_id: ""
+    pan: ""
+    exp_date: ""
+    pin: ""
+    ipin: ""
+    ebs_insecure_skip_verify: false
+    cors:
+        - noebs.dev
+        - api.2t.sd
+        - staging.app.2t.sd
+        - beta.app.2t.sd
+    consumer_biller_hooks_url: ""
+    is_debug: false
 ```

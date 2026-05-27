@@ -203,6 +203,35 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	}
 }
 
+func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
+	entrypoint, err := os.ReadFile(filepath.Join("..", "scripts", "entrypoint.sh"))
+	if err != nil {
+		t.Fatalf("read entrypoint: %v", err)
+	}
+	entrypointText := string(entrypoint)
+	for _, required := range []string{"/app/config.yaml", "/app/service.yaml", "/app/secrets.yaml", "/app/.sops/age-key.txt"} {
+		if !strings.Contains(entrypointText, required) {
+			t.Fatalf("entrypoint does not require mounted %s", required)
+		}
+	}
+	for _, rejected := range []string{"litestream", "DB_PATH_FILE", "render-config", "|| true"} {
+		if strings.Contains(entrypointText, rejected) {
+			t.Fatalf("entrypoint carries legacy startup behavior %q", rejected)
+		}
+	}
+
+	dockerfile, err := os.ReadFile(filepath.Join("..", "Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	dockerfileText := string(dockerfile)
+	for _, rejected := range []string{"COPY config.yaml /app/config.yaml", "litestream", "sqlite3"} {
+		if strings.Contains(dockerfileText, rejected) {
+			t.Fatalf("Dockerfile carries legacy image runtime behavior %q", rejected)
+		}
+	}
+}
+
 func TestKubernetesWorkloadsUseExplicitServiceAccounts(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 

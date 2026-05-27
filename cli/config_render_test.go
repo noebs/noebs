@@ -60,15 +60,25 @@ func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 	}
 }
 
-func TestRenderConfigFilesDoesNotDefaultDatabasePath(t *testing.T) {
+func TestRenderConfigFilesDoesNotRenderLegacySQLiteArtifacts(t *testing.T) {
 	tmp := renderConfigTempDir(t, `noebs:
   default_tenant_id: tenant_1
+  db_path: /tmp/noebs.db
+litestream:
+  dbs:
+    - path: /tmp/noebs.db
+      replicas:
+        - type: s3
+          bucket: litestream-dbs
 `)
 	if err := renderConfigFiles(); err != nil {
 		t.Fatalf("renderConfigFiles() error = %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(tmp, ".db_path")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf(".db_path stat error = %v, want %v", err, os.ErrNotExist)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "litestream.yml")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("litestream.yml stat error = %v, want %v", err, os.ErrNotExist)
 	}
 }
 
