@@ -345,7 +345,7 @@ func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler,
 }
 
 func registerNotificationChatRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	route.Get("/ws", userIdentity, adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		chat.ServeWs(hub, w, r)
 	}))
 
@@ -364,6 +364,21 @@ func registerNotificationChatRoutes(route *fiber.App, userIdentity fiber.Handler
 
 func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", userIdentity), consumerHandler)
+}
+
+func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
+	identity, err := gateway.ParseInternalUserIdentity(
+		r.Header.Get(gateway.GatewayTenantIDHeader),
+		r.Header.Get(gateway.GatewayUserIDHeader),
+		r.Header.Get(gateway.GatewayMobileHeader),
+	)
+	if err != nil {
+		return "", chat.ErrUnauthorized
+	}
+	if identity.Mobile == "" {
+		return "", chat.ErrUnauthorized
+	}
+	return identity.Mobile, nil
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
@@ -600,23 +615,7 @@ func initConfig() {
 		chatCfg.UnreadBatchSize = 200
 		chatCfg.PersistBatchSize = 128
 		chatCfg.PersistFlushInterval = 10 * time.Millisecond
-		chatCfg.ClientIDFromRequest = func(r *http.Request) (string, error) {
-			token := strings.TrimSpace(r.Header.Get("Authorization"))
-			if strings.HasPrefix(strings.ToLower(token), "bearer ") {
-				token = strings.TrimSpace(token[7:])
-			}
-			if token == "" {
-				return "", chat.ErrUnauthorized
-			}
-			claims, err := auth.VerifyJWT(token)
-			if err != nil {
-				return "", chat.ErrUnauthorized
-			}
-			if claims.Mobile == "" {
-				return "", chat.ErrUnauthorized
-			}
-			return claims.Mobile, nil
-		}
+		chatCfg.ClientIDFromRequest = chatClientIDFromGatewayIdentity
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
 	}
 	if role.startsChat() && (database == nil || database.DB == nil) {

@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	chat "github.com/tutipay/ws"
 )
 
 func testAuthorizationHeader(t *testing.T) string {
@@ -78,6 +81,41 @@ func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 				t.Fatalf("notification-chat did not register %s", tt.path)
 			}
 		})
+	}
+}
+
+func TestNotificationWebsocketRejectsBearerWithoutGatewayIdentity(t *testing.T) {
+	ensureInit()
+	authorization := testAuthorizationHeader(t)
+	setServiceRoleForTest(t, serviceRoleNotification)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	req.Header.Set("Authorization", authorization)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+}
+
+func TestChatClientIDUsesGatewayIdentity(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	req.Header.Set("Authorization", testAuthorizationHeader(t))
+	if _, err := chatClientIDFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
+		t.Fatalf("bearer-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
+	}
+
+	setGatewayUserIdentityHeaders(req, 1, "test-tenant", "0912345678")
+	got, err := chatClientIDFromGatewayIdentity(req)
+	if err != nil {
+		t.Fatalf("chatClientIDFromGatewayIdentity() error = %v", err)
+	}
+	if got != "0912345678" {
+		t.Fatalf("client id = %q, want %q", got, "0912345678")
 	}
 }
 

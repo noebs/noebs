@@ -217,7 +217,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
 		{method: fiber.MethodDelete, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
 
-		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthPublic},
+		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/notifications", role: serviceRoleNotification, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/submit_contacts", role: serviceRoleNotification, auth: gatewayAuthUser},
 

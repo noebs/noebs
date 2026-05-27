@@ -73,6 +73,7 @@ func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 		{name: "card vault", role: serviceRoleCardVault, method: http.MethodGet, path: "/consumer/get_cards"},
 		{name: "ebs adapter", role: serviceRoleEBSAdapter, method: http.MethodGet, path: "/consumer/transactions"},
 		{name: "notification", role: serviceRoleNotification, method: http.MethodGet, path: "/consumer/notifications"},
+		{name: "notification websocket", role: serviceRoleNotification, method: http.MethodGet, path: "/ws"},
 		{name: "beneficiary", role: serviceRoleBeneficiary, method: http.MethodGet, path: "/consumer/beneficiary"},
 	}
 	for _, tt := range tests {
@@ -159,28 +160,39 @@ func TestAdminServiceRolesRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.
 
 func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	ensureInit()
-	var hits atomic.Int64
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits.Add(1)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	t.Cleanup(upstream.Close)
-
-	setGatewayDiscoveryForTest(t, upstream.URL)
-	setServiceRoleForTest(t, serviceRoleAPIGateway)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/consumer/get_cards", nil)
-	resp, err := route.Test(req)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "card vault", path: "/consumer/get_cards"},
+		{name: "notification websocket", path: "/ws"},
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-	}
-	if hits.Load() != 0 {
-		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var hits atomic.Int64
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				hits.Add(1)
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			t.Cleanup(upstream.Close)
+
+			setGatewayDiscoveryForTest(t, upstream.URL)
+			setServiceRoleForTest(t, serviceRoleAPIGateway)
+			route := GetMainEngine()
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+			}
+			if hits.Load() != 0 {
+				t.Fatalf("upstream hits = %d, want 0", hits.Load())
+			}
+		})
 	}
 }
 
