@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/utils"
 )
 
 type CardByMobileCommand struct {
@@ -14,6 +15,12 @@ type CardByMobileCommand struct {
 type CardByMobileResult struct {
 	PAN     string `json:"pan"`
 	ExpDate string `json:"expDate,omitempty"`
+}
+
+type MaskedCardsCommand struct{}
+
+type MaskedCardsResult struct {
+	MaskedPANs []string `json:"masked_pans"`
 }
 
 func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd CardByMobileCommand) (CardByMobileResult, error) {
@@ -39,6 +46,39 @@ func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd 
 		return CardByMobileResult{}, ErrReceiverHasNoCard
 	}
 	return CardByMobileResult{PAN: pan, ExpDate: strings.TrimSpace(cards[0].Expiry)}, nil
+}
+
+func (s *Service) ListMaskedCardsForUserID(ctx context.Context, tenantID string, userID int64, _ MaskedCardsCommand) (MaskedCardsResult, error) {
+	if s == nil || s.Store == nil {
+		return MaskedCardsResult{}, ErrMissingStore
+	}
+	if tenantID == "" {
+		return MaskedCardsResult{}, store.ErrMissingTenantID
+	}
+	if userID <= 0 {
+		return MaskedCardsResult{}, store.ErrInvalidUserID
+	}
+	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, userID)
+	if err != nil {
+		return MaskedCardsResult{}, err
+	}
+	result := MaskedCardsResult{MaskedPANs: make([]string, 0, len(cards))}
+	for _, card := range cards {
+		pan := strings.TrimSpace(card.Pan)
+		if pan == "" {
+			return MaskedCardsResult{}, store.ErrMissingPAN
+		}
+		result.MaskedPANs = append(result.MaskedPANs, utils.MaskPAN(pan))
+	}
+	return result, nil
+}
+
+func (s *Service) ListMaskedCardsInCardVault(ctx context.Context, tenantID string, userID int64) (MaskedCardsResult, error) {
+	var result MaskedCardsResult
+	if err := s.doCardVaultCommand(ctx, tenantID, userID, "/internal/card-vault/cards/masked", MaskedCardsCommand{}, &result); err != nil {
+		return MaskedCardsResult{}, err
+	}
+	return result, nil
 }
 
 func (s *Service) ResolveCardByMobileInCardVault(ctx context.Context, tenantID, mobile string) (CardByMobileResult, error) {

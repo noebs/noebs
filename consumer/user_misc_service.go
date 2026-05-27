@@ -114,30 +114,29 @@ func (s *Service) SetMainCardForUserID(ctx context.Context, tenantID string, use
 	return s.Store.SetMainCard(ctx, tenantID, userID, pan)
 }
 
-func (s *Service) GetTransactions(ctx context.Context, tenantID, mobile string) ([]ebs_fields.EBSResponse, error) {
+func (s *Service) GetTransactionsForUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.EBSResponse, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
 	if tenantID == "" {
 		return nil, store.ErrMissingTenantID
 	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return nil, ErrMissingMobile
+	if userID <= 0 {
+		return nil, store.ErrInvalidUserID
 	}
 
-	user, err := s.Store.GetCardsOrFail(ctx, tenantID, mobile)
+	cards, err := s.ListMaskedCardsInCardVault(ctx, tenantID, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	var trans []ebs_fields.EBSResponse
-	for _, card := range user.Cards {
-		masked := utils.MaskPAN(card.Pan)
+	for _, masked := range cards.MaskedPANs {
 		cardTrans, err := s.Store.GetTransactionsByMaskedPan(ctx, tenantID, masked)
-		if err == nil {
-			trans = append(trans, cardTrans...)
+		if err != nil {
+			return nil, err
 		}
+		trans = append(trans, cardTrans...)
 	}
 	return trans, nil
 }

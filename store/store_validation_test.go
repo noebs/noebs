@@ -172,6 +172,13 @@ func TestStore_DeleteBeneficiary_RequiresExplicitFields(t *testing.T) {
 	}
 }
 
+func TestStore_GetTransactionsByMaskedPan_RequiresPAN(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.GetTransactionsByMaskedPan(context.Background(), "t1", " "); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("expected ErrMissingPAN, got %v", err)
+	}
+}
+
 func TestStore_UpsertCacheCard_RequiresDataKey(t *testing.T) {
 	s := newTestStoreWithoutDataKey(t)
 	err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: "9222081700000000"})

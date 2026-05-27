@@ -158,6 +158,7 @@ func TestCardVaultOwnsQuickPayInternalCommands(t *testing.T) {
 	tests := []cardVaultRoute{
 		{name: "resolve quick pay token", method: http.MethodPost, path: "/internal/card-vault/quick-pay/resolve"},
 		{name: "mark quick pay token paid", method: http.MethodPost, path: "/internal/card-vault/quick-pay/mark-paid"},
+		{name: "masked cards", method: http.MethodPost, path: "/internal/card-vault/cards/masked"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

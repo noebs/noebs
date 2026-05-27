@@ -927,6 +927,10 @@ func (s *Store) GetTransactionsByMaskedPan(ctx context.Context, tenantID string,
 	if tenantID == "" {
 		return nil, ErrMissingTenantID
 	}
+	maskedPan = strings.TrimSpace(maskedPan)
+	if maskedPan == "" {
+		return nil, ErrMissingPAN
+	}
 	stmt := s.DB.Rebind("SELECT payload FROM transactions WHERE tenant_id = ? AND (pan = ? OR sender_pan = ? OR receiver_pan = ?)")
 	rows, err := db.QueryxContext(ctx, stmt, tenantID, maskedPan, maskedPan, maskedPan)
 	if err != nil {

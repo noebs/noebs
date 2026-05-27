@@ -96,6 +96,7 @@ func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/quick-pay/resolve", h.ResolveQuickPaymentToken)
 	router.Post("/quick-pay/mark-paid", h.MarkQuickPaymentTokenPaid)
+	router.Post("/cards/masked", h.ListMaskedCards)
 }
 
 func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
