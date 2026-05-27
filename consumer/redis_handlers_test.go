@@ -6,65 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
-
-func TestService_CardFromNumber_ReturnsPan(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Timeout: 2 * time.Second},
-	}
-
-	ctx := context.Background()
-	if err := storeSvc.AddCards(ctx, tenantID, 42, []ebs_fields.Card{{Pan: "99999", Mobile: "0912141660"}}); err != nil {
-		t.Fatalf("seed card: %v", err)
-	}
-
-	pan, err := service.CardFromNumber(ctx, tenantID, "0912141660")
-	if err != nil {
-		t.Fatalf("card from number: %v", err)
-	}
-	if pan != "99999" {
-		t.Fatalf("expected pan 99999, got %q", pan)
-	}
-}
-
-func TestService_CardFromNumber_NotFound(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Timeout: 2 * time.Second},
-	}
-
-	_, err := service.CardFromNumber(context.Background(), tenantID, "0912141660")
-	if err == nil {
-		t.Fatalf("expected not found error, got %v", err)
-	}
-}
-
-func TestService_GetUserCardsUsesCardVaultMobileMapping(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Timeout: 2 * time.Second},
-	}
-	if err := storeSvc.AddCards(context.Background(), tenantID, 42, []ebs_fields.Card{{Pan: "99999", Expiry: "2601", Mobile: "0912141660"}}); err != nil {
-		t.Fatalf("seed card: %v", err)
-	}
-
-	user, err := service.GetUserCards(context.Background(), tenantID, "0912141660")
-	if err != nil {
-		t.Fatalf("get user cards: %v", err)
-	}
-	if user.Mobile != "0912141660" || user.MainCard != "99999" || user.ExpDate != "2601" || len(user.Cards) != 1 {
-		t.Fatalf("user cards = %+v", user)
-	}
-}
 
 func TestResolveIdentityUserByMobileUsesIdentityScope(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})

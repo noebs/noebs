@@ -8,26 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// CardFromNumber maps a submitted MSISDN to a stored PAN.
-func (h *Handler) CardFromNumber(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
-	q := strings.TrimSpace(c.Query("mobile_number"))
-	if q == "" {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "mobile number is empty", "code": "empty_mobile_number"})
-	}
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	pan, err := h.Service.CardFromNumber(c.UserContext(), tenantID, q)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "No user with such mobile number", "code": "mobile_number_not_found"})
-	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"result": pan})
-}
-
 func (h *Handler) GetCards(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
@@ -317,22 +297,6 @@ func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 	response, err := h.Service.GetTransactionByUUID(c.UserContext(), tenantID, id)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "not_found", "message": err.Error()})
-	}
-	return jsonResponse(c, http.StatusOK, response)
-}
-
-func (h *Handler) CardsByMobile(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
-	mobile := strings.TrimSpace(c.Query("mobile"))
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	response, err := h.Service.GetUserCards(c.UserContext(), tenantID, mobile)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "not_found", "message": err.Error()})
 	}

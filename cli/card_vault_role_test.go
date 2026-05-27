@@ -24,8 +24,6 @@ func cardVaultSteadyRoutes() []cardVaultRoute {
 		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
 		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
 		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
-		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
-		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
 	}
 }
 
@@ -109,6 +107,36 @@ func TestCardVaultSteadyRoutesExcludeTransitionalRoutes(t *testing.T) {
 		if steady[key] {
 			t.Fatalf("%s must stay transitional until service-to-service commands replace mixed ownership", key)
 		}
+	}
+}
+
+func TestCardVaultDoesNotExposePublicMobilePANLookup(t *testing.T) {
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.path == "/consumer/users/cards" || spec.path == "/consumer/mobile2pan" {
+			t.Fatalf("%s must not be proxied as a public route; use internal card-vault commands", spec.path)
+		}
+	}
+
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	route := GetMainEngine()
+
+	for _, tt := range []cardVaultRoute{
+		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
+		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			setTestGatewayUserIdentityHeaders(req)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+			}
+		})
 	}
 }
 

@@ -9,27 +9,6 @@ import (
 	"github.com/adonese/noebs/store"
 )
 
-func (s *Service) CardFromNumber(ctx context.Context, tenantID, mobileNumber string) (string, error) {
-	if s == nil || s.Store == nil {
-		return "", ErrMissingStore
-	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
-	}
-	mobileNumber = strings.TrimSpace(mobileNumber)
-	if mobileNumber == "" {
-		return "", ErrMissingMobile
-	}
-	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobileNumber)
-	if err != nil {
-		return "", err
-	}
-	if len(cards) == 0 {
-		return "", errors.New("no cards")
-	}
-	return cards[0].Pan, nil
-}
-
 func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Card, *ebs_fields.Card, error) {
 	if s == nil || s.Store == nil {
 		return nil, nil, ErrMissingStore
@@ -316,30 +295,4 @@ func (s *Service) GetTransactionByUUID(ctx context.Context, tenantID, uuid strin
 		return nil, errors.New("missing uuid")
 	}
 	return s.Store.GetTransactionByUUID(ctx, tenantID, uuid)
-}
-
-func (s *Service) GetUserCards(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, error) {
-	if s == nil || s.Store == nil {
-		return nil, ErrMissingStore
-	}
-	if tenantID == "" {
-		return nil, store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return nil, ErrMissingMobile
-	}
-	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, err
-	}
-	if len(cards) == 0 {
-		return nil, errors.New("no cards found")
-	}
-	return &ebs_fields.User{
-		Mobile:   mobile,
-		MainCard: cards[0].Pan,
-		ExpDate:  cards[0].Expiry,
-		Cards:    cards,
-	}, nil
 }

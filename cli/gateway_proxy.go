@@ -161,8 +161,6 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPut, path: "/consumer/edit_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodDelete, path: "/consumer/delete_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/cards/set_main", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/users/cards", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/mobile2pan", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/payment_request", role: serviceRoleCardVault, auth: gatewayAuthUser},

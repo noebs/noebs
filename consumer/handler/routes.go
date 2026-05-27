@@ -84,8 +84,6 @@ func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Put("/edit_card", h.EditCard)
 	router.Delete("/delete_card", h.RemoveCard)
 	router.Post("/cards/set_main", h.SetMainCard)
-	router.Get("/users/cards", h.CardsByMobile)
-	router.Get("/mobile2pan", h.CardFromNumber)
 
 	// Payment tokens
 	router.Get("/payment_token", h.GetPaymentToken)

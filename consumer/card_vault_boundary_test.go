@@ -21,6 +21,16 @@ func TestLegacyMobileBasedCardVaultHelpersStayRemoved(t *testing.T) {
 			"func (s *Service) AddCards(",
 			"func (s *Service) EditCard(",
 			"func (s *Service) RemoveCard(",
+			"func (s *Service) CardFromNumber(",
+			"func (s *Service) GetUserCards(",
+		},
+		"handler/routes.go": {
+			`router.Get("/users/cards"`,
+			`router.Get("/mobile2pan"`,
+		},
+		"handler/user.go": {
+			"func (h *Handler) CardFromNumber(",
+			"func (h *Handler) CardsByMobile(",
 		},
 	}
 	for path, tokens := range rejected {
