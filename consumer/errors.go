@@ -36,6 +36,11 @@ var (
 	ErrAdminReportingCommand = errors.New("admin_reporting_command_failed")
 
 	// Registration
-	ErrMissingPassword  = errors.New("missing password")
-	ErrMissingIssuedPAN = errors.New("missing_issued_pan")
+	ErrMissingMobile     = errors.New("missing mobile")
+	ErrMissingPublicKey  = errors.New("missing public key")
+	ErrInvalidCard       = errors.New("invalid card")
+	ErrMissingPassword   = errors.New("missing password")
+	ErrMissingIssuedPAN  = errors.New("missing_issued_pan")
+	ErrMissingCardExpiry = errors.New("missing_card_expiry")
+	ErrUserAlreadyExists = errors.New("user_already_exists")
 )

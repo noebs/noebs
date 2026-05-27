@@ -4,6 +4,7 @@ import "github.com/gofiber/fiber/v2"
 
 func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	// EBS operations (public, matches legacy behavior)
+	router.Post("/register_with_card", h.RegisterWithCard)
 	router.Post("/card_info", h.EbsGetCardInfo)
 	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
 	router.Post("/cards/new", h.RegisterCard)
@@ -44,7 +45,6 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 	// Registration / auth (public)
 	router.Post("/register", h.CreateUser)
-	router.Post("/register_with_card", h.RegisterWithCard)
 	router.Post("/login", h.LoginHandler)
 	router.Post("/refresh", h.RefreshHandler)
 
@@ -107,6 +107,7 @@ func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/card-registration/users", h.CreateCompletedRegistrationIdentity)
+	router.Post("/register-with-card/users", h.RegisterWithCardIdentity)
 	router.Post("/users/by-mobile", h.ResolveIdentityUserByMobile)
 }
 

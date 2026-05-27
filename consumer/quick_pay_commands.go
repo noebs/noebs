@@ -308,6 +308,12 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingPassword
 	case ErrMissingIssuedPAN.Error():
 		return ErrMissingIssuedPAN
+	case ErrMissingCardExpiry.Error():
+		return ErrMissingCardExpiry
+	case ErrUserAlreadyExists.Error():
+		return ErrUserAlreadyExists
+	case ErrInvalidCard.Error():
+		return ErrInvalidCard
 	case ErrReceiverHasNoCard.Error():
 		return ErrReceiverHasNoCard
 	case store.ErrMissingTenantID.Error():

@@ -111,13 +111,16 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrMissingBillType),
 		errors.Is(err, consumer.ErrMissingMobile),
 		errors.Is(err, consumer.ErrMissingPassword),
+		errors.Is(err, consumer.ErrMissingCardExpiry),
 		errors.Is(err, consumer.ErrMissingUUID),
 		errors.Is(err, consumer.ErrAmountMismatch),
 		errors.Is(err, consumer.ErrInvalidPaymentToken),
 		errors.Is(err, consumer.ErrAmbiguousPaymentToken),
 		errors.Is(err, consumer.ErrReceiverHasNoCard),
 		errors.Is(err, consumer.ErrMissingBillerID),
-		errors.Is(err, consumer.ErrMissingPublicKey):
+		errors.Is(err, consumer.ErrMissingPublicKey),
+		errors.Is(err, consumer.ErrInvalidCard),
+		errors.Is(err, consumer.ErrUserAlreadyExists):
 		return http.StatusBadRequest
 	case store.ErrNotFound(err):
 		return http.StatusNotFound

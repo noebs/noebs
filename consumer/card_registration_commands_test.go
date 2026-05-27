@@ -162,6 +162,45 @@ func TestCreateCompletedRegistrationIdentityUsesIdentityScope(t *testing.T) {
 	}
 }
 
+func TestRegisterWithCardIdentityUsesIdentityScope(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	smsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(smsServer.Close)
+	service := &Service{
+		Store: storeSvc,
+		NoebsConfig: ebs_fields.NoebsConfig{
+			SMSGateway: smsServer.URL + "?",
+			SMSAPIKey:  "test-key",
+			SMSSender:  "noebs",
+		},
+	}
+
+	result, err := service.RegisterWithCardIdentity(context.Background(), tenantID, RegisterWithCardIdentityCommand{
+		Mobile:    "0912345678",
+		Password:  "local-password",
+		PublicKey: "pubkey",
+		Fullname:  "Test User",
+	})
+	if err != nil {
+		t.Fatalf("register with card identity: %v", err)
+	}
+	if result.UserID <= 0 {
+		t.Fatalf("user ID = %d", result.UserID)
+	}
+	user, err := storeSvc.GetUserByMobile(context.Background(), tenantID, "0912345678")
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	if user.Fullname != "Test User" || user.PublicKey != "pubkey" || user.MainCard != "" || user.ExpDate != "" {
+		t.Fatalf("user = %+v", user)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("identity scope should not create card tables, err=%v", err)
+	}
+}
+
 func TestStoreCompletedRegistrationCardUsesCardVaultScope(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
@@ -196,6 +235,15 @@ func TestCompletedRegistrationCommandsRejectMissingInputs(t *testing.T) {
 	}
 	if err := service.StoreCompletedRegistrationCard(context.Background(), "tenant-a", CompletedRegistrationCardCommand{UserID: 42}); !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("card-vault missing mobile error = %v", err)
+	}
+	if _, err := service.RegisterWithCardIdentity(context.Background(), "tenant-a", RegisterWithCardIdentityCommand{}); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("register with card identity missing mobile error = %v", err)
+	}
+	if _, err := service.RegisterWithCardIdentity(context.Background(), "tenant-a", RegisterWithCardIdentityCommand{Mobile: "0912345678"}); !errors.Is(err, ErrMissingPassword) {
+		t.Fatalf("register with card identity missing password error = %v", err)
+	}
+	if _, err := service.RegisterWithCardIdentity(context.Background(), "tenant-a", RegisterWithCardIdentityCommand{Mobile: "0912345678", Password: "local-password"}); !errors.Is(err, ErrMissingPublicKey) {
+		t.Fatalf("register with card identity missing public key error = %v", err)
 	}
 }
 

@@ -80,6 +80,7 @@ func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 		path string
 	}{
 		{name: "completed card registration user", path: "/internal/identity-auth/card-registration/users"},
+		{name: "register with card identity", path: "/internal/identity-auth/register-with-card/users"},
 		{name: "user by mobile", path: "/internal/identity-auth/users/by-mobile"},
 	}
 	for _, tt := range tests {
@@ -107,6 +108,7 @@ func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {
 		path   string
 	}{
 		{name: "ebs balance", method: http.MethodPost, path: "/consumer/balance"},
+		{name: "register with card", method: http.MethodPost, path: "/consumer/register_with_card"},
 		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
 		{name: "payment token", method: http.MethodPost, path: "/consumer/payment_token"},
 	}

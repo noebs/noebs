@@ -20,8 +20,8 @@ func (h *Handler) RegisterWithCard(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	if _, err := h.Service.RegisterWithCard(c.UserContext(), tenantID, card); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_card_or_missing_credentials"})
+	if err := h.Service.RegisterWithCard(c.UserContext(), tenantID, card); err != nil {
+		return jsonResponse(c, statusForError(err), fiber.Map{"message": err.Error(), "code": "invalid_card_or_missing_credentials"})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 }

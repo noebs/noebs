@@ -2,100 +2,70 @@ package consumer
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
-	"github.com/adonese/noebs/utils"
 )
 
-var (
-	ErrMissingMobile    = errors.New("missing mobile")
-	ErrMissingPublicKey = errors.New("missing public key")
-	ErrInvalidCard      = errors.New("invalid card")
-)
-
-// RegisterWithCard creates or updates a noebs user and associates a card with them.
-//
-// NOTE: this assumes the provided card is already in our cache or can be validated
-// against EBS (see isValidCard).
-func (s *Service) RegisterWithCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (string, error) {
-	if s == nil || s.Store == nil {
-		return "", ErrMissingStore
+// RegisterWithCard validates card credentials through EBS, then commands
+// identity-auth and card-vault to persist their service-owned state.
+func (s *Service) RegisterWithCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) error {
+	if s == nil {
+		return ErrMissingService
+	}
+	if s.Store == nil {
+		return ErrMissingStore
+	}
+	if s.HTTPClient == nil {
+		return ErrMissingHTTPClient
 	}
 	if tenantID == "" {
-		return "", store.ErrMissingTenantID
+		return store.ErrMissingTenantID
 	}
 	card.Mobile = strings.TrimSpace(card.Mobile)
 	card.PublicKey = strings.TrimSpace(card.PublicKey)
+	card.Pan = strings.TrimSpace(card.Pan)
+	card.Expiry = strings.TrimSpace(card.Expiry)
+	card.Password = strings.TrimSpace(card.Password)
 	if card.Mobile == "" {
-		return "", ErrMissingMobile
+		return ErrMissingMobile
 	}
 	if card.PublicKey == "" {
-		return "", ErrMissingPublicKey
+		return ErrMissingPublicKey
 	}
-
+	if card.Password == "" {
+		return ErrMissingPassword
+	}
+	if card.Pan == "" {
+		return store.ErrMissingPAN
+	}
+	if card.Expiry == "" {
+		return ErrMissingCardExpiry
+	}
 	ok, err := s.isValidCard(ctx, tenantID, card)
-	if !ok {
-		if err != nil {
-			return "", fmt.Errorf("%w: %v", ErrInvalidCard, err)
-		}
-		return "", ErrInvalidCard
-	}
-
-	var user *ebs_fields.User
-	tmpUser, err := s.Store.GetUserByMobile(ctx, tenantID, card.Mobile)
-	switch {
-	case err == nil && tmpUser.IsVerified:
-		return "", errors.New("user already exists")
-	case err == nil:
-		user = tmpUser
-	case store.ErrNotFound(err):
-		user = &ebs_fields.User{Mobile: card.Mobile, Username: card.Mobile}
-	default:
-		return "", err
-	}
-
-	user.Fullname = card.Name
-	user.MainCard = card.Pan
-	user.ExpDate = card.Expiry
-	user.Password = card.Password
-	user.PublicKey = card.PublicKey
-	if err := user.HashPassword(); err != nil {
-		return "", err
-	}
-
-	otp, err := user.GenerateOtp()
 	if err != nil {
-		return "", err
+		return err
+	}
+	if !ok {
+		return ErrInvalidCard
 	}
 
-	if user.ID == 0 {
-		if err := s.Store.CreateUser(ctx, tenantID, user); err != nil {
-			return "", err
-		}
-	} else {
-		if err := s.Store.UpdateUser(ctx, tenantID, user); err != nil {
-			return "", err
-		}
-	}
-
-	ucard := card.NewCardFromCached(int(user.ID))
-	ucard.ID = 0
-	ucard.IsMain = true
-	ucard.Mobile = card.Mobile
-	if err := s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{ucard}); err != nil {
-		return "", err
-	}
-
-	go utils.SendSMS(&s.NoebsConfig, utils.SMS{
-		Mobile:  card.Mobile,
-		Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", otp),
+	identity, err := s.RegisterWithCardIdentityInIdentityAuth(ctx, tenantID, RegisterWithCardIdentityCommand{
+		Mobile:    card.Mobile,
+		Password:  card.Password,
+		PublicKey: card.PublicKey,
+		Fullname:  card.Name,
 	})
-
-	return otp, nil
+	if err != nil {
+		return err
+	}
+	return s.StoreCompletedRegistrationCardInCardVault(ctx, tenantID, CompletedRegistrationCardCommand{
+		Mobile:  card.Mobile,
+		UserID:  identity.UserID,
+		PAN:     card.Pan,
+		ExpDate: card.Expiry,
+	})
 }
 
 // CompleteRegistration performs step 2 in card issuance, then commands identity-auth

@@ -223,13 +223,16 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, e
 	}
 }
 
-// isValidCard checks the noebs database first and verifies unknown cards with an EBS balance request.
+// isValidCard verifies card credentials with EBS.
 func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
 	if tenantID == "" {
 		return false, store.ErrMissingTenantID
 	}
-	if exists, err := s.Store.CardExists(ctx, tenantID, card.Pan); err == nil && exists {
-		return true, nil
+	if strings.TrimSpace(card.Pan) == "" {
+		return false, store.ErrMissingPAN
+	}
+	if strings.TrimSpace(card.Expiry) == "" {
+		return false, ErrMissingCardExpiry
 	}
 	if err := s.requireTransactionProjectionTarget(); err != nil {
 		return false, err
@@ -237,7 +240,10 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
 	var fields ebs_fields.ConsumerBalanceFields
-	uid, _ := uuid.NewRandom()
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		return false, err
+	}
 	fields.UUID = uid.String()
 	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	fields.ApplicationId = s.NoebsConfig.ConsumerID
@@ -261,6 +267,9 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
 
 	if res.ResponseCode == ebs_fields.INVALIDCARD {
+		return false, errors.Join(ErrInvalidCard, ebsErr, recordErr)
+	}
+	if ebsErr != nil {
 		return false, errors.Join(ebsErr, recordErr)
 	}
 	if recordErr != nil {

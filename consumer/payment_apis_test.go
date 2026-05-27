@@ -1,37 +1,144 @@
 package consumer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 )
 
-func TestService_RegisterWithCard(t *testing.T) {
-	env := newTestEnv(t)
+func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeEBSAdapter})
 
-	ctx := context.Background()
-	user := seedUser(t, env.Store, env.Tenant, "0900000000", "Seed@Pass1")
-	seedCard := ebs_fields.Card{Pan: "23232323", Expiry: "2901", Mobile: user.Mobile}
-	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{seedCard}); err != nil {
-		t.Fatalf("seed card: %v", err)
+	var sawEBS bool
+	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+ebs_fields.ConsumerBalanceEndpoint {
+			t.Fatalf("EBS path = %s", r.URL.Path)
+		}
+		body := readBodyForTest(t, r)
+		for _, forbidden := range [][]byte{[]byte(`"password"`), []byte(`"mobile"`), []byte(`"user_pubkey"`), []byte(`"public_key"`)} {
+			if bytes.Contains(body, forbidden) {
+				t.Fatalf("EBS request leaked identity data %s: %s", forbidden, body)
+			}
+		}
+		if !bytes.Contains(body, []byte(`"PAN":"23232323"`)) || !bytes.Contains(body, []byte(`"expDate":"2901"`)) {
+			t.Fatalf("EBS request missing card data: %s", body)
+		}
+		sawEBS = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
+			EBSResponse: ebs_fields.EBSResponse{
+				UUID:            "register-with-card-balance",
+				ResponseCode:    0,
+				ResponseMessage: "Success",
+			},
+		})
+	}))
+	t.Cleanup(ebsServer.Close)
+
+	var sawIdentity bool
+	identityServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/identity-auth/register-with-card/users" {
+			t.Fatalf("identity path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		body := readBodyForTest(t, r)
+		for _, forbidden := range [][]byte{[]byte(`"pan"`), []byte(`"expDate"`), []byte(`"exp_date"`)} {
+			if bytes.Contains(body, forbidden) {
+				t.Fatalf("identity command leaked card data %s: %s", forbidden, body)
+			}
+		}
+		var cmd RegisterWithCardIdentityCommand
+		if err := json.Unmarshal(body, &cmd); err != nil {
+			t.Fatalf("decode identity command: %v", err)
+		}
+		if cmd.Mobile != "0912141660" || cmd.Password != "me@Suckit1" || cmd.PublicKey != "pubkey" || cmd.Fullname != "Test User" {
+			t.Fatalf("identity command = %+v", cmd)
+		}
+		sawIdentity = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(RegisterWithCardIdentityResult{UserID: 42})
+	}))
+	t.Cleanup(identityServer.Close)
+
+	var sawCardVault bool
+	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/card-vault/card-registration/cards" {
+			t.Fatalf("card-vault path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		var cmd CompletedRegistrationCardCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode card-vault command: %v", err)
+		}
+		if cmd.Mobile != "0912141660" || cmd.UserID != 42 || cmd.PAN != "23232323" || cmd.ExpDate != "2901" {
+			t.Fatalf("card-vault command = %+v", cmd)
+		}
+		sawCardVault = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(cardVaultServer.Close)
+
+	var sawAdminReporting bool
+	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/admin-reporting/transactions" {
+			t.Fatalf("admin-reporting path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		var cmd transactionProjectionCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode admin-reporting command: %v", err)
+		}
+		if cmd.Transaction == nil || cmd.Transaction.UUID != "register-with-card-balance" {
+			t.Fatalf("admin-reporting command = %+v", cmd)
+		}
+		sawAdminReporting = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(adminReportingServer.Close)
+
+	service := &Service{
+		Store:      storeSvc,
+		HTTPClient: &http.Client{Timeout: 2 * time.Second},
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerIP:      ebsServer.URL + "/",
+			ConsumerID:      "consumer-app",
+			EBSConsumerKey:  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4Jj+8WL5ANXllkz9lkOKRmXnDzQ+yS/VFKxKttkk4o5duJPPFZzJ0E3/m1F6xqEVPH2aM2IpSKN/SgeBv9NL6y+qgms7GbpnQ8MCilLIFWNGuTeRzDNVIR7yIqQ0jHX3dgrJyiDp02LQnQtMTRhzOYDZnwOnweixwEzAk8yPEeXQyzp867rUsLZ4jIIChRcI06UTFdMQrd7KZReTt5hunjQLH+qJBaMj1yAQGmf9C10MeC3Nnp4oE7m0OuTkTvekHnsaAtyY+TFg/UBvMQOyp9uJG6OwdvV6doI3MmXg16K6WJx1J1xewG6e28Tvt13z5mEljj8dnWQcqmhuASRlZwIDAQAB",
+			BillInquiryIPIN: "0000",
+			ServiceDiscovery: map[string]string{
+				cardVaultServiceDiscoveryKey:      cardVaultServer.URL,
+				identityAuthServiceDiscoveryKey:   identityServer.URL,
+				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
+			},
+		},
 	}
 
-	card := ebs_fields.CacheCards{
+	err := service.RegisterWithCard(context.Background(), tenantID, ebs_fields.CacheCards{
 		Pan:       "23232323",
 		Expiry:    "2901",
 		Mobile:    "0912141660",
 		Password:  "me@Suckit1",
 		PublicKey: "pubkey",
 		Name:      "Test User",
-	}
-
-	otp, err := env.Service.RegisterWithCard(ctx, env.Tenant, card)
+	})
 	if err != nil {
 		t.Fatalf("register with card: %v", err)
 	}
-	if otp == "" {
-		t.Fatalf("expected otp to be non-empty")
+	if !sawEBS || !sawIdentity || !sawCardVault || !sawAdminReporting {
+		t.Fatalf("sawEBS=%v sawIdentity=%v sawCardVault=%v sawAdminReporting=%v", sawEBS, sawIdentity, sawCardVault, sawAdminReporting)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("ebs-adapter scope should not create user tables, err=%v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("ebs-adapter scope should not create card tables, err=%v", err)
 	}
 }
 

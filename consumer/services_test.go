@@ -2,17 +2,60 @@ package consumer
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
 
 func TestService_isValidCard(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeEBSAdapter})
 
-	env := newTestEnv(t)
-	ctx := context.Background()
-	user := seedUser(t, env.Store, env.Tenant, "0912999999", "Me@Passw0rd!")
+	var sawEBS bool
+	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+ebs_fields.ConsumerBalanceEndpoint {
+			t.Fatalf("EBS path = %s", r.URL.Path)
+		}
+		sawEBS = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
+			EBSResponse: ebs_fields.EBSResponse{
+				UUID:            "valid-card-balance",
+				ResponseCode:    0,
+				ResponseMessage: "Success",
+			},
+		})
+	}))
+	t.Cleanup(ebsServer.Close)
+
+	var sawAdminReporting bool
+	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/admin-reporting/transactions" {
+			t.Fatalf("admin-reporting path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		sawAdminReporting = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(adminReportingServer.Close)
+
+	service := &Service{
+		Store:      storeSvc,
+		HTTPClient: &http.Client{Timeout: 2 * time.Second},
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerIP:      ebsServer.URL + "/",
+			ConsumerID:      "consumer-app",
+			EBSConsumerKey:  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4Jj+8WL5ANXllkz9lkOKRmXnDzQ+yS/VFKxKttkk4o5duJPPFZzJ0E3/m1F6xqEVPH2aM2IpSKN/SgeBv9NL6y+qgms7GbpnQ8MCilLIFWNGuTeRzDNVIR7yIqQ0jHX3dgrJyiDp02LQnQtMTRhzOYDZnwOnweixwEzAk8yPEeXQyzp867rUsLZ4jIIChRcI06UTFdMQrd7KZReTt5hunjQLH+qJBaMj1yAQGmf9C10MeC3Nnp4oE7m0OuTkTvekHnsaAtyY+TFg/UBvMQOyp9uJG6OwdvV6doI3MmXg16K6WJx1J1xewG6e28Tvt13z5mEljj8dnWQcqmhuASRlZwIDAQAB",
+			BillInquiryIPIN: "0000",
+			ServiceDiscovery: map[string]string{
+				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
+			},
+		},
+	}
 	type args struct {
 		card ebs_fields.CacheCards
 	}
@@ -22,18 +65,11 @@ func TestService_isValidCard(t *testing.T) {
 		want    bool
 		wantErr bool
 	}{
-		{"test is valid", args{ebs_fields.CacheCards{Pan: "99999"}}, true, false},
-		{"test is valid", args{ebs_fields.CacheCards{Pan: "88888"}}, true, false},
-	}
-	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "99999", Mobile: user.Mobile}}); err != nil {
-		t.Fatalf("seed card 99999: %v", err)
-	}
-	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "88888", Mobile: user.Mobile}}); err != nil {
-		t.Fatalf("seed card 88888: %v", err)
+		{"valid", args{ebs_fields.CacheCards{Pan: "99999", Expiry: "2901"}}, true, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := env.Service.isValidCard(ctx, env.Tenant, tt.args.card)
+			got, err := service.isValidCard(context.Background(), tenantID, tt.args.card)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Service.isValidCard() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -42,6 +78,9 @@ func TestService_isValidCard(t *testing.T) {
 				t.Errorf("Service.isValidCard() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+	if !sawEBS || !sawAdminReporting {
+		t.Fatalf("sawEBS=%v sawAdminReporting=%v", sawEBS, sawAdminReporting)
 	}
 }
 
