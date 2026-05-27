@@ -3,10 +3,6 @@ package handler
 import "github.com/gofiber/fiber/v2"
 
 func RegisterPublicRoutes(router fiber.Router, h *Handler) {
-	if router == nil || h == nil {
-		return
-	}
-
 	// EBS operations (public, matches legacy behavior)
 	router.Post("/balance", h.Balance)
 	router.Post("/status", h.TransactionStatus)
@@ -36,10 +32,14 @@ func RegisterPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/generate_ipin", h.GenerateIpin)
 	router.Post("/complete_ipin", h.CompleteIpin)
 
-	// Cards / vouchers (public)
+	// Vouchers (public)
+	router.Post("/vouchers/generate", h.GenerateVoucher)
+}
+
+func RegisterCardVaultPublicRoutes(router fiber.Router, h *Handler) {
+	// Cards / lookups (public)
 	router.Post("/card_info", h.EbsGetCardInfo)
 	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
-	router.Post("/vouchers/generate", h.GenerateVoucher)
 	router.Post("/cards/new", h.RegisterCard)
 	router.Post("/cards/complete", h.CompleteRegistration)
 	router.Get("/nec2name", h.NecToName)
@@ -68,19 +68,6 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
-	if router == nil || h == nil {
-		return
-	}
-
-	// Cards
-	router.Get("/get_cards", h.GetCards)
-	router.Post("/add_card", h.AddCards)
-	router.Put("/edit_card", h.EditCard)
-	router.Delete("/delete_card", h.RemoveCard)
-	router.Post("/cards/set_main", h.SetMainCard)
-	router.Get("/users/cards", h.CardsByMobile)
-	router.Get("/mobile2pan", h.CardFromNumber)
-
 	// Transactions / payment compatibility
 	router.Get("/transaction", h.TransactionByUUID)
 	router.Get("/transactions", h.GetTransactions)
@@ -90,6 +77,17 @@ func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Post("/beneficiary", h.CreateBeneficiary)
 	router.Get("/beneficiary", h.ListBeneficiaries)
 	router.Delete("/beneficiary", h.DeleteBeneficiary)
+}
+
+func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
+	// Cards
+	router.Get("/get_cards", h.GetCards)
+	router.Post("/add_card", h.AddCards)
+	router.Put("/edit_card", h.EditCard)
+	router.Delete("/delete_card", h.RemoveCard)
+	router.Post("/cards/set_main", h.SetMainCard)
+	router.Get("/users/cards", h.CardsByMobile)
+	router.Get("/mobile2pan", h.CardFromNumber)
 
 	// Payment tokens
 	router.Get("/payment_token", h.GetPaymentToken)

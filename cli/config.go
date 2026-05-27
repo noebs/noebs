@@ -256,6 +256,12 @@ func registerIdentityAuthRoutes(route *fiber.App, auth gateway.JWTAuth, adminGua
 	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
 }
 
+func registerCardVaultRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler) {
+	cons := route.Group("/consumer")
+	consumerhandler.RegisterCardVaultPublicRoutes(cons, consumerHandler)
+	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
@@ -303,6 +309,10 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleIdentityAuth {
 		registerIdentityAuthRoutes(route, auth, adminGuard, consumerHandler)
+		return route
+	}
+	if role == serviceRoleCardVault {
+		registerCardVaultRoutes(route, auth, consumerHandler)
 		return route
 	}
 	if role == serviceRoleAdminReporting {

@@ -230,6 +230,39 @@ services:
       start_period: 10s
     user: "10001:10001"
 
+  card-vault:
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
+    init: true
+    depends_on:
+      noebs-migrate:
+        condition: service_completed_successfully
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/card-vault.yaml:/app/service.yaml:ro"
+    secrets:
+      - source: noebs_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+      - source: sops_age_key
+        target: /app/.sops/age-key.txt
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    networks:
+      - backend
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    user: "10001:10001"
+
   psp-webhook:
     <<: [*service-defaults, *web-hardening]
     build:
@@ -402,6 +435,8 @@ services:
       api-gateway:
         condition: service_healthy
       identity-auth:
+        condition: service_healthy
+      card-vault:
         condition: service_healthy
       psp-webhook:
         condition: service_healthy

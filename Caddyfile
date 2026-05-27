@@ -4,6 +4,11 @@ api.noebs.sd, dsa.adonese.sd {
         reverse_proxy identity-auth:8080
     }
 
+    @cardVault path /consumer/card_info /consumer/pan_from_mobile /consumer/cards/new /consumer/cards/complete /consumer/nec2name /consumer/get_cards /consumer/add_card /consumer/edit_card /consumer/delete_card /consumer/cards/set_main /consumer/users/cards /consumer/mobile2pan /consumer/payment_token /consumer/payment_request /consumer/payment_token/quick_pay
+    handle @cardVault {
+        reverse_proxy card-vault:8080
+    }
+
     handle /psp/webhooks* {
         reverse_proxy psp-webhook:8080
     }

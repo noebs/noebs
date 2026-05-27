@@ -94,6 +94,111 @@ spec:
                 name: identity-auth
                 port:
                   name: http
+          - path: /consumer/card_info
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/pan_from_mobile
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/cards/new
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/cards/complete
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/nec2name
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/get_cards
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/add_card
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/edit_card
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/delete_card
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/cards/set_main
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/users/cards
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/mobile2pan
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/payment_token
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/payment_request
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/payment_token/quick_pay
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
           - path: /psp/webhooks
             pathType: Prefix
             backend:
@@ -214,6 +319,111 @@ spec:
             backend:
               service:
                 name: identity-auth
+                port:
+                  name: http
+          - path: /consumer/card_info
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/pan_from_mobile
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/cards/new
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/cards/complete
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/nec2name
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/get_cards
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/add_card
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/edit_card
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/delete_card
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/cards/set_main
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/users/cards
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/mobile2pan
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/payment_token
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/payment_request
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
+                port:
+                  name: http
+          - path: /consumer/payment_token/quick_pay
+            pathType: Exact
+            backend:
+              service:
+                name: card-vault
                 port:
                   name: http
           - path: /psp/webhooks

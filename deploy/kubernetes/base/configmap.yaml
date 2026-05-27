@@ -44,6 +44,9 @@ data:
   identity-auth.service.yaml: |
     noebs:
       service_role: identity-auth
+  card-vault.service.yaml: |
+    noebs:
+      service_role: card-vault
   psp-webhook.service.yaml: |
     noebs:
       service_role: psp-webhook

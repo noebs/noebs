@@ -37,7 +37,7 @@ Initial package owner: existing user/auth code in `consumer` plus `store` user/a
 
 Owns PAN/IPIN/card storage, encryption, tokenization, fingerprints, card lookup, and mobile-to-card mappings. Only this service can read decrypted card data. Other services receive tokenized references or last-four metadata.
 
-Initial package owner: card/token functions currently in `consumer` and `store`.
+Initial package owner: card/token functions currently in `consumer` and `store`. The first split owns card info, card registration/completion, card CRUD, card lookup, mobile-to-PAN, NEC lookup, payment-token, payment-request, and quick-pay token routes.
 
 ### EBS Adapter Service
 
@@ -99,6 +99,7 @@ Kubernetes provides service discovery through ClusterIP services:
 
 - `api-gateway.noebs.svc.cluster.local:8080`
 - `identity-auth.noebs.svc.cluster.local:8080`
+- `card-vault.noebs.svc.cluster.local:8080`
 - `psp-webhook.noebs.svc.cluster.local:8080`
 - `admin-reporting.noebs.svc.cluster.local:8080`
 - `notification-chat.noebs.svc.cluster.local:8080`
@@ -115,15 +116,15 @@ Service identity is config-driven. Each noebs workload mounts the shared `/app/c
 
 ## Migration Plan
 
-1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
 2. Run database migrations only through the Kubernetes/k3s migration Job.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
 5. Move dashboard traffic into the `admin-reporting` workload. It owns read-only dashboard, settlement, merchant-view, status, and stream routes. `GET /dashboard/create` and `POST /dashboard/issues` are not registered by the reporting service.
 6. Move notification/chat traffic into the `notification-chat` workload. It owns websocket contacts and notification reads at the public path level.
 7. Move Identity/Auth traffic into the `identity-auth` workload. It owns JWT issuance, OAuth, user/profile, API-key, KYC/check-user, and device-token update routes.
-8. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
-9. Extract Card/Vault behind internal APIs. Remove direct card table access from consumer/merchant flows.
+8. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
+9. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
 10. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
 11. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
 12. Split migrations by owned schema and enforce table ownership in tests.

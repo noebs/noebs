@@ -11,6 +11,7 @@ resources:
   - migrate-job.yaml
   - api-gateway.yaml
   - identity-auth.yaml
+  - card-vault.yaml
   - psp-webhook.yaml
   - admin-reporting.yaml
   - notification-chat.yaml
