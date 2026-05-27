@@ -65,14 +65,29 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 		_ = container.DropDatabase(dropCtx, dbName)
 	})
 	tenantID := "test-tenant"
-	if err := store.Migrate(ctx, db, tenantID); err != nil {
-		t.Fatalf("migrate: %v", err)
+	if err := migrateConsumerTestScopes(ctx, db, tenantID); err != nil {
+		t.Fatalf("migrate service scopes: %v", err)
 	}
 	storeSvc := store.New(db, store.WithDataKey("test-data-key"))
 	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
 		t.Fatalf("ensure tenant: %v", err)
 	}
 	return db, storeSvc, tenantID
+}
+
+func migrateConsumerTestScopes(ctx context.Context, db *store.DB, tenantID string) error {
+	for _, scope := range []string{
+		store.MigrationScopeIdentityAuth,
+		store.MigrationScopeCardVault,
+		store.MigrationScopeEBSAdapter,
+		store.MigrationScopeNotificationChat,
+		store.MigrationScopeConsumerBeneficiary,
+	} {
+		if err := store.MigrateScope(ctx, db, tenantID, scope); err != nil {
+			return fmt.Errorf("%s: %w", scope, err)
+		}
+	}
+	return nil
 }
 
 func newTestEnv(t *testing.T) *testEnv {

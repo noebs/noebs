@@ -8,15 +8,10 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-//go:embed migrations/postgres/*.sql migrations/postgres/*/*.sql
+//go:embed migrations/postgres/*/*.sql
 var postgresMigrations embed.FS
 
-var migrationDriver string
-var migrationDefaultTenant string
-var migrationScope string
-
 const (
-	MigrationScopeLegacy              = "legacy"
 	MigrationScopeIdentityAuth        = "identity-auth"
 	MigrationScopeCardVault           = "card-vault"
 	MigrationScopeEBSAdapter          = "ebs-adapter"
@@ -28,7 +23,6 @@ const (
 )
 
 var migrationScopePaths = map[string]string{
-	MigrationScopeLegacy:              "migrations/postgres",
 	MigrationScopeIdentityAuth:        "migrations/postgres/identity_auth",
 	MigrationScopeCardVault:           "migrations/postgres/card_vault",
 	MigrationScopeEBSAdapter:          "migrations/postgres/ebs_adapter",
@@ -40,7 +34,6 @@ var migrationScopePaths = map[string]string{
 }
 
 var migrationScopeTableNames = map[string]string{
-	MigrationScopeLegacy:              "goose_db_version",
 	MigrationScopeIdentityAuth:        "goose_db_version_identity_auth",
 	MigrationScopeCardVault:           "goose_db_version_card_vault",
 	MigrationScopeEBSAdapter:          "goose_db_version_ebs_adapter",
@@ -49,11 +42,6 @@ var migrationScopeTableNames = map[string]string{
 	MigrationScopeNotificationChat:    "goose_db_version_notification_chat",
 	MigrationScopeConsumerBeneficiary: "goose_db_version_consumer_beneficiary",
 	MigrationScopeWalletLedger:        "goose_db_version_wallet_ledger",
-}
-
-// Migrate applies embedded SQL/Go migrations using goose.
-func Migrate(ctx context.Context, db *DB, defaultTenantID string) error {
-	return MigrateScope(ctx, db, defaultTenantID, MigrationScopeLegacy)
 }
 
 // MigrateScope applies embedded SQL migrations for one service-owned database.
@@ -65,14 +53,9 @@ func MigrateScope(ctx context.Context, db *DB, defaultTenantID, scope string) er
 	if !ok {
 		return fmt.Errorf("unknown migration scope %q", scope)
 	}
-	tenantID, err := ValidateTenantID(defaultTenantID)
-	if err != nil {
+	if _, err := ValidateTenantID(defaultTenantID); err != nil {
 		return err
 	}
-
-	migrationDriver = db.Driver
-	migrationDefaultTenant = tenantID
-	migrationScope = scope
 
 	if db.Driver != DriverPostgres {
 		return fmt.Errorf("unsupported migration driver %q (postgres only)", db.Driver)

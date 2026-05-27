@@ -58,8 +58,8 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("open test db for migration job: %v", err))
 	}
-	if err := store.Migrate(ctx, db, "test-tenant"); err != nil {
-		panic(fmt.Sprintf("run test migration job: %v", err))
+	if err := migrateAllServiceScopes(ctx, db, "test-tenant"); err != nil {
+		panic(fmt.Sprintf("run test migration jobs: %v", err))
 	}
 	if err := store.New(db).EnsureTenant(ctx, "test-tenant"); err != nil {
 		panic(fmt.Sprintf("ensure test tenant: %v", err))
@@ -81,4 +81,22 @@ func TestMain(m *testing.M) {
 		_ = testPostgres.Terminate(cleanupCtx)
 	}
 	os.Exit(code)
+}
+
+func migrateAllServiceScopes(ctx context.Context, db *store.DB, tenantID string) error {
+	for _, scope := range []string{
+		store.MigrationScopeIdentityAuth,
+		store.MigrationScopeCardVault,
+		store.MigrationScopeEBSAdapter,
+		store.MigrationScopePSPWebhook,
+		store.MigrationScopeAdminReporting,
+		store.MigrationScopeNotificationChat,
+		store.MigrationScopeConsumerBeneficiary,
+		store.MigrationScopeWalletLedger,
+	} {
+		if err := store.MigrateScope(ctx, db, tenantID, scope); err != nil {
+			return fmt.Errorf("%s: %w", scope, err)
+		}
+	}
+	return nil
 }

@@ -145,8 +145,11 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}()
 
 	tenantID := "tenant"
-	if err := store.Migrate(ctx, db, tenantID); err != nil {
-		t.Fatalf("migrate db: %v", err)
+	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopeWalletLedger); err != nil {
+		t.Fatalf("migrate wallet-ledger db: %v", err)
+	}
+	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopePSPWebhook); err != nil {
+		t.Fatalf("migrate psp-webhook db: %v", err)
 	}
 
 	cfg := ebs_fields.NoebsConfig{

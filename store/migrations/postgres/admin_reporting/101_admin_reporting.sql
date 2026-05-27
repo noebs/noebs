@@ -1,6 +1,6 @@
 -- +goose Up
 CREATE TABLE IF NOT EXISTS tenants (
-  id TEXT PRIMARY KEY CHECK (lower(btrim(id)) <> 'default'),
+  id TEXT PRIMARY KEY CONSTRAINT tenant_id_not_reserved CHECK (lower(btrim(id)) <> 'default'),
   name TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
