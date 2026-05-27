@@ -159,41 +159,82 @@ func buildPSPDeps(service *wallet.Service, secrets map[string]interface{}) (*wal
 	return pspRegistry, pspLoader
 }
 
-func startCronWorkflow(ctx context.Context, temporalClient client.Client, workflowID, cron string, taskQueue string, workflowFn interface{}, args ...interface{}) {
-	if temporalClient == nil || workflowID == "" || cron == "" || taskQueue == "" {
-		return
+var (
+	errMissingWalletWorkflowClient = errors.New("missing wallet workflow client")
+	errMissingWalletWorkflowID     = errors.New("missing wallet workflow id")
+	errMissingWalletWorkflowCron   = errors.New("missing wallet workflow cron")
+	errMissingWalletWorkflow       = errors.New("missing wallet workflow")
+	errMissingWalletTenants        = errors.New("missing wallet tenants")
+	errMissingWalletPSPDeps        = errors.New("missing wallet PSP dependencies")
+)
+
+func startCronWorkflow(ctx context.Context, temporalClient client.Client, workflowID, cron string, taskQueue walletworker.TaskQueue, workflowFn interface{}, args ...interface{}) error {
+	workflowID = strings.TrimSpace(workflowID)
+	cron = strings.TrimSpace(cron)
+	if workflowID == "" {
+		return errMissingWalletWorkflowID
+	}
+	if cron == "" {
+		return errMissingWalletWorkflowCron
+	}
+	if taskQueue == "" {
+		return walletworker.ErrMissingTaskQueue
+	}
+	if workflowFn == nil {
+		return errMissingWalletWorkflow
+	}
+	if temporalClient == nil {
+		return errMissingWalletWorkflowClient
 	}
 	_, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:           workflowID,
-		TaskQueue:    taskQueue,
+		TaskQueue:    string(taskQueue),
 		CronSchedule: cron,
 	}, workflowFn, args...)
 	if err == nil {
 		logrusLogger.Printf("started cron workflow %s (%s)", workflowID, cron)
-		return
+		return nil
 	}
 	if _, ok := err.(*serviceerror.WorkflowExecutionAlreadyStarted); ok {
-		return
+		return nil
 	}
-	logrusLogger.Printf("error starting cron workflow %s: %v", workflowID, err)
+	return err
 }
 
-func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client, tenants []string, cfg ebs_fields.NoebsConfig) {
-	if temporalClient == nil {
-		return
+func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client, tenants []string, cfg ebs_fields.NoebsConfig, taskQueue walletworker.TaskQueue) error {
+	if len(tenants) == 0 {
+		return errMissingWalletTenants
 	}
-	taskQueue := string(walletworker.TaskQueueMain)
+	if taskQueue == "" {
+		return walletworker.ErrMissingTaskQueue
+	}
+	if strings.TrimSpace(cfg.WalletPSPPollerCron) == "" {
+		return fmt.Errorf("%w: wallet_psp_poller_cron", errMissingWalletWorkflowCron)
+	}
+	if strings.TrimSpace(cfg.WalletReconciliationCron) == "" {
+		return fmt.Errorf("%w: wallet_reconciliation_cron", errMissingWalletWorkflowCron)
+	}
+	normalizedTenants := make([]string, 0, len(tenants))
 	for _, tenantID := range tenants {
+		tenantID = strings.TrimSpace(tenantID)
 		if tenantID == "" {
-			continue
+			return store.ErrMissingTenantID
 		}
+		normalizedTenants = append(normalizedTenants, tenantID)
+	}
+	if temporalClient == nil {
+		return errMissingWalletWorkflowClient
+	}
+	for _, tenantID := range normalizedTenants {
 		pollerID := fmt.Sprintf("wallet-psp-poller-%s", tenantID)
 		pollerParams := walletworkflow.PSPStatusPollerParams{
 			TenantID:            tenantID,
 			Limit:               cfg.WalletPSPPollerBatchSize,
 			PollIntervalSeconds: cfg.WalletPSPPollerIntervalSeconds,
 		}
-		startCronWorkflow(ctx, temporalClient, pollerID, cfg.WalletPSPPollerCron, taskQueue, walletworkflow.PSPStatusPoller, pollerParams)
+		if err := startCronWorkflow(ctx, temporalClient, pollerID, cfg.WalletPSPPollerCron, taskQueue, walletworkflow.PSPStatusPoller, pollerParams); err != nil {
+			return fmt.Errorf("start %s: %w", pollerID, err)
+		}
 
 		reconID := fmt.Sprintf("wallet-reconciliation-%s", tenantID)
 		reconParams := walletworkflow.ReconciliationParams{
@@ -202,8 +243,11 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 			Limit:         cfg.WalletReconciliationBatchSize,
 			LookbackHours: cfg.WalletReconciliationLookbackHours,
 		}
-		startCronWorkflow(ctx, temporalClient, reconID, cfg.WalletReconciliationCron, taskQueue, walletworkflow.Reconciliation, reconParams)
+		if err := startCronWorkflow(ctx, temporalClient, reconID, cfg.WalletReconciliationCron, taskQueue, walletworkflow.Reconciliation, reconParams); err != nil {
+			return fmt.Errorf("start %s: %w", reconID, err)
+		}
 	}
+	return nil
 }
 
 var walletWorkflowClient wallethandler.TemporalClient
@@ -541,9 +585,9 @@ func initConfig() {
 			logrusLogger.Fatalf("error creating wallet-ledger grpc client: %v", err)
 		}
 	}
-	if role.startsWalletWorker() && noebsConfig.TemporalEnabled {
+	if role.startsWalletWorker() {
 		if walletPSPRegistry == nil || walletPSPLoader == nil {
-			logrusLogger.Printf("wallet PSP dependencies not initialized; PSP activities disabled")
+			logrusLogger.Fatalf("error in wallet-worker PSP dependencies: %v", errMissingWalletPSPDeps)
 		}
 		pspActivities := walletactivity.NewPSPActivities(walletPSPLoader, walletPSPRegistry)
 		workerOpts := walletworker.Options{
@@ -567,18 +611,13 @@ func initConfig() {
 			logrusLogger.Fatalf("error starting wallet worker: %v", err)
 		}
 		walletWorker = runner
-		var tenants []string
-		if storeSvc != nil {
-			if list, err := storeSvc.ListTenants(context.Background()); err == nil {
-				tenants = list
-			} else {
-				logrusLogger.Printf("error listing tenants for wallet schedules: %v", err)
-			}
+		tenants, err := storeSvc.ListTenants(context.Background())
+		if err != nil {
+			logrusLogger.Fatalf("error listing tenants for wallet schedules: %v", err)
 		}
-		if len(tenants) == 0 && noebsConfig.DefaultTenantID != "" {
-			tenants = []string{noebsConfig.DefaultTenantID}
+		if err := startWalletCronWorkflows(context.Background(), runner.Client, tenants, noebsConfig, workerOpts.TaskQueue); err != nil {
+			logrusLogger.Fatalf("error starting wallet cron workflows: %v", err)
 		}
-		startWalletCronWorkflows(context.Background(), runner.Client, tenants, noebsConfig)
 	}
 	if role == serviceRoleWalletLedger && !noebsConfig.GRPCEnabled {
 		logrusLogger.Fatalf("wallet-ledger role requires grpc_enabled")

@@ -71,6 +71,8 @@ Owns Temporal workers and scheduled wallet workflows. It uses the same wallet co
 
 Initial package owner: `wallet/worker`, `wallet/workflow`, `wallet/activity`.
 
+Startup invariants: wallet-worker requires Temporal config, wallet PSP dependencies, an explicit task queue, and tenant rows from its service database before scheduling PSP polling or reconciliation workflows. It does not fall back to `default_tenant_id` when tenant discovery is empty.
+
 ### PSP/Webhook Service
 
 Owns PSP config loading, webhook signature verification, PSP request/response mapping, idempotent webhook persistence, and workflow signaling. It must not post ledger entries directly; successful webhooks signal wallet workflows.

@@ -252,7 +252,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	mismatchUserReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"user_id":99,"currency":"USD"}`))
 	mismatchUserReq.Header.Set("Content-Type", "application/json")
 	mismatchUserReq.Header.Set("Authorization", "Bearer "+ownerToken)
-	mismatchUserResp, err := route.Test(mismatchUserReq)
+	mismatchUserResp, err := route.Test(mismatchUserReq, 5_000)
 	if err != nil {
 		t.Fatalf("mismatch user request failed: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	mismatchTenantReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"tenant_id":"other-tenant","currency":"USD"}`))
 	mismatchTenantReq.Header.Set("Content-Type", "application/json")
 	mismatchTenantReq.Header.Set("Authorization", "Bearer "+ownerToken)
-	mismatchTenantResp, err := route.Test(mismatchTenantReq)
+	mismatchTenantResp, err := route.Test(mismatchTenantReq, 5_000)
 	if err != nil {
 		t.Fatalf("mismatch tenant request failed: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 	ownerWalletReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"currency":"USD"}`))
 	ownerWalletReq.Header.Set("Content-Type", "application/json")
 	ownerWalletReq.Header.Set("Authorization", "Bearer "+ownerToken)
-	ownerWalletResp, err := route.Test(ownerWalletReq)
+	ownerWalletResp, err := route.Test(ownerWalletReq, 5_000)
 	if err != nil {
 		t.Fatalf("owner wallet request failed: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 
 	foreignWalletReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID, nil)
 	foreignWalletReq.Header.Set("Authorization", "Bearer "+otherToken)
-	foreignWalletResp, err := route.Test(foreignWalletReq)
+	foreignWalletResp, err := route.Test(foreignWalletReq, 5_000)
 	if err != nil {
 		t.Fatalf("foreign wallet request failed: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 
 	ownerGetReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID, nil)
 	ownerGetReq.Header.Set("Authorization", "Bearer "+ownerToken)
-	ownerGetResp, err := route.Test(ownerGetReq)
+	ownerGetResp, err := route.Test(ownerGetReq, 5_000)
 	if err != nil {
 		t.Fatalf("owner get wallet request failed: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 
 	ownerHistoryReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"/transactions", nil)
 	ownerHistoryReq.Header.Set("Authorization", "Bearer "+ownerToken)
-	ownerHistoryResp, err := route.Test(ownerHistoryReq)
+	ownerHistoryResp, err := route.Test(ownerHistoryReq, 5_000)
 	if err != nil {
 		t.Fatalf("owner wallet history request failed: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestWalletRoutesUseJWTIdentity(t *testing.T) {
 
 	foreignHistoryReq := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"/transactions", nil)
 	foreignHistoryReq.Header.Set("Authorization", "Bearer "+otherToken)
-	foreignHistoryResp, err := route.Test(foreignHistoryReq)
+	foreignHistoryResp, err := route.Test(foreignHistoryReq, 5_000)
 	if err != nil {
 		t.Fatalf("foreign wallet history request failed: %v", err)
 	}
