@@ -6,6 +6,21 @@ output "argocd_namespace" {
   value = var.argocd_namespace
 }
 
+output "noebs_namespace" {
+  value = kubernetes_namespace_v1.noebs.metadata[0].name
+}
+
 output "noebs_manifest_path" {
   value = var.noebs_manifest_path
+}
+
+output "noebs_service_discovery" {
+  value = {
+    for name, service in local.noebs_service_catalog :
+    name => {
+      endpoint = "${name}.${kubernetes_namespace_v1.noebs.metadata[0].name}.svc.cluster.local:${service.port}"
+      port     = service.port
+      protocol = service.protocol
+    }
+  }
 }

@@ -14,6 +14,18 @@ resource "kubernetes_namespace_v1" "argocd" {
   }
 }
 
+resource "kubernetes_namespace_v1" "noebs" {
+  metadata {
+    name = var.noebs_namespace
+
+    labels = {
+      "app.kubernetes.io/name"       = var.noebs_namespace
+      "app.kubernetes.io/part-of"    = "noebs"
+      "app.kubernetes.io/managed-by" = "terraform"
+    }
+  }
+}
+
 resource "helm_release" "argocd" {
   name       = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
@@ -41,14 +53,8 @@ resource "kubernetes_manifest" "noebs_project" {
       ]
       destinations = [
         {
-          namespace = "noebs"
+          namespace = kubernetes_namespace_v1.noebs.metadata[0].name
           server    = "https://kubernetes.default.svc"
-        },
-      ]
-      clusterResourceWhitelist = [
-        {
-          group = ""
-          kind  = "Namespace"
         },
       ]
       namespaceResourceWhitelist = [
@@ -80,7 +86,7 @@ resource "kubernetes_manifest" "noebs_application" {
       }
       destination = {
         server    = "https://kubernetes.default.svc"
-        namespace = "noebs"
+        namespace = kubernetes_namespace_v1.noebs.metadata[0].name
       }
       syncPolicy = {
         automated = {
@@ -88,12 +94,14 @@ resource "kubernetes_manifest" "noebs_application" {
           selfHeal = true
         }
         syncOptions = [
-          "CreateNamespace=true",
           "PruneLast=true",
         ]
       }
     }
   }
 
-  depends_on = [kubernetes_manifest.noebs_project]
+  depends_on = [
+    kubernetes_manifest.noebs_project,
+    kubernetes_namespace_v1.noebs,
+  ]
 }

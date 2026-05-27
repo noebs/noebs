@@ -117,7 +117,7 @@ Kubernetes provides service discovery through ClusterIP services:
 - `temporal-frontend.noebs.svc.cluster.local:7233`
 - `postgres.noebs.svc.cluster.local:5432`
 
-Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Terraform under `foundation/terraform` owns platform installation and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
+Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Terraform under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
 
 Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an Argo CD PreSync hook. Service Deployments must not run migrations in their startup path.
 

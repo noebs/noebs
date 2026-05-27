@@ -3,17 +3,26 @@
 This root owns platform-level deployment wiring for the existing host `100.102.164.34`:
 
 - install Argo CD into the configured cluster;
+- create the `noebs` namespace for microservice workloads;
 - create the noebs Argo CD project;
 - create the noebs Argo CD application pointing at `deploy/kubernetes/overlays/current-host`.
 
-Required variables are listed in `terraform.tfvars.example`. Copying that file is not required by the code; provide the variables through your normal Terraform workflow.
+Defaults are pinned for the current host, namespace names, Argo CD chart version, repository, branch, and manifest path. Override them only when intentionally moving infrastructure ownership.
 
 Commands:
 
 ```sh
 terraform -chdir=foundation/terraform init
-terraform -chdir=foundation/terraform plan -var-file=terraform.tfvars
-terraform -chdir=foundation/terraform apply -var-file=terraform.tfvars
+terraform -chdir=foundation/terraform plan
+terraform -chdir=foundation/terraform apply
 ```
 
-The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host should be handled before applying this root so Terraform can manage Argo CD through the Kubernetes API.
+The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host happens before applying this root so Terraform can manage Argo CD through the Kubernetes API.
+
+Runtime secrets are not stored in Terraform. Before syncing the Argo CD application, create the required Kubernetes Secrets in the Terraform-owned `noebs` namespace:
+
+- `noebs-secrets` with key `secrets.yaml`
+- `sops-age-key` with key `age-key.txt`
+- `postgres-credentials` with key `password`
+- `temporal-postgres-credentials` with key `password`
+- `noebs-tls` for `api.noebs.sd` and `dsa.adonese.sd`

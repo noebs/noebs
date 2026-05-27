@@ -4,7 +4,6 @@ kind: Kustomization
 namespace: noebs
 
 resources:
-  - namespace.yaml
   - configmap.yaml
   - postgres.yaml
   - temporal.yaml

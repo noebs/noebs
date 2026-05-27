@@ -2,6 +2,8 @@
 
 This overlay targets the existing deployment host `100.102.164.34`.
 
+The `noebs` namespace is owned by `foundation/terraform`; this overlay only renders namespaced runtime resources.
+
 Required DNS records:
 
 - `api.noebs.sd A 100.102.164.34`

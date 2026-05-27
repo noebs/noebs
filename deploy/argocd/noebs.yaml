@@ -9,9 +9,6 @@ spec:
   destinations:
     - namespace: noebs
       server: https://kubernetes.default.svc
-  clusterResourceWhitelist:
-    - group: ""
-      kind: Namespace
   namespaceResourceWhitelist:
     - group: "*"
       kind: "*"
@@ -35,5 +32,4 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-      - CreateNamespace=true
       - PruneLast=true
