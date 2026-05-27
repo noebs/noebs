@@ -1,3 +1,4 @@
 noebs:
   service_role: ebs-adapter
+  otel_service_name: ebs-adapter
   db_driver: pgx

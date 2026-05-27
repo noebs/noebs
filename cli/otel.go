@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -16,46 +19,66 @@ import (
 
 const otelShutdownTimeout = 5 * time.Second
 
-func initOTel(ctx context.Context, cfg ebs_fields.NoebsConfig, logger *logrus.Logger) {
+var (
+	errMissingOtelEndpoint    = errors.New("missing noebs.otel_endpoint")
+	errMissingOtelServiceName = errors.New("missing noebs.otel_service_name")
+	errInvalidOtelServiceName = errors.New("invalid noebs.otel_service_name")
+	errInvalidOtelSampleRate  = errors.New("invalid noebs.otel_sample_rate")
+)
+
+func validateOTelRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 	if !cfg.OtelEnabled {
-		return
+		return nil
 	}
-	if cfg.OtelEndpoint == "" {
-		logger.Warn("otel enabled but endpoint is empty; tracing disabled")
-		return
+	if strings.TrimSpace(cfg.OtelEndpoint) == "" {
+		return errMissingOtelEndpoint
+	}
+	serviceName := strings.TrimSpace(cfg.OtelServiceName)
+	if serviceName == "" {
+		return errMissingOtelServiceName
+	}
+	if serviceName != string(role) {
+		return fmt.Errorf("%w: got %q want %q", errInvalidOtelServiceName, serviceName, role)
+	}
+	if cfg.OtelSampleRate <= 0 || cfg.OtelSampleRate > 1 {
+		return fmt.Errorf("%w: %f", errInvalidOtelSampleRate, cfg.OtelSampleRate)
+	}
+	return nil
+}
+
+func initOTel(ctx context.Context, role serviceRole, cfg ebs_fields.NoebsConfig, logger *logrus.Logger) error {
+	if !cfg.OtelEnabled {
+		return nil
+	}
+	if err := validateOTelRuntimeConfig(role, cfg); err != nil {
+		return err
 	}
 
 	opts := []otlptracegrpc.Option{}
-	opts = append(opts, otlptracegrpc.WithEndpoint(cfg.OtelEndpoint))
+	opts = append(opts, otlptracegrpc.WithEndpoint(strings.TrimSpace(cfg.OtelEndpoint)))
 	if cfg.OtelInsecure {
 		opts = append(opts, otlptracegrpc.WithInsecure())
 	}
 
 	exporter, err := otlptracegrpc.New(ctx, opts...)
 	if err != nil {
-		logger.WithError(err).Warn("otel trace exporter init failed")
-		return
+		return fmt.Errorf("otel trace exporter init failed: %w", err)
 	}
 
-	serviceName := cfg.OtelServiceName
-	if serviceName == "" {
-		serviceName = "noebs"
-	}
-
-	sampleRate := clamp01(cfg.OtelSampleRate)
+	serviceName := strings.TrimSpace(cfg.OtelServiceName)
 	res, err := resource.Merge(resource.Default(), resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String(serviceName),
 		semconv.ServiceVersionKey.String(cfg.OtelServiceVersion),
 	))
 	if err != nil {
-		logger.WithError(err).Warn("otel resource init failed")
+		return fmt.Errorf("otel resource init failed: %w", err)
 	}
 
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRate))),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.OtelSampleRate))),
 	)
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
@@ -65,18 +88,9 @@ func initOTel(ctx context.Context, cfg ebs_fields.NoebsConfig, logger *logrus.Lo
 
 	logger.WithFields(logrus.Fields{
 		"endpoint":    cfg.OtelEndpoint,
-		"sample_rate": sampleRate,
+		"sample_rate": cfg.OtelSampleRate,
 		"service":     serviceName,
 		"insecure":    cfg.OtelInsecure,
 	}).Info("otel tracing enabled")
-}
-
-func clamp01(v float64) float64 {
-	if v <= 0 {
-		return 0.1
-	}
-	if v > 1 {
-		return 1
-	}
-	return v
+	return nil
 }

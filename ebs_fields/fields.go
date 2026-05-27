@@ -1057,12 +1057,6 @@ func (n *NoebsConfig) Defaults() {
 		n.MerchantIP = n.MerchantQAIP
 		n.MerchantID = n.MerchantQAID
 	}
-	if n.OtelServiceName == "" {
-		n.OtelServiceName = "noebs"
-	}
-	if n.OtelSampleRate == 0 {
-		n.OtelSampleRate = 0.1
-	}
 }
 
 type QuickPaymentFields struct {

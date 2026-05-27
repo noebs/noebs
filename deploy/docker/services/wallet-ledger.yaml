@@ -1,3 +1,4 @@
 noebs:
   service_role: wallet-ledger
+  otel_service_name: wallet-ledger
   db_driver: pgx

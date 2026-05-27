@@ -47,4 +47,10 @@ func TestNoebsConfigDefaultsDoNotInventRoleRuntimeConfig(t *testing.T) {
 	if cfg.WalletReconciliationLookbackHours != 0 {
 		t.Fatalf("WalletReconciliationLookbackHours = %d, want 0 without explicit config", cfg.WalletReconciliationLookbackHours)
 	}
+	if cfg.OtelServiceName != "" {
+		t.Fatalf("OtelServiceName = %q, want empty without explicit service config", cfg.OtelServiceName)
+	}
+	if cfg.OtelSampleRate != 0 {
+		t.Fatalf("OtelSampleRate = %f, want 0 without explicit config", cfg.OtelSampleRate)
+	}
 }

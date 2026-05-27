@@ -1,3 +1,4 @@
 noebs:
   service_role: card-vault
+  otel_service_name: card-vault
   db_driver: pgx

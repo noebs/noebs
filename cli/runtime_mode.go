@@ -129,6 +129,9 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
 }
 
 func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if err := validateOTelRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
 	if roleUsesWalletFeature(role) && !cfg.WalletEnabled {
 		return fmt.Errorf("%w: %s", errWalletNotEnabled, role)
 	}

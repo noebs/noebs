@@ -1,3 +1,4 @@
 noebs:
   service_role: admin-reporting-migrate
+  otel_service_name: admin-reporting-migrate
   db_driver: pgx

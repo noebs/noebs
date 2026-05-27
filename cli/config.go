@@ -557,14 +557,16 @@ func initConfig() {
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime config: %v", err)
 	}
-	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
-	configureLogger(noebsConfig)
-	initOTel(context.Background(), noebsConfig, logrusLogger)
 	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver); err != nil {
 		logrusLogger.Fatalf("error in runtime database config: %v", err)
 	}
 	if err := validateRoleRuntimeConfig(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error in runtime service config: %v", err)
+	}
+	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
+	configureLogger(noebsConfig)
+	if err := initOTel(context.Background(), role, noebsConfig, logrusLogger); err != nil {
+		logrusLogger.Fatalf("error initializing otel: %v", err)
 	}
 	if role.opensDatabase() {
 		database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver)

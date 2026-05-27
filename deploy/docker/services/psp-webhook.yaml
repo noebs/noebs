@@ -1,3 +1,4 @@
 noebs:
   service_role: psp-webhook
+  otel_service_name: psp-webhook
   db_driver: pgx

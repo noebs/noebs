@@ -1,3 +1,4 @@
 noebs:
   service_role: consumer-beneficiary-migrate
+  otel_service_name: consumer-beneficiary-migrate
   db_driver: pgx

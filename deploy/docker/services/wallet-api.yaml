@@ -1,2 +1,3 @@
 noebs:
   service_role: wallet-api
+  otel_service_name: wallet-api

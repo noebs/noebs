@@ -1,3 +1,4 @@
 noebs:
   service_role: admin-reporting
+  otel_service_name: admin-reporting
   db_driver: pgx

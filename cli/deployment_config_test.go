@@ -142,6 +142,7 @@ type composeSecret struct {
 type mountedNoebsConfig struct {
 	Noebs struct {
 		DatabaseDriver                             string            `yaml:"db_driver"`
+		OtelServiceName                            string            `yaml:"otel_service_name"`
 		ServiceDiscovery                           map[string]string `yaml:"service_discovery"`
 		GRPCServiceDiscovery                       map[string]string `yaml:"grpc_service_discovery"`
 		TemporalHost                               string            `yaml:"temporal_host"`
@@ -167,8 +168,9 @@ type mountedNoebsConfig struct {
 
 type mountedNoebsServiceConfig struct {
 	Noebs struct {
-		ServiceRole    string `yaml:"service_role"`
-		DatabaseDriver string `yaml:"db_driver"`
+		ServiceRole     string `yaml:"service_role"`
+		DatabaseDriver  string `yaml:"db_driver"`
+		OtelServiceName string `yaml:"otel_service_name"`
 	} `yaml:"noebs"`
 }
 
@@ -1045,14 +1047,20 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	}
 }
 
-func TestNoebsDatabaseDriverBelongsToDatabaseOpeningServiceConfigs(t *testing.T) {
+func TestNoebsServiceIdentityConfigBelongsToServiceConfigs(t *testing.T) {
 	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
 	if dockerConfig.Noebs.DatabaseDriver != "" {
 		t.Fatalf("config.docker.yaml must not define shared noebs.db_driver; got %q", dockerConfig.Noebs.DatabaseDriver)
 	}
+	if dockerConfig.Noebs.OtelServiceName != "" {
+		t.Fatalf("config.docker.yaml must not define shared noebs.otel_service_name; got %q", dockerConfig.Noebs.OtelServiceName)
+	}
 	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
 	if kubernetesConfig.Noebs.DatabaseDriver != "" {
 		t.Fatalf("Kubernetes noebs-config config.yaml must not define shared noebs.db_driver; got %q", kubernetesConfig.Noebs.DatabaseDriver)
+	}
+	if kubernetesConfig.Noebs.OtelServiceName != "" {
+		t.Fatalf("Kubernetes noebs-config config.yaml must not define shared noebs.otel_service_name; got %q", kubernetesConfig.Noebs.OtelServiceName)
 	}
 
 	serviceFiles, err := filepath.Glob(filepath.Join("..", "deploy", "docker", "services", "*.yaml"))
@@ -1060,7 +1068,7 @@ func TestNoebsDatabaseDriverBelongsToDatabaseOpeningServiceConfigs(t *testing.T)
 		t.Fatalf("list docker service configs: %v", err)
 	}
 	for _, serviceFile := range serviceFiles {
-		requireServiceDatabaseDriver(t, serviceFile, decodeNoebsServiceConfigFile(t, serviceFile))
+		requireServiceIdentityConfig(t, serviceFile, decodeNoebsServiceConfigFile(t, serviceFile))
 	}
 
 	configMapData := decodeKubernetesNoebsConfigMapData(t)
@@ -1070,7 +1078,7 @@ func TestNoebsDatabaseDriverBelongsToDatabaseOpeningServiceConfigs(t *testing.T)
 			continue
 		}
 		checked++
-		requireServiceDatabaseDriver(t, "noebs-config/"+key, decodeNoebsServiceConfigBytes(t, "noebs-config/"+key, []byte(payload)))
+		requireServiceIdentityConfig(t, "noebs-config/"+key, decodeNoebsServiceConfigBytes(t, "noebs-config/"+key, []byte(payload)))
 	}
 	if checked == 0 {
 		t.Fatalf("Kubernetes noebs-config contains no service configs")
@@ -1557,7 +1565,7 @@ func decodeNoebsServiceConfigBytes(t *testing.T, label string, data []byte) moun
 	return config
 }
 
-func requireServiceDatabaseDriver(t *testing.T, label string, config mountedNoebsServiceConfig) {
+func requireServiceIdentityConfig(t *testing.T, label string, config mountedNoebsServiceConfig) {
 	t.Helper()
 	role, err := parseServiceRole(config.Noebs.ServiceRole)
 	if err != nil {
@@ -1567,10 +1575,11 @@ func requireServiceDatabaseDriver(t *testing.T, label string, config mountedNoeb
 		if config.Noebs.DatabaseDriver != "pgx" {
 			t.Fatalf("%s noebs.db_driver = %q, want pgx for database-opening role %s", label, config.Noebs.DatabaseDriver, role)
 		}
-		return
-	}
-	if config.Noebs.DatabaseDriver != "" {
+	} else if config.Noebs.DatabaseDriver != "" {
 		t.Fatalf("%s noebs.db_driver = %q, want empty for no-database role %s", label, config.Noebs.DatabaseDriver, role)
+	}
+	if config.Noebs.OtelServiceName != string(role) {
+		t.Fatalf("%s noebs.otel_service_name = %q, want %q", label, config.Noebs.OtelServiceName, role)
 	}
 }
 

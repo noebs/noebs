@@ -1,3 +1,4 @@
 noebs:
   service_role: identity-auth-migrate
+  otel_service_name: identity-auth-migrate
   db_driver: pgx

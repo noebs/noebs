@@ -35,7 +35,7 @@ Each noebs service secret must contain the merged secret material expected by th
 
 When using the in-cluster `postgres` StatefulSet, service database URLs should point at the owned database names created by the init script: `identity_auth`, `card_vault`, `ebs_adapter`, `psp_webhook`, `admin_reporting`, `notification_chat`, `consumer_beneficiary`, and `wallet_ledger`.
 
-Noebs service roles are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
+Noebs service roles and OTel service names are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
 The public Ingress routes both hostnames only to `api-gateway`. Internal HTTP routing is owned by the gateway through `noebs.service_discovery` in the mounted config. Wallet API to wallet ledger gRPC routing uses `noebs.grpc_service_discovery.wallet-ledger`.
 

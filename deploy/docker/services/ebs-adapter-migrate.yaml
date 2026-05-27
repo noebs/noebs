@@ -1,3 +1,4 @@
 noebs:
   service_role: ebs-adapter-migrate
+  otel_service_name: ebs-adapter-migrate
   db_driver: pgx

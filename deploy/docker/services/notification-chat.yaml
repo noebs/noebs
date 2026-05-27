@@ -1,3 +1,4 @@
 noebs:
   service_role: notification-chat
+  otel_service_name: notification-chat
   db_driver: pgx

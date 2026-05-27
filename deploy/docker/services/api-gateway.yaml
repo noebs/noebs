@@ -1,2 +1,3 @@
 noebs:
   service_role: api-gateway
+  otel_service_name: api-gateway

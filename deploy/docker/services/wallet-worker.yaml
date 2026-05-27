@@ -1,3 +1,4 @@
 noebs:
   service_role: wallet-worker
+  otel_service_name: wallet-worker
   db_driver: pgx

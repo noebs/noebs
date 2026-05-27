@@ -52,74 +52,93 @@ data:
   api-gateway.service.yaml: |
     noebs:
       service_role: api-gateway
+      otel_service_name: api-gateway
   identity-auth.service.yaml: |
     noebs:
       service_role: identity-auth
+      otel_service_name: identity-auth
       db_driver: pgx
   card-vault.service.yaml: |
     noebs:
       service_role: card-vault
+      otel_service_name: card-vault
       db_driver: pgx
   ebs-adapter.service.yaml: |
     noebs:
       service_role: ebs-adapter
+      otel_service_name: ebs-adapter
       db_driver: pgx
   psp-webhook.service.yaml: |
     noebs:
       service_role: psp-webhook
+      otel_service_name: psp-webhook
       db_driver: pgx
   admin-reporting.service.yaml: |
     noebs:
       service_role: admin-reporting
+      otel_service_name: admin-reporting
       db_driver: pgx
   notification-chat.service.yaml: |
     noebs:
       service_role: notification-chat
+      otel_service_name: notification-chat
       db_driver: pgx
   consumer-beneficiary.service.yaml: |
     noebs:
       service_role: consumer-beneficiary
+      otel_service_name: consumer-beneficiary
       db_driver: pgx
   wallet-api.service.yaml: |
     noebs:
       service_role: wallet-api
+      otel_service_name: wallet-api
   wallet-ledger.service.yaml: |
     noebs:
       service_role: wallet-ledger
+      otel_service_name: wallet-ledger
       db_driver: pgx
   wallet-worker.service.yaml: |
     noebs:
       service_role: wallet-worker
+      otel_service_name: wallet-worker
       db_driver: pgx
   identity-auth-migrate.service.yaml: |
     noebs:
       service_role: identity-auth-migrate
+      otel_service_name: identity-auth-migrate
       db_driver: pgx
   card-vault-migrate.service.yaml: |
     noebs:
       service_role: card-vault-migrate
+      otel_service_name: card-vault-migrate
       db_driver: pgx
   ebs-adapter-migrate.service.yaml: |
     noebs:
       service_role: ebs-adapter-migrate
+      otel_service_name: ebs-adapter-migrate
       db_driver: pgx
   psp-webhook-migrate.service.yaml: |
     noebs:
       service_role: psp-webhook-migrate
+      otel_service_name: psp-webhook-migrate
       db_driver: pgx
   admin-reporting-migrate.service.yaml: |
     noebs:
       service_role: admin-reporting-migrate
+      otel_service_name: admin-reporting-migrate
       db_driver: pgx
   notification-chat-migrate.service.yaml: |
     noebs:
       service_role: notification-chat-migrate
+      otel_service_name: notification-chat-migrate
       db_driver: pgx
   consumer-beneficiary-migrate.service.yaml: |
     noebs:
       service_role: consumer-beneficiary-migrate
+      otel_service_name: consumer-beneficiary-migrate
       db_driver: pgx
   wallet-ledger-migrate.service.yaml: |
     noebs:
       service_role: wallet-ledger-migrate
+      otel_service_name: wallet-ledger-migrate
       db_driver: pgx

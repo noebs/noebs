@@ -1,3 +1,4 @@
 noebs:
   service_role: card-vault-migrate
+  otel_service_name: card-vault-migrate
   db_driver: pgx

@@ -278,6 +278,45 @@ func validWalletRuntimeConfig() ebs_fields.NoebsConfig {
 	}
 }
 
+func TestServiceRoleRuntimeConfigRequiresExplicitOTelConfigWhenEnabled(t *testing.T) {
+	cfg := ebs_fields.NoebsConfig{OtelEnabled: true}
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errMissingOtelEndpoint) {
+		t.Fatalf("otel endpoint error = %v, want %v", err, errMissingOtelEndpoint)
+	}
+
+	cfg = ebs_fields.NoebsConfig{
+		OtelEnabled:  true,
+		OtelEndpoint: "otel-collector:4317",
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errMissingOtelServiceName) {
+		t.Fatalf("otel service name error = %v, want %v", err, errMissingOtelServiceName)
+	}
+
+	cfg = ebs_fields.NoebsConfig{
+		OtelEnabled:     true,
+		OtelEndpoint:    "otel-collector:4317",
+		OtelServiceName: string(serviceRoleAPIGateway),
+		OtelSampleRate:  0.1,
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errInvalidOtelServiceName) {
+		t.Fatalf("otel service name mismatch error = %v, want %v", err, errInvalidOtelServiceName)
+	}
+
+	cfg = ebs_fields.NoebsConfig{
+		OtelEnabled:     true,
+		OtelEndpoint:    "otel-collector:4317",
+		OtelServiceName: string(serviceRoleIdentityAuth),
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errInvalidOtelSampleRate) {
+		t.Fatalf("otel sample rate error = %v, want %v", err, errInvalidOtelSampleRate)
+	}
+
+	cfg.OtelSampleRate = 0.25
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); err != nil {
+		t.Fatalf("explicit otel runtime config error = %v", err)
+	}
+}
+
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
 		t.Fatalf("identity-auth runtime config error = %v", err)
