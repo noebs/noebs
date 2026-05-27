@@ -35,6 +35,7 @@ type manifestObject struct {
 			Server    string `yaml:"server"`
 			Namespace string `yaml:"namespace"`
 		} `yaml:"destination"`
+		Rules      []manifestIngressRule `yaml:"rules"`
 		Ports      []manifestServicePort `yaml:"ports"`
 		SyncPolicy struct {
 			Automated struct {
@@ -51,6 +52,25 @@ type manifestObject struct {
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
+}
+
+type manifestIngressRule struct {
+	Host string `yaml:"host"`
+	HTTP struct {
+		Paths []manifestIngressPath `yaml:"paths"`
+	} `yaml:"http"`
+}
+
+type manifestIngressPath struct {
+	Path    string `yaml:"path"`
+	Backend struct {
+		Service struct {
+			Name string `yaml:"name"`
+			Port struct {
+				Name string `yaml:"name"`
+			} `yaml:"port"`
+		} `yaml:"service"`
+	} `yaml:"backend"`
 }
 
 type manifestServicePort struct {
@@ -314,6 +334,38 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 	}
 }
 
+func TestCurrentHostIngressTargetsOnlyAPIGateway(t *testing.T) {
+	objects := decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "ingress.yaml"))
+
+	checkedPaths := 0
+	for _, object := range objects {
+		if object.Kind != "Ingress" {
+			continue
+		}
+		if len(object.Spec.Rules) == 0 {
+			t.Fatalf("%s Ingress has no rules", object.Metadata.Name)
+		}
+		for _, rule := range object.Spec.Rules {
+			if len(rule.HTTP.Paths) == 0 {
+				t.Fatalf("%s Ingress host %s has no HTTP paths", object.Metadata.Name, rule.Host)
+			}
+			for _, ingressPath := range rule.HTTP.Paths {
+				checkedPaths++
+				serviceName := ingressPath.Backend.Service.Name
+				if serviceName == "" {
+					t.Fatalf("%s Ingress host %s path %s has no backend service", object.Metadata.Name, rule.Host, ingressPath.Path)
+				}
+				if serviceName != "api-gateway" {
+					t.Fatalf("%s Ingress host %s path %s targets %q, want api-gateway", object.Metadata.Name, rule.Host, ingressPath.Path, serviceName)
+				}
+			}
+		}
+	}
+	if checkedPaths == 0 {
+		t.Fatalf("current-host overlay has no Ingress backend paths")
+	}
+}
+
 func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 	if _, ok := compose.Secrets["noebs_secrets"]; ok {
@@ -354,6 +406,33 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 		requireComposeSecret(t, serviceName, service.Secrets, "sops_age_key", "/app/.sops/age-key.txt")
 		rejectComposeSecret(t, serviceName, service.Secrets, "postgres-bootstrap-secrets")
 		requireComposeTopLevelSecret(t, compose.Secrets, secretSource, "./deploy/docker/secrets/"+strings.TrimSuffix(secretSource, "-secrets")+".secrets.yaml")
+	}
+}
+
+func TestCaddyEdgeProxyTargetsOnlyAPIGateway(t *testing.T) {
+	path := filepath.Join("..", "Caddyfile")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	foundProxy := false
+	for lineIndex, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || !strings.HasPrefix(trimmed, "reverse_proxy") {
+			continue
+		}
+		foundProxy = true
+		fields := strings.Fields(trimmed)
+		if len(fields) != 2 {
+			t.Fatalf("%s:%d reverse_proxy = %q, want exactly one upstream", path, lineIndex+1, trimmed)
+		}
+		if fields[1] != "api-gateway:8080" {
+			t.Fatalf("%s:%d reverse_proxy upstream = %q, want api-gateway:8080", path, lineIndex+1, fields[1])
+		}
+	}
+	if !foundProxy {
+		t.Fatalf("%s has no reverse_proxy directive", path)
 	}
 }
 
