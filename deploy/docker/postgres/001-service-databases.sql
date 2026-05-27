@@ -1,5 +1,3 @@
-SELECT 'CREATE DATABASE api_gateway OWNER noebs'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'api_gateway')\gexec
 SELECT 'CREATE DATABASE identity_auth OWNER noebs'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'identity_auth')\gexec
 SELECT 'CREATE DATABASE card_vault OWNER noebs'

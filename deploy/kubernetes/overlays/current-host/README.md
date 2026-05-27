@@ -25,9 +25,9 @@ Required Kubernetes Secrets in namespace `noebs`:
 - `temporal-postgres-credentials` with key `password`.
 - `noebs-tls` TLS secret for `api.noebs.sd` and `dsa.adonese.sd`.
 
-Each noebs service secret must contain the merged secret material expected by that service, including `noebs.default_tenant_id`, that service's `noebs.db_url`, JWT/admin keys it owns, EBS credentials it owns, data key material it owns, and PSP secrets it owns. Wallet API, wallet ledger, and wallet worker share `wallet-ledger-secrets` because ledger is the database owner for wallet state.
+Each noebs service secret must contain the merged secret material expected by that service, including `noebs.default_tenant_id`, JWT/admin keys it owns, EBS credentials it owns, data key material it owns, and PSP secrets it owns. Every database-opening service secret must also contain that service's `noebs.db_url`. `api-gateway-secrets` must not contain `noebs.db_url`. Wallet API, wallet ledger, and wallet worker share `wallet-ledger-secrets` because ledger is the database owner for wallet state.
 
-When using the in-cluster `postgres` StatefulSet, service `noebs.db_url` values should point at the owned database names created by the init script: `api_gateway`, `identity_auth`, `card_vault`, `ebs_adapter`, `psp_webhook`, `admin_reporting`, `notification_chat`, `consumer_beneficiary`, and `wallet_ledger`.
+When using the in-cluster `postgres` StatefulSet, service `noebs.db_url` values should point at the owned database names created by the init script: `identity_auth`, `card_vault`, `ebs_adapter`, `psp_webhook`, `admin_reporting`, `notification_chat`, `consumer_beneficiary`, and `wallet_ledger`.
 
 Noebs service roles are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 

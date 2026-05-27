@@ -81,15 +81,14 @@ func renderConfigFiles() error {
 	if _, err := validateTenantID(defaultTenantID); err != nil {
 		return fmt.Errorf("runtime config default_tenant_id: %w", err)
 	}
-	if isEmptyValue(noebs["db_path"]) {
-		noebs["db_path"] = "/data/noebs.db"
-	}
 
 	if err := os.MkdirAll(outputDir, 0700); err != nil {
 		return fmt.Errorf("create runtime config dir: %w", err)
 	}
-	if err := os.WriteFile(outputDBPath, []byte(fmt.Sprint(noebs["db_path"])), 0600); err != nil {
-		return fmt.Errorf("write db path: %w", err)
+	if !isEmptyValue(noebs["db_path"]) {
+		if err := os.WriteFile(outputDBPath, []byte(fmt.Sprint(noebs["db_path"])), 0600); err != nil {
+			return fmt.Errorf("write db path: %w", err)
+		}
 	}
 
 	if err := writeLitestreamConfig(merged, noebs, outputLitestream); err != nil {
@@ -184,6 +183,16 @@ func applyServiceDatabaseURL(noebs map[string]interface{}) error {
 		}
 		return errors.New("noebs.service_role is required when noebs.service_databases is set")
 	}
+	parsedRole, err := parseServiceRole(role)
+	if err != nil {
+		return err
+	}
+	if !parsedRole.opensDatabase() {
+		if _, exists := databases[role]; exists {
+			return fmt.Errorf("%w: noebs.service_databases.%s", errDatabaseNotAllowed, role)
+		}
+		return validateRoleDatabaseConfig(parsedRole, firstString(noebs, "db_url"), firstString(noebs, "db_path"), firstString(noebs, "db_driver"))
+	}
 	rawDBURL, ok := databases[role]
 	if !ok {
 		return fmt.Errorf("noebs.service_databases missing %q", role)
@@ -248,7 +257,10 @@ func writeLitestreamConfig(merged map[string]interface{}, noebs map[string]inter
 		return nil
 	}
 
-	dbPath := fmt.Sprint(noebs["db_path"])
+	dbPath := ""
+	if !isEmptyValue(noebs["db_path"]) {
+		dbPath = fmt.Sprint(noebs["db_path"])
+	}
 
 	for _, dbEntry := range dbs {
 		dbMap, ok := dbEntry.(map[string]interface{})
@@ -256,6 +268,9 @@ func writeLitestreamConfig(merged map[string]interface{}, noebs map[string]inter
 			continue
 		}
 		if isEmptyValue(dbMap["path"]) {
+			if dbPath == "" {
+				return errors.New("noebs.db_path is required when litestream db path is empty")
+			}
 			dbMap["path"] = dbPath
 		}
 		replicas, ok := dbMap["replicas"].([]interface{})

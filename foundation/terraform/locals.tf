@@ -53,10 +53,6 @@ locals {
   }
 
   noebs_database_catalog = {
-    "api-gateway" = {
-      database    = "api_gateway"
-      secret_name = "api-gateway-secrets"
-    }
     "identity-auth" = {
       database       = "identity_auth"
       secret_name    = "identity-auth-secrets"

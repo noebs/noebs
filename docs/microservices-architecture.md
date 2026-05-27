@@ -25,7 +25,7 @@ The code already has useful extraction points:
 
 ### API Gateway/BFF
 
-Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state. It calls internal services over gRPC/HTTP using config-driven service discovery and maps their typed errors to the public REST contract.
+Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state, open a service database, or accept `noebs.db_url`. It calls internal services over gRPC/HTTP using config-driven service discovery and maps their typed errors to the public REST contract.
 
 Initial package owner: `apigateway`, route composition from `cli`.
 
@@ -119,13 +119,13 @@ Kubernetes provides service discovery through ClusterIP services:
 - `temporal-frontend.noebs.svc.cluster.local:7233`
 - service-owned Postgres databases, addressed through each service's mounted `secrets.yaml`.
 
-Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. The public Ingress only targets `api-gateway`; `api-gateway` proxies public compatibility routes to the ClusterIP service catalog. Terraform under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
+Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. The public Ingress only targets `api-gateway`; `api-gateway` proxies public compatibility routes to the ClusterIP service catalog. OpenTofu under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
 
 Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as Argo CD PreSync hooks. Each job has a service-specific role and runs only that service's embedded migration scope. Service Deployments must not run migrations in their startup path.
 
 Service identity is config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. Secrets continue to merge through `secrets.yaml`, with service-owned database URLs supplied by service-specific Kubernetes Secrets.
 
-For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed by service role and migration role. When that map exists, the runtime requires an entry for the current `noebs.service_role` and copies that URL into `noebs.db_url`.
+For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed by service role and migration role. When that map exists, the runtime requires an entry for database-opening roles and migration roles, copies that URL into `noebs.db_url`, and rejects database entries for `api-gateway`.
 
 ## Migration Plan
 
@@ -148,8 +148,8 @@ For local Docker Compose, a single SOPS file can still track service-owned datab
 - `go test ./...`
 - `go test ./cli ./apigateway ./store ./wallet/...`
 - `kubectl kustomize deploy/kubernetes/overlays/current-host`
-- `terraform -chdir=foundation/terraform fmt -check`
-- `terraform -chdir=foundation/terraform validate`
+- `tofu -chdir=foundation/terraform fmt -check`
+- `tofu -chdir=foundation/terraform validate`
 - Smoke checks after deployment:
   - `GET /test` on the public gateway.
   - wallet gRPC health from inside the cluster.

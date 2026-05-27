@@ -210,9 +210,6 @@ services:
     build:
       context: .
     init: true
-    depends_on:
-      db:
-        condition: service_healthy
     ports:
       # `:8080` is a common host port and is already used on our server.
       # Keep the app listening on `:8080` in-container, but publish it on `:8081` on the host.

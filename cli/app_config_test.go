@@ -16,6 +16,7 @@ import (
 
 func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	ensureInit()
+	configureGatewayProxyForTest(t)
 
 	originalCfg := noebsConfig
 	t.Cleanup(func() {

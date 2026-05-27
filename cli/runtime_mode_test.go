@@ -120,3 +120,49 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceRoleDatabaseOwnership(t *testing.T) {
+	if serviceRoleAPIGateway.opensDatabase() {
+		t.Fatalf("api-gateway role must not open a service database")
+	}
+	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
+		t.Fatalf("api-gateway database error = %v, want %v", err, errDatabaseNotAllowed)
+	}
+	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "", "/data/noebs.db", "sqlite3"); !errors.Is(err, errDatabaseNotAllowed) {
+		t.Fatalf("api-gateway database path error = %v, want %v", err, errDatabaseNotAllowed)
+	}
+
+	databaseRoles := []serviceRole{
+		serviceRoleIdentityAuth,
+		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
+		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleBeneficiary,
+		serviceRoleWalletAPI,
+		serviceRoleWalletLedger,
+		serviceRoleWalletWorker,
+		serviceRoleIdentityAuthMigrate,
+		serviceRoleCardVaultMigrate,
+		serviceRoleEBSAdapterMigrate,
+		serviceRolePSPWebhookMigrate,
+		serviceRoleAdminReportingMigrate,
+		serviceRoleNotificationMigrate,
+		serviceRoleBeneficiaryMigrate,
+		serviceRoleWalletLedgerMigrate,
+	}
+	for _, role := range databaseRoles {
+		t.Run(string(role), func(t *testing.T) {
+			if !role.opensDatabase() {
+				t.Fatalf("%s should require an explicit database URL", role)
+			}
+			if err := validateRoleDatabaseConfig(role, "", "", "pgx"); !errors.Is(err, errMissingDatabaseURL) {
+				t.Fatalf("%s database error = %v, want %v", role, err, errMissingDatabaseURL)
+			}
+			if err := validateRoleDatabaseConfig(role, "", "", "sqlite3"); !errors.Is(err, errMissingDatabasePath) {
+				t.Fatalf("%s sqlite database error = %v, want %v", role, err, errMissingDatabasePath)
+			}
+		})
+	}
+}

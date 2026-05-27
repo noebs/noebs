@@ -11,8 +11,11 @@ import (
 type serviceRole string
 
 var (
-	errMissingServiceRole = errors.New("missing noebs.service_role")
-	errInvalidServiceRole = errors.New("invalid noebs.service_role")
+	errMissingServiceRole  = errors.New("missing noebs.service_role")
+	errInvalidServiceRole  = errors.New("invalid noebs.service_role")
+	errMissingDatabaseURL  = errors.New("missing noebs.db_url")
+	errMissingDatabasePath = errors.New("missing noebs.db_path")
+	errDatabaseNotAllowed  = errors.New("database config not allowed for service role")
 )
 
 const (
@@ -86,6 +89,33 @@ func (r serviceRole) startsWalletWorker() bool {
 
 func (r serviceRole) startsChat() bool {
 	return r == serviceRoleNotification
+}
+
+func (r serviceRole) opensDatabase() bool {
+	return r != serviceRoleAPIGateway
+}
+
+func validateRoleDatabaseConfig(role serviceRole, dbURL, dbPath, driver string) error {
+	if !role.opensDatabase() {
+		if strings.TrimSpace(dbURL) != "" {
+			return fmt.Errorf("%w: %s must not set noebs.db_url", errDatabaseNotAllowed, role)
+		}
+		if strings.TrimSpace(dbPath) != "" {
+			return fmt.Errorf("%w: %s must not set noebs.db_path", errDatabaseNotAllowed, role)
+		}
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "sqlite", store.DriverSQLite:
+		if strings.TrimSpace(dbPath) == "" {
+			return fmt.Errorf("%w: %s requires noebs.db_path for sqlite", errMissingDatabasePath, role)
+		}
+		return nil
+	}
+	if strings.TrimSpace(dbURL) == "" {
+		return fmt.Errorf("%w: %s requires noebs.db_url", errMissingDatabaseURL, role)
+	}
+	return nil
 }
 
 func (r serviceRole) startsBackgroundJobs() bool {

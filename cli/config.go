@@ -421,45 +421,45 @@ func initConfig() {
 	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
 	configureLogger(noebsConfig)
 	initOTel(context.Background(), noebsConfig, logrusLogger)
-	dbpath := "test.db"
-	if noebsConfig.DatabasePath != "" {
-		dbpath = noebsConfig.DatabasePath
+	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabasePath, noebsConfig.DatabaseDriver); err != nil {
+		logrusLogger.Fatalf("error in runtime database config: %v", err)
 	}
-	if isTestRun() {
-		if tmp, err := os.CreateTemp("", "noebs-test-*.db"); err == nil {
-			dbpath = tmp.Name()
-			_ = tmp.Close()
+	if role.opensDatabase() {
+		dbpath := noebsConfig.DatabasePath
+		if dbpath != "" {
+			logrusLogger.Printf("The final database file is: %#v", dbpath)
 		}
-	}
-
-	logrusLogger.Printf("The final database file is: %#v", dbpath)
-	database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, dbpath, noebsConfig.DatabaseDriver)
-	if err != nil {
-		logrusLogger.Fatalf("error in connecting to db: %v", err)
-	}
-	storeSvc = store.New(database, store.WithDataKey(noebsConfig.DataKey))
-	migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancelMigrate()
-	if migrationScope, ok := role.migrationScope(); ok {
-		if err := store.MigrateScope(migrateCtx, database, tenantID, migrationScope); err != nil {
-			logrusLogger.Fatalf("error in migrations: %v", err)
+		database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, dbpath, noebsConfig.DatabaseDriver)
+		if err != nil {
+			logrusLogger.Fatalf("error in connecting to db: %v", err)
 		}
-		if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
-			logrusLogger.Fatalf("error ensuring tenant: %v", err)
-		}
-		if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
-			logrusLogger.Fatalf("error validating tenants: %v", err)
+		storeSvc = store.New(database, store.WithDataKey(noebsConfig.DataKey))
+		migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancelMigrate()
+		if migrationScope, ok := role.migrationScope(); ok {
+			if err := store.MigrateScope(migrateCtx, database, tenantID, migrationScope); err != nil {
+				logrusLogger.Fatalf("error in migrations: %v", err)
+			}
+			if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
+				logrusLogger.Fatalf("error ensuring tenant: %v", err)
+			}
+			if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
+				logrusLogger.Fatalf("error validating tenants: %v", err)
+			}
+		} else {
+			logrusLogger.Printf("Migrations are owned by service-specific migration roles; current role is %s", role)
 		}
 	} else {
-		logrusLogger.Printf("Migrations are owned by service-specific migration roles; current role is %s", role)
+		logrusLogger.Printf("%s role does not open a service database", role)
 	}
 
 	logrusLogger.Printf(
-		"Runtime config loaded: role=%s driver=%s tenant=%s port=%s temporal=%t grpc=%t wallet=%t",
+		"Runtime config loaded: role=%s driver=%s tenant=%s port=%s database=%t temporal=%t grpc=%t wallet=%t",
 		role,
 		noebsConfig.DatabaseDriver,
 		noebsConfig.DefaultTenantID,
 		noebsConfig.Port,
+		role.opensDatabase(),
 		noebsConfig.TemporalEnabled,
 		noebsConfig.GRPCEnabled,
 		noebsConfig.WalletEnabled,
@@ -504,11 +504,16 @@ func initConfig() {
 		}
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
 	}
-	consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
-	dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
-	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
-	walletService = wallet.NewService(database, noebsConfig)
-	walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
+	if role.startsChat() && (database == nil || database.DB == nil) {
+		logrusLogger.Fatalf("%s role requires an initialized database", role)
+	}
+	if role.opensDatabase() {
+		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
+		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
+		merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
+		walletService = wallet.NewService(database, noebsConfig)
+		walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
+	}
 	if (role == serviceRolePSPWebhook || role == serviceRoleWalletAPI) && !noebsConfig.WalletEnabled {
 		logrusLogger.Fatalf("%s role requires wallet_enabled", role)
 	}

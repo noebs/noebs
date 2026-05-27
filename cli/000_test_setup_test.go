@@ -48,7 +48,7 @@ func TestMain(m *testing.M) {
     notification-chat: "http://127.0.0.1:1"
     consumer-beneficiary: "http://127.0.0.1:1"
     wallet-api: "http://127.0.0.1:1"
-`, dbURL, "postgres", "test-tenant", serviceRoleAPIGateway)
+`, dbURL, "postgres", "test-tenant", serviceRoleIdentityAuth)
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))
 	}

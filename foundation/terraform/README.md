@@ -1,4 +1,4 @@
-# noebs Foundation Terraform
+# noebs Foundation OpenTofu
 
 This root owns platform-level deployment wiring for the existing host `100.102.164.34`:
 
@@ -12,14 +12,14 @@ Defaults are pinned for the current host, namespace names, Argo CD chart version
 Commands:
 
 ```sh
-terraform -chdir=foundation/terraform init
-terraform -chdir=foundation/terraform plan
-terraform -chdir=foundation/terraform apply
+tofu -chdir=foundation/terraform init
+tofu -chdir=foundation/terraform plan
+tofu -chdir=foundation/terraform apply
 ```
 
-The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host happens before applying this root so Terraform can manage Argo CD through the Kubernetes API.
+The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host happens before applying this root so OpenTofu can manage Argo CD through the Kubernetes API.
 
-Runtime secrets are not stored in Terraform. Before syncing the Argo CD application, create the required Kubernetes Secrets in the Terraform-owned `noebs` namespace:
+Runtime secrets are not stored in OpenTofu. Before syncing the Argo CD application, create the required Kubernetes Secrets in the OpenTofu-owned `noebs` namespace:
 
 - `api-gateway-secrets` with key `secrets.yaml`
 - `identity-auth-secrets` with key `secrets.yaml`
@@ -34,3 +34,5 @@ Runtime secrets are not stored in Terraform. Before syncing the Argo CD applicat
 - `postgres-credentials` with key `password`
 - `temporal-postgres-credentials` with key `password`
 - `noebs-tls` for `api.noebs.sd` and `dsa.adonese.sd`
+
+`api-gateway-secrets` carries edge auth/admin material only; it must not include `noebs.db_url`.

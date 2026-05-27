@@ -60,7 +60,25 @@ func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 	}
 }
 
+func TestRenderConfigFilesDoesNotDefaultDatabasePath(t *testing.T) {
+	tmp := renderConfigTempDir(t, `noebs:
+  default_tenant_id: tenant_1
+`)
+	if err := renderConfigFiles(); err != nil {
+		t.Fatalf("renderConfigFiles() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".db_path")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(".db_path stat error = %v, want %v", err, os.ErrNotExist)
+	}
+}
+
 func renderConfigInTempDir(t *testing.T, payload string) error {
+	t.Helper()
+	renderConfigTempDir(t, payload)
+	return renderConfigFiles()
+}
+
+func renderConfigTempDir(t *testing.T, payload string) string {
 	t.Helper()
 	originalWD, err := os.Getwd()
 	if err != nil {
@@ -76,7 +94,7 @@ func renderConfigInTempDir(t *testing.T, payload string) error {
 	t.Cleanup(func() {
 		_ = os.Chdir(originalWD)
 	})
-	return renderConfigFiles()
+	return tmp
 }
 
 func TestValidateTenantIDAcceptsExplicitTenant(t *testing.T) {

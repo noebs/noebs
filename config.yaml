@@ -1,6 +1,5 @@
 noebs:
   service_role: api-gateway
-  db_path: /data/noebs.db
   port: ":8080"
   is_debug: false
   # Only enable for local/dev when the EBS endpoint uses a self-signed cert.
