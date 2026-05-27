@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/apperr"
-	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
@@ -26,21 +25,18 @@ type TemporalSignaler interface {
 }
 
 type PSPWebhookHandler struct {
-	Service  *wallet.Service
+	Store    *walletstore.Store
 	Loader   *walletpsp.Loader
 	Registry *walletpsp.Registry
 	Temporal TemporalSignaler
 }
 
-func NewPSPWebhookHandler(service *wallet.Service, loader *walletpsp.Loader, registry *walletpsp.Registry, temporal TemporalSignaler) *PSPWebhookHandler {
-	return &PSPWebhookHandler{Service: service, Loader: loader, Registry: registry, Temporal: temporal}
+func NewPSPWebhookHandler(store *walletstore.Store, loader *walletpsp.Loader, registry *walletpsp.Registry, temporal TemporalSignaler) *PSPWebhookHandler {
+	return &PSPWebhookHandler{Store: store, Loader: loader, Registry: registry, Temporal: temporal}
 }
 
 func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil || h.Service.Store == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
-	}
-	if !h.Service.Config.WalletEnabled {
+	if h == nil || h.Store == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
 	providerCode := strings.TrimSpace(c.Params("provider"))
@@ -169,7 +165,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		if pspTransactionID != "" {
 			txn.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
 		}
-		if _, err := h.Service.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
+		if _, err := h.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
 			return jsonResponse(c, 0, mapWalletError(err))
 		}
 		if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, txn.Direction, http.StatusAccepted, fiber.Map{"status": "held", "client_reference": clientRef}, "", payload); err != nil {
@@ -178,7 +174,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": "held", "client_reference": clientRef})
 	}
 
-	stored, err := h.Service.Store.GetPSPTransactionByReference(c.Context(), tenantID, clientRef)
+	stored, err := h.Store.GetPSPTransactionByReference(c.Context(), tenantID, clientRef)
 	if err != nil {
 		if errors.Is(err, walletstore.ErrPSPTransactionNotFound) {
 			amount := mappedWebhook.Amount
@@ -202,7 +198,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			if pspTransactionID != "" {
 				txn.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
 			}
-			if _, err := h.Service.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
+			if _, err := h.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
 				return jsonResponse(c, 0, mapWalletError(err))
 			}
 			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, txn.Direction, http.StatusAccepted, fiber.Map{"status": status, "client_reference": clientRef}, "", payload); err != nil {
@@ -228,7 +224,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	if update.Status == "success" {
 		update.ConfirmedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
 	}
-	if err := h.Service.Store.UpdatePSPTransactionStatus(c.Context(), tenantID, clientRef, update); err != nil {
+	if err := h.Store.UpdatePSPTransactionStatus(c.Context(), tenantID, clientRef, update); err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
@@ -258,8 +254,8 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 }
 
 func (h *PSPWebhookHandler) recordWebhookInteraction(c *fiber.Ctx, tenantID, providerCode, clientReference, pspTransactionID, direction string, statusCode int, responseBody any, errorMessage string, payload []byte) error {
-	if h == nil || h.Service == nil || h.Service.Store == nil {
-		return wallet.ErrMissingStore
+	if h == nil || h.Store == nil {
+		return apperr.ErrUnavailable
 	}
 	requestHeaders, err := rawJSONFromAny(c.GetReqHeaders())
 	if err != nil {
@@ -285,7 +281,7 @@ func (h *PSPWebhookHandler) recordWebhookInteraction(c *fiber.Ctx, tenantID, pro
 		StatusCode:       sql.NullInt64{Int64: int64(statusCode), Valid: statusCode > 0},
 		ErrorMessage:     sql.NullString{String: errorMessage, Valid: errorMessage != ""},
 	}
-	_, err = h.Service.Store.RecordPSPInteraction(c.Context(), interaction)
+	_, err = h.Store.RecordPSPInteraction(c.Context(), interaction)
 	return err
 }
 
@@ -356,8 +352,8 @@ func (h *PSPWebhookHandler) authorizeUnsignedWebhook(c *fiber.Ctx, cfg *walletps
 }
 
 func (h *PSPWebhookHandler) recordWebhookStatusCheck(c *fiber.Ctx, cfg *walletpsp.Config, tenantID, providerCode, clientReference, pspTransactionID, direction string, status *walletpsp.TxStatus, callErr error) error {
-	if h == nil || h.Service == nil || h.Service.Store == nil {
-		return wallet.ErrMissingStore
+	if h == nil || h.Store == nil {
+		return apperr.ErrUnavailable
 	}
 	requestHeaders, err := webhookProviderHeaders(cfg)
 	if err != nil {
@@ -389,7 +385,7 @@ func (h *PSPWebhookHandler) recordWebhookStatusCheck(c *fiber.Ctx, cfg *walletps
 		ResponseBody:     responseBody,
 		ErrorMessage:     sql.NullString{String: errorString(callErr), Valid: callErr != nil},
 	}
-	_, err = h.Service.Store.RecordPSPInteraction(c.Context(), interaction)
+	_, err = h.Store.RecordPSPInteraction(c.Context(), interaction)
 	return err
 }
 

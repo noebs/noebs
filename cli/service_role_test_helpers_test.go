@@ -10,6 +10,7 @@ import (
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
+	walletstore "github.com/adonese/noebs/wallet/store"
 )
 
 func setServiceRoleForTest(t *testing.T, role serviceRole) {
@@ -31,6 +32,7 @@ type roleServicesSnapshot struct {
 	dashService       dashboard.Service
 	merchantServices  merchant.Service
 	walletService     *wallet.Service
+	pspWebhookStore   *walletstore.Store
 	walletPSPRegistry *walletpsp.Registry
 	walletPSPLoader   *walletpsp.Loader
 }
@@ -41,6 +43,7 @@ func captureRoleServices() roleServicesSnapshot {
 		dashService:       dashService,
 		merchantServices:  merchantServices,
 		walletService:     walletService,
+		pspWebhookStore:   pspWebhookStore,
 		walletPSPRegistry: walletPSPRegistry,
 		walletPSPLoader:   walletPSPLoader,
 	}
@@ -51,6 +54,7 @@ func (s roleServicesSnapshot) restore() {
 	dashService = s.dashService
 	merchantServices = s.merchantServices
 	walletService = s.walletService
+	pspWebhookStore = s.pspWebhookStore
 	walletPSPRegistry = s.walletPSPRegistry
 	walletPSPLoader = s.walletPSPLoader
 }

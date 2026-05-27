@@ -26,6 +26,7 @@ import (
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletpsphttpjson "github.com/adonese/noebs/wallet/psp/httpjson"
 	walletpspnoop "github.com/adonese/noebs/wallet/psp/noop"
+	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/adaptor/v2"
@@ -134,9 +135,9 @@ func loadConfig() ([]byte, error) {
 	return payload, nil
 }
 
-func buildPSPDeps(service *wallet.Service, secrets map[string]interface{}) (*walletpsp.Registry, *walletpsp.Loader) {
-	if service == nil || service.Store == nil {
-		return nil, nil
+func buildPSPDeps(pspStore *walletstore.Store, secrets map[string]interface{}) (*walletpsp.Registry, *walletpsp.Loader, error) {
+	if pspStore == nil {
+		return nil, nil, errMissingPSPStore
 	}
 	pspRegistry := walletpsp.NewRegistry()
 	if err := pspRegistry.Register("noop", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
@@ -158,10 +159,10 @@ func buildPSPDeps(service *wallet.Service, secrets map[string]interface{}) (*wal
 		secretResolver = mapResolver
 	}
 	pspLoader := &walletpsp.Loader{
-		Store:   service.Store,
+		Store:   pspStore,
 		Secrets: secretResolver,
 	}
-	return pspRegistry, pspLoader
+	return pspRegistry, pspLoader, nil
 }
 
 var (
@@ -171,6 +172,7 @@ var (
 	errMissingWalletWorkflow       = errors.New("missing wallet workflow")
 	errMissingWalletTenants        = errors.New("missing wallet tenants")
 	errMissingWalletPSPDeps        = errors.New("missing wallet PSP dependencies")
+	errMissingPSPStore             = errors.New("missing PSP store")
 )
 
 func startCronWorkflow(ctx context.Context, temporalClient client.Client, workflowID, cron string, taskQueue walletworker.TaskQueue, workflowFn interface{}, args ...interface{}) error {
@@ -271,6 +273,7 @@ func initRoleServices(role serviceRole) error {
 	dashService = dashboard.Service{}
 	merchantServices = merchant.Service{}
 	walletService = nil
+	pspWebhookStore = nil
 	walletPSPRegistry = nil
 	walletPSPLoader = nil
 
@@ -280,6 +283,11 @@ func initRoleServices(role serviceRole) error {
 		}
 	}
 	if roleNeedsWalletService(role) {
+		if database == nil {
+			return fmt.Errorf("%w: %s", errRoleDatabaseNotInitialized, role)
+		}
+	}
+	if roleNeedsPSPWebhookStore(role) {
 		if database == nil {
 			return fmt.Errorf("%w: %s", errRoleDatabaseNotInitialized, role)
 		}
@@ -297,8 +305,18 @@ func initRoleServices(role serviceRole) error {
 	if roleNeedsWalletService(role) {
 		walletService = wallet.NewService(database, noebsConfig)
 	}
+	if roleNeedsPSPWebhookStore(role) {
+		pspWebhookStore = walletstore.New(database)
+	}
 	if roleNeedsWalletPSPDeps(role) {
-		walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
+		pspStore, err := pspStoreForRole(role)
+		if err != nil {
+			return err
+		}
+		walletPSPRegistry, walletPSPLoader, err = buildPSPDeps(pspStore, rawSecrets)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -320,14 +338,34 @@ func roleNeedsMerchantService(role serviceRole) bool {
 }
 
 func roleNeedsWalletService(role serviceRole) bool {
-	return role == serviceRolePSPWebhook ||
-		role == serviceRoleWalletLedger ||
+	return role == serviceRoleWalletLedger ||
 		role == serviceRoleWalletWorker
+}
+
+func roleNeedsPSPWebhookStore(role serviceRole) bool {
+	return role == serviceRolePSPWebhook
 }
 
 func roleNeedsWalletPSPDeps(role serviceRole) bool {
 	return role == serviceRolePSPWebhook ||
 		role == serviceRoleWalletWorker
+}
+
+func pspStoreForRole(role serviceRole) (*walletstore.Store, error) {
+	switch role {
+	case serviceRolePSPWebhook:
+		if pspWebhookStore == nil {
+			return nil, errMissingPSPStore
+		}
+		return pspWebhookStore, nil
+	case serviceRoleWalletWorker:
+		if walletService == nil || walletService.Store == nil {
+			return nil, errMissingPSPStore
+		}
+		return walletService.Store, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", errMissingPSPStore, role)
+	}
 }
 
 func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler) {
@@ -471,7 +509,7 @@ func GetMainEngine() *fiber.App {
 	route.Get("/metrics", metricsGuard, adaptor.HTTPHandler(promhttp.Handler()))
 
 	if role == serviceRolePSPWebhook {
-		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(walletService, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
+		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(pspWebhookStore, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
 		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
 		return route
 	}

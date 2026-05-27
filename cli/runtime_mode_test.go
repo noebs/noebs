@@ -511,13 +511,14 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 		dashboard     bool
 		merchant      bool
 		wallet        bool
+		pspStore      bool
 		walletPSPDeps bool
 	}{
 		{role: serviceRoleAPIGateway},
 		{role: serviceRoleIdentityAuth, consumer: true},
 		{role: serviceRoleCardVault, consumer: true},
 		{role: serviceRoleEBSAdapter, consumer: true, merchant: true},
-		{role: serviceRolePSPWebhook, wallet: true, walletPSPDeps: true},
+		{role: serviceRolePSPWebhook, pspStore: true, walletPSPDeps: true},
 		{role: serviceRoleAdminReporting, dashboard: true},
 		{role: serviceRoleNotification, consumer: true},
 		{role: serviceRoleBeneficiary, consumer: true},
@@ -544,6 +545,9 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 			}
 			if got := walletService != nil; got != tt.wallet {
 				t.Fatalf("walletService initialized = %t, want %t", got, tt.wallet)
+			}
+			if got := pspWebhookStore != nil; got != tt.pspStore {
+				t.Fatalf("pspWebhookStore initialized = %t, want %t", got, tt.pspStore)
 			}
 			pspDeps := walletPSPRegistry != nil && walletPSPLoader != nil
 			if pspDeps != tt.walletPSPDeps {
