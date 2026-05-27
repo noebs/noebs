@@ -11,6 +11,7 @@ resources:
   - migrate-job.yaml
   - api-gateway.yaml
   - psp-webhook.yaml
+  - admin-reporting.yaml
   - wallet-ledger.yaml
   - wallet-worker.yaml
 

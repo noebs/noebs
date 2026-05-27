@@ -15,11 +15,12 @@ var (
 )
 
 const (
-	serviceRoleAPIGateway   serviceRole = "api-gateway"
-	serviceRolePSPWebhook   serviceRole = "psp-webhook"
-	serviceRoleWalletLedger serviceRole = "wallet-ledger"
-	serviceRoleWalletWorker serviceRole = "wallet-worker"
-	serviceRoleMigrate      serviceRole = "migrate"
+	serviceRoleAPIGateway     serviceRole = "api-gateway"
+	serviceRolePSPWebhook     serviceRole = "psp-webhook"
+	serviceRoleAdminReporting serviceRole = "admin-reporting"
+	serviceRoleWalletLedger   serviceRole = "wallet-ledger"
+	serviceRoleWalletWorker   serviceRole = "wallet-worker"
+	serviceRoleMigrate        serviceRole = "migrate"
 )
 
 func currentServiceRole() (serviceRole, error) {
@@ -33,6 +34,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 		return "", errMissingServiceRole
 	case serviceRoleAPIGateway,
 		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleMigrate:
@@ -43,7 +45,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 }
 
 func (r serviceRole) startsHTTP() bool {
-	return r == serviceRoleAPIGateway || r == serviceRolePSPWebhook
+	return r == serviceRoleAPIGateway || r == serviceRolePSPWebhook || r == serviceRoleAdminReporting
 }
 
 func (r serviceRole) startsGRPC() bool {

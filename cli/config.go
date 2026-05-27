@@ -200,6 +200,25 @@ func closePSPTemporalClient() {
 	}
 }
 
+func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, templateDir string) {
+	route.Static("/dashboard/assets", templateDir)
+	dashboardGroup := route.Group("/dashboard", adminGuard)
+	{
+		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
+		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
+		dashboardGroup.Get("/get", wrapHandler(dashService.TransactionByTid))
+		dashboardGroup.Get("/all", wrapHandler(dashService.GetAll))
+		dashboardGroup.Get("/all/:id", wrapHandler(dashService.GetID))
+		dashboardGroup.Get("/count", wrapHandler(dashService.TransactionsCount))
+		dashboardGroup.Get("/settlement", wrapHandler(dashService.DailySettlement))
+		dashboardGroup.Get("/merchant", wrapHandler(dashService.MerchantTransactionsEndpoint))
+		dashboardGroup.Get("/merchant/:id", wrapHandler(dashService.MerchantViews))
+		dashboardGroup.Get("/status", wrapHandler(dashService.QRStatus))
+		dashboardGroup.Get("/test_browser", wrapHandler(dashService.IndexPage))
+		dashboardGroup.Get("/stream", wrapHandler(dashService.Stream))
+	}
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
@@ -245,6 +264,10 @@ func GetMainEngine() *fiber.App {
 		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
 		return route
 	}
+	if role == serviceRoleAdminReporting {
+		registerAdminReportingRoutes(route, adminGuard, templateDir)
+		return route
+	}
 	if role != serviceRoleAPIGateway {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
@@ -258,27 +281,8 @@ func GetMainEngine() *fiber.App {
 		chat.ServeWs(hub, w, r)
 	}))
 
-	route.Static("/dashboard/assets", templateDir)
 	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
 	route.Get("/app/config", appConfigHandler)
-
-	dashboardGroup := route.Group("/dashboard", adminGuard)
-	{
-		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
-		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
-		dashboardGroup.Get("/get", wrapHandler(dashService.TransactionByTid))
-		dashboardGroup.Get("/create", wrapHandler(dashService.MakeDummyTransaction))
-		dashboardGroup.Get("/all", wrapHandler(dashService.GetAll))
-		dashboardGroup.Get("/all/:id", wrapHandler(dashService.GetID))
-		dashboardGroup.Get("/count", wrapHandler(dashService.TransactionsCount))
-		dashboardGroup.Get("/settlement", wrapHandler(dashService.DailySettlement))
-		dashboardGroup.Get("/merchant", wrapHandler(dashService.MerchantTransactionsEndpoint))
-		dashboardGroup.Get("/merchant/:id", wrapHandler(dashService.MerchantViews))
-		dashboardGroup.Post("/issues", wrapHandler(dashService.ReportIssueEndpoint))
-		dashboardGroup.Get("/status", wrapHandler(dashService.QRStatus))
-		dashboardGroup.Get("/test_browser", wrapHandler(dashService.IndexPage))
-		dashboardGroup.Get("/stream", wrapHandler(dashService.Stream))
-	}
 
 	cons := route.Group("/consumer")
 

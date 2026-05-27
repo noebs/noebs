@@ -3,6 +3,10 @@ api.noebs.sd, dsa.adonese.sd {
         reverse_proxy psp-webhook:8080
     }
 
+    handle /dashboard* {
+        reverse_proxy admin-reporting:8080
+    }
+
     handle {
         reverse_proxy api-gateway:8080
     }

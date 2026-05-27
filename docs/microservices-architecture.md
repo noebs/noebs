@@ -99,6 +99,7 @@ Kubernetes provides service discovery through ClusterIP services:
 
 - `api-gateway.noebs.svc.cluster.local:8080`
 - `psp-webhook.noebs.svc.cluster.local:8080`
+- `admin-reporting.noebs.svc.cluster.local:8080`
 - `wallet-ledger.noebs.svc.cluster.local:9090`
 - `wallet-worker` has no service; it is a worker deployment.
 - `temporal-frontend.noebs.svc.cluster.local:7233`
@@ -110,15 +111,16 @@ Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an 
 
 ## Migration Plan
 
-1. Add explicit runtime roles to the current binary: `api-gateway`, `psp-webhook`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+1. Add explicit runtime roles to the current binary: `api-gateway`, `psp-webhook`, `admin-reporting`, `wallet-ledger`, `wallet-worker`, and `migrate`.
 2. Run database migrations only through the Kubernetes/k3s migration Job.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
-5. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
-6. Extract Identity/Auth and Card/Vault behind internal APIs. Remove direct card/user table access from consumer/merchant flows.
-7. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
-8. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
-9. Split migrations by owned schema and enforce table ownership in tests.
+5. Move dashboard traffic into the `admin-reporting` workload. It owns read-only dashboard, settlement, merchant-view, status, and stream routes. `GET /dashboard/create` and `POST /dashboard/issues` are not registered by the reporting service.
+6. Move wallet public traffic from in-process HTTP handlers to the wallet gRPC contract. Keep the public REST paths stable in the API Gateway/BFF.
+7. Extract Identity/Auth and Card/Vault behind internal APIs. Remove direct card/user table access from consumer/merchant flows.
+8. Extract EBS Adapter and route merchant/consumer compatibility APIs through it.
+9. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
+10. Split migrations by owned schema and enforce table ownership in tests.
 
 ## Verification Gates
 
