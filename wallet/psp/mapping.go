@@ -27,27 +27,24 @@ type MappedResponse struct {
 
 func MapResponse(payload map[string]any, mapping ResponseMapping, defaultCurrency string) MappedResponse {
 	return MappedResponse{
-		ClientReference: stringFromPaths(payload, pathsOrDefault(mapping.ClientReference, "client_reference", "clientReference", "client_ref", "reference")),
-		TransactionID:   stringFromPaths(payload, pathsOrDefault(mapping.TransactionID, "transaction_id", "psp_transaction_id", "id")),
-		Status:          strings.ToLower(stringFromPaths(payload, pathsOrDefault(mapping.Status, "status"))),
-		Amount:          int64FromPaths(payload, pathsOrDefault(mapping.Amount, "amount")),
-		Currency:        stringOrDefault(stringFromPaths(payload, pathsOrDefault(mapping.Currency, "currency")), defaultCurrency),
-		Metadata:        mapFromPaths(payload, pathsOrDefault(mapping.Metadata, "metadata", "meta")),
+		ClientReference: stringFromPaths(payload, mapping.ClientReference),
+		TransactionID:   stringFromPaths(payload, mapping.TransactionID),
+		Status:          strings.ToLower(stringFromPaths(payload, mapping.Status)),
+		Amount:          int64FromPaths(payload, mapping.Amount),
+		Currency:        responseCurrency(payload, mapping, defaultCurrency),
+		Metadata:        mapFromPaths(payload, mapping.Metadata),
 	}
 }
 
-func pathsOrDefault(paths []string, fallback ...string) []string {
-	if len(paths) > 0 {
-		return paths
+func responseCurrency(payload map[string]any, mapping ResponseMapping, defaultCurrency string) string {
+	currency := stringFromPaths(payload, mapping.Currency)
+	if currency != "" {
+		return currency
 	}
-	return fallback
-}
-
-func stringOrDefault(value, fallback string) string {
-	if value != "" {
-		return value
+	if len(mapping.Currency) == 0 {
+		return ""
 	}
-	return fallback
+	return strings.TrimSpace(defaultCurrency)
 }
 
 func valueFromPaths(payload map[string]any, paths []string) any {

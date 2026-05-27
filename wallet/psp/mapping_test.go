@@ -15,6 +15,7 @@ func TestMapResponseUsesConfiguredPathsAndDefaultCurrency(t *testing.T) {
 		TransactionID: []string{"result.provider_id"},
 		Status:        []string{"result.state"},
 		Amount:        []string{"result.minor_units"},
+		Currency:      []string{"result.currency"},
 		Metadata:      []string{"meta"},
 	}, "AED")
 
@@ -35,7 +36,7 @@ func TestMapResponseUsesConfiguredPathsAndDefaultCurrency(t *testing.T) {
 	}
 }
 
-func TestMapResponseFallsBackToCommonFields(t *testing.T) {
+func TestMapResponseRequiresConfiguredPaths(t *testing.T) {
 	payload := map[string]any{
 		"client_reference":   "front-ref",
 		"psp_transaction_id": "psp-123",
@@ -44,14 +45,8 @@ func TestMapResponseFallsBackToCommonFields(t *testing.T) {
 		"currency":           "USD",
 	}
 	mapped := MapResponse(payload, ResponseMapping{}, "")
-	if mapped.ClientReference != "front-ref" {
-		t.Fatalf("expected client reference front-ref, got %q", mapped.ClientReference)
-	}
-	if mapped.TransactionID != "psp-123" {
-		t.Fatalf("expected transaction id psp-123, got %q", mapped.TransactionID)
-	}
-	if mapped.Status != "pending" || mapped.Amount != 1200 || mapped.Currency != "USD" {
-		t.Fatalf("unexpected mapped response: %+v", mapped)
+	if mapped.ClientReference != "" || mapped.TransactionID != "" || mapped.Status != "" || mapped.Amount != 0 || mapped.Currency != "" {
+		t.Fatalf("MapResponse() = %+v, want empty fields without configured paths", mapped)
 	}
 }
 
