@@ -39,6 +39,11 @@ api.noebs.sd, dsa.adonese.sd {
         reverse_proxy notification-chat:8080
     }
 
+    @consumerBeneficiary path /consumer/beneficiary
+    handle @consumerBeneficiary {
+        reverse_proxy consumer-beneficiary:8080
+    }
+
     handle {
         reverse_proxy api-gateway:8080
     }

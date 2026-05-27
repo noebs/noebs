@@ -16,6 +16,7 @@ resources:
   - psp-webhook.yaml
   - admin-reporting.yaml
   - notification-chat.yaml
+  - consumer-beneficiary.yaml
   - wallet-api.yaml
   - wallet-ledger.yaml
   - wallet-worker.yaml

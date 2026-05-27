@@ -113,7 +113,7 @@ func TestEBSAdapterRoutesAreOwnedByEBSAdapter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, 5_000)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}

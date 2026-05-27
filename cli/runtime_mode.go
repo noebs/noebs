@@ -21,6 +21,7 @@ const (
 	serviceRolePSPWebhook     serviceRole = "psp-webhook"
 	serviceRoleAdminReporting serviceRole = "admin-reporting"
 	serviceRoleNotification   serviceRole = "notification-chat"
+	serviceRoleBeneficiary    serviceRole = "consumer-beneficiary"
 	serviceRoleWalletAPI      serviceRole = "wallet-api"
 	serviceRoleWalletLedger   serviceRole = "wallet-ledger"
 	serviceRoleWalletWorker   serviceRole = "wallet-worker"
@@ -43,6 +44,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
+		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
@@ -54,7 +56,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 }
 
 func (r serviceRole) startsHTTP() bool {
-	return r == serviceRoleAPIGateway || r == serviceRoleIdentityAuth || r == serviceRoleCardVault || r == serviceRoleEBSAdapter || r == serviceRolePSPWebhook || r == serviceRoleAdminReporting || r == serviceRoleNotification || r == serviceRoleWalletAPI
+	return r == serviceRoleAPIGateway || r == serviceRoleIdentityAuth || r == serviceRoleCardVault || r == serviceRoleEBSAdapter || r == serviceRolePSPWebhook || r == serviceRoleAdminReporting || r == serviceRoleNotification || r == serviceRoleBeneficiary || r == serviceRoleWalletAPI
 }
 
 func (r serviceRole) startsGRPC() bool {

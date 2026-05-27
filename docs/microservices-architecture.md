@@ -33,6 +33,12 @@ Owns users, mobile auth, Google OAuth linking, JWT issuance, auth accounts, prof
 
 Initial package owner: existing user/auth code in `consumer` plus `store` user/auth tables. The first split owns login, registration, OTP, Google OAuth, profile, language, password, API-key generation, KYC/check-user, and device-token update routes.
 
+### Consumer Beneficiary Service
+
+Owns consumer beneficiary/contact payment targets at the public compatibility path level. It keeps beneficiary CRUD out of the API Gateway while the legacy consumer package is being carved into explicit owners.
+
+Initial package owner: beneficiary methods in `consumer` and `store`. The first split owns `POST /consumer/beneficiary`, `GET /consumer/beneficiary`, and `DELETE /consumer/beneficiary`.
+
 ### Card/Vault Service
 
 Owns PAN/IPIN/card storage, encryption, tokenization, fingerprints, card lookup, and mobile-to-card mappings. Only this service can read decrypted card data. Other services receive tokenized references or last-four metadata.
@@ -104,6 +110,7 @@ Kubernetes provides service discovery through ClusterIP services:
 - `psp-webhook.noebs.svc.cluster.local:8080`
 - `admin-reporting.noebs.svc.cluster.local:8080`
 - `notification-chat.noebs.svc.cluster.local:8080`
+- `consumer-beneficiary.noebs.svc.cluster.local:8080`
 - `wallet-api.noebs.svc.cluster.local:8080`
 - `wallet-ledger.noebs.svc.cluster.local:9090`
 - `wallet-worker` has no service; it is a worker deployment.
@@ -118,7 +125,7 @@ Service identity is config-driven. Each noebs workload mounts the shared `/app/c
 
 ## Migration Plan
 
-1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `ebs-adapter`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-api`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `ebs-adapter`, `psp-webhook`, `admin-reporting`, `notification-chat`, `consumer-beneficiary`, `wallet-api`, `wallet-ledger`, `wallet-worker`, and `migrate`.
 2. Run database migrations only through the Kubernetes/k3s migration Job.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
@@ -128,8 +135,9 @@ Service identity is config-driven. Each noebs workload mounts the shared `/app/c
 8. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
 9. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS transaction lookup, and mobile-transfer compatibility routes.
 10. Move wallet HTTP traffic into the `wallet-api` workload. It owns `/wallet` and `/admin/wallet` routes at the public path level while `wallet-ledger` owns the gRPC ledger process.
-11. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
-12. Split migrations by owned schema and enforce table ownership in tests.
+11. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
+12. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
+13. Split migrations by owned schema and enforce table ownership in tests.
 
 ## Verification Gates
 

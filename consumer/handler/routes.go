@@ -67,8 +67,7 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/kyc", h.KYC)
 }
 
-func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
-	// Beneficiaries
+func RegisterBeneficiaryRoutes(router fiber.Router, h *Handler) {
 	router.Post("/beneficiary", h.CreateBeneficiary)
 	router.Get("/beneficiary", h.ListBeneficiaries)
 	router.Delete("/beneficiary", h.DeleteBeneficiary)

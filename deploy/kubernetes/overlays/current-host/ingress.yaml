@@ -535,6 +535,13 @@ spec:
                 name: ebs-adapter
                 port:
                   name: http
+          - path: /consumer/beneficiary
+            pathType: Exact
+            backend:
+              service:
+                name: consumer-beneficiary
+                port:
+                  name: http
           - path: /wallet
             pathType: Prefix
             backend:
@@ -1110,6 +1117,13 @@ spec:
             backend:
               service:
                 name: ebs-adapter
+                port:
+                  name: http
+          - path: /consumer/beneficiary
+            pathType: Exact
+            backend:
+              service:
+                name: consumer-beneficiary
                 port:
                   name: http
           - path: /wallet

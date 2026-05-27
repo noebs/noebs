@@ -249,6 +249,10 @@ func registerNotificationChatRoutes(route *fiber.App, auth gateway.JWTAuth, cons
 	})
 }
 
+func registerConsumerBeneficiaryRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHandler *consumerhandler.Handler) {
+	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", auth.AuthMiddleware()), consumerHandler)
+}
+
 func registerIdentityAuthRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
 
@@ -346,6 +350,10 @@ func GetMainEngine() *fiber.App {
 		registerNotificationChatRoutes(route, auth, consumerHandler)
 		return route
 	}
+	if role == serviceRoleBeneficiary {
+		registerConsumerBeneficiaryRoutes(route, auth, consumerHandler)
+		return route
+	}
 	if role == serviceRoleWalletAPI {
 		registerWalletAPIRoutes(route, auth, adminGuard)
 		return route
@@ -362,9 +370,6 @@ func GetMainEngine() *fiber.App {
 		cons.Post("/test", func(c *fiber.Ctx) error {
 			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 		})
-
-		authedCons := cons.Group("", auth.AuthMiddleware())
-		consumerhandler.RegisterAuthedRoutes(authedCons, consumerHandler)
 	}
 	return route
 }
