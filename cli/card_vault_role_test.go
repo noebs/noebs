@@ -178,12 +178,20 @@ func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
 	setServiceRoleForTest(t, serviceRoleCardVault)
 	route := GetMainEngine()
 
-	req := httptest.NewRequest(http.MethodPost, "/internal/card-vault/card-registration/cards", nil)
-	setGatewayAdminIdentityHeader(req)
-	resp, err := route.Test(req)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
+	tests := []cardVaultRoute{
+		{name: "completed card registration card", method: http.MethodPost, path: "/internal/card-vault/card-registration/cards"},
+		{name: "card by mobile", method: http.MethodPost, path: "/internal/card-vault/cards/by-mobile"},
 	}
-	defer func() { _ = resp.Body.Close() }()
-	assertFiberRouteRegistered(t, resp, http.MethodPost, "/internal/card-vault/card-registration/cards")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			setGatewayAdminIdentityHeader(req)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
+		})
+	}
 }

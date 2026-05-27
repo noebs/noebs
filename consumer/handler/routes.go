@@ -100,6 +100,7 @@ func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
 
 func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/card-registration/cards", h.StoreCompletedRegistrationCard)
+	router.Post("/cards/by-mobile", h.ResolveCardByMobile)
 }
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {

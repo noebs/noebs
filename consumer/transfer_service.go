@@ -38,14 +38,14 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 
 	// Push notification (async).
 	data := PushData{
-		TenantID:      tenantID,
-		Type:          EBS_NOTIFICATION,
-		Date:          time.Now().Unix(),
-		Title:         "Card Transfer",
-		CallToAction:  CTA_CARD_TRANSFER,
-		EBSData:       res.EBSResponse,
-		UUID:          fields.UUID,
-		DeviceID:      deviceID,
+		TenantID:       tenantID,
+		Type:           EBS_NOTIFICATION,
+		Date:           time.Now().Unix(),
+		Title:          "Card Transfer",
+		CallToAction:   CTA_CARD_TRANSFER,
+		EBSData:        res.EBSResponse,
+		UUID:           fields.UUID,
+		DeviceID:       deviceID,
 		PaymentRequest: ebs_fields.QrData{},
 	}
 
@@ -72,8 +72,11 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 
 // MobileTransfer performs a P2P transfer to a recipient resolved by MSISDN (mobile number).
 func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields ebs_fields.ConsumerMobileTransferFields) (ebs_fields.EBSParserFields, error) {
-	if s == nil || s.Store == nil {
-		return ebs_fields.EBSParserFields{}, ErrMissingStore
+	if s == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingService
+	}
+	if s.HTTPClient == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
@@ -84,17 +87,11 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 		return ebs_fields.EBSParserFields{}, ErrMissingMobile
 	}
 
-	receiver, err := s.Store.GetUserByMobile(ctx, tenantID, receiverMobile)
+	card, err := s.ResolveCardByMobileInCardVault(ctx, tenantID, receiverMobile)
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-
-	toCard := receiver.MainCard
-	if toCard == "" {
-		if withCards, err := s.Store.GetCardsOrFail(ctx, tenantID, receiverMobile); err == nil && len(withCards.Cards) > 0 {
-			toCard = withCards.Cards[0].Pan
-		}
-	}
+	toCard := strings.TrimSpace(card.PAN)
 	if toCard == "" {
 		return ebs_fields.EBSParserFields{}, ErrReceiverHasNoCard
 	}
