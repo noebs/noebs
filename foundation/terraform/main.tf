@@ -3,7 +3,7 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  kubernetes {
+  kubernetes = {
     config_path = var.kubeconfig_path
   }
 }
@@ -33,10 +33,12 @@ resource "helm_release" "argocd" {
   version    = var.argocd_chart_version
   namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
 
-  set {
-    name  = "server.service.type"
-    value = "ClusterIP"
-  }
+  set = [
+    {
+      name  = "server.service.type"
+      value = "ClusterIP"
+    },
+  ]
 }
 
 resource "kubernetes_manifest" "noebs_project" {

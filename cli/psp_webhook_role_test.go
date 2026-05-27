@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func TestPSPWebhookRouteIsNotOwnedByAPIGateway(t *testing.T) {
+func TestPSPWebhookRouteIsProxiedByAPIGateway(t *testing.T) {
 	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	configureGatewayProxyForTest(t)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", nil)
@@ -16,10 +16,7 @@ func TestPSPWebhookRouteIsNotOwnedByAPIGateway(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-	}
-	_ = resp.Body.Close()
+	assertGatewayProxied(t, resp)
 }
 
 func TestPSPWebhookRouteIsOwnedByPSPWebhookService(t *testing.T) {

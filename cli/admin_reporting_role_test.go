@@ -6,20 +6,19 @@ import (
 	"testing"
 )
 
-func TestDashboardRouteIsNotOwnedByAPIGateway(t *testing.T) {
+func TestDashboardRouteIsProxiedByAPIGateway(t *testing.T) {
 	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	configureGatewayProxyForTest(t)
+	adminKey := setAdminKeyForTest(t)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-	}
+	assertGatewayProxied(t, resp)
 }
 
 func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {

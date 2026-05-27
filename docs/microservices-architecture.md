@@ -9,6 +9,8 @@ The pre-split runtime was a single Go binary built from `./cli`. `cli/config.go`
 
 The target runtime is microservices-only. There is no supported monolith runtime role, no mixed monolith/microservice deployment mode, and no silent fallback to an all-in-one process. The same image can be reused while packages are being extracted, but every process must declare a single service role and own only that role's process lifecycle. If a split exposes a bug, we fix forward.
 
+The public edge is the `api-gateway` service. Ingress and local Caddy route public hosts only to `api-gateway`; downstream services are reached through mounted `noebs.service_discovery` endpoints and ClusterIP service names.
+
 The code already has useful extraction points:
 
 - `apigateway`: Fiber middleware for request IDs, CORS, auth enforcement, metrics, and logging.
@@ -23,7 +25,7 @@ The code already has useful extraction points:
 
 ### API Gateway/BFF
 
-Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state. It calls internal services over gRPC/HTTP and maps their typed errors to the public REST contract.
+Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state. It calls internal services over gRPC/HTTP using config-driven service discovery and maps their typed errors to the public REST contract.
 
 Initial package owner: `apigateway`, route composition from `cli`.
 
@@ -117,7 +119,7 @@ Kubernetes provides service discovery through ClusterIP services:
 - `temporal-frontend.noebs.svc.cluster.local:7233`
 - service-owned Postgres databases, addressed through each service's mounted `secrets.yaml`.
 
-Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Terraform under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
+Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. The public Ingress only targets `api-gateway`; `api-gateway` proxies public compatibility routes to the ClusterIP service catalog. Terraform under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
 
 Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as Argo CD PreSync hooks. Each job has a service-specific role and runs only that service's embedded migration scope. Service Deployments must not run migrations in their startup path.
 

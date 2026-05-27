@@ -364,6 +364,9 @@ func GetMainEngine() *fiber.App {
 	if role != serviceRoleAPIGateway {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
+	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, auth, adminGuard); err != nil {
+		logrusLogger.Fatalf("error in api gateway service discovery: %v", err)
+	}
 
 	route.Get("/app/config", appConfigHandler)
 

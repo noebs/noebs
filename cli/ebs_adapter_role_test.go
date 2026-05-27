@@ -81,9 +81,9 @@ func assertFiberRouteRegistered(t *testing.T, resp *http.Response, method, path 
 	}
 }
 
-func TestEBSAdapterRoutesAreNotOwnedByAPIGateway(t *testing.T) {
+func TestEBSAdapterRoutesAreProxiedByAPIGateway(t *testing.T) {
 	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	configureGatewayProxyForTest(t)
 	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
@@ -95,10 +95,7 @@ func TestEBSAdapterRoutesAreNotOwnedByAPIGateway(t *testing.T) {
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-			}
+			assertGatewayProxied(t, resp)
 		})
 	}
 }

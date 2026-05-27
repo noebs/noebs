@@ -39,6 +39,15 @@ func TestMain(m *testing.M) {
   db_driver: %q
   default_tenant_id: %q
   service_role: %q
+  service_discovery:
+    identity-auth: "http://127.0.0.1:1"
+    card-vault: "http://127.0.0.1:1"
+    ebs-adapter: "http://127.0.0.1:1"
+    psp-webhook: "http://127.0.0.1:1"
+    admin-reporting: "http://127.0.0.1:1"
+    notification-chat: "http://127.0.0.1:1"
+    consumer-beneficiary: "http://127.0.0.1:1"
+    wallet-api: "http://127.0.0.1:1"
 `, dbURL, "postgres", "test-tenant", serviceRoleAPIGateway)
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))

@@ -19,6 +19,7 @@ cli/noebs
 cli/cli
 litestream.yml
 .db_path
+**/.terraform/
 
 # SOPS/age secrets - NEVER commit these
 .sops/age-key.txt

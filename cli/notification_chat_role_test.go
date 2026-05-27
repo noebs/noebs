@@ -24,9 +24,9 @@ func testAuthorizationHeader(t *testing.T) string {
 	return "Bearer " + token
 }
 
-func TestNotificationRoutesAreNotOwnedByAPIGateway(t *testing.T) {
+func TestNotificationRoutesAreProxiedByAPIGateway(t *testing.T) {
 	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	configureGatewayProxyForTest(t)
 	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
@@ -47,10 +47,7 @@ func TestNotificationRoutesAreNotOwnedByAPIGateway(t *testing.T) {
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-			}
+			assertGatewayProxied(t, resp)
 		})
 	}
 }
