@@ -44,6 +44,4 @@ RUN mkdir -p /data /app /app/.sops /app/.secrets \
 WORKDIR /app
 USER noebs
 
-EXPOSE 8080
-
 ENTRYPOINT ["/entrypoint.sh"]
