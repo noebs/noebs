@@ -1,14 +1,19 @@
 package consumer
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 )
 
 func TestQuickPaymentTokenUUIDAcceptsExactlyOneReference(t *testing.T) {
@@ -192,5 +197,157 @@ func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 	}
 	if !sawResolve || !sawMarkPaid {
 		t.Fatalf("sawResolve=%v sawMarkPaid=%v", sawResolve, sawMarkPaid)
+	}
+}
+
+func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeEBSAdapter})
+
+	var sawResolve bool
+	var sawMarkPaid bool
+	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/internal/card-vault/quick-pay/resolve":
+			assertCardVaultUserCommandHeaders(t, r, tenantID, 42)
+			var cmd QuickPaymentTokenResolveCommand
+			if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+				t.Fatalf("decode resolve command: %v", err)
+			}
+			if cmd.UUID != "token-1" || cmd.Amount != 25 {
+				t.Fatalf("resolve command = %+v", cmd)
+			}
+			sawResolve = true
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", ToCard: "9222081700000000", Amount: 25})
+		case "/internal/card-vault/quick-pay/mark-paid":
+			assertCardVaultUserCommandHeaders(t, r, tenantID, 42)
+			var cmd QuickPaymentTokenPaidCommand
+			if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+				t.Fatalf("decode mark-paid command: %v", err)
+			}
+			if cmd.UUID != "token-1" {
+				t.Fatalf("mark-paid command = %+v", cmd)
+			}
+			sawMarkPaid = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected card-vault path %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(cardVaultServer.Close)
+
+	var sawEBS bool
+	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/"+ebs_fields.ConsumerCardTransferEndpoint {
+			t.Fatalf("EBS path = %s", r.URL.Path)
+		}
+		body := readBodyForTest(t, r)
+		if !bytes.Contains(body, []byte(`"toCard":"9222081700000000"`)) {
+			t.Fatalf("EBS request missing card-vault destination PAN: %s", body)
+		}
+		sawEBS = true
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
+			EBSResponse: ebs_fields.EBSResponse{
+				UUID:            "quickpay-ebs-uuid",
+				ResponseCode:    0,
+				ResponseMessage: "Approved",
+				PAN:             "9222081700009999",
+				ToCard:          "9222081700000000",
+				TranAmount:      25,
+			},
+		})
+	}))
+	t.Cleanup(ebsServer.Close)
+
+	var sawNotification bool
+	notificationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/notification-chat/biller-hook" {
+			t.Fatalf("notification path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		var cmd BillerHookCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode biller hook command: %v", err)
+		}
+		if cmd.Token != "token-1" || cmd.EBS.UUID != "quickpay-ebs-uuid" || !cmd.IsSuccessful {
+			t.Fatalf("biller hook command = %+v", cmd)
+		}
+		sawNotification = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(notificationServer.Close)
+
+	var sawAdminReporting bool
+	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/admin-reporting/transactions" {
+			t.Fatalf("admin-reporting path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		var cmd transactionProjectionCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode admin-reporting command: %v", err)
+		}
+		if cmd.Transaction == nil || cmd.Transaction.UUID != "quickpay-ebs-uuid" {
+			t.Fatalf("admin-reporting command = %+v", cmd)
+		}
+		sawAdminReporting = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(adminReportingServer.Close)
+
+	service := &Service{
+		Store:      storeSvc,
+		HTTPClient: testHTTPClient(),
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerIP: ebsServer.URL + "/",
+			ServiceDiscovery: map[string]string{
+				cardVaultServiceDiscoveryKey:      cardVaultServer.URL,
+				notificationServiceDiscoveryKey:   notificationServer.URL,
+				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
+			},
+		},
+	}
+
+	res, err := service.NoebsQuickPayment(context.Background(), tenantID, 42, ebs_fields.QuickPaymentFields{
+		ConsumerCardTransferFields: ebs_fields.ConsumerCardTransferFields{
+			ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
+				UUID:         "quickpay-request-uuid",
+				TranDateTime: "270526205500",
+			},
+			ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
+				Pan:     "9222081700009999",
+				Ipin:    "encrypted-ipin",
+				ExpDate: "2601",
+			},
+			AmountFields: ebs_fields.AmountFields{
+				TranAmount: 25,
+			},
+		},
+	}, "token-1", "")
+	if err != nil {
+		t.Fatalf("quick pay: %v", err)
+	}
+	if res.UUID != "quickpay-ebs-uuid" {
+		t.Fatalf("EBS response = %+v", res)
+	}
+	if !sawResolve || !sawMarkPaid || !sawEBS || !sawNotification || !sawAdminReporting {
+		t.Fatalf("sawResolve=%v sawMarkPaid=%v sawEBS=%v sawNotification=%v sawAdminReporting=%v", sawResolve, sawMarkPaid, sawEBS, sawNotification, sawAdminReporting)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("ebs-adapter scope should not create user tables, err=%v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("ebs-adapter scope should not create card tables, err=%v", err)
+	}
+}
+
+func assertCardVaultUserCommandHeaders(t *testing.T, r *http.Request, tenantID string, userID int64) {
+	t.Helper()
+	if r.Header.Get(gateway.GatewayTenantIDHeader) != tenantID {
+		t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
+	}
+	if r.Header.Get(gateway.GatewayUserIDHeader) != fmt.Sprint(userID) {
+		t.Fatalf("user header = %q", r.Header.Get(gateway.GatewayUserIDHeader))
 	}
 }

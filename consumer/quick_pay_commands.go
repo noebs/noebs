@@ -316,6 +316,10 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingCardExpiry
 	case ErrInvalidRecoveryJWT.Error():
 		return ErrInvalidRecoveryJWT
+	case ErrInvalidBillerHookEndpoint.Error():
+		return ErrInvalidBillerHookEndpoint
+	case ErrBillerHookPost.Error():
+		return ErrBillerHookPost
 	case ErrUserAlreadyExists.Error():
 		return ErrUserAlreadyExists
 	case ErrInvalidCard.Error():

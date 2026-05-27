@@ -1,124 +1,16 @@
 package consumer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
 	"strings"
-	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
 )
-
-var billerChan = make(chan billerForm)
-
-type billerHookPayload struct {
-	PaymentToken    string  `json:"payment_token"`
-	IsSuccessful    bool    `json:"is_successful"`
-	ResponseCode    int     `json:"response_code"`
-	ResponseMessage string  `json:"response_message,omitempty"`
-	ResponseStatus  string  `json:"response_status,omitempty"`
-	UUID            string  `json:"uuid,omitempty"`
-	TranAmount      float32 `json:"tran_amount,omitempty"`
-	ApprovalCode    string  `json:"approval_code,omitempty"`
-	ReferenceNumber string  `json:"reference_number,omitempty"`
-	TranDateTime    string  `json:"tran_date_time,omitempty"`
-}
-
-// BillerHooks submits results to an optional external endpoint and updates cache_cards from EBS responses.
-//
-// tenantID must be explicit; defaults must be applied at the boundary (main).
-func (s *Service) BillerHooks(ctx context.Context, tenantID string) {
-	httpClient := &http.Client{Timeout: 5 * time.Second}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case value, ok := <-billerChan:
-			if !ok {
-				return
-			}
-			hookURL := strings.TrimSpace(s.NoebsConfig.ConsumerBillerHooksURL)
-			if hookURL == "" {
-				// Explicitly disabled by config.
-				if s.NoebsConfig.IsDebug {
-					log.Printf("biller hook disabled token=%s success=%v ebs=%s", value.Token, value.IsSuccessful, value.EBS.String())
-				}
-				continue
-			}
-			log.Printf("biller hook event token=%s success=%v ebs=%s", value.Token, value.IsSuccessful, value.EBS.String())
-			parsed, err := url.Parse(hookURL)
-			if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-				log.Printf("invalid consumer_biller_hooks_url=%q err=%v", hookURL, err)
-				continue
-			}
-			if parsed.Scheme != "https" && !s.NoebsConfig.IsDebug {
-				log.Printf("refusing to post biller hook to non-https url=%q (enable is_debug to allow)", hookURL)
-				continue
-			}
-
-			payload := billerHookPayload{
-				PaymentToken:    value.Token,
-				IsSuccessful:    value.IsSuccessful,
-				ResponseCode:    value.EBS.ResponseCode,
-				ResponseMessage: value.EBS.ResponseMessage,
-				ResponseStatus:  value.EBS.ResponseStatus,
-				UUID:            value.EBS.UUID,
-				TranAmount:      value.EBS.TranAmount,
-				ApprovalCode:    value.EBS.ApprovalCode,
-				ReferenceNumber: value.EBS.ReferenceNumber,
-				TranDateTime:    value.EBS.TranDateTime,
-			}
-			data, err := json.Marshal(&payload)
-			if err != nil {
-				log.Printf("error marshaling biller hook payload: %v", err)
-				continue
-			}
-
-			reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, hookURL, bytes.NewBuffer(data))
-			if err != nil {
-				cancel()
-				log.Printf("error creating biller hook request: %v", err)
-				continue
-			}
-			req.Header.Set("Content-Type", "application/json")
-			resp, err := httpClient.Do(req)
-			cancel()
-			if err != nil {
-				log.Printf("biller hook post failed: %v", err)
-				continue
-			}
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			if resp.StatusCode >= 300 {
-				log.Printf("biller hook post failed: status=%d url=%q", resp.StatusCode, hookURL)
-			}
-		case res, ok := <-ebs_fields.EBSRes:
-			if !ok {
-				return
-			}
-			if tenantID == "" {
-				log.Printf("cache card update skipped: missing tenant_id")
-				continue
-			}
-			if s == nil || s.Store == nil {
-				continue
-			}
-			if err := s.Store.UpsertCacheCard(ctx, tenantID, res); err != nil {
-				log.Printf("cache card update failed: %v", err)
-			}
-		}
-	}
-}
 
 // Bills represents an inquiry request for EBS billers (telecoms, utilities, etc).
 type Bills struct {

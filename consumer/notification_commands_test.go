@@ -2,9 +2,15 @@ package consumer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
 
@@ -51,5 +57,116 @@ func TestStoreNotificationPushDataRejectsMissingInputs(t *testing.T) {
 func TestNotificationRecordForEventRequiresTransactionUUID(t *testing.T) {
 	if _, err := notificationRecordForEvent(PushData{}, "sender"); !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("notificationRecordForEvent() error = %v, want %v", err, ErrMissingUUID)
+	}
+}
+
+func TestSubmitBillerHookUsesNotificationScopeOnly(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeNotificationChat})
+
+	var sawHook bool
+	webhook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s", r.Method)
+		}
+		var payload billerHookPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode hook payload: %v", err)
+		}
+		if payload.PaymentToken != "token-1" || !payload.IsSuccessful || payload.UUID != "ebs-uuid" || payload.ResponseCode != 0 {
+			t.Fatalf("hook payload = %+v", payload)
+		}
+		sawHook = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(webhook.Close)
+
+	service := &Service{
+		Store:      storeSvc,
+		HTTPClient: webhook.Client(),
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerBillerHooksURL: webhook.URL,
+			IsDebug:                true,
+		},
+	}
+	if err := service.SubmitBillerHook(context.Background(), tenantID, BillerHookCommand{
+		EBS: ebs_fields.EBSResponse{
+			UUID:            "ebs-uuid",
+			ResponseCode:    0,
+			ResponseMessage: "Approved",
+		},
+		IsSuccessful: true,
+		Token:        "token-1",
+	}); err != nil {
+		t.Fatalf("submit biller hook: %v", err)
+	}
+	if !sawHook {
+		t.Fatalf("biller hook endpoint was not called")
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("notification-chat scope should not create user tables, err=%v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("notification-chat scope should not create card tables, err=%v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cache_cards LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("notification-chat scope should not create card cache tables, err=%v", err)
+	}
+}
+
+func TestSubmitBillerHookRejectsInvalidEndpoint(t *testing.T) {
+	service := &Service{
+		HTTPClient: testHTTPClient(),
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerBillerHooksURL: "http://callbacks.example/hook",
+		},
+	}
+	err := service.SubmitBillerHook(context.Background(), "tenant-a", BillerHookCommand{Token: "token-1"})
+	if !errors.Is(err, ErrInvalidBillerHookEndpoint) {
+		t.Fatalf("invalid endpoint error = %v, want %v", err, ErrInvalidBillerHookEndpoint)
+	}
+}
+
+func TestSubmitBillerHookInNotificationChatUsesAdminCommand(t *testing.T) {
+	var sawCommand bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/notification-chat/biller-hook" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if r.Header.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue {
+			t.Fatalf("admin identity header = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
+		}
+		if r.Header.Get(internalTenantIDHeader) != "tenant-a" {
+			t.Fatalf("tenant header = %q", r.Header.Get(internalTenantIDHeader))
+		}
+		var cmd BillerHookCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode command: %v", err)
+		}
+		if cmd.Token != "token-1" || cmd.EBS.UUID != "ebs-uuid" || !cmd.IsSuccessful {
+			t.Fatalf("command = %+v", cmd)
+		}
+		sawCommand = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	service := &Service{
+		HTTPClient: server.Client(),
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ServiceDiscovery: map[string]string{
+				notificationServiceDiscoveryKey: server.URL,
+			},
+		},
+	}
+	err := service.SubmitBillerHookInNotificationChat(context.Background(), "tenant-a", BillerHookCommand{
+		EBS:          ebs_fields.EBSResponse{UUID: "ebs-uuid"},
+		IsSuccessful: true,
+		Token:        "token-1",
+	})
+	if err != nil {
+		t.Fatalf("submit notification command: %v", err)
+	}
+	if !sawCommand {
+		t.Fatalf("notification command was not sent")
 	}
 }

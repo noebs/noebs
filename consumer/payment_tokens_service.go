@@ -213,8 +213,10 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 		}
 	}
 
-	// Notify external biller hooks (async).
-	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: err == nil, Token: resolution.UUID}
+	hookErr := s.SubmitBillerHookInNotificationChat(ctx, tenantID, BillerHookCommand{EBS: res.EBSResponse, IsSuccessful: err == nil, Token: resolution.UUID})
+	if hookErr != nil {
+		return res, errors.Join(err, hookErr)
+	}
 
 	return res, err
 }

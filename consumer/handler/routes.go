@@ -133,4 +133,5 @@ func RegisterNotificationRoutes(router fiber.Router, h *Handler) {
 
 func RegisterNotificationAdminInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/push-data", h.StoreNotificationPushData)
+	router.Post("/biller-hook", h.SubmitBillerHook)
 }

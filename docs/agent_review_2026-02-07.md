@@ -8,7 +8,7 @@ This document tracks a deep-dive code review pass (security, correctness, mainta
 - **Silent defaulting of identifiers in non-boundary layers** (violates `AGENTS.md`):
   - Tenant ID defaults in store/service layers (`store/store.go`, `store/migrate.go`, `consumer/*`, `merchant/*`, `apigateway/jwt_auth.go`).
   - Some code paths implicitly rely on `"default"` tenant inside shared components.
-- **Broken/dangerous webhook-like behavior**: `consumer/services.go` posts to a hard-coded external URL when `billerForm.to` is empty (SSRF/data exfil risk, also plain HTTP).
+- **Broken/dangerous webhook-like behavior**: legacy biller callback code posted to a hard-coded external URL when `billerForm.to` was empty (SSRF/data exfil risk, also plain HTTP).
 - **CORS implementation is incorrect**: `apigateway/main.go` sets `Access-Control-Allow-Origin` to a comma-joined list, which browsers ignore; also no `Vary: Origin` handling.
 - **Correctness bug**: `store/store.go:RecordLoginAttempt` attempted to scan 2 columns into 1 destination (would error at runtime).
 - **Postgres compatibility bug**: `store/store.go` used `LastInsertId()` for Postgres inserts (unsupported), causing IDs to remain unset.
@@ -29,7 +29,7 @@ This document tracks a deep-dive code review pass (security, correctness, mainta
 - **Fixed CORS**:
   - `apigateway.NoebsCors` now uses Fiber’s `cors` middleware for correct multi-origin allowlists, and exposes `Authorization`.
 - **Removed a dangerous outbound default**:
-  - `consumer.BillerHooks` no longer posts to a hard-coded URL; it only posts when `noebs.consumer_biller_hooks_url` is set, requires `https` unless `is_debug=true`, and sends a sanitized payload (no PAN).
+  - Biller callback delivery is now explicit config and later moved behind a `notification-chat` internal command; it only posts when `noebs.consumer_biller_hooks_url` is set, requires `https` unless `is_debug=true`, and sends a sanitized payload (no PAN).
 - **CI/dev ergonomics**:
   - GitHub Actions now uses the Go version from `go.mod` and runs `go test` + `-race`.
   - `make test` now runs `go test ./...`.

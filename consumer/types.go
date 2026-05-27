@@ -30,22 +30,6 @@ type cashoutFields struct {
 	Biller   response `json:"details,omitempty"` // this is to embed ebs response inside the cashout. Could be a terrible idea
 }
 
-type billerForm struct {
-	EBS          ebs_fields.EBSResponse `json:"ebs_response"`
-	ID           string                 `json:"id"`
-	IsSuccessful bool                   `json:"is_successful"`
-	Token        string                 `json:"payment_token"`
-}
-
-func (bf *billerForm) MarshalBinary() ([]byte, error) {
-	return json.Marshal(bf)
-}
-
-func (bf *billerForm) UnmarshalBinary(data []byte) error {
-	// convert data to yours, let's assume its json data
-	return json.Unmarshal(data, bf)
-}
-
 func notEbs(pan string) bool {
 	/*
 		Bank Code        Bank Card PREFIX        Bank Short Name        Bank Full name
