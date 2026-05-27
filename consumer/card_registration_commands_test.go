@@ -76,7 +76,7 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode card-vault command: %v", err)
 		}
-		if cmd.UserID != 42 || cmd.PAN != "9222081700000000" || cmd.ExpDate != "2601" {
+		if cmd.Mobile != "0912345678" || cmd.UserID != 42 || cmd.PAN != "9222081700000000" || cmd.ExpDate != "2601" {
 			t.Fatalf("card-vault command = %+v", cmd)
 		}
 		sawCardVault = true
@@ -164,6 +164,7 @@ func TestStoreCompletedRegistrationCardUsesCardVaultScope(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
 	if err := service.StoreCompletedRegistrationCard(context.Background(), tenantID, CompletedRegistrationCardCommand{
+		Mobile:  "0912345678",
 		UserID:  42,
 		PAN:     "9222081700000000",
 		ExpDate: "2601",
@@ -174,7 +175,7 @@ func TestStoreCompletedRegistrationCardUsesCardVaultScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list cards: %v", err)
 	}
-	if len(cards) != 1 || cards[0].Pan != "9222081700000000" || !cards[0].IsMain {
+	if len(cards) != 1 || cards[0].Mobile != "0912345678" || cards[0].Pan != "9222081700000000" || !cards[0].IsMain {
 		t.Fatalf("cards = %+v", cards)
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
@@ -190,6 +191,9 @@ func TestCompletedRegistrationCommandsRejectMissingInputs(t *testing.T) {
 	}
 	if err := service.StoreCompletedRegistrationCard(context.Background(), "tenant-a", CompletedRegistrationCardCommand{}); !errors.Is(err, store.ErrInvalidUserID) {
 		t.Fatalf("card-vault missing user error = %v", err)
+	}
+	if err := service.StoreCompletedRegistrationCard(context.Background(), "tenant-a", CompletedRegistrationCardCommand{UserID: 42}); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("card-vault missing mobile error = %v", err)
 	}
 }
 

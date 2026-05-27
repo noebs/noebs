@@ -20,11 +20,7 @@ func (s *Service) CardFromNumber(ctx context.Context, tenantID, mobileNumber str
 	if mobileNumber == "" {
 		return "", ErrMissingMobile
 	}
-	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobileNumber)
-	if err != nil {
-		return "", err
-	}
-	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobileNumber)
 	if err != nil {
 		return "", err
 	}
@@ -46,11 +42,7 @@ func (s *Service) GetCards(ctx context.Context, tenantID, mobile string) ([]ebs_
 	if mobile == "" {
 		return nil, nil, ErrMissingMobile
 	}
-	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, nil, err
-	}
-	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,14 +162,11 @@ func (s *Service) AddCards(ctx context.Context, tenantID, mobile string, cards [
 	if err != nil {
 		return err
 	}
-	for i := range cards {
-		cards[i].ID = 0
-		cards[i].UserID = user.ID
-	}
+	prepareCardsForUser(cards, user.ID, mobile)
 	return s.Store.AddCards(ctx, tenantID, user.ID, cards)
 }
 
-func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID int64, cards []ebs_fields.Card) error {
+func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID int64, mobile string, cards []ebs_fields.Card) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
@@ -187,11 +176,20 @@ func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID
 	if userID <= 0 {
 		return store.ErrInvalidUserID
 	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
+	prepareCardsForUser(cards, userID, mobile)
+	return s.Store.AddCards(ctx, tenantID, userID, cards)
+}
+
+func prepareCardsForUser(cards []ebs_fields.Card, userID int64, mobile string) {
 	for i := range cards {
 		cards[i].ID = 0
 		cards[i].UserID = userID
+		cards[i].Mobile = mobile
 	}
-	return s.Store.AddCards(ctx, tenantID, userID, cards)
 }
 
 func (s *Service) EditCard(ctx context.Context, tenantID, mobile string, card ebs_fields.Card) error {
@@ -432,11 +430,7 @@ func (s *Service) GetUserCards(ctx context.Context, tenantID, mobile string) (*e
 	if mobile == "" {
 		return nil, ErrMissingMobile
 	}
-	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, err
-	}
-	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +438,7 @@ func (s *Service) GetUserCards(ctx context.Context, tenantID, mobile string) (*e
 		return nil, errors.New("no cards found")
 	}
 	return &ebs_fields.User{
-		Mobile:   identity.Mobile,
+		Mobile:   mobile,
 		MainCard: cards[0].Pan,
 		ExpDate:  cards[0].Expiry,
 		Cards:    cards,

@@ -18,9 +18,10 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	}
 	ctx := context.Background()
 	userID := int64(42)
+	mobile := "0912141660"
 	pan := "9222081700000000"
 
-	if err := service.AddCardsForUserID(ctx, tenantID, userID, []ebs_fields.Card{{
+	if err := service.AddCardsForUserID(ctx, tenantID, userID, mobile, []ebs_fields.Card{{
 		Pan:    pan,
 		Expiry: "2912",
 		Name:   "Primary",
@@ -35,6 +36,13 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	}
 	if len(cards) != 1 || main == nil || main.Pan != pan {
 		t.Fatalf("cards = %+v main = %+v, want one card with pan %s", cards, main, pan)
+	}
+	byMobile, err := service.ResolveCardByMobile(ctx, tenantID, CardByMobileCommand{Mobile: mobile})
+	if err != nil {
+		t.Fatalf("resolve card by mobile with card-vault schema: %v", err)
+	}
+	if byMobile.PAN != pan || byMobile.ExpDate != "2912" {
+		t.Fatalf("card by mobile = %+v, want pan=%s exp=2912", byMobile, pan)
 	}
 
 	if err := service.SetMainCardForUserID(ctx, tenantID, userID, pan); err != nil {

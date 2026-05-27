@@ -14,17 +14,13 @@ import (
 
 func TestService_CardFromNumber_ReturnsPan(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	identityServer := newIdentityUserByMobileServer(t, tenantID, "0912141660", 42)
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
-		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
-			identityAuthServiceDiscoveryKey: identityServer.URL,
-		}},
 	}
 
 	ctx := context.Background()
-	if err := storeSvc.AddCards(ctx, tenantID, 42, []ebs_fields.Card{{Pan: "99999"}}); err != nil {
+	if err := storeSvc.AddCards(ctx, tenantID, 42, []ebs_fields.Card{{Pan: "99999", Mobile: "0912141660"}}); err != nil {
 		t.Fatalf("seed card: %v", err)
 	}
 
@@ -39,13 +35,9 @@ func TestService_CardFromNumber_ReturnsPan(t *testing.T) {
 
 func TestService_CardFromNumber_NotFound(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	identityServer := newIdentityUserByMobileServer(t, tenantID, "0912141660", 42)
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
-		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
-			identityAuthServiceDiscoveryKey: identityServer.URL,
-		}},
 	}
 
 	_, err := service.CardFromNumber(context.Background(), tenantID, "0912141660")
@@ -54,17 +46,13 @@ func TestService_CardFromNumber_NotFound(t *testing.T) {
 	}
 }
 
-func TestService_GetUserCardsResolvesMobileThroughIdentityAuth(t *testing.T) {
+func TestService_GetUserCardsUsesCardVaultMobileMapping(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	identityServer := newIdentityUserByMobileServer(t, tenantID, "0912141660", 42)
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
-		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
-			identityAuthServiceDiscoveryKey: identityServer.URL,
-		}},
 	}
-	if err := storeSvc.AddCards(context.Background(), tenantID, 42, []ebs_fields.Card{{Pan: "99999", Expiry: "2601"}}); err != nil {
+	if err := storeSvc.AddCards(context.Background(), tenantID, 42, []ebs_fields.Card{{Pan: "99999", Expiry: "2601", Mobile: "0912141660"}}); err != nil {
 		t.Fatalf("seed card: %v", err)
 	}
 

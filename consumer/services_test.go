@@ -25,10 +25,10 @@ func TestService_isValidCard(t *testing.T) {
 		{"test is valid", args{ebs_fields.CacheCards{Pan: "99999"}}, true, false},
 		{"test is valid", args{ebs_fields.CacheCards{Pan: "88888"}}, true, false},
 	}
-	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "99999"}}); err != nil {
+	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "99999", Mobile: user.Mobile}}); err != nil {
 		t.Fatalf("seed card 99999: %v", err)
 	}
-	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "88888"}}); err != nil {
+	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{{Pan: "88888", Mobile: user.Mobile}}); err != nil {
 		t.Fatalf("seed card 88888: %v", err)
 	}
 	for _, tt := range tests {

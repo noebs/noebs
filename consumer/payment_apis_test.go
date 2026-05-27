@@ -12,7 +12,7 @@ func TestService_RegisterWithCard(t *testing.T) {
 
 	ctx := context.Background()
 	user := seedUser(t, env.Store, env.Tenant, "0900000000", "Seed@Pass1")
-	seedCard := ebs_fields.Card{Pan: "23232323", Expiry: "2901"}
+	seedCard := ebs_fields.Card{Pan: "23232323", Expiry: "2901", Mobile: user.Mobile}
 	if err := env.Store.AddCards(ctx, env.Tenant, user.ID, []ebs_fields.Card{seedCard}); err != nil {
 		t.Fatalf("seed card: %v", err)
 	}

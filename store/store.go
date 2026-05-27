@@ -418,6 +418,29 @@ func (s *Store) ListCardsByUserID(ctx context.Context, tenantID string, userID i
 	return cards, nil
 }
 
+func (s *Store) ListCardsByMobile(ctx context.Context, tenantID, mobile string) ([]ebs_fields.Card, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	if tenantID == "" {
+		return nil, ErrMissingTenantID
+	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return nil, ErrMissingMobile
+	}
+	stmt := s.DB.Rebind("SELECT * FROM cards WHERE tenant_id = ? AND mobile = ? AND deleted_at IS NULL ORDER BY is_main DESC")
+	cards := []ebs_fields.Card{}
+	if err := db.SelectContext(ctx, &cards, stmt, tenantID, mobile); err != nil {
+		return nil, err
+	}
+	for i := range cards {
+		s.hydrateCardFields(ctx, tenantID, &cards[i])
+	}
+	return cards, nil
+}
+
 func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, cards []ebs_fields.Card) error {
 	db, err := s.ensureDB()
 	if err != nil {
@@ -431,16 +454,21 @@ func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, car
 	}
 	now := time.Now().UTC()
 	for _, card := range cards {
+		card.Mobile = strings.TrimSpace(card.Mobile)
+		if card.Mobile == "" {
+			return ErrMissingMobile
+		}
 		if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
 			return err
 		}
 		s.encryptCardFields(&card)
 		stmt := s.DB.Rebind(`INSERT INTO cards(
-			tenant_id, user_id, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
-		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			tenant_id, user_id, mobile, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if _, err := db.ExecContext(ctx, stmt,
 			tenantID,
 			userID,
+			card.Mobile,
 			card.Pan,
 			card.PanEnc,
 			card.Expiry,
@@ -547,11 +575,7 @@ func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, 
 }
 
 func (s *Store) GetPanByMobile(ctx context.Context, tenantID, mobile string) (string, error) {
-	user, err := s.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return "", err
-	}
-	cards, err := s.ListCardsByUserID(ctx, tenantID, user.ID)
+	cards, err := s.ListCardsByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return "", err
 	}

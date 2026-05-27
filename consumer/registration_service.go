@@ -85,6 +85,7 @@ func (s *Service) RegisterWithCard(ctx context.Context, tenantID string, card eb
 	ucard := card.NewCardFromCached(int(user.ID))
 	ucard.ID = 0
 	ucard.IsMain = true
+	ucard.Mobile = card.Mobile
 	if err := s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{ucard}); err != nil {
 		return "", err
 	}
@@ -154,6 +155,7 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 		return res, err
 	}
 	if err := s.StoreCompletedRegistrationCardInCardVault(ctx, tenantID, CompletedRegistrationCardCommand{
+		Mobile:  mobile,
 		UserID:  identity.UserID,
 		PAN:     issuedPan,
 		ExpDate: issuedExp,

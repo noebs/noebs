@@ -20,6 +20,7 @@ type CompletedRegistrationIdentityResult struct {
 }
 
 type CompletedRegistrationCardCommand struct {
+	Mobile  string `json:"mobile"`
 	UserID  int64  `json:"user_id"`
 	PAN     string `json:"pan"`
 	ExpDate string `json:"expDate,omitempty"`
@@ -73,12 +74,16 @@ func (s *Service) StoreCompletedRegistrationCard(ctx context.Context, tenantID s
 	if cmd.UserID <= 0 {
 		return store.ErrInvalidUserID
 	}
+	mobile := strings.TrimSpace(cmd.Mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
 	pan := strings.TrimSpace(cmd.PAN)
 	if pan == "" {
 		return ErrMissingIssuedPAN
 	}
 
-	card := ebs_fields.CacheCards{Pan: pan, Expiry: strings.TrimSpace(cmd.ExpDate)}
+	card := ebs_fields.CacheCards{Pan: pan, Expiry: strings.TrimSpace(cmd.ExpDate), Mobile: mobile}
 	if err := s.Store.UpsertCacheCard(ctx, tenantID, card); err != nil {
 		return err
 	}

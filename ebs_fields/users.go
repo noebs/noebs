@@ -290,6 +290,7 @@ type Card struct {
 	IPIN     string `json:"ipin"`
 	IPINEnc  string `json:"-" db:"ipin_enc"`
 	UserID   int64
+	Mobile   string `json:"mobile,omitempty"`
 	IsMain   bool   `json:"is_main"`
 	CardIdx  string `json:"card_index" db:"-"`
 	IsValid  *bool  `json:"is_valid"`
@@ -321,6 +322,7 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 		Pan:    c.Pan,
 		Expiry: c.Expiry,
 		UserID: int64(id),
+		Mobile: c.Mobile,
 	}
 }
 

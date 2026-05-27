@@ -132,11 +132,12 @@ func (h *Handler) AddCards(c *fiber.Ctx) error {
 	if err := parseJSON(c, &list); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
+	mobile := getMobile(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.AddCardsForUserID(c.UserContext(), tenantID, userID, list); err != nil {
+	if err := h.Service.AddCardsForUserID(c.UserContext(), tenantID, userID, mobile, list); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"code": "ok", "message": "cards added"})

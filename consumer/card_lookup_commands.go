@@ -20,9 +20,6 @@ func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd 
 	if s == nil || s.Store == nil {
 		return CardByMobileResult{}, ErrMissingStore
 	}
-	if s.HTTPClient == nil {
-		return CardByMobileResult{}, ErrMissingHTTPClient
-	}
 	if tenantID == "" {
 		return CardByMobileResult{}, store.ErrMissingTenantID
 	}
@@ -30,11 +27,7 @@ func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd 
 	if mobile == "" {
 		return CardByMobileResult{}, ErrMissingMobile
 	}
-	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobile)
-	if err != nil {
-		return CardByMobileResult{}, err
-	}
-	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return CardByMobileResult{}, err
 	}

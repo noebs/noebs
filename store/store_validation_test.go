@@ -135,9 +135,17 @@ func TestStore_CreateToken_MissingUUID(t *testing.T) {
 
 func TestStore_AddCards_RequiresDataKey(t *testing.T) {
 	s := newTestStoreWithoutDataKey(t)
-	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000", IPIN: "1234"}})
+	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000", IPIN: "1234", Mobile: "0912141660"}})
 	if !errors.Is(err, ErrMissingDataKey) {
 		t.Fatalf("expected ErrMissingDataKey, got %v", err)
+	}
+}
+
+func TestStore_AddCards_RequiresMobile(t *testing.T) {
+	s := newTestStore(t)
+	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000"}})
+	if !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("expected ErrMissingMobile, got %v", err)
 	}
 }
 
