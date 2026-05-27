@@ -60,6 +60,7 @@ type manifestServicePort struct {
 type manifestContainer struct {
 	Name         string           `yaml:"name"`
 	Image        string           `yaml:"image"`
+	Args         []string         `yaml:"args"`
 	Env          []map[string]any `yaml:"env"`
 	EnvFrom      []map[string]any `yaml:"envFrom"`
 	VolumeMounts []manifestMount  `yaml:"volumeMounts"`
@@ -202,6 +203,62 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 	requireKubernetesServicePort(t, services, config.Noebs.TemporalHost, temporalPort)
 }
 
+func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+
+	services := map[string]map[int]bool{}
+	var foundKeycloakDeployment bool
+	var foundKeycloakPostgres bool
+
+	for _, object := range objects {
+		if object.Kind == "Service" {
+			ports := map[int]bool{}
+			for _, port := range object.Spec.Ports {
+				ports[port.Port] = true
+			}
+			services[object.Metadata.Name] = ports
+		}
+		if object.Kind == "StatefulSet" && object.Metadata.Name == "keycloak-postgres" {
+			foundKeycloakPostgres = true
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("keycloak-postgres containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if container.Image != "postgres:16" {
+				t.Fatalf("keycloak-postgres image = %q, want postgres:16", container.Image)
+			}
+		}
+		if object.Kind != "Deployment" || object.Metadata.Name != "keycloak" {
+			continue
+		}
+		foundKeycloakDeployment = true
+		if len(object.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("keycloak containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+		}
+		container := object.Spec.Template.Spec.Containers[0]
+		if container.Image != "quay.io/keycloak/keycloak:26.6.1" {
+			t.Fatalf("keycloak image = %q, want quay.io/keycloak/keycloak:26.6.1", container.Image)
+		}
+		if !containsString(container.Args, "start") {
+			t.Fatalf("keycloak args = %v, want start", container.Args)
+		}
+		if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+			t.Fatalf("keycloak must use mounted keycloak.conf instead of env/envFrom")
+		}
+		requireMount(t, "keycloak", container, "/opt/keycloak/conf/keycloak.conf", "keycloak.conf")
+	}
+
+	requireKubernetesServicePort(t, services, "keycloak", 8080)
+	requireKubernetesServicePort(t, services, "keycloak", 9000)
+	requireKubernetesServicePort(t, services, "keycloak-postgres", 5432)
+	if !foundKeycloakDeployment {
+		t.Fatalf("keycloak Deployment not found")
+	}
+	if !foundKeycloakPostgres {
+		t.Fatalf("keycloak-postgres StatefulSet not found")
+	}
+}
+
 func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 	if _, ok := compose.Secrets["noebs_secrets"]; ok {
@@ -243,6 +300,30 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 		rejectComposeSecret(t, serviceName, service.Secrets, "postgres-bootstrap-secrets")
 		requireComposeTopLevelSecret(t, compose.Secrets, secretSource, "./deploy/docker/secrets/"+strings.TrimSuffix(secretSource, "-secrets")+".secrets.yaml")
 	}
+}
+
+func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
+	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+
+	keycloak, ok := compose.Services["keycloak"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing keycloak service")
+	}
+	if keycloak.Environment != nil {
+		t.Fatalf("keycloak defines environment; keycloak config must be file-mounted")
+	}
+	if keycloak.EnvFile != nil {
+		t.Fatalf("keycloak defines env_file; keycloak config must be file-mounted")
+	}
+	requireComposeSecret(t, "keycloak", keycloak.Secrets, "keycloak_config", "/opt/keycloak/conf/keycloak.conf")
+	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_config", "./deploy/docker/keycloak/keycloak.conf")
+
+	keycloakPostgres, ok := compose.Services["keycloak-postgres"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing keycloak-postgres service")
+	}
+	requireComposeSecret(t, "keycloak-postgres", keycloakPostgres.Secrets, "keycloak_postgres_password", "keycloak_postgres_password")
+	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_postgres_password", "./deploy/docker/keycloak/postgres-password.txt")
 }
 
 func TestArgoCDApplicationTargetsCurrentHostOverlay(t *testing.T) {
