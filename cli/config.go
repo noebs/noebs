@@ -279,12 +279,15 @@ func registerEBSAdapterRoutes(route *fiber.App, auth gateway.JWTAuth, consumerHa
 }
 
 func registerWalletAPIRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard fiber.Handler) {
+	if walletPublicClient == nil {
+		logrusLogger.Fatal("wallet-api role requires an initialized wallet-ledger grpc client")
+	}
 	if walletWorkflowClient == nil {
 		logrusLogger.Fatal("wallet-api role requires an initialized temporal client")
 	}
-	walletUserHandler := wallethandler.NewUserHandler(walletService)
+	walletUserHandler := wallethandler.NewGRPCUserHandler(walletPublicClient, noebsConfig)
 	walletAdminHandler := wallethandler.NewAdminHandler(walletService, walletWorkflowClient)
-	wallethandler.RegisterUserRoutes(route.Group("/wallet", auth.AuthMiddleware()), walletUserHandler)
+	wallethandler.RegisterGRPCUserRoutes(route.Group("/wallet", auth.AuthMiddleware()), walletUserHandler)
 	wallethandler.RegisterAdminRoutes(route.Group("/admin/wallet", adminGuard), walletAdminHandler)
 }
 
@@ -532,6 +535,11 @@ func initConfig() {
 		}
 		walletWorkflowClient = client
 		walletWorkflowCloser = client
+	}
+	if role == serviceRoleWalletAPI {
+		if err := initWalletLedgerPublicClient(noebsConfig); err != nil {
+			logrusLogger.Fatalf("error creating wallet-ledger grpc client: %v", err)
+		}
 	}
 	if role == serviceRoleWalletWorker && !noebsConfig.TemporalEnabled {
 		logrusLogger.Fatalf("wallet-worker role requires temporal_enabled")

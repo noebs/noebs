@@ -35,7 +35,7 @@ When using the in-cluster `postgres` StatefulSet, service `noebs.db_url` values 
 
 Noebs service roles are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
-The public Ingress routes both hostnames only to `api-gateway`. Internal service routing is owned by the gateway through `noebs.service_discovery` in the mounted config.
+The public Ingress routes both hostnames only to `api-gateway`. Internal HTTP routing is owned by the gateway through `noebs.service_discovery` in the mounted config. Wallet API to wallet ledger gRPC routing uses `noebs.grpc_service_discovery.wallet-ledger`.
 
 Render check:
 

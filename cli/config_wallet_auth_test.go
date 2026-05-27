@@ -4,14 +4,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	walletgrpc "github.com/adonese/noebs/wallet/grpc"
 	"github.com/golang-jwt/jwt/v5"
 	"go.temporal.io/sdk/client"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 type walletRouteResponse struct {
@@ -21,6 +27,10 @@ type walletRouteResponse struct {
 
 type walletTransactionsRouteResponse struct {
 	Transactions []any `json:"transactions"`
+}
+
+type walletMethodsRouteResponse struct {
+	Methods []any `json:"methods"`
 }
 
 type walletRouteTemporalClient struct{}
@@ -45,21 +55,58 @@ func configureWalletRouteTest(t *testing.T) {
 	originalWalletCfg := walletService.Config
 	originalWorkflowClient := walletWorkflowClient
 	originalWorkflowCloser := walletWorkflowCloser
+	originalWalletPublicClient := walletPublicClient
+	originalWalletLedgerConn := walletLedgerGRPCConn
+	var testGRPCServer *grpc.Server
+	var testGRPCListener *bufconn.Listener
+	var testGRPCConn *grpc.ClientConn
 	t.Cleanup(func() {
+		if testGRPCConn != nil {
+			_ = testGRPCConn.Close()
+		}
+		if testGRPCServer != nil {
+			testGRPCServer.Stop()
+		}
+		if testGRPCListener != nil {
+			_ = testGRPCListener.Close()
+		}
 		auth = originalAuth
 		noebsConfig = originalCfg
 		walletService.Config = originalWalletCfg
 		walletWorkflowClient = originalWorkflowClient
 		walletWorkflowCloser = originalWorkflowCloser
+		walletPublicClient = originalWalletPublicClient
+		walletLedgerGRPCConn = originalWalletLedgerConn
 	})
 
 	noebsConfig.WalletEnabled = true
 	noebsConfig.WalletDefaultCurrency = "USD"
+	noebsConfig.JWTKey = "test-key"
 	noebsConfig.ServiceRole = string(serviceRoleWalletAPI)
-	auth = gateway.JWTAuth{Key: []byte("test-key")}
+	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
+	auth.Init()
 	walletService.Config = noebsConfig
 	walletWorkflowClient = walletRouteTemporalClient{}
 	walletWorkflowCloser = nil
+
+	testGRPCListener = bufconn.Listen(1024 * 1024)
+	testGRPCServer = grpc.NewServer(grpc.UnaryInterceptor(requireAuthForWalletMethods))
+	walletv1.RegisterWalletPublicServiceServer(testGRPCServer, walletgrpc.NewServer(walletService))
+	go func() {
+		_ = testGRPCServer.Serve(testGRPCListener)
+	}()
+	conn, err := grpc.NewClient("passthrough:///wallet-ledger-test",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return testGRPCListener.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("create wallet-ledger grpc test client: %v", err)
+	}
+	testGRPCConn = conn
+	walletLedgerGRPCConn = conn
+	walletPublicClient = walletv1.NewWalletPublicServiceClient(conn)
 }
 
 func walletToken(t *testing.T, userID int64) string {
@@ -373,6 +420,32 @@ func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
 		t.Fatalf("blank tenant query status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 	_ = resp.Body.Close()
+}
+
+func TestWalletMethodsRouteUsesLedgerGRPC(t *testing.T) {
+	configureWalletRouteTest(t)
+
+	token := walletToken(t, 42)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/wallet/methods?direction=deposit", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("wallet methods request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("wallet methods status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var methods walletMethodsRouteResponse
+	if err := json.NewDecoder(resp.Body).Decode(&methods); err != nil {
+		t.Fatalf("decode wallet methods: %v", err)
+	}
+	_ = resp.Body.Close()
+	if methods.Methods == nil {
+		t.Fatalf("wallet methods is nil")
+	}
 }
 
 func TestWalletRoutesRequireTenantClaim(t *testing.T) {

@@ -45,6 +45,16 @@ service WalletPublicService {
       body: "*"
     };
   }
+  rpc ListPaymentMethodsPublic(ListPaymentMethodsRequest) returns (PaymentMethodList) {
+    option (google.api.http) = {
+      get: "/wallet/methods"
+    };
+  }
+  rpc ListWalletTransactionsPublic(ListWalletTransactionsRequest) returns (WalletLedgerEntryList) {
+    option (google.api.http) = {
+      get: "/wallet/{wallet_id}/transactions"
+    };
+  }
   rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {
     option (google.api.http) = {
       post: "/wallet/p2p"
@@ -157,6 +167,8 @@ message Wallet {
   int64 available_balance = 7;
   string status = 8;
   string kyc_tier = 9;
+  string created_at = 10;
+  string updated_at = 11;
 }
 
 message GetWalletRequest {
@@ -168,6 +180,66 @@ message EnsureWalletRequest {
   string tenant_id = 1;
   int64 user_id = 2;
   string currency = 3;
+}
+
+message ListPaymentMethodsRequest {
+  string tenant_id = 1;
+  string direction = 2;
+  string currency = 3;
+  string region = 4;
+  int64 amount = 5;
+  int32 limit = 6;
+  int32 offset = 7;
+}
+
+message PaymentMethod {
+  string provider_code = 1;
+  string provider_name = 2;
+  string display_name = 3;
+  string method_type = 4;
+  string direction = 5;
+  repeated string currencies = 6;
+  repeated string regions = 7;
+  optional int64 min_amount = 8;
+  optional int64 max_amount = 9;
+  string input_schema_json = 10;
+  string presentation_json = 11;
+  bool supports_deposit = 12;
+  bool supports_withdrawal = 13;
+}
+
+message PaymentMethodList {
+  repeated PaymentMethod methods = 1;
+}
+
+message ListWalletTransactionsRequest {
+  string tenant_id = 1;
+  string wallet_id = 2;
+  string entry_type = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message WalletLedgerEntry {
+  int64 id = 1;
+  string tenant_id = 2;
+  int64 transaction_id = 3;
+  string wallet_id = 4;
+  string entry_type = 5;
+  int64 amount = 6;
+  string currency = 7;
+  int64 balance_after = 8;
+  int64 wallet_sequence = 9;
+  string status = 10;
+  string reference_type = 11;
+  optional string reference_id = 12;
+  optional string description = 13;
+  string metadata_json = 14;
+  string created_at = 15;
+}
+
+message WalletLedgerEntryList {
+  repeated WalletLedgerEntry transactions = 1;
 }
 
 message ValidateP2PRequest {

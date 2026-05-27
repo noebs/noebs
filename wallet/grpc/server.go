@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
@@ -188,9 +189,6 @@ func (s *Server) ensureWallet(ctx context.Context, req *walletv1.EnsureWalletReq
 	}
 	currency := req.Currency
 	if currency == "" {
-		currency = s.Service.Config.WalletDefaultCurrency
-	}
-	if currency == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
 	w, err := s.Service.EnsureUserWallet(ctx, tenantID, req.UserId, currency)
@@ -214,6 +212,8 @@ func toWalletProto(w *walletstore.Wallet) *walletv1.Wallet {
 		AvailableBalance: w.AvailableBalance,
 		Status:           w.Status,
 		KycTier:          w.KYCTier,
+		CreatedAt:        w.CreatedAt.Format(time.RFC3339Nano),
+		UpdatedAt:        w.UpdatedAt.Format(time.RFC3339Nano),
 	}
 }
 
@@ -249,6 +249,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidWalletPair),
 		errors.Is(err, walletstore.ErrMissingIdempotencyKey),
 		errors.Is(err, walletstore.ErrInvalidLimit),
+		errors.Is(err, walletstore.ErrInvalidOffset),
 		errors.Is(err, walletstore.ErrMissingReferenceType),
 		errors.Is(err, walletstore.ErrMissingReferenceID),
 		errors.Is(err, walletstore.ErrMissingWalletPIN),

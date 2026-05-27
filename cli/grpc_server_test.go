@@ -53,6 +53,11 @@ func TestWalletMethodAuthRequirement(t *testing.T) {
 			want:       walletAuthJWT,
 		},
 		{
+			name:       "public wallet query method uses jwt",
+			fullMethod: walletv1.WalletPublicService_ListWalletTransactionsPublic_FullMethodName,
+			want:       walletAuthJWT,
+		},
+		{
 			name:       "public admin method uses admin auth",
 			fullMethod: walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
 			want:       walletAuthAdmin,

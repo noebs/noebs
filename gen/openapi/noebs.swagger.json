@@ -233,6 +233,75 @@
         ]
       }
     },
+    "/wallet/methods": {
+      "get": {
+        "operationId": "WalletPublicService_ListPaymentMethodsPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PaymentMethodList"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "amount",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
     "/wallet/ownership_verifications/{verificationId}/complete": {
       "post": {
         "operationId": "WalletPublicService_CompleteOwnershipVerification",
@@ -722,6 +791,62 @@
           "WalletPublicService"
         ]
       }
+    },
+    "/wallet/{walletId}/transactions": {
+      "get": {
+        "operationId": "WalletPublicService_ListWalletTransactionsPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1WalletLedgerEntryList"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "walletId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "entryType",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -1014,6 +1139,70 @@
         }
       }
     },
+    "v1PaymentMethod": {
+      "type": "object",
+      "properties": {
+        "providerCode": {
+          "type": "string"
+        },
+        "providerName": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "methodType": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "currencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "regions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "minAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "maxAmount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "inputSchemaJson": {
+          "type": "string"
+        },
+        "presentationJson": {
+          "type": "string"
+        },
+        "supportsDeposit": {
+          "type": "boolean"
+        },
+        "supportsWithdrawal": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1PaymentMethodList": {
+      "type": "object",
+      "properties": {
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PaymentMethod"
+          }
+        }
+      }
+    },
     "v1User2FASetup": {
       "type": "object",
       "properties": {
@@ -1032,6 +1221,25 @@
         },
         "enabled": {
           "type": "boolean"
+        }
+      }
+    },
+    "v1ValidateP2PResponse": {
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "totalDebit": {
+          "type": "string",
+          "format": "int64"
+        },
+        "fee": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -1066,6 +1274,79 @@
         },
         "kycTier": {
           "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "string"
+        }
+      }
+    },
+    "v1WalletLedgerEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "tenantId": {
+          "type": "string"
+        },
+        "transactionId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "walletId": {
+          "type": "string"
+        },
+        "entryType": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "balanceAfter": {
+          "type": "string",
+          "format": "int64"
+        },
+        "walletSequence": {
+          "type": "string",
+          "format": "int64"
+        },
+        "status": {
+          "type": "string"
+        },
+        "referenceType": {
+          "type": "string"
+        },
+        "referenceId": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "metadataJson": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      }
+    },
+    "v1WalletLedgerEntryList": {
+      "type": "object",
+      "properties": {
+        "transactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WalletLedgerEntry"
+          }
         }
       }
     },

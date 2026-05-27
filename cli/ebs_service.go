@@ -103,6 +103,7 @@ func main() {
 	go func() {
 		<-ctx.Done()
 		closeWalletWorkflowClient()
+		closeWalletLedgerPublicClient()
 	}()
 
 	if role.startsChat() {

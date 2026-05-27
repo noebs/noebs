@@ -147,6 +147,8 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		return walletAuthAdmin
 	case walletv1.WalletPublicService_GetWalletPublic_FullMethodName,
 		walletv1.WalletPublicService_EnsureWalletPublic_FullMethodName,
+		walletv1.WalletPublicService_ListPaymentMethodsPublic_FullMethodName,
+		walletv1.WalletPublicService_ListWalletTransactionsPublic_FullMethodName,
 		walletv1.WalletPublicService_RequestP2PTransfer_FullMethodName,
 		walletv1.WalletPublicService_RequestDeposit_FullMethodName,
 		walletv1.WalletPublicService_RequestWithdrawal_FullMethodName,

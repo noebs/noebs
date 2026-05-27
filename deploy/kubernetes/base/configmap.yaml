@@ -47,6 +47,8 @@ data:
         notification-chat: "http://notification-chat:8080"
         consumer-beneficiary: "http://consumer-beneficiary:8080"
         wallet-api: "http://wallet-api:8080"
+      grpc_service_discovery:
+        wallet-ledger: "wallet-ledger:9090"
   api-gateway.service.yaml: |
     noebs:
       service_role: api-gateway

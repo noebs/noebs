@@ -391,6 +391,8 @@ services:
     depends_on:
       wallet-ledger-migrate:
         condition: service_completed_successfully
+      wallet-ledger:
+        condition: service_healthy
       temporal:
         condition: service_healthy
     volumes:

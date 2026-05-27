@@ -918,6 +918,7 @@ type ValidationError struct {
 type NoebsConfig struct {
 	ServiceRole          string            `json:"service_role"`
 	ServiceDiscovery     map[string]string `json:"service_discovery"`
+	GRPCServiceDiscovery map[string]string `json:"grpc_service_discovery"`
 	SOPSAgeKeyFile       string            `json:"sops_age_key_file"`
 	RuntimeDir           string            `json:"runtime_dir"`
 	RenderDBPasswordFile string            `json:"render_db_password_file"`
