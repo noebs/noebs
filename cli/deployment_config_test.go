@@ -81,6 +81,7 @@ type manifestServicePort struct {
 type manifestContainer struct {
 	Name         string           `yaml:"name"`
 	Image        string           `yaml:"image"`
+	Command      []string         `yaml:"command"`
 	Args         []string         `yaml:"args"`
 	Env          []map[string]any `yaml:"env"`
 	EnvFrom      []map[string]any `yaml:"envFrom"`
@@ -284,8 +285,12 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 	services := map[string]map[int]bool{}
 	var foundKeycloakDeployment bool
 	var foundKeycloakPostgres bool
+	var keycloakPostgresBootstrap string
 
 	for _, object := range objects {
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "keycloak-postgres-bootstrap" {
+			keycloakPostgresBootstrap = object.Data["start.sh"]
+		}
 		if object.Kind == "Service" {
 			ports := map[int]bool{}
 			for _, port := range object.Spec.Ports {
@@ -302,6 +307,14 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 			if container.Image != "postgres:16" {
 				t.Fatalf("keycloak-postgres image = %q, want postgres:16", container.Image)
 			}
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("keycloak-postgres must use mounted bootstrap files instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/opt/keycloak-postgres/bin/start.sh") {
+				t.Fatalf("keycloak-postgres command = %v, want mounted start.sh", container.Command)
+			}
+			requireMount(t, "keycloak-postgres", container, "/opt/keycloak-postgres/bin/start.sh", "start.sh")
+			requireMount(t, "keycloak-postgres", container, "/opt/keycloak-postgres/secrets/password", "password")
 		}
 		if object.Kind != "Deployment" || object.Metadata.Name != "keycloak" {
 			continue
@@ -331,6 +344,16 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 	}
 	if !foundKeycloakPostgres {
 		t.Fatalf("keycloak-postgres StatefulSet not found")
+	}
+	if keycloakPostgresBootstrap == "" {
+		t.Fatalf("keycloak-postgres-bootstrap ConfigMap missing start.sh")
+	}
+	dockerBootstrap, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "keycloak", "postgres-start.sh"))
+	if err != nil {
+		t.Fatalf("read docker Keycloak Postgres bootstrap: %v", err)
+	}
+	if keycloakPostgresBootstrap != string(dockerBootstrap) {
+		t.Fatalf("Kubernetes and Docker Keycloak Postgres bootstrap scripts differ")
 	}
 }
 
@@ -457,7 +480,14 @@ func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	if !ok {
 		t.Fatalf("docker-compose.yml missing keycloak-postgres service")
 	}
-	requireComposeSecret(t, "keycloak-postgres", keycloakPostgres.Secrets, "keycloak_postgres_password", "keycloak_postgres_password")
+	if keycloakPostgres.Environment != nil {
+		t.Fatalf("keycloak-postgres defines environment; Keycloak database bootstrap must be file-mounted")
+	}
+	if keycloakPostgres.EnvFile != nil {
+		t.Fatalf("keycloak-postgres defines env_file; Keycloak database bootstrap must be file-mounted")
+	}
+	requireComposeVolume(t, "keycloak-postgres", keycloakPostgres.Volumes, "./deploy/docker/keycloak/postgres-start.sh", "/opt/keycloak-postgres/bin/start.sh")
+	requireComposeSecret(t, "keycloak-postgres", keycloakPostgres.Secrets, "keycloak_postgres_password", "/opt/keycloak-postgres/secrets/password")
 	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_postgres_password", "./deploy/docker/keycloak/postgres-password.txt")
 	if config.Noebs.ServiceDiscovery["keycloak"] == "" {
 		t.Fatalf("config.docker.yaml must include noebs.service_discovery.keycloak")

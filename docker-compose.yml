@@ -227,20 +227,17 @@ services:
     <<: *service-defaults
     image: postgres:16
     init: true
-    environment:
-      POSTGRES_USER: keycloak
-      POSTGRES_DB: keycloak
-      POSTGRES_PASSWORD_FILE: /run/secrets/keycloak_postgres_password
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    entrypoint: ["/bin/bash", "/opt/keycloak-postgres/bin/start.sh"]
     volumes:
       - keycloak-postgres-data:/var/lib/postgresql/data
+      - ./deploy/docker/keycloak/postgres-start.sh:/opt/keycloak-postgres/bin/start.sh:ro
     secrets:
       - source: keycloak_postgres_password
-        target: keycloak_postgres_password
+        target: /opt/keycloak-postgres/secrets/password
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
       interval: 10s
       timeout: 3s
       retries: 5
