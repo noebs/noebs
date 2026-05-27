@@ -33,5 +33,8 @@ func (s *Service) recordTransaction(ctx context.Context, tenantID string, res eb
 	if tenantID == "" {
 		return store.ErrMissingTenantID
 	}
-	return s.Store.CreateTransaction(ctx, tenantID, res)
+	if err := s.Store.CreateTransaction(ctx, tenantID, res); err != nil {
+		return err
+	}
+	return s.StoreTransactionProjectionInAdminReporting(ctx, tenantID, res)
 }

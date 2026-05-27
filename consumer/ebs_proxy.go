@@ -23,6 +23,9 @@ func (s *Service) callEBSJSONWithMutate(ctx context.Context, tenantID, baseURL, 
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
 	}
+	if err := s.requireTransactionProjectionTarget(); err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
 	url := baseURL + endpoint
 	payload, err := json.Marshal(req)
 	if err != nil {
@@ -43,6 +46,9 @@ func (s *Service) callEBSRawWithMutate(ctx context.Context, tenantID, baseURL, e
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
 	}
+	if err := s.requireTransactionProjectionTarget(); err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
 	url := baseURL + endpoint
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)
 	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate)
@@ -59,20 +65,22 @@ func (s *Service) finalizeEBSCall(ctx context.Context, tenantID, url, endpoint s
 	// Always mask before returning (store also masks before persisting).
 	res.MaskPAN()
 
-	if s.Store != nil {
-		if err := s.recordTransaction(ctx, tenantID, res.EBSResponse); err != nil {
-			if s.Logger != nil {
-				s.Logger.WithFields(logrus.Fields{
-					"tenant_id": tenantID,
-					"endpoint":  endpoint,
-					"error":     err,
-				}).Warn("record transaction failed")
-			}
+	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
+	if recordErr != nil {
+		if s.Logger != nil {
+			s.Logger.WithFields(logrus.Fields{
+				"tenant_id": tenantID,
+				"endpoint":  endpoint,
+				"error":     recordErr,
+			}).Warn("record transaction failed")
 		}
 	}
 
 	if ebsErr != nil {
-		return res, &ebs_fields.CallError{Status: code, Response: res, Err: ebsErr}
+		return res, errors.Join(&ebs_fields.CallError{Status: code, Response: res, Err: ebsErr}, recordErr)
+	}
+	if recordErr != nil {
+		return res, recordErr
 	}
 	return res, nil
 }

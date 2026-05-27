@@ -30,6 +30,9 @@ var (
 	ErrMissingNotification   = errors.New("missing_notification_chat_service_discovery")
 	ErrInvalidNotification   = errors.New("invalid_notification_chat_service_discovery")
 	ErrNotificationCommand   = errors.New("notification_chat_command_failed")
+	ErrMissingAdminReporting = errors.New("missing_admin_reporting_service_discovery")
+	ErrInvalidAdminReporting = errors.New("invalid_admin_reporting_service_discovery")
+	ErrAdminReportingCommand = errors.New("admin_reporting_command_failed")
 
 	// Registration
 	ErrMissingPassword  = errors.New("missing password")

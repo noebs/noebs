@@ -2,6 +2,8 @@
 package merchant
 
 import (
+	"net/http"
+
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/sirupsen/logrus"
@@ -13,6 +15,7 @@ type Service struct {
 	IP          string
 	Logger      *logrus.Logger
 	NoebsConfig ebs_fields.NoebsConfig
+	HTTPClient  *http.Client
 }
 
 // billChan it is used to asyncronysly parses ebs response to get and assign values to the billers

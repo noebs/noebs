@@ -223,11 +223,13 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, e
 	}
 }
 
-// billerID retrieves the type of a mobile number (operator and prepaid/postpaid) using heuristics,
-// falling back to an EBS bill inquiry.
+// billerID retrieves the type of a mobile number (operator and prepaid/postpaid) using EBS bill inquiry.
 func (s *Service) billerID(ctx context.Context, tenantID, mobile string) (string, error) {
 	if tenantID == "" {
 		return "", store.ErrMissingTenantID
+	}
+	if err := s.requireTransactionProjectionTarget(); err != nil {
+		return "", err
 	}
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
 	var b Bills
@@ -261,14 +263,24 @@ func (s *Service) billerID(ctx context.Context, tenantID, mobile string) (string
 	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 	res.MaskPAN()
 	res.Name = s.ToDatabasename(url)
-	_ = s.Store.CreateTransaction(ctx, tenantID, res.EBSResponse)
+	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
 
 	if ebsErr != nil {
 		cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
-		_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
+		if recordErr != nil {
+			return "", errors.Join(ebsErr, recordErr)
+		}
+		if err := s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID); err != nil {
+			return "", err
+		}
 		return cacheBills.BillerID, nil
 	}
-	_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
+	if recordErr != nil {
+		return "", recordErr
+	}
+	if err := s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID); err != nil {
+		return "", err
+	}
 	return cacheBills.BillerID, nil
 }
 
@@ -291,13 +303,16 @@ func flipBillerID(id string) string {
 	return newId
 }
 
-// isValidCard checks the noebs database first and falls back to an EBS balance request.
+// isValidCard checks the noebs database first and verifies unknown cards with an EBS balance request.
 func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
 	if tenantID == "" {
 		return false, store.ErrMissingTenantID
 	}
 	if exists, err := s.Store.CardExists(ctx, tenantID, card.Pan); err == nil && exists {
 		return true, nil
+	}
+	if err := s.requireTransactionProjectionTarget(); err != nil {
+		return false, err
 	}
 
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
@@ -323,10 +338,13 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 	res.MaskPAN()
 	res.Name = s.ToDatabasename(url)
-	_ = s.Store.CreateTransaction(ctx, tenantID, res.EBSResponse)
+	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
 
 	if res.ResponseCode == ebs_fields.INVALIDCARD {
-		return false, ebsErr
+		return false, errors.Join(ebsErr, recordErr)
+	}
+	if recordErr != nil {
+		return false, recordErr
 	}
 	return true, nil
 }
@@ -349,6 +367,9 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	if tenantID == "" {
 		return store.ErrMissingTenantID
 	}
+	if err := s.requireTransactionProjectionTarget(); err != nil {
+		return err
+	}
 	url := s.NoebsConfig.IPINIp + ebs_fields.QRPublicKey
 	id, _ := uuid.NewRandom()
 	fields := ebs_fields.ConsumerGenerateIPINFields{
@@ -362,9 +383,12 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	}
 	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
 	res.Name = s.ToDatabasename(url)
-	_ = s.Store.CreateTransaction(ctx, tenantID, res.EBSResponse)
+	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
 	if ebsErr != nil {
-		return errors.New("error in transaction: ebs")
+		return errors.Join(errors.New("error in transaction: ebs"), recordErr)
+	}
+	if recordErr != nil {
+		return recordErr
 	}
 	ebsIpinEncryptionKey = res.PubKeyValue
 	return nil

@@ -44,6 +44,26 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	}
 }
 
+func TestAdminReportingOwnsInternalTransactionProjectionCommand(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/admin-reporting/transactions", nil)
+	setGatewayAdminIdentityHeader(req)
+	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode == http.StatusNotFound {
+		t.Fatalf("admin-reporting did not register transaction projection command")
+	}
+}
+
 func TestAdminReportingServesEmbeddedDashboardAssets(t *testing.T) {
 	ensureInit()
 	originalWD, err := os.Getwd()

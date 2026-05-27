@@ -8,8 +8,14 @@ import (
 )
 
 func (s *Service) recordTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
 	if tenantID == "" {
 		return store.ErrMissingTenantID
 	}
-	return s.Store.CreateTransaction(ctx, tenantID, res)
+	if err := s.Store.CreateTransaction(ctx, tenantID, res); err != nil {
+		return err
+	}
+	return s.StoreTransactionProjectionInAdminReporting(ctx, tenantID, res)
 }

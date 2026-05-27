@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/adonese/noebs/adminreporting"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
@@ -28,6 +29,7 @@ var consumerService consumer.Service
 var dataConfigs ebs_fields.Configs
 var service consumer.Service
 var auth gateway.JWTAuth
+var adminReportingService adminreporting.Service
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
 var walletService *wallet.Service

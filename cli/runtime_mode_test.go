@@ -369,6 +369,11 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingNotification); err == nil {
 		t.Fatalf("ebs-adapter should require notification-chat service discovery")
 	}
+	missingAdminReporting := explicitEBSRuntimeConfig()
+	delete(missingAdminReporting.ServiceDiscovery, string(serviceRoleAdminReporting))
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingAdminReporting); err == nil {
+		t.Fatalf("ebs-adapter should require admin-reporting service discovery")
+	}
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
 		t.Fatalf("identity-auth should not require EBS endpoint config: %v", err)
 	}
@@ -397,9 +402,10 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 		ConsumerID: "consumer-app",
 		MerchantID: "merchant-app",
 		ServiceDiscovery: map[string]string{
-			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
-			string(serviceRoleCardVault):    "http://card-vault:8080",
-			string(serviceRoleNotification): "http://notification-chat:8080",
+			string(serviceRoleIdentityAuth):   "http://identity-auth:8080",
+			string(serviceRoleCardVault):      "http://card-vault:8080",
+			string(serviceRoleNotification):   "http://notification-chat:8080",
+			string(serviceRoleAdminReporting): "http://admin-reporting:8080",
 		},
 	}
 }
@@ -514,6 +520,7 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 	tests := []struct {
 		role          serviceRole
 		consumer      bool
+		adminReports  bool
 		dashboard     bool
 		merchant      bool
 		wallet        bool
@@ -525,7 +532,7 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 		{role: serviceRoleCardVault, consumer: true},
 		{role: serviceRoleEBSAdapter, consumer: true, merchant: true},
 		{role: serviceRolePSPWebhook, pspStore: true, walletPSPDeps: true},
-		{role: serviceRoleAdminReporting, dashboard: true},
+		{role: serviceRoleAdminReporting, adminReports: true, dashboard: true},
 		{role: serviceRoleNotification, consumer: true},
 		{role: serviceRoleBeneficiary, consumer: true},
 		{role: serviceRoleWalletAPI},
@@ -542,6 +549,9 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 			}
 			if got := consumerService.Store != nil; got != tt.consumer {
 				t.Fatalf("consumerService initialized = %t, want %t", got, tt.consumer)
+			}
+			if got := adminReportingService.Store != nil; got != tt.adminReports {
+				t.Fatalf("adminReportingService initialized = %t, want %t", got, tt.adminReports)
 			}
 			if got := dashService.Store != nil; got != tt.dashboard {
 				t.Fatalf("dashService initialized = %t, want %t", got, tt.dashboard)

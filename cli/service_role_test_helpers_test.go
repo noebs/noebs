@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/adonese/noebs/adminreporting"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/merchant"
@@ -29,6 +30,7 @@ func setServiceRoleForTest(t *testing.T, role serviceRole) {
 
 type roleServicesSnapshot struct {
 	consumerService   consumer.Service
+	adminReporting    adminreporting.Service
 	dashService       dashboard.Service
 	merchantServices  merchant.Service
 	walletService     *wallet.Service
@@ -40,6 +42,7 @@ type roleServicesSnapshot struct {
 func captureRoleServices() roleServicesSnapshot {
 	return roleServicesSnapshot{
 		consumerService:   consumerService,
+		adminReporting:    adminReportingService,
 		dashService:       dashService,
 		merchantServices:  merchantServices,
 		walletService:     walletService,
@@ -51,6 +54,7 @@ func captureRoleServices() roleServicesSnapshot {
 
 func (s roleServicesSnapshot) restore() {
 	consumerService = s.consumerService
+	adminReportingService = s.adminReporting
 	dashService = s.dashService
 	merchantServices = s.merchantServices
 	walletService = s.walletService

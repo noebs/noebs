@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/adonese/noebs/adminreporting"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	consumerhandler "github.com/adonese/noebs/consumer/handler"
@@ -270,6 +271,7 @@ var errRoleDatabaseNotInitialized = errors.New("role database not initialized")
 
 func initRoleServices(role serviceRole) error {
 	consumerService = consumer.Service{}
+	adminReportingService = adminreporting.Service{}
 	dashService = dashboard.Service{}
 	merchantServices = merchant.Service{}
 	walletService = nil
@@ -297,10 +299,11 @@ func initRoleServices(role serviceRole) error {
 		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth, HTTPClient: httpclient.Default()}
 	}
 	if roleNeedsDashboardService(role) {
+		adminReportingService = adminreporting.Service{Store: storeSvc}
 		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
 	}
 	if roleNeedsMerchantService(role) {
-		merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
+		merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig, HTTPClient: httpclient.Default()}
 	}
 	if roleNeedsWalletService(role) {
 		walletService = wallet.NewService(database, noebsConfig)
@@ -368,7 +371,8 @@ func pspStoreForRole(role serviceRole) (*walletstore.Store, error) {
 	}
 }
 
-func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler) {
+func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler, service *adminreporting.Service) {
+	adminreporting.RegisterInternalRoutes(route.Group("/internal/admin-reporting", adminIdentity), service)
 	route.Use("/dashboard/assets", filesystem.New(filesystem.Config{
 		Root: dashboard.AssetFileSystem(),
 	}))
@@ -528,7 +532,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleAdminReporting {
-		registerAdminReportingRoutes(route, adminIdentity)
+		registerAdminReportingRoutes(route, adminIdentity, &adminReportingService)
 		return route
 	}
 	if role == serviceRoleNotification {

@@ -49,6 +49,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
 			EBSResponse: ebs_fields.EBSResponse{
+				UUID:            "transfer-uuid",
 				ResponseCode:    0,
 				ResponseMessage: "Approved",
 				PAN:             "9222081700009999",
@@ -74,14 +75,30 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	}))
 	t.Cleanup(notificationServer.Close)
 
+	var projections []transactionProjectionCommand
+	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/admin-reporting/transactions" {
+			t.Fatalf("admin-reporting path = %s", r.URL.Path)
+		}
+		assertAdminCommandHeaders(t, r, tenantID)
+		var cmd transactionProjectionCommand
+		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+			t.Fatalf("decode admin-reporting command: %v", err)
+		}
+		projections = append(projections, cmd)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(adminReportingServer.Close)
+
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: testHTTPClient(),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP: ebsServer.URL + "/",
 			ServiceDiscovery: map[string]string{
-				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
-				notificationServiceDiscoveryKey: notificationServer.URL,
+				cardVaultServiceDiscoveryKey:      cardVaultServer.URL,
+				notificationServiceDiscoveryKey:   notificationServer.URL,
+				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
 			},
 		},
 	}
@@ -114,6 +131,12 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	}
 	if len(notifications) != 2 {
 		t.Fatalf("notification commands = %d, want 2", len(notifications))
+	}
+	if len(projections) != 1 {
+		t.Fatalf("admin-reporting projection commands = %d, want 1", len(projections))
+	}
+	if projections[0].Transaction == nil || projections[0].Transaction.UUID != "transfer-uuid" {
+		t.Fatalf("admin-reporting projection = %+v", projections[0])
 	}
 	if got, want := notifications[0].Data.UUID, "transfer-uuid:receiver"; got != want {
 		t.Fatalf("receiver notification uuid = %q, want %q", got, want)
