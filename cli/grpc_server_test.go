@@ -93,6 +93,20 @@ func TestGRPCGatewayIncomingHeaderMatcher(t *testing.T) {
 	if key != "x-noebs-tenant-id" {
 		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) = %q, want %q", gateway.GatewayTenantIDHeader, key, "x-noebs-tenant-id")
 	}
+
+	blockedHeaders := []string{
+		"Authorization",
+		"X-Admin-Key",
+		"X-Admin-Role",
+		"X-Admin-Permissions",
+	}
+	for _, header := range blockedHeaders {
+		t.Run(header, func(t *testing.T) {
+			if got, ok := grpcGatewayIncomingHeaderMatcher(header); ok || got != "" {
+				t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) = %q, %t; want empty, false", header, got, ok)
+			}
+		})
+	}
 }
 
 func TestContextHasGatewayUserIdentity(t *testing.T) {

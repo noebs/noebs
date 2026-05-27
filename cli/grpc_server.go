@@ -194,6 +194,9 @@ func requestHasGatewayAdminIdentity(r *http.Request) bool {
 }
 
 func grpcGatewayIncomingHeaderMatcher(key string) (string, bool) {
+	if isPublicCredentialHeader(key) {
+		return "", false
+	}
 	if strings.EqualFold(key, gateway.GatewayAdminIdentityHeader) {
 		return strings.ToLower(gateway.GatewayAdminIdentityHeader), true
 	}
@@ -207,6 +210,13 @@ func grpcGatewayIncomingHeaderMatcher(key string) (string, bool) {
 		return strings.ToLower(gateway.GatewayMobileHeader), true
 	}
 	return runtime.DefaultHeaderMatcher(key)
+}
+
+func isPublicCredentialHeader(key string) bool {
+	return strings.EqualFold(key, "Authorization") ||
+		strings.EqualFold(key, "X-Admin-Key") ||
+		strings.EqualFold(key, "X-Admin-Role") ||
+		strings.EqualFold(key, "X-Admin-Permissions")
 }
 
 func contextHasGatewayUserIdentity(ctx context.Context) bool {
