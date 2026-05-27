@@ -8,30 +8,41 @@ import (
 	"testing"
 )
 
+type cardVaultRoute struct {
+	name   string
+	method string
+	path   string
+}
+
+func cardVaultSteadyRoutes() []cardVaultRoute {
+	return []cardVaultRoute{
+		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
+		{name: "add card", method: http.MethodPost, path: "/consumer/add_card"},
+		{name: "edit card", method: http.MethodPut, path: "/consumer/edit_card"},
+		{name: "delete card", method: http.MethodDelete, path: "/consumer/delete_card"},
+		{name: "main card", method: http.MethodPost, path: "/consumer/cards/set_main"},
+		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
+		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
+	}
+}
+
+func cardVaultTransitionalRoutes() []cardVaultRoute {
+	return []cardVaultRoute{
+		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
+		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
+		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
+		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
+		{name: "quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
+	}
+}
+
 func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {
 	ensureInit()
 	configureGatewayProxyForTest(t)
 	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
-		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
-		{name: "add card", method: http.MethodPost, path: "/consumer/add_card"},
-		{name: "edit card", method: http.MethodPut, path: "/consumer/edit_card"},
-		{name: "delete card", method: http.MethodDelete, path: "/consumer/delete_card"},
-		{name: "main card", method: http.MethodPost, path: "/consumer/cards/set_main"},
-		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
-		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
-		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
-		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
-		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
-		{name: "quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
-	}
+	tests := append(cardVaultSteadyRoutes(), cardVaultTransitionalRoutes()...)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
@@ -45,30 +56,12 @@ func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {
 	}
 }
 
-func TestCardVaultRoutesAreOwnedByCardVault(t *testing.T) {
+func TestCardVaultSteadyRoutesAreOwnedByCardVault(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleCardVault)
 	route := GetMainEngine()
 
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
-		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
-		{name: "add card", method: http.MethodPost, path: "/consumer/add_card"},
-		{name: "edit card", method: http.MethodPut, path: "/consumer/edit_card"},
-		{name: "delete card", method: http.MethodDelete, path: "/consumer/delete_card"},
-		{name: "main card", method: http.MethodPost, path: "/consumer/cards/set_main"},
-		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
-		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
-		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
-		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
-		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
-		{name: "quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
-	}
-	for _, tt := range tests {
+	for _, tt := range cardVaultSteadyRoutes() {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
@@ -87,6 +80,38 @@ func TestCardVaultRoutesAreOwnedByCardVault(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCardVaultTransitionalRoutesStayVisibleUntilSplit(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	route := GetMainEngine()
+
+	for _, tt := range cardVaultTransitionalRoutes() {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			setTestGatewayUserIdentityHeaders(req)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
+		})
+	}
+}
+
+func TestCardVaultSteadyRoutesExcludeTransitionalRoutes(t *testing.T) {
+	steady := map[string]bool{}
+	for _, route := range cardVaultSteadyRoutes() {
+		steady[route.method+" "+route.path] = true
+	}
+	for _, route := range cardVaultTransitionalRoutes() {
+		key := route.method + " " + route.path
+		if steady[key] {
+			t.Fatalf("%s must stay transitional until service-to-service commands replace mixed ownership", key)
+		}
 	}
 }
 
