@@ -192,7 +192,7 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyDeposit, verifyParams).Get(ctx, &result); err != nil {
 			return err
 		}
-		statusResult = statusFromDepositVerification(result, pspTxn.Status)
+		statusResult = statusFromDepositVerification(result)
 		if err := updatePSPTransactionFromStatus(ctx, params.TenantID, params.ClientReference, statusResult); err != nil {
 			return err
 		}
@@ -775,7 +775,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		releaseHold()
 		return err
 	}
-	statusResult := statusFromPayoutResult(result, pspTxn.Status)
+	statusResult := statusFromPayoutResult(result)
 	if err := updatePSPTransactionFromStatus(ctx, params.TenantID, params.Request.ClientReference, statusResult); err != nil {
 		releaseHold()
 		return err
@@ -1635,28 +1635,20 @@ func loadPSPTransaction(ctx workflow.Context, tenantID, clientReference string) 
 	return &txn, nil
 }
 
-func statusFromDepositVerification(result walletpsp.DepositVerification, fallbackStatus string) walletpsp.TxStatus {
-	status := normalizePSPStatus(result.Status)
-	if status == "" {
-		status = normalizePSPStatus(fallbackStatus)
-	}
+func statusFromDepositVerification(result walletpsp.DepositVerification) walletpsp.TxStatus {
 	return walletpsp.TxStatus{
 		ProviderTxID: result.ProviderTxID,
 		Amount:       result.Amount,
 		Currency:     result.Currency,
-		Status:       status,
+		Status:       normalizePSPStatus(result.Status),
 		RawResponse:  result.Metadata,
 	}
 }
 
-func statusFromPayoutResult(result walletpsp.PayoutResult, fallbackStatus string) walletpsp.TxStatus {
-	status := normalizePSPStatus(result.Status)
-	if status == "" {
-		status = normalizePSPStatus(fallbackStatus)
-	}
+func statusFromPayoutResult(result walletpsp.PayoutResult) walletpsp.TxStatus {
 	return walletpsp.TxStatus{
 		ProviderTxID: result.ProviderTxID,
-		Status:       status,
+		Status:       normalizePSPStatus(result.Status),
 		RawResponse:  result.RawResponse,
 	}
 }

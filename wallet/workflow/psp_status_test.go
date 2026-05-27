@@ -33,6 +33,30 @@ func TestStatusFromPSPTransactionParsesRawResponse(t *testing.T) {
 	}
 }
 
+func TestProviderStatusConversionsDoNotFallBackToStoredStatus(t *testing.T) {
+	deposit := statusFromDepositVerification(walletpsp.DepositVerification{
+		ProviderTxID: "provider-deposit-id",
+		Status:       "",
+	})
+	if deposit.Status != "" {
+		t.Fatalf("deposit status = %q, want empty", deposit.Status)
+	}
+	if deposit.ProviderTxID != "provider-deposit-id" {
+		t.Fatalf("deposit provider id = %q", deposit.ProviderTxID)
+	}
+
+	payout := statusFromPayoutResult(walletpsp.PayoutResult{
+		ProviderTxID: "provider-payout-id",
+		Status:       "",
+	})
+	if payout.Status != "" {
+		t.Fatalf("payout status = %q, want empty", payout.Status)
+	}
+	if payout.ProviderTxID != "provider-payout-id" {
+		t.Fatalf("payout provider id = %q", payout.ProviderTxID)
+	}
+}
+
 func TestAwaitTerminalPSPStatusReceivesSignal(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
