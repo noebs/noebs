@@ -138,7 +138,7 @@ Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as Arg
 
 Service identity and service discovery are config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. HTTP route discovery uses `noebs.service_discovery`; wallet-api reaches wallet-ledger through `noebs.grpc_service_discovery.wallet-ledger`. Secrets continue to merge through `secrets.yaml`, with service-owned database URLs supplied by service-specific Kubernetes Secrets. `wallet-api` uses its own no-database secret; wallet-ledger and wallet-worker use the wallet-ledger database secret. Wallet-ledger owns workflow starts, so it requires Temporal config while wallet-api does not.
 
-For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed by service role and migration role. When that map exists, the runtime requires an entry for database-opening roles and migration roles, copies that URL into `noebs.db_url`, and rejects database entries for no-database roles such as `api-gateway` and `wallet-api`.
+For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed only by database owner role. Migration roles use their owning service key, and `wallet-worker` uses the `wallet-ledger` key. When that map exists, the runtime requires an owner entry for every database-opening role, copies that URL into `noebs.db_url`, and rejects database entries for no-database or non-owner roles such as `api-gateway`, `wallet-api`, `identity-auth-migrate`, and `wallet-worker`.
 
 ## Migration Plan
 

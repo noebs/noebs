@@ -176,6 +176,9 @@ func applyServiceDatabaseURL(noebs map[string]interface{}) error {
 	if !ok {
 		return errors.New("noebs.service_databases must be a map")
 	}
+	if err := validateServiceDatabaseOwners(databases); err != nil {
+		return err
+	}
 	role := firstString(noebs, "service_role")
 	if role == "" {
 		if firstString(noebs, "db_url") != "" {
@@ -187,21 +190,36 @@ func applyServiceDatabaseURL(noebs map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-	if !parsedRole.opensDatabase() {
-		if _, exists := databases[role]; exists {
-			return fmt.Errorf("%w: noebs.service_databases.%s", errDatabaseNotAllowed, role)
-		}
+	ownerRole, opensDatabase := parsedRole.databaseOwnerRole()
+	if !opensDatabase {
 		return validateRoleDatabaseConfig(parsedRole, firstString(noebs, "db_url"), firstString(noebs, "db_path"), firstString(noebs, "db_driver"))
 	}
-	rawDBURL, ok := databases[role]
+	rawDBURL, ok := databases[string(ownerRole)]
 	if !ok {
-		return fmt.Errorf("noebs.service_databases missing %q", role)
+		return fmt.Errorf("noebs.service_databases missing %q", ownerRole)
 	}
 	dbURL, ok := rawDBURL.(string)
 	if !ok || strings.TrimSpace(dbURL) == "" {
-		return fmt.Errorf("noebs.service_databases.%s must be a non-empty db_url", role)
+		return fmt.Errorf("noebs.service_databases.%s must be a non-empty db_url", ownerRole)
 	}
 	noebs["db_url"] = strings.TrimSpace(dbURL)
+	return nil
+}
+
+func validateServiceDatabaseOwners(databases map[string]interface{}) error {
+	for key := range databases {
+		role, err := parseServiceRole(key)
+		if err != nil {
+			return fmt.Errorf("noebs.service_databases.%s: %w", key, err)
+		}
+		ownerRole, opensDatabase := role.databaseOwnerRole()
+		if !opensDatabase {
+			return fmt.Errorf("%w: noebs.service_databases.%s", errDatabaseNotAllowed, role)
+		}
+		if ownerRole != role {
+			return fmt.Errorf("%w: noebs.service_databases.%s belongs to %s", errDatabaseOwnerKey, role, ownerRole)
+		}
+	}
 	return nil
 }
 

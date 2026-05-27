@@ -16,6 +16,7 @@ var (
 	errMissingDatabaseURL  = errors.New("missing noebs.db_url")
 	errMissingDatabasePath = errors.New("missing noebs.db_path")
 	errDatabaseNotAllowed  = errors.New("database config not allowed for service role")
+	errDatabaseOwnerKey    = errors.New("service database entry must use owner role")
 )
 
 const (
@@ -92,7 +93,8 @@ func (r serviceRole) startsChat() bool {
 }
 
 func (r serviceRole) opensDatabase() bool {
-	return r != serviceRoleAPIGateway && r != serviceRoleWalletAPI
+	_, ok := r.databaseOwnerRole()
+	return ok
 }
 
 func (r serviceRole) requiresTemporal() bool {
@@ -125,6 +127,29 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, dbPath, driver string) 
 func (r serviceRole) runsMigrations() bool {
 	_, ok := r.migrationScope()
 	return ok
+}
+
+func (r serviceRole) databaseOwnerRole() (serviceRole, bool) {
+	switch r {
+	case serviceRoleIdentityAuth, serviceRoleIdentityAuthMigrate:
+		return serviceRoleIdentityAuth, true
+	case serviceRoleCardVault, serviceRoleCardVaultMigrate:
+		return serviceRoleCardVault, true
+	case serviceRoleEBSAdapter, serviceRoleEBSAdapterMigrate:
+		return serviceRoleEBSAdapter, true
+	case serviceRolePSPWebhook, serviceRolePSPWebhookMigrate:
+		return serviceRolePSPWebhook, true
+	case serviceRoleAdminReporting, serviceRoleAdminReportingMigrate:
+		return serviceRoleAdminReporting, true
+	case serviceRoleNotification, serviceRoleNotificationMigrate:
+		return serviceRoleNotification, true
+	case serviceRoleBeneficiary, serviceRoleBeneficiaryMigrate:
+		return serviceRoleBeneficiary, true
+	case serviceRoleWalletLedger, serviceRoleWalletLedgerMigrate, serviceRoleWalletWorker:
+		return serviceRoleWalletLedger, true
+	default:
+		return "", false
+	}
 }
 
 func (r serviceRole) migrationScope() (string, bool) {

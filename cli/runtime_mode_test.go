@@ -172,6 +172,51 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 	}
 }
 
+func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
+	tests := []struct {
+		role serviceRole
+		want serviceRole
+	}{
+		{role: serviceRoleIdentityAuth, want: serviceRoleIdentityAuth},
+		{role: serviceRoleIdentityAuthMigrate, want: serviceRoleIdentityAuth},
+		{role: serviceRoleCardVault, want: serviceRoleCardVault},
+		{role: serviceRoleCardVaultMigrate, want: serviceRoleCardVault},
+		{role: serviceRoleEBSAdapter, want: serviceRoleEBSAdapter},
+		{role: serviceRoleEBSAdapterMigrate, want: serviceRoleEBSAdapter},
+		{role: serviceRolePSPWebhook, want: serviceRolePSPWebhook},
+		{role: serviceRolePSPWebhookMigrate, want: serviceRolePSPWebhook},
+		{role: serviceRoleAdminReporting, want: serviceRoleAdminReporting},
+		{role: serviceRoleAdminReportingMigrate, want: serviceRoleAdminReporting},
+		{role: serviceRoleNotification, want: serviceRoleNotification},
+		{role: serviceRoleNotificationMigrate, want: serviceRoleNotification},
+		{role: serviceRoleBeneficiary, want: serviceRoleBeneficiary},
+		{role: serviceRoleBeneficiaryMigrate, want: serviceRoleBeneficiary},
+		{role: serviceRoleWalletLedger, want: serviceRoleWalletLedger},
+		{role: serviceRoleWalletLedgerMigrate, want: serviceRoleWalletLedger},
+		{role: serviceRoleWalletWorker, want: serviceRoleWalletLedger},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.role), func(t *testing.T) {
+			got, ok := tt.role.databaseOwnerRole()
+			if !ok {
+				t.Fatalf("%s should have a database owner role", tt.role)
+			}
+			if got != tt.want {
+				t.Fatalf("%s database owner = %s, want %s", tt.role, got, tt.want)
+			}
+		})
+	}
+
+	noDatabaseRoles := []serviceRole{serviceRoleAPIGateway, serviceRoleWalletAPI}
+	for _, role := range noDatabaseRoles {
+		t.Run(string(role), func(t *testing.T) {
+			if owner, ok := role.databaseOwnerRole(); ok {
+				t.Fatalf("%s database owner = %s, want none", role, owner)
+			}
+		})
+	}
+}
+
 func TestServiceRoleTemporalOwnership(t *testing.T) {
 	temporalRoles := []serviceRole{
 		serviceRolePSPWebhook,
