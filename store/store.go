@@ -983,6 +983,10 @@ func (s *Store) GetNotifications(ctx context.Context, tenantID, userMobile strin
 	if tenantID == "" {
 		return nil, ErrMissingTenantID
 	}
+	userMobile = strings.TrimSpace(userMobile)
+	if userMobile == "" {
+		return nil, ErrMissingMobile
+	}
 	stmt := s.DB.Rebind("SELECT * FROM push_data WHERE tenant_id = ? AND user_mobile = ? AND deleted_at IS NULL ORDER BY date DESC")
 	rows, err := db.QueryxContext(ctx, stmt, tenantID, userMobile)
 	if err != nil {
@@ -1030,8 +1034,12 @@ func (s *Store) MarkNotificationsRead(ctx context.Context, tenantID, phone strin
 	if tenantID == "" {
 		return ErrMissingTenantID
 	}
-	stmt := s.DB.Rebind("UPDATE push_data SET is_read = TRUE, updated_at = ? WHERE tenant_id = ? AND phone = ?")
-	_, err = db.ExecContext(ctx, stmt, time.Now().UTC(), tenantID, phone)
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return ErrMissingMobile
+	}
+	stmt := s.DB.Rebind("UPDATE push_data SET is_read = TRUE, updated_at = ? WHERE tenant_id = ? AND (phone = ? OR user_mobile = ?)")
+	_, err = db.ExecContext(ctx, stmt, time.Now().UTC(), tenantID, phone, phone)
 	return err
 }
 

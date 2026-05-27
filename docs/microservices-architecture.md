@@ -83,7 +83,7 @@ Initial package owner: `wallet/psp`, PSP rows in `wallet/store`, and `wallet/han
 
 Owns websocket hub, persisted push data, biller callback delivery, notification projections, and push fanout. It consumes domain events from wallet/EBS/auth rather than reading write models directly.
 
-Initial package owner: current `github.com/tutipay/ws` integration plus notification methods in `consumer`. The first split owns `/ws`, `GET /consumer/notifications`, and `POST /consumer/submit_contacts`.
+Initial package owner: current `github.com/tutipay/ws` integration plus notification methods in `consumer`. The first split owns `/ws`, `GET /consumer/notifications`, and `POST /consumer/submit_contacts`. Notification reads use the gateway-provided mobile claim against `notification-chat` owned `push_data`; they do not open identity/auth user tables to confirm the mobile.
 
 ### Admin/Reporting Service
 

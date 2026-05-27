@@ -156,3 +156,19 @@ func TestStore_CreateToken_RequiresDataKeyForDestinationPAN(t *testing.T) {
 		t.Fatalf("expected ErrMissingDataKey, got %v", err)
 	}
 }
+
+func TestStore_GetNotifications_MissingMobile(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.GetNotifications(context.Background(), "t1", "")
+	if !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("expected ErrMissingMobile, got %v", err)
+	}
+}
+
+func TestStore_MarkNotificationsRead_MissingMobile(t *testing.T) {
+	s := newTestStore(t)
+	err := s.MarkNotificationsRead(context.Background(), "t1", "")
+	if !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("expected ErrMissingMobile, got %v", err)
+	}
+}

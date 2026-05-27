@@ -297,15 +297,13 @@ func (s *Service) Notifications(ctx context.Context, tenantID, mobile string) ([
 	if mobile == "" {
 		return nil, ErrMissingMobile
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	records, err := s.Store.GetNotifications(ctx, tenantID, mobile)
 	if err != nil {
 		return nil, err
 	}
-	records, err := s.Store.GetNotifications(ctx, tenantID, user.Mobile)
-	if err != nil {
+	if err := s.Store.MarkNotificationsRead(ctx, tenantID, mobile); err != nil {
 		return nil, err
 	}
-	_ = s.Store.MarkNotificationsRead(ctx, tenantID, mobile)
 	return records, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 )
 
 func TestService_isValidCard(t *testing.T) {
@@ -67,5 +68,26 @@ func TestService_Notifications(t *testing.T) {
 	}
 	if data[0].Body != "test me" {
 		t.Error("wrong data")
+	}
+}
+
+func TestService_NotificationsUseNotificationScopeOnly(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeNotificationChat})
+	service := &Service{Store: storeSvc}
+	mobile := "0129751986"
+	seed := PushData{UUID: "uuid-notification-only", Body: "notification scope", UserMobile: mobile}
+	if err := storeSvc.CreatePushData(context.Background(), tenantID, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
+		t.Fatalf("seed notification: %v", err)
+	}
+
+	records, err := service.Notifications(context.Background(), tenantID, mobile)
+	if err != nil {
+		t.Fatalf("notifications: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("records len = %d, want 1", len(records))
+	}
+	if records[0].Body != "notification scope" {
+		t.Fatalf("body = %q", records[0].Body)
 	}
 }
