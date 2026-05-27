@@ -8,7 +8,7 @@ Date started: 2026-01-24
 - Remove Redis usage (move data to SQL).
 - Add strong unit-test invariants (tests first, then migrations).
 - Introduce proper context propagation (no hidden context.Background in helpers).
-- Move primary DB to Postgres via Docker Compose; migrations target Postgres only.
+- Move primary DB to Postgres; migrations target Postgres only.
 - Support Google sign-in (optional) while preserving existing mobile auth.
 - Make the system multi-tenant by design (tenant scoping everywhere).
 
@@ -30,7 +30,7 @@ Date started: 2026-01-24
 4) Replace GORM models with explicit SQL (sqlx/sqlc) and migrations.
 5) Multi-tenant support: add tenant_id to auth, DB schema, and queries.
 6) Auth: keep mobile login; add/keep Google auth linking to users.
-7) Docker Compose: add Postgres service and env wiring.
+7) Docker Compose: add local Postgres service wiring through mounted config and secrets.
 8) Cleanup: remove Redis + GORM dependencies and update docs.
 
 ## Progress Log

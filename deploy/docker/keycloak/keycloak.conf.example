@@ -1,5 +1,3 @@
-# Local Docker Compose config only. Production Kubernetes uses the
-# keycloak-secrets Secret with the same keycloak.conf format.
 http-enabled=true
 http-port=8080
 hostname-strict=false
@@ -10,7 +8,7 @@ metrics-enabled=true
 db=postgres
 db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
 db-username=keycloak
-db-password=keycloak
+db-password=REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD
 
-bootstrap-admin-username=admin
-bootstrap-admin-password=admin
+bootstrap-admin-username=REPLACE_WITH_BOOTSTRAP_ADMIN_USERNAME
+bootstrap-admin-password=REPLACE_WITH_BOOTSTRAP_ADMIN_PASSWORD

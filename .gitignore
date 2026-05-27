@@ -27,3 +27,9 @@ secrets.yaml.bak
 
 # Keep secrets.yaml in git (it's encrypted), but not decrypted versions
 secrets.decrypted.yaml
+
+# Local Docker Compose runtime secrets/config. Kubernetes uses Secrets instead.
+/deploy/docker/keycloak/keycloak.conf
+/deploy/docker/keycloak/postgres-password.txt
+/deploy/docker/temporal/postgres-password.txt
+/deploy/docker/temporal/broadcast-address.txt

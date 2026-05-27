@@ -39,17 +39,19 @@ $ go build .
 ```
 You will have a binary that after running it will spawn a production ready server!
 
-## Building using Docker and docker-compose
-We provide an easier way to build and run noebs using Docker.
+## Local development with Docker Compose
+Docker Compose is for local development only. Deployment goes through Kubernetes/k3s manifests and Argo CD.
+
 - Fork this repository (e.g., `git clone https://github.com/adonese/noebs`)
 - `cd` to noebs root directory (E.g., $HOME/src/noebs)
-- `docker compose up --build`
+- Provide the explicit ignored local files described in `deploy/docker/secrets/README.md`
+- Run `docker compose up --build`
 - Open `localhost:8081/test` in your browser to reach the API gateway
 
 ## Notes on installation
 noebs needs to be connected with EBS merchant server in order to get useful responses. For tests and local development, use a dedicated test config file (for example `config.test.yaml`) to point at mock services and a local database.
 
-- Using Docker
+- Using Docker locally
 ```shell
 docker compose up --build
 ```

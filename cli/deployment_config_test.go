@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -243,6 +244,73 @@ func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
 	for _, rejected := range []string{"COPY config.yaml /app/config.yaml", "litestream", "sqlite3"} {
 		if strings.Contains(dockerfileText, rejected) {
 			t.Fatalf("Dockerfile carries legacy image runtime behavior %q", rejected)
+		}
+	}
+}
+
+func TestDockerComposeLocalInputsAreNotTrackedGuesses(t *testing.T) {
+	localOnlyInputs := []string{
+		"deploy/docker/keycloak/keycloak.conf",
+		"deploy/docker/keycloak/postgres-password.txt",
+		"deploy/docker/temporal/postgres-password.txt",
+		"deploy/docker/temporal/broadcast-address.txt",
+	}
+
+	gitignore, err := os.ReadFile(filepath.Join("..", ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	gitignoreText := string(gitignore)
+	for _, path := range localOnlyInputs {
+		pattern := "/" + path
+		if !strings.Contains(gitignoreText, pattern) {
+			t.Fatalf(".gitignore missing local-only Docker Compose input %s", pattern)
+		}
+	}
+
+	args := append([]string{"-C", "..", "ls-files", "--"}, localOnlyInputs...)
+	output, err := exec.Command("git", args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git ls-files local Docker Compose inputs: %v\n%s", err, output)
+	}
+	trackedExisting := []string{}
+	for _, path := range strings.Fields(string(output)) {
+		if _, err := os.Stat(filepath.Join("..", path)); err == nil {
+			trackedExisting = append(trackedExisting, path)
+			continue
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+	if len(trackedExisting) != 0 {
+		t.Fatalf("local Docker Compose runtime inputs must not be committed guesses:\n%s", strings.Join(trackedExisting, "\n"))
+	}
+}
+
+func TestRepositoryDoesNotCarryDirectVMDeploymentScripts(t *testing.T) {
+	scripts, err := filepath.Glob(filepath.Join("..", "scripts", "*.sh"))
+	if err != nil {
+		t.Fatalf("list scripts: %v", err)
+	}
+	forbidden := []string{
+		"docker compose up",
+		"exe.dev",
+		"get.docker.com",
+		"rsync ",
+		"scp ",
+		"ssh ",
+		"systemctl enable --now docker",
+	}
+	for _, path := range scripts {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(data)
+		for _, token := range forbidden {
+			if strings.Contains(text, token) {
+				t.Fatalf("%s carries direct VM/Docker deployment behavior %q; deployment must go through Kubernetes/k3s and Argo CD", path, token)
+			}
 		}
 	}
 }
@@ -1389,7 +1457,7 @@ func requireTemporalStartScriptExplicitInputs(t *testing.T, script string) {
 			t.Fatalf("temporal-start.sh missing explicit mounted input read: %s", want)
 		}
 	}
-	for _, rejected := range []string{":-", "getent hosts", "$(hostname)"} {
+	for _, rejected := range []string{":-", "getent hosts", "$(hostname)", "__TEMPORAL_POSTGRES_PASSWORD__", "__TEMPORAL_BROADCAST_ADDRESS__"} {
 		if strings.Contains(script, rejected) {
 			t.Fatalf("temporal-start.sh must not derive password or broadcast address with %q", rejected)
 		}
