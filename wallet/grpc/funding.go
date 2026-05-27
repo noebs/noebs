@@ -635,7 +635,9 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 	if err := s.Service.Store.SetUserTwoFAEnabled(ctx, tenantID, req.UserId, true, now); err != nil {
 		return nil, mapError(err)
 	}
-	_ = s.Service.Store.TouchUserTwoFALastUsed(ctx, tenantID, req.UserId, now)
+	if err := s.Service.Store.TouchUserTwoFALastUsed(ctx, tenantID, req.UserId, now); err != nil {
+		return nil, mapError(err)
+	}
 	return &emptypb.Empty{}, nil
 }
 

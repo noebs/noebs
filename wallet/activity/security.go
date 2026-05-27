@@ -2,22 +2,19 @@ package activity
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	basestore "github.com/adonese/noebs/store"
 	walletsecurity "github.com/adonese/noebs/wallet/security"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 )
 
 type SecurityActivities struct {
-	Store     *walletstore.Store
-	UserStore *basestore.Store
+	Store *walletstore.Store
 }
 
-func NewSecurityActivities(store *walletstore.Store, userStore *basestore.Store) *SecurityActivities {
-	return &SecurityActivities{Store: store, UserStore: userStore}
+func NewSecurityActivities(store *walletstore.Store) *SecurityActivities {
+	return &SecurityActivities{Store: store}
 }
 
 func (a *SecurityActivities) VerifyWalletPIN(ctx context.Context, tenantID string, walletID uuid.UUID, pin string) (bool, error) {
@@ -39,7 +36,7 @@ func (a *SecurityActivities) VerifyWalletPIN(ctx context.Context, tenantID strin
 }
 
 func (a *SecurityActivities) VerifyUserTOTP(ctx context.Context, tenantID string, userID int64, code string) (bool, error) {
-	if a == nil || a.UserStore == nil {
+	if a == nil || a.Store == nil {
 		return false, ErrMissingStore
 	}
 	if tenantID == "" {
@@ -51,25 +48,18 @@ func (a *SecurityActivities) VerifyUserTOTP(ctx context.Context, tenantID string
 	if code == "" {
 		return false, walletstore.ErrMissingTwoFACode
 	}
-	if a.Store != nil {
-		record, err := a.Store.GetUserTwoFA(ctx, tenantID, userID)
-		if err == nil {
-			if !record.Enabled {
-				return false, walletstore.ErrMissingTwoFACode
-			}
-			ok := walletsecurity.VerifyTOTP(record.Secret, code)
-			if ok {
-				_ = a.Store.TouchUserTwoFALastUsed(ctx, tenantID, userID, time.Now().UTC())
-			}
-			return ok, nil
-		}
-		if !errors.Is(err, walletstore.ErrUserTwoFANotFound) {
-			return false, err
-		}
-	}
-	user, err := a.UserStore.FindUserByID(ctx, tenantID, userID)
+	record, err := a.Store.GetUserTwoFA(ctx, tenantID, userID)
 	if err != nil {
 		return false, err
 	}
-	return user.VerifyOtp(code), nil
+	if !record.Enabled {
+		return false, walletstore.ErrMissingTwoFACode
+	}
+	ok := walletsecurity.VerifyTOTP(record.Secret, code)
+	if ok {
+		if err := a.Store.TouchUserTwoFALastUsed(ctx, tenantID, userID, time.Now().UTC()); err != nil {
+			return false, err
+		}
+	}
+	return ok, nil
 }

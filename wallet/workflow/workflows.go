@@ -1869,7 +1869,7 @@ type fundingSourceSpec struct {
 	hasData               bool
 }
 
-func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, currency string, amount int64, fallbackExternalRef sql.NullString, defaultSupportsWithdrawal bool, fundedAt time.Time, providerPayloads ...map[string]any) (walletstore.FundingSource, error) {
+func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, currency string, amount int64, transactionExternalRef sql.NullString, supportsWithdrawalFromValidation bool, fundedAt time.Time, providerPayloads ...map[string]any) (walletstore.FundingSource, error) {
 	if txn == nil {
 		return walletstore.FundingSource{}, walletstore.ErrPSPTransactionNotFound
 	}
@@ -1886,7 +1886,7 @@ func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, c
 	if spec.sourceType == "" {
 		spec.sourceType = "psp"
 	}
-	externalRef := fallbackExternalRef
+	externalRef := transactionExternalRef
 	if spec.externalReference != "" {
 		externalRef = sql.NullString{String: spec.externalReference, Valid: true}
 	}
@@ -1909,7 +1909,7 @@ func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, c
 	if err != nil {
 		return walletstore.FundingSource{}, err
 	}
-	supportsWithdrawal := defaultSupportsWithdrawal
+	supportsWithdrawal := supportsWithdrawalFromValidation
 	if spec.supportsWithdrawalSet {
 		supportsWithdrawal = spec.supportsWithdrawal
 	}
