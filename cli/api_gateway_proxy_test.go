@@ -158,6 +158,88 @@ func TestAdminServiceRolesRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.
 	})
 }
 
+func TestServiceMetricsRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.T) {
+	ensureInit()
+	adminKey := setAdminKeyForTest(t)
+	roles := []serviceRole{
+		serviceRoleIdentityAuth,
+		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
+		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleBeneficiary,
+	}
+	for _, role := range roles {
+		t.Run(string(role), func(t *testing.T) {
+			setServiceRoleForTest(t, role)
+			route := GetMainEngine()
+
+			req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+			req.Header.Set("X-Admin-Key", adminKey)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+			}
+		})
+	}
+
+	t.Run("wallet api", func(t *testing.T) {
+		configureWalletRouteTest(t)
+		route := GetMainEngine()
+
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set("X-Admin-Key", adminKey)
+		resp, err := route.Test(req)
+		if err != nil {
+			t.Fatalf("route.Test() error = %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+		}
+	})
+}
+
+func TestServiceMetricsAcceptGatewayAdminIdentity(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleIdentityAuth)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	setGatewayAdminIdentityHeader(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestAPIGatewayMetricsAcceptsPublicAdminKey(t *testing.T) {
+	ensureInit()
+	adminKey := setAdminKeyForTest(t)
+	configureGatewayProxyForTest(t)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
 func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	ensureInit()
 	tests := []struct {

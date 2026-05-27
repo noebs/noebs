@@ -449,6 +449,10 @@ func GetMainEngine() *fiber.App {
 		Password: noebsConfig.AdminPassword,
 		Debug:    noebsConfig.IsDebug,
 	})
+	metricsGuard := adminGuard
+	if role != serviceRoleAPIGateway {
+		metricsGuard = adminIdentity
+	}
 
 	consumerHandler := consumerhandler.New(&consumerService)
 	merchantHandler := merchanthandler.New(&merchantServices)
@@ -456,7 +460,7 @@ func GetMainEngine() *fiber.App {
 	route.Get("/test", func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 	})
-	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
+	route.Get("/metrics", metricsGuard, adaptor.HTTPHandler(promhttp.Handler()))
 
 	if role == serviceRolePSPWebhook {
 		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(walletService, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
