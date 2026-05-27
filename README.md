@@ -26,18 +26,7 @@ There are many reasons why I started this project. On one hand people can happil
 
 You can contact us directly at [hi@noebs.dev](mailto:hi@noebs.dev) for more available hosting options.   
 
-There are different ways to use noebs:
-## Building with `go get` command [not recommended]
-- make sure you have Go installed (Consult go website to see various ways to install go)[https://golang.org]
-- Then
-```shell
-# this command may likely takes along time depending on your internet connections.
-# also, make sure you are using a vpn since some of the libraries are hosted in GCE hosting which forbids Sudan
-$ go get github.com/adonese/noebs
-$ cd $GOPATH/github.com/adonese/noebs
-$ go build .
-```
-You will have a binary that after running it will spawn a production ready server!
+noebs is deployed as role-specific microservices. There is no supported root `config.yaml` or single-binary local server mode; every runtime process must receive mounted shared config, mounted service role config, and mounted secrets.
 
 ## Local development with Docker Compose
 Docker Compose is for local development only. Deployment goes through Kubernetes/k3s manifests and Argo CD.
@@ -48,18 +37,10 @@ Docker Compose is for local development only. Deployment goes through Kubernetes
 - Run `docker compose up --build`
 - Open `localhost:8081/test` in your browser to reach the API gateway
 
-## Notes on installation
-noebs needs to be connected with EBS merchant server in order to get useful responses. For tests and local development, use a dedicated test config file (for example `config.test.yaml`) to point at mock services and a local database.
+## Deployment
+Production deployment is Kubernetes/k3s plus Argo CD. The current host target is `100.102.164.34`, using `deploy/kubernetes/overlays/current-host` and the foundation OpenTofu root under `foundation/terraform`.
 
-- Using Docker locally
-```shell
-docker compose up --build
-```
-
-- Using `go get` method
-```shell
-$ noebs
-```
+Noebs service roles are selected by mounted service config files, not environment variables. Service-owned secrets are separate SOPS material per microservice, and migrations run through service-specific Kubernetes Jobs before runtime Deployments.
 
 # This project philosophy
 noebs is not meant to be a full e-payment framework (e.g., unlike Morsal). It is meant as a generic e-payment gateway system. Currently, it implements EBS services, but we might add new gateway. Being such, adapts to Unix philosophy; doing one thing and do it good. Also, with our experience with embedded devices, working with authorizations and handling all of these headers and tokens (esp. JWT ones) has proven to be challenging as simply some of the older models cannot handle lengthy headers.
@@ -143,35 +124,6 @@ I opted to the second one. Go is cool!
 I'm very committed to this project.
 
 
-## Sample for secrets.yaml
+## Runtime Secrets
 
-```yaml
-noebs:
-    jwt_secret: my_top_secret
-    db_driver: pgx
-    service_databases:
-        identity-auth: postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable
-    is_consumer_prod: false
-    redis_port: 100.89.231.117:6379
-    sms_gateway: endpoint
-    sms_key: key==
-    sms_sender: tutipay
-    sentry: ""
-    port: :8080
-    consumer_qa_id: YourConsumerID
-    merchant_qa_id: YourConsumerID
-    consumer_prod_id: ""
-    merchant_prod_id: ""
-    pan: ""
-    exp_date: ""
-    pin: ""
-    ipin: ""
-    ebs_insecure_skip_verify: false
-    cors:
-        - noebs.dev
-        - api.2t.sd
-        - staging.app.2t.sd
-        - beta.app.2t.sd
-    consumer_biller_hooks_url: ""
-    is_debug: false
-```
+Docker Compose secret shapes live in `deploy/docker/secrets/*.example`; the local encrypted files are ignored. Kubernetes secrets required by the current host overlay are listed in `deploy/kubernetes/overlays/current-host/README.md`.

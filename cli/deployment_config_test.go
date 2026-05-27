@@ -259,6 +259,38 @@ func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestRepositoryDoesNotCarryRootRuntimeConfig(t *testing.T) {
+	output, err := exec.Command("git", "-C", "..", "ls-files", "--", "config.yaml").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git ls-files root config.yaml: %v\n%s", err, output)
+	}
+	if tracked := strings.TrimSpace(string(output)); tracked != "" {
+		t.Fatalf("root config.yaml must not be a tracked runtime contract:\n%s", tracked)
+	}
+	gitignore, err := os.ReadFile(filepath.Join("..", ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "/config.yaml") {
+		t.Fatalf(".gitignore must reject local root config.yaml")
+	}
+	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	readmeText := string(readme)
+	for _, rejected := range []string{
+		"Building with `go get`",
+		"production ready server",
+		"Using `go get` method",
+		"Sample for secrets.yaml",
+	} {
+		if strings.Contains(readmeText, rejected) {
+			t.Fatalf("README.md carries legacy single-binary/root-secret guidance %q", rejected)
+		}
+	}
+}
+
 func TestDockerComposeLocalInputsAreNotTrackedGuesses(t *testing.T) {
 	localOnlyInputs := []string{
 		"deploy/docker/keycloak/keycloak.conf",
