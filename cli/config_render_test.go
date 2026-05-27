@@ -60,6 +60,40 @@ func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 	}
 }
 
+func TestRenderConfigFilesRejectsMissingServiceConfig(t *testing.T) {
+	renderConfigTempDirWithService(t, `noebs:
+  default_tenant_id: tenant_1
+  db_driver: pgx
+`, "")
+	if err := renderConfigFiles(); err == nil {
+		t.Fatalf("renderConfigFiles() error = nil, want missing service config error")
+	}
+}
+
+func TestRenderConfigFilesRejectsInvalidServiceRole(t *testing.T) {
+	renderConfigTempDirWithService(t, `noebs:
+  default_tenant_id: tenant_1
+  db_driver: pgx
+`, `noebs:
+  service_role: no-such-service
+`)
+	if err := renderConfigFiles(); !errors.Is(err, errInvalidServiceRole) {
+		t.Fatalf("renderConfigFiles() error = %v, want %v", err, errInvalidServiceRole)
+	}
+}
+
+func TestRenderConfigFilesValidatesRoleDatabaseConfig(t *testing.T) {
+	renderConfigTempDirWithService(t, `noebs:
+  default_tenant_id: tenant_1
+  db_driver: pgx
+`, `noebs:
+  service_role: identity-auth
+`)
+	if err := renderConfigFiles(); !errors.Is(err, errMissingDatabaseURL) {
+		t.Fatalf("renderConfigFiles() error = %v, want %v", err, errMissingDatabaseURL)
+	}
+}
+
 func TestRenderConfigFilesRejectsLegacyDatabasePath(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
   default_tenant_id: tenant_1
@@ -119,6 +153,13 @@ func renderConfigInTempDir(t *testing.T, payload string) error {
 
 func renderConfigTempDir(t *testing.T, payload string) string {
 	t.Helper()
+	return renderConfigTempDirWithService(t, payload, `noebs:
+  service_role: api-gateway
+`)
+}
+
+func renderConfigTempDirWithService(t *testing.T, payload, servicePayload string) string {
+	t.Helper()
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -126,6 +167,11 @@ func renderConfigTempDir(t *testing.T, payload string) string {
 	tmp := t.TempDir()
 	if err := os.WriteFile(filepath.Join(tmp, "config.yaml"), []byte(payload), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
+	}
+	if servicePayload != "" {
+		if err := os.WriteFile(filepath.Join(tmp, "service.yaml"), []byte(servicePayload), 0o600); err != nil {
+			t.Fatalf("write service config: %v", err)
+		}
 	}
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatalf("chdir temp: %v", err)

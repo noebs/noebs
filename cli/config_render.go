@@ -31,15 +31,22 @@ func isConfigUtilityCommand() bool {
 }
 
 func renderConfigFiles() error {
-	noebs, configPath, err := loadMergedConfigForRender()
+	noebs, configPath, err := loadMergedConfigForRender(true)
 	if err != nil {
 		return err
 	}
 
+	role, err := parseServiceRole(firstString(noebs, "service_role"))
+	if err != nil {
+		return err
+	}
 	if err := applyServiceDatabaseURL(noebs); err != nil {
 		return err
 	}
 	if err := rejectLegacyDatabasePath(noebs); err != nil {
+		return err
+	}
+	if err := validateRoleDatabaseConfig(role, firstString(noebs, "db_url"), firstString(noebs, "db_driver")); err != nil {
 		return err
 	}
 	outputDir := filepath.Dir(configPath)
@@ -63,7 +70,7 @@ func renderConfigFiles() error {
 }
 
 func renderDatabasePasswordFile() error {
-	noebs, _, err := loadMergedConfigForRender()
+	noebs, _, err := loadMergedConfigForRender(false)
 	if err != nil {
 		return err
 	}
@@ -73,7 +80,7 @@ func renderDatabasePasswordFile() error {
 	return writeDatabasePassword(noebs)
 }
 
-func loadMergedConfigForRender() (map[string]interface{}, string, error) {
+func loadMergedConfigForRender(requireServiceConfig bool) (map[string]interface{}, string, error) {
 	configPath := defaultConfigPath
 	if isTestRun() {
 		configPath = "./config.yaml"
@@ -103,6 +110,11 @@ func loadMergedConfigForRender() (map[string]interface{}, string, error) {
 	serviceConfigPath := defaultServiceConfigPath
 	if isTestRun() {
 		serviceConfigPath = "./service.yaml"
+	}
+	if requireServiceConfig {
+		if _, err := requiredExistingPath("service config", serviceConfigPath); err != nil {
+			return nil, "", err
+		}
 	}
 	serviceConfigPath, err = optionalExistingPath(serviceConfigPath)
 	if err != nil {
