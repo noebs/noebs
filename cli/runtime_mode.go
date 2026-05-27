@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 )
 
 type serviceRole string
@@ -17,6 +19,12 @@ var (
 	errMissingDatabasePath = errors.New("missing noebs.db_path")
 	errDatabaseNotAllowed  = errors.New("database config not allowed for service role")
 	errDatabaseOwnerKey    = errors.New("service database entry must use owner role")
+	errWalletNotEnabled    = errors.New("wallet_enabled required for service role")
+	errTemporalNotEnabled  = errors.New("temporal_enabled required for service role")
+	errGRPCNotEnabled      = errors.New("grpc_enabled required for service role")
+	errMissingGRPCPort     = errors.New("missing noebs.grpc_port")
+	errMissingGRPCGateway  = errors.New("missing noebs.grpc_gateway_port")
+	errInvalidWalletConfig = errors.New("invalid wallet runtime config")
 )
 
 const (
@@ -127,6 +135,93 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, dbPath, driver string) 
 	default:
 		return fmt.Errorf("%w: %s noebs.db_driver %q", store.ErrUnsupportedDatabaseDriver, role, driver)
 	}
+}
+
+func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if roleUsesWalletFeature(role) && !cfg.WalletEnabled {
+		return fmt.Errorf("%w: %s", errWalletNotEnabled, role)
+	}
+	if roleUsesWalletFeature(role) {
+		if err := validateWalletRuntimeSettings(cfg); err != nil {
+			return err
+		}
+	}
+	if role.requiresTemporal() {
+		if !cfg.TemporalEnabled {
+			return fmt.Errorf("%w: %s", errTemporalNotEnabled, role)
+		}
+		if err := (walletworker.Options{
+			Host:      strings.TrimSpace(cfg.TemporalHost),
+			Port:      strings.TrimSpace(cfg.TemporalPort),
+			Namespace: strings.TrimSpace(cfg.TemporalNamespace),
+			TaskQueue: walletworker.TaskQueueMain,
+		}).Validate(); err != nil {
+			return fmt.Errorf("%s temporal config: %w", role, err)
+		}
+	}
+	if role == serviceRoleWalletLedger {
+		if !cfg.GRPCEnabled {
+			return fmt.Errorf("%w: %s", errGRPCNotEnabled, role)
+		}
+		if strings.TrimSpace(cfg.GRPCPort) == "" {
+			return fmt.Errorf("%w: %s", errMissingGRPCPort, role)
+		}
+	}
+	if cfg.GRPCGatewayEnabled && strings.TrimSpace(cfg.GRPCGatewayPort) == "" {
+		return fmt.Errorf("%w: %s", errMissingGRPCGateway, role)
+	}
+	if role == serviceRoleWalletWorker {
+		return validateWalletWorkerSchedules(cfg)
+	}
+	return nil
+}
+
+func roleUsesWalletFeature(role serviceRole) bool {
+	return role == serviceRolePSPWebhook ||
+		role == serviceRoleWalletAPI ||
+		role == serviceRoleWalletLedger ||
+		role == serviceRoleWalletWorker
+}
+
+func validateWalletRuntimeSettings(cfg ebs_fields.NoebsConfig) error {
+	if strings.TrimSpace(cfg.WalletDefaultCurrency) == "" {
+		return fmt.Errorf("%w: wallet_default_currency", errInvalidWalletConfig)
+	}
+	if cfg.WalletHoldExpirySeconds <= 0 {
+		return fmt.Errorf("%w: wallet_hold_expiry_seconds", errInvalidWalletConfig)
+	}
+	if cfg.WalletApprovalTimeoutSeconds <= 0 {
+		return fmt.Errorf("%w: wallet_approval_timeout_seconds", errInvalidWalletConfig)
+	}
+	if cfg.WalletVerificationTimeoutSeconds <= 0 {
+		return fmt.Errorf("%w: wallet_verification_timeout_seconds", errInvalidWalletConfig)
+	}
+	if cfg.WalletManualTransferApprovalTimeoutSeconds <= 0 {
+		return fmt.Errorf("%w: wallet_manual_approval_timeout_seconds", errInvalidWalletConfig)
+	}
+	return nil
+}
+
+func validateWalletWorkerSchedules(cfg ebs_fields.NoebsConfig) error {
+	if strings.TrimSpace(cfg.WalletPSPPollerCron) == "" {
+		return fmt.Errorf("%w: wallet_psp_poller_cron", errMissingWalletWorkflowCron)
+	}
+	if cfg.WalletPSPPollerBatchSize <= 0 {
+		return fmt.Errorf("%w: wallet_psp_poller_batch_size", errInvalidWalletConfig)
+	}
+	if cfg.WalletPSPPollerIntervalSeconds <= 0 {
+		return fmt.Errorf("%w: wallet_psp_poller_interval_seconds", errInvalidWalletConfig)
+	}
+	if strings.TrimSpace(cfg.WalletReconciliationCron) == "" {
+		return fmt.Errorf("%w: wallet_reconciliation_cron", errMissingWalletWorkflowCron)
+	}
+	if cfg.WalletReconciliationBatchSize <= 0 {
+		return fmt.Errorf("%w: wallet_reconciliation_batch_size", errInvalidWalletConfig)
+	}
+	if cfg.WalletReconciliationLookbackHours <= 0 {
+		return fmt.Errorf("%w: wallet_reconciliation_lookback_hours", errInvalidWalletConfig)
+	}
+	return nil
 }
 
 func (r serviceRole) runsMigrations() bool {

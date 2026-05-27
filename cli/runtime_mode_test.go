@@ -4,7 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
+	walletworker "github.com/adonese/noebs/wallet/worker"
 )
 
 func TestParseServiceRoleRequiresExplicitRole(t *testing.T) {
@@ -248,6 +250,131 @@ func TestServiceRoleTemporalOwnership(t *testing.T) {
 		t.Run(string(role), func(t *testing.T) {
 			if role.requiresTemporal() {
 				t.Fatalf("%s should not require Temporal", role)
+			}
+		})
+	}
+}
+
+func validWalletRuntimeConfig() ebs_fields.NoebsConfig {
+	return ebs_fields.NoebsConfig{
+		WalletEnabled:                    true,
+		TemporalEnabled:                  true,
+		TemporalHost:                     "temporal-frontend",
+		TemporalPort:                     "7233",
+		TemporalNamespace:                "default",
+		GRPCEnabled:                      true,
+		GRPCPort:                         ":9090",
+		WalletDefaultCurrency:            "SDG",
+		WalletHoldExpirySeconds:          3600,
+		WalletApprovalTimeoutSeconds:     3600,
+		WalletVerificationTimeoutSeconds: 86400,
+		WalletManualTransferApprovalTimeoutSeconds: 86400,
+		WalletPSPPollerCron:                        "*/5 * * * *",
+		WalletPSPPollerBatchSize:                   100,
+		WalletPSPPollerIntervalSeconds:             300,
+		WalletReconciliationCron:                   "0 3 * * *",
+		WalletReconciliationBatchSize:              500,
+		WalletReconciliationLookbackHours:          24,
+	}
+}
+
+func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
+		t.Fatalf("identity-auth runtime config error = %v", err)
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleWalletAPI, ebs_fields.NoebsConfig{}); !errors.Is(err, errWalletNotEnabled) {
+		t.Fatalf("wallet-api runtime config error = %v, want %v", err, errWalletNotEnabled)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*ebs_fields.NoebsConfig)
+	}{
+		{name: "currency", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletDefaultCurrency = "" }},
+		{name: "hold_expiry", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletHoldExpirySeconds = 0 }},
+		{name: "approval_timeout", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletApprovalTimeoutSeconds = 0 }},
+		{name: "verification_timeout", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletVerificationTimeoutSeconds = 0 }},
+		{name: "manual_transfer_approval_timeout", mutate: func(cfg *ebs_fields.NoebsConfig) {
+			cfg.WalletManualTransferApprovalTimeoutSeconds = 0
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validWalletRuntimeConfig()
+			tt.mutate(&cfg)
+			if err := validateRoleRuntimeConfig(serviceRoleWalletAPI, cfg); !errors.Is(err, errInvalidWalletConfig) {
+				t.Fatalf("wallet-api runtime config error = %v, want %v", err, errInvalidWalletConfig)
+			}
+		})
+	}
+}
+
+func TestServiceRoleRuntimeConfigRequiresExplicitTemporalConfig(t *testing.T) {
+	cfg := validWalletRuntimeConfig()
+	cfg.TemporalEnabled = false
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errTemporalNotEnabled) {
+		t.Fatalf("wallet-ledger temporal enabled error = %v, want %v", err, errTemporalNotEnabled)
+	}
+
+	cfg = validWalletRuntimeConfig()
+	cfg.TemporalHost = ""
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, walletworker.ErrMissingTemporalHost) {
+		t.Fatalf("wallet-ledger temporal host error = %v, want %v", err, walletworker.ErrMissingTemporalHost)
+	}
+
+	cfg = validWalletRuntimeConfig()
+	cfg.TemporalPort = ""
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, walletworker.ErrMissingTemporalPort) {
+		t.Fatalf("wallet-ledger temporal port error = %v, want %v", err, walletworker.ErrMissingTemporalPort)
+	}
+
+	cfg = validWalletRuntimeConfig()
+	cfg.TemporalNamespace = ""
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, walletworker.ErrMissingTemporalNamespace) {
+		t.Fatalf("wallet-ledger temporal namespace error = %v, want %v", err, walletworker.ErrMissingTemporalNamespace)
+	}
+}
+
+func TestServiceRoleRuntimeConfigRequiresExplicitGRPCConfig(t *testing.T) {
+	cfg := validWalletRuntimeConfig()
+	cfg.GRPCEnabled = false
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errGRPCNotEnabled) {
+		t.Fatalf("wallet-ledger grpc enabled error = %v, want %v", err, errGRPCNotEnabled)
+	}
+
+	cfg = validWalletRuntimeConfig()
+	cfg.GRPCPort = ""
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errMissingGRPCPort) {
+		t.Fatalf("wallet-ledger grpc port error = %v, want %v", err, errMissingGRPCPort)
+	}
+
+	cfg = validWalletRuntimeConfig()
+	cfg.GRPCGatewayEnabled = true
+	cfg.GRPCGatewayPort = ""
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errMissingGRPCGateway) {
+		t.Fatalf("wallet-ledger grpc gateway port error = %v, want %v", err, errMissingGRPCGateway)
+	}
+}
+
+func TestServiceRoleRuntimeConfigRequiresExplicitWalletWorkerSchedules(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*ebs_fields.NoebsConfig)
+		want   error
+	}{
+		{name: "poller_cron", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletPSPPollerCron = "" }, want: errMissingWalletWorkflowCron},
+		{name: "poller_batch", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletPSPPollerBatchSize = 0 }, want: errInvalidWalletConfig},
+		{name: "poller_interval", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletPSPPollerIntervalSeconds = 0 }, want: errInvalidWalletConfig},
+		{name: "reconciliation_cron", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletReconciliationCron = "" }, want: errMissingWalletWorkflowCron},
+		{name: "reconciliation_batch", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletReconciliationBatchSize = 0 }, want: errInvalidWalletConfig},
+		{name: "reconciliation_lookback", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletReconciliationLookbackHours = 0 }, want: errInvalidWalletConfig},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validWalletRuntimeConfig()
+			tt.mutate(&cfg)
+			if err := validateRoleRuntimeConfig(serviceRoleWalletWorker, cfg); !errors.Is(err, tt.want) {
+				t.Fatalf("wallet-worker runtime config error = %v, want %v", err, tt.want)
 			}
 		})
 	}

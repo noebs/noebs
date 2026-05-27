@@ -1064,42 +1064,6 @@ func (n *NoebsConfig) Defaults() {
 	if n.OtelSampleRate == 0 {
 		n.OtelSampleRate = 0.1
 	}
-	if n.WalletHoldExpirySeconds == 0 {
-		n.WalletHoldExpirySeconds = 3600
-	}
-	if n.WalletApprovalTimeoutSeconds == 0 {
-		n.WalletApprovalTimeoutSeconds = 3600
-	}
-	if n.WalletVerificationTimeoutSeconds == 0 {
-		n.WalletVerificationTimeoutSeconds = 86400
-	}
-	if n.WalletManualTransferApprovalTimeoutSeconds == 0 {
-		n.WalletManualTransferApprovalTimeoutSeconds = 86400
-	}
-	if n.WalletPSPPollerCron == "" {
-		n.WalletPSPPollerCron = "*/5 * * * *"
-	}
-	if n.WalletPSPPollerBatchSize == 0 {
-		n.WalletPSPPollerBatchSize = 100
-	}
-	if n.WalletPSPPollerIntervalSeconds == 0 {
-		n.WalletPSPPollerIntervalSeconds = 300
-	}
-	if n.WalletReconciliationCron == "" {
-		n.WalletReconciliationCron = "0 3 * * *"
-	}
-	if n.WalletReconciliationBatchSize == 0 {
-		n.WalletReconciliationBatchSize = 500
-	}
-	if n.WalletReconciliationLookbackHours == 0 {
-		n.WalletReconciliationLookbackHours = 24
-	}
-	if n.GRPCEnabled && n.GRPCPort == "" {
-		n.GRPCPort = ":9090"
-	}
-	if n.GRPCGatewayEnabled && n.GRPCGatewayPort == "" {
-		n.GRPCGatewayPort = ":9091"
-	}
 }
 
 type QuickPaymentFields struct {

@@ -558,6 +558,9 @@ func initConfig() {
 	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabasePath, noebsConfig.DatabaseDriver); err != nil {
 		logrusLogger.Fatalf("error in runtime database config: %v", err)
 	}
+	if err := validateRoleRuntimeConfig(role, noebsConfig); err != nil {
+		logrusLogger.Fatalf("error in runtime service config: %v", err)
+	}
 	if role.opensDatabase() {
 		dbpath := noebsConfig.DatabasePath
 		if dbpath != "" {
@@ -628,12 +631,6 @@ func initConfig() {
 	if err := initRoleServices(role); err != nil {
 		logrusLogger.Fatalf("error initializing role services: %v", err)
 	}
-	if (role == serviceRolePSPWebhook || role == serviceRoleWalletAPI) && !noebsConfig.WalletEnabled {
-		logrusLogger.Fatalf("%s role requires wallet_enabled", role)
-	}
-	if role.requiresTemporal() && !noebsConfig.TemporalEnabled {
-		logrusLogger.Fatalf("%s role requires temporal_enabled", role)
-	}
 	if role == serviceRolePSPWebhook {
 		client, err := walletworker.NewClient(walletworker.Options{
 			Host:      noebsConfig.TemporalHost,
@@ -685,9 +682,6 @@ func initConfig() {
 		if err := startWalletCronWorkflows(context.Background(), runner.Client, tenants, noebsConfig, workerOpts.TaskQueue); err != nil {
 			logrusLogger.Fatalf("error starting wallet cron workflows: %v", err)
 		}
-	}
-	if role == serviceRoleWalletLedger && !noebsConfig.GRPCEnabled {
-		logrusLogger.Fatalf("wallet-ledger role requires grpc_enabled")
 	}
 	if role.startsGRPC() {
 		if err := initGRPCServers(); err != nil {

@@ -11,6 +11,7 @@ import (
 
 var (
 	ErrMissingTemporalHost      = errors.New("missing temporal host")
+	ErrMissingTemporalPort      = errors.New("missing temporal port")
 	ErrMissingTemporalNamespace = errors.New("missing temporal namespace")
 	ErrMissingTaskQueue         = errors.New("missing temporal task queue")
 )
@@ -27,7 +28,7 @@ func (o Options) Address() (string, error) {
 		return "", ErrMissingTemporalHost
 	}
 	if o.Port == "" {
-		return o.Host, nil
+		return "", ErrMissingTemporalPort
 	}
 	return fmt.Sprintf("%s:%s", o.Host, o.Port), nil
 }

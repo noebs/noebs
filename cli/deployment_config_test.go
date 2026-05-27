@@ -671,9 +671,7 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-postgres-bootstrap start.sh", postgresBootstrap, filepath.Join("..", "deploy", "docker", "temporal", "postgres-start.sh"))
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal.yaml", temporalConfig["temporal.yaml"], filepath.Join("..", "deploy", "docker", "temporal", "temporal.yaml"))
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal-start.sh", temporalConfig["temporal-start.sh"], filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
-	if strings.Contains(temporalConfig["temporal-start.sh"], "getent hosts") || strings.Contains(temporalConfig["temporal-start.sh"], "$(hostname)") {
-		t.Fatalf("temporal-start.sh must read the broadcast address from a mounted file, not derive it from hostname DNS")
-	}
+	requireTemporalStartScriptExplicitInputs(t, temporalConfig["temporal-start.sh"])
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config schema-migrate.sh", temporalConfig["schema-migrate.sh"], filepath.Join("..", "deploy", "docker", "temporal", "schema-migrate.sh"))
 	if _, ok := temporalConfig["dynamicconfig.yaml"]; !ok {
 		t.Fatalf("temporal-config missing dynamicconfig.yaml")
@@ -834,6 +832,11 @@ func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/dynamicconfig.yaml", "/opt/temporal/config/dynamicconfig/docker.yaml")
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/broadcast-address.txt", "/opt/temporal/runtime/broadcast-address")
 	requireComposeSecret(t, "temporal", temporal.Secrets, "temporal_postgres_password", "/opt/temporal/secrets/postgres-password")
+	temporalStart, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
+	if err != nil {
+		t.Fatalf("read Temporal start script: %v", err)
+	}
+	requireTemporalStartScriptExplicitInputs(t, string(temporalStart))
 
 	temporalUI, ok := compose.Services["temporal-ui"]
 	if !ok {
@@ -1269,6 +1272,24 @@ func requireKubernetesConfigMapDataMatchesFile(t *testing.T, name, got, path str
 	}
 	if got != string(want) {
 		t.Fatalf("%s differs from %s", name, path)
+	}
+}
+
+func requireTemporalStartScriptExplicitInputs(t *testing.T, script string) {
+	t.Helper()
+	required := []string{
+		`password="$(read_required_file "Temporal Postgres password" "$password_source")"`,
+		`broadcast_address="$(read_required_file "Temporal broadcast address" "$broadcast_address_source")"`,
+	}
+	for _, want := range required {
+		if !strings.Contains(script, want) {
+			t.Fatalf("temporal-start.sh missing explicit mounted input read: %s", want)
+		}
+	}
+	for _, rejected := range []string{":-", "getent hosts", "$(hostname)"} {
+		if strings.Contains(script, rejected) {
+			t.Fatalf("temporal-start.sh must not derive password or broadcast address with %q", rejected)
+		}
 	}
 }
 
