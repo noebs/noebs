@@ -40,6 +40,7 @@ data:
       grpc_gateway_port: ":9091"
       service_discovery:
         identity-auth: "http://identity-auth:8080"
+        keycloak: "http://keycloak:8080"
         card-vault: "http://card-vault:8080"
         ebs-adapter: "http://ebs-adapter:8080"
         psp-webhook: "http://psp-webhook:8080"

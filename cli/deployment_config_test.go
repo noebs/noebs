@@ -181,6 +181,9 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 	if len(config.Noebs.ServiceDiscovery) == 0 {
 		t.Fatalf("noebs.service_discovery is empty")
 	}
+	if config.Noebs.ServiceDiscovery["keycloak"] == "" {
+		t.Fatalf("noebs.service_discovery must include keycloak")
+	}
 	if len(config.Noebs.GRPCServiceDiscovery) == 0 {
 		t.Fatalf("noebs.grpc_service_discovery is empty")
 	}
@@ -304,6 +307,7 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 
 func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+	config := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
 
 	keycloak, ok := compose.Services["keycloak"]
 	if !ok {
@@ -324,6 +328,13 @@ func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	}
 	requireComposeSecret(t, "keycloak-postgres", keycloakPostgres.Secrets, "keycloak_postgres_password", "keycloak_postgres_password")
 	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_postgres_password", "./deploy/docker/keycloak/postgres-password.txt")
+	if config.Noebs.ServiceDiscovery["keycloak"] == "" {
+		t.Fatalf("config.docker.yaml must include noebs.service_discovery.keycloak")
+	}
+	serviceName, port := parseHTTPDiscoveryEndpoint(t, "keycloak", config.Noebs.ServiceDiscovery["keycloak"])
+	if serviceName != "keycloak" || port != 8080 {
+		t.Fatalf("keycloak service discovery = %s:%d, want keycloak:8080", serviceName, port)
+	}
 }
 
 func TestArgoCDApplicationTargetsCurrentHostOverlay(t *testing.T) {
@@ -491,6 +502,19 @@ func decodeComposeDocument(t *testing.T, path string) composeDocument {
 		t.Fatalf("decode %s: %v", path, err)
 	}
 	return compose
+}
+
+func decodeMountedNoebsConfigFile(t *testing.T, path string) mountedNoebsConfig {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var config mountedNoebsConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	return config
 }
 
 func requireMount(t *testing.T, workload string, container manifestContainer, mountPath, subPath string) {
