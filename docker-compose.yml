@@ -167,39 +167,58 @@ services:
     <<: *service-defaults
     image: postgres:16
     init: true
-    environment:
-      POSTGRES_USER: temporal
-      POSTGRES_DB: temporal
-      POSTGRES_PASSWORD: temporal
+    entrypoint: ["/bin/bash", "/opt/temporal-postgres/bin/start.sh"]
     volumes:
       - temporal-postgres:/var/lib/postgresql/data
+      - ./deploy/docker/temporal/postgres-start.sh:/opt/temporal-postgres/bin/start.sh:ro
+    secrets:
+      - source: temporal_postgres_password
+        target: /opt/temporal-postgres/secrets/password
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 20s
 
-  temporal:
+  temporal-schema-migrate:
     <<: *service-defaults
     image: temporalio/auto-setup:1.29.1
     depends_on:
       temporal-postgres:
         condition: service_healthy
-    environment:
-      DB: postgres12
-      DB_PORT: 5432
-      POSTGRES_USER: temporal
-      POSTGRES_PWD: temporal
-      POSTGRES_SEEDS: temporal-postgres
-      TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_CLI_ADDRESS: temporal:7233
+    entrypoint: ["/bin/bash", "/opt/temporal/bin/schema-migrate.sh"]
+    volumes:
+      - ./deploy/docker/temporal/schema-migrate.sh:/opt/temporal/bin/schema-migrate.sh:ro
+    secrets:
+      - source: temporal_postgres_password
+        target: /opt/temporal/secrets/postgres-password
+    networks:
+      - backend
+    restart: "no"
+
+  temporal:
+    <<: *service-defaults
+    image: temporalio/auto-setup:1.29.1
+    depends_on:
+      temporal-schema-migrate:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/bash", "/opt/temporal/bin/temporal-start.sh"]
+    volumes:
+      - ./deploy/docker/temporal/temporal-start.sh:/opt/temporal/bin/temporal-start.sh:ro
+      - ./deploy/docker/temporal/temporal.yaml:/opt/temporal/config/temporal.yaml:ro
+      - ./deploy/docker/temporal/dynamicconfig.yaml:/opt/temporal/config/dynamicconfig/docker.yaml:ro
+    secrets:
+      - source: temporal_postgres_password
+        target: /opt/temporal/secrets/postgres-password
     ports:
       - "127.0.0.1:7233:7233"
     networks:
-      - backend
+      backend:
+        aliases:
+          - temporal-frontend
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/7233' || exit 1"]
       interval: 10s
@@ -213,10 +232,11 @@ services:
     depends_on:
       temporal:
         condition: service_started
-    environment:
-      TEMPORAL_ADDRESS: temporal:7233
+    entrypoint: ["/home/ui-server/ui-server", "--root", "/home/ui-server", "--config", "config", "start"]
     ports:
       - "127.0.0.1:8233:8080"
+    volumes:
+      - ./deploy/docker/temporal/ui.yaml:/home/ui-server/config/development.yaml:ro
     networks:
       - backend
 
@@ -682,6 +702,8 @@ secrets:
     file: ./deploy/docker/keycloak/keycloak.conf
   keycloak_postgres_password:
     file: ./deploy/docker/keycloak/postgres-password.txt
+  temporal_postgres_password:
+    file: ./deploy/docker/temporal/postgres-password.txt
 
 networks:
   public:

@@ -13,6 +13,353 @@ spec:
       port: 5432
       targetPort: postgres
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-postgres-bootstrap
+  labels:
+    app.kubernetes.io/name: temporal-postgres
+data:
+  start.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    pgdata="/var/lib/postgresql/data"
+    postgres_user="temporal"
+    postgres_db="temporal"
+    visibility_db="temporal_visibility"
+    password_source="/opt/temporal-postgres/secrets/password"
+    password_runtime="/tmp/temporal-postgres-password"
+    pgpass="/var/lib/postgresql/.pgpass"
+
+    cleanup() {
+      rm -f "$password_runtime" "$pgpass"
+    }
+    trap cleanup EXIT
+
+    pgpass_escape() {
+      local value="$1"
+      value="${value//\\/\\\\}"
+      value="${value//:/\\:}"
+      printf '%s' "$value"
+    }
+
+    if [ ! -s "$password_source" ]; then
+      echo "missing Temporal Postgres password file: $password_source" >&2
+      exit 1
+    fi
+
+    install -d -o postgres -g postgres -m 0700 "$pgdata"
+
+    if [ ! -s "$pgdata/PG_VERSION" ]; then
+      password="$(tr -d '\r\n' < "$password_source")"
+      printf '%s\n' "$password" > "$password_runtime"
+      chown postgres:postgres "$password_runtime"
+      chmod 0600 "$password_runtime"
+
+      gosu postgres initdb \
+        -D "$pgdata" \
+        --auth-host=scram-sha-256 \
+        --auth-local=scram-sha-256 \
+        --username="$postgres_user" \
+        --pwfile="$password_runtime"
+
+      {
+        echo
+        echo "host all all all scram-sha-256"
+      } >> "$pgdata/pg_hba.conf"
+
+      printf '/tmp:5432:*:%s:%s\n' "$(pgpass_escape "$postgres_user")" "$(pgpass_escape "$password")" > "$pgpass"
+      chown postgres:postgres "$pgpass"
+      chmod 0600 "$pgpass"
+
+      gosu postgres pg_ctl \
+        -D "$pgdata" \
+        -o "-c listen_addresses='' -c unix_socket_directories=/tmp" \
+        -w start
+      gosu postgres psql \
+        "host=/tmp dbname=postgres user=$postgres_user passfile=$pgpass" \
+        --set=ON_ERROR_STOP=1 \
+        --command="CREATE DATABASE $postgres_db"
+      gosu postgres psql \
+        "host=/tmp dbname=postgres user=$postgres_user passfile=$pgpass" \
+        --set=ON_ERROR_STOP=1 \
+        --command="CREATE DATABASE $visibility_db"
+      gosu postgres pg_ctl -D "$pgdata" -m fast -w stop
+    fi
+
+    exec gosu postgres postgres -D "$pgdata" -c listen_addresses='*'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-config
+  labels:
+    app.kubernetes.io/name: temporal
+data:
+  temporal.yaml: |
+    log:
+      stdout: true
+      level: info
+
+    persistence:
+      numHistoryShards: 4
+      defaultStore: default
+      visibilityStore: visibility
+      datastores:
+        default:
+          sql:
+            pluginName: postgres12
+            databaseName: temporal
+            connectAddr: temporal-postgres:5432
+            connectProtocol: tcp
+            user: temporal
+            password: __DATABASE_PASSWORD_FROM_FILE__
+            maxConns: 20
+            maxIdleConns: 20
+            maxConnLifetime: 1h
+        visibility:
+          sql:
+            pluginName: postgres12
+            databaseName: temporal_visibility
+            connectAddr: temporal-postgres:5432
+            connectProtocol: tcp
+            user: temporal
+            password: __DATABASE_PASSWORD_FROM_FILE__
+            maxConns: 10
+            maxIdleConns: 10
+            maxConnLifetime: 1h
+
+    global:
+      membership:
+        maxJoinDuration: 30s
+        broadcastAddress: __BROADCAST_ADDRESS_FROM_HOSTNAME__
+      pprof:
+        port: 0
+      authorization:
+        permissionsClaimName: permissions
+        authorizer: ""
+        claimMapper: ""
+
+    services:
+      frontend:
+        rpc:
+          grpcPort: 7233
+          membershipPort: 6933
+          bindOnIP: 0.0.0.0
+          httpPort: 7243
+      matching:
+        rpc:
+          grpcPort: 7235
+          membershipPort: 6935
+          bindOnIP: 0.0.0.0
+      history:
+        rpc:
+          grpcPort: 7234
+          membershipPort: 6934
+          bindOnIP: 0.0.0.0
+      worker:
+        rpc:
+          grpcPort: 7239
+          membershipPort: 6939
+          bindOnIP: 0.0.0.0
+
+    clusterMetadata:
+      enableGlobalNamespace: false
+      failoverVersionIncrement: 10
+      masterClusterName: active
+      currentClusterName: active
+      clusterInformation:
+        active:
+          enabled: true
+          initialFailoverVersion: 1
+          rpcName: frontend
+          rpcAddress: 127.0.0.1:7233
+          httpAddress: 127.0.0.1:7243
+
+    dcRedirectionPolicy:
+      policy: noop
+
+    archival:
+      history:
+        state: enabled
+        enableRead: true
+        provider:
+          filestore:
+            fileMode: "0666"
+            dirMode: "0766"
+      visibility:
+        state: enabled
+        enableRead: true
+        provider:
+          filestore:
+            fileMode: "0666"
+            dirMode: "0766"
+
+    namespaceDefaults:
+      archival:
+        history:
+          state: disabled
+          URI: file:///tmp/temporal_archival/development
+        visibility:
+          state: disabled
+          URI: file:///tmp/temporal_vis_archival/development
+
+    dynamicConfigClient:
+      filepath: /opt/temporal/config/dynamicconfig/docker.yaml
+      pollInterval: 60s
+  temporal-start.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    password_source="/opt/temporal/secrets/postgres-password"
+    template_source="/opt/temporal/config/temporal.yaml"
+    runtime_root="/tmp/temporal"
+    runtime_config_dir="$runtime_root/config"
+    runtime_config="$runtime_config_dir/development.yaml"
+
+    sed_escape() {
+      local value="$1"
+      value="${value//\\/\\\\}"
+      value="${value//&/\\&}"
+      value="${value//|/\\|}"
+      printf '%s' "$value"
+    }
+
+    if [ ! -s "$password_source" ]; then
+      echo "missing Temporal Postgres password file: $password_source" >&2
+      exit 1
+    fi
+    if [ ! -s "$template_source" ]; then
+      echo "missing Temporal config template: $template_source" >&2
+      exit 1
+    fi
+
+    install -d -m 0700 "$runtime_config_dir"
+    password="$(sed_escape "$(tr -d '\r\n' < "$password_source")")"
+    broadcast_address="$(getent hosts "$(hostname)" | awk 'NR == 1 { print $1 }')"
+    if [ -z "$broadcast_address" ]; then
+      echo "unable to resolve Temporal broadcast address for hostname: $(hostname)" >&2
+      exit 1
+    fi
+    broadcast_address="$(sed_escape "$broadcast_address")"
+    sed \
+      -e "s|__DATABASE_PASSWORD_FROM_FILE__|$password|g" \
+      -e "s|__BROADCAST_ADDRESS_FROM_HOSTNAME__|$broadcast_address|g" \
+      "$template_source" > "$runtime_config"
+    chmod 0600 "$runtime_config"
+
+    exec temporal-server --root "$runtime_root" --config config --allow-no-auth start
+  schema-migrate.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    password_source="/opt/temporal/secrets/postgres-password"
+    postgres_host="temporal-postgres"
+    postgres_port="5432"
+    postgres_user="temporal"
+    temporal_db="temporal"
+    visibility_db="temporal_visibility"
+    schema_root="/etc/temporal/schema/postgresql/v12"
+
+    if [ ! -s "$password_source" ]; then
+      echo "missing Temporal Postgres password file: $password_source" >&2
+      exit 1
+    fi
+
+    password="$(tr -d '\r\n' < "$password_source")"
+
+    until nc -z "$postgres_host" "$postgres_port"; do
+      echo "waiting for Temporal Postgres at $postgres_host:$postgres_port"
+      sleep 1
+    done
+
+    temporal-sql-tool \
+      --plugin postgres12 \
+      --endpoint "$postgres_host" \
+      --port "$postgres_port" \
+      --user "$postgres_user" \
+      --password "$password" \
+      --database "$temporal_db" \
+      setup-schema -v 0.0
+    temporal-sql-tool \
+      --plugin postgres12 \
+      --endpoint "$postgres_host" \
+      --port "$postgres_port" \
+      --user "$postgres_user" \
+      --password "$password" \
+      --database "$temporal_db" \
+      update-schema -d "$schema_root/temporal/versioned"
+
+    temporal-sql-tool \
+      --plugin postgres12 \
+      --endpoint "$postgres_host" \
+      --port "$postgres_port" \
+      --user "$postgres_user" \
+      --password "$password" \
+      --database "$visibility_db" \
+      setup-schema -v 0.0
+    temporal-sql-tool \
+      --plugin postgres12 \
+      --endpoint "$postgres_host" \
+      --port "$postgres_port" \
+      --user "$postgres_user" \
+      --password "$password" \
+      --database "$visibility_db" \
+      update-schema -d "$schema_root/visibility/versioned"
+  dynamicconfig.yaml: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: temporal-ui-config
+  labels:
+    app.kubernetes.io/name: temporal-ui
+data:
+  development.yaml: |
+    temporalGrpcAddress: temporal-frontend:7233
+    port: 8080
+    publicPath: ""
+    enableUi: true
+    bannerText: ""
+    cloudUi: false
+    defaultNamespace: default
+    feedbackUrl: ""
+    notifyOnNewVersion: false
+    refreshInterval: 0s
+    showTemporalSystemNamespace: false
+    disableWriteActions: false
+    workflowTerminateDisabled: false
+    workflowCancelDisabled: false
+    workflowSignalDisabled: false
+    workflowResetDisabled: false
+    batchActionsDisabled: false
+    startWorkflowDisabled: false
+    hideWorkflowQueryErrors: false
+    refreshWorkflowCountsDisabled: false
+    cors:
+      cookieInsecure: false
+      allowOrigins:
+        - http://localhost:8080
+    tls:
+      caFile: ""
+      certFile: ""
+      keyFile: ""
+      caData: ""
+      certData: ""
+      keyData: ""
+      enableHostVerification: false
+      serverName: ""
+    auth:
+      enabled: false
+      providers: []
+    codec:
+      endpoint: ""
+      passAccessToken: false
+      includeCredentials: false
+    forwardHeaders: []
+    hideLogs: false
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -36,16 +383,9 @@ spec:
         - name: postgres
           image: postgres:16
           imagePullPolicy: IfNotPresent
-          env:
-            - name: POSTGRES_USER
-              value: temporal
-            - name: POSTGRES_DB
-              value: temporal
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: temporal-postgres-credentials
-                  key: password
+          command:
+            - /bin/bash
+            - /opt/temporal-postgres/bin/start.sh
           ports:
             - name: postgres
               containerPort: 5432
@@ -70,8 +410,24 @@ spec:
             periodSeconds: 30
             failureThreshold: 3
           volumeMounts:
+            - name: temporal-postgres-bootstrap
+              mountPath: /opt/temporal-postgres/bin/start.sh
+              subPath: start.sh
+              readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal-postgres/secrets/password
+              subPath: password
+              readOnly: true
             - name: temporal-postgres-data
               mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: temporal-postgres-bootstrap
+          configMap:
+            name: temporal-postgres-bootstrap
+            defaultMode: 0555
+        - name: temporal-postgres-credentials
+          secret:
+            secretName: temporal-postgres-credentials
   volumeClaimTemplates:
     - metadata:
         name: temporal-postgres-data
@@ -81,6 +437,52 @@ spec:
         resources:
           requests:
             storage: 20Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-schema-migrate
+  labels:
+    app.kubernetes.io/name: temporal-schema-migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temporal-schema-migrate
+    spec:
+      serviceAccountName: temporal-schema-migrate
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: temporal-schema-migrate
+          image: temporalio/auto-setup:1.29.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /opt/temporal/bin/schema-migrate.sh
+          volumeMounts:
+            - name: temporal-config
+              mountPath: /opt/temporal/bin/schema-migrate.sh
+              subPath: schema-migrate.sh
+              readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal/secrets/postgres-password
+              subPath: password
+              readOnly: true
+      volumes:
+        - name: temporal-config
+          configMap:
+            name: temporal-config
+            defaultMode: 0555
+        - name: temporal-postgres-credentials
+          secret:
+            secretName: temporal-postgres-credentials
 ---
 apiVersion: v1
 kind: Service
@@ -103,6 +505,8 @@ metadata:
   name: temporal
   labels:
     app.kubernetes.io/name: temporal
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
 spec:
   replicas: 1
   selector:
@@ -119,24 +523,9 @@ spec:
         - name: temporal
           image: temporalio/auto-setup:1.29.1
           imagePullPolicy: IfNotPresent
-          env:
-            - name: DB
-              value: postgres12
-            - name: DB_PORT
-              value: "5432"
-            - name: POSTGRES_USER
-              value: temporal
-            - name: POSTGRES_PWD
-              valueFrom:
-                secretKeyRef:
-                  name: temporal-postgres-credentials
-                  key: password
-            - name: POSTGRES_SEEDS
-              value: temporal-postgres
-            - name: TEMPORAL_ADDRESS
-              value: temporal-frontend:7233
-            - name: TEMPORAL_CLI_ADDRESS
-              value: temporal-frontend:7233
+          command:
+            - /bin/bash
+            - /opt/temporal/bin/temporal-start.sh
           ports:
             - name: grpc
               containerPort: 7233
@@ -150,6 +539,31 @@ spec:
               port: grpc
             periodSeconds: 30
             failureThreshold: 3
+          volumeMounts:
+            - name: temporal-config
+              mountPath: /opt/temporal/bin/temporal-start.sh
+              subPath: temporal-start.sh
+              readOnly: true
+            - name: temporal-config
+              mountPath: /opt/temporal/config/temporal.yaml
+              subPath: temporal.yaml
+              readOnly: true
+            - name: temporal-config
+              mountPath: /opt/temporal/config/dynamicconfig/docker.yaml
+              subPath: dynamicconfig.yaml
+              readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal/secrets/postgres-password
+              subPath: password
+              readOnly: true
+      volumes:
+        - name: temporal-config
+          configMap:
+            name: temporal-config
+            defaultMode: 0555
+        - name: temporal-postgres-credentials
+          secret:
+            secretName: temporal-postgres-credentials
 ---
 apiVersion: v1
 kind: Service
@@ -172,6 +586,8 @@ metadata:
   name: temporal-ui
   labels:
     app.kubernetes.io/name: temporal-ui
+  annotations:
+    argocd.argoproj.io/sync-wave: "16"
 spec:
   replicas: 1
   selector:
@@ -188,9 +604,23 @@ spec:
         - name: temporal-ui
           image: temporalio/ui:2.34.0
           imagePullPolicy: IfNotPresent
-          env:
-            - name: TEMPORAL_ADDRESS
-              value: temporal-frontend:7233
+          command:
+            - /home/ui-server/ui-server
+          args:
+            - --root
+            - /home/ui-server
+            - --config
+            - config
+            - start
           ports:
             - name: http
               containerPort: 8080
+          volumeMounts:
+            - name: temporal-ui-config
+              mountPath: /home/ui-server/config/development.yaml
+              subPath: development.yaml
+              readOnly: true
+      volumes:
+        - name: temporal-ui-config
+          configMap:
+            name: temporal-ui-config

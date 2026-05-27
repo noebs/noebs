@@ -474,6 +474,144 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 	}
 }
 
+func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+
+	var foundPostgres bool
+	var foundSchemaJob bool
+	var foundTemporal bool
+	var foundTemporalUI bool
+	var postgresBootstrap string
+	var temporalConfig map[string]string
+	var temporalUIConfig string
+
+	for _, object := range objects {
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "temporal-postgres-bootstrap" {
+			postgresBootstrap = object.Data["start.sh"]
+		}
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "temporal-config" {
+			temporalConfig = object.Data
+		}
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "temporal-ui-config" {
+			temporalUIConfig = object.Data["development.yaml"]
+		}
+
+		switch {
+		case object.Kind == "StatefulSet" && object.Metadata.Name == "temporal-postgres":
+			foundPostgres = true
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("temporal-postgres containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if container.Image != "postgres:16" {
+				t.Fatalf("temporal-postgres image = %q, want postgres:16", container.Image)
+			}
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("temporal-postgres must use mounted bootstrap files instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/opt/temporal-postgres/bin/start.sh") {
+				t.Fatalf("temporal-postgres command = %v, want mounted start.sh", container.Command)
+			}
+			requireMount(t, "temporal-postgres", container, "/opt/temporal-postgres/bin/start.sh", "start.sh")
+			requireMount(t, "temporal-postgres", container, "/opt/temporal-postgres/secrets/password", "password")
+		case object.Kind == "Job" && object.Metadata.Name == "temporal-schema-migrate":
+			foundSchemaJob = true
+			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "Sync" {
+				t.Fatalf("temporal-schema-migrate hook = %q, want Sync", object.Metadata.Annotations["argocd.argoproj.io/hook"])
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "5" {
+				t.Fatalf("temporal-schema-migrate sync-wave = %q, want 5", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if object.Spec.Template.Spec.ServiceAccountName != "temporal-schema-migrate" {
+				t.Fatalf("temporal-schema-migrate serviceAccountName = %q", object.Spec.Template.Spec.ServiceAccountName)
+			}
+			if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+				t.Fatalf("temporal-schema-migrate must disable service account token automount")
+			}
+			if object.Spec.Template.Spec.RestartPolicy != "Never" {
+				t.Fatalf("temporal-schema-migrate restartPolicy = %q, want Never", object.Spec.Template.Spec.RestartPolicy)
+			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("temporal-schema-migrate containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if container.Image != "temporalio/auto-setup:1.29.1" {
+				t.Fatalf("temporal-schema-migrate image = %q", container.Image)
+			}
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("temporal-schema-migrate must use mounted config/secrets instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/opt/temporal/bin/schema-migrate.sh") {
+				t.Fatalf("temporal-schema-migrate command = %v, want mounted schema migration script", container.Command)
+			}
+			requireMount(t, "temporal-schema-migrate", container, "/opt/temporal/bin/schema-migrate.sh", "schema-migrate.sh")
+			requireMount(t, "temporal-schema-migrate", container, "/opt/temporal/secrets/postgres-password", "password")
+		case object.Kind == "Deployment" && object.Metadata.Name == "temporal":
+			foundTemporal = true
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "15" {
+				t.Fatalf("temporal sync-wave = %q, want 15", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("temporal containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if container.Image != "temporalio/auto-setup:1.29.1" {
+				t.Fatalf("temporal image = %q", container.Image)
+			}
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("temporal must use mounted config/secrets instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/opt/temporal/bin/temporal-start.sh") {
+				t.Fatalf("temporal command = %v, want mounted start script", container.Command)
+			}
+			requireMount(t, "temporal", container, "/opt/temporal/bin/temporal-start.sh", "temporal-start.sh")
+			requireMount(t, "temporal", container, "/opt/temporal/config/temporal.yaml", "temporal.yaml")
+			requireMount(t, "temporal", container, "/opt/temporal/config/dynamicconfig/docker.yaml", "dynamicconfig.yaml")
+			requireMount(t, "temporal", container, "/opt/temporal/secrets/postgres-password", "password")
+		case object.Kind == "Deployment" && object.Metadata.Name == "temporal-ui":
+			foundTemporalUI = true
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "16" {
+				t.Fatalf("temporal-ui sync-wave = %q, want 16", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("temporal-ui containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if container.Image != "temporalio/ui:2.34.0" {
+				t.Fatalf("temporal-ui image = %q", container.Image)
+			}
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("temporal-ui must use mounted config instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/home/ui-server/ui-server") || !containsString(container.Args, "start") {
+				t.Fatalf("temporal-ui command/args = %v %v, want ui-server start", container.Command, container.Args)
+			}
+			requireMount(t, "temporal-ui", container, "/home/ui-server/config/development.yaml", "development.yaml")
+		}
+	}
+
+	if !foundPostgres {
+		t.Fatalf("temporal-postgres StatefulSet not found")
+	}
+	if !foundSchemaJob {
+		t.Fatalf("temporal-schema-migrate Job not found")
+	}
+	if !foundTemporal {
+		t.Fatalf("temporal Deployment not found")
+	}
+	if !foundTemporalUI {
+		t.Fatalf("temporal-ui Deployment not found")
+	}
+	requireKubernetesConfigMapDataMatchesFile(t, "temporal-postgres-bootstrap start.sh", postgresBootstrap, filepath.Join("..", "deploy", "docker", "temporal", "postgres-start.sh"))
+	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal.yaml", temporalConfig["temporal.yaml"], filepath.Join("..", "deploy", "docker", "temporal", "temporal.yaml"))
+	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal-start.sh", temporalConfig["temporal-start.sh"], filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
+	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config schema-migrate.sh", temporalConfig["schema-migrate.sh"], filepath.Join("..", "deploy", "docker", "temporal", "schema-migrate.sh"))
+	if _, ok := temporalConfig["dynamicconfig.yaml"]; !ok {
+		t.Fatalf("temporal-config missing dynamicconfig.yaml")
+	}
+	requireKubernetesConfigMapDataMatchesFile(t, "temporal-ui-config development.yaml", temporalUIConfig, filepath.Join("..", "deploy", "docker", "temporal", "ui.yaml"))
+}
+
 func TestCurrentHostIngressTargetsOnlyAPIGateway(t *testing.T) {
 	objects := decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "ingress.yaml"))
 
@@ -572,6 +710,76 @@ func TestNoebsPostgresDockerComposeUsesMountedBootstrapFiles(t *testing.T) {
 	if config.Noebs.RenderDBPasswordFile != "/app/runtime/password" {
 		t.Fatalf("config.docker.yaml render_db_password_file = %q, want /app/runtime/password", config.Noebs.RenderDBPasswordFile)
 	}
+}
+
+func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
+	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+
+	temporalPostgres, ok := compose.Services["temporal-postgres"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing temporal-postgres service")
+	}
+	if temporalPostgres.Environment != nil {
+		t.Fatalf("temporal-postgres defines environment; Temporal database bootstrap must be file-mounted")
+	}
+	if temporalPostgres.EnvFile != nil {
+		t.Fatalf("temporal-postgres defines env_file; Temporal database bootstrap must be file-mounted")
+	}
+	if !containsString(temporalPostgres.Entrypoint, "/opt/temporal-postgres/bin/start.sh") {
+		t.Fatalf("temporal-postgres entrypoint = %v, want mounted start.sh", temporalPostgres.Entrypoint)
+	}
+	requireComposeVolume(t, "temporal-postgres", temporalPostgres.Volumes, "./deploy/docker/temporal/postgres-start.sh", "/opt/temporal-postgres/bin/start.sh")
+	requireComposeSecret(t, "temporal-postgres", temporalPostgres.Secrets, "temporal_postgres_password", "/opt/temporal-postgres/secrets/password")
+
+	temporalSchemaMigrate, ok := compose.Services["temporal-schema-migrate"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing temporal-schema-migrate service")
+	}
+	if temporalSchemaMigrate.Environment != nil {
+		t.Fatalf("temporal-schema-migrate defines environment; Temporal migration must use mounted config/secrets")
+	}
+	if temporalSchemaMigrate.EnvFile != nil {
+		t.Fatalf("temporal-schema-migrate defines env_file; Temporal migration must use mounted config/secrets")
+	}
+	if !containsString(temporalSchemaMigrate.Entrypoint, "/opt/temporal/bin/schema-migrate.sh") {
+		t.Fatalf("temporal-schema-migrate entrypoint = %v, want mounted schema migration script", temporalSchemaMigrate.Entrypoint)
+	}
+	requireComposeVolume(t, "temporal-schema-migrate", temporalSchemaMigrate.Volumes, "./deploy/docker/temporal/schema-migrate.sh", "/opt/temporal/bin/schema-migrate.sh")
+	requireComposeSecret(t, "temporal-schema-migrate", temporalSchemaMigrate.Secrets, "temporal_postgres_password", "/opt/temporal/secrets/postgres-password")
+
+	temporal, ok := compose.Services["temporal"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing temporal service")
+	}
+	if temporal.Environment != nil {
+		t.Fatalf("temporal defines environment; Temporal config must be file-mounted")
+	}
+	if temporal.EnvFile != nil {
+		t.Fatalf("temporal defines env_file; Temporal config must be file-mounted")
+	}
+	if !containsString(temporal.Entrypoint, "/opt/temporal/bin/temporal-start.sh") {
+		t.Fatalf("temporal entrypoint = %v, want mounted start script", temporal.Entrypoint)
+	}
+	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/temporal-start.sh", "/opt/temporal/bin/temporal-start.sh")
+	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/temporal.yaml", "/opt/temporal/config/temporal.yaml")
+	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/dynamicconfig.yaml", "/opt/temporal/config/dynamicconfig/docker.yaml")
+	requireComposeSecret(t, "temporal", temporal.Secrets, "temporal_postgres_password", "/opt/temporal/secrets/postgres-password")
+
+	temporalUI, ok := compose.Services["temporal-ui"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing temporal-ui service")
+	}
+	if temporalUI.Environment != nil {
+		t.Fatalf("temporal-ui defines environment; Temporal UI config must be file-mounted")
+	}
+	if temporalUI.EnvFile != nil {
+		t.Fatalf("temporal-ui defines env_file; Temporal UI config must be file-mounted")
+	}
+	if !containsString(temporalUI.Entrypoint, "/home/ui-server/ui-server") || !containsString(temporalUI.Entrypoint, "start") {
+		t.Fatalf("temporal-ui entrypoint = %v, want ui-server start", temporalUI.Entrypoint)
+	}
+	requireComposeVolume(t, "temporal-ui", temporalUI.Volumes, "./deploy/docker/temporal/ui.yaml", "/home/ui-server/config/development.yaml")
+	requireComposeTopLevelSecret(t, compose.Secrets, "temporal_postgres_password", "./deploy/docker/temporal/postgres-password.txt")
 }
 
 func TestCaddyEdgeProxyTargetsOnlyAPIGateway(t *testing.T) {
@@ -765,6 +973,9 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 				t.Fatalf("%s runtime must not be an Argo hook", object.Metadata.Name)
 			}
 		case "Job":
+			if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
+				continue
+			}
 			if _, ok := expectedJobs[object.Metadata.Name]; !ok {
 				t.Fatalf("unexpected migration Job %q", object.Metadata.Name)
 			}
@@ -898,10 +1109,10 @@ func expectedServiceAccountForWorkload(t *testing.T, object manifestObject) stri
 	if object.Kind != "Job" {
 		return object.Metadata.Name
 	}
-	if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
-		t.Fatalf("Job %s must use the noebs- prefix for service account ownership", object.Metadata.Name)
+	if strings.HasPrefix(object.Metadata.Name, "noebs-") {
+		return strings.TrimPrefix(object.Metadata.Name, "noebs-")
 	}
-	return strings.TrimPrefix(object.Metadata.Name, "noebs-")
+	return object.Metadata.Name
 }
 
 func requireMount(t *testing.T, workload string, container manifestContainer, mountPath, subPath string) {
@@ -956,6 +1167,20 @@ func parseHostPortDiscoveryEndpoint(t *testing.T, role, endpoint string) (string
 		t.Fatalf("grpc_service_discovery.%s port = %q: %v", role, portText, err)
 	}
 	return host, port
+}
+
+func requireKubernetesConfigMapDataMatchesFile(t *testing.T, name, got, path string) {
+	t.Helper()
+	if got == "" {
+		t.Fatalf("%s ConfigMap data is empty", name)
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if got != string(want) {
+		t.Fatalf("%s differs from %s", name, path)
+	}
 }
 
 func requireKubernetesServicePort(t *testing.T, services map[string]map[int]bool, serviceName string, port int) {
