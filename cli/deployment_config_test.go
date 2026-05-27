@@ -52,6 +52,7 @@ type manifestObject struct {
 				RestartPolicy                string              `yaml:"restartPolicy"`
 				Containers                   []manifestContainer `yaml:"containers"`
 				InitContainers               []manifestContainer `yaml:"initContainers"`
+				Volumes                      []manifestVolume    `yaml:"volumes"`
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
@@ -94,6 +95,22 @@ type manifestContainer struct {
 type manifestMount struct {
 	MountPath string `yaml:"mountPath"`
 	SubPath   string `yaml:"subPath"`
+}
+
+type manifestVolume struct {
+	Name        string               `yaml:"name"`
+	DownwardAPI *manifestDownwardAPI `yaml:"downwardAPI"`
+}
+
+type manifestDownwardAPI struct {
+	Items []manifestDownwardAPIItem `yaml:"items"`
+}
+
+type manifestDownwardAPIItem struct {
+	Path     string `yaml:"path"`
+	FieldRef struct {
+		FieldPath string `yaml:"fieldPath"`
+	} `yaml:"fieldRef"`
 }
 
 type composeDocument struct {
@@ -568,6 +585,8 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 			requireMount(t, "temporal", container, "/opt/temporal/config/temporal.yaml", "temporal.yaml")
 			requireMount(t, "temporal", container, "/opt/temporal/config/dynamicconfig/docker.yaml", "dynamicconfig.yaml")
 			requireMount(t, "temporal", container, "/opt/temporal/secrets/postgres-password", "password")
+			requireMount(t, "temporal", container, "/opt/temporal/runtime/broadcast-address", "broadcast-address")
+			requireDownwardAPIField(t, "temporal", object.Spec.Template.Spec.Volumes, "temporal-runtime", "broadcast-address", "status.podIP")
 		case object.Kind == "Deployment" && object.Metadata.Name == "temporal-ui":
 			foundTemporalUI = true
 			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "16" {
@@ -605,6 +624,9 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-postgres-bootstrap start.sh", postgresBootstrap, filepath.Join("..", "deploy", "docker", "temporal", "postgres-start.sh"))
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal.yaml", temporalConfig["temporal.yaml"], filepath.Join("..", "deploy", "docker", "temporal", "temporal.yaml"))
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal-start.sh", temporalConfig["temporal-start.sh"], filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
+	if strings.Contains(temporalConfig["temporal-start.sh"], "getent hosts") || strings.Contains(temporalConfig["temporal-start.sh"], "$(hostname)") {
+		t.Fatalf("temporal-start.sh must read the broadcast address from a mounted file, not derive it from hostname DNS")
+	}
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config schema-migrate.sh", temporalConfig["schema-migrate.sh"], filepath.Join("..", "deploy", "docker", "temporal", "schema-migrate.sh"))
 	if _, ok := temporalConfig["dynamicconfig.yaml"]; !ok {
 		t.Fatalf("temporal-config missing dynamicconfig.yaml")
@@ -763,6 +785,7 @@ func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/temporal-start.sh", "/opt/temporal/bin/temporal-start.sh")
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/temporal.yaml", "/opt/temporal/config/temporal.yaml")
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/dynamicconfig.yaml", "/opt/temporal/config/dynamicconfig/docker.yaml")
+	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/broadcast-address.txt", "/opt/temporal/runtime/broadcast-address")
 	requireComposeSecret(t, "temporal", temporal.Secrets, "temporal_postgres_password", "/opt/temporal/secrets/postgres-password")
 
 	temporalUI, ok := compose.Services["temporal-ui"]
@@ -1127,6 +1150,25 @@ func requireMount(t *testing.T, workload string, container manifestContainer, mo
 		return
 	}
 	t.Fatalf("%s/%s missing mount %s", workload, container.Name, mountPath)
+}
+
+func requireDownwardAPIField(t *testing.T, workload string, volumes []manifestVolume, volumeName, path, fieldPath string) {
+	t.Helper()
+	for _, volume := range volumes {
+		if volume.Name != volumeName {
+			continue
+		}
+		if volume.DownwardAPI == nil {
+			t.Fatalf("%s volume %s is not a downwardAPI volume", workload, volumeName)
+		}
+		for _, item := range volume.DownwardAPI.Items {
+			if item.Path == path && item.FieldRef.FieldPath == fieldPath {
+				return
+			}
+		}
+		t.Fatalf("%s downwardAPI volume %s missing %s from %s", workload, volumeName, path, fieldPath)
+	}
+	t.Fatalf("%s missing volume %s", workload, volumeName)
 }
 
 func parseHTTPDiscoveryEndpoint(t *testing.T, role, endpoint string) (string, int) {

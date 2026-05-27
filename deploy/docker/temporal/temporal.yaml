@@ -33,7 +33,7 @@ persistence:
 global:
   membership:
     maxJoinDuration: 30s
-    broadcastAddress: __BROADCAST_ADDRESS_FROM_HOSTNAME__
+    broadcastAddress: __BROADCAST_ADDRESS_FROM_FILE__
   pprof:
     port: 0
   authorization:
