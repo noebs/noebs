@@ -79,14 +79,13 @@ func loadConfig() ([]byte, error) {
 
 	secretsMap := map[string]interface{}{}
 	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml", "../secrets.yaml")
+	if isTestRun() {
+		secretsPath = firstExistingPath("./secrets.yaml")
+	}
 	if secretsPath != "" {
 		decrypted, err := decryptSopsFile(secretsPath, firstString(getMap(configMap, "noebs"), "sops_age_key_file"))
 		if err != nil {
-			if isTestRun() {
-				logrusLogger.Printf("Skipping secrets (%s): %v", secretsPath, err)
-			} else {
-				return nil, err
-			}
+			return nil, err
 		} else if err := yaml.Unmarshal(decrypted, &secretsMap); err != nil {
 			return nil, fmt.Errorf("parse secrets yaml: %w", err)
 		} else {
