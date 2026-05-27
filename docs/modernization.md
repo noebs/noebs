@@ -36,7 +36,7 @@ Date started: 2026-01-24
 ## Progress Log
 - 2026-01-24: Created tracking doc; started adding tests and redis test harness.
 - 2026-01-24: Added manual SQL store + migrations, tenant-aware queries, postgres-compose setup, and removed Redis/GORM from runtime paths (tests updated or tagged legacy where needed).
-- 2026-01-24: Switched runtime config loading to merge config.yaml + secrets.yaml (SOPS), removed env overrides and .secrets.json dependency, and added docker-specific config for Postgres compose.
+- 2026-01-24: Switched runtime config loading to merge mounted config.yaml + secrets.yaml (SOPS), removed env overrides and .secrets.json dependency, and added docker-specific config for Postgres compose.
 - 2026-01-24: Replaced custom migrator with goose (embedded SQL + Go migrations) and added a backfill migration to ensure tenant_id columns and legacy push_data/transaction fields are migrated.
 - 2026-01-24: Removed GORM dependencies entirely (legacy GORM tests deleted; manual SQL is the only persistence path).
 - 2026-01-24: Introduced typed app errors and standardized JSON error responses in fiber helpers.

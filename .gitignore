@@ -24,13 +24,13 @@ litestream.yml
 # SOPS/age secrets - NEVER commit these
 .sops/age-key.txt
 secrets.yaml.bak
-
-# Keep secrets.yaml in git (it's encrypted), but not decrypted versions
 secrets.decrypted.yaml
 
-# No root runtime config contract. Runtime config is mounted from Docker Compose
-# or Kubernetes ConfigMaps with a separate service role file.
+# No root runtime config or secret contract. Runtime config/secrets are mounted
+# from Docker Compose service files or Kubernetes ConfigMaps/Secrets with a
+# separate service role file.
 /config.yaml
+/secrets.yaml
 
 # Local Docker Compose runtime secrets/config. Kubernetes uses Secrets instead.
 /deploy/docker/keycloak/keycloak.conf

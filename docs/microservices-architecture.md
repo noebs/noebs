@@ -132,7 +132,7 @@ Kubernetes provides service discovery through ClusterIP services:
 - noebs service-owned Postgres databases, addressed through each service's mounted `secrets.yaml`.
 - Keycloak's Postgres database, addressed through the mounted `keycloak.conf` secret.
 
-Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. The public Ingress only targets `api-gateway`; `api-gateway` proxies public compatibility routes to the ClusterIP service catalog. OpenTofu under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
+Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. The public Ingress only targets `api-gateway`; `api-gateway` proxies public compatibility routes to the ClusterIP service catalog. OpenTofu under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Runtime secrets remain outside Git as service-owned SOPS material rendered into Kubernetes Secrets.
 
 Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as Argo CD `Sync` hooks at sync wave 10, before Noebs runtime Deployments at sync wave 20. Each job has a service-specific role and runs only that service's embedded migration scope. Service Deployments must not run migrations in their startup path.
 

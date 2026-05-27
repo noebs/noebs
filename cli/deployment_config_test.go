@@ -259,20 +259,26 @@ func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestRepositoryDoesNotCarryRootRuntimeConfig(t *testing.T) {
-	output, err := exec.Command("git", "-C", "..", "ls-files", "--", "config.yaml").CombinedOutput()
+func TestRepositoryDoesNotCarryRootRuntimeConfigOrSecrets(t *testing.T) {
+	rootRuntimeFiles := []string{"config.yaml", "secrets.yaml"}
+	args := append([]string{"-C", "..", "ls-files", "--"}, rootRuntimeFiles...)
+	output, err := exec.Command("git", args...).CombinedOutput()
 	if err != nil {
-		t.Fatalf("git ls-files root config.yaml: %v\n%s", err, output)
+		t.Fatalf("git ls-files root runtime files: %v\n%s", err, output)
 	}
 	if tracked := strings.TrimSpace(string(output)); tracked != "" {
-		t.Fatalf("root config.yaml must not be a tracked runtime contract:\n%s", tracked)
+		t.Fatalf("root runtime config/secrets must not be tracked contracts:\n%s", tracked)
 	}
 	gitignore, err := os.ReadFile(filepath.Join("..", ".gitignore"))
 	if err != nil {
 		t.Fatalf("read .gitignore: %v", err)
 	}
-	if !strings.Contains(string(gitignore), "/config.yaml") {
-		t.Fatalf(".gitignore must reject local root config.yaml")
+	gitignoreText := string(gitignore)
+	for _, path := range rootRuntimeFiles {
+		pattern := "/" + path
+		if !strings.Contains(gitignoreText, pattern) {
+			t.Fatalf(".gitignore must reject local root runtime file %s", pattern)
+		}
 	}
 	readme, err := os.ReadFile(filepath.Join("..", "README.md"))
 	if err != nil {
@@ -284,6 +290,7 @@ func TestRepositoryDoesNotCarryRootRuntimeConfig(t *testing.T) {
 		"production ready server",
 		"Using `go get` method",
 		"Sample for secrets.yaml",
+		"root `secrets.yaml`",
 	} {
 		if strings.Contains(readmeText, rejected) {
 			t.Fatalf("README.md carries legacy single-binary/root-secret guidance %q", rejected)
