@@ -18,12 +18,6 @@ import (
 	"github.com/adonese/noebs/wallet/psp"
 )
 
-const (
-	verifyDepositPath = "/deposits/verify"
-	payoutPath        = "/payouts"
-	statusPath        = "/transactions/"
-)
-
 type Provider struct {
 	config *psp.Config
 	client *http.Client
@@ -32,6 +26,9 @@ type Provider struct {
 func NewProvider(cfg *psp.Config) (*Provider, error) {
 	if cfg == nil || cfg.APIBaseURL == "" || cfg.ProviderCode == "" {
 		return nil, psp.ErrPSPConfigInvalid
+	}
+	if err := validateRequestRoutes(cfg); err != nil {
+		return nil, err
 	}
 	return &Provider{
 		config: cfg,
@@ -57,8 +54,8 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 	canonical := map[string]any{"transaction_id": txID}
 	payload := psp.MapRequest(canonical, p.config.DepositRequestMapping)
 	resp := map[string]any{}
-	method := methodOrDefault(p.config.DepositRequestMethod, http.MethodPost)
-	path := renderRequestPath(pathOrDefault(p.config.DepositRequestPath, verifyDepositPath), canonical)
+	method := normalizeMethod(p.config.DepositRequestMethod)
+	path := renderRequestPath(strings.TrimSpace(p.config.DepositRequestPath), canonical)
 	path = appendQueryForMethod(method, path, payload)
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
@@ -87,8 +84,8 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 	payload := psp.MapRequest(canonical, p.config.PayoutRequestMapping)
 	resp := map[string]any{}
 	idempotencyKey := req.ClientReference
-	method := methodOrDefault(p.config.PayoutRequestMethod, http.MethodPost)
-	path := renderRequestPath(pathOrDefault(p.config.PayoutRequestPath, payoutPath), canonical)
+	method := normalizeMethod(p.config.PayoutRequestMethod)
+	path := renderRequestPath(strings.TrimSpace(p.config.PayoutRequestPath), canonical)
 	path = appendQueryForMethod(method, path, payload)
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), idempotencyKey, &resp); err != nil {
 		return nil, err
@@ -108,8 +105,8 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	resp := map[string]any{}
 	canonical := map[string]any{"transaction_id": txID}
 	payload := psp.MapRequest(canonical, p.config.StatusRequestMapping)
-	method := methodOrDefault(p.config.StatusRequestMethod, http.MethodGet)
-	path := renderRequestPath(pathOrDefault(p.config.StatusRequestPath, statusPath+"{transaction_id}"), canonical)
+	method := normalizeMethod(p.config.StatusRequestMethod)
+	path := renderRequestPath(strings.TrimSpace(p.config.StatusRequestPath), canonical)
 	path = appendQueryForMethod(method, path, payload)
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
@@ -124,27 +121,28 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	}, nil
 }
 
-func methodOrDefault(method, fallback string) string {
-	method = strings.ToUpper(strings.TrimSpace(method))
-	if method == "" {
-		return fallback
+func validateRequestRoutes(cfg *psp.Config) error {
+	if strings.TrimSpace(cfg.DepositRequestMethod) == "" || strings.TrimSpace(cfg.DepositRequestPath) == "" {
+		return psp.ErrPSPConfigInvalid
 	}
-	return method
+	if strings.TrimSpace(cfg.PayoutRequestMethod) == "" || strings.TrimSpace(cfg.PayoutRequestPath) == "" {
+		return psp.ErrPSPConfigInvalid
+	}
+	if strings.TrimSpace(cfg.StatusRequestMethod) == "" || strings.TrimSpace(cfg.StatusRequestPath) == "" {
+		return psp.ErrPSPConfigInvalid
+	}
+	return nil
 }
 
-func pathOrDefault(path, fallback string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return fallback
-	}
-	return path
+func normalizeMethod(method string) string {
+	return strings.ToUpper(strings.TrimSpace(method))
 }
 
 func payloadForMethod(method string, payload map[string]any) any {
 	if len(payload) == 0 {
 		return nil
 	}
-	switch methodOrDefault(method, http.MethodGet) {
+	switch normalizeMethod(method) {
 	case http.MethodGet, http.MethodHead:
 		return nil
 	default:
@@ -156,7 +154,7 @@ func appendQueryForMethod(method, path string, payload map[string]any) string {
 	if len(payload) == 0 {
 		return path
 	}
-	switch methodOrDefault(method, http.MethodGet) {
+	switch normalizeMethod(method) {
 	case http.MethodGet, http.MethodHead:
 	default:
 		return path

@@ -1,10 +1,36 @@
 package httpjson
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"testing"
+
+	"github.com/adonese/noebs/wallet/psp"
 )
+
+func TestNewProviderRequiresExplicitRequestRoutes(t *testing.T) {
+	cfg := &psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           "https://pay.example",
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposit/verify",
+		PayoutRequestMethod:  http.MethodPost,
+		PayoutRequestPath:    "/payouts",
+		StatusRequestMethod:  http.MethodGet,
+		StatusRequestPath:    "/transactions/{transaction_id}",
+	}
+
+	if _, err := NewProvider(cfg); err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	cfg.StatusRequestPath = ""
+	_, err := NewProvider(cfg)
+	if !errors.Is(err, psp.ErrPSPConfigInvalid) {
+		t.Fatalf("NewProvider() error = %v, want %v", err, psp.ErrPSPConfigInvalid)
+	}
+}
 
 func TestAppendQueryForMethodAddsMappedGETFields(t *testing.T) {
 	path := appendQueryForMethod(http.MethodGet, "/status", map[string]any{
