@@ -77,6 +77,69 @@ func TestLoadConfigReturnsExplicitSecretDecryptErrorDuringTests(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDoesNotReadParentConfigDuringTests(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	parent := t.TempDir()
+	if err := os.WriteFile(filepath.Join(parent, "config.test.yaml"), []byte(`noebs:
+  default_tenant_id: parent-tenant
+  db_driver: postgres
+  service_role: api-gateway
+`), 0o600); err != nil {
+		t.Fatalf("write parent config: %v", err)
+	}
+	child := filepath.Join(parent, "child")
+	if err := os.Mkdir(child, 0o700); err != nil {
+		t.Fatalf("mkdir child: %v", err)
+	}
+	if err := os.Chdir(child); err != nil {
+		t.Fatalf("chdir child: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	if _, err := loadConfig(); err == nil {
+		t.Fatalf("loadConfig() error = nil, want missing local config.test.yaml")
+	}
+}
+
+func TestLoadConfigDoesNotReadParentSecretsDuringTests(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	parent := t.TempDir()
+	if err := os.WriteFile(filepath.Join(parent, "secrets.yaml"), []byte(`noebs:
+  jwt_secret: not-sops-encrypted
+`), 0o600); err != nil {
+		t.Fatalf("write parent secrets: %v", err)
+	}
+	child := filepath.Join(parent, "child")
+	if err := os.Mkdir(child, 0o700); err != nil {
+		t.Fatalf("mkdir child: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(child, "config.test.yaml"), []byte(`noebs:
+  default_tenant_id: test-tenant
+  db_driver: postgres
+  service_role: api-gateway
+`), 0o600); err != nil {
+		t.Fatalf("write child config: %v", err)
+	}
+	if err := os.Chdir(child); err != nil {
+		t.Fatalf("chdir child: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	if _, err := loadConfig(); err != nil {
+		t.Fatalf("loadConfig() error = %v", err)
+	}
+}
+
 func TestLoadConfigSelectsServiceDatabaseURL(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {

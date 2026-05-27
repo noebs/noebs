@@ -74,12 +74,22 @@ func renderDatabasePasswordFile() error {
 }
 
 func loadMergedConfigForRender() (map[string]interface{}, string, error) {
-	configPath := firstExistingPath(defaultConfigPath, "./config.yaml")
-	if configPath == "" {
-		return nil, "", errors.New("config.yaml not found")
+	configPath := defaultConfigPath
+	if isTestRun() {
+		configPath = "./config.yaml"
+	}
+	if _, err := requiredExistingPath("config", configPath); err != nil {
+		return nil, "", err
 	}
 
-	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml")
+	secretsPath := defaultSecretsPath
+	if isTestRun() {
+		secretsPath = "./secrets.yaml"
+	}
+	secretsPath, err := optionalExistingPath(secretsPath)
+	if err != nil {
+		return nil, "", err
+	}
 
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
@@ -90,7 +100,15 @@ func loadMergedConfigForRender() (map[string]interface{}, string, error) {
 	if err := yaml.Unmarshal(configData, &configMap); err != nil {
 		return nil, "", fmt.Errorf("parse config yaml: %w", err)
 	}
-	if serviceConfigPath := firstExistingPath(defaultServiceConfigPath, "./service.yaml"); serviceConfigPath != "" {
+	serviceConfigPath := defaultServiceConfigPath
+	if isTestRun() {
+		serviceConfigPath = "./service.yaml"
+	}
+	serviceConfigPath, err = optionalExistingPath(serviceConfigPath)
+	if err != nil {
+		return nil, "", err
+	}
+	if serviceConfigPath != "" {
 		serviceConfigData, err := os.ReadFile(serviceConfigPath)
 		if err != nil {
 			return nil, "", fmt.Errorf("read service config: %w", err)
@@ -122,13 +140,24 @@ func loadMergedConfigForRender() (map[string]interface{}, string, error) {
 	return noebs, configPath, nil
 }
 
-func firstExistingPath(paths ...string) string {
-	for _, path := range paths {
-		if _, err := os.Stat(path); err == nil {
-			return path
+func requiredExistingPath(label, path string) (string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("%s not found at %s", label, path)
 		}
+		return "", fmt.Errorf("stat %s %s: %w", label, path, err)
 	}
-	return ""
+	return path, nil
+}
+
+func optionalExistingPath(path string) (string, error) {
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("stat %s: %w", path, err)
+	}
+	return path, nil
 }
 
 func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {

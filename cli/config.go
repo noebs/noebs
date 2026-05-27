@@ -45,15 +45,12 @@ func isTestRun() bool {
 }
 
 func loadConfig() ([]byte, error) {
-	configPath := firstExistingPath(defaultConfigPath, "./config.yaml", "../config.yaml")
+	configPath := defaultConfigPath
 	if isTestRun() {
-		configPath = firstExistingPath("./config.test.yaml", "../config.test.yaml", "./config.yaml", "../config.yaml", defaultConfigPath)
+		configPath = "./config.test.yaml"
 	}
-	if configPath == "" {
-		if isTestRun() {
-			return []byte("{}"), nil
-		}
-		return nil, errors.New("config.yaml not found")
+	if _, err := requiredExistingPath("config", configPath); err != nil {
+		return nil, err
 	}
 
 	configData, err := os.ReadFile(configPath)
@@ -65,7 +62,18 @@ func loadConfig() ([]byte, error) {
 	if err := yaml.Unmarshal(configData, &configMap); err != nil {
 		return nil, fmt.Errorf("parse config yaml: %w", err)
 	}
-	if serviceConfigPath := firstExistingPath(defaultServiceConfigPath, "./service.yaml", "../service.yaml"); serviceConfigPath != "" {
+	serviceConfigPath := defaultServiceConfigPath
+	if isTestRun() {
+		serviceConfigPath = "./service.yaml"
+	}
+	if !isTestRun() {
+		if _, err := requiredExistingPath("service config", serviceConfigPath); err != nil {
+			return nil, err
+		}
+	}
+	if serviceConfigPath, err := optionalExistingPath(serviceConfigPath); err != nil {
+		return nil, err
+	} else if serviceConfigPath != "" {
 		serviceConfigData, err := os.ReadFile(serviceConfigPath)
 		if err != nil {
 			return nil, fmt.Errorf("read service config: %w", err)
@@ -78,11 +86,18 @@ func loadConfig() ([]byte, error) {
 	}
 
 	secretsMap := map[string]interface{}{}
-	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml", "../secrets.yaml")
+	secretsPath := defaultSecretsPath
 	if isTestRun() {
-		secretsPath = firstExistingPath("./secrets.yaml")
+		secretsPath = "./secrets.yaml"
 	}
-	if secretsPath != "" {
+	if !isTestRun() {
+		if _, err := requiredExistingPath("secrets", secretsPath); err != nil {
+			return nil, err
+		}
+	}
+	if secretsPath, err := optionalExistingPath(secretsPath); err != nil {
+		return nil, err
+	} else if secretsPath != "" {
 		decrypted, err := decryptSopsFile(secretsPath, firstString(getMap(configMap, "noebs"), "sops_age_key_file"))
 		if err != nil {
 			return nil, err
