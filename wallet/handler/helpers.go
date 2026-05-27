@@ -134,18 +134,16 @@ func renderComponent(c *fiber.Ctx, status int, component templ.Component) error 
 	return c.Status(status).Send(buf.Bytes())
 }
 
-func resolveTenantID(cfg ebs_fields.NoebsConfig, tenantID string) (string, error) {
+func resolveTenantID(tenantID string) (string, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
-		tenantID = cfg.DefaultTenantID
+		return "", walletstore.ErrMissingTenantID
 	}
 	return walletstore.ValidateTenantID(tenantID)
 }
 
-func resolveCurrency(cfg ebs_fields.NoebsConfig, currency string) (string, error) {
-	if currency == "" {
-		currency = cfg.WalletDefaultCurrency
-	}
+func resolveCurrency(currency string) (string, error) {
+	currency = strings.TrimSpace(currency)
 	if currency == "" {
 		return "", walletstore.ErrMissingCurrency
 	}

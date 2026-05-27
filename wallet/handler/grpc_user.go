@@ -59,7 +59,7 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 	if err := validateRequestedUserID(req.UserID, userID); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	currency, err := resolveCurrency(h.Config, req.Currency)
+	currency, err := resolveCurrency(req.Currency)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}

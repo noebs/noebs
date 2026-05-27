@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -186,6 +187,26 @@ func TestWalletRoutesRequireAuth(t *testing.T) {
 		t.Fatalf("authorized status = %d, want %d", authorizedResp.StatusCode, http.StatusOK)
 	}
 	_ = authorizedResp.Body.Close()
+}
+
+func TestWalletRoutesRequireExplicitCurrency(t *testing.T) {
+	configureWalletRouteTest(t)
+
+	token := walletToken(t, 42)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	_ = resp.Body.Close()
 }
 
 func TestWalletRoutesAreProxiedByAPIGateway(t *testing.T) {
@@ -464,7 +485,7 @@ func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 	adminKey := setAdminKeyForTest(t)
 
 	route := GetMainEngine()
-	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/?tenant_id="+url.QueryEscape(noebsConfig.DefaultTenantID), nil)
 	req.Header.Set("X-Admin-Key", adminKey)
 
 	resp, err := route.Test(req)
@@ -476,6 +497,24 @@ func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 	}
 	if contentType := resp.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
 		t.Fatalf("content type = %q, want text/html; charset=utf-8", contentType)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestWalletAdminRouteRequiresTenantQuery(t *testing.T) {
+	configureWalletRouteTest(t)
+	adminKey := setAdminKeyForTest(t)
+
+	route := GetMainEngine()
+	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("wallet admin request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("wallet admin status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 	_ = resp.Body.Close()
 }

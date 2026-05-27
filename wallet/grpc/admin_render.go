@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
-	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -68,7 +67,7 @@ func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.AdminWalle
 }
 
 func (s *Server) renderAdminDashboard(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -76,7 +75,7 @@ func (s *Server) renderAdminDashboard(ctx context.Context, req *walletv1.AdminWa
 }
 
 func (s *Server) renderAdminWallets(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -95,7 +94,7 @@ func (s *Server) renderAdminWallets(ctx context.Context, req *walletv1.AdminWall
 }
 
 func (s *Server) renderAdminWalletDetail(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -124,7 +123,7 @@ func (s *Server) renderAdminWalletDetail(ctx context.Context, req *walletv1.Admi
 }
 
 func (s *Server) renderAdminPendingApprovals(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -154,7 +153,7 @@ func (s *Server) renderAdminPendingApprovals(ctx context.Context, req *walletv1.
 }
 
 func (s *Server) renderAdminAudit(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -202,7 +201,7 @@ func (s *Server) renderAdminAudit(ctx context.Context, req *walletv1.AdminWallet
 }
 
 func (s *Server) renderAdminTransactions(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -246,7 +245,7 @@ func (s *Server) renderAdminTransactions(ctx context.Context, req *walletv1.Admi
 }
 
 func (s *Server) renderAdminTransactionDetail(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -265,7 +264,7 @@ func (s *Server) renderAdminTransactionDetail(ctx context.Context, req *walletv1
 }
 
 func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -312,15 +311,13 @@ func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.A
 			Limit:        limit,
 			Offset:       offset,
 		},
-		Values: wallethandler.ManualTransferFormValues{
-			Currency: s.Service.Config.WalletDefaultCurrency,
-		},
+		Values: wallethandler.ManualTransferFormValues{},
 	}))
 }
 
 func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
-	tenantID, err := adminTenantID(s.Service.Config, adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -342,7 +339,7 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Ad
 	if approvalTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
 	}
-	currency, err := adminCurrency(s.Service.Config, adminForm(form, "currency"))
+	currency, err := adminCurrency(adminForm(form, "currency"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -400,7 +397,7 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Ad
 }
 
 func (s *Server) renderAdminManualTransferDetail(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -424,7 +421,7 @@ func (s *Server) renderAdminManualTransferDetail(ctx context.Context, req *walle
 }
 
 func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -456,7 +453,6 @@ func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletR
 			Offset:          offset,
 		},
 		Form: wallethandler.FeeConfigFormValues{
-			Currency: s.Service.Config.WalletDefaultCurrency,
 			IsActive: true,
 		},
 	}))
@@ -464,7 +460,7 @@ func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletR
 
 func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
-	tenantID, err := adminTenantID(s.Service.Config, adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -472,7 +468,7 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRe
 	if txType == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTransactionType.Error())
 	}
-	currency, err := adminCurrency(s.Service.Config, adminForm(form, "currency"))
+	currency, err := adminCurrency(adminForm(form, "currency"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -521,7 +517,7 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRe
 }
 
 func (s *Server) renderAdminRates(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(s.Service.Config, adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -556,7 +552,7 @@ func (s *Server) renderAdminRates(ctx context.Context, req *walletv1.AdminWallet
 
 func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
-	tenantID, err := adminTenantID(s.Service.Config, adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -634,6 +630,10 @@ func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWal
 	if !approved && reason == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
+	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
+	if err != nil {
+		return nil, mapError(err)
+	}
 
 	switch kind {
 	case "manual_transfer":
@@ -657,10 +657,6 @@ func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWal
 	}
 	if err != nil {
 		return nil, err
-	}
-	tenantID := adminForm(form, "tenant_id")
-	if tenantID == "" {
-		tenantID = adminQuery(req, "tenant_id")
 	}
 	return adminRedirect("/admin/wallet/pending", tenantID), nil
 }
@@ -687,19 +683,16 @@ func adminRedirect(path, tenantID string) *walletv1.AdminWalletResponse {
 	}
 }
 
-func adminTenantID(cfg ebs_fields.NoebsConfig, tenantID string) (string, error) {
+func adminTenantID(tenantID string) (string, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
-		tenantID = cfg.DefaultTenantID
+		return "", walletstore.ErrMissingTenantID
 	}
 	return walletstore.ValidateTenantID(tenantID)
 }
 
-func adminCurrency(cfg ebs_fields.NoebsConfig, currency string) (string, error) {
+func adminCurrency(currency string) (string, error) {
 	currency = strings.TrimSpace(currency)
-	if currency == "" {
-		currency = cfg.WalletDefaultCurrency
-	}
 	if currency == "" {
 		return "", walletstore.ErrMissingCurrency
 	}

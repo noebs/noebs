@@ -54,7 +54,7 @@ func (h *AdminHandler) Dashboard(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -68,7 +68,7 @@ func (h *AdminHandler) ListWallets(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -96,7 +96,7 @@ func (h *AdminHandler) WalletDetail(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid wallet id"))
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -129,7 +129,7 @@ func (h *AdminHandler) PendingApprovals(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -176,7 +176,7 @@ func (h *AdminHandler) AuditLog(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -246,7 +246,7 @@ func (h *AdminHandler) Transactions(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -313,7 +313,7 @@ func (h *AdminHandler) TransactionDetail(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -339,7 +339,7 @@ func (h *AdminHandler) ManualTransfers(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -400,9 +400,7 @@ func (h *AdminHandler) ManualTransfers(c *fiber.Ctx) error {
 			Limit:        limit,
 			Offset:       offset,
 		},
-		Values: ManualTransferFormValues{
-			Currency: h.Service.Config.WalletDefaultCurrency,
-		},
+		Values: ManualTransferFormValues{},
 	}
 	return renderComponent(c, http.StatusOK, ManualTransferFormPage(view))
 }
@@ -418,7 +416,7 @@ func (h *AdminHandler) SubmitManualTransfer(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
 
-	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
+	tenantID, err := resolveTenantID(c.FormValue("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -445,7 +443,7 @@ func (h *AdminHandler) SubmitManualTransfer(c *fiber.Ctx) error {
 	if err != nil || amount <= 0 {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
 	}
-	currency, err := resolveCurrency(h.Service.Config, strings.TrimSpace(c.FormValue("currency")))
+	currency, err := resolveCurrency(c.FormValue("currency"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -522,7 +520,7 @@ func (h *AdminHandler) ManualTransferDetail(c *fiber.Ctx) error {
 	if !h.Service.Config.WalletEnabled {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -556,7 +554,7 @@ func (h *AdminHandler) Fees(c *fiber.Ctx) error {
 	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -587,7 +585,6 @@ func (h *AdminHandler) Fees(c *fiber.Ctx) error {
 			Offset:          offset,
 		},
 		Form: FeeConfigFormValues{
-			Currency: h.Service.Config.WalletDefaultCurrency,
 			IsActive: true,
 		},
 	}
@@ -604,7 +601,7 @@ func (h *AdminHandler) CreateFeeConfig(c *fiber.Ctx) error {
 	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
+	tenantID, err := resolveTenantID(c.FormValue("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -612,7 +609,7 @@ func (h *AdminHandler) CreateFeeConfig(c *fiber.Ctx) error {
 	if txType == "" {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrMissingTransactionType))
 	}
-	currency, err := resolveCurrency(h.Service.Config, strings.TrimSpace(c.FormValue("currency")))
+	currency, err := resolveCurrency(c.FormValue("currency"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -701,7 +698,7 @@ func (h *AdminHandler) Rates(c *fiber.Ctx) error {
 	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, c.Query("tenant_id"))
+	tenantID, err := resolveTenantID(c.Query("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -745,7 +742,7 @@ func (h *AdminHandler) CreateRate(c *fiber.Ctx) error {
 	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	tenantID, err := resolveTenantID(h.Service.Config, strings.TrimSpace(c.FormValue("tenant_id")))
+	tenantID, err := resolveTenantID(c.FormValue("tenant_id"))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -854,25 +851,19 @@ func (h *AdminHandler) handleDecision(c *fiber.Ctx, approved bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	tenantID := strings.TrimSpace(c.FormValue("tenant_id"))
-	if tenantID == "" {
-		tenantID = strings.TrimSpace(c.Query("tenant_id"))
-	}
-	resolvedTenantID := tenantID
-	if resolved, err := resolveTenantID(h.Service.Config, tenantID); err == nil {
-		resolvedTenantID = resolved
+	tenantID, err := resolveTenantID(c.FormValue("tenant_id"))
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
 	}
 	var signalErr error
 	switch kind {
 	case "manual_transfer":
-		if resolvedTenantID != "" {
-			transfer, err := h.Service.Store.GetManualTransferByWorkflow(ctx, resolvedTenantID, workflowID)
-			if err == nil && transfer.RequestedBy.Valid && transfer.RequestedBy.Int64 == approverID {
-				return jsonResponse(c, 0, mapWalletError(walletstore.ErrApproverIsRequester))
-			}
-			if err != nil && !errors.Is(err, walletstore.ErrManualTransferNotFound) && !errors.Is(err, walletstore.ErrMissingTenantID) {
-				return jsonResponse(c, 0, mapWalletError(err))
-			}
+		transfer, err := h.Service.Store.GetManualTransferByWorkflow(ctx, tenantID, workflowID)
+		if err == nil && transfer.RequestedBy.Valid && transfer.RequestedBy.Int64 == approverID {
+			return jsonResponse(c, 0, mapWalletError(walletstore.ErrApproverIsRequester))
+		}
+		if err != nil && !errors.Is(err, walletstore.ErrManualTransferNotFound) {
+			return jsonResponse(c, 0, mapWalletError(err))
 		}
 		decision := walletworkflow.ManualTransferDecision{
 			Approved:       approved,
