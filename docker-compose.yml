@@ -217,7 +217,6 @@ services:
       - ./deploy/docker/temporal/temporal-start.sh:/opt/temporal/bin/temporal-start.sh:ro
       - ./deploy/docker/temporal/temporal.yaml:/opt/temporal/config/temporal.yaml:ro
       - ./deploy/docker/temporal/dynamicconfig.yaml:/opt/temporal/config/dynamicconfig/docker.yaml:ro
-      - ./deploy/docker/temporal/broadcast-address.txt:/opt/temporal/runtime/broadcast-address:ro
     secrets:
       - source: temporal_postgres_password
         target: /opt/temporal/secrets/postgres-password

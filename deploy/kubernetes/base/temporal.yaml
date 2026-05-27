@@ -133,7 +133,7 @@ data:
     global:
       membership:
         maxJoinDuration: 30s
-        broadcastAddress: __BROADCAST_ADDRESS_FROM_FILE__
+        broadcastAddress: temporal-frontend
       pprof:
         port: 0
       authorization:
@@ -213,7 +213,6 @@ data:
     set -euo pipefail
 
     password_source="/opt/temporal/secrets/postgres-password"
-    broadcast_address_source="/opt/temporal/runtime/broadcast-address"
     template_source="/opt/temporal/config/temporal.yaml"
     runtime_root="/tmp/temporal"
     runtime_config_dir="$runtime_root/config"
@@ -253,10 +252,8 @@ data:
 
     install -d -m 0700 "$runtime_config_dir"
     password="$(read_required_file "Temporal Postgres password" "$password_source")"
-    broadcast_address="$(read_required_file "Temporal broadcast address" "$broadcast_address_source")"
     sed \
       -e "s|__DATABASE_PASSWORD_FROM_FILE__|$(sed_escape "$password")|g" \
-      -e "s|__BROADCAST_ADDRESS_FROM_FILE__|$(sed_escape "$broadcast_address")|g" \
       "$template_source" > "$runtime_config"
     chmod 0600 "$runtime_config"
 
@@ -509,6 +506,18 @@ spec:
     - name: grpc
       port: 7233
       targetPort: grpc
+    - name: frontend-membership
+      port: 6933
+      targetPort: frontend-membership
+    - name: history-membership
+      port: 6934
+      targetPort: history-membership
+    - name: matching-membership
+      port: 6935
+      targetPort: matching-membership
+    - name: worker-membership
+      port: 6939
+      targetPort: worker-membership
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -540,6 +549,14 @@ spec:
           ports:
             - name: grpc
               containerPort: 7233
+            - name: frontend-membership
+              containerPort: 6933
+            - name: history-membership
+              containerPort: 6934
+            - name: matching-membership
+              containerPort: 6935
+            - name: worker-membership
+              containerPort: 6939
           readinessProbe:
             tcpSocket:
               port: grpc
@@ -567,10 +584,6 @@ spec:
               mountPath: /opt/temporal/secrets/postgres-password
               subPath: password
               readOnly: true
-            - name: temporal-runtime
-              mountPath: /opt/temporal/runtime/broadcast-address
-              subPath: broadcast-address
-              readOnly: true
       volumes:
         - name: temporal-config
           configMap:
@@ -579,12 +592,6 @@ spec:
         - name: temporal-postgres-credentials
           secret:
             secretName: temporal-postgres-credentials
-        - name: temporal-runtime
-          downwardAPI:
-            items:
-              - path: broadcast-address
-                fieldRef:
-                  fieldPath: status.podIP
 ---
 apiVersion: v1
 kind: Service

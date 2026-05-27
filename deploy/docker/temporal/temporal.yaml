@@ -33,7 +33,7 @@ persistence:
 global:
   membership:
     maxJoinDuration: 30s
-    broadcastAddress: __BROADCAST_ADDRESS_FROM_FILE__
+    broadcastAddress: temporal-frontend
   pprof:
     port: 0
   authorization:

@@ -27,7 +27,6 @@ Database-opening services get `noebs.db_driver` from their mounted service confi
 Local Compose also requires explicit, ignored runtime inputs for non-Noebs platform services:
 
 - `deploy/docker/temporal/postgres-password.txt`
-- `deploy/docker/temporal/broadcast-address.txt`
 - `deploy/docker/keycloak/keycloak.conf`
 - `deploy/docker/keycloak/postgres-password.txt`
 

@@ -2,7 +2,6 @@
 set -euo pipefail
 
 password_source="/opt/temporal/secrets/postgres-password"
-broadcast_address_source="/opt/temporal/runtime/broadcast-address"
 template_source="/opt/temporal/config/temporal.yaml"
 runtime_root="/tmp/temporal"
 runtime_config_dir="$runtime_root/config"
@@ -42,10 +41,8 @@ fi
 
 install -d -m 0700 "$runtime_config_dir"
 password="$(read_required_file "Temporal Postgres password" "$password_source")"
-broadcast_address="$(read_required_file "Temporal broadcast address" "$broadcast_address_source")"
 sed \
   -e "s|__DATABASE_PASSWORD_FROM_FILE__|$(sed_escape "$password")|g" \
-  -e "s|__BROADCAST_ADDRESS_FROM_FILE__|$(sed_escape "$broadcast_address")|g" \
   "$template_source" > "$runtime_config"
 chmod 0600 "$runtime_config"
 
