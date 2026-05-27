@@ -60,6 +60,22 @@ type manifestMount struct {
 	SubPath   string `yaml:"subPath"`
 }
 
+type composeDocument struct {
+	Services map[string]composeService `yaml:"services"`
+}
+
+type composeService struct {
+	Environment any             `yaml:"environment"`
+	EnvFile     any             `yaml:"env_file"`
+	Volumes     []string        `yaml:"volumes"`
+	Secrets     []composeSecret `yaml:"secrets"`
+}
+
+type composeSecret struct {
+	Source string `yaml:"source"`
+	Target string `yaml:"target"`
+}
+
 func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	baseDir := filepath.Join("..", "deploy", "kubernetes", "base")
 	entries, err := os.ReadDir(baseDir)
@@ -106,6 +122,35 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatalf("no noebs Kubernetes containers were checked")
+	}
+}
+
+func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
+	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+	serviceFiles, err := filepath.Glob(filepath.Join("..", "deploy", "docker", "services", "*.yaml"))
+	if err != nil {
+		t.Fatalf("list docker service configs: %v", err)
+	}
+	if len(serviceFiles) == 0 {
+		t.Fatalf("no docker service configs found")
+	}
+
+	for _, serviceFile := range serviceFiles {
+		serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
+		service, ok := compose.Services[serviceName]
+		if !ok {
+			t.Fatalf("docker-compose.yml missing service %q for %s", serviceName, serviceFile)
+		}
+		if service.Environment != nil {
+			t.Fatalf("%s defines environment; noebs service config must be file-mounted", serviceName)
+		}
+		if service.EnvFile != nil {
+			t.Fatalf("%s defines env_file; noebs service config must be file-mounted", serviceName)
+		}
+
+		requireComposeVolume(t, serviceName, service.Volumes, "./config.docker.yaml", "/app/config.yaml")
+		requireComposeVolume(t, serviceName, service.Volumes, "./deploy/docker/services/"+filepath.Base(serviceFile), "/app/service.yaml")
+		requireComposeSecret(t, serviceName, service.Secrets, "noebs_secrets", "/app/secrets.yaml")
 	}
 }
 
@@ -247,6 +292,19 @@ func decodeManifestObjects(t *testing.T, path string) []manifestObject {
 	return objects
 }
 
+func decodeComposeDocument(t *testing.T, path string) composeDocument {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var compose composeDocument
+	if err := yaml.Unmarshal(data, &compose); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	return compose
+}
+
 func requireMount(t *testing.T, workload string, container manifestContainer, mountPath, subPath string) {
 	t.Helper()
 	for _, mount := range container.VolumeMounts {
@@ -259,6 +317,27 @@ func requireMount(t *testing.T, workload string, container manifestContainer, mo
 		return
 	}
 	t.Fatalf("%s/%s missing mount %s", workload, container.Name, mountPath)
+}
+
+func requireComposeVolume(t *testing.T, serviceName string, volumes []string, source, target string) {
+	t.Helper()
+	for _, volume := range volumes {
+		parts := strings.Split(volume, ":")
+		if len(parts) >= 2 && parts[0] == source && parts[1] == target {
+			return
+		}
+	}
+	t.Fatalf("%s volumes = %v; missing %s:%s", serviceName, volumes, source, target)
+}
+
+func requireComposeSecret(t *testing.T, serviceName string, secrets []composeSecret, source, target string) {
+	t.Helper()
+	for _, secret := range secrets {
+		if secret.Source == source && secret.Target == target {
+			return
+		}
+	}
+	t.Fatalf("%s secrets = %v; missing %s target %s", serviceName, secrets, source, target)
 }
 
 func findMount(container manifestContainer, mountPath string) *manifestMount {
