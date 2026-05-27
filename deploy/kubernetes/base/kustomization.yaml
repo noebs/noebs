@@ -5,6 +5,7 @@ namespace: noebs
 
 resources:
   - configmap.yaml
+  - service-accounts.yaml
   - postgres.yaml
   - temporal.yaml
   - keycloak.yaml

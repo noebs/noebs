@@ -55,6 +55,8 @@ spec:
       labels:
         app.kubernetes.io/name: postgres
     spec:
+      serviceAccountName: postgres
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:16

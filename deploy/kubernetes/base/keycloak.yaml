@@ -102,6 +102,8 @@ spec:
       labels:
         app.kubernetes.io/name: keycloak-postgres
     spec:
+      serviceAccountName: keycloak-postgres
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:16
@@ -195,6 +197,8 @@ spec:
       labels:
         app.kubernetes.io/name: keycloak
     spec:
+      serviceAccountName: keycloak
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

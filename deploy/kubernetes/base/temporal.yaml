@@ -30,6 +30,8 @@ spec:
       labels:
         app.kubernetes.io/name: temporal-postgres
     spec:
+      serviceAccountName: temporal-postgres
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:16
@@ -111,6 +113,8 @@ spec:
       labels:
         app.kubernetes.io/name: temporal
     spec:
+      serviceAccountName: temporal
+      automountServiceAccountToken: false
       containers:
         - name: temporal
           image: temporalio/auto-setup:1.29.1
@@ -178,6 +182,8 @@ spec:
       labels:
         app.kubernetes.io/name: temporal-ui
     spec:
+      serviceAccountName: temporal-ui
+      automountServiceAccountToken: false
       containers:
         - name: temporal-ui
           image: temporalio/ui:2.34.0

@@ -3,8 +3,9 @@ kind: Job
 metadata:
   name: noebs-identity-auth-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-identity-auth-migrate
 spec:
@@ -15,6 +16,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-identity-auth-migrate
     spec:
+      serviceAccountName: identity-auth-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -64,8 +67,9 @@ kind: Job
 metadata:
   name: noebs-card-vault-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-card-vault-migrate
 spec:
@@ -76,6 +80,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-card-vault-migrate
     spec:
+      serviceAccountName: card-vault-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -125,8 +131,9 @@ kind: Job
 metadata:
   name: noebs-ebs-adapter-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-ebs-adapter-migrate
 spec:
@@ -137,6 +144,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-ebs-adapter-migrate
     spec:
+      serviceAccountName: ebs-adapter-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -186,8 +195,9 @@ kind: Job
 metadata:
   name: noebs-psp-webhook-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-psp-webhook-migrate
 spec:
@@ -198,6 +208,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-psp-webhook-migrate
     spec:
+      serviceAccountName: psp-webhook-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -247,8 +259,9 @@ kind: Job
 metadata:
   name: noebs-admin-reporting-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-admin-reporting-migrate
 spec:
@@ -259,6 +272,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-admin-reporting-migrate
     spec:
+      serviceAccountName: admin-reporting-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -308,8 +323,9 @@ kind: Job
 metadata:
   name: noebs-notification-chat-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-notification-chat-migrate
 spec:
@@ -320,6 +336,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-notification-chat-migrate
     spec:
+      serviceAccountName: notification-chat-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -369,8 +387,9 @@ kind: Job
 metadata:
   name: noebs-consumer-beneficiary-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-consumer-beneficiary-migrate
 spec:
@@ -381,6 +400,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-consumer-beneficiary-migrate
     spec:
+      serviceAccountName: consumer-beneficiary-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true
@@ -430,8 +451,9 @@ kind: Job
 metadata:
   name: noebs-wallet-ledger-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
   labels:
     app.kubernetes.io/name: noebs-wallet-ledger-migrate
 spec:
@@ -442,6 +464,8 @@ spec:
       labels:
         app.kubernetes.io/name: noebs-wallet-ledger-migrate
     spec:
+      serviceAccountName: wallet-ledger-migrate
+      automountServiceAccountToken: false
       restartPolicy: Never
       securityContext:
         runAsNonRoot: true

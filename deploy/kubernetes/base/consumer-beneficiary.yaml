@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: consumer-beneficiary
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
   labels:
     app.kubernetes.io/name: consumer-beneficiary
 spec:
@@ -14,6 +16,8 @@ spec:
       labels:
         app.kubernetes.io/name: consumer-beneficiary
     spec:
+      serviceAccountName: consumer-beneficiary
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wallet-ledger
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
   labels:
     app.kubernetes.io/name: wallet-ledger
 spec:
@@ -14,6 +16,8 @@ spec:
       labels:
         app.kubernetes.io/name: wallet-ledger
     spec:
+      serviceAccountName: wallet-ledger
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

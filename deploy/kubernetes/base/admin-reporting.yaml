@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: admin-reporting
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
   labels:
     app.kubernetes.io/name: admin-reporting
 spec:
@@ -14,6 +16,8 @@ spec:
       labels:
         app.kubernetes.io/name: admin-reporting
     spec:
+      serviceAccountName: admin-reporting
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001

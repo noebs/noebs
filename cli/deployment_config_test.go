@@ -17,9 +17,10 @@ import (
 )
 
 type manifestObject struct {
-	Kind     string            `yaml:"kind"`
-	Data     map[string]string `yaml:"data"`
-	Metadata struct {
+	Kind                         string            `yaml:"kind"`
+	AutomountServiceAccountToken *bool             `yaml:"automountServiceAccountToken"`
+	Data                         map[string]string `yaml:"data"`
+	Metadata                     struct {
 		Name        string            `yaml:"name"`
 		Namespace   string            `yaml:"namespace"`
 		Annotations map[string]string `yaml:"annotations"`
@@ -46,9 +47,11 @@ type manifestObject struct {
 		} `yaml:"syncPolicy"`
 		Template struct {
 			Spec struct {
-				RestartPolicy  string              `yaml:"restartPolicy"`
-				Containers     []manifestContainer `yaml:"containers"`
-				InitContainers []manifestContainer `yaml:"initContainers"`
+				ServiceAccountName           string              `yaml:"serviceAccountName"`
+				AutomountServiceAccountToken *bool               `yaml:"automountServiceAccountToken"`
+				RestartPolicy                string              `yaml:"restartPolicy"`
+				Containers                   []manifestContainer `yaml:"containers"`
+				InitContainers               []manifestContainer `yaml:"initContainers"`
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
@@ -171,6 +174,61 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatalf("no noebs Kubernetes containers were checked")
+	}
+}
+
+func TestKubernetesWorkloadsUseExplicitServiceAccounts(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+
+	serviceAccounts := map[string]bool{}
+	for _, object := range objects {
+		if object.Kind != "ServiceAccount" {
+			continue
+		}
+		if object.Metadata.Name == "" {
+			t.Fatalf("ServiceAccount has empty metadata.name")
+		}
+		if object.AutomountServiceAccountToken == nil || *object.AutomountServiceAccountToken {
+			t.Fatalf("ServiceAccount %s must set automountServiceAccountToken: false", object.Metadata.Name)
+		}
+		serviceAccounts[object.Metadata.Name] = true
+	}
+	if len(serviceAccounts) == 0 {
+		t.Fatalf("no ServiceAccount objects were found")
+	}
+
+	checked := 0
+	usedServiceAccounts := map[string]bool{}
+	for _, object := range objects {
+		if !isKubernetesWorkloadKind(object.Kind) {
+			continue
+		}
+		workload := object.Kind + "/" + object.Metadata.Name
+		if len(object.Spec.Template.Spec.Containers)+len(object.Spec.Template.Spec.InitContainers) == 0 {
+			t.Fatalf("%s has no pod containers", workload)
+		}
+		checked++
+
+		expectedServiceAccount := expectedServiceAccountForWorkload(t, object)
+		serviceAccount := object.Spec.Template.Spec.ServiceAccountName
+		if serviceAccount != expectedServiceAccount {
+			t.Fatalf("%s serviceAccountName = %q, want %q", workload, serviceAccount, expectedServiceAccount)
+		}
+		if !serviceAccounts[serviceAccount] {
+			t.Fatalf("%s references missing ServiceAccount %q", workload, serviceAccount)
+		}
+		usedServiceAccounts[serviceAccount] = true
+		if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+			t.Fatalf("%s must set automountServiceAccountToken: false", workload)
+		}
+	}
+	if checked == 0 {
+		t.Fatalf("no Kubernetes workloads were checked")
+	}
+	for serviceAccount := range serviceAccounts {
+		if !usedServiceAccounts[serviceAccount] {
+			t.Fatalf("ServiceAccount %s is not assigned to a workload", serviceAccount)
+		}
 	}
 }
 
@@ -580,10 +638,8 @@ func TestArgoCDApplicationTargetsCurrentHostOverlay(t *testing.T) {
 	}
 }
 
-func TestMigrationJobsAreArgoPreSyncHooks(t *testing.T) {
-	path := filepath.Join("..", "deploy", "kubernetes", "base", "migrate-job.yaml")
-	objects := decodeManifestObjects(t, path)
-
+func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	expectedJobs := map[string]bool{
 		"noebs-identity-auth-migrate":        false,
 		"noebs-card-vault-migrate":           false,
@@ -594,42 +650,77 @@ func TestMigrationJobsAreArgoPreSyncHooks(t *testing.T) {
 		"noebs-consumer-beneficiary-migrate": false,
 		"noebs-wallet-ledger-migrate":        false,
 	}
+	expectedRuntimeDeployments := map[string]bool{
+		"api-gateway":          false,
+		"identity-auth":        false,
+		"card-vault":           false,
+		"ebs-adapter":          false,
+		"psp-webhook":          false,
+		"admin-reporting":      false,
+		"notification-chat":    false,
+		"consumer-beneficiary": false,
+		"wallet-api":           false,
+		"wallet-ledger":        false,
+		"wallet-worker":        false,
+	}
 
 	for _, object := range objects {
-		if object.Kind != "Job" {
-			continue
+		switch object.Kind {
+		case "Deployment":
+			if !workloadUsesNoebsImage(object) {
+				continue
+			}
+			if _, ok := expectedRuntimeDeployments[object.Metadata.Name]; !ok {
+				t.Fatalf("unexpected noebs runtime Deployment %q", object.Metadata.Name)
+			}
+			expectedRuntimeDeployments[object.Metadata.Name] = true
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "20" {
+				t.Fatalf("%s runtime sync-wave = %q, want 20", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "" {
+				t.Fatalf("%s runtime must not be an Argo hook", object.Metadata.Name)
+			}
+		case "Job":
+			if _, ok := expectedJobs[object.Metadata.Name]; !ok {
+				t.Fatalf("unexpected migration Job %q", object.Metadata.Name)
+			}
+			expectedJobs[object.Metadata.Name] = true
+			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "Sync" {
+				t.Fatalf("%s hook = %q, want Sync", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/hook"])
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "10" {
+				t.Fatalf("%s sync-wave = %q, want 10", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"] != "BeforeHookCreation,HookSucceeded" {
+				t.Fatalf("%s hook delete policy = %q", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"])
+			}
+			if object.Spec.Template.Spec.RestartPolicy != "Never" {
+				t.Fatalf("%s restartPolicy = %q, want Never", object.Metadata.Name, object.Spec.Template.Spec.RestartPolicy)
+			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("%s containers = %d, want 1", object.Metadata.Name, len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if !strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
+				t.Fatalf("%s container image = %q", object.Metadata.Name, container.Image)
+			}
+			serviceMount := findMount(container, "/app/service.yaml")
+			if serviceMount == nil || !strings.HasSuffix(serviceMount.SubPath, "-migrate.service.yaml") {
+				t.Fatalf("%s service mount = %#v, want migrate service config", object.Metadata.Name, serviceMount)
+			}
+			requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
+			requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
 		}
-		if _, ok := expectedJobs[object.Metadata.Name]; !ok {
-			t.Fatalf("unexpected migration Job %q", object.Metadata.Name)
-		}
-		expectedJobs[object.Metadata.Name] = true
-		if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "PreSync" {
-			t.Fatalf("%s hook = %q, want PreSync", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/hook"])
-		}
-		if object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"] != "BeforeHookCreation,HookSucceeded" {
-			t.Fatalf("%s hook delete policy = %q", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"])
-		}
-		if object.Spec.Template.Spec.RestartPolicy != "Never" {
-			t.Fatalf("%s restartPolicy = %q, want Never", object.Metadata.Name, object.Spec.Template.Spec.RestartPolicy)
-		}
-		if len(object.Spec.Template.Spec.Containers) != 1 {
-			t.Fatalf("%s containers = %d, want 1", object.Metadata.Name, len(object.Spec.Template.Spec.Containers))
-		}
-		container := object.Spec.Template.Spec.Containers[0]
-		if !strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
-			t.Fatalf("%s container image = %q", object.Metadata.Name, container.Image)
-		}
-		serviceMount := findMount(container, "/app/service.yaml")
-		if serviceMount == nil || !strings.HasSuffix(serviceMount.SubPath, "-migrate.service.yaml") {
-			t.Fatalf("%s service mount = %#v, want migrate service config", object.Metadata.Name, serviceMount)
-		}
-		requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
-		requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
 	}
 
 	for job, found := range expectedJobs {
 		if !found {
 			t.Fatalf("migration Job %q not found", job)
+		}
+	}
+	for deployment, found := range expectedRuntimeDeployments {
+		if !found {
+			t.Fatalf("runtime Deployment %q not found", deployment)
 		}
 	}
 }
@@ -698,6 +789,35 @@ func decodeMountedNoebsConfigFile(t *testing.T, path string) mountedNoebsConfig 
 		t.Fatalf("decode %s: %v", path, err)
 	}
 	return config
+}
+
+func isKubernetesWorkloadKind(kind string) bool {
+	switch kind {
+	case "Deployment", "StatefulSet", "Job":
+		return true
+	default:
+		return false
+	}
+}
+
+func workloadUsesNoebsImage(object manifestObject) bool {
+	for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+		if strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
+			return true
+		}
+	}
+	return false
+}
+
+func expectedServiceAccountForWorkload(t *testing.T, object manifestObject) string {
+	t.Helper()
+	if object.Kind != "Job" {
+		return object.Metadata.Name
+	}
+	if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
+		t.Fatalf("Job %s must use the noebs- prefix for service account ownership", object.Metadata.Name)
+	}
+	return strings.TrimPrefix(object.Metadata.Name, "noebs-")
 }
 
 func requireMount(t *testing.T, workload string, container manifestContainer, mountPath, subPath string) {
