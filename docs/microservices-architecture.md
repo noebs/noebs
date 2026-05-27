@@ -152,8 +152,8 @@ For local Docker Compose, each Noebs service mounts its own SOPS secret file fro
 6. Move notification/chat traffic into the `notification-chat` workload. It owns websocket contacts and notification reads at the public path level.
 7. Deploy Keycloak as an independent auth platform service with its own database and config-mounted secret. Do not wire noebs auth data to it until the migration contract is explicit.
 8. Move Identity/Auth traffic into the `identity-auth` workload. It owns JWT issuance, OAuth, user/profile, API-key, KYC/check-user, and device-token update routes.
-9. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
-10. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS transaction lookup, and mobile-transfer compatibility routes.
+9. Move Card/Vault traffic into the `card-vault` workload. It owns stored card management, stored mobile-to-PAN lookup, and payment-token routes. The existing `/consumer/cards/complete` flow remains registered here only because it writes identity/card state; it is the next required split into EBS adapter plus identity/card commands.
+10. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS card-info/PAN lookup/card-registration-start routes, NEC meter lookup, EBS transaction lookup, and mobile-transfer compatibility routes.
 11. Move wallet HTTP traffic into the `wallet-api` workload. Public `/wallet` and operational `/admin/wallet` routes call `wallet-ledger` over gRPC; wallet-ledger remains the database and workflow boundary for wallet state.
 12. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
 13. Move admin/reporting to event-driven projections. Block payment writes from reporting code.

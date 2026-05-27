@@ -4,6 +4,10 @@ import "github.com/gofiber/fiber/v2"
 
 func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	// EBS operations (public, matches legacy behavior)
+	router.Post("/card_info", h.EbsGetCardInfo)
+	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
+	router.Post("/cards/new", h.RegisterCard)
+	router.Get("/nec2name", h.NecToName)
 	router.Post("/balance", h.Balance)
 	router.Post("/status", h.TransactionStatus)
 	router.Post("/is_alive", h.IsAlive)
@@ -37,12 +41,8 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterCardVaultPublicRoutes(router fiber.Router, h *Handler) {
-	// Cards / lookups (public)
-	router.Post("/card_info", h.EbsGetCardInfo)
-	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
-	router.Post("/cards/new", h.RegisterCard)
+	// Registration completion persists local identity/card state; split its EBS step next.
 	router.Post("/cards/complete", h.CompleteRegistration)
-	router.Get("/nec2name", h.NecToName)
 }
 
 func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {

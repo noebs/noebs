@@ -19,11 +19,7 @@ func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "card info", method: http.MethodPost, path: "/consumer/card_info"},
-		{name: "pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
-		{name: "card registration", method: http.MethodPost, path: "/consumer/cards/new"},
 		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
-		{name: "nec lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
 		{name: "add card", method: http.MethodPost, path: "/consumer/add_card"},
 		{name: "edit card", method: http.MethodPut, path: "/consumer/edit_card"},
@@ -59,11 +55,7 @@ func TestCardVaultRoutesAreOwnedByCardVault(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "card info", method: http.MethodPost, path: "/consumer/card_info"},
-		{name: "pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
-		{name: "card registration", method: http.MethodPost, path: "/consumer/cards/new"},
 		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
-		{name: "nec lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
 		{name: "add card", method: http.MethodPost, path: "/consumer/add_card"},
 		{name: "edit card", method: http.MethodPut, path: "/consumer/edit_card"},
@@ -113,6 +105,10 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 		{name: "balance", method: http.MethodPost, path: "/consumer/balance"},
 		{name: "transactions", method: http.MethodGet, path: "/consumer/transactions"},
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
+		{name: "ebs card info", method: http.MethodPost, path: "/consumer/card_info"},
+		{name: "ebs pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
+		{name: "ebs card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
+		{name: "ebs meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

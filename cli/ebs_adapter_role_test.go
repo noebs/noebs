@@ -16,6 +16,10 @@ type ebsAdapterRoute struct {
 
 func ebsAdapterRoutes() []ebsAdapterRoute {
 	return []ebsAdapterRoute{
+		{name: "consumer card info", method: http.MethodPost, path: "/consumer/card_info"},
+		{name: "consumer pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
+		{name: "consumer card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
+		{name: "consumer meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 		{name: "consumer balance", method: http.MethodPost, path: "/consumer/balance"},
 		{name: "consumer status", method: http.MethodPost, path: "/consumer/status"},
 		{name: "consumer alive", method: http.MethodPost, path: "/consumer/is_alive"},
@@ -127,6 +131,7 @@ func TestEBSAdapterDoesNotOwnIdentityCardNotificationOrWalletRoutes(t *testing.T
 	tests := []ebsAdapterRoute{
 		{name: "identity login", method: http.MethodPost, path: "/consumer/login"},
 		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
+		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
 		{name: "wallet", method: http.MethodPost, path: "/wallet"},
 	}
