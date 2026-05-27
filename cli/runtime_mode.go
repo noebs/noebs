@@ -122,10 +122,6 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, dbPath, driver string) 
 	return nil
 }
 
-func (r serviceRole) startsBackgroundJobs() bool {
-	return false
-}
-
 func (r serviceRole) runsMigrations() bool {
 	_, ok := r.migrationScope()
 	return ok

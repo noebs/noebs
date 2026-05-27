@@ -112,10 +112,6 @@ func main() {
 		}
 		go hub.Run()
 	}
-	if role.startsBackgroundJobs() {
-		go consumerService.BillerHooks(ctx, noebsConfig.DefaultTenantID)
-		go consumerService.Pusher(ctx)
-	}
 	if noebsConfig.Port == "" {
 		logrusLogger.Fatalf("%s role requires port", role)
 	}
