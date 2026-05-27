@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,7 +16,8 @@ import (
 )
 
 type manifestObject struct {
-	Kind     string `yaml:"kind"`
+	Kind     string            `yaml:"kind"`
+	Data     map[string]string `yaml:"data"`
 	Metadata struct {
 		Name        string            `yaml:"name"`
 		Namespace   string            `yaml:"namespace"`
@@ -30,6 +34,7 @@ type manifestObject struct {
 			Server    string `yaml:"server"`
 			Namespace string `yaml:"namespace"`
 		} `yaml:"destination"`
+		Ports      []manifestServicePort `yaml:"ports"`
 		SyncPolicy struct {
 			Automated struct {
 				Prune    bool `yaml:"prune"`
@@ -45,6 +50,11 @@ type manifestObject struct {
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
+}
+
+type manifestServicePort struct {
+	Name string `yaml:"name"`
+	Port int    `yaml:"port"`
 }
 
 type manifestContainer struct {
@@ -76,6 +86,15 @@ type composeSecret struct {
 	Source string `yaml:"source"`
 	Target string `yaml:"target"`
 	File   string `yaml:"file"`
+}
+
+type mountedNoebsConfig struct {
+	Noebs struct {
+		ServiceDiscovery     map[string]string `yaml:"service_discovery"`
+		GRPCServiceDiscovery map[string]string `yaml:"grpc_service_discovery"`
+		TemporalHost         string            `yaml:"temporal_host"`
+		TemporalPort         string            `yaml:"temporal_port"`
+	} `yaml:"noebs"`
 }
 
 func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
@@ -125,6 +144,62 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	if checked == 0 {
 		t.Fatalf("no noebs Kubernetes containers were checked")
 	}
+}
+
+func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	services := map[string]map[int]bool{}
+	var config mountedNoebsConfig
+	var foundConfig bool
+
+	for _, object := range objects {
+		switch object.Kind {
+		case "Service":
+			ports := map[int]bool{}
+			for _, port := range object.Spec.Ports {
+				ports[port.Port] = true
+			}
+			services[object.Metadata.Name] = ports
+		case "ConfigMap":
+			if object.Metadata.Name != "noebs-config" {
+				continue
+			}
+			configData := object.Data["config.yaml"]
+			if configData == "" {
+				t.Fatalf("noebs-config missing config.yaml")
+			}
+			if err := yaml.Unmarshal([]byte(configData), &config); err != nil {
+				t.Fatalf("parse noebs-config config.yaml: %v", err)
+			}
+			foundConfig = true
+		}
+	}
+	if !foundConfig {
+		t.Fatalf("noebs-config ConfigMap not found")
+	}
+	if len(config.Noebs.ServiceDiscovery) == 0 {
+		t.Fatalf("noebs.service_discovery is empty")
+	}
+	if len(config.Noebs.GRPCServiceDiscovery) == 0 {
+		t.Fatalf("noebs.grpc_service_discovery is empty")
+	}
+
+	for role, endpoint := range config.Noebs.ServiceDiscovery {
+		serviceName, port := parseHTTPDiscoveryEndpoint(t, role, endpoint)
+		requireKubernetesServicePort(t, services, serviceName, port)
+	}
+	for role, endpoint := range config.Noebs.GRPCServiceDiscovery {
+		serviceName, port := parseHostPortDiscoveryEndpoint(t, role, endpoint)
+		requireKubernetesServicePort(t, services, serviceName, port)
+	}
+	if config.Noebs.TemporalHost == "" || config.Noebs.TemporalPort == "" {
+		t.Fatalf("temporal host/port must be explicit in mounted config")
+	}
+	temporalPort, err := strconv.Atoi(config.Noebs.TemporalPort)
+	if err != nil {
+		t.Fatalf("temporal_port = %q: %v", config.Noebs.TemporalPort, err)
+	}
+	requireKubernetesServicePort(t, services, config.Noebs.TemporalHost, temporalPort)
 }
 
 func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
@@ -308,6 +383,22 @@ func decodeManifestObjects(t *testing.T, path string) []manifestObject {
 	return objects
 }
 
+func decodeManifestObjectsFromDir(t *testing.T, dir string) []manifestObject {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	var objects []manifestObject
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
+		objects = append(objects, decodeManifestObjects(t, filepath.Join(dir, entry.Name()))...)
+	}
+	return objects
+}
+
 func decodeComposeDocument(t *testing.T, path string) composeDocument {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -333,6 +424,57 @@ func requireMount(t *testing.T, workload string, container manifestContainer, mo
 		return
 	}
 	t.Fatalf("%s/%s missing mount %s", workload, container.Name, mountPath)
+}
+
+func parseHTTPDiscoveryEndpoint(t *testing.T, role, endpoint string) (string, int) {
+	t.Helper()
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		t.Fatalf("service_discovery.%s = %q: %v", role, endpoint, err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		t.Fatalf("service_discovery.%s scheme = %q, want http or https", role, parsed.Scheme)
+	}
+	host := parsed.Hostname()
+	if host == "" {
+		t.Fatalf("service_discovery.%s = %q missing host", role, endpoint)
+	}
+	portText := parsed.Port()
+	if portText == "" {
+		t.Fatalf("service_discovery.%s = %q missing port", role, endpoint)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatalf("service_discovery.%s port = %q: %v", role, portText, err)
+	}
+	return host, port
+}
+
+func parseHostPortDiscoveryEndpoint(t *testing.T, role, endpoint string) (string, int) {
+	t.Helper()
+	host, portText, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		t.Fatalf("grpc_service_discovery.%s = %q: %v", role, endpoint, err)
+	}
+	if host == "" {
+		t.Fatalf("grpc_service_discovery.%s = %q missing host", role, endpoint)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatalf("grpc_service_discovery.%s port = %q: %v", role, portText, err)
+	}
+	return host, port
+}
+
+func requireKubernetesServicePort(t *testing.T, services map[string]map[int]bool, serviceName string, port int) {
+	t.Helper()
+	ports, ok := services[serviceName]
+	if !ok {
+		t.Fatalf("service discovery references missing Kubernetes Service %q", serviceName)
+	}
+	if !ports[port] {
+		t.Fatalf("Service %s ports = %v; missing port %d", serviceName, ports, port)
+	}
 }
 
 func requireComposeVolume(t *testing.T, serviceName string, volumes []string, source, target string) {
