@@ -1,2 +1,3 @@
 noebs:
   service_role: admin-reporting
+  db_driver: pgx

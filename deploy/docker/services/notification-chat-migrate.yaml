@@ -1,2 +1,3 @@
 noebs:
   service_role: notification-chat-migrate
+  db_driver: pgx

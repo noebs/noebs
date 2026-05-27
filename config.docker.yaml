@@ -2,7 +2,6 @@ noebs:
   sops_age_key_file: /app/.sops/age-key.txt
   runtime_dir: /app/runtime
   render_db_password_file: /app/runtime/password
-  db_driver: pgx
   port: ":8080"
   temporal_enabled: true
   temporal_host: "temporal"

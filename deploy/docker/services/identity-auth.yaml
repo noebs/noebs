@@ -1,2 +1,3 @@
 noebs:
   service_role: identity-auth
+  db_driver: pgx

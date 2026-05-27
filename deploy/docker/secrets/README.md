@@ -18,7 +18,7 @@ Expected files:
 
 Each expected file has a checked-in `*.example` next to it. The examples define shape only; every scalar value is a `REPLACE_WITH_*` placeholder and must be replaced in the local SOPS-encrypted file.
 
-Database-opening services must include `noebs.service_databases` with only their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url` or `noebs.service_databases`. `wallet-worker.secrets.yaml` uses the `wallet-ledger` owner key because the worker uses ledger state without owning a separate database or migration scope.
+Database-opening services get `noebs.db_driver` from their mounted service config and must include `noebs.service_databases` in secrets with only their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url` or `noebs.service_databases`. `wallet-worker.secrets.yaml` uses the `wallet-ledger` owner key because the worker uses ledger state without owning a separate database or migration scope.
 
 `secrets-init` uses the explicit ignored bootstrap secret at `deploy/docker/postgres/bootstrap.secrets.yaml` to run `noebs render-db-password` and render the local Postgres password file before Postgres starts. The repository carries `deploy/docker/postgres/bootstrap.secrets.yaml.example` with placeholders only. The root `secrets.yaml` is not a Docker Compose bootstrap contract and is not mounted into Noebs app or migration services.
 

@@ -1,2 +1,3 @@
 noebs:
   service_role: wallet-ledger
+  db_driver: pgx

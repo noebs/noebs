@@ -141,6 +141,7 @@ type composeSecret struct {
 
 type mountedNoebsConfig struct {
 	Noebs struct {
+		DatabaseDriver                             string            `yaml:"db_driver"`
 		ServiceDiscovery                           map[string]string `yaml:"service_discovery"`
 		GRPCServiceDiscovery                       map[string]string `yaml:"grpc_service_discovery"`
 		TemporalHost                               string            `yaml:"temporal_host"`
@@ -161,6 +162,13 @@ type mountedNoebsConfig struct {
 		WalletReconciliationCron                   string            `yaml:"wallet_reconciliation_cron"`
 		WalletReconciliationBatchSize              int               `yaml:"wallet_reconciliation_batch_size"`
 		WalletReconciliationLookbackHours          int               `yaml:"wallet_reconciliation_lookback_hours"`
+	} `yaml:"noebs"`
+}
+
+type mountedNoebsServiceConfig struct {
+	Noebs struct {
+		ServiceRole    string `yaml:"service_role"`
+		DatabaseDriver string `yaml:"db_driver"`
 	} `yaml:"noebs"`
 }
 
@@ -1037,6 +1045,38 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	}
 }
 
+func TestNoebsDatabaseDriverBelongsToDatabaseOpeningServiceConfigs(t *testing.T) {
+	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
+	if dockerConfig.Noebs.DatabaseDriver != "" {
+		t.Fatalf("config.docker.yaml must not define shared noebs.db_driver; got %q", dockerConfig.Noebs.DatabaseDriver)
+	}
+	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
+	if kubernetesConfig.Noebs.DatabaseDriver != "" {
+		t.Fatalf("Kubernetes noebs-config config.yaml must not define shared noebs.db_driver; got %q", kubernetesConfig.Noebs.DatabaseDriver)
+	}
+
+	serviceFiles, err := filepath.Glob(filepath.Join("..", "deploy", "docker", "services", "*.yaml"))
+	if err != nil {
+		t.Fatalf("list docker service configs: %v", err)
+	}
+	for _, serviceFile := range serviceFiles {
+		requireServiceDatabaseDriver(t, serviceFile, decodeNoebsServiceConfigFile(t, serviceFile))
+	}
+
+	configMapData := decodeKubernetesNoebsConfigMapData(t)
+	checked := 0
+	for key, payload := range configMapData {
+		if !strings.HasSuffix(key, ".service.yaml") {
+			continue
+		}
+		checked++
+		requireServiceDatabaseDriver(t, "noebs-config/"+key, decodeNoebsServiceConfigBytes(t, "noebs-config/"+key, []byte(payload)))
+	}
+	if checked == 0 {
+		t.Fatalf("Kubernetes noebs-config contains no service configs")
+	}
+}
+
 func TestNoebsPostgresDockerComposeUsesMountedBootstrapFiles(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 	config := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
@@ -1476,23 +1516,62 @@ func decodeMountedNoebsConfigFile(t *testing.T, path string) mountedNoebsConfig 
 
 func decodeKubernetesBaseNoebsConfig(t *testing.T) mountedNoebsConfig {
 	t.Helper()
+	configData := decodeKubernetesNoebsConfigMapData(t)["config.yaml"]
+	if configData == "" {
+		t.Fatalf("noebs-config missing config.yaml")
+	}
+	var config mountedNoebsConfig
+	if err := yaml.Unmarshal([]byte(configData), &config); err != nil {
+		t.Fatalf("parse noebs-config config.yaml: %v", err)
+	}
+	return config
+}
+
+func decodeKubernetesNoebsConfigMapData(t *testing.T) map[string]string {
+	t.Helper()
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	for _, object := range objects {
-		if object.Kind != "ConfigMap" || object.Metadata.Name != "noebs-config" {
-			continue
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "noebs-config" {
+			return object.Data
 		}
-		configData := object.Data["config.yaml"]
-		if configData == "" {
-			t.Fatalf("noebs-config missing config.yaml")
-		}
-		var config mountedNoebsConfig
-		if err := yaml.Unmarshal([]byte(configData), &config); err != nil {
-			t.Fatalf("parse noebs-config config.yaml: %v", err)
-		}
-		return config
 	}
 	t.Fatalf("noebs-config ConfigMap not found")
-	return mountedNoebsConfig{}
+	return nil
+}
+
+func decodeNoebsServiceConfigFile(t *testing.T, path string) mountedNoebsServiceConfig {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return decodeNoebsServiceConfigBytes(t, path, data)
+}
+
+func decodeNoebsServiceConfigBytes(t *testing.T, label string, data []byte) mountedNoebsServiceConfig {
+	t.Helper()
+	var config mountedNoebsServiceConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		t.Fatalf("parse %s: %v", label, err)
+	}
+	return config
+}
+
+func requireServiceDatabaseDriver(t *testing.T, label string, config mountedNoebsServiceConfig) {
+	t.Helper()
+	role, err := parseServiceRole(config.Noebs.ServiceRole)
+	if err != nil {
+		t.Fatalf("%s service_role = %q: %v", label, config.Noebs.ServiceRole, err)
+	}
+	if role.opensDatabase() {
+		if config.Noebs.DatabaseDriver != "pgx" {
+			t.Fatalf("%s noebs.db_driver = %q, want pgx for database-opening role %s", label, config.Noebs.DatabaseDriver, role)
+		}
+		return
+	}
+	if config.Noebs.DatabaseDriver != "" {
+		t.Fatalf("%s noebs.db_driver = %q, want empty for no-database role %s", label, config.Noebs.DatabaseDriver, role)
+	}
 }
 
 func isKubernetesWorkloadKind(kind string) bool {

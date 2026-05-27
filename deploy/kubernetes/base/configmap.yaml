@@ -7,7 +7,6 @@ data:
     noebs:
       sops_age_key_file: /app/.sops/age-key.txt
       runtime_dir: /app/runtime
-      db_driver: pgx
       port: ":8080"
       is_debug: false
       ebs_insecure_skip_verify: false
@@ -56,54 +55,71 @@ data:
   identity-auth.service.yaml: |
     noebs:
       service_role: identity-auth
+      db_driver: pgx
   card-vault.service.yaml: |
     noebs:
       service_role: card-vault
+      db_driver: pgx
   ebs-adapter.service.yaml: |
     noebs:
       service_role: ebs-adapter
+      db_driver: pgx
   psp-webhook.service.yaml: |
     noebs:
       service_role: psp-webhook
+      db_driver: pgx
   admin-reporting.service.yaml: |
     noebs:
       service_role: admin-reporting
+      db_driver: pgx
   notification-chat.service.yaml: |
     noebs:
       service_role: notification-chat
+      db_driver: pgx
   consumer-beneficiary.service.yaml: |
     noebs:
       service_role: consumer-beneficiary
+      db_driver: pgx
   wallet-api.service.yaml: |
     noebs:
       service_role: wallet-api
   wallet-ledger.service.yaml: |
     noebs:
       service_role: wallet-ledger
+      db_driver: pgx
   wallet-worker.service.yaml: |
     noebs:
       service_role: wallet-worker
+      db_driver: pgx
   identity-auth-migrate.service.yaml: |
     noebs:
       service_role: identity-auth-migrate
+      db_driver: pgx
   card-vault-migrate.service.yaml: |
     noebs:
       service_role: card-vault-migrate
+      db_driver: pgx
   ebs-adapter-migrate.service.yaml: |
     noebs:
       service_role: ebs-adapter-migrate
+      db_driver: pgx
   psp-webhook-migrate.service.yaml: |
     noebs:
       service_role: psp-webhook-migrate
+      db_driver: pgx
   admin-reporting-migrate.service.yaml: |
     noebs:
       service_role: admin-reporting-migrate
+      db_driver: pgx
   notification-chat-migrate.service.yaml: |
     noebs:
       service_role: notification-chat-migrate
+      db_driver: pgx
   consumer-beneficiary-migrate.service.yaml: |
     noebs:
       service_role: consumer-beneficiary-migrate
+      db_driver: pgx
   wallet-ledger-migrate.service.yaml: |
     noebs:
       service_role: wallet-ledger-migrate
+      db_driver: pgx

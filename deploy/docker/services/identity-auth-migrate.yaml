@@ -1,2 +1,3 @@
 noebs:
   service_role: identity-auth-migrate
+  db_driver: pgx

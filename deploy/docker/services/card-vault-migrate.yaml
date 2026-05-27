@@ -1,2 +1,3 @@
 noebs:
   service_role: card-vault-migrate
+  db_driver: pgx

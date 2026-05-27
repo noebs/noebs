@@ -1,2 +1,3 @@
 noebs:
   service_role: notification-chat
+  db_driver: pgx
