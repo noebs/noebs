@@ -41,10 +41,6 @@ services:
     depends_on:
       runtime-init:
         condition: service_completed_successfully
-    environment:
-      NOEBS_RUNTIME_DIR: /app/runtime
-      NOEBS_RENDER_DB_PASSWORD_FILE: /app/runtime/postgres_password.txt
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - noebs-runtime:/app/runtime
@@ -146,6 +142,7 @@ services:
         condition: service_healthy
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/migrate.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -157,10 +154,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: migrate
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
     restart: "no"
@@ -180,6 +173,7 @@ services:
       - "0.0.0.0:8081:8080"
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/api-gateway.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -191,10 +185,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: api-gateway
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
       - public
@@ -219,6 +209,7 @@ services:
         condition: service_healthy
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/psp-webhook.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -230,10 +221,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: psp-webhook
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
     stop_grace_period: 30s
@@ -255,6 +242,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/admin-reporting.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -266,10 +254,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: admin-reporting
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
     stop_grace_period: 30s
@@ -291,6 +275,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/notification-chat.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -302,10 +287,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: notification-chat
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
     stop_grace_period: 30s
@@ -329,6 +310,7 @@ services:
         condition: service_healthy
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/wallet-ledger.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -340,10 +322,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: wallet-ledger
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
     stop_grace_period: 30s
@@ -367,6 +345,7 @@ services:
         condition: service_healthy
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/wallet-worker.yaml:/app/service.yaml:ro"
     secrets:
       - source: noebs_secrets
         target: /app/secrets.yaml
@@ -378,10 +357,6 @@ services:
         uid: "10001"
         gid: "10001"
         mode: 0400
-    environment:
-      NOEBS_SERVICE: wallet-worker
-      NOEBS_RUNTIME_DIR: /app/runtime
-      SOPS_AGE_KEY_FILE: /app/.sops/age-key.txt
     networks:
       - backend
     stop_grace_period: 30s

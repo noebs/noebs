@@ -62,8 +62,6 @@ func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 
 func renderConfigInTempDir(t *testing.T, payload string) error {
 	t.Helper()
-	t.Setenv("NOEBS_RUNTIME_DIR", "")
-	t.Setenv("NOEBS_RENDER_DB_PASSWORD_FILE", "")
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)

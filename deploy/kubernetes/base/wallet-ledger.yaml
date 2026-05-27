@@ -23,13 +23,6 @@ spec:
         - name: wallet-ledger
           image: ghcr.io/adonese/noebs:master
           imagePullPolicy: IfNotPresent
-          env:
-            - name: NOEBS_SERVICE
-              value: wallet-ledger
-            - name: NOEBS_RUNTIME_DIR
-              value: /app/runtime
-            - name: SOPS_AGE_KEY_FILE
-              value: /app/.sops/age-key.txt
           ports:
             - name: grpc
               containerPort: 9090
@@ -54,6 +47,10 @@ spec:
               mountPath: /app/config.yaml
               subPath: config.yaml
               readOnly: true
+            - name: config
+              mountPath: /app/service.yaml
+              subPath: wallet-ledger.service.yaml
+              readOnly: true
             - name: noebs-secrets
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
@@ -62,8 +59,6 @@ spec:
               mountPath: /app/.sops/age-key.txt
               subPath: age-key.txt
               readOnly: true
-            - name: runtime
-              mountPath: /app/runtime
       volumes:
         - name: config
           configMap:
@@ -74,8 +69,6 @@ spec:
         - name: sops-age-key
           secret:
             secretName: sops-age-key
-        - name: runtime
-          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

@@ -110,9 +110,11 @@ Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Te
 
 Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an Argo CD PreSync hook. Service Deployments must not run migrations in their startup path.
 
+Service identity is config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. Secrets continue to merge through `secrets.yaml`.
+
 ## Migration Plan
 
-1. Add explicit runtime roles to the current binary: `api-gateway`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
+1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `psp-webhook`, `admin-reporting`, `notification-chat`, `wallet-ledger`, `wallet-worker`, and `migrate`.
 2. Run database migrations only through the Kubernetes/k3s migration Job.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.

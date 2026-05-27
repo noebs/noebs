@@ -26,7 +26,7 @@ func testAuthorizationHeader(t *testing.T) string {
 
 func TestNotificationRoutesAreNotOwnedByAPIGateway(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRoleAPIGateway))
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
 	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
@@ -58,7 +58,7 @@ func TestNotificationRoutesAreNotOwnedByAPIGateway(t *testing.T) {
 
 func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRoleNotification))
+	setServiceRoleForTest(t, serviceRoleNotification)
 	route := GetMainEngine()
 
 	tests := []struct {

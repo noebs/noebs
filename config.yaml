@@ -1,4 +1,5 @@
 noebs:
+  service_role: api-gateway
   db_path: /data/noebs.db
   port: ":8080"
   is_debug: false

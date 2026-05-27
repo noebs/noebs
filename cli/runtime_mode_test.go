@@ -19,6 +19,17 @@ func TestParseServiceRoleRejectsUnknownRole(t *testing.T) {
 	}
 }
 
+func TestCurrentServiceRoleReadsConfig(t *testing.T) {
+	setServiceRoleForTest(t, serviceRolePSPWebhook)
+	got, err := currentServiceRole()
+	if err != nil {
+		t.Fatalf("currentServiceRole() error = %v", err)
+	}
+	if got != serviceRolePSPWebhook {
+		t.Fatalf("role = %q, want %q", got, serviceRolePSPWebhook)
+	}
+}
+
 func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 	roles := []serviceRole{
 		serviceRoleAPIGateway,

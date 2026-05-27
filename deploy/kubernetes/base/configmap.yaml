@@ -5,6 +5,8 @@ metadata:
 data:
   config.yaml: |
     noebs:
+      sops_age_key_file: /app/.sops/age-key.txt
+      runtime_dir: /app/runtime
       db_driver: pgx
       port: ":8080"
       is_debug: false
@@ -36,3 +38,24 @@ data:
       grpc_port: ":9090"
       grpc_gateway_enabled: false
       grpc_gateway_port: ":9091"
+  api-gateway.service.yaml: |
+    noebs:
+      service_role: api-gateway
+  psp-webhook.service.yaml: |
+    noebs:
+      service_role: psp-webhook
+  admin-reporting.service.yaml: |
+    noebs:
+      service_role: admin-reporting
+  notification-chat.service.yaml: |
+    noebs:
+      service_role: notification-chat
+  wallet-ledger.service.yaml: |
+    noebs:
+      service_role: wallet-ledger
+  wallet-worker.service.yaml: |
+    noebs:
+      service_role: wallet-worker
+  migrate.service.yaml: |
+    noebs:
+      service_role: migrate

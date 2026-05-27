@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	defaultConfigPath  = "/app/config.yaml"
-	defaultSecretsPath = "/app/secrets.yaml"
+	defaultConfigPath        = "/app/config.yaml"
+	defaultServiceConfigPath = "/app/service.yaml"
+	defaultSecretsPath       = "/app/secrets.yaml"
 )
 
 func isRenderConfigCommand() bool {
@@ -29,13 +30,6 @@ func renderConfigFiles() error {
 
 	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml")
 
-	outputDir := filepath.Dir(configPath)
-	if runtimeDir := strings.TrimSpace(os.Getenv("NOEBS_RUNTIME_DIR")); runtimeDir != "" {
-		outputDir = runtimeDir
-	}
-	outputDBPath := filepath.Join(outputDir, ".db_path")
-	outputLitestream := litestreamOutputPath(outputDir)
-
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
@@ -45,10 +39,22 @@ func renderConfigFiles() error {
 	if err := yaml.Unmarshal(configData, &configMap); err != nil {
 		return fmt.Errorf("parse config yaml: %w", err)
 	}
+	if serviceConfigPath := firstExistingPath(defaultServiceConfigPath, "./service.yaml"); serviceConfigPath != "" {
+		serviceConfigData, err := os.ReadFile(serviceConfigPath)
+		if err != nil {
+			return fmt.Errorf("read service config: %w", err)
+		}
+		serviceConfigMap := map[string]interface{}{}
+		if err := yaml.Unmarshal(serviceConfigData, &serviceConfigMap); err != nil {
+			return fmt.Errorf("parse service config yaml: %w", err)
+		}
+		configMap = mergeConfig(configMap, serviceConfigMap).(map[string]interface{})
+	}
+	configNoebs := getMap(configMap, "noebs")
 
 	secretsMap := map[string]interface{}{}
 	if secretsPath != "" {
-		decrypted, err := decryptSopsFile(secretsPath)
+		decrypted, err := decryptSopsFile(secretsPath, firstString(configNoebs, "sops_age_key_file"))
 		if err != nil {
 			return err
 		}
@@ -62,6 +68,12 @@ func renderConfigFiles() error {
 	if noebs == nil {
 		noebs = map[string]interface{}{}
 	}
+	outputDir := filepath.Dir(configPath)
+	if runtimeDir := firstString(noebs, "runtime_dir"); runtimeDir != "" {
+		outputDir = runtimeDir
+	}
+	outputDBPath := filepath.Join(outputDir, ".db_path")
+	outputLitestream := litestreamOutputPath(outputDir)
 	defaultTenantID, _ := noebs["default_tenant_id"].(string)
 	if _, err := validateTenantID(defaultTenantID); err != nil {
 		return fmt.Errorf("runtime config default_tenant_id: %w", err)
@@ -70,6 +82,9 @@ func renderConfigFiles() error {
 		noebs["db_path"] = "/data/noebs.db"
 	}
 
+	if err := os.MkdirAll(outputDir, 0700); err != nil {
+		return fmt.Errorf("create runtime config dir: %w", err)
+	}
 	if err := os.WriteFile(outputDBPath, []byte(fmt.Sprint(noebs["db_path"])), 0600); err != nil {
 		return fmt.Errorf("write db path: %w", err)
 	}
@@ -101,8 +116,11 @@ func litestreamOutputPath(fallbackDir string) string {
 	return filepath.Join(fallbackDir, "litestream.yml")
 }
 
-func decryptSopsFile(path string) ([]byte, error) {
+func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
 	cmd := exec.Command("sops", "-d", path)
+	if ageKeyFile != "" {
+		cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+ageKeyFile)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("sops -d %s: %w", path, err)
@@ -243,7 +261,7 @@ func writeLitestreamConfig(merged map[string]interface{}, noebs map[string]inter
 }
 
 func writeDatabasePassword(noebs map[string]interface{}) error {
-	outputPath := strings.TrimSpace(os.Getenv("NOEBS_RENDER_DB_PASSWORD_FILE"))
+	outputPath := firstString(noebs, "render_db_password_file")
 	if outputPath == "" {
 		return nil
 	}

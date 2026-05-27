@@ -17,10 +17,6 @@ var testDBName string
 var testConfigPath string
 
 func TestMain(m *testing.M) {
-	if err := os.Setenv("NOEBS_SERVICE", string(serviceRoleAPIGateway)); err != nil {
-		panic(fmt.Sprintf("set NOEBS_SERVICE: %v", err))
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -42,7 +38,8 @@ func TestMain(m *testing.M) {
   db_url: %q
   db_driver: %q
   default_tenant_id: %q
-`, dbURL, "postgres", "test-tenant")
+  service_role: %q
+`, dbURL, "postgres", "test-tenant", serviceRoleAPIGateway)
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))
 	}

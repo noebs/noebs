@@ -8,7 +8,7 @@ import (
 
 func TestDashboardRouteIsNotOwnedByAPIGateway(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRoleAPIGateway))
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
@@ -24,7 +24,7 @@ func TestDashboardRouteIsNotOwnedByAPIGateway(t *testing.T) {
 
 func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRoleAdminReporting))
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
@@ -40,7 +40,7 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 
 func TestAdminReportingDoesNotOwnDashboardWriteRoutes(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRoleAdminReporting))
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
 	wasDebug := noebsConfig.IsDebug
 	noebsConfig.IsDebug = true
 	t.Cleanup(func() {

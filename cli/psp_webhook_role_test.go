@@ -8,7 +8,7 @@ import (
 
 func TestPSPWebhookRouteIsNotOwnedByAPIGateway(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRoleAPIGateway))
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", nil)
@@ -24,7 +24,7 @@ func TestPSPWebhookRouteIsNotOwnedByAPIGateway(t *testing.T) {
 
 func TestPSPWebhookRouteIsOwnedByPSPWebhookService(t *testing.T) {
 	ensureInit()
-	t.Setenv("NOEBS_SERVICE", string(serviceRolePSPWebhook))
+	setServiceRoleForTest(t, serviceRolePSPWebhook)
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", nil)

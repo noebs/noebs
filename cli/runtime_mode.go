@@ -3,15 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
 type serviceRole string
 
 var (
-	errMissingServiceRole = errors.New("missing NOEBS_SERVICE")
-	errInvalidServiceRole = errors.New("invalid NOEBS_SERVICE")
+	errMissingServiceRole = errors.New("missing noebs.service_role")
+	errInvalidServiceRole = errors.New("invalid noebs.service_role")
 )
 
 const (
@@ -25,7 +24,7 @@ const (
 )
 
 func currentServiceRole() (serviceRole, error) {
-	return parseServiceRole(os.Getenv("NOEBS_SERVICE"))
+	return parseServiceRole(noebsConfig.ServiceRole)
 }
 
 func parseServiceRole(value string) (serviceRole, error) {

@@ -15,6 +15,8 @@ Required Kubernetes Secrets in namespace `noebs`:
 - `temporal-postgres-credentials` with key `password`.
 - `noebs-tls` TLS secret for `api.noebs.sd` and `dsa.adonese.sd`.
 
+Noebs service roles are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload.
+
 Render check:
 
 ```sh

@@ -65,11 +65,22 @@ func loadConfig() ([]byte, error) {
 	if err := yaml.Unmarshal(configData, &configMap); err != nil {
 		return nil, fmt.Errorf("parse config yaml: %w", err)
 	}
+	if serviceConfigPath := firstExistingPath(defaultServiceConfigPath, "./service.yaml", "../service.yaml"); serviceConfigPath != "" {
+		serviceConfigData, err := os.ReadFile(serviceConfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("read service config: %w", err)
+		}
+		serviceConfigMap := map[string]interface{}{}
+		if err := yaml.Unmarshal(serviceConfigData, &serviceConfigMap); err != nil {
+			return nil, fmt.Errorf("parse service config yaml: %w", err)
+		}
+		configMap = mergeConfig(configMap, serviceConfigMap).(map[string]interface{})
+	}
 
 	secretsMap := map[string]interface{}{}
 	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml", "../secrets.yaml")
 	if secretsPath != "" {
-		decrypted, err := decryptSopsFile(secretsPath)
+		decrypted, err := decryptSopsFile(secretsPath, firstString(getMap(configMap, "noebs"), "sops_age_key_file"))
 		if err != nil {
 			if isTestRun() {
 				logrusLogger.Printf("Skipping secrets (%s): %v", secretsPath, err)
@@ -348,10 +359,6 @@ func init() {
 
 func initConfig() {
 	var err error
-	role, err := currentServiceRole()
-	if err != nil {
-		logrusLogger.Fatalf("error in runtime service role: %v", err)
-	}
 
 	// load the secrets file
 	configData, err := loadConfig()
@@ -364,6 +371,10 @@ func initConfig() {
 	}
 
 	noebsConfig.Defaults()
+	role, err := currentServiceRole()
+	if err != nil {
+		logrusLogger.Fatalf("error in runtime service role: %v", err)
+	}
 	tenantID, err := configuredTenantID(noebsConfig)
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime config: %v", err)
