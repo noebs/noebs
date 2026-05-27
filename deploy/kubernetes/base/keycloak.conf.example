@@ -1,0 +1,14 @@
+http-enabled=true
+http-port=8080
+hostname-strict=false
+proxy-headers=xforwarded
+health-enabled=true
+metrics-enabled=true
+
+db=postgres
+db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
+db-username=keycloak
+db-password=REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD
+
+bootstrap-admin-username=REPLACE_WITH_BOOTSTRAP_ADMIN_USERNAME
+bootstrap-admin-password=REPLACE_WITH_BOOTSTRAP_ADMIN_PASSWORD

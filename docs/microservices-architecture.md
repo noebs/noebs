@@ -35,6 +35,12 @@ Owns users, mobile auth, Google OAuth linking, JWT issuance, auth accounts, prof
 
 Initial package owner: existing user/auth code in `consumer` plus `store` user/auth tables. The first split owns login, registration, OTP, Google OAuth, profile, language, password, API-key generation, KYC/check-user, and device-token update routes.
 
+### Keycloak Service
+
+Owns the future external identity provider runtime. It is deployed as an independent service with its own Postgres database and mounted `keycloak.conf` secret, but no noebs auth data path is wired to it yet.
+
+Initial package owner: official Keycloak container. The first split only makes the service deployable and discoverable inside the cluster.
+
 ### Consumer Beneficiary Service
 
 Owns consumer beneficiary/contact payment targets at the public compatibility path level. It keeps beneficiary CRUD out of the API Gateway while the legacy consumer package is being carved into explicit owners.
@@ -107,6 +113,7 @@ Kubernetes provides service discovery through ClusterIP services:
 
 - `api-gateway.noebs.svc.cluster.local:8080`
 - `identity-auth.noebs.svc.cluster.local:8080`
+- `keycloak.noebs.svc.cluster.local:8080`
 - `card-vault.noebs.svc.cluster.local:8080`
 - `ebs-adapter.noebs.svc.cluster.local:8080`
 - `psp-webhook.noebs.svc.cluster.local:8080`
@@ -117,7 +124,9 @@ Kubernetes provides service discovery through ClusterIP services:
 - `wallet-ledger.noebs.svc.cluster.local:9090`
 - `wallet-worker` has no service; it is a worker deployment.
 - `temporal-frontend.noebs.svc.cluster.local:7233`
-- service-owned Postgres databases, addressed through each service's mounted `secrets.yaml`.
+- `keycloak-postgres.noebs.svc.cluster.local:5432`
+- noebs service-owned Postgres databases, addressed through each service's mounted `secrets.yaml`.
+- Keycloak's Postgres database, addressed through the mounted `keycloak.conf` secret.
 
 Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. The public Ingress only targets `api-gateway`; `api-gateway` proxies public compatibility routes to the ClusterIP service catalog. OpenTofu under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
 
@@ -135,13 +144,14 @@ For local Docker Compose, a single SOPS file can still track service-owned datab
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
 5. Move dashboard traffic into the `admin-reporting` workload. It owns read-only dashboard, settlement, merchant-view, status, and stream routes. `GET /dashboard/create` and `POST /dashboard/issues` are not registered by the reporting service.
 6. Move notification/chat traffic into the `notification-chat` workload. It owns websocket contacts and notification reads at the public path level.
-7. Move Identity/Auth traffic into the `identity-auth` workload. It owns JWT issuance, OAuth, user/profile, API-key, KYC/check-user, and device-token update routes.
-8. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
-9. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS transaction lookup, and mobile-transfer compatibility routes.
-10. Move wallet HTTP traffic into the `wallet-api` workload. It owns `/wallet` and `/admin/wallet` routes at the public path level while `wallet-ledger` owns the gRPC ledger process.
-11. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
-12. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
-13. Keep migration scopes service-owned as schemas move forward; do not add new tables to the legacy monolith scope.
+7. Deploy Keycloak as an independent auth platform service with its own database and config-mounted secret. Do not wire noebs auth data to it until the migration contract is explicit.
+8. Move Identity/Auth traffic into the `identity-auth` workload. It owns JWT issuance, OAuth, user/profile, API-key, KYC/check-user, and device-token update routes.
+9. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
+10. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS transaction lookup, and mobile-transfer compatibility routes.
+11. Move wallet HTTP traffic into the `wallet-api` workload. It owns `/wallet` and `/admin/wallet` routes at the public path level while `wallet-ledger` owns the gRPC ledger process.
+12. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
+13. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
+14. Keep migration scopes service-owned as schemas move forward; do not add new tables to the legacy monolith scope.
 
 ## Verification Gates
 

@@ -10,6 +10,10 @@ locals {
       port     = 8080
       protocol = "http"
     }
+    keycloak = {
+      port     = 8080
+      protocol = "http"
+    }
     "card-vault" = {
       port     = 8080
       protocol = "http"
@@ -47,6 +51,10 @@ locals {
       protocol = "grpc"
     }
     postgres = {
+      port     = 5432
+      protocol = "postgres"
+    }
+    "keycloak-postgres" = {
       port     = 5432
       protocol = "postgres"
     }
@@ -100,6 +108,11 @@ locals {
     "wallet-worker" = {
       database    = "wallet_ledger"
       secret_name = "wallet-ledger-secrets"
+    }
+    keycloak = {
+      database    = "keycloak"
+      secret_name = "keycloak-secrets"
+      managed_by  = "keycloak"
     }
   }
 }
