@@ -16,7 +16,33 @@ import (
 	"github.com/adonese/noebs/store"
 )
 
-const cardVaultServiceDiscoveryKey = "card-vault"
+const (
+	cardVaultServiceDiscoveryKey    = "card-vault"
+	identityAuthServiceDiscoveryKey = "identity-auth"
+	internalTenantIDHeader          = "X-Tenant-ID"
+)
+
+type serviceCommandTarget struct {
+	discoveryKey string
+	missingErr   error
+	invalidErr   error
+	commandErr   error
+}
+
+var (
+	cardVaultCommandTarget = serviceCommandTarget{
+		discoveryKey: cardVaultServiceDiscoveryKey,
+		missingErr:   ErrMissingCardVault,
+		invalidErr:   ErrInvalidCardVault,
+		commandErr:   ErrCardVaultCommand,
+	}
+	identityAuthCommandTarget = serviceCommandTarget{
+		discoveryKey: identityAuthServiceDiscoveryKey,
+		missingErr:   ErrMissingIdentityAuth,
+		invalidErr:   ErrInvalidIdentityAuth,
+		commandErr:   ErrIdentityAuthCommand,
+	}
+)
 
 type QuickPaymentTokenResolveCommand struct {
 	BodyToken  string `json:"body_token,omitempty"`
@@ -35,7 +61,7 @@ type QuickPaymentTokenPaidCommand struct {
 	UUID string `json:"uuid"`
 }
 
-type cardVaultErrorPayload struct {
+type serviceCommandErrorPayload struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
@@ -121,7 +147,7 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 	if userID <= 0 {
 		return store.ErrInvalidUserID
 	}
-	endpoint, err := s.cardVaultEndpoint()
+	endpoint, err := s.serviceDiscoveryEndpoint(cardVaultCommandTarget)
 	if err != nil {
 		return err
 	}
@@ -148,7 +174,7 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 		return err
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return cardVaultCommandError(resp.StatusCode, data)
+		return serviceCommandError(cardVaultCommandTarget.commandErr, resp.StatusCode, data)
 	}
 	if out == nil {
 		return nil
@@ -159,39 +185,88 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 	return nil
 }
 
-func (s *Service) cardVaultEndpoint() (string, error) {
+func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, target serviceCommandTarget, path string, command any, out any) error {
+	if s == nil {
+		return ErrMissingService
+	}
+	if s.HTTPClient == nil {
+		return ErrMissingHTTPClient
+	}
+	if tenantID == "" {
+		return store.ErrMissingTenantID
+	}
+	endpoint, err := s.serviceDiscoveryEndpoint(target)
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(command)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+path, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(internalTenantIDHeader, tenantID)
+	req.Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
+	req.Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
+
+	resp, err := s.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: %v", target.commandErr, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return serviceCommandError(target.commandErr, resp.StatusCode, data)
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) serviceDiscoveryEndpoint(target serviceCommandTarget) (string, error) {
 	if s == nil {
 		return "", ErrMissingService
 	}
-	endpoint := strings.TrimSpace(s.NoebsConfig.ServiceDiscovery[cardVaultServiceDiscoveryKey])
+	endpoint := strings.TrimSpace(s.NoebsConfig.ServiceDiscovery[target.discoveryKey])
 	if endpoint == "" {
-		return "", ErrMissingCardVault
+		return "", target.missingErr
 	}
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrInvalidCardVault, err)
+		return "", fmt.Errorf("%w: %v", target.invalidErr, err)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("%w: scheme %q", ErrInvalidCardVault, parsed.Scheme)
+		return "", fmt.Errorf("%w: scheme %q", target.invalidErr, parsed.Scheme)
 	}
 	if parsed.Host == "" {
-		return "", fmt.Errorf("%w: missing host", ErrInvalidCardVault)
+		return "", fmt.Errorf("%w: missing host", target.invalidErr)
 	}
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
-func cardVaultCommandError(status int, data []byte) error {
-	var payload cardVaultErrorPayload
+func serviceCommandError(commandErr error, status int, data []byte) error {
+	var payload serviceCommandErrorPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return fmt.Errorf("%w: status %d", ErrCardVaultCommand, status)
+		return fmt.Errorf("%w: status %d", commandErr, status)
 	}
-	if err := errorForCardVaultCode(payload.Code); err != nil {
+	if err := errorForServiceCommandCode(payload.Code); err != nil {
 		return err
 	}
-	return fmt.Errorf("%w: status %d code %q", ErrCardVaultCommand, status, payload.Code)
+	return fmt.Errorf("%w: status %d code %q", commandErr, status, payload.Code)
 }
 
-func errorForCardVaultCode(code string) error {
+func errorForServiceCommandCode(code string) error {
 	switch strings.TrimSpace(code) {
 	case "":
 		return nil
@@ -205,11 +280,19 @@ func errorForCardVaultCode(code string) error {
 		return ErrAmbiguousPaymentToken
 	case ErrMissingStore.Error():
 		return ErrMissingStore
+	case ErrMissingMobile.Error():
+		return ErrMissingMobile
+	case ErrMissingPassword.Error():
+		return ErrMissingPassword
+	case ErrMissingIssuedPAN.Error():
+		return ErrMissingIssuedPAN
 	case store.ErrMissingTenantID.Error():
 		return store.ErrMissingTenantID
+	case store.ErrInvalidTenantID.Error():
+		return store.ErrInvalidTenantID
 	case store.ErrInvalidUserID.Error():
 		return store.ErrInvalidUserID
 	default:
-		return fmt.Errorf("%w: %s", ErrCardVaultCommand, code)
+		return nil
 	}
 }

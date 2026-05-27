@@ -158,7 +158,6 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/user/device", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/change_password", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 
-		{method: fiber.MethodPost, path: "/consumer/cards/complete", role: serviceRoleCardVault, auth: gatewayAuthPublic},
 		{method: fiber.MethodGet, path: "/consumer/get_cards", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/add_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPut, path: "/consumer/edit_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
@@ -174,6 +173,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/card_info", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/pan_from_mobile", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/cards/new", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
+		{method: fiber.MethodPost, path: "/consumer/cards/complete", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodGet, path: "/consumer/nec2name", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/workingKey", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/cardTransfer", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},

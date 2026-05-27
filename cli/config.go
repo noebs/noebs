@@ -390,17 +390,18 @@ func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
 
 func registerIdentityAuthRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Post("/generate_api_key", adminIdentity, consumerHandler.GenerateAPIKey)
+	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", adminIdentity), consumerHandler)
 
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterIdentityPublicRoutes(cons, consumerHandler)
 	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerCardVaultRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerCardVaultRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
-	consumerhandler.RegisterCardVaultPublicRoutes(cons, consumerHandler)
 	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 	consumerhandler.RegisterCardVaultInternalRoutes(route.Group("/internal/card-vault", userIdentity), consumerHandler)
+	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", adminIdentity), consumerHandler)
 }
 
 func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
@@ -479,7 +480,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleCardVault {
-		registerCardVaultRoutes(route, userIdentity, consumerHandler)
+		registerCardVaultRoutes(route, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleEBSAdapter {

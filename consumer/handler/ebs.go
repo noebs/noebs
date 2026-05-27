@@ -1,6 +1,11 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
 )
@@ -144,10 +149,35 @@ func (h *Handler) RegisterCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CompleteRegistration(c *fiber.Ctx) error {
+	if h == nil || h.Service == nil {
+		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	}
 	var req ebs_fields.ConsumerCompleteRegistrationFields
-	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerCompleteRegistrationFields) {
-		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-	}, h.Service.CompleteRegistration, nil)
+	if err := bindJSON(c, &req); err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
+	}
+	tenantID, err := resolveTenantID(c)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+	req.ApplicationId = h.Service.NoebsConfig.ConsumerID
+	req.Mobile = strings.TrimSpace(req.Mobile)
+	if req.Mobile == "" {
+		return jsonResponse(c, statusForError(consumer.ErrMissingMobile), fiber.Map{"code": consumer.ErrMissingMobile.Error(), "message": consumer.ErrMissingMobile.Error()})
+	}
+	if strings.TrimSpace(req.NoebsPassword) == "" {
+		return jsonResponse(c, statusForError(consumer.ErrMissingPassword), fiber.Map{"code": consumer.ErrMissingPassword.Error(), "message": consumer.ErrMissingPassword.Error()})
+	}
+
+	res, callErr := h.Service.CompleteRegistration(c.UserContext(), tenantID, req)
+	if callErr != nil {
+		var ebsCallErr *ebs_fields.CallError
+		if errors.As(callErr, &ebsCallErr) && ebsCallErr != nil {
+			return jsonResponse(c, statusForError(callErr), ebsErrorDetails(ebsCallErr.Response))
+		}
+		return jsonResponse(c, statusForError(callErr), fiber.Map{"code": "bad_request", "message": callErr.Error()})
+	}
+	return jsonResponse(c, http.StatusOK, fiber.Map{"ebs_response": res})
 }
 
 func (h *Handler) CardTransfer(c *fiber.Ctx) error {

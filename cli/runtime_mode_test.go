@@ -359,6 +359,11 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingCardVault); err == nil {
 		t.Fatalf("ebs-adapter should require card-vault service discovery")
 	}
+	missingIdentityAuth := explicitEBSRuntimeConfig()
+	delete(missingIdentityAuth.ServiceDiscovery, string(serviceRoleIdentityAuth))
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingIdentityAuth); err == nil {
+		t.Fatalf("ebs-adapter should require identity-auth service discovery")
+	}
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
 		t.Fatalf("identity-auth should not require EBS endpoint config: %v", err)
 	}
@@ -372,7 +377,8 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 		ConsumerID: "consumer-app",
 		MerchantID: "merchant-app",
 		ServiceDiscovery: map[string]string{
-			string(serviceRoleCardVault): "http://card-vault:8080",
+			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
+			string(serviceRoleCardVault):    "http://card-vault:8080",
 		},
 	}
 }

@@ -70,6 +70,21 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 	}
 }
 
+func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleIdentityAuth)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/identity-auth/card-registration/users", nil)
+	setGatewayAdminIdentityHeader(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertFiberRouteRegistered(t, resp, http.MethodPost, "/internal/identity-auth/card-registration/users")
+}
+
 func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)

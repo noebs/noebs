@@ -23,7 +23,11 @@ var (
 	ErrMissingCardVault      = errors.New("missing_card_vault_service_discovery")
 	ErrInvalidCardVault      = errors.New("invalid_card_vault_service_discovery")
 	ErrCardVaultCommand      = errors.New("card_vault_command_failed")
+	ErrMissingIdentityAuth   = errors.New("missing_identity_auth_service_discovery")
+	ErrInvalidIdentityAuth   = errors.New("invalid_identity_auth_service_discovery")
+	ErrIdentityAuthCommand   = errors.New("identity_auth_command_failed")
 
 	// Registration
-	ErrMissingPassword = errors.New("missing password")
+	ErrMissingPassword  = errors.New("missing password")
+	ErrMissingIssuedPAN = errors.New("missing_issued_pan")
 )

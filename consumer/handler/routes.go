@@ -7,6 +7,7 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/card_info", h.EbsGetCardInfo)
 	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
 	router.Post("/cards/new", h.RegisterCard)
+	router.Post("/cards/complete", h.CompleteRegistration)
 	router.Get("/nec2name", h.NecToName)
 	router.Post("/balance", h.Balance)
 	router.Post("/status", h.TransactionStatus)
@@ -38,11 +39,6 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 
 	// Vouchers (public)
 	router.Post("/vouchers/generate", h.GenerateVoucher)
-}
-
-func RegisterCardVaultPublicRoutes(router fiber.Router, h *Handler) {
-	// Registration completion persists local identity/card state; split its EBS step next.
-	router.Post("/cards/complete", h.CompleteRegistration)
 }
 
 func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
@@ -100,6 +96,14 @@ func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/quick-pay/resolve", h.ResolveQuickPaymentToken)
 	router.Post("/quick-pay/mark-paid", h.MarkQuickPaymentTokenPaid)
+}
+
+func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
+	router.Post("/card-registration/cards", h.StoreCompletedRegistrationCard)
+}
+
+func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
+	router.Post("/card-registration/users", h.CreateCompletedRegistrationIdentity)
 }
 
 func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {

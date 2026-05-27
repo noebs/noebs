@@ -29,7 +29,6 @@ func cardVaultSteadyRoutes() []cardVaultRoute {
 
 func cardVaultTransitionalRoutes() []cardVaultRoute {
 	return []cardVaultRoute{
-		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
 		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
 		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
 	}
@@ -133,6 +132,7 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 		{name: "quick pay execution", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
 		{name: "ebs pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
 		{name: "ebs card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
+		{name: "ebs card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
 		{name: "ebs meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 	}
 	for _, tt := range tests {
@@ -172,4 +172,19 @@ func TestCardVaultOwnsQuickPayInternalCommands(t *testing.T) {
 			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
 		})
 	}
+}
+
+func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/internal/card-vault/card-registration/cards", nil)
+	setGatewayAdminIdentityHeader(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	assertFiberRouteRegistered(t, resp, http.MethodPost, "/internal/card-vault/card-registration/cards")
 }

@@ -97,10 +97,14 @@ func (s *Service) RegisterWithCard(ctx context.Context, tenantID string, card eb
 	return otp, nil
 }
 
-// CompleteRegistration performs step 2 in card issuance and creates a local user + card on success.
+// CompleteRegistration performs step 2 in card issuance, then commands identity-auth
+// and card-vault to persist their service-owned state.
 func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fields ebs_fields.ConsumerCompleteRegistrationFields) (ebs_fields.EBSParserFields, error) {
-	if s == nil || s.Store == nil {
-		return ebs_fields.EBSParserFields{}, ErrMissingStore
+	if s == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingService
+	}
+	if s.HTTPClient == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
@@ -112,16 +116,6 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 	}
 	if strings.TrimSpace(password) == "" {
 		return ebs_fields.EBSParserFields{}, ErrMissingPassword
-	}
-
-	// Create the local user first (matches legacy behavior).
-	user := ebs_fields.User{Mobile: mobile, Username: mobile, Password: password}
-	if err := user.HashPassword(); err != nil {
-		return ebs_fields.EBSParserFields{}, err
-	}
-	user.SanitizeName()
-	if err := s.Store.CreateUser(ctx, tenantID, &user); err != nil {
-		return ebs_fields.EBSParserFields{}, err
 	}
 
 	// Never send noebs-specific fields to EBS.
@@ -146,30 +140,25 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 		return res, err
 	}
 
-	// Associate the issued card to that user.
-	if issuedPan != "" {
-		card := ebs_fields.CacheCards{Pan: issuedPan, Expiry: issuedExp}
-		if err := s.Store.UpsertCacheCard(ctx, tenantID, card); err != nil {
-			return res, err
-		}
-
-		user.MainCard = issuedPan
-		user.ExpDate = issuedExp
-		if err := s.Store.UpdateUserColumns(ctx, tenantID, user.ID, map[string]any{
-			"main_card":       issuedPan,
-			"main_expdate":    issuedExp,
-			"is_verified":     true,
-			"is_password_otp": true,
-		}); err != nil {
-			return res, err
-		}
-
-		newCard := card.NewCardFromCached(int(user.ID))
-		newCard.ID = 0
-		newCard.IsMain = true
-		if err := s.Store.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{newCard}); err != nil {
-			return res, err
-		}
+	issuedPan = strings.TrimSpace(issuedPan)
+	if issuedPan == "" {
+		return res, ErrMissingIssuedPAN
+	}
+	identity, err := s.CreateCompletedRegistrationIdentityInIdentityAuth(ctx, tenantID, CompletedRegistrationIdentityCommand{
+		Mobile:   mobile,
+		Password: password,
+		PAN:      issuedPan,
+		ExpDate:  issuedExp,
+	})
+	if err != nil {
+		return res, err
+	}
+	if err := s.StoreCompletedRegistrationCardInCardVault(ctx, tenantID, CompletedRegistrationCardCommand{
+		UserID:  identity.UserID,
+		PAN:     issuedPan,
+		ExpDate: issuedExp,
+	}); err != nil {
+		return res, err
 	}
 
 	return res, nil
