@@ -136,23 +136,6 @@ func (s *Service) TransactionByTid(c *fiber.Ctx) {
 	jsonResponse(c, http.StatusOK, fiber.Map{"result": tran, "count": len(tran)})
 }
 
-func (s *Service) MakeDummyTransaction(c *fiber.Ctx) {
-	if s.Store == nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": "db_not_configured"})
-		return
-	}
-	tenantID, ok := s.requireTenantID(c)
-	if !ok {
-		return
-	}
-	tran := ebs_fields.EBSResponse{}
-	if err := s.Store.CreateTransaction(c.UserContext(), tenantID, tran); err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"code": err.Error()})
-	} else {
-		jsonResponse(c, http.StatusOK, fiber.Map{"message": "object create successfully."})
-	}
-}
-
 func (s *Service) GetAll(c *fiber.Ctx) {
 	p := c.Query("page", "0")
 	size := c.Query("size", "50")
@@ -470,28 +453,6 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 	jsonResponse(c, http.StatusOK, fiber.Map{"result": stats})
 }
 
-func (s *Service) ReportIssueEndpoint(c *fiber.Ctx) {
-	var issue merchantsIssues
-	if err := parseJSON(c, &issue); err != nil {
-		jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "terminalId_not_provided", "message": "Pls provide terminal Id"})
-	} else {
-		db, err := s.ensureDB()
-		if err != nil {
-			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-			return
-		}
-		tenantID, ok := s.requireTenantID(c)
-		if !ok {
-			return
-		}
-		if err := insertIssue(c.UserContext(), db, tenantID, issue); err != nil {
-			jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-			return
-		}
-		jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
-	}
-}
-
 //TODO
 // - Add Merchant views
 // - Add Merchant stats / per month
@@ -517,12 +478,4 @@ func listIssues(ctx context.Context, db *sqlx.DB, tenantID, terminalID string) (
 		return nil, err
 	}
 	return issues, nil
-}
-
-func insertIssue(ctx context.Context, db *sqlx.DB, tenantID string, issue merchantsIssues) error {
-	reportedAt := normalizeTime(issue.Time)
-	stmt := `INSERT INTO merchant_issues(tenant_id, terminal_id, latitude, longitude, reported_at, created_at)
-		VALUES(?, ?, ?, ?, ?, ?)`
-	_, err := db.ExecContext(ctx, db.Rebind(stmt), tenantID, issue.TerminalID, issue.Latitude, issue.Longitude, reportedAt, time.Now().UTC())
-	return err
 }
