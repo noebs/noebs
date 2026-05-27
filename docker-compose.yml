@@ -127,7 +127,7 @@ services:
     <<: *service-defaults
     build:
       context: .
-    entrypoint: ["/usr/local/bin/noebs", "render-config"]
+    entrypoint: ["/usr/local/bin/noebs", "render-db-password"]
     depends_on:
       runtime-init:
         condition: service_completed_successfully

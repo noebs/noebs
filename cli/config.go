@@ -524,7 +524,7 @@ func ensureInit() {
 }
 
 func init() {
-	if isRenderConfigCommand() {
+	if isConfigUtilityCommand() {
 		return
 	}
 	if isTestRun() {

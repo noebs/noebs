@@ -46,6 +46,12 @@ func main() {
 		}
 		return
 	}
+	if isRenderDatabasePasswordCommand() {
+		if err := renderDatabasePasswordFile(); err != nil {
+			logrusLogger.Fatalf("render database password failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)

@@ -22,52 +22,20 @@ func isRenderConfigCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-config"
 }
 
+func isRenderDatabasePasswordCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "render-db-password"
+}
+
+func isConfigUtilityCommand() bool {
+	return isRenderConfigCommand() || isRenderDatabasePasswordCommand()
+}
+
 func renderConfigFiles() error {
-	configPath := firstExistingPath(defaultConfigPath, "./config.yaml")
-	if configPath == "" {
-		return errors.New("config.yaml not found")
-	}
-
-	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml")
-
-	configData, err := os.ReadFile(configPath)
+	noebs, configPath, err := loadMergedConfigForRender()
 	if err != nil {
-		return fmt.Errorf("read config: %w", err)
+		return err
 	}
 
-	configMap := map[string]interface{}{}
-	if err := yaml.Unmarshal(configData, &configMap); err != nil {
-		return fmt.Errorf("parse config yaml: %w", err)
-	}
-	if serviceConfigPath := firstExistingPath(defaultServiceConfigPath, "./service.yaml"); serviceConfigPath != "" {
-		serviceConfigData, err := os.ReadFile(serviceConfigPath)
-		if err != nil {
-			return fmt.Errorf("read service config: %w", err)
-		}
-		serviceConfigMap := map[string]interface{}{}
-		if err := yaml.Unmarshal(serviceConfigData, &serviceConfigMap); err != nil {
-			return fmt.Errorf("parse service config yaml: %w", err)
-		}
-		configMap = mergeConfig(configMap, serviceConfigMap).(map[string]interface{})
-	}
-	configNoebs := getMap(configMap, "noebs")
-
-	secretsMap := map[string]interface{}{}
-	if secretsPath != "" {
-		decrypted, err := decryptSopsFile(secretsPath, firstString(configNoebs, "sops_age_key_file"))
-		if err != nil {
-			return err
-		}
-		if err := yaml.Unmarshal(decrypted, &secretsMap); err != nil {
-			return fmt.Errorf("parse secrets yaml: %w", err)
-		}
-	}
-
-	merged := mergeConfig(configMap, secretsMap).(map[string]interface{})
-	noebs := getMap(merged, "noebs")
-	if noebs == nil {
-		noebs = map[string]interface{}{}
-	}
 	if err := applyServiceDatabaseURL(noebs); err != nil {
 		return err
 	}
@@ -92,6 +60,66 @@ func renderConfigFiles() error {
 	}
 
 	return nil
+}
+
+func renderDatabasePasswordFile() error {
+	noebs, _, err := loadMergedConfigForRender()
+	if err != nil {
+		return err
+	}
+	if firstString(noebs, "render_db_password_file") == "" {
+		return errors.New("render_db_password_file is required")
+	}
+	return writeDatabasePassword(noebs)
+}
+
+func loadMergedConfigForRender() (map[string]interface{}, string, error) {
+	configPath := firstExistingPath(defaultConfigPath, "./config.yaml")
+	if configPath == "" {
+		return nil, "", errors.New("config.yaml not found")
+	}
+
+	secretsPath := firstExistingPath(defaultSecretsPath, "./secrets.yaml")
+
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, "", fmt.Errorf("read config: %w", err)
+	}
+
+	configMap := map[string]interface{}{}
+	if err := yaml.Unmarshal(configData, &configMap); err != nil {
+		return nil, "", fmt.Errorf("parse config yaml: %w", err)
+	}
+	if serviceConfigPath := firstExistingPath(defaultServiceConfigPath, "./service.yaml"); serviceConfigPath != "" {
+		serviceConfigData, err := os.ReadFile(serviceConfigPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("read service config: %w", err)
+		}
+		serviceConfigMap := map[string]interface{}{}
+		if err := yaml.Unmarshal(serviceConfigData, &serviceConfigMap); err != nil {
+			return nil, "", fmt.Errorf("parse service config yaml: %w", err)
+		}
+		configMap = mergeConfig(configMap, serviceConfigMap).(map[string]interface{})
+	}
+	configNoebs := getMap(configMap, "noebs")
+
+	secretsMap := map[string]interface{}{}
+	if secretsPath != "" {
+		decrypted, err := decryptSopsFile(secretsPath, firstString(configNoebs, "sops_age_key_file"))
+		if err != nil {
+			return nil, "", err
+		}
+		if err := yaml.Unmarshal(decrypted, &secretsMap); err != nil {
+			return nil, "", fmt.Errorf("parse secrets yaml: %w", err)
+		}
+	}
+
+	merged := mergeConfig(configMap, secretsMap).(map[string]interface{})
+	noebs := getMap(merged, "noebs")
+	if noebs == nil {
+		noebs = map[string]interface{}{}
+	}
+	return noebs, configPath, nil
 }
 
 func firstExistingPath(paths ...string) string {

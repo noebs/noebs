@@ -749,6 +749,12 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	if !ok {
 		t.Fatalf("docker-compose.yml missing secrets-init service")
 	}
+	if !containsString(secretsInit.Entrypoint, "render-db-password") {
+		t.Fatalf("secrets-init entrypoint = %v, want explicit database password renderer", secretsInit.Entrypoint)
+	}
+	if containsString(secretsInit.Entrypoint, "render-config") {
+		t.Fatalf("secrets-init must not run runtime config validation")
+	}
 	requireComposeSecret(t, "secrets-init", secretsInit.Secrets, "postgres-bootstrap-secrets", "/app/secrets.yaml")
 	requireComposeTopLevelSecret(t, compose.Secrets, "postgres-bootstrap-secrets", "./secrets.yaml")
 

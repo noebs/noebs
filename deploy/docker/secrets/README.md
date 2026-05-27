@@ -15,6 +15,6 @@ Expected files:
 - `wallet-api.secrets.yaml`
 - `wallet-ledger.secrets.yaml`
 
-Database-opening services must include their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url`. `wallet-worker` and `wallet-ledger-migrate` mount `wallet-ledger.secrets.yaml` because `wallet-ledger` owns wallet state.
+Database-opening services must include `noebs.service_databases` with only their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url` or `noebs.service_databases`. `wallet-worker` and `wallet-ledger-migrate` mount `wallet-ledger.secrets.yaml` because `wallet-ledger` owns wallet state.
 
-The root `secrets.yaml` remains a bootstrap secret for `secrets-init`, which renders the local Postgres password file before Postgres starts. It is not mounted into Noebs app or migration services.
+The root `secrets.yaml` remains a bootstrap secret for `secrets-init`, which runs `noebs render-db-password` to render the local Postgres password file before Postgres starts. It is not mounted into Noebs app or migration services.
