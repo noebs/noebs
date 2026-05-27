@@ -45,6 +45,7 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 		handlers = append(handlers, clearGatewayIdentityHeaders)
 		switch spec.auth {
 		case gatewayAuthPublic:
+			handlers = append(handlers, clearPublicCredentialHeaders)
 		case gatewayAuthUser:
 			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
 		case gatewayAuthAdmin:
@@ -96,6 +97,18 @@ func clearGatewayIdentityHeaders(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+func clearPublicCredentialHeaders(c *fiber.Ctx) error {
+	stripPublicCredentialHeaders(c)
+	return c.Next()
+}
+
+func stripPublicCredentialHeaders(c *fiber.Ctx) {
+	c.Request().Header.Del("Authorization")
+	c.Request().Header.Del("X-Admin-Key")
+	c.Request().Header.Del("X-Admin-Role")
+	c.Request().Header.Del("X-Admin-Permissions")
+}
+
 func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 	tenantID, ok := c.Locals("tenant_id").(string)
 	if !ok || strings.TrimSpace(tenantID) == "" {
@@ -110,14 +123,12 @@ func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
 		c.Request().Header.Set(gateway.GatewayMobileHeader, mobile)
 	}
+	stripPublicCredentialHeaders(c)
 	return c.Next()
 }
 
 func propagateGatewayAdminIdentity(c *fiber.Ctx) error {
-	c.Request().Header.Del("X-Admin-Key")
-	c.Request().Header.Del("X-Admin-Role")
-	c.Request().Header.Del("X-Admin-Permissions")
-	c.Request().Header.Del("Authorization")
+	stripPublicCredentialHeaders(c)
 	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
 	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
 	return c.Next()
