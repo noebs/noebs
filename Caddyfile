@@ -1,4 +1,9 @@
 api.noebs.sd, dsa.adonese.sd {
+    @identity path /generate_api_key /consumer/register /consumer/register_with_card /consumer/login /consumer/refresh /consumer/otp/* /consumer/auth/* /consumer/user /consumer/user/lang /consumer/user/device /consumer/change_password /consumer/check_user /consumer/kyc
+    handle @identity {
+        reverse_proxy identity-auth:8080
+    }
+
     handle /psp/webhooks* {
         reverse_proxy psp-webhook:8080
     }
@@ -12,10 +17,6 @@ api.noebs.sd, dsa.adonese.sd {
     }
 
     handle /consumer/notifications* {
-        reverse_proxy notification-chat:8080
-    }
-
-    handle /consumer/user/device* {
         reverse_proxy notification-chat:8080
     }
 

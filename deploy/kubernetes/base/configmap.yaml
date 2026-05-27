@@ -41,6 +41,9 @@ data:
   api-gateway.service.yaml: |
     noebs:
       service_role: api-gateway
+  identity-auth.service.yaml: |
+    noebs:
+      service_role: identity-auth
   psp-webhook.service.yaml: |
     noebs:
       service_role: psp-webhook

@@ -7,22 +7,6 @@ func RegisterPublicRoutes(router fiber.Router, h *Handler) {
 		return
 	}
 
-	// Registration / auth (public)
-	router.Post("/register", h.CreateUser)
-	router.Post("/register_with_card", h.RegisterWithCard)
-	router.Post("/login", h.LoginHandler)
-	router.Post("/refresh", h.RefreshHandler)
-
-	// OTP (public)
-	router.Post("/otp/generate", h.GenerateSignInCode)
-	router.Post("/otp/generate_insecure", h.GenerateSignInCodeInsecure)
-	router.Post("/otp/login", h.SingleLoginHandler)
-	router.Post("/otp/verify", h.VerifyOTP)
-	router.Post("/otp/balance", h.BalanceStep)
-
-	// Social auth (public)
-	router.Post("/auth/google", h.GoogleAuth)
-
 	// EBS operations (public, matches legacy behavior)
 	router.Post("/balance", h.Balance)
 	router.Post("/status", h.TransactionStatus)
@@ -59,8 +43,26 @@ func RegisterPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/cards/new", h.RegisterCard)
 	router.Post("/cards/complete", h.CompleteRegistration)
 	router.Get("/nec2name", h.NecToName)
+}
 
-	// Misc (public)
+func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
+	// Registration / auth (public)
+	router.Post("/register", h.CreateUser)
+	router.Post("/register_with_card", h.RegisterWithCard)
+	router.Post("/login", h.LoginHandler)
+	router.Post("/refresh", h.RefreshHandler)
+
+	// OTP (public)
+	router.Post("/otp/generate", h.GenerateSignInCode)
+	router.Post("/otp/generate_insecure", h.GenerateSignInCodeInsecure)
+	router.Post("/otp/login", h.SingleLoginHandler)
+	router.Post("/otp/verify", h.VerifyOTP)
+	router.Post("/otp/balance", h.BalanceStep)
+
+	// Social auth (public)
+	router.Post("/auth/google", h.GoogleAuth)
+
+	// User identity checks
 	router.Post("/check_user", h.CheckUser)
 	router.Post("/kyc", h.KYC)
 }
@@ -69,17 +71,6 @@ func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
 	if router == nil || h == nil {
 		return
 	}
-
-	// Authenticated auth/profile endpoints
-	router.Post("/auth/complete_profile", h.CompleteProfile)
-	router.Get("/auth/me", h.AuthMe)
-
-	// User profile
-	router.Get("/user", h.GetUser)
-	router.Put("/user", h.UpdateUser)
-	router.Get("/user/lang", h.GetUserLanguage)
-	router.Put("/user/lang", h.SetUserLanguage)
-	router.Post("/change_password", h.ChangePassword)
 
 	// Cards
 	router.Get("/get_cards", h.GetCards)
@@ -90,7 +81,7 @@ func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Get("/users/cards", h.CardsByMobile)
 	router.Get("/mobile2pan", h.CardFromNumber)
 
-	// Transactions / notifications
+	// Transactions / payment compatibility
 	router.Get("/transaction", h.TransactionByUUID)
 	router.Get("/transactions", h.GetTransactions)
 	router.Post("/p2p_mobile", h.MobileTransfer)
@@ -107,7 +98,20 @@ func RegisterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
 }
 
+func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
+	// Authenticated auth/profile endpoints
+	router.Post("/auth/complete_profile", h.CompleteProfile)
+	router.Get("/auth/me", h.AuthMe)
+
+	// User profile
+	router.Get("/user", h.GetUser)
+	router.Put("/user", h.UpdateUser)
+	router.Get("/user/lang", h.GetUserLanguage)
+	router.Put("/user/lang", h.SetUserLanguage)
+	router.Post("/user/device", h.AddDeviceToken)
+	router.Post("/change_password", h.ChangePassword)
+}
+
 func RegisterNotificationRoutes(router fiber.Router, h *Handler) {
 	router.Get("/notifications", h.Notifications)
-	router.Post("/user/device", h.AddDeviceToken)
 }

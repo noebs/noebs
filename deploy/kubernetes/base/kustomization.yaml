@@ -10,6 +10,7 @@ resources:
   - temporal.yaml
   - migrate-job.yaml
   - api-gateway.yaml
+  - identity-auth.yaml
   - psp-webhook.yaml
   - admin-reporting.yaml
   - notification-chat.yaml

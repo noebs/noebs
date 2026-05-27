@@ -248,6 +248,14 @@ func registerNotificationChatRoutes(route *fiber.App, auth gateway.JWTAuth, cons
 	})
 }
 
+func registerIdentityAuthRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard fiber.Handler, consumerHandler *consumerhandler.Handler) {
+	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
+
+	cons := route.Group("/consumer")
+	consumerhandler.RegisterIdentityPublicRoutes(cons, consumerHandler)
+	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", auth.AuthMiddleware()), consumerHandler)
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
@@ -293,6 +301,10 @@ func GetMainEngine() *fiber.App {
 		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
 		return route
 	}
+	if role == serviceRoleIdentityAuth {
+		registerIdentityAuthRoutes(route, auth, adminGuard, consumerHandler)
+		return route
+	}
 	if role == serviceRoleAdminReporting {
 		registerAdminReportingRoutes(route, adminGuard, templateDir)
 		return route
@@ -307,7 +319,6 @@ func GetMainEngine() *fiber.App {
 
 	merchanthandler.RegisterRoutes(route, merchantHandler)
 
-	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
 	route.Get("/app/config", appConfigHandler)
 
 	cons := route.Group("/consumer")

@@ -37,7 +37,6 @@ func TestNotificationRoutesAreNotOwnedByAPIGateway(t *testing.T) {
 	}{
 		{name: "websocket", method: http.MethodGet, path: "/ws"},
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
 		{name: "contacts", method: http.MethodPost, path: "/consumer/submit_contacts"},
 	}
 	for _, tt := range tests {
@@ -67,7 +66,6 @@ func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 		path   string
 	}{
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
 		{name: "contacts", method: http.MethodPost, path: "/consumer/submit_contacts"},
 	}
 	for _, tt := range tests {
@@ -82,5 +80,23 @@ func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 				t.Fatalf("notification-chat did not register %s", tt.path)
 			}
 		})
+	}
+}
+
+func TestDeviceTokenRouteIsNotOwnedByNotificationChat(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleNotification)
+	authorization := testAuthorizationHeader(t)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/user/device", nil)
+	req.Header.Set("Authorization", authorization)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
 }
