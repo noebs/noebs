@@ -63,7 +63,7 @@ Initial package owner: `ebs_fields`, `consumer/*_service.go`, `merchant/*`. The 
 
 Owns wallets, balances, holds, double-entry posting, fees, limits, rates, funding sources, withdrawal destinations, wallet PIN/2FA state, and wallet gRPC APIs. Wallet and ledger stay together because balance correctness depends on local transactional invariants.
 
-Initial package owner: `wallet`, `wallet/store`, `wallet/grpc`, `proto/noebs/wallet/v1`. Public `/wallet` HTTP routes run in `wallet-api` and call `wallet-ledger` through `noebs.grpc_service_discovery.wallet-ledger`. The remaining `/admin/wallet` HTTP routes still run in `wallet-api` against the wallet-ledger-owned data path and are the next route group to move behind the wallet gRPC contract.
+Initial package owner: `wallet`, `wallet/store`, `wallet/grpc`, `proto/noebs/wallet/v1`. Public `/wallet` and operational `/admin/wallet` HTTP routes run in `wallet-api` and call `wallet-ledger` through `noebs.grpc_service_discovery.wallet-ledger`. `wallet-api` does not open the wallet-ledger database.
 
 ### Wallet Worker Service
 
@@ -132,9 +132,9 @@ Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Th
 
 Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as Argo CD PreSync hooks. Each job has a service-specific role and runs only that service's embedded migration scope. Service Deployments must not run migrations in their startup path.
 
-Service identity and service discovery are config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. HTTP route discovery uses `noebs.service_discovery`; wallet-api reaches wallet-ledger through `noebs.grpc_service_discovery.wallet-ledger`. Secrets continue to merge through `secrets.yaml`, with service-owned database URLs supplied by service-specific Kubernetes Secrets.
+Service identity and service discovery are config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. HTTP route discovery uses `noebs.service_discovery`; wallet-api reaches wallet-ledger through `noebs.grpc_service_discovery.wallet-ledger`. Secrets continue to merge through `secrets.yaml`, with service-owned database URLs supplied by service-specific Kubernetes Secrets. `wallet-api` uses its own no-database secret; wallet-ledger and wallet-worker use the wallet-ledger database secret. Wallet-ledger owns workflow starts, so it requires Temporal config while wallet-api does not.
 
-For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed by service role and migration role. When that map exists, the runtime requires an entry for database-opening roles and migration roles, copies that URL into `noebs.db_url`, and rejects database entries for `api-gateway`.
+For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed by service role and migration role. When that map exists, the runtime requires an entry for database-opening roles and migration roles, copies that URL into `noebs.db_url`, and rejects database entries for no-database roles such as `api-gateway` and `wallet-api`.
 
 ## Migration Plan
 
@@ -148,7 +148,7 @@ For local Docker Compose, a single SOPS file can still track service-owned datab
 8. Move Identity/Auth traffic into the `identity-auth` workload. It owns JWT issuance, OAuth, user/profile, API-key, KYC/check-user, and device-token update routes.
 9. Move Card/Vault traffic into the `card-vault` workload. It owns card storage, card lookup, mobile-to-PAN, and payment-token routes at the public path level.
 10. Move EBS Adapter traffic into the `ebs-adapter` workload. It owns merchant EBS endpoints, consumer EBS/IPIN/QR/voucher endpoints, EBS transaction lookup, and mobile-transfer compatibility routes.
-11. Move wallet HTTP traffic into the `wallet-api` workload. Public `/wallet` routes call `wallet-ledger` over gRPC; `/admin/wallet` remains the next wallet route group to cut onto the gRPC contract.
+11. Move wallet HTTP traffic into the `wallet-api` workload. Public `/wallet` and operational `/admin/wallet` routes call `wallet-ledger` over gRPC; wallet-ledger remains the database and workflow boundary for wallet state.
 12. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
 13. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
 14. Keep migration scopes service-owned as schemas move forward; do not add new tables to the legacy monolith scope.

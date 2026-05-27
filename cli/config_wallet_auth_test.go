@@ -56,6 +56,7 @@ func configureWalletRouteTest(t *testing.T) {
 	originalWorkflowClient := walletWorkflowClient
 	originalWorkflowCloser := walletWorkflowCloser
 	originalWalletPublicClient := walletPublicClient
+	originalWalletAdminClient := walletAdminClient
 	originalWalletLedgerConn := walletLedgerGRPCConn
 	var testGRPCServer *grpc.Server
 	var testGRPCListener *bufconn.Listener
@@ -76,6 +77,7 @@ func configureWalletRouteTest(t *testing.T) {
 		walletWorkflowClient = originalWorkflowClient
 		walletWorkflowCloser = originalWorkflowCloser
 		walletPublicClient = originalWalletPublicClient
+		walletAdminClient = originalWalletAdminClient
 		walletLedgerGRPCConn = originalWalletLedgerConn
 	})
 
@@ -91,7 +93,10 @@ func configureWalletRouteTest(t *testing.T) {
 
 	testGRPCListener = bufconn.Listen(1024 * 1024)
 	testGRPCServer = grpc.NewServer(grpc.UnaryInterceptor(requireAuthForWalletMethods))
-	walletv1.RegisterWalletPublicServiceServer(testGRPCServer, walletgrpc.NewServer(walletService))
+	walletSrv := walletgrpc.NewServer(walletService)
+	walletSrv.TemporalClient = walletRouteTemporalClient{}
+	walletv1.RegisterWalletPublicServiceServer(testGRPCServer, walletSrv)
+	walletv1.RegisterWalletAdminServiceServer(testGRPCServer, walletSrv)
 	go func() {
 		_ = testGRPCServer.Serve(testGRPCListener)
 	}()
@@ -107,6 +112,7 @@ func configureWalletRouteTest(t *testing.T) {
 	testGRPCConn = conn
 	walletLedgerGRPCConn = conn
 	walletPublicClient = walletv1.NewWalletPublicServiceClient(conn)
+	walletAdminClient = walletv1.NewWalletAdminServiceClient(conn)
 }
 
 func walletToken(t *testing.T, userID int64) string {
@@ -446,6 +452,27 @@ func TestWalletMethodsRouteUsesLedgerGRPC(t *testing.T) {
 	if methods.Methods == nil {
 		t.Fatalf("wallet methods is nil")
 	}
+}
+
+func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
+	configureWalletRouteTest(t)
+	adminKey := setAdminKeyForTest(t)
+
+	route := GetMainEngine()
+	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
+
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("wallet admin request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("wallet admin status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if contentType := resp.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+		t.Fatalf("content type = %q, want text/html; charset=utf-8", contentType)
+	}
+	_ = resp.Body.Close()
 }
 
 func TestWalletRoutesRequireTenantClaim(t *testing.T) {

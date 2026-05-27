@@ -13,7 +13,6 @@ import (
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
-	walletworker "github.com/adonese/noebs/wallet/worker"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -200,9 +199,9 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 			Metadata:        metadata,
 		},
 	}
-	taskQueue := s.TemporalOptions.TaskQueue
-	if taskQueue == "" {
-		taskQueue = walletworker.TaskQueueMain
+	taskQueue, err := s.temporalTaskQueue()
+	if err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:                    workflowID,

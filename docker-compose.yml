@@ -393,8 +393,6 @@ services:
         condition: service_completed_successfully
       wallet-ledger:
         condition: service_healthy
-      temporal:
-        condition: service_healthy
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-api.yaml:/app/service.yaml:ro"

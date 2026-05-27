@@ -24,11 +24,11 @@ func (s *Server) ensureTemporalClient() (temporalClient, error) {
 	if s.TemporalClient != nil {
 		return s.TemporalClient, nil
 	}
+	if _, err := s.temporalTaskQueue(); err != nil {
+		return nil, err
+	}
 	s.temporalOnce.Do(func() {
 		opts := s.TemporalOptions
-		if opts.TaskQueue == "" {
-			opts.TaskQueue = walletworker.TaskQueueMain
-		}
 		client, err := walletworker.NewClient(opts)
 		if err != nil {
 			s.temporalErr = err
@@ -43,6 +43,13 @@ func (s *Server) ensureTemporalClient() (temporalClient, error) {
 		return nil, s.temporalErr
 	}
 	return nil, walletworker.ErrMissingTemporalHost
+}
+
+func (s *Server) temporalTaskQueue() (walletworker.TaskQueue, error) {
+	if s.TemporalOptions.TaskQueue == "" {
+		return "", walletworker.ErrMissingTaskQueue
+	}
+	return s.TemporalOptions.TaskQueue, nil
 }
 
 func mapTemporalError(err error) error {

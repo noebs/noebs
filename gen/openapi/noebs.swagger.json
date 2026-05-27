@@ -10,6 +10,9 @@
     },
     {
       "name": "WalletPublicService"
+    },
+    {
+      "name": "WalletAdminService"
     }
   ],
   "consumes": [
@@ -883,6 +886,48 @@
             "type": "object",
             "$ref": "#/definitions/protobufAny"
           }
+        }
+      }
+    },
+    "v1AdminWalletAction": {
+      "type": "string",
+      "enum": [
+        "ADMIN_WALLET_ACTION_UNSPECIFIED",
+        "ADMIN_WALLET_ACTION_DASHBOARD",
+        "ADMIN_WALLET_ACTION_LIST_WALLETS",
+        "ADMIN_WALLET_ACTION_WALLET_DETAIL",
+        "ADMIN_WALLET_ACTION_PENDING_APPROVALS",
+        "ADMIN_WALLET_ACTION_LIST_AUDIT_EVENTS",
+        "ADMIN_WALLET_ACTION_LIST_TRANSACTIONS",
+        "ADMIN_WALLET_ACTION_TRANSACTION_DETAIL",
+        "ADMIN_WALLET_ACTION_LIST_MANUAL_TRANSFERS",
+        "ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER",
+        "ADMIN_WALLET_ACTION_MANUAL_TRANSFER_DETAIL",
+        "ADMIN_WALLET_ACTION_LIST_FEES",
+        "ADMIN_WALLET_ACTION_CREATE_FEE",
+        "ADMIN_WALLET_ACTION_LIST_RATES",
+        "ADMIN_WALLET_ACTION_CREATE_RATE",
+        "ADMIN_WALLET_ACTION_APPROVE_TRANSFER",
+        "ADMIN_WALLET_ACTION_REJECT_TRANSFER"
+      ],
+      "default": "ADMIN_WALLET_ACTION_UNSPECIFIED"
+    },
+    "v1AdminWalletResponse": {
+      "type": "object",
+      "properties": {
+        "statusCode": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "format": "byte"
+        },
+        "redirectLocation": {
+          "type": "string"
         }
       }
     },

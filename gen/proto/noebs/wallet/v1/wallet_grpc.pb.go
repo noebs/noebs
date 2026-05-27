@@ -1780,3 +1780,105 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/noebs/wallet/v1/wallet.proto",
 }
+
+const (
+	WalletAdminService_RenderWalletAdmin_FullMethodName = "/noebs.wallet.v1.WalletAdminService/RenderWalletAdmin"
+)
+
+// WalletAdminServiceClient is the client API for WalletAdminService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type WalletAdminServiceClient interface {
+	RenderWalletAdmin(ctx context.Context, in *AdminWalletRequest, opts ...grpc.CallOption) (*AdminWalletResponse, error)
+}
+
+type walletAdminServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewWalletAdminServiceClient(cc grpc.ClientConnInterface) WalletAdminServiceClient {
+	return &walletAdminServiceClient{cc}
+}
+
+func (c *walletAdminServiceClient) RenderWalletAdmin(ctx context.Context, in *AdminWalletRequest, opts ...grpc.CallOption) (*AdminWalletResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminWalletResponse)
+	err := c.cc.Invoke(ctx, WalletAdminService_RenderWalletAdmin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// WalletAdminServiceServer is the server API for WalletAdminService service.
+// All implementations must embed UnimplementedWalletAdminServiceServer
+// for forward compatibility.
+type WalletAdminServiceServer interface {
+	RenderWalletAdmin(context.Context, *AdminWalletRequest) (*AdminWalletResponse, error)
+	mustEmbedUnimplementedWalletAdminServiceServer()
+}
+
+// UnimplementedWalletAdminServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedWalletAdminServiceServer struct{}
+
+func (UnimplementedWalletAdminServiceServer) RenderWalletAdmin(context.Context, *AdminWalletRequest) (*AdminWalletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenderWalletAdmin not implemented")
+}
+func (UnimplementedWalletAdminServiceServer) mustEmbedUnimplementedWalletAdminServiceServer() {}
+func (UnimplementedWalletAdminServiceServer) testEmbeddedByValue()                            {}
+
+// UnsafeWalletAdminServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to WalletAdminServiceServer will
+// result in compilation errors.
+type UnsafeWalletAdminServiceServer interface {
+	mustEmbedUnimplementedWalletAdminServiceServer()
+}
+
+func RegisterWalletAdminServiceServer(s grpc.ServiceRegistrar, srv WalletAdminServiceServer) {
+	// If the following call pancis, it indicates UnimplementedWalletAdminServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&WalletAdminService_ServiceDesc, srv)
+}
+
+func _WalletAdminService_RenderWalletAdmin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminWalletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletAdminServiceServer).RenderWalletAdmin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletAdminService_RenderWalletAdmin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletAdminServiceServer).RenderWalletAdmin(ctx, req.(*AdminWalletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// WalletAdminService_ServiceDesc is the grpc.ServiceDesc for WalletAdminService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var WalletAdminService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "noebs.wallet.v1.WalletAdminService",
+	HandlerType: (*WalletAdminServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "RenderWalletAdmin",
+			Handler:    _WalletAdminService_RenderWalletAdmin_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/noebs/wallet/v1/wallet.proto",
+}

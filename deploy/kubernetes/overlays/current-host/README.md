@@ -21,13 +21,14 @@ Required Kubernetes Secrets in namespace `noebs`:
 - `admin-reporting-secrets` with key `secrets.yaml`.
 - `notification-chat-secrets` with key `secrets.yaml`.
 - `consumer-beneficiary-secrets` with key `secrets.yaml`.
+- `wallet-api-secrets` with key `secrets.yaml`.
 - `wallet-ledger-secrets` with key `secrets.yaml`.
 - `sops-age-key` with key `age-key.txt`.
 - `postgres-credentials` with key `password`.
 - `temporal-postgres-credentials` with key `password`.
 - `noebs-tls` TLS secret for `api.noebs.sd` and `dsa.adonese.sd`.
 
-Each noebs service secret must contain the merged secret material expected by that service, including `noebs.default_tenant_id`, JWT/admin keys it owns, EBS credentials it owns, data key material it owns, and PSP secrets it owns. Every database-opening service secret must also contain that service's `noebs.db_url`. `api-gateway-secrets` must not contain `noebs.db_url`. Wallet API, wallet ledger, and wallet worker share `wallet-ledger-secrets` because ledger is the database owner for wallet state.
+Each noebs service secret must contain the merged secret material expected by that service, including `noebs.default_tenant_id`, JWT/admin keys it owns, EBS credentials it owns, data key material it owns, and PSP secrets it owns. Every database-opening service secret must also contain that service's `noebs.db_url`. `api-gateway-secrets` and `wallet-api-secrets` must not contain `noebs.db_url`. Wallet ledger and wallet worker share `wallet-ledger-secrets` because ledger is the database owner for wallet state.
 
 `keycloak-secrets` is not a noebs merged secret. It must contain a Keycloak `keycloak.conf` file with its database, hostname, bootstrap admin, health, and metrics configuration; `deploy/kubernetes/base/keycloak.conf.example` shows the required keys. Keycloak is deployed now as an independent auth platform service; no noebs auth data is wired to it yet.
 

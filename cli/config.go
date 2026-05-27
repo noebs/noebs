@@ -282,13 +282,13 @@ func registerWalletAPIRoutes(route *fiber.App, auth gateway.JWTAuth, adminGuard 
 	if walletPublicClient == nil {
 		logrusLogger.Fatal("wallet-api role requires an initialized wallet-ledger grpc client")
 	}
-	if walletWorkflowClient == nil {
-		logrusLogger.Fatal("wallet-api role requires an initialized temporal client")
+	if walletAdminClient == nil {
+		logrusLogger.Fatal("wallet-api role requires an initialized wallet-ledger admin grpc client")
 	}
 	walletUserHandler := wallethandler.NewGRPCUserHandler(walletPublicClient, noebsConfig)
-	walletAdminHandler := wallethandler.NewAdminHandler(walletService, walletWorkflowClient)
+	walletAdminHandler := wallethandler.NewGRPCAdminHandler(walletAdminClient)
 	wallethandler.RegisterGRPCUserRoutes(route.Group("/wallet", auth.AuthMiddleware()), walletUserHandler)
-	wallethandler.RegisterAdminRoutes(route.Group("/admin/wallet", adminGuard), walletAdminHandler)
+	wallethandler.RegisterGRPCAdminRoutes(route.Group("/admin/wallet", adminGuard), walletAdminHandler)
 }
 
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
@@ -520,10 +520,10 @@ func initConfig() {
 	if (role == serviceRolePSPWebhook || role == serviceRoleWalletAPI) && !noebsConfig.WalletEnabled {
 		logrusLogger.Fatalf("%s role requires wallet_enabled", role)
 	}
-	if (role == serviceRolePSPWebhook || role == serviceRoleWalletAPI) && !noebsConfig.TemporalEnabled {
+	if role.requiresTemporal() && !noebsConfig.TemporalEnabled {
 		logrusLogger.Fatalf("%s role requires temporal_enabled", role)
 	}
-	if role == serviceRolePSPWebhook || role == serviceRoleWalletAPI {
+	if role == serviceRolePSPWebhook {
 		client, err := walletworker.NewClient(walletworker.Options{
 			Host:      noebsConfig.TemporalHost,
 			Port:      noebsConfig.TemporalPort,
@@ -540,9 +540,6 @@ func initConfig() {
 		if err := initWalletLedgerPublicClient(noebsConfig); err != nil {
 			logrusLogger.Fatalf("error creating wallet-ledger grpc client: %v", err)
 		}
-	}
-	if role == serviceRoleWalletWorker && !noebsConfig.TemporalEnabled {
-		logrusLogger.Fatalf("wallet-worker role requires temporal_enabled")
 	}
 	if role.startsWalletWorker() && noebsConfig.TemporalEnabled {
 		if walletPSPRegistry == nil || walletPSPLoader == nil {

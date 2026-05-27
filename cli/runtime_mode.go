@@ -92,7 +92,11 @@ func (r serviceRole) startsChat() bool {
 }
 
 func (r serviceRole) opensDatabase() bool {
-	return r != serviceRoleAPIGateway
+	return r != serviceRoleAPIGateway && r != serviceRoleWalletAPI
+}
+
+func (r serviceRole) requiresTemporal() bool {
+	return r == serviceRolePSPWebhook || r == serviceRoleWalletLedger || r == serviceRoleWalletWorker
 }
 
 func validateRoleDatabaseConfig(role serviceRole, dbURL, dbPath, driver string) error {

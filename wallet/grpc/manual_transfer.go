@@ -8,7 +8,6 @@ import (
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
-	walletworker "github.com/adonese/noebs/wallet/worker"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -67,9 +66,9 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
-	taskQueue := s.TemporalOptions.TaskQueue
-	if taskQueue == "" {
-		taskQueue = walletworker.TaskQueueMain
+	taskQueue, err := s.temporalTaskQueue()
+	if err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
 	workflowID := manualTransferWorkflowID(tenantID, req.IdempotencyKey)

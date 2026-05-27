@@ -20,6 +20,7 @@ var (
 
 var walletLedgerGRPCConn *grpc.ClientConn
 var walletPublicClient walletv1.WalletPublicServiceClient
+var walletAdminClient walletv1.WalletAdminServiceClient
 
 func grpcServiceDiscoveryEndpoint(cfg ebs_fields.NoebsConfig, role serviceRole) (string, error) {
 	if cfg.GRPCServiceDiscovery == nil {
@@ -54,6 +55,7 @@ func initWalletLedgerPublicClient(cfg ebs_fields.NoebsConfig) error {
 	}
 	walletLedgerGRPCConn = conn
 	walletPublicClient = walletv1.NewWalletPublicServiceClient(conn)
+	walletAdminClient = walletv1.NewWalletAdminServiceClient(conn)
 	return nil
 }
 
@@ -62,5 +64,6 @@ func closeWalletLedgerPublicClient() {
 		_ = walletLedgerGRPCConn.Close()
 		walletLedgerGRPCConn = nil
 		walletPublicClient = nil
+		walletAdminClient = nil
 	}
 }

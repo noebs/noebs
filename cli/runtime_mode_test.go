@@ -125,11 +125,17 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 	if serviceRoleAPIGateway.opensDatabase() {
 		t.Fatalf("api-gateway role must not open a service database")
 	}
+	if serviceRoleWalletAPI.opensDatabase() {
+		t.Fatalf("wallet-api role must not open the wallet-ledger database")
+	}
 	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("api-gateway database error = %v, want %v", err, errDatabaseNotAllowed)
 	}
 	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "", "/data/noebs.db", "sqlite3"); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("api-gateway database path error = %v, want %v", err, errDatabaseNotAllowed)
+	}
+	if err := validateRoleDatabaseConfig(serviceRoleWalletAPI, "postgres://noebs:noebs@postgres:5432/wallet_ledger?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
+		t.Fatalf("wallet-api database error = %v, want %v", err, errDatabaseNotAllowed)
 	}
 
 	databaseRoles := []serviceRole{
@@ -140,7 +146,6 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
 		serviceRoleBeneficiary,
-		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleIdentityAuthMigrate,
@@ -162,6 +167,34 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 			}
 			if err := validateRoleDatabaseConfig(role, "", "", "sqlite3"); !errors.Is(err, errMissingDatabasePath) {
 				t.Fatalf("%s sqlite database error = %v, want %v", role, err, errMissingDatabasePath)
+			}
+		})
+	}
+}
+
+func TestServiceRoleTemporalOwnership(t *testing.T) {
+	temporalRoles := []serviceRole{
+		serviceRolePSPWebhook,
+		serviceRoleWalletLedger,
+		serviceRoleWalletWorker,
+	}
+	for _, role := range temporalRoles {
+		t.Run(string(role), func(t *testing.T) {
+			if !role.requiresTemporal() {
+				t.Fatalf("%s should require Temporal", role)
+			}
+		})
+	}
+
+	noTemporalRoles := []serviceRole{
+		serviceRoleAPIGateway,
+		serviceRoleWalletAPI,
+		serviceRoleWalletLedgerMigrate,
+	}
+	for _, role := range noTemporalRoles {
+		t.Run(string(role), func(t *testing.T) {
+			if role.requiresTemporal() {
+				t.Fatalf("%s should not require Temporal", role)
 			}
 		})
 	}

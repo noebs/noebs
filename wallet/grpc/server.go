@@ -19,6 +19,7 @@ import (
 type Server struct {
 	walletv1.UnimplementedWalletInternalServiceServer
 	walletv1.UnimplementedWalletPublicServiceServer
+	walletv1.UnimplementedWalletAdminServiceServer
 	Service         *wallet.Service
 	TemporalClient  temporalClient
 	TemporalOptions walletworker.Options
@@ -227,7 +228,10 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrDestinationNotFound),
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
 		errors.Is(err, walletstore.ErrVerificationNotFound),
-		errors.Is(err, walletstore.ErrUserTwoFANotFound):
+		errors.Is(err, walletstore.ErrUserTwoFANotFound),
+		errors.Is(err, walletstore.ErrManualTransferNotFound),
+		errors.Is(err, walletstore.ErrFeeConfigNotFound),
+		errors.Is(err, walletstore.ErrExchangeRateNotFound):
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),
@@ -266,10 +270,15 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingMaxAttempts),
 		errors.Is(err, walletstore.ErrMissingHoldExpiry),
 		errors.Is(err, walletstore.ErrMissingTransferType),
+		errors.Is(err, walletstore.ErrMissingTransactionType),
+		errors.Is(err, walletstore.ErrMissingBaseCurrency),
+		errors.Is(err, walletstore.ErrMissingQuoteCurrency),
 		errors.Is(err, walletstore.ErrMissingReason),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingWorkflowID),
 		errors.Is(err, walletstore.ErrMissingInteractionType),
+		errors.Is(err, walletstore.ErrInvalidPercentage),
+		errors.Is(err, walletstore.ErrInvalidRate),
 		errors.Is(err, walletstore.ErrFundingSourceNotVerified),
 		errors.Is(err, walletstore.ErrFundingSourceNotWithdrawable),
 		errors.Is(err, walletstore.ErrFundingSourceLimitExceeded),

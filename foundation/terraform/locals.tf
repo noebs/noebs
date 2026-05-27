@@ -101,10 +101,6 @@ locals {
       secret_name    = "wallet-ledger-secrets"
       migration_role = "wallet-ledger-migrate"
     }
-    "wallet-api" = {
-      database    = "wallet_ledger"
-      secret_name = "wallet-ledger-secrets"
-    }
     "wallet-worker" = {
       database    = "wallet_ledger"
       secret_name = "wallet-ledger-secrets"

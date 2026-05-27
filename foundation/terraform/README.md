@@ -31,6 +31,7 @@ Runtime secrets are not stored in OpenTofu. Before syncing the Argo CD applicati
 - `admin-reporting-secrets` with key `secrets.yaml`
 - `notification-chat-secrets` with key `secrets.yaml`
 - `consumer-beneficiary-secrets` with key `secrets.yaml`
+- `wallet-api-secrets` with key `secrets.yaml`
 - `wallet-ledger-secrets` with key `secrets.yaml`
 - `sops-age-key` with key `age-key.txt`
 - `postgres-credentials` with key `password`
@@ -38,4 +39,5 @@ Runtime secrets are not stored in OpenTofu. Before syncing the Argo CD applicati
 - `noebs-tls` for `api.noebs.sd` and `dsa.adonese.sd`
 
 `api-gateway-secrets` carries edge auth/admin material only; it must not include `noebs.db_url`.
+`wallet-api-secrets` carries wallet HTTP facade auth/admin material only; it must not include `noebs.db_url`.
 `keycloak-secrets` carries Keycloak's own `keycloak.conf`; no noebs auth data is wired to Keycloak yet.

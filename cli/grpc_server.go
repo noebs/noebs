@@ -60,6 +60,7 @@ func initGRPCServers() error {
 		server := grpc.NewServer(grpc.UnaryInterceptor(requireAuthForWalletMethods))
 		walletv1.RegisterWalletInternalServiceServer(server, walletSrv)
 		walletv1.RegisterWalletPublicServiceServer(server, walletSrv)
+		walletv1.RegisterWalletAdminServiceServer(server, walletSrv)
 		grpcServer = server
 		grpcListener = listener
 	}
@@ -137,6 +138,9 @@ func requireAuthForWalletHTTP(next http.Handler) http.Handler {
 
 func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 	if strings.HasPrefix(fullMethod, "/noebs.wallet.v1.WalletInternalService/") {
+		return walletAuthAdmin
+	}
+	if strings.HasPrefix(fullMethod, "/noebs.wallet.v1.WalletAdminService/") {
 		return walletAuthAdmin
 	}
 	switch fullMethod {
