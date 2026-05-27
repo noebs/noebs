@@ -104,6 +104,7 @@ type composeDocument struct {
 type composeService struct {
 	Environment any             `yaml:"environment"`
 	EnvFile     any             `yaml:"env_file"`
+	Entrypoint  []string        `yaml:"entrypoint"`
 	Volumes     []string        `yaml:"volumes"`
 	Secrets     []composeSecret `yaml:"secrets"`
 }
@@ -120,6 +121,7 @@ type mountedNoebsConfig struct {
 		GRPCServiceDiscovery map[string]string `yaml:"grpc_service_discovery"`
 		TemporalHost         string            `yaml:"temporal_host"`
 		TemporalPort         string            `yaml:"temporal_port"`
+		RenderDBPasswordFile string            `yaml:"render_db_password_file"`
 	} `yaml:"noebs"`
 }
 
@@ -415,6 +417,63 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 	}
 }
 
+func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+
+	var foundPostgres bool
+	var bootstrapScript string
+	var serviceDatabaseSQL string
+	for _, object := range objects {
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "postgres-bootstrap" {
+			bootstrapScript = object.Data["start.sh"]
+			serviceDatabaseSQL = object.Data["001-service-databases.sql"]
+		}
+		if object.Kind != "StatefulSet" || object.Metadata.Name != "postgres" {
+			continue
+		}
+		foundPostgres = true
+		if len(object.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("postgres containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+		}
+		container := object.Spec.Template.Spec.Containers[0]
+		if container.Image != "postgres:16" {
+			t.Fatalf("postgres image = %q, want postgres:16", container.Image)
+		}
+		if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+			t.Fatalf("postgres must use mounted bootstrap files instead of env/envFrom")
+		}
+		if !containsString(container.Command, "/opt/noebs-postgres/bin/start.sh") {
+			t.Fatalf("postgres command = %v, want mounted start.sh", container.Command)
+		}
+		requireMount(t, "postgres", container, "/opt/noebs-postgres/bin/start.sh", "start.sh")
+		requireMount(t, "postgres", container, "/opt/noebs-postgres/init/001-service-databases.sql", "001-service-databases.sql")
+		requireMount(t, "postgres", container, "/opt/noebs-postgres/secrets/password", "password")
+	}
+	if !foundPostgres {
+		t.Fatalf("postgres StatefulSet not found")
+	}
+	if bootstrapScript == "" {
+		t.Fatalf("postgres-bootstrap ConfigMap missing start.sh")
+	}
+	if serviceDatabaseSQL == "" {
+		t.Fatalf("postgres-bootstrap ConfigMap missing 001-service-databases.sql")
+	}
+	dockerBootstrap, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "postgres", "postgres-start.sh"))
+	if err != nil {
+		t.Fatalf("read docker Postgres bootstrap: %v", err)
+	}
+	if bootstrapScript != string(dockerBootstrap) {
+		t.Fatalf("Kubernetes and Docker Noebs Postgres bootstrap scripts differ")
+	}
+	dockerSQL, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "postgres", "001-service-databases.sql"))
+	if err != nil {
+		t.Fatalf("read docker Postgres service database SQL: %v", err)
+	}
+	if serviceDatabaseSQL != string(dockerSQL) {
+		t.Fatalf("Kubernetes and Docker Noebs Postgres service database SQL differ")
+	}
+}
+
 func TestCurrentHostIngressTargetsOnlyAPIGateway(t *testing.T) {
 	objects := decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "ingress.yaml"))
 
@@ -487,6 +546,31 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 		requireComposeSecret(t, serviceName, service.Secrets, "sops_age_key", "/app/.sops/age-key.txt")
 		rejectComposeSecret(t, serviceName, service.Secrets, "postgres-bootstrap-secrets")
 		requireComposeTopLevelSecret(t, compose.Secrets, secretSource, "./deploy/docker/secrets/"+strings.TrimSuffix(secretSource, "-secrets")+".secrets.yaml")
+	}
+}
+
+func TestNoebsPostgresDockerComposeUsesMountedBootstrapFiles(t *testing.T) {
+	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+	config := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
+
+	db, ok := compose.Services["db"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing db service")
+	}
+	if db.Environment != nil {
+		t.Fatalf("db defines environment; Noebs Postgres bootstrap must be file-mounted")
+	}
+	if db.EnvFile != nil {
+		t.Fatalf("db defines env_file; Noebs Postgres bootstrap must be file-mounted")
+	}
+	if !containsString(db.Entrypoint, "/opt/noebs-postgres/bin/start.sh") {
+		t.Fatalf("db entrypoint = %v, want mounted start.sh", db.Entrypoint)
+	}
+	requireComposeVolume(t, "db", db.Volumes, "./deploy/docker/postgres/postgres-start.sh", "/opt/noebs-postgres/bin/start.sh")
+	requireComposeVolume(t, "db", db.Volumes, "./deploy/docker/postgres/001-service-databases.sql", "/opt/noebs-postgres/init/001-service-databases.sql")
+	requireComposeVolume(t, "db", db.Volumes, "noebs-runtime", "/opt/noebs-postgres/secrets")
+	if config.Noebs.RenderDBPasswordFile != "/app/runtime/password" {
+		t.Fatalf("config.docker.yaml render_db_password_file = %q, want /app/runtime/password", config.Noebs.RenderDBPasswordFile)
 	}
 }
 

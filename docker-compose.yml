@@ -148,19 +148,16 @@ services:
     depends_on:
       secrets-init:
         condition: service_completed_successfully
-    environment:
-      POSTGRES_USER: noebs
-      POSTGRES_DB: noebs
-      POSTGRES_PASSWORD_FILE: /app/runtime/postgres_password.txt
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    entrypoint: ["/bin/bash", "/opt/noebs-postgres/bin/start.sh"]
     volumes:
       - noebs-postgres:/var/lib/postgresql/data
-      - noebs-runtime:/app/runtime:ro
-      - ./deploy/docker/postgres/001-service-databases.sql:/docker-entrypoint-initdb.d/001-service-databases.sql:ro
+      - noebs-runtime:/opt/noebs-postgres/secrets:ro
+      - ./deploy/docker/postgres/postgres-start.sh:/opt/noebs-postgres/bin/start.sh:ro
+      - ./deploy/docker/postgres/001-service-databases.sql:/opt/noebs-postgres/init/001-service-databases.sql:ro
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U noebs -d noebs"]
       interval: 10s
       timeout: 3s
       retries: 5
