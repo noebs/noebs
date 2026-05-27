@@ -327,7 +327,7 @@ func roleNeedsWalletPSPDeps(role serviceRole) bool {
 
 func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, templateDir string) {
 	route.Static("/dashboard/assets", templateDir)
-	dashboardGroup := route.Group("/dashboard", adminGuard, defaultTenantBoundary(noebsConfig.DefaultTenantID))
+	dashboardGroup := route.Group("/dashboard", adminGuard)
 	{
 		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
 		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
@@ -341,15 +341,6 @@ func registerAdminReportingRoutes(route *fiber.App, adminGuard fiber.Handler, te
 		dashboardGroup.Get("/status", wrapHandler(dashService.QRStatus))
 		dashboardGroup.Get("/test_browser", wrapHandler(dashService.IndexPage))
 		dashboardGroup.Get("/stream", wrapHandler(dashService.Stream))
-	}
-}
-
-func defaultTenantBoundary(defaultTenantID string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		if strings.TrimSpace(c.Get("X-Tenant-ID")) == "" && c.Locals("tenant_id") == nil {
-			c.Locals("tenant_id", defaultTenantID)
-		}
-		return c.Next()
 	}
 }
 
