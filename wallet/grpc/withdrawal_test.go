@@ -134,7 +134,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		t.Fatalf("create database: %v", err)
 	}
 
-	db, err := store.OpenFromConfig(dbURL, "", store.DriverPostgres)
+	db, err := store.OpenFromConfig(dbURL, store.DriverPostgres)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

@@ -54,7 +54,7 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 	if err != nil {
 		t.Fatalf("create test db: %v", err)
 	}
-	db, err := store.OpenFromConfig(dbURL, "", "postgres")
+	db, err := store.OpenFromConfig(dbURL, "postgres")
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}

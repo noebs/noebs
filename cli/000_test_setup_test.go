@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))
 	}
-	db, err := store.OpenFromConfig(dbURL, "", store.DriverPostgres)
+	db, err := store.OpenFromConfig(dbURL, store.DriverPostgres)
 	if err != nil {
 		panic(fmt.Sprintf("open test db for migration job: %v", err))
 	}

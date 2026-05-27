@@ -34,7 +34,7 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 		t.Fatalf("create database: %v", err)
 	}
 
-	db, err := basestore.OpenFromConfig(dbURL, "", basestore.DriverPostgres)
+	db, err := basestore.OpenFromConfig(dbURL, basestore.DriverPostgres)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

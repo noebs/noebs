@@ -41,7 +41,7 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 		t.Fatalf("create database: %v", err)
 	}
 
-	db, err := basestore.OpenFromConfig(dbURL, "", basestore.DriverPostgres)
+	db, err := basestore.OpenFromConfig(dbURL, basestore.DriverPostgres)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

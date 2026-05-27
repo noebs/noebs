@@ -89,7 +89,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 				_ = testPostgres.DropDatabase(cleanupCtx, dbName)
 			})
 
-			db, err := store.OpenFromConfig(dbURL, "", store.DriverPostgres)
+			db, err := store.OpenFromConfig(dbURL, store.DriverPostgres)
 			if err != nil {
 				t.Fatalf("open db: %v", err)
 			}

@@ -130,7 +130,6 @@ require (
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/matttproud/golang_protobuf_extensions v1.0.2 // indirect
 	github.com/pquerna/otp v1.4.0
 	github.com/prometheus/client_model v0.2.0 // indirect

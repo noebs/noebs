@@ -3,29 +3,66 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/testdb"
 )
+
+var (
+	validationPostgresOnce sync.Once
+	validationPostgres     *testdb.PostgresContainer
+	validationPostgresErr  error
+	validationDatabaseSeq  atomic.Uint64
+)
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if validationPostgres != nil {
+		_ = validationPostgres.Terminate(context.Background())
+	}
+	os.Exit(code)
+}
 
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
-	db, err := OpenFromConfig("", ":memory:", "sqlite")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newValidationDB(t)
 	return New(db, WithDataKey("test-data-key"))
 }
 
 func newTestStoreWithoutDataKey(t *testing.T) *Store {
 	t.Helper()
-	db, err := OpenFromConfig("", ":memory:", "sqlite")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newValidationDB(t)
 	return New(db)
+}
+
+func newValidationDB(t *testing.T) *DB {
+	t.Helper()
+	ctx := context.Background()
+	validationPostgresOnce.Do(func() {
+		validationPostgres, validationPostgresErr = testdb.StartPostgresContainer(ctx)
+	})
+	if validationPostgresErr != nil {
+		t.Fatalf("start postgres: %v", validationPostgresErr)
+	}
+	databaseName := fmt.Sprintf("store_validation_%d", validationDatabaseSeq.Add(1))
+	dbURL, err := validationPostgres.CreateDatabase(ctx, databaseName)
+	if err != nil {
+		t.Fatalf("create postgres database: %v", err)
+	}
+	db, err := OpenFromConfig(dbURL, DriverPostgres)
+	if err != nil {
+		t.Fatalf("open postgres database: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+		_ = validationPostgres.DropDatabase(context.Background(), databaseName)
+	})
+	return db
 }
 
 func TestStore_EnsureTenant_MissingTenantID(t *testing.T) {

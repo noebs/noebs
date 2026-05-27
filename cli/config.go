@@ -562,11 +562,7 @@ func initConfig() {
 		logrusLogger.Fatalf("error in runtime service config: %v", err)
 	}
 	if role.opensDatabase() {
-		dbpath := noebsConfig.DatabasePath
-		if dbpath != "" {
-			logrusLogger.Printf("The final database file is: %#v", dbpath)
-		}
-		database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, dbpath, noebsConfig.DatabaseDriver)
+		database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver)
 		if err != nil {
 			logrusLogger.Fatalf("error in connecting to db: %v", err)
 		}

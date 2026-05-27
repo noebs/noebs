@@ -11,18 +11,15 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
 	DriverPostgres = "pgx"
-	DriverSQLite   = "sqlite3"
 )
 
 var (
 	ErrMissingDatabaseDriver     = errors.New("missing database driver")
 	ErrMissingDatabaseURL        = errors.New("missing database URL")
-	ErrMissingDatabasePath       = errors.New("missing database path")
 	ErrUnsupportedDatabaseDriver = errors.New("unsupported database driver")
 )
 
@@ -32,8 +29,8 @@ type DB struct {
 	Driver string
 }
 
-// OpenFromConfig opens a database based on the provided url/path.
-func OpenFromConfig(dbURL, sqlitePath, driverOverride string) (*DB, error) {
+// OpenFromConfig opens a service Postgres database.
+func OpenFromConfig(dbURL, driverOverride string) (*DB, error) {
 	sqlx.NameMapper = toSnake
 
 	driver := strings.ToLower(strings.TrimSpace(driverOverride))
@@ -48,12 +45,6 @@ func OpenFromConfig(dbURL, sqlitePath, driverOverride string) (*DB, error) {
 		}
 		driver = DriverPostgres
 		dsn = dbURL
-	case "sqlite", "sqlite3":
-		if sqlitePath == "" {
-			return nil, fmt.Errorf("%w: db_path required for %s driver", ErrMissingDatabasePath, driver)
-		}
-		driver = DriverSQLite
-		dsn = sqlitePath
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnsupportedDatabaseDriver, driver)
 	}

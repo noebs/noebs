@@ -257,7 +257,7 @@ type EBSResponse struct {
 	ApprovalCode    string `json:"approvalCode,omitempty"`
 	VoucherNumber   string `json:"voucherNumber,omitempty"`
 	VoucherCode     string `json:"voucherCode,omitempty"`
-	//FIXME(adonese): #166 ministatement records need to be properly parsed to sqlite compatible type
+	//FIXME(adonese): #166 ministatement records need to be properly parsed to a SQL-compatible type
 	MiniStatementRecords MinistatementDB `json:"miniStatementRecords,omitempty"`
 	DisputeRRN           string          `json:"DisputeRRN,omitempty"`
 	AdditionalData       string          `json:"additionalData,omitempty"`

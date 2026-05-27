@@ -135,7 +135,7 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("api-gateway database error = %v, want %v", err, errDatabaseNotAllowed)
 	}
-	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "", "/data/noebs.db", "sqlite3"); !errors.Is(err, errDatabaseNotAllowed) {
+	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "", "/data/noebs.db", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("api-gateway database path error = %v, want %v", err, errDatabaseNotAllowed)
 	}
 	if err := validateRoleDatabaseConfig(serviceRoleWalletAPI, "postgres://noebs:noebs@postgres:5432/wallet_ledger?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
@@ -169,8 +169,11 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 			if err := validateRoleDatabaseConfig(role, "", "", "pgx"); !errors.Is(err, errMissingDatabaseURL) {
 				t.Fatalf("%s database error = %v, want %v", role, err, errMissingDatabaseURL)
 			}
-			if err := validateRoleDatabaseConfig(role, "", "", "sqlite3"); !errors.Is(err, errMissingDatabasePath) {
-				t.Fatalf("%s sqlite database error = %v, want %v", role, err, errMissingDatabasePath)
+			if err := validateRoleDatabaseConfig(role, "", "/data/noebs.db", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
+				t.Fatalf("%s database path error = %v, want %v", role, err, errDatabaseNotAllowed)
+			}
+			if err := validateRoleDatabaseConfig(role, "", "", "sqlite3"); !errors.Is(err, store.ErrUnsupportedDatabaseDriver) {
+				t.Fatalf("%s sqlite driver error = %v, want %v", role, err, store.ErrUnsupportedDatabaseDriver)
 			}
 			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", "", ""); !errors.Is(err, store.ErrMissingDatabaseDriver) {
 				t.Fatalf("%s missing driver error = %v, want %v", role, err, store.ErrMissingDatabaseDriver)
