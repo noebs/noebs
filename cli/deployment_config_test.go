@@ -265,6 +265,7 @@ func TestDockerComposeLocalInputsAreNotTrackedGuesses(t *testing.T) {
 		"deploy/docker/keycloak/postgres-password.txt",
 		"deploy/docker/temporal/postgres-password.txt",
 		"deploy/docker/temporal/broadcast-address.txt",
+		"deploy/docker/postgres/bootstrap.secrets.yaml",
 	}
 
 	gitignore, err := os.ReadFile(filepath.Join("..", ".gitignore"))
@@ -296,6 +297,31 @@ func TestDockerComposeLocalInputsAreNotTrackedGuesses(t *testing.T) {
 	if len(trackedExisting) != 0 {
 		t.Fatalf("local Docker Compose runtime inputs must not be committed guesses:\n%s", strings.Join(trackedExisting, "\n"))
 	}
+}
+
+func TestDockerComposePostgresBootstrapSecretExampleIsExplicit(t *testing.T) {
+	path := filepath.Join("..", "deploy", "docker", "postgres", "bootstrap.secrets.yaml.example")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var example serviceSecretExample
+	if err := yaml.Unmarshal(data, &example); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	if example.Noebs == nil {
+		t.Fatalf("%s missing noebs secret map", path)
+	}
+	if _, ok := example.Noebs["db_url"]; !ok {
+		t.Fatalf("%s missing explicit noebs.db_url placeholder", path)
+	}
+	if _, ok := example.Noebs["db_path"]; ok {
+		t.Fatalf("%s must not carry legacy noebs.db_path", path)
+	}
+	if _, ok := example.Noebs["service_databases"]; ok {
+		t.Fatalf("%s must not carry service database ownership; bootstrap renders only the local Postgres password", path)
+	}
+	requirePlaceholderStrings(t, path, example.Noebs)
 }
 
 func TestDockerComposeSecretExamplesMatchServiceOwnership(t *testing.T) {
@@ -939,7 +965,7 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 		t.Fatalf("secrets-init must not run runtime config validation")
 	}
 	requireComposeSecret(t, "secrets-init", secretsInit.Secrets, "postgres-bootstrap-secrets", "/app/secrets.yaml")
-	requireComposeTopLevelSecret(t, compose.Secrets, "postgres-bootstrap-secrets", "./secrets.yaml")
+	requireComposeTopLevelSecret(t, compose.Secrets, "postgres-bootstrap-secrets", "./deploy/docker/postgres/bootstrap.secrets.yaml")
 
 	serviceFiles, err := filepath.Glob(filepath.Join("..", "deploy", "docker", "services", "*.yaml"))
 	if err != nil {

@@ -683,7 +683,7 @@ volumes:
 
 secrets:
   postgres-bootstrap-secrets:
-    file: ./secrets.yaml
+    file: ./deploy/docker/postgres/bootstrap.secrets.yaml
   api-gateway-secrets:
     file: ./deploy/docker/secrets/api-gateway.secrets.yaml
   identity-auth-secrets:

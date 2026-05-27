@@ -33,4 +33,5 @@ secrets.decrypted.yaml
 /deploy/docker/keycloak/postgres-password.txt
 /deploy/docker/temporal/postgres-password.txt
 /deploy/docker/temporal/broadcast-address.txt
+/deploy/docker/postgres/bootstrap.secrets.yaml
 /deploy/docker/secrets/*.secrets.yaml
