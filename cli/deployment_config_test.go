@@ -459,6 +459,24 @@ func TestCaddyEdgeProxyTargetsOnlyAPIGateway(t *testing.T) {
 	}
 }
 
+func TestDockerfileDoesNotDefineRoleAgnosticHealthcheck(t *testing.T) {
+	path := filepath.Join("..", "Dockerfile")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	for lineIndex, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(strings.ToUpper(trimmed), "HEALTHCHECK") {
+			t.Fatalf("%s:%d defines image-level HEALTHCHECK; probes must be role-specific in deployment manifests", path, lineIndex+1)
+		}
+	}
+}
+
 func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 	config := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
