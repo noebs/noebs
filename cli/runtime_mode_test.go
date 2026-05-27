@@ -43,7 +43,14 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
-		serviceRoleMigrate,
+		serviceRoleIdentityAuthMigrate,
+		serviceRoleCardVaultMigrate,
+		serviceRoleEBSAdapterMigrate,
+		serviceRolePSPWebhookMigrate,
+		serviceRoleAdminReportingMigrate,
+		serviceRoleNotificationMigrate,
+		serviceRoleBeneficiaryMigrate,
+		serviceRoleWalletLedgerMigrate,
 	}
 	for _, role := range roles {
 		t.Run(string(role), func(t *testing.T) {
@@ -92,7 +99,24 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	if serviceRoleWalletWorker.startsHTTP() || serviceRoleWalletWorker.startsGRPC() || !serviceRoleWalletWorker.startsWalletWorker() || serviceRoleWalletWorker.runsMigrations() {
 		t.Fatalf("wallet-worker role should own only the Temporal worker process")
 	}
-	if serviceRoleMigrate.startsHTTP() || serviceRoleMigrate.startsGRPC() || serviceRoleMigrate.startsWalletWorker() || !serviceRoleMigrate.runsMigrations() {
-		t.Fatalf("migrate role should only run migrations")
+	migrationRoles := []serviceRole{
+		serviceRoleIdentityAuthMigrate,
+		serviceRoleCardVaultMigrate,
+		serviceRoleEBSAdapterMigrate,
+		serviceRolePSPWebhookMigrate,
+		serviceRoleAdminReportingMigrate,
+		serviceRoleNotificationMigrate,
+		serviceRoleBeneficiaryMigrate,
+		serviceRoleWalletLedgerMigrate,
+	}
+	for _, role := range migrationRoles {
+		t.Run(string(role), func(t *testing.T) {
+			if role.startsHTTP() || role.startsGRPC() || role.startsWalletWorker() || !role.runsMigrations() {
+				t.Fatalf("%s role should only run migrations", role)
+			}
+			if _, ok := role.migrationScope(); !ok {
+				t.Fatalf("%s role should map to a migration scope", role)
+			}
+		})
 	}
 }

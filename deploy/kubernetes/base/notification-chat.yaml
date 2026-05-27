@@ -53,7 +53,7 @@ spec:
               mountPath: /app/service.yaml
               subPath: notification-chat.service.yaml
               readOnly: true
-            - name: noebs-secrets
+            - name: notification-chat-secrets
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
               readOnly: true
@@ -65,9 +65,9 @@ spec:
         - name: config
           configMap:
             name: noebs-config
-        - name: noebs-secrets
+        - name: notification-chat-secrets
           secret:
-            secretName: noebs-secrets
+            secretName: notification-chat-secrets
         - name: sops-age-key
           secret:
             secretName: sops-age-key

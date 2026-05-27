@@ -51,6 +51,61 @@ locals {
       protocol = "postgres"
     }
   }
+
+  noebs_database_catalog = {
+    "api-gateway" = {
+      database    = "api_gateway"
+      secret_name = "api-gateway-secrets"
+    }
+    "identity-auth" = {
+      database       = "identity_auth"
+      secret_name    = "identity-auth-secrets"
+      migration_role = "identity-auth-migrate"
+    }
+    "card-vault" = {
+      database       = "card_vault"
+      secret_name    = "card-vault-secrets"
+      migration_role = "card-vault-migrate"
+    }
+    "ebs-adapter" = {
+      database       = "ebs_adapter"
+      secret_name    = "ebs-adapter-secrets"
+      migration_role = "ebs-adapter-migrate"
+    }
+    "psp-webhook" = {
+      database       = "psp_webhook"
+      secret_name    = "psp-webhook-secrets"
+      migration_role = "psp-webhook-migrate"
+    }
+    "admin-reporting" = {
+      database       = "admin_reporting"
+      secret_name    = "admin-reporting-secrets"
+      migration_role = "admin-reporting-migrate"
+    }
+    "notification-chat" = {
+      database       = "notification_chat"
+      secret_name    = "notification-chat-secrets"
+      migration_role = "notification-chat-migrate"
+    }
+    "consumer-beneficiary" = {
+      database       = "consumer_beneficiary"
+      secret_name    = "consumer-beneficiary-secrets"
+      migration_role = "consumer-beneficiary-migrate"
+    }
+    "wallet-ledger" = {
+      database       = "wallet_ledger"
+      secret_name    = "wallet-ledger-secrets"
+      migration_role = "wallet-ledger-migrate"
+    }
+    "wallet-api" = {
+      database    = "wallet_ledger"
+      secret_name = "wallet-ledger-secrets"
+    }
+    "wallet-worker" = {
+      database    = "wallet_ledger"
+      secret_name = "wallet-ledger-secrets"
+    }
+  }
 }
 
 check "noebs_manifest_path_exists" {

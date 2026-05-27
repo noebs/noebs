@@ -24,6 +24,30 @@ x-web-hardening: &web-hardening
       soft: 65535
       hard: 65535
 
+x-migrate-defaults: &migrate-defaults
+  <<: [*service-defaults, *web-hardening]
+  build:
+    context: .
+  init: true
+  depends_on:
+    db:
+      condition: service_healthy
+  secrets:
+    - source: noebs_secrets
+      target: /app/secrets.yaml
+      uid: "10001"
+      gid: "10001"
+      mode: 0400
+    - source: sops_age_key
+      target: /app/.sops/age-key.txt
+      uid: "10001"
+      gid: "10001"
+      mode: 0400
+  networks:
+    - backend
+  restart: "no"
+  user: "10001:10001"
+
 services:
   runtime-init:
     <<: *service-defaults
@@ -66,6 +90,7 @@ services:
     volumes:
       - noebs-postgres:/var/lib/postgresql/data
       - noebs-runtime:/app/runtime:ro
+      - ./deploy/docker/postgres/001-service-databases.sql:/docker-entrypoint-initdb.d/001-service-databases.sql:ro
     networks:
       - backend
     healthcheck:
@@ -132,32 +157,53 @@ services:
     networks:
       - backend
 
-  noebs-migrate:
-    <<: [*service-defaults, *web-hardening]
-    build:
-      context: .
-    init: true
-    depends_on:
-      db:
-        condition: service_healthy
+  identity-auth-migrate:
+    <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
-      - "./deploy/docker/services/migrate.yaml:/app/service.yaml:ro"
-    secrets:
-      - source: noebs_secrets
-        target: /app/secrets.yaml
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-        uid: "10001"
-        gid: "10001"
-        mode: 0400
-    networks:
-      - backend
-    restart: "no"
-    user: "10001:10001"
+      - "./deploy/docker/services/identity-auth-migrate.yaml:/app/service.yaml:ro"
+
+  card-vault-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/card-vault-migrate.yaml:/app/service.yaml:ro"
+
+  ebs-adapter-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/ebs-adapter-migrate.yaml:/app/service.yaml:ro"
+
+  psp-webhook-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/psp-webhook-migrate.yaml:/app/service.yaml:ro"
+
+  admin-reporting-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/admin-reporting-migrate.yaml:/app/service.yaml:ro"
+
+  notification-chat-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/notification-chat-migrate.yaml:/app/service.yaml:ro"
+
+  consumer-beneficiary-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/consumer-beneficiary-migrate.yaml:/app/service.yaml:ro"
+
+  wallet-ledger-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/wallet-ledger-migrate.yaml:/app/service.yaml:ro"
 
   api-gateway:
     <<: [*service-defaults, *web-hardening]
@@ -165,8 +211,8 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     ports:
       # `:8080` is a common host port and is already used on our server.
       # Keep the app listening on `:8080` in-container, but publish it on `:8081` on the host.
@@ -203,7 +249,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      identity-auth-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
@@ -236,7 +282,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      card-vault-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
@@ -269,7 +315,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      ebs-adapter-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
@@ -302,7 +348,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      wallet-ledger-migrate:
         condition: service_completed_successfully
       temporal:
         condition: service_healthy
@@ -337,7 +383,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      psp-webhook-migrate:
         condition: service_completed_successfully
       temporal:
         condition: service_healthy
@@ -372,7 +418,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      admin-reporting-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
@@ -405,7 +451,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      notification-chat-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
@@ -438,7 +484,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      consumer-beneficiary-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
@@ -471,7 +517,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      wallet-ledger-migrate:
         condition: service_completed_successfully
       temporal:
         condition: service_healthy
@@ -506,7 +552,7 @@ services:
       context: .
     init: true
     depends_on:
-      noebs-migrate:
+      wallet-ledger-migrate:
         condition: service_completed_successfully
       temporal:
         condition: service_healthy

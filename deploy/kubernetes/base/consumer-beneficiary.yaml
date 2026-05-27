@@ -53,7 +53,7 @@ spec:
               mountPath: /app/service.yaml
               subPath: consumer-beneficiary.service.yaml
               readOnly: true
-            - name: noebs-secrets
+            - name: consumer-beneficiary-secrets
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
               readOnly: true
@@ -65,9 +65,9 @@ spec:
         - name: config
           configMap:
             name: noebs-config
-        - name: noebs-secrets
+        - name: consumer-beneficiary-secrets
           secret:
-            secretName: noebs-secrets
+            secretName: consumer-beneficiary-secrets
         - name: sops-age-key
           secret:
             secretName: sops-age-key

@@ -15,6 +15,9 @@ func init() {
 }
 
 func backfillUp(ctx context.Context, tx *sql.Tx) error {
+	if migrationScope != MigrationScopeLegacy {
+		return nil
+	}
 	driver := migrationDriver
 	if driver == "" {
 		driver = DriverPostgres
@@ -93,6 +96,9 @@ func backfillUp(ctx context.Context, tx *sql.Tx) error {
 }
 
 func backfillDown(ctx context.Context, tx *sql.Tx) error {
+	if migrationScope != MigrationScopeLegacy {
+		return nil
+	}
 	_ = ctx
 	_ = tx
 	return nil

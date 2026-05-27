@@ -68,6 +68,9 @@ func renderConfigFiles() error {
 	if noebs == nil {
 		noebs = map[string]interface{}{}
 	}
+	if err := applyServiceDatabaseURL(noebs); err != nil {
+		return err
+	}
 	outputDir := filepath.Dir(configPath)
 	if runtimeDir := firstString(noebs, "runtime_dir"); runtimeDir != "" {
 		outputDir = runtimeDir
@@ -160,6 +163,37 @@ func mergeConfig(base, override interface{}) interface{} {
 	default:
 		return override
 	}
+}
+
+func applyServiceDatabaseURL(noebs map[string]interface{}) error {
+	if noebs == nil {
+		return nil
+	}
+	rawDatabases, ok := noebs["service_databases"]
+	if !ok || rawDatabases == nil {
+		return nil
+	}
+	databases, ok := rawDatabases.(map[string]interface{})
+	if !ok {
+		return errors.New("noebs.service_databases must be a map")
+	}
+	role := firstString(noebs, "service_role")
+	if role == "" {
+		if firstString(noebs, "db_url") != "" {
+			return nil
+		}
+		return errors.New("noebs.service_role is required when noebs.service_databases is set")
+	}
+	rawDBURL, ok := databases[role]
+	if !ok {
+		return fmt.Errorf("noebs.service_databases missing %q", role)
+	}
+	dbURL, ok := rawDBURL.(string)
+	if !ok || strings.TrimSpace(dbURL) == "" {
+		return fmt.Errorf("noebs.service_databases.%s must be a non-empty db_url", role)
+	}
+	noebs["db_url"] = strings.TrimSpace(dbURL)
+	return nil
 }
 
 func getMap(source map[string]interface{}, key string) map[string]interface{} {

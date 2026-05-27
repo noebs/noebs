@@ -60,7 +60,7 @@ func main() {
 			}
 		}()
 	}
-	if role == serviceRoleMigrate {
+	if role.runsMigrations() {
 		logrusLogger.Print("migration service role completed")
 		return
 	}

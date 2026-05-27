@@ -21,7 +21,15 @@ The Kubernetes cluster itself must already be reachable through `kubeconfig_path
 
 Runtime secrets are not stored in Terraform. Before syncing the Argo CD application, create the required Kubernetes Secrets in the Terraform-owned `noebs` namespace:
 
-- `noebs-secrets` with key `secrets.yaml`
+- `api-gateway-secrets` with key `secrets.yaml`
+- `identity-auth-secrets` with key `secrets.yaml`
+- `card-vault-secrets` with key `secrets.yaml`
+- `ebs-adapter-secrets` with key `secrets.yaml`
+- `psp-webhook-secrets` with key `secrets.yaml`
+- `admin-reporting-secrets` with key `secrets.yaml`
+- `notification-chat-secrets` with key `secrets.yaml`
+- `consumer-beneficiary-secrets` with key `secrets.yaml`
+- `wallet-ledger-secrets` with key `secrets.yaml`
 - `sops-age-key` with key `age-key.txt`
 - `postgres-credentials` with key `password`
 - `temporal-postgres-credentials` with key `password`

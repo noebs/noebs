@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/adonese/noebs/store"
 )
 
 type serviceRole string
@@ -25,7 +27,15 @@ const (
 	serviceRoleWalletAPI      serviceRole = "wallet-api"
 	serviceRoleWalletLedger   serviceRole = "wallet-ledger"
 	serviceRoleWalletWorker   serviceRole = "wallet-worker"
-	serviceRoleMigrate        serviceRole = "migrate"
+
+	serviceRoleIdentityAuthMigrate   serviceRole = "identity-auth-migrate"
+	serviceRoleCardVaultMigrate      serviceRole = "card-vault-migrate"
+	serviceRoleEBSAdapterMigrate     serviceRole = "ebs-adapter-migrate"
+	serviceRolePSPWebhookMigrate     serviceRole = "psp-webhook-migrate"
+	serviceRoleAdminReportingMigrate serviceRole = "admin-reporting-migrate"
+	serviceRoleNotificationMigrate   serviceRole = "notification-chat-migrate"
+	serviceRoleBeneficiaryMigrate    serviceRole = "consumer-beneficiary-migrate"
+	serviceRoleWalletLedgerMigrate   serviceRole = "wallet-ledger-migrate"
 )
 
 func currentServiceRole() (serviceRole, error) {
@@ -48,7 +58,14 @@ func parseServiceRole(value string) (serviceRole, error) {
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
-		serviceRoleMigrate:
+		serviceRoleIdentityAuthMigrate,
+		serviceRoleCardVaultMigrate,
+		serviceRoleEBSAdapterMigrate,
+		serviceRolePSPWebhookMigrate,
+		serviceRoleAdminReportingMigrate,
+		serviceRoleNotificationMigrate,
+		serviceRoleBeneficiaryMigrate,
+		serviceRoleWalletLedgerMigrate:
 		return role, nil
 	default:
 		return "", fmt.Errorf("%w: %q", errInvalidServiceRole, value)
@@ -76,5 +93,29 @@ func (r serviceRole) startsBackgroundJobs() bool {
 }
 
 func (r serviceRole) runsMigrations() bool {
-	return r == serviceRoleMigrate
+	_, ok := r.migrationScope()
+	return ok
+}
+
+func (r serviceRole) migrationScope() (string, bool) {
+	switch r {
+	case serviceRoleIdentityAuthMigrate:
+		return store.MigrationScopeIdentityAuth, true
+	case serviceRoleCardVaultMigrate:
+		return store.MigrationScopeCardVault, true
+	case serviceRoleEBSAdapterMigrate:
+		return store.MigrationScopeEBSAdapter, true
+	case serviceRolePSPWebhookMigrate:
+		return store.MigrationScopePSPWebhook, true
+	case serviceRoleAdminReportingMigrate:
+		return store.MigrationScopeAdminReporting, true
+	case serviceRoleNotificationMigrate:
+		return store.MigrationScopeNotificationChat, true
+	case serviceRoleBeneficiaryMigrate:
+		return store.MigrationScopeConsumerBeneficiary, true
+	case serviceRoleWalletLedgerMigrate:
+		return store.MigrationScopeWalletLedger, true
+	default:
+		return "", false
+	}
 }

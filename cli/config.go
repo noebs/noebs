@@ -103,6 +103,9 @@ func loadConfig() ([]byte, error) {
 	if noebs == nil {
 		noebs = map[string]interface{}{}
 	}
+	if err := applyServiceDatabaseURL(noebs); err != nil {
+		return nil, err
+	}
 
 	payload, err := json.Marshal(noebs)
 	if err != nil {
@@ -434,8 +437,8 @@ func initConfig() {
 	storeSvc = store.New(database, store.WithDataKey(noebsConfig.DataKey))
 	migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelMigrate()
-	if role.runsMigrations() {
-		if err := store.Migrate(migrateCtx, database, tenantID); err != nil {
+	if migrationScope, ok := role.migrationScope(); ok {
+		if err := store.MigrateScope(migrateCtx, database, tenantID, migrationScope); err != nil {
 			logrusLogger.Fatalf("error in migrations: %v", err)
 		}
 		if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
@@ -445,7 +448,7 @@ func initConfig() {
 			logrusLogger.Fatalf("error validating tenants: %v", err)
 		}
 	} else {
-		logrusLogger.Printf("Migrations are owned by service role %s; current role is %s", serviceRoleMigrate, role)
+		logrusLogger.Printf("Migrations are owned by service-specific migration roles; current role is %s", role)
 	}
 
 	logrusLogger.Printf(
@@ -458,7 +461,7 @@ func initConfig() {
 		noebsConfig.GRPCEnabled,
 		noebsConfig.WalletEnabled,
 	)
-	if role == serviceRoleMigrate {
+	if role.runsMigrations() {
 		dataConfigs.DB = database
 		return
 	}

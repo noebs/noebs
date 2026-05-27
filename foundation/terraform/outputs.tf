@@ -24,3 +24,7 @@ output "noebs_service_discovery" {
     }
   }
 }
+
+output "noebs_database_ownership" {
+  value = local.noebs_database_catalog
+}

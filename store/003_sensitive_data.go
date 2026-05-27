@@ -13,6 +13,9 @@ func init() {
 }
 
 func sensitiveDataUp(ctx context.Context, tx *sql.Tx) error {
+	if migrationScope != MigrationScopeLegacy {
+		return nil
+	}
 	driver := migrationDriver
 	if driver == "" {
 		driver = DriverPostgres
@@ -41,6 +44,9 @@ func sensitiveDataUp(ctx context.Context, tx *sql.Tx) error {
 }
 
 func sensitiveDataDown(ctx context.Context, tx *sql.Tx) error {
+	if migrationScope != MigrationScopeLegacy {
+		return nil
+	}
 	_ = ctx
 	_ = tx
 	return nil

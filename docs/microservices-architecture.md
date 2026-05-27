@@ -17,7 +17,7 @@ The code already has useful extraction points:
 - `wallet/worker` and `wallet/workflow`: Temporal workflow/worker package.
 - `wallet/psp` and `wallet/handler/psp_webhook.go`: PSP config, mapping, verification, and webhook handling.
 - `dashboard`: admin/reporting views.
-- `store` and `wallet/store`: shared Postgres migration set today, with tenant/currency validation already asserted by tests.
+- `store` and `wallet/store`: Postgres access and scoped migrations, with tenant/currency validation already asserted by tests.
 
 ## Service Boundaries
 
@@ -96,8 +96,8 @@ The first split should keep frontend delivery behind the API Gateway/BFF. Admin 
 - Wallet writes are idempotent by caller-provided idempotency key.
 - PSP webhooks must be verified or explicitly authorized by provider config before they can signal workflows.
 - EBS calls are logged with tenant, service, request reference, response code, and raw adapter metadata.
-- Migrations run only as a Kubernetes/k3s `Job` deployment step, not from service replicas.
-- Each service owns its tables after extraction. During the transition, shared Postgres is allowed only with clear table ownership.
+- Migrations run only as Kubernetes/k3s `Job` deployment steps, not from service replicas.
+- Each applicable service owns its database and its migration scope. A service must not rely on another service's schema in the same process.
 
 ## Deployment Shape
 
@@ -115,18 +115,20 @@ Kubernetes provides service discovery through ClusterIP services:
 - `wallet-ledger.noebs.svc.cluster.local:9090`
 - `wallet-worker` has no service; it is a worker deployment.
 - `temporal-frontend.noebs.svc.cluster.local:7233`
-- `postgres.noebs.svc.cluster.local:5432`
+- service-owned Postgres databases, addressed through each service's mounted `secrets.yaml`.
 
 Argo CD owns application sync from `deploy/kubernetes/overlays/current-host`. Terraform under `foundation/terraform` owns platform installation, the `noebs` namespace, service-discovery outputs, and the Argo CD application definition. Secrets remain outside Git as Kubernetes Secrets generated from the existing SOPS material.
 
-Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as an Argo CD PreSync hook. Service Deployments must not run migrations in their startup path.
+Migrations are deployed through `deploy/kubernetes/base/migrate-job.yaml` as Argo CD PreSync hooks. Each job has a service-specific role and runs only that service's embedded migration scope. Service Deployments must not run migrations in their startup path.
 
-Service identity is config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. Secrets continue to merge through `secrets.yaml`.
+Service identity is config-driven. Each noebs workload mounts the shared `/app/config.yaml` plus a tracked `/app/service.yaml` containing `noebs.service_role`; deployments do not select noebs roles through environment variables. Secrets continue to merge through `secrets.yaml`, with service-owned database URLs supplied by service-specific Kubernetes Secrets.
+
+For local Docker Compose, a single SOPS file can still track service-owned database URLs by using `noebs.service_databases` keyed by service role and migration role. When that map exists, the runtime requires an entry for the current `noebs.service_role` and copies that URL into `noebs.db_url`.
 
 ## Migration Plan
 
-1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `ebs-adapter`, `psp-webhook`, `admin-reporting`, `notification-chat`, `consumer-beneficiary`, `wallet-api`, `wallet-ledger`, `wallet-worker`, and `migrate`.
-2. Run database migrations only through the Kubernetes/k3s migration Job.
+1. Add explicit config-selected runtime roles to the current binary: `api-gateway`, `identity-auth`, `card-vault`, `ebs-adapter`, `psp-webhook`, `admin-reporting`, `notification-chat`, `consumer-beneficiary`, `wallet-api`, `wallet-ledger`, and `wallet-worker`.
+2. Run database migrations only through Kubernetes/k3s migration Jobs with service-specific roles: `identity-auth-migrate`, `card-vault-migrate`, `ebs-adapter-migrate`, `psp-webhook-migrate`, `admin-reporting-migrate`, `notification-chat-migrate`, `consumer-beneficiary-migrate`, and `wallet-ledger-migrate`.
 3. Deploy role-specific Kubernetes workloads with ClusterIP service discovery. No monolith workload is retained.
 4. Move PSP webhook traffic into the `psp-webhook` workload. It owns provider verification, request/response mapping, interaction persistence, and Temporal workflow signaling.
 5. Move dashboard traffic into the `admin-reporting` workload. It owns read-only dashboard, settlement, merchant-view, status, and stream routes. `GET /dashboard/create` and `POST /dashboard/issues` are not registered by the reporting service.
@@ -137,7 +139,7 @@ Service identity is config-driven. Each noebs workload mounts the shared `/app/c
 10. Move wallet HTTP traffic into the `wallet-api` workload. It owns `/wallet` and `/admin/wallet` routes at the public path level while `wallet-ledger` owns the gRPC ledger process.
 11. Move consumer beneficiary traffic into the `consumer-beneficiary` workload. It owns beneficiary CRUD at the public path level.
 12. Move admin/reporting to event-driven projections. Block payment writes from reporting code.
-13. Split migrations by owned schema and enforce table ownership in tests.
+13. Keep migration scopes service-owned as schemas move forward; do not add new tables to the legacy monolith scope.
 
 ## Verification Gates
 
