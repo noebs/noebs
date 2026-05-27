@@ -241,7 +241,7 @@ func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
 			t.Fatalf("entrypoint does not require mounted %s", required)
 		}
 	}
-	for _, rejected := range []string{"litestream", "DB_PATH_FILE", "render-config", "|| true"} {
+	for _, rejected := range []string{"litefs", "litestream", "DB_PATH_FILE", "render-config", "|| true"} {
 		if strings.Contains(entrypointText, rejected) {
 			t.Fatalf("entrypoint carries legacy startup behavior %q", rejected)
 		}
@@ -252,7 +252,7 @@ func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
 		t.Fatalf("read Dockerfile: %v", err)
 	}
 	dockerfileText := string(dockerfile)
-	for _, rejected := range []string{"COPY config.yaml /app/config.yaml", "litestream", "sqlite3"} {
+	for _, rejected := range []string{"COPY config.yaml /app/config.yaml", "litefs", "litestream", "sqlite3"} {
 		if strings.Contains(dockerfileText, rejected) {
 			t.Fatalf("Dockerfile carries legacy image runtime behavior %q", rejected)
 		}
@@ -371,6 +371,41 @@ func TestRepositoryDoesNotCarryDirectVMDeploymentScripts(t *testing.T) {
 		for _, token := range forbidden {
 			if strings.Contains(text, token) {
 				t.Fatalf("%s carries direct VM/Docker deployment behavior %q; deployment must go through Kubernetes/k3s and Argo CD", path, token)
+			}
+		}
+	}
+}
+
+func TestRepositoryDoesNotCarryLegacySingleHostDeploymentArtifacts(t *testing.T) {
+	for _, path := range []string{
+		"fly.toml",
+		"litefs.yml",
+		"litefs.static-lease.yml",
+	} {
+		if _, err := os.Stat(filepath.Join("..", path)); err == nil {
+			t.Fatalf("%s is a legacy single-host deployment artifact; deployment must go through Kubernetes/k3s and Argo CD", path)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+
+	output, err := exec.Command("git", "-C", "..", "ls-files").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git ls-files: %v\n%s", err, output)
+	}
+	forbidden := []string{"fly_" + "consul_url", "/var/lib/" + "litefs", "lite" + "fs/"}
+	for _, path := range strings.Fields(string(output)) {
+		data, err := os.ReadFile(filepath.Join("..", path))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := strings.ToLower(string(data))
+		for _, token := range forbidden {
+			if strings.Contains(text, token) {
+				t.Fatalf("%s carries legacy Fly/LiteFS deployment behavior %q", path, token)
 			}
 		}
 	}
