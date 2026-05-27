@@ -1,7 +1,10 @@
 package consumer
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -30,5 +33,32 @@ func Test_newFromBytes(t *testing.T) {
 				t.Errorf("newFromBytes() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestConsumerRuntimeDoesNotCarryBillerCallbackDefaults(t *testing.T) {
+	paths, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatalf("list consumer go files: %v", err)
+	}
+	rejectedTokens := []string{
+		"default=https://sahil2.soluspay.net",
+		`form:"to,default=`,
+		`form:"hooks,default=`,
+	}
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, rejected := range rejectedTokens {
+			if strings.Contains(source, rejected) {
+				t.Fatalf("%s must not silently default biller callback fields with %q", path, rejected)
+			}
+		}
 	}
 }

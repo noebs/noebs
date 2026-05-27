@@ -14,11 +14,9 @@ const (
 )
 
 type specialPaymentQueries struct {
-	ID       string `form:"id,omitempty" binding:"required"`    //biller specific ids
-	Token    string `form:"token,omitempty" binding:"required"` //noebs payment token
-	IsJSON   bool   `form:"json,omitempty"`
-	Referer  string `form:"to,default=https://sahil2.soluspay.net"`
-	HooksURL string `form:"hooks,default=https://sahil2.soluspay.net"`
+	ID     string `form:"id,omitempty" binding:"required"`    //biller specific ids
+	Token  string `form:"token,omitempty" binding:"required"` //noebs payment token
+	IsJSON bool   `form:"json,omitempty"`
 }
 
 type cashoutFields struct {
