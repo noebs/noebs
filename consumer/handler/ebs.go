@@ -14,7 +14,7 @@ func (h *Handler) Purchase(c *fiber.Ctx) error {
 	var req ebs_fields.ConsumerPurchaseFields
 	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerPurchaseFields) {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-		r.DynamicFees = ebs_fields.NewDynamicFeesWithDefaults().SpecialPaymentFees
+		r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.SpecialPaymentFees
 	}, h.Service.Purchase, nil)
 }
 
@@ -53,7 +53,7 @@ func (h *Handler) WorkingKey(c *fiber.Ctx) error {
 	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerWorkingKeyFields) {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
 	}, h.Service.WorkingKey, func(res ebs_fields.EBSParserFields) interface{} {
-		return fiber.Map{"ebs_response": res, "fees": ebs_fields.NewDynamicFeesWithDefaults()}
+		return fiber.Map{"ebs_response": res, "fees": h.Service.NoebsConfig.EBSDynamicFees}
 	})
 }
 
@@ -184,7 +184,7 @@ func (h *Handler) CardTransfer(c *fiber.Ctx) error {
 	var req ebs_fields.ConsumerCardTransferAndMobileFields
 	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerCardTransferAndMobileFields) {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-		r.DynamicFees = ebs_fields.NewDynamicFeesWithDefaults().CardTransferfees
+		r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.CardTransferfees
 	}, h.Service.CardTransfer, nil)
 }
 
@@ -192,7 +192,7 @@ func (h *Handler) MobileTransfer(c *fiber.Ctx) error {
 	var req ebs_fields.ConsumerMobileTransferFields
 	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerMobileTransferFields) {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-		r.DynamicFees = ebs_fields.NewDynamicFeesWithDefaults().CardTransferfees
+		r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.CardTransferfees
 	}, h.Service.MobileTransfer, nil)
 }
 

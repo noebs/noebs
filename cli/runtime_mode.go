@@ -243,6 +243,15 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 			return fmt.Errorf("%w: noebs.%s", errMissingEBSConfig, key)
 		}
 	}
+	if cfg.EBSDynamicFees.CardTransferfees <= 0 {
+		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.p2p_fees", errMissingEBSConfig)
+	}
+	if cfg.EBSDynamicFees.SpecialPaymentFees <= 0 {
+		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.special_payment_fees", errMissingEBSConfig)
+	}
+	if cfg.EBSDynamicFees.CustomFees <= 0 {
+		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.custom_fees", errMissingEBSConfig)
+	}
 	return nil
 }
 

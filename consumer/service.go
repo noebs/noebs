@@ -24,8 +24,6 @@ type Service struct {
 	HTTPClient  *http.Client
 }
 
-var fees = ebs_fields.NewDynamicFeesWithDefaults()
-
 func (s *Service) recordTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore

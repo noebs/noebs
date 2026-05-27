@@ -45,3 +45,7 @@ noebs:
     - "*"
   # Optional outbound callback (disabled when empty).
   consumer_biller_hooks_url: ""
+  ebs_dynamic_fees:
+    p2p_fees: 30
+    custom_fees: 85
+    special_payment_fees: 2

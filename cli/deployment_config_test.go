@@ -129,29 +129,36 @@ type composeSecret struct {
 
 type mountedNoebsConfig struct {
 	Noebs struct {
-		DatabaseDriver                             string            `yaml:"db_driver"`
-		OtelServiceName                            string            `yaml:"otel_service_name"`
-		ServiceDiscovery                           map[string]string `yaml:"service_discovery"`
-		GRPCServiceDiscovery                       map[string]string `yaml:"grpc_service_discovery"`
-		TemporalHost                               string            `yaml:"temporal_host"`
-		TemporalPort                               string            `yaml:"temporal_port"`
-		RenderDBPasswordFile                       string            `yaml:"render_db_password_file"`
-		WalletEnabled                              bool              `yaml:"wallet_enabled"`
-		WalletPINRequired                          bool              `yaml:"wallet_pin_required"`
-		Wallet2FAThreshold                         int64             `yaml:"wallet_2fa_threshold"`
-		WalletApprovalThreshold                    int64             `yaml:"wallet_approval_threshold"`
-		WalletDefaultCurrency                      string            `yaml:"wallet_default_currency"`
-		WalletHoldExpirySeconds                    int               `yaml:"wallet_hold_expiry_seconds"`
-		WalletApprovalTimeoutSeconds               int               `yaml:"wallet_approval_timeout_seconds"`
-		WalletVerificationTimeoutSeconds           int               `yaml:"wallet_verification_timeout_seconds"`
-		WalletManualTransferApprovalTimeoutSeconds int               `yaml:"wallet_manual_approval_timeout_seconds"`
-		WalletPSPPollerCron                        string            `yaml:"wallet_psp_poller_cron"`
-		WalletPSPPollerBatchSize                   int               `yaml:"wallet_psp_poller_batch_size"`
-		WalletPSPPollerIntervalSeconds             int               `yaml:"wallet_psp_poller_interval_seconds"`
-		WalletReconciliationCron                   string            `yaml:"wallet_reconciliation_cron"`
-		WalletReconciliationBatchSize              int               `yaml:"wallet_reconciliation_batch_size"`
-		WalletReconciliationLookbackHours          int               `yaml:"wallet_reconciliation_lookback_hours"`
+		DatabaseDriver                             string                `yaml:"db_driver"`
+		OtelServiceName                            string                `yaml:"otel_service_name"`
+		ServiceDiscovery                           map[string]string     `yaml:"service_discovery"`
+		GRPCServiceDiscovery                       map[string]string     `yaml:"grpc_service_discovery"`
+		EBSDynamicFees                             mountedEBSDynamicFees `yaml:"ebs_dynamic_fees"`
+		TemporalHost                               string                `yaml:"temporal_host"`
+		TemporalPort                               string                `yaml:"temporal_port"`
+		RenderDBPasswordFile                       string                `yaml:"render_db_password_file"`
+		WalletEnabled                              bool                  `yaml:"wallet_enabled"`
+		WalletPINRequired                          bool                  `yaml:"wallet_pin_required"`
+		Wallet2FAThreshold                         int64                 `yaml:"wallet_2fa_threshold"`
+		WalletApprovalThreshold                    int64                 `yaml:"wallet_approval_threshold"`
+		WalletDefaultCurrency                      string                `yaml:"wallet_default_currency"`
+		WalletHoldExpirySeconds                    int                   `yaml:"wallet_hold_expiry_seconds"`
+		WalletApprovalTimeoutSeconds               int                   `yaml:"wallet_approval_timeout_seconds"`
+		WalletVerificationTimeoutSeconds           int                   `yaml:"wallet_verification_timeout_seconds"`
+		WalletManualTransferApprovalTimeoutSeconds int                   `yaml:"wallet_manual_approval_timeout_seconds"`
+		WalletPSPPollerCron                        string                `yaml:"wallet_psp_poller_cron"`
+		WalletPSPPollerBatchSize                   int                   `yaml:"wallet_psp_poller_batch_size"`
+		WalletPSPPollerIntervalSeconds             int                   `yaml:"wallet_psp_poller_interval_seconds"`
+		WalletReconciliationCron                   string                `yaml:"wallet_reconciliation_cron"`
+		WalletReconciliationBatchSize              int                   `yaml:"wallet_reconciliation_batch_size"`
+		WalletReconciliationLookbackHours          int                   `yaml:"wallet_reconciliation_lookback_hours"`
 	} `yaml:"noebs"`
+}
+
+type mountedEBSDynamicFees struct {
+	CardTransferfees   float32 `yaml:"p2p_fees"`
+	CustomFees         float32 `yaml:"custom_fees"`
+	SpecialPaymentFees float32 `yaml:"special_payment_fees"`
 }
 
 type mountedNoebsServiceConfig struct {
@@ -1138,6 +1145,29 @@ func TestDockerComposeWalletRuntimeConfigMatchesKubernetes(t *testing.T) {
 	for _, check := range checks {
 		if check.docker != check.k8s {
 			t.Fatalf("config.docker.yaml %s = %v, want Kubernetes value %v", check.name, check.docker, check.k8s)
+		}
+	}
+}
+
+func TestDockerComposeEBSRuntimeConfigMatchesKubernetes(t *testing.T) {
+	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
+	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
+
+	checks := []struct {
+		name   string
+		docker float32
+		k8s    float32
+	}{
+		{"p2p_fees", dockerConfig.Noebs.EBSDynamicFees.CardTransferfees, kubernetesConfig.Noebs.EBSDynamicFees.CardTransferfees},
+		{"custom_fees", dockerConfig.Noebs.EBSDynamicFees.CustomFees, kubernetesConfig.Noebs.EBSDynamicFees.CustomFees},
+		{"special_payment_fees", dockerConfig.Noebs.EBSDynamicFees.SpecialPaymentFees, kubernetesConfig.Noebs.EBSDynamicFees.SpecialPaymentFees},
+	}
+	for _, check := range checks {
+		if check.docker <= 0 {
+			t.Fatalf("config.docker.yaml ebs_dynamic_fees.%s = %v, want positive explicit fee", check.name, check.docker)
+		}
+		if check.docker != check.k8s {
+			t.Fatalf("config.docker.yaml ebs_dynamic_fees.%s = %v, want Kubernetes value %v", check.name, check.docker, check.k8s)
 		}
 	}
 }

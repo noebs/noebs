@@ -342,6 +342,9 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 		{name: "ipin_endpoint", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.IPINIp = "" }},
 		{name: "consumer_app_id", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.ConsumerID = "" }},
 		{name: "merchant_app_id", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.MerchantID = "" }},
+		{name: "p2p_fees", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.EBSDynamicFees.CardTransferfees = 0 }},
+		{name: "special_payment_fees", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.EBSDynamicFees.SpecialPaymentFees = 0 }},
+		{name: "custom_fees", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.EBSDynamicFees.CustomFees = 0 }},
 	}
 
 	for _, tt := range required {
@@ -404,6 +407,11 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 		IPINIp:     "https://ipin.ebs.example",
 		ConsumerID: "consumer-app",
 		MerchantID: "merchant-app",
+		EBSDynamicFees: ebs_fields.DynamicFeesFields{
+			CardTransferfees:   30,
+			SpecialPaymentFees: 2,
+			CustomFees:         85,
+		},
 		ServiceDiscovery: map[string]string{
 			string(serviceRoleIdentityAuth):   "http://identity-auth:8080",
 			string(serviceRoleCardVault):      "http://card-vault:8080",

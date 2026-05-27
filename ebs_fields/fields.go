@@ -959,6 +959,8 @@ type NoebsConfig struct {
 	ConsumerID string `json:"consumer_app_id"` // The ID that will be used within noebs to identify the consumer
 	MerchantID string `json:"merchant_app_id"` // The ID that will be used within noebs to identify the merchant
 
+	EBSDynamicFees DynamicFeesFields `json:"ebs_dynamic_fees"`
+
 	ConsumerQAID string `json:"consumer_qa_id"` // EBS application ID for mobile and card not present services prod)
 	MerchantQAID string `json:"merchant_qa_id"` // EBS client ID for pos and merchant services (prod)
 
