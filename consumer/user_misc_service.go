@@ -7,7 +7,6 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
-	"github.com/adonese/noebs/utils"
 )
 
 type CheckUserResult struct {
@@ -19,6 +18,9 @@ type CheckUserResult struct {
 func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []string) ([]CheckUserResult, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
+	}
+	if s.HTTPClient == nil {
+		return nil, ErrMissingHTTPClient
 	}
 	if tenantID == "" {
 		return nil, store.ErrMissingTenantID
@@ -39,22 +41,14 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 			continue
 		}
 
-		pan := user.MainCard
-		if pan == "" {
-			userCards, err := s.Store.GetCardsOrFail(ctx, tenantID, phone)
-			if err == nil && len(userCards.Cards) > 0 {
-				pan = userCards.Cards[0].Pan
-			} else {
-				// Keep legacy behavior: skip users without cards.
-				continue
-			}
+		maskedCard, err := s.ResolveMaskedCardByMobileInCardVault(ctx, tenantID, user.Mobile)
+		if errors.Is(err, ErrReceiverHasNoCard) {
+			continue
 		}
-
-		masked := ""
-		if pan != "" {
-			masked = utils.MaskPAN(pan)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, CheckUserResult{Phone: phone, IsUser: true, Pan: masked})
+		out = append(out, CheckUserResult{Phone: phone, IsUser: true, Pan: maskedCard.MaskedPAN})
 	}
 	return out, nil
 }

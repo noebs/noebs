@@ -137,6 +137,11 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	if err := validateEBSRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
+	if role == serviceRoleIdentityAuth {
+		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleCardVault); err != nil {
+			return err
+		}
+	}
 	if role == serviceRoleEBSAdapter {
 		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleCardVault); err != nil {
 			return err

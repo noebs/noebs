@@ -316,6 +316,8 @@ func errorForServiceCommandCode(code string) error {
 		return store.ErrInvalidTenantID
 	case store.ErrInvalidUserID.Error():
 		return store.ErrInvalidUserID
+	case store.ErrMissingPAN.Error():
+		return store.ErrMissingPAN
 	default:
 		return nil
 	}

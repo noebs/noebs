@@ -51,6 +51,13 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	if len(masked.MaskedPANs) != 1 || masked.MaskedPANs[0] != "922208*****0000" {
 		t.Fatalf("masked cards = %+v", masked)
 	}
+	maskedByMobile, err := service.ResolveMaskedCardByMobile(ctx, tenantID, MaskedCardByMobileCommand{Mobile: mobile})
+	if err != nil {
+		t.Fatalf("resolve masked card by mobile with card-vault schema: %v", err)
+	}
+	if maskedByMobile.MaskedPAN != "922208*****0000" {
+		t.Fatalf("masked card by mobile = %+v", maskedByMobile)
+	}
 
 	if err := service.SetMainCardForUserID(ctx, tenantID, userID, pan); err != nil {
 		t.Fatalf("set main card with card-vault schema: %v", err)

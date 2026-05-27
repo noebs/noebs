@@ -312,6 +312,9 @@ func TestServiceRoleRuntimeConfigRequiresExplicitOTelConfigWhenEnabled(t *testin
 	}
 
 	cfg.OtelSampleRate = 0.25
+	cfg.ServiceDiscovery = map[string]string{
+		string(serviceRoleCardVault): "http://card-vault:8080",
+	}
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); err != nil {
 		t.Fatalf("explicit otel runtime config error = %v", err)
 	}
@@ -374,7 +377,7 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingAdminReporting); err == nil {
 		t.Fatalf("ebs-adapter should require admin-reporting service discovery")
 	}
-	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
 		t.Fatalf("identity-auth should not require EBS endpoint config: %v", err)
 	}
 }
@@ -382,6 +385,15 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 func TestServiceRoleRuntimeConfigDoesNotRequireCardVaultServiceDiscovery(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{}); err != nil {
 		t.Fatalf("card-vault runtime config error = %v", err)
+	}
+}
+
+func TestServiceRoleRuntimeConfigRequiresIdentityAuthCardVaultDiscovery(t *testing.T) {
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
+		t.Fatalf("identity-auth runtime config error = %v", err)
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err == nil {
+		t.Fatalf("identity-auth should require card-vault service discovery")
 	}
 }
 
@@ -401,8 +413,16 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 	}
 }
 
+func identityAuthRuntimeConfig() ebs_fields.NoebsConfig {
+	return ebs_fields.NoebsConfig{
+		ServiceDiscovery: map[string]string{
+			string(serviceRoleCardVault): "http://card-vault:8080",
+		},
+	}
+}
+
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
-	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{}); err != nil {
+	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
 		t.Fatalf("identity-auth runtime config error = %v", err)
 	}
 	if err := validateRoleRuntimeConfig(serviceRoleWalletAPI, ebs_fields.NoebsConfig{}); !errors.Is(err, errWalletNotEnabled) {
