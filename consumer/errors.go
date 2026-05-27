@@ -4,11 +4,13 @@ import "errors"
 
 var (
 	// Auth / OTP
-	ErrWrongPassword   = errors.New("wrong_password")
-	ErrWrongOTP        = errors.New("wrong_otp")
-	ErrPasswordInvalid = errors.New("password_invalid")
-	ErrEmptyOTP        = errors.New("empty_otp")
-	ErrInvalidOTP      = errors.New("invalid_otp")
+	ErrWrongPassword      = errors.New("wrong_password")
+	ErrWrongOTP           = errors.New("wrong_otp")
+	ErrPasswordInvalid    = errors.New("password_invalid")
+	ErrEmptyOTP           = errors.New("empty_otp")
+	ErrInvalidOTP         = errors.New("invalid_otp")
+	ErrMissingAuth        = errors.New("missing_auth")
+	ErrInvalidRecoveryJWT = errors.New("invalid_recovery_jwt")
 
 	// Account recovery / balance step
 	ErrCardNotMatched    = errors.New("card_not_matched")

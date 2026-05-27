@@ -4,6 +4,7 @@ import "github.com/gofiber/fiber/v2"
 
 func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	// EBS operations (public, matches legacy behavior)
+	router.Post("/otp/balance", h.BalanceStep)
 	router.Post("/register_with_card", h.RegisterWithCard)
 	router.Post("/card_info", h.EbsGetCardInfo)
 	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
@@ -53,7 +54,6 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/otp/generate_insecure", h.GenerateSignInCodeInsecure)
 	router.Post("/otp/login", h.SingleLoginHandler)
 	router.Post("/otp/verify", h.VerifyOTP)
-	router.Post("/otp/balance", h.BalanceStep)
 
 	// Social auth (public)
 	router.Post("/auth/google", h.GoogleAuth)
@@ -102,12 +102,14 @@ func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
 func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/card-registration/cards", h.StoreCompletedRegistrationCard)
 	router.Post("/cards/by-mobile", h.ResolveCardByMobile)
+	router.Post("/cards/by-mobile-pan", h.ResolveCardByMobilePAN)
 	router.Post("/cards/masked-by-mobile", h.ResolveMaskedCardByMobile)
 }
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/card-registration/users", h.CreateCompletedRegistrationIdentity)
 	router.Post("/register-with-card/users", h.RegisterWithCardIdentity)
+	router.Post("/recovery-jwt", h.IssueRecoveryJWT)
 	router.Post("/users/by-mobile", h.ResolveIdentityUserByMobile)
 }
 

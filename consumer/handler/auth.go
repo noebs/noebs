@@ -193,7 +193,7 @@ func (h *Handler) BalanceStep(c *fiber.Ctx) error {
 			code = "transaction_failed"
 			msg = "Invalid credentials"
 		}
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": msg, "code": code})
+		return jsonResponse(c, statusForError(err), fiber.Map{"message": msg, "code": code})
 	}
 	c.Set("Authorization", token)
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok", "authorization": token})

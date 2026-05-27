@@ -114,6 +114,7 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrMissingCardExpiry),
 		errors.Is(err, consumer.ErrMissingUUID),
 		errors.Is(err, consumer.ErrAmountMismatch),
+		errors.Is(err, consumer.ErrCardNotMatched),
 		errors.Is(err, consumer.ErrInvalidPaymentToken),
 		errors.Is(err, consumer.ErrAmbiguousPaymentToken),
 		errors.Is(err, consumer.ErrReceiverHasNoCard),
@@ -129,10 +130,12 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrNotificationCommand),
 		errors.Is(err, consumer.ErrAdminReportingCommand),
 		errors.Is(err, consumer.ErrInvalidPaymentInfo),
-		errors.Is(err, consumer.ErrMissingIssuedPAN):
+		errors.Is(err, consumer.ErrMissingIssuedPAN),
+		errors.Is(err, consumer.ErrInvalidRecoveryJWT):
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
+		errors.Is(err, consumer.ErrMissingAuth),
 		errors.Is(err, consumer.ErrMissingHTTPClient),
 		errors.Is(err, consumer.ErrMissingCardVault),
 		errors.Is(err, consumer.ErrInvalidCardVault),

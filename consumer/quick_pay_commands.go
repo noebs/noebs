@@ -288,6 +288,10 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingUUID
 	case ErrAmountMismatch.Error():
 		return ErrAmountMismatch
+	case ErrCardNotMatched.Error():
+		return ErrCardNotMatched
+	case ErrTransactionFailed.Error():
+		return ErrTransactionFailed
 	case ErrInvalidPaymentToken.Error():
 		return ErrInvalidPaymentToken
 	case ErrAmbiguousPaymentToken.Error():
@@ -310,6 +314,8 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingIssuedPAN
 	case ErrMissingCardExpiry.Error():
 		return ErrMissingCardExpiry
+	case ErrInvalidRecoveryJWT.Error():
+		return ErrInvalidRecoveryJWT
 	case ErrUserAlreadyExists.Error():
 		return ErrUserAlreadyExists
 	case ErrInvalidCard.Error():

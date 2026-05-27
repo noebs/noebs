@@ -182,6 +182,7 @@ func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
 	tests := []cardVaultRoute{
 		{name: "completed card registration card", method: http.MethodPost, path: "/internal/card-vault/card-registration/cards"},
 		{name: "card by mobile", method: http.MethodPost, path: "/internal/card-vault/cards/by-mobile"},
+		{name: "card by mobile and pan", method: http.MethodPost, path: "/internal/card-vault/cards/by-mobile-pan"},
 		{name: "masked card by mobile", method: http.MethodPost, path: "/internal/card-vault/cards/masked-by-mobile"},
 	}
 	for _, tt := range tests {

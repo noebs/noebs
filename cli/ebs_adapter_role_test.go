@@ -18,6 +18,7 @@ func ebsAdapterRoutes() []ebsAdapterRoute {
 	return []ebsAdapterRoute{
 		{name: "consumer card info", method: http.MethodPost, path: "/consumer/card_info"},
 		{name: "consumer pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
+		{name: "consumer recovery balance", method: http.MethodPost, path: "/consumer/otp/balance"},
 		{name: "consumer register with card", method: http.MethodPost, path: "/consumer/register_with_card"},
 		{name: "consumer card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
 		{name: "consumer card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},

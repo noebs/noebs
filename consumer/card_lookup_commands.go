@@ -17,6 +17,16 @@ type CardByMobileResult struct {
 	ExpDate string `json:"expDate,omitempty"`
 }
 
+type CardByMobilePANCommand struct {
+	Mobile string `json:"mobile"`
+	PAN    string `json:"pan"`
+}
+
+type CardByMobilePANResult struct {
+	UserID  int64  `json:"user_id"`
+	ExpDate string `json:"expDate,omitempty"`
+}
+
 type MaskedCardsCommand struct{}
 
 type MaskedCardsResult struct {
@@ -54,6 +64,41 @@ func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd 
 		return CardByMobileResult{}, ErrReceiverHasNoCard
 	}
 	return CardByMobileResult{PAN: pan, ExpDate: strings.TrimSpace(cards[0].Expiry)}, nil
+}
+
+func (s *Service) ResolveCardByMobilePAN(ctx context.Context, tenantID string, cmd CardByMobilePANCommand) (CardByMobilePANResult, error) {
+	if s == nil || s.Store == nil {
+		return CardByMobilePANResult{}, ErrMissingStore
+	}
+	if tenantID == "" {
+		return CardByMobilePANResult{}, store.ErrMissingTenantID
+	}
+	mobile := strings.TrimSpace(cmd.Mobile)
+	if mobile == "" {
+		return CardByMobilePANResult{}, ErrMissingMobile
+	}
+	pan := strings.TrimSpace(cmd.PAN)
+	if pan == "" {
+		return CardByMobilePANResult{}, store.ErrMissingPAN
+	}
+	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobile)
+	if err != nil {
+		return CardByMobilePANResult{}, err
+	}
+	for _, card := range cards {
+		if strings.TrimSpace(card.Pan) != pan {
+			continue
+		}
+		expiry := strings.TrimSpace(card.Expiry)
+		if expiry == "" {
+			return CardByMobilePANResult{}, ErrMissingCardExpiry
+		}
+		if card.UserID <= 0 {
+			return CardByMobilePANResult{}, store.ErrInvalidUserID
+		}
+		return CardByMobilePANResult{UserID: card.UserID, ExpDate: expiry}, nil
+	}
+	return CardByMobilePANResult{}, ErrCardNotMatched
 }
 
 func (s *Service) ListMaskedCardsForUserID(ctx context.Context, tenantID string, userID int64, _ MaskedCardsCommand) (MaskedCardsResult, error) {
@@ -132,6 +177,20 @@ func (s *Service) ResolveCardByMobileInCardVault(ctx context.Context, tenantID, 
 	}
 	if strings.TrimSpace(result.PAN) == "" {
 		return CardByMobileResult{}, ErrReceiverHasNoCard
+	}
+	return result, nil
+}
+
+func (s *Service) ResolveCardByMobilePANInCardVault(ctx context.Context, tenantID, mobile, pan string) (CardByMobilePANResult, error) {
+	var result CardByMobilePANResult
+	if err := s.doAdminServiceCommand(ctx, tenantID, cardVaultCommandTarget, "/internal/card-vault/cards/by-mobile-pan", CardByMobilePANCommand{Mobile: mobile, PAN: pan}, &result); err != nil {
+		return CardByMobilePANResult{}, err
+	}
+	if result.UserID <= 0 {
+		return CardByMobilePANResult{}, store.ErrInvalidUserID
+	}
+	if strings.TrimSpace(result.ExpDate) == "" {
+		return CardByMobilePANResult{}, ErrMissingCardExpiry
 	}
 	return result, nil
 }

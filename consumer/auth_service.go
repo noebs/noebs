@@ -2,7 +2,6 @@ package consumer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -191,52 +190,6 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (
 	}
 	_ = s.Store.UpdateUserColumns(ctx, tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true})
 	return sanitizeUser(*u), nil
-}
-
-type BalanceStepRequest struct {
-	ebs_fields.ConsumerBalanceFields
-	Mobile string `json:"mobile,omitempty"`
-}
-
-// BalanceStep validates card credentials against EBS, then issues a JWT for account recovery.
-func (s *Service) BalanceStep(ctx context.Context, tenantID string, req BalanceStepRequest) (string, error) {
-	if s == nil || s.Store == nil {
-		return "", ErrMissingStore
-	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
-	}
-
-	user, _ := s.Store.GetUserWithCards(ctx, tenantID, req.Mobile)
-	if user == nil || user.Cards == nil {
-		return "", ErrCardNotMatched
-	}
-
-	var isMatched bool
-	for _, card := range user.Cards {
-		if req.Pan == card.Pan {
-			isMatched = true
-			req.ExpDate = card.Expiry
-		}
-	}
-	if !isMatched {
-		return "", ErrCardNotMatched
-	}
-
-	// Make an EBS balance transaction to validate cardholder info.
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
-	mobile := req.Mobile
-	req.Mobile = ""
-	req.ApplicationId = s.NoebsConfig.ConsumerID
-	jsonBuffer, err := json.Marshal(req)
-	if err != nil {
-		return "", err
-	}
-	_, _, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-	if ebsErr != nil {
-		return "", ErrTransactionFailed
-	}
-	return s.Auth.GenerateJWT(user.ID, mobile, tenantID)
 }
 
 func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassword string) (ebs_fields.User, error) {

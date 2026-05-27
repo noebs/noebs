@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
@@ -76,6 +77,29 @@ func TestResolveIdentityUserByMobileUsesIdentityScope(t *testing.T) {
 	}
 	if result.UserID <= 0 || result.Mobile != "0912141660" {
 		t.Fatalf("identity result = %+v", result)
+	}
+}
+
+func TestIssueRecoveryJWTUsesIdentityScope(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	user := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
+	auth := &gateway.JWTAuth{NoebsConfig: ebs_fields.NoebsConfig{JWTKey: "test-secret"}}
+	auth.Init()
+	service := &Service{Store: storeSvc, Auth: auth}
+
+	result, err := service.IssueRecoveryJWT(context.Background(), tenantID, RecoveryJWTCommand{UserID: user.ID, Mobile: user.Mobile})
+	if err != nil {
+		t.Fatalf("issue recovery jwt: %v", err)
+	}
+	claims, err := auth.VerifyJWT(result.Token)
+	if err != nil {
+		t.Fatalf("verify recovery jwt: %v", err)
+	}
+	if claims.UserID != user.ID || claims.Mobile != user.Mobile || claims.TenantID != tenantID {
+		t.Fatalf("claims = %+v", claims)
+	}
+	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil {
+		t.Fatalf("identity-auth scope should not create card tables")
 	}
 }
 
