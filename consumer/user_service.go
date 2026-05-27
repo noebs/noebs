@@ -30,29 +30,6 @@ func (s *Service) CardFromNumber(ctx context.Context, tenantID, mobileNumber str
 	return cards[0].Pan, nil
 }
 
-// GetCards returns the full card list for a user plus their main card.
-func (s *Service) GetCards(ctx context.Context, tenantID, mobile string) ([]ebs_fields.Card, *ebs_fields.Card, error) {
-	if s == nil || s.Store == nil {
-		return nil, nil, ErrMissingStore
-	}
-	if tenantID == "" {
-		return nil, nil, store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return nil, nil, ErrMissingMobile
-	}
-	cards, err := s.Store.ListCardsByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(cards) == 0 {
-		return nil, nil, errors.New("no cards found")
-	}
-	main := cards[0]
-	return cards, &main, nil
-}
-
 func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Card, *ebs_fields.Card, error) {
 	if s == nil || s.Store == nil {
 		return nil, nil, ErrMissingStore
@@ -132,25 +109,6 @@ func (s *Service) DeleteBeneficiaryForUserID(ctx context.Context, tenantID strin
 	return s.Store.DeleteBeneficiary(ctx, tenantID, userID, data)
 }
 
-func (s *Service) AddCards(ctx context.Context, tenantID, mobile string, cards []ebs_fields.Card) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	prepareCardsForUser(cards, user.ID, mobile)
-	return s.Store.AddCards(ctx, tenantID, user.ID, cards)
-}
-
 func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID int64, mobile string, cards []ebs_fields.Card) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
@@ -177,28 +135,6 @@ func prepareCardsForUser(cards []ebs_fields.Card, userID int64, mobile string) {
 	}
 }
 
-func (s *Service) EditCard(ctx context.Context, tenantID, mobile string, card ebs_fields.Card) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	if strings.TrimSpace(card.CardIdx) == "" {
-		return errors.New("card idx is empty")
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	card.UserID = user.ID
-	return s.Store.UpdateCard(ctx, tenantID, user.ID, card)
-}
-
 func (s *Service) EditCardForUserID(ctx context.Context, tenantID string, userID int64, card ebs_fields.Card) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
@@ -214,28 +150,6 @@ func (s *Service) EditCardForUserID(ctx context.Context, tenantID string, userID
 	}
 	card.UserID = userID
 	return s.Store.UpdateCard(ctx, tenantID, userID, card)
-}
-
-func (s *Service) RemoveCard(ctx context.Context, tenantID, mobile, cardIdx string) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	cardIdx = strings.TrimSpace(cardIdx)
-	if cardIdx == "" {
-		return errors.New("card idx is empty")
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	return s.Store.DeleteCard(ctx, tenantID, user.ID, cardIdx)
 }
 
 func (s *Service) RemoveCardForUserID(ctx context.Context, tenantID string, userID int64, cardIdx string) error {

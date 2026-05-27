@@ -17,6 +17,25 @@ func TestNoebsConfigHasNoRuntimeDefaultsMutator(t *testing.T) {
 	}
 }
 
+func TestEBSClientHasNoInProcessCacheCardSideChannel(t *testing.T) {
+	data, err := os.ReadFile("ebs_client.go")
+	if err != nil {
+		t.Fatalf("read ebs_client.go: %v", err)
+	}
+	source := string(data)
+	rejected := []string{
+		"var EBSRes",
+		"EBSRes <-",
+		"make(chan CacheCards",
+		"getPan(",
+	}
+	for _, token := range rejected {
+		if strings.Contains(source, token) {
+			t.Fatalf("ebs_client.go must not publish cache-card state through in-process side channel %q", token)
+		}
+	}
+}
+
 func TestNoebsConfigUsesExplicitResolvedEBSEndpoints(t *testing.T) {
 	payload := []byte(`{
 		"consumer_endpoint": "https://consumer.ebs.example",

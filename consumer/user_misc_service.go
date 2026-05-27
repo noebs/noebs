@@ -53,38 +53,6 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 	return out, nil
 }
 
-func (s *Service) SetMainCard(ctx context.Context, tenantID, mobile, pan string) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	pan = strings.TrimSpace(pan)
-	if pan == "" {
-		return errors.New("missing pan")
-	}
-
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	if ok, err := s.Store.CardExists(ctx, tenantID, pan); err != nil || !ok {
-		if err != nil {
-			return err
-		}
-		return errors.New("card does not exist")
-	}
-	if err := s.Store.SetMainCard(ctx, tenantID, user.ID, pan); err != nil {
-		return err
-	}
-	return s.Store.UpdateUserColumns(ctx, tenantID, user.ID, map[string]any{"main_card": pan})
-}
-
 func (s *Service) SetMainCardForUserID(ctx context.Context, tenantID string, userID int64, pan string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore

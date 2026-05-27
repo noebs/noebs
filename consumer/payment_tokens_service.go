@@ -13,29 +13,6 @@ import (
 
 var ErrMissingUUID = errors.New("missing uuid")
 
-// GeneratePaymentToken creates a payment token for the authorized user (mobile).
-//
-// NOTE: the returned encoded token intentionally masks the destination PAN to avoid exposing card data.
-func (s *Service) GeneratePaymentToken(ctx context.Context, tenantID, mobile string, token ebs_fields.Token) (ebs_fields.Token, string, string, error) {
-	if s == nil || s.Store == nil {
-		return ebs_fields.Token{}, "", "", ErrMissingStore
-	}
-	if tenantID == "" {
-		return ebs_fields.Token{}, "", "", store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ebs_fields.Token{}, "", "", ErrMissingMobile
-	}
-
-	user, err := s.Store.GetCardsOrFail(ctx, tenantID, mobile)
-	if err != nil {
-		return ebs_fields.Token{}, "", "", err
-	}
-
-	return s.generatePaymentTokenForCards(ctx, tenantID, user.ID, user.Cards, token)
-}
-
 func (s *Service) GeneratePaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, token ebs_fields.Token) (ebs_fields.Token, string, string, error) {
 	if s == nil || s.Store == nil {
 		return ebs_fields.Token{}, "", "", ErrMissingStore
@@ -93,43 +70,6 @@ func (s *Service) PaymentRequestForUserID(ctx context.Context, tenantID string, 
 		ToCard: data.ToCard,
 		Amount: data.Amount,
 	})
-}
-
-// GetPaymentToken returns either a single token (when uuid != "") or all tokens for the given user.
-func (s *Service) GetPaymentToken(ctx context.Context, tenantID, mobile, uuid string) ([]ebs_fields.Token, *ebs_fields.Token, error) {
-	if s == nil || s.Store == nil {
-		return nil, nil, ErrMissingStore
-	}
-	if tenantID == "" {
-		return nil, nil, store.ErrMissingTenantID
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return nil, nil, ErrMissingMobile
-	}
-
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if strings.TrimSpace(uuid) == "" {
-		tokens, err := s.Store.GetAllTokensByUserID(ctx, tenantID, user.ID)
-		if err != nil {
-			return nil, nil, err
-		}
-		for i := range tokens {
-			tokens[i].ToCard = utils.MaskPAN(tokens[i].ToCard)
-		}
-		return tokens, nil, nil
-	}
-
-	result, err := s.Store.GetTokenByUUID(ctx, tenantID, uuid)
-	if err != nil {
-		return nil, nil, err
-	}
-	result.ToCard = utils.MaskPAN(result.ToCard)
-	return nil, result, nil
 }
 
 func (s *Service) GetPaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, uuid string) ([]ebs_fields.Token, *ebs_fields.Token, error) {

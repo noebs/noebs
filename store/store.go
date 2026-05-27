@@ -1279,22 +1279,6 @@ func (s *Store) FindUserByID(ctx context.Context, tenantID string, id int64) (*e
 	return &user, nil
 }
 
-func (s *Store) GetCardsOrFail(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, error) {
-	user, err := s.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return nil, err
-	}
-	cards, err := s.ListCardsByUserID(ctx, tenantID, user.ID)
-	if err != nil {
-		return nil, err
-	}
-	if len(cards) == 0 {
-		return nil, errors.New("no cards found")
-	}
-	user.Cards = cards
-	return user, nil
-}
-
 func (s *Store) GetDeviceIDsByPan(ctx context.Context, tenantID, pan string) ([]string, error) {
 	db, err := s.ensureDB()
 	if err != nil {

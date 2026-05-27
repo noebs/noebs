@@ -91,9 +91,6 @@ func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse E
 		return code, ebsGenericResponse, EbsGatewayConnectivityErr
 	}
 	respSize = len(responseBody)
-	var c CacheCards
-	var isValid = true
-	c.Pan = getPan(req)
 
 	log.WithFields(logrus.Fields{"bytes": respSize}).Debug("EBS response received")
 	if !strings.Contains(ebsResponse.Header.Get("Content-Type"), "application/json") {
@@ -106,14 +103,6 @@ func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse E
 	}
 	var tmpRes IPINResponse
 	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
-		if ebsGenericResponse.ResponseCode == INVALIDCARD {
-			isValid = false
-		}
-		c.IsValid = &isValid
-		select {
-		case EBSRes <- c:
-		default:
-		}
 		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
 			code = http.StatusOK
 			return code, ebsGenericResponse, nil
@@ -168,17 +157,6 @@ func (i IPINResponse) newResponse() EBSParserFields {
 	res.PAN = i.Pan
 	res.ExpDate = i.ExpDate
 	return EBSParserFields{EBSResponse: res}
-}
-
-var EBSRes = make(chan CacheCards)
-
-func getPan(data []byte) string {
-	var d map[string]any
-	json.Unmarshal(data, &d)
-	if res, ok := d["PAN"].(string); ok {
-		return res
-	}
-	return ""
 }
 
 var (
