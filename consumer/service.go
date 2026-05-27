@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"net/http"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -20,6 +21,7 @@ type Service struct {
 	NoebsConfig ebs_fields.NoebsConfig
 	Logger      *logrus.Logger
 	Auth        Auther
+	HTTPClient  *http.Client
 }
 
 var fees = ebs_fields.NewDynamicFeesWithDefaults()

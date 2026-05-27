@@ -16,6 +16,7 @@ import (
 	consumerhandler "github.com/adonese/noebs/consumer/handler"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/httpclient"
 	"github.com/adonese/noebs/merchant"
 	merchanthandler "github.com/adonese/noebs/merchant/handler"
 	"github.com/adonese/noebs/store"
@@ -285,7 +286,7 @@ func initRoleServices(role serviceRole) error {
 	}
 
 	if roleNeedsConsumerService(role) {
-		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth}
+		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth, HTTPClient: httpclient.Default()}
 	}
 	if roleNeedsDashboardService(role) {
 		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
@@ -399,6 +400,7 @@ func registerCardVaultRoutes(route *fiber.App, userIdentity fiber.Handler, consu
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterCardVaultPublicRoutes(cons, consumerHandler)
 	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
+	consumerhandler.RegisterCardVaultInternalRoutes(route.Group("/internal/card-vault", userIdentity), consumerHandler)
 }
 
 func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {

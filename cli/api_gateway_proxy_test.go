@@ -381,7 +381,7 @@ func isInternalServiceRoute(method, path string) bool {
 	case "GET /test", "GET /metrics":
 		return true
 	default:
-		return method == fiber.MethodHead || method == fiber.MethodOptions
+		return strings.HasPrefix(path, "/internal/") || method == fiber.MethodHead || method == fiber.MethodOptions
 	}
 }
 

@@ -78,6 +78,7 @@ func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Get("/transaction", h.TransactionByUUID)
 	router.Get("/transactions", h.GetTransactions)
 	router.Post("/p2p_mobile", h.MobileTransfer)
+	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
 }
 
 func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
@@ -94,7 +95,11 @@ func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Get("/payment_token", h.GetPaymentToken)
 	router.Post("/payment_token", h.GeneratePaymentToken)
 	router.Post("/payment_request", h.PaymentRequest)
-	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
+}
+
+func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
+	router.Post("/quick-pay/resolve", h.ResolveQuickPaymentToken)
+	router.Post("/quick-pay/mark-paid", h.MarkQuickPaymentTokenPaid)
 }
 
 func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {

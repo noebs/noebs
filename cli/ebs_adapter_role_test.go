@@ -47,6 +47,7 @@ func ebsAdapterRoutes() []ebsAdapterRoute {
 		{name: "consumer transaction", method: http.MethodGet, path: "/consumer/transaction"},
 		{name: "consumer transactions", method: http.MethodGet, path: "/consumer/transactions"},
 		{name: "consumer mobile transfer", method: http.MethodPost, path: "/consumer/p2p_mobile"},
+		{name: "consumer quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
 		{name: "merchant proxy", method: http.MethodPost, path: "/ebs/balance"},
 		{name: "merchant working key", method: http.MethodPost, path: "/workingKey"},
 		{name: "merchant card transfer", method: http.MethodPost, path: "/cardTransfer"},

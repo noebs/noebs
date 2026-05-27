@@ -165,36 +165,35 @@ func (s *Service) GetPaymentTokenForUserID(ctx context.Context, tenantID string,
 	return nil, result, nil
 }
 
-// NoebsQuickPayment performs a payment using a stored payment token UUID (or an encoded token).
-func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, req ebs_fields.QuickPaymentFields, uuidQuery, tokenQuery string) (ebs_fields.EBSParserFields, error) {
-	if s == nil || s.Store == nil {
-		return ebs_fields.EBSParserFields{}, ErrMissingStore
+// NoebsQuickPayment executes a quick payment through EBS after resolving token
+// state from the card-vault service.
+func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID int64, req ebs_fields.QuickPaymentFields, uuidQuery, tokenQuery string) (ebs_fields.EBSParserFields, error) {
+	if s == nil {
+		return ebs_fields.EBSParserFields{}, ErrMissingService
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
 	}
-
-	tokenUUID, err := quickPaymentTokenUUID(req, uuidQuery, tokenQuery)
+	if userID <= 0 {
+		return ebs_fields.EBSParserFields{}, store.ErrInvalidUserID
+	}
+	resolution, err := s.ResolveQuickPaymentTokenFromCardVault(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
+		BodyToken:  req.EncodedPaymentToken,
+		QueryToken: tokenQuery,
+		UUID:       uuidQuery,
+		Amount:     int(req.TranAmount),
+	})
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
-	}
-
-	storedToken, err := s.Store.GetTokenByUUID(ctx, tenantID, tokenUUID)
-	if err != nil {
-		return ebs_fields.EBSParserFields{}, err
-	}
-
-	if storedToken.Amount != 0 && int(req.TranAmount) != storedToken.Amount {
-		return ebs_fields.EBSParserFields{}, ErrAmountMismatch
 	}
 
 	// Force the destination PAN + amount from the stored token.
 	req.ApplicationId = s.NoebsConfig.ConsumerID
-	req.ToCard = storedToken.ToCard
-	req.TranAmount = float32(storedToken.Amount)
+	req.ToCard = resolution.ToCard
+	req.TranAmount = float32(resolution.Amount)
 
 	senderPan := req.Pan
-	receiverPan := storedToken.ToCard
+	receiverPan := resolution.ToCard
 	payload := req.MarshallP2pFields()
 
 	res, err := s.callEBSRawWithMutate(
@@ -209,11 +208,13 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, req eb
 		},
 	)
 	if err == nil {
-		_ = s.Store.MarkTokenPaid(ctx, tenantID, storedToken.UUID)
+		if markErr := s.MarkQuickPaymentTokenPaidInCardVault(ctx, tenantID, userID, QuickPaymentTokenPaidCommand{UUID: resolution.UUID}); markErr != nil {
+			return res, markErr
+		}
 	}
 
 	// Notify external biller hooks (async).
-	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: err == nil, Token: storedToken.UUID}
+	billerChan <- billerForm{EBS: res.EBSResponse, IsSuccessful: err == nil, Token: resolution.UUID}
 
 	return res, err
 }

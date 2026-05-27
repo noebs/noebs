@@ -82,6 +82,7 @@ func (h *Handler) NoebsQuickPayment(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -97,7 +98,7 @@ func (h *Handler) NoebsQuickPayment(c *fiber.Ctx) error {
 		}
 	}
 
-	res, err := h.Service.NoebsQuickPayment(c.UserContext(), tenantID, req, uuidQuery, tokenQuery)
+	res, err := h.Service.NoebsQuickPayment(c.UserContext(), tenantID, userID, req, uuidQuery, tokenQuery)
 	if err != nil {
 		var callErr *ebs_fields.CallError
 		if errors.As(err, &callErr) && callErr != nil {

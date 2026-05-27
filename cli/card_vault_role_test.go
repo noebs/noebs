@@ -32,7 +32,6 @@ func cardVaultTransitionalRoutes() []cardVaultRoute {
 		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
 		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
 		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
-		{name: "quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
 	}
 }
 
@@ -131,6 +130,7 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 		{name: "transactions", method: http.MethodGet, path: "/consumer/transactions"},
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
 		{name: "ebs card info", method: http.MethodPost, path: "/consumer/card_info"},
+		{name: "quick pay execution", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
 		{name: "ebs pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
 		{name: "ebs card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
 		{name: "ebs meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
@@ -147,6 +147,29 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 			if resp.StatusCode != http.StatusNotFound {
 				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 			}
+		})
+	}
+}
+
+func TestCardVaultOwnsQuickPayInternalCommands(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	route := GetMainEngine()
+
+	tests := []cardVaultRoute{
+		{name: "resolve quick pay token", method: http.MethodPost, path: "/internal/card-vault/quick-pay/resolve"},
+		{name: "mark quick pay token paid", method: http.MethodPost, path: "/internal/card-vault/quick-pay/mark-paid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			setTestGatewayUserIdentityHeaders(req)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
 		})
 	}
 }

@@ -169,7 +169,6 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/payment_request", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/payment_token/quick_pay", role: serviceRoleCardVault, auth: gatewayAuthUser},
 
 		{method: fiber.MethodPost, path: "/ebs/*", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/card_info", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
@@ -223,6 +222,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/consumer/transaction", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/transactions", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/p2p_mobile", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
+		{method: fiber.MethodPost, path: "/consumer/payment_token/quick_pay", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
 
 		{method: fiber.MethodPost, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},

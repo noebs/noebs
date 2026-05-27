@@ -64,6 +64,27 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 		t.Fatalf("created token must not return raw PAN")
 	}
 
+	resolution, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
+		UUID:   created.UUID,
+		Amount: created.Amount,
+	})
+	if err != nil {
+		t.Fatalf("resolve quick-pay token with card-vault schema: %v", err)
+	}
+	if resolution.UUID != created.UUID || resolution.Amount != created.Amount || resolution.ToCard != pan {
+		t.Fatalf("quick-pay resolution = %+v, want uuid=%s amount=%d raw PAN", resolution, created.UUID, created.Amount)
+	}
+	if err := service.MarkQuickPaymentTokenPaidForUserID(ctx, tenantID, userID, QuickPaymentTokenPaidCommand{UUID: created.UUID}); err != nil {
+		t.Fatalf("mark quick-pay token paid with card-vault schema: %v", err)
+	}
+	paidToken, err := storeSvc.GetTokenByUUID(ctx, tenantID, created.UUID)
+	if err != nil {
+		t.Fatalf("get paid token with card-vault schema: %v", err)
+	}
+	if !paidToken.IsPaid {
+		t.Fatalf("quick-pay token was not marked paid")
+	}
+
 	tokens, token, err := service.GetPaymentTokenForUserID(ctx, tenantID, userID, "")
 	if err != nil {
 		t.Fatalf("list payment tokens with card-vault schema: %v", err)

@@ -117,8 +117,13 @@ func statusForError(err error) int {
 		return http.StatusBadRequest
 	case store.ErrNotFound(err):
 		return http.StatusNotFound
+	case errors.Is(err, consumer.ErrCardVaultCommand):
+		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
+		errors.Is(err, consumer.ErrMissingHTTPClient),
+		errors.Is(err, consumer.ErrMissingCardVault),
+		errors.Is(err, consumer.ErrInvalidCardVault),
 		errors.Is(err, store.ErrMissingDataKey),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable
