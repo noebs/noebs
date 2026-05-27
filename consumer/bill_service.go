@@ -159,6 +159,13 @@ func moheArabicPaymentPhone(paymentInfo string) (string, error) {
 // GetBills inquires a bill (telecoms, utilities, government, etc.) and maintains a per-MSISDN cache.
 func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_fields.EBSParserFields, BillAmounts, error) {
 	var due BillAmounts
+	if tenantID == "" {
+		return ebs_fields.EBSParserFields{}, due, store.ErrMissingTenantID
+	}
+	b.PayeeID = strings.TrimSpace(b.PayeeID)
+	if b.PayeeID == "" {
+		return ebs_fields.EBSParserFields{}, due, ErrMissingBillerID
+	}
 
 	uid, err := uuid.NewRandom()
 	if err != nil {
@@ -182,13 +189,6 @@ func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_f
 	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 
 	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
-	// Prefer cached biller id for this MSISDN when present.
-	if s != nil && s.Store != nil {
-		if oldCache, err := s.Store.GetCacheBiller(ctx, tenantID, b.Phone); err == nil {
-			fields.PayeeId = oldCache.BillerID
-			cacheBills.BillerID = oldCache.BillerID
-		}
-	}
 
 	payload, err := json.Marshal(fields)
 	if err != nil {
@@ -197,41 +197,31 @@ func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_f
 
 	res, err := s.callEBSRaw(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerBillInquiryEndpoint, payload)
 	if err != nil {
-		// Some billers flip between prepaid/postpaid; maintain a heuristic cache.
-		cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
-		if s != nil && s.Store != nil {
-			_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
-		}
 		return res, due, err
 	}
 
 	parsedDue, err := parseDueAmounts(fields.PayeeId, res.BillInfo)
 	if err != nil {
-		cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
-		if s != nil && s.Store != nil {
-			_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
-		}
 		return res, due, err
 	}
 
-	if s != nil && s.Store != nil {
-		_ = s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID)
+	if err := s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID); err != nil {
+		return res, due, err
 	}
 	return res, parsedDue, nil
 }
 
-// GetBiller returns a cached biller id for the MSISDN and triggers an async update when missing.
+// GetBiller returns a cached biller id for the MSISDN.
 func (s *Service) GetBiller(ctx context.Context, tenantID, mobile string) (string, error) {
 	if mobile == "" {
-		return "", errors.New("empty_mobile")
+		return "", ErrMissingMobile
 	}
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
-	guessed, err := s.Store.GetCacheBiller(ctx, tenantID, mobile)
+	cached, err := s.Store.GetCacheBiller(ctx, tenantID, mobile)
 	if err != nil {
-		go s.billerID(ctx, tenantID, mobile)
 		return "", err
 	}
-	return guessed.BillerID, nil
+	return cached.BillerID, nil
 }

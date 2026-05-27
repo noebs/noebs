@@ -294,6 +294,8 @@ func errorForServiceCommandCode(code string) error {
 		return ErrAmbiguousPaymentToken
 	case ErrInvalidPaymentInfo.Error():
 		return ErrInvalidPaymentInfo
+	case ErrMissingBillerID.Error():
+		return ErrMissingBillerID
 	case ErrMissingStore.Error():
 		return ErrMissingStore
 	case ErrNotificationCommand.Error():

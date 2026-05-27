@@ -26,7 +26,7 @@ func ebsAdapterRoutes() []ebsAdapterRoute {
 		{name: "consumer alive", method: http.MethodPost, path: "/consumer/is_alive"},
 		{name: "consumer bill payment", method: http.MethodPost, path: "/consumer/bill_payment"},
 		{name: "consumer bills", method: http.MethodPost, path: "/consumer/bills"},
-		{name: "consumer guess biller", method: http.MethodGet, path: "/consumer/guess_biller"},
+		{name: "consumer cached biller", method: http.MethodGet, path: "/consumer/biller"},
 		{name: "consumer bill inquiry", method: http.MethodPost, path: "/consumer/bill_inquiry"},
 		{name: "consumer p2p", method: http.MethodPost, path: "/consumer/p2p"},
 		{name: "consumer cash in", method: http.MethodPost, path: "/consumer/cashIn"},
@@ -149,5 +149,24 @@ func TestEBSAdapterDoesNotOwnIdentityCardNotificationOrWalletRoutes(t *testing.T
 				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 			}
 		})
+	}
+}
+
+func TestEBSAdapterDoesNotOwnLegacyGuessBillerRoute(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleEBSAdapter)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/consumer/guess_biller", nil)
+	setTestGatewayUserIdentityHeaders(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
 }

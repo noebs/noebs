@@ -20,6 +20,7 @@ var (
 	ErrInvalidPaymentToken   = errors.New("invalid_payment_token")
 	ErrAmbiguousPaymentToken = errors.New("ambiguous_payment_token")
 	ErrInvalidPaymentInfo    = errors.New("invalid_payment_info")
+	ErrMissingBillerID       = errors.New("missing_biller_id")
 	ErrMissingHTTPClient     = errors.New("missing_http_client")
 	ErrMissingCardVault      = errors.New("missing_card_vault_service_discovery")
 	ErrInvalidCardVault      = errors.New("invalid_card_vault_service_discovery")

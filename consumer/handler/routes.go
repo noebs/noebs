@@ -14,7 +14,7 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/is_alive", h.IsAlive)
 	router.Post("/bill_payment", h.BillPayment)
 	router.Post("/bills", h.GetBills)
-	router.Get("/guess_biller", h.GetBiller)
+	router.Get("/biller", h.GetBiller)
 	router.Post("/bill_inquiry", h.BillInquiry)
 	router.Post("/p2p", h.CardTransfer)
 	router.Post("/cashIn", h.CashIn)

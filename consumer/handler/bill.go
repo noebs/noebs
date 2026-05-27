@@ -75,7 +75,7 @@ func (h *Handler) GetBiller(c *fiber.Ctx) error {
 
 	billerID, err := h.Service.GetBiller(c.UserContext(), tenantID, mobile)
 	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "no record", "code": "empty_mobile"})
+		return jsonResponse(c, statusForError(err), fiber.Map{"message": err.Error(), "code": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"biller_id": billerID})
 }

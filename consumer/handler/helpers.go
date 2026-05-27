@@ -113,6 +113,7 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidPaymentToken),
 		errors.Is(err, consumer.ErrAmbiguousPaymentToken),
 		errors.Is(err, consumer.ErrReceiverHasNoCard),
+		errors.Is(err, consumer.ErrMissingBillerID),
 		errors.Is(err, consumer.ErrMissingPublicKey):
 		return http.StatusBadRequest
 	case store.ErrNotFound(err):

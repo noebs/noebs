@@ -223,86 +223,6 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, e
 	}
 }
 
-// billerID retrieves the type of a mobile number (operator and prepaid/postpaid) using EBS bill inquiry.
-func (s *Service) billerID(ctx context.Context, tenantID, mobile string) (string, error) {
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
-	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return "", err
-	}
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBillInquiryEndpoint
-	var b Bills
-	b.PayeeID = guessMobile(mobile)
-	b.Phone = mobile
-	uid, _ := uuid.NewRandom()
-	var fields ebs_fields.ConsumerBillInquiryFields
-	fields.ApplicationId = s.NoebsConfig.ConsumerID
-	fields.UUID = uid.String()
-	updatePaymentInfo(&fields, b)
-	fields.PayeeId = b.PayeeID
-	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
-	if err != nil {
-		return "", err
-	}
-	fields.ConsumerCardHolderFields.Ipin = ipinBlock
-	fields.ConsumerCardHolderFields.Pan = s.NoebsConfig.BillInquiryPAN
-	fields.ConsumerCardHolderFields.ExpDate = s.NoebsConfig.BillInquiryExpDate
-	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
-
-	cacheBills := ebs_fields.CacheBillers{Mobile: b.Phone, BillerID: b.PayeeID}
-	if oldCache, err := s.Store.GetCacheBiller(ctx, tenantID, b.Phone); err == nil {
-		fields.PayeeId = oldCache.BillerID
-		cacheBills.BillerID = oldCache.BillerID
-	}
-
-	jsonBuffer, err := json.Marshal(fields)
-	if err != nil {
-		return "", err
-	}
-	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
-	res.MaskPAN()
-	res.Name = s.ToDatabasename(url)
-	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
-
-	if ebsErr != nil {
-		cacheBills.BillerID = flipBillerID(cacheBills.BillerID)
-		if recordErr != nil {
-			return "", errors.Join(ebsErr, recordErr)
-		}
-		if err := s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID); err != nil {
-			return "", err
-		}
-		return cacheBills.BillerID, nil
-	}
-	if recordErr != nil {
-		return "", recordErr
-	}
-	if err := s.Store.UpsertCacheBiller(ctx, tenantID, cacheBills.Mobile, cacheBills.BillerID); err != nil {
-		return "", err
-	}
-	return cacheBills.BillerID, nil
-}
-
-func flipBillerID(id string) string {
-	newId := id
-	switch id {
-	case "0010010002": // zain bill payment
-		newId = "0010010001" // zain top up
-	case "0010010001":
-		newId = "0010010002"
-	case "0010010004": // mtn bill payment
-		newId = "0010010003" // mtn top up
-	case "0010010003":
-		newId = "0010010004"
-	case "0010010006": // sudani bill payment
-		newId = "0010010005" // sudani top up
-	case "0010010005":
-		newId = "0010010006"
-	}
-	return newId
-}
-
 // isValidCard checks the noebs database first and verifies unknown cards with an EBS balance request.
 func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
 	if tenantID == "" {
@@ -347,17 +267,6 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 		return false, recordErr
 	}
 	return true, nil
-}
-
-func guessMobile(mobile string) string {
-	switch {
-	case strings.HasPrefix(mobile, "091"), strings.HasPrefix(mobile, "096"):
-		return "0010010002" // zain
-	case strings.HasPrefix(mobile, "099"), strings.HasPrefix(mobile, "092"):
-		return "0010010004" // mtn
-	default:
-		return "0010010006" // sudani
-	}
 }
 
 func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
