@@ -91,6 +91,8 @@ Owns read-only dashboards, settlement reports, issue reports, and operational pr
 
 Initial package owner: `dashboard` plus wallet admin templates as a transitional read surface.
 
+Admin/reporting tenant defaults are applied only at the HTTP boundary. Dashboard service helpers require an explicit tenant from request headers or request locals and do not fall back to service config.
+
 ### Frontend
 
 The first split should keep frontend delivery behind the API Gateway/BFF. Admin UI can later move into a separate static frontend served by the gateway or an object store/CDN.

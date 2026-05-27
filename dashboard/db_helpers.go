@@ -42,9 +42,6 @@ func (s *Service) resolveTenantID(c *fiber.Ctx) (string, error) {
 			}
 		}
 	}
-	if tenantID == "" && s != nil {
-		tenantID = s.NoebsConfig.DefaultTenantID
-	}
 	return store.ValidateTenantID(tenantID)
 }
 

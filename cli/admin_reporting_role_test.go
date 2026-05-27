@@ -37,6 +37,24 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	}
 }
 
+func TestAdminReportingAppliesDefaultTenantAtHTTPBoundary(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
+	adminKey := setAdminKeyForTest(t)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
 func TestAdminReportingDoesNotOwnDashboardWriteRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleAdminReporting)

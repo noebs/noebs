@@ -1,8 +1,10 @@
 package dashboard
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
 
@@ -35,5 +37,16 @@ func TestService_calculateOffset(t *testing.T) {
 				t.Errorf("Service.calculateOffset() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveTenantIDDoesNotDefaultFromServiceConfig(t *testing.T) {
+	s := Service{
+		NoebsConfig: ebs_fields.NoebsConfig{DefaultTenantID: "test-tenant"},
+	}
+
+	_, err := s.resolveTenantID(nil)
+	if !errors.Is(err, store.ErrMissingTenantID) {
+		t.Fatalf("resolveTenantID(nil) error = %v, want %v", err, store.ErrMissingTenantID)
 	}
 }
