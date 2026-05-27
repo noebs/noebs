@@ -34,7 +34,6 @@ func (s *Service) GenerateVoucher(ctx context.Context, tenantID string, fields e
 
 	res, err := s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerGenerateVoucher, req)
 
-	// Push notification (async).
 	data := PushData{
 		TenantID:     tenantID,
 		Type:         EBS_NOTIFICATION,

@@ -29,7 +29,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"cards",
 			"cache_cards",
 			"tokens",
-			"push_data",
 		},
 		serviceRoleEBSAdapterMigrate: {
 			"tenants",
@@ -70,10 +69,16 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"wallet_user_2fa",
 		},
 	}
+	forbiddenTables := map[serviceRole][]string{
+		serviceRoleCardVaultMigrate: {
+			"push_data",
+		},
+	}
 
 	for role, tables := range roles {
 		role := role
 		tables := tables
+		forbidden := forbiddenTables[role]
 		t.Run(string(role), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -108,6 +113,11 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			for _, table := range tables {
 				if !postgresTableExists(t, ctx, db, table) {
 					t.Fatalf("expected table %s", table)
+				}
+			}
+			for _, table := range forbidden {
+				if postgresTableExists(t, ctx, db, table) {
+					t.Fatalf("forbidden table %s exists in %s migration scope", table, role)
 				}
 			}
 		})
