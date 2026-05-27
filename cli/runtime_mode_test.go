@@ -132,13 +132,13 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 	if serviceRoleWalletAPI.opensDatabase() {
 		t.Fatalf("wallet-api role must not open the wallet-ledger database")
 	}
-	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
+	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("api-gateway database error = %v, want %v", err, errDatabaseNotAllowed)
 	}
-	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "", "/data/noebs.db", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
-		t.Fatalf("api-gateway database path error = %v, want %v", err, errDatabaseNotAllowed)
+	if err := rejectLegacyDatabasePath(map[string]interface{}{"db_path": "/data/noebs.db"}); !errors.Is(err, errDatabaseNotAllowed) {
+		t.Fatalf("database path error = %v, want %v", err, errDatabaseNotAllowed)
 	}
-	if err := validateRoleDatabaseConfig(serviceRoleWalletAPI, "postgres://noebs:noebs@postgres:5432/wallet_ledger?sslmode=disable", "", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
+	if err := validateRoleDatabaseConfig(serviceRoleWalletAPI, "postgres://noebs:noebs@postgres:5432/wallet_ledger?sslmode=disable", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("wallet-api database error = %v, want %v", err, errDatabaseNotAllowed)
 	}
 
@@ -166,19 +166,16 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 			if !role.opensDatabase() {
 				t.Fatalf("%s should require an explicit database URL", role)
 			}
-			if err := validateRoleDatabaseConfig(role, "", "", "pgx"); !errors.Is(err, errMissingDatabaseURL) {
+			if err := validateRoleDatabaseConfig(role, "", "pgx"); !errors.Is(err, errMissingDatabaseURL) {
 				t.Fatalf("%s database error = %v, want %v", role, err, errMissingDatabaseURL)
 			}
-			if err := validateRoleDatabaseConfig(role, "", "/data/noebs.db", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
-				t.Fatalf("%s database path error = %v, want %v", role, err, errDatabaseNotAllowed)
-			}
-			if err := validateRoleDatabaseConfig(role, "", "", "sqlite3"); !errors.Is(err, store.ErrUnsupportedDatabaseDriver) {
+			if err := validateRoleDatabaseConfig(role, "", "sqlite3"); !errors.Is(err, store.ErrUnsupportedDatabaseDriver) {
 				t.Fatalf("%s sqlite driver error = %v, want %v", role, err, store.ErrUnsupportedDatabaseDriver)
 			}
-			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", "", ""); !errors.Is(err, store.ErrMissingDatabaseDriver) {
+			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", ""); !errors.Is(err, store.ErrMissingDatabaseDriver) {
 				t.Fatalf("%s missing driver error = %v, want %v", role, err, store.ErrMissingDatabaseDriver)
 			}
-			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", "", "mysql"); !errors.Is(err, store.ErrUnsupportedDatabaseDriver) {
+			if err := validateRoleDatabaseConfig(role, "postgres://noebs:noebs@postgres:5432/noebs?sslmode=disable", "mysql"); !errors.Is(err, store.ErrUnsupportedDatabaseDriver) {
 				t.Fatalf("%s unsupported driver error = %v, want %v", role, err, store.ErrUnsupportedDatabaseDriver)
 			}
 		})

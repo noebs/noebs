@@ -275,6 +275,37 @@ func TestLoadConfigRejectsServiceDatabaseURLForAPIGateway(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsLegacyDatabasePath(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "config.test.yaml"), []byte(`noebs:
+  default_tenant_id: test-tenant
+  db_driver: postgres
+  db_path: /tmp/noebs.db
+`), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "service.yaml"), []byte(`noebs:
+  service_role: identity-auth
+`), 0o600); err != nil {
+		t.Fatalf("write service config: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
+	_, err = loadConfig()
+	if !errors.Is(err, errDatabaseNotAllowed) {
+		t.Fatalf("loadConfig() error = %v, want %v", err, errDatabaseNotAllowed)
+	}
+}
+
 func TestLoadConfigRejectsServiceDatabaseURLForMigrationRoleKey(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {

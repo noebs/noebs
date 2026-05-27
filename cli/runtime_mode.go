@@ -108,18 +108,12 @@ func (r serviceRole) requiresTemporal() bool {
 	return r == serviceRolePSPWebhook || r == serviceRoleWalletLedger || r == serviceRoleWalletWorker
 }
 
-func validateRoleDatabaseConfig(role serviceRole, dbURL, dbPath, driver string) error {
+func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
 	if !role.opensDatabase() {
 		if strings.TrimSpace(dbURL) != "" {
 			return fmt.Errorf("%w: %s must not set noebs.db_url", errDatabaseNotAllowed, role)
 		}
-		if strings.TrimSpace(dbPath) != "" {
-			return fmt.Errorf("%w: %s must not set noebs.db_path", errDatabaseNotAllowed, role)
-		}
 		return nil
-	}
-	if strings.TrimSpace(dbPath) != "" {
-		return fmt.Errorf("%w: %s must not set noebs.db_path", errDatabaseNotAllowed, role)
 	}
 	switch strings.ToLower(strings.TrimSpace(driver)) {
 	case "":

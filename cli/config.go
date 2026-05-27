@@ -106,6 +106,9 @@ func loadConfig() ([]byte, error) {
 	if err := applyServiceDatabaseURL(noebs); err != nil {
 		return nil, err
 	}
+	if err := rejectLegacyDatabasePath(noebs); err != nil {
+		return nil, err
+	}
 
 	payload, err := json.Marshal(noebs)
 	if err != nil {
@@ -555,7 +558,7 @@ func initConfig() {
 	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
 	configureLogger(noebsConfig)
 	initOTel(context.Background(), noebsConfig, logrusLogger)
-	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabasePath, noebsConfig.DatabaseDriver); err != nil {
+	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver); err != nil {
 		logrusLogger.Fatalf("error in runtime database config: %v", err)
 	}
 	if err := validateRoleRuntimeConfig(role, noebsConfig); err != nil {

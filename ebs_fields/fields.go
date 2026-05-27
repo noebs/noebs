@@ -926,7 +926,6 @@ type NoebsConfig struct {
 	AdminUser            string            `json:"admin_user"`
 	AdminPassword        string            `json:"admin_password"`
 	DataKey              string            `json:"data_key"`
-	DatabasePath         string            `json:"db_path"`
 	DatabaseURL          string            `json:"db_url"`
 	DatabaseDriver       string            `json:"db_driver"`
 	DefaultTenantID      string            `json:"default_tenant_id"`

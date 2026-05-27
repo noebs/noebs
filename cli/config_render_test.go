@@ -33,7 +33,7 @@ func TestValidateTenantIDRejectsMissingAndDefault(t *testing.T) {
 
 func TestRenderConfigFilesRejectsMissingTenantAfterMerge(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
-  db_path: /tmp/noebs.db
+  db_driver: pgx
 `)
 	if !errors.Is(err, store.ErrMissingTenantID) {
 		t.Fatalf("error = %v, want %v", err, store.ErrMissingTenantID)
@@ -43,7 +43,7 @@ func TestRenderConfigFilesRejectsMissingTenantAfterMerge(t *testing.T) {
 func TestRenderConfigFilesRejectsDefaultTenantAfterMerge(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
   default_tenant_id: default
-  db_path: /tmp/noebs.db
+  db_driver: pgx
 `)
 	if !errors.Is(err, store.ErrInvalidTenantID) {
 		t.Fatalf("error = %v, want %v", err, store.ErrInvalidTenantID)
@@ -53,17 +53,28 @@ func TestRenderConfigFilesRejectsDefaultTenantAfterMerge(t *testing.T) {
 func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
   default_tenant_id: tenant_1
-  db_path: /tmp/noebs.db
+  db_driver: pgx
 `)
 	if err != nil {
 		t.Fatalf("renderConfigFiles() error = %v", err)
 	}
 }
 
-func TestRenderConfigFilesDoesNotRenderLegacySQLiteArtifacts(t *testing.T) {
+func TestRenderConfigFilesRejectsLegacyDatabasePath(t *testing.T) {
+	err := renderConfigInTempDir(t, `noebs:
+  default_tenant_id: tenant_1
+  db_driver: pgx
+  db_path: /tmp/noebs.db
+`)
+	if !errors.Is(err, errDatabaseNotAllowed) {
+		t.Fatalf("renderConfigFiles() error = %v, want %v", err, errDatabaseNotAllowed)
+	}
+}
+
+func TestRenderConfigFilesDoesNotRenderLegacyLitestreamArtifacts(t *testing.T) {
 	tmp := renderConfigTempDir(t, `noebs:
   default_tenant_id: tenant_1
-  db_path: /tmp/noebs.db
+  db_driver: pgx
 litestream:
   dbs:
     - path: /tmp/noebs.db

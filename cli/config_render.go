@@ -71,6 +71,9 @@ func renderConfigFiles() error {
 	if err := applyServiceDatabaseURL(noebs); err != nil {
 		return err
 	}
+	if err := rejectLegacyDatabasePath(noebs); err != nil {
+		return err
+	}
 	outputDir := filepath.Dir(configPath)
 	if runtimeDir := firstString(noebs, "runtime_dir"); runtimeDir != "" {
 		outputDir = runtimeDir
@@ -174,7 +177,7 @@ func applyServiceDatabaseURL(noebs map[string]interface{}) error {
 	}
 	ownerRole, opensDatabase := parsedRole.databaseOwnerRole()
 	if !opensDatabase {
-		return validateRoleDatabaseConfig(parsedRole, firstString(noebs, "db_url"), firstString(noebs, "db_path"), firstString(noebs, "db_driver"))
+		return validateRoleDatabaseConfig(parsedRole, firstString(noebs, "db_url"), firstString(noebs, "db_driver"))
 	}
 	rawDBURL, ok := databases[string(ownerRole)]
 	if !ok {
@@ -201,6 +204,13 @@ func validateServiceDatabaseOwners(databases map[string]interface{}) error {
 		if ownerRole != role {
 			return fmt.Errorf("%w: noebs.service_databases.%s belongs to %s", errDatabaseOwnerKey, role, ownerRole)
 		}
+	}
+	return nil
+}
+
+func rejectLegacyDatabasePath(noebs map[string]interface{}) error {
+	if firstString(noebs, "db_path") != "" {
+		return fmt.Errorf("%w: noebs.db_path", errDatabaseNotAllowed)
 	}
 	return nil
 }
