@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -96,6 +97,11 @@ type mountedNoebsConfig struct {
 		TemporalHost         string            `yaml:"temporal_host"`
 		TemporalPort         string            `yaml:"temporal_port"`
 	} `yaml:"noebs"`
+}
+
+type terraformServiceCatalogEntry struct {
+	Port     int
+	Protocol string
 }
 
 func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
@@ -204,6 +210,52 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 		t.Fatalf("temporal_port = %q: %v", config.Noebs.TemporalPort, err)
 	}
 	requireKubernetesServicePort(t, services, config.Noebs.TemporalHost, temporalPort)
+}
+
+func TestFoundationServiceCatalogMatchesKubernetesDiscovery(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	services := map[string]map[int]bool{}
+	var config mountedNoebsConfig
+	var foundConfig bool
+	for _, object := range objects {
+		switch object.Kind {
+		case "Service":
+			ports := map[int]bool{}
+			for _, port := range object.Spec.Ports {
+				ports[port.Port] = true
+			}
+			services[object.Metadata.Name] = ports
+		case "ConfigMap":
+			if object.Metadata.Name != "noebs-config" {
+				continue
+			}
+			if err := yaml.Unmarshal([]byte(object.Data["config.yaml"]), &config); err != nil {
+				t.Fatalf("parse noebs-config config.yaml: %v", err)
+			}
+			foundConfig = true
+		}
+	}
+	if !foundConfig {
+		t.Fatalf("noebs-config ConfigMap not found")
+	}
+
+	catalog := parseTerraformServiceCatalog(t, filepath.Join("..", "foundation", "terraform", "locals.tf"))
+	for name, entry := range catalog {
+		requireKubernetesServicePort(t, services, name, entry.Port)
+	}
+	for role, endpoint := range config.Noebs.ServiceDiscovery {
+		name, port := parseHTTPDiscoveryEndpoint(t, role, endpoint)
+		requireTerraformServiceCatalogEntry(t, catalog, name, port, "http")
+	}
+	for role, endpoint := range config.Noebs.GRPCServiceDiscovery {
+		name, port := parseHostPortDiscoveryEndpoint(t, role, endpoint)
+		requireTerraformServiceCatalogEntry(t, catalog, name, port, "grpc")
+	}
+	temporalPort, err := strconv.Atoi(config.Noebs.TemporalPort)
+	if err != nil {
+		t.Fatalf("temporal_port = %q: %v", config.Noebs.TemporalPort, err)
+	}
+	requireTerraformServiceCatalogEntry(t, catalog, config.Noebs.TemporalHost, temporalPort, "grpc")
 }
 
 func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
@@ -662,4 +714,78 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func parseTerraformServiceCatalog(t *testing.T, path string) map[string]terraformServiceCatalogEntry {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+	entryRe := regexp.MustCompile(`^\s*"?([A-Za-z0-9_-]+)"?\s*=\s*\{\s*$`)
+	portRe := regexp.MustCompile(`^\s*port\s*=\s*([0-9]+)\s*$`)
+	protocolRe := regexp.MustCompile(`^\s*protocol\s*=\s*"([^"]+)"\s*$`)
+
+	catalog := map[string]terraformServiceCatalogEntry{}
+	inCatalog := false
+	catalogDepth := 0
+	currentName := ""
+	current := terraformServiceCatalogEntry{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !inCatalog {
+			if trimmed == "noebs_service_catalog = {" {
+				inCatalog = true
+				catalogDepth = 1
+			}
+			continue
+		}
+
+		if currentName == "" && catalogDepth == 1 {
+			if match := entryRe.FindStringSubmatch(line); len(match) == 2 {
+				currentName = match[1]
+				current = terraformServiceCatalogEntry{}
+			}
+		} else if currentName != "" {
+			if match := portRe.FindStringSubmatch(line); len(match) == 2 {
+				port, err := strconv.Atoi(match[1])
+				if err != nil {
+					t.Fatalf("parse Terraform port for %s: %v", currentName, err)
+				}
+				current.Port = port
+			}
+			if match := protocolRe.FindStringSubmatch(line); len(match) == 2 {
+				current.Protocol = match[1]
+			}
+		}
+
+		catalogDepth += strings.Count(line, "{")
+		catalogDepth -= strings.Count(line, "}")
+		if currentName != "" && catalogDepth == 1 {
+			if current.Port == 0 || current.Protocol == "" {
+				t.Fatalf("incomplete Terraform service catalog entry %s: %+v", currentName, current)
+			}
+			catalog[currentName] = current
+			currentName = ""
+		}
+		if catalogDepth == 0 {
+			break
+		}
+	}
+	if len(catalog) == 0 {
+		t.Fatalf("noebs_service_catalog not found in %s", path)
+	}
+	return catalog
+}
+
+func requireTerraformServiceCatalogEntry(t *testing.T, catalog map[string]terraformServiceCatalogEntry, name string, port int, protocol string) {
+	t.Helper()
+	entry, ok := catalog[name]
+	if !ok {
+		t.Fatalf("Terraform service catalog missing %q", name)
+	}
+	if entry.Port != port || entry.Protocol != protocol {
+		t.Fatalf("Terraform service catalog %s = %+v, want port=%d protocol=%s", name, entry, port, protocol)
+	}
 }
