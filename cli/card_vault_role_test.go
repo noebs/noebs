@@ -24,14 +24,13 @@ func cardVaultSteadyRoutes() []cardVaultRoute {
 		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
 		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
 		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
+		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
+		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
 	}
 }
 
 func cardVaultTransitionalRoutes() []cardVaultRoute {
-	return []cardVaultRoute{
-		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
-		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
-	}
+	return nil
 }
 
 func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {

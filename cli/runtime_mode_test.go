@@ -369,6 +369,21 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	}
 }
 
+func TestServiceRoleRuntimeConfigRequiresCardVaultIdentityDiscovery(t *testing.T) {
+	cfg := ebs_fields.NoebsConfig{
+		ServiceDiscovery: map[string]string{
+			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
+		},
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleCardVault, cfg); err != nil {
+		t.Fatalf("card-vault runtime config error = %v", err)
+	}
+	cfg.ServiceDiscovery = map[string]string{}
+	if err := validateRoleRuntimeConfig(serviceRoleCardVault, cfg); err == nil {
+		t.Fatalf("card-vault should require identity-auth service discovery")
+	}
+}
+
 func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
 		ConsumerIP: "https://consumer.ebs.example",

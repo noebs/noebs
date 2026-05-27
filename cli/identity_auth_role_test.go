@@ -75,14 +75,25 @@ func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
 	route := GetMainEngine()
 
-	req := httptest.NewRequest(http.MethodPost, "/internal/identity-auth/card-registration/users", nil)
-	setGatewayAdminIdentityHeader(req)
-	resp, err := route.Test(req)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "completed card registration user", path: "/internal/identity-auth/card-registration/users"},
+		{name: "user by mobile", path: "/internal/identity-auth/users/by-mobile"},
 	}
-	defer func() { _ = resp.Body.Close() }()
-	assertFiberRouteRegistered(t, resp, http.MethodPost, "/internal/identity-auth/card-registration/users")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			setGatewayAdminIdentityHeader(req)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			assertFiberRouteRegistered(t, resp, http.MethodPost, tt.path)
+		})
+	}
 }
 
 func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {

@@ -20,11 +20,18 @@ func (s *Service) CardFromNumber(ctx context.Context, tenantID, mobileNumber str
 	if mobileNumber == "" {
 		return "", ErrMissingMobile
 	}
-	pan, err := s.Store.GetPanByMobile(ctx, tenantID, mobileNumber)
+	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobileNumber)
 	if err != nil {
 		return "", err
 	}
-	return pan, nil
+	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	if err != nil {
+		return "", err
+	}
+	if len(cards) == 0 {
+		return "", errors.New("no cards")
+	}
+	return cards[0].Pan, nil
 }
 
 // GetCards returns the full card list for a user plus their main card.
@@ -39,15 +46,19 @@ func (s *Service) GetCards(ctx context.Context, tenantID, mobile string) ([]ebs_
 	if mobile == "" {
 		return nil, nil, ErrMissingMobile
 	}
-	user, err := s.Store.GetCardsOrFail(ctx, tenantID, mobile)
+	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobile)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(user.Cards) == 0 {
+	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(cards) == 0 {
 		return nil, nil, errors.New("no cards found")
 	}
-	main := user.Cards[0]
-	return user.Cards, &main, nil
+	main := cards[0]
+	return cards, &main, nil
 }
 
 func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Card, *ebs_fields.Card, error) {
@@ -423,5 +434,21 @@ func (s *Service) GetUserCards(ctx context.Context, tenantID, mobile string) (*e
 	if mobile == "" {
 		return nil, ErrMissingMobile
 	}
-	return s.Store.GetCardsOrFail(ctx, tenantID, mobile)
+	identity, err := s.ResolveIdentityUserByMobileInIdentityAuth(ctx, tenantID, mobile)
+	if err != nil {
+		return nil, err
+	}
+	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, identity.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if len(cards) == 0 {
+		return nil, errors.New("no cards found")
+	}
+	return &ebs_fields.User{
+		Mobile:   identity.Mobile,
+		MainCard: cards[0].Pan,
+		ExpDate:  cards[0].Expiry,
+		Cards:    cards,
+	}, nil
 }

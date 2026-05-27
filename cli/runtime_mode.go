@@ -145,6 +145,11 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 			return err
 		}
 	}
+	if role == serviceRoleCardVault {
+		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleIdentityAuth); err != nil {
+			return err
+		}
+	}
 	if roleUsesWalletFeature(role) && !cfg.WalletEnabled {
 		return fmt.Errorf("%w: %s", errWalletNotEnabled, role)
 	}
