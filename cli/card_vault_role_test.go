@@ -23,6 +23,7 @@ func cardVaultSteadyRoutes() []cardVaultRoute {
 		{name: "main card", method: http.MethodPost, path: "/consumer/cards/set_main"},
 		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
 		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
+		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
 	}
 }
 
@@ -31,7 +32,6 @@ func cardVaultTransitionalRoutes() []cardVaultRoute {
 		{name: "card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
 		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
 		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
-		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
 		{name: "quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
 	}
 }

@@ -3,9 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -86,92 +84,15 @@ func (s *Service) generatePaymentTokenForCards(ctx context.Context, tenantID str
 }
 
 type PaymentRequestData struct {
-	Mobile string `json:"mobile,omitempty"`
 	ToCard string `json:"toCard,omitempty"`
 	Amount int    `json:"amount,omitempty"`
 }
 
-func (s *Service) PaymentRequest(ctx context.Context, tenantID, senderMobile string, data PaymentRequestData) (ebs_fields.Token, string, string, error) {
-	if s == nil || s.Store == nil {
-		return ebs_fields.Token{}, "", "", ErrMissingStore
-	}
-	if tenantID == "" {
-		return ebs_fields.Token{}, "", "", store.ErrMissingTenantID
-	}
-	senderMobile = strings.TrimSpace(senderMobile)
-	if senderMobile == "" {
-		return ebs_fields.Token{}, "", "", ErrMissingMobile
-	}
-	data.Mobile = strings.TrimSpace(data.Mobile)
-	if data.Mobile == "" {
-		return ebs_fields.Token{}, "", "", ErrMissingMobile
-	}
-
-	sender, err := s.Store.GetCardsOrFail(ctx, tenantID, senderMobile)
-	if err != nil {
-		return ebs_fields.Token{}, "", "", err
-	}
-	receiver, err := s.Store.GetUserByMobile(ctx, tenantID, data.Mobile)
-	if err != nil {
-		return ebs_fields.Token{}, "", "", err
-	}
-
-	fullPan := ""
-	if data.ToCard == "" {
-		if len(sender.Cards) == 0 {
-			return ebs_fields.Token{}, "", "", errors.New("no card found")
-		}
-		fullPan = sender.Cards[0].Pan
-	} else {
-		pan, err := ebs_fields.ExpandCard(data.ToCard, sender.Cards)
-		if err != nil {
-			return ebs_fields.Token{}, "", "", err
-		}
-		fullPan = pan
-	}
-
-	token := ebs_fields.Token{
-		ToCard: fullPan,
+func (s *Service) PaymentRequestForUserID(ctx context.Context, tenantID string, userID int64, data PaymentRequestData) (ebs_fields.Token, string, string, error) {
+	return s.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{
+		ToCard: data.ToCard,
 		Amount: data.Amount,
-		UUID:   uuid.New().String(),
-		UserID: sender.ID,
-		User:   *sender,
-	}
-	if err := s.Store.CreateToken(ctx, tenantID, &token); err != nil {
-		return ebs_fields.Token{}, "", "", err
-	}
-
-	safe := token
-	safe.ToCard = utils.MaskPAN(token.ToCard)
-	encoded, _ := ebs_fields.Encode(&safe)
-	paymentLink := s.NoebsConfig.PaymentLinkBase + token.UUID
-
-	name := sender.Fullname
-	if name == "" {
-		name = sender.Mobile
-	}
-
-	// Push notification to the receiver (async).
-	pData := PushData{
-		TenantID:     tenantID,
-		Type:         NOEBS_NOTIFICATION,
-		Date:         time.Now().Unix(),
-		CallToAction: CTA_REQUEST_FUNDS,
-		UUID:         token.UUID,
-		DeviceID:     receiver.DeviceID,
-		Title:        "Payment Request",
-		Body:         fmt.Sprintf("%v has requested %v SDG from you.", name, token.Amount),
-		Phone:        data.Mobile,
-		UserMobile:   data.Mobile,
-		PaymentRequest: ebs_fields.QrData{
-			UUID:   token.UUID,
-			ToCard: safe.ToCard,
-			Amount: token.Amount,
-		},
-	}
-	tranData <- pData
-
-	return safe, encoded, paymentLink, nil
+	})
 }
 
 // GetPaymentToken returns either a single token (when uuid != "") or all tokens for the given user.

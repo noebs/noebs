@@ -36,7 +36,7 @@ func (h *Handler) PaymentRequest(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}
-	mobile := getMobile(c)
+	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -47,7 +47,7 @@ func (h *Handler) PaymentRequest(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
 	}
 
-	created, encoded, paymentLink, err := h.Service.PaymentRequest(c.UserContext(), tenantID, mobile, data)
+	created, encoded, paymentLink, err := h.Service.PaymentRequestForUserID(c.UserContext(), tenantID, userID, data)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 	}

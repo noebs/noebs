@@ -80,6 +80,20 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 		t.Fatalf("tokens = %+v token = %+v, want one masked token result", tokens, token)
 	}
 
+	requested, encodedRequest, paymentRequestLink, err := service.PaymentRequestForUserID(ctx, tenantID, userID, PaymentRequestData{Amount: 75})
+	if err != nil {
+		t.Fatalf("create payment request with card-vault schema: %v", err)
+	}
+	if requested.UUID == "" || encodedRequest == "" {
+		t.Fatalf("payment request UUID/encoded must be set: requested=%+v encoded=%q", requested, encodedRequest)
+	}
+	if paymentRequestLink != "https://pay.example/token/"+requested.UUID {
+		t.Fatalf("payment request link = %q, want base plus token UUID", paymentRequestLink)
+	}
+	if requested.ToCard == pan {
+		t.Fatalf("payment request must not return raw PAN")
+	}
+
 	if err := service.RemoveCardForUserID(ctx, tenantID, userID, pan); err != nil {
 		t.Fatalf("remove card with card-vault schema: %v", err)
 	}
