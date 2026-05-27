@@ -53,11 +53,15 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 			t.Fatalf("identity path = %s", r.URL.Path)
 		}
 		assertAdminCommandHeaders(t, r, tenantID)
+		body := readBodyForTest(t, r)
+		if bytes.Contains(body, []byte(`"pan"`)) || bytes.Contains(body, []byte(`"expDate"`)) {
+			t.Fatalf("identity command leaked card data: %s", body)
+		}
 		var cmd CompletedRegistrationIdentityCommand
-		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		if err := json.Unmarshal(body, &cmd); err != nil {
 			t.Fatalf("decode identity command: %v", err)
 		}
-		if cmd.Mobile != "0912345678" || cmd.Password != "local-password" || cmd.PAN != "9222081700000000" || cmd.ExpDate != "2601" {
+		if cmd.Mobile != "0912345678" || cmd.Password != "local-password" {
 			t.Fatalf("identity command = %+v", cmd)
 		}
 		sawIdentity = true
@@ -139,8 +143,6 @@ func TestCreateCompletedRegistrationIdentityUsesIdentityScope(t *testing.T) {
 	result, err := service.CreateCompletedRegistrationIdentity(context.Background(), tenantID, CompletedRegistrationIdentityCommand{
 		Mobile:   "0912345678",
 		Password: "local-password",
-		PAN:      "9222081700000000",
-		ExpDate:  "2601",
 	})
 	if err != nil {
 		t.Fatalf("create completed registration identity: %v", err)
@@ -152,7 +154,7 @@ func TestCreateCompletedRegistrationIdentityUsesIdentityScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get user: %v", err)
 	}
-	if !user.IsVerified || !user.IsPasswordOTP || user.MainCard != "9222081700000000" || user.ExpDate != "2601" {
+	if !user.IsVerified || !user.IsPasswordOTP || user.MainCard != "" || user.ExpDate != "" {
 		t.Fatalf("user = %+v", user)
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {

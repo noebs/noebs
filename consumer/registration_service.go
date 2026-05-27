@@ -148,8 +148,6 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 	identity, err := s.CreateCompletedRegistrationIdentityInIdentityAuth(ctx, tenantID, CompletedRegistrationIdentityCommand{
 		Mobile:   mobile,
 		Password: password,
-		PAN:      issuedPan,
-		ExpDate:  issuedExp,
 	})
 	if err != nil {
 		return res, err

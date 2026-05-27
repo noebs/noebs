@@ -11,8 +11,6 @@ import (
 type CompletedRegistrationIdentityCommand struct {
 	Mobile   string `json:"mobile"`
 	Password string `json:"password"`
-	PAN      string `json:"pan"`
-	ExpDate  string `json:"expDate,omitempty"`
 }
 
 type CompletedRegistrationIdentityResult struct {
@@ -40,17 +38,11 @@ func (s *Service) CreateCompletedRegistrationIdentity(ctx context.Context, tenan
 	if strings.TrimSpace(cmd.Password) == "" {
 		return CompletedRegistrationIdentityResult{}, ErrMissingPassword
 	}
-	pan := strings.TrimSpace(cmd.PAN)
-	if pan == "" {
-		return CompletedRegistrationIdentityResult{}, ErrMissingIssuedPAN
-	}
 
 	user := ebs_fields.User{
 		Mobile:        mobile,
 		Username:      mobile,
 		Password:      cmd.Password,
-		MainCard:      pan,
-		ExpDate:       strings.TrimSpace(cmd.ExpDate),
 		IsVerified:    true,
 		IsPasswordOTP: true,
 	}
