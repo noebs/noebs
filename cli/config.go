@@ -192,9 +192,21 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 	}
 }
 
+var pspTemporalClient client.Client
+
+func closePSPTemporalClient() {
+	if pspTemporalClient != nil {
+		pspTemporalClient.Close()
+	}
+}
+
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
 func GetMainEngine() *fiber.App {
 	ensureInit()
+	role, err := currentServiceRole()
+	if err != nil {
+		logrusLogger.Fatalf("error in runtime service role: %v", err)
+	}
 	templateDir := resolveDashboardTemplateDir()
 	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
@@ -223,6 +235,20 @@ func GetMainEngine() *fiber.App {
 	consumerHandler := consumerhandler.New(&consumerService)
 	merchantHandler := merchanthandler.New(&merchantServices)
 
+	route.Get("/test", func(c *fiber.Ctx) error {
+		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
+	})
+	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
+
+	if role == serviceRolePSPWebhook {
+		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(walletService, walletPSPLoader, walletPSPRegistry, pspTemporalClient)
+		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
+		return route
+	}
+	if role != serviceRoleAPIGateway {
+		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
+	}
+
 	merchanthandler.RegisterRoutes(route, merchantHandler)
 	route.Get("/ws", adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hub == nil {
@@ -234,11 +260,7 @@ func GetMainEngine() *fiber.App {
 
 	route.Static("/dashboard/assets", templateDir)
 	route.Post("/generate_api_key", adminGuard, consumerHandler.GenerateAPIKey)
-	route.Get("/test", func(c *fiber.Ctx) error {
-		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
-	})
 	route.Get("/app/config", appConfigHandler)
-	route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
 
 	dashboardGroup := route.Group("/dashboard", adminGuard)
 	{
@@ -290,20 +312,16 @@ func GetMainEngine() *fiber.App {
 	}
 
 	if walletService != nil {
-		var temporalSignaler wallethandler.TemporalSignaler
 		var temporalClient wallethandler.TemporalClient
 		if walletWorker != nil {
-			temporalSignaler = walletWorker.Client
 			temporalClient = walletWorker.Client
 		}
 		walletUserHandler := wallethandler.NewUserHandler(walletService)
 		walletAdminHandler := wallethandler.NewAdminHandler(walletService, temporalClient)
-		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(walletService, walletPSPLoader, walletPSPRegistry, temporalSignaler)
 		userWalletGroup := route.Group("/wallet", auth.AuthMiddleware())
 		adminWalletGroup := route.Group("/admin/wallet", adminGuard)
 		wallethandler.RegisterUserRoutes(userWalletGroup, walletUserHandler)
 		wallethandler.RegisterAdminRoutes(adminWalletGroup, walletAdminHandler)
-		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
 	}
 	if grpcGatewayHandler != nil {
 		route.All("/wallet", adaptor.HTTPHandler(grpcGatewayHandler))
@@ -441,6 +459,23 @@ func initConfig() {
 	merchantServices = merchant.Service{Store: storeSvc, Logger: logrusLogger, NoebsConfig: noebsConfig}
 	walletService = wallet.NewService(database, noebsConfig)
 	walletPSPRegistry, walletPSPLoader = buildPSPDeps(walletService, rawSecrets)
+	if role == serviceRolePSPWebhook && !noebsConfig.WalletEnabled {
+		logrusLogger.Fatalf("psp-webhook role requires wallet_enabled")
+	}
+	if role == serviceRolePSPWebhook && !noebsConfig.TemporalEnabled {
+		logrusLogger.Fatalf("psp-webhook role requires temporal_enabled")
+	}
+	if role == serviceRolePSPWebhook {
+		pspTemporalClient, err = walletworker.NewClient(walletworker.Options{
+			Host:      noebsConfig.TemporalHost,
+			Port:      noebsConfig.TemporalPort,
+			Namespace: noebsConfig.TemporalNamespace,
+			TaskQueue: walletworker.TaskQueueMain,
+		})
+		if err != nil {
+			logrusLogger.Fatalf("error creating psp temporal client: %v", err)
+		}
+	}
 	if role == serviceRoleWalletWorker && !noebsConfig.TemporalEnabled {
 		logrusLogger.Fatalf("wallet-worker role requires temporal_enabled")
 	}

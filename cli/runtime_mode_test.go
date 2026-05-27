@@ -22,6 +22,7 @@ func TestParseServiceRoleRejectsUnknownRole(t *testing.T) {
 func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 	roles := []serviceRole{
 		serviceRoleAPIGateway,
+		serviceRolePSPWebhook,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleMigrate,
@@ -42,6 +43,9 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 func TestServiceRoleProcessOwnership(t *testing.T) {
 	if !serviceRoleAPIGateway.startsHTTP() || serviceRoleAPIGateway.startsGRPC() || serviceRoleAPIGateway.startsWalletWorker() || serviceRoleAPIGateway.runsMigrations() {
 		t.Fatalf("api-gateway role should own only the HTTP process")
+	}
+	if !serviceRolePSPWebhook.startsHTTP() || serviceRolePSPWebhook.startsGRPC() || serviceRolePSPWebhook.startsWalletWorker() || serviceRolePSPWebhook.runsMigrations() {
+		t.Fatalf("psp-webhook role should own only the HTTP process")
 	}
 	if serviceRoleWalletLedger.startsHTTP() || !serviceRoleWalletLedger.startsGRPC() || serviceRoleWalletLedger.startsWalletWorker() || serviceRoleWalletLedger.runsMigrations() {
 		t.Fatalf("wallet-ledger role should own only the gRPC process")

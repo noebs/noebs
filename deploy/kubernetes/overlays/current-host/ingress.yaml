@@ -17,6 +17,13 @@ spec:
     - host: api.noebs.sd
       http:
         paths:
+          - path: /psp/webhooks
+            pathType: Prefix
+            backend:
+              service:
+                name: psp-webhook
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:
@@ -27,6 +34,13 @@ spec:
     - host: dsa.adonese.sd
       http:
         paths:
+          - path: /psp/webhooks
+            pathType: Prefix
+            backend:
+              service:
+                name: psp-webhook
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:

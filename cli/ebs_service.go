@@ -100,6 +100,10 @@ func main() {
 	if !role.startsHTTP() {
 		logrusLogger.Fatalf("service role %s has no runnable process", role)
 	}
+	go func() {
+		<-ctx.Done()
+		closePSPTemporalClient()
+	}()
 
 	if role.startsChat() && hub != nil {
 		go hub.Run()
@@ -111,7 +115,7 @@ func main() {
 		go consumerService.Pusher(ctx)
 	}
 	if noebsConfig.Port == "" {
-		logrusLogger.Fatal("api-gateway role requires port")
+		logrusLogger.Fatalf("%s role requires port", role)
 	}
 	logrusLogger.Fatal(GetMainEngine().Listen(noebsConfig.Port))
 }
