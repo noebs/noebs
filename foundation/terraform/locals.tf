@@ -111,7 +111,7 @@ locals {
     }
     "wallet-worker" = {
       database    = "wallet_ledger"
-      secret_name = "wallet-ledger-secrets"
+      secret_name = "wallet-worker-secrets"
     }
     keycloak = {
       database    = "keycloak"

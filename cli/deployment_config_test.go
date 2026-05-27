@@ -94,6 +94,7 @@ type manifestContainer struct {
 }
 
 type manifestMount struct {
+	Name      string `yaml:"name"`
 	MountPath string `yaml:"mountPath"`
 	SubPath   string `yaml:"subPath"`
 }
@@ -101,6 +102,7 @@ type manifestMount struct {
 type manifestVolume struct {
 	Name        string               `yaml:"name"`
 	DownwardAPI *manifestDownwardAPI `yaml:"downwardAPI"`
+	Secret      *manifestSecret      `yaml:"secret"`
 }
 
 type manifestDownwardAPI struct {
@@ -112,6 +114,10 @@ type manifestDownwardAPIItem struct {
 	FieldRef struct {
 		FieldPath string `yaml:"fieldPath"`
 	} `yaml:"fieldRef"`
+}
+
+type manifestSecret struct {
+	SecretName string `yaml:"secretName"`
 }
 
 type composeDocument struct {
@@ -170,6 +176,10 @@ type terraformDatabaseCatalogEntry struct {
 	ManagedBy     string
 }
 
+type serviceSecretExample struct {
+	Noebs map[string]any `yaml:"noebs"`
+}
+
 func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	baseDir := filepath.Join("..", "deploy", "kubernetes", "base")
 	entries, err := os.ReadDir(baseDir)
@@ -211,6 +221,7 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 				requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
 				requireMount(t, object.Metadata.Name, container, "/app/service.yaml", "")
 				requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
+				requireNoebsSecretVolume(t, object.Metadata.Name, container, object.Spec.Template.Spec.Volumes)
 			}
 		}
 	}
@@ -284,6 +295,56 @@ func TestDockerComposeLocalInputsAreNotTrackedGuesses(t *testing.T) {
 	}
 	if len(trackedExisting) != 0 {
 		t.Fatalf("local Docker Compose runtime inputs must not be committed guesses:\n%s", strings.Join(trackedExisting, "\n"))
+	}
+}
+
+func TestDockerComposeSecretExamplesMatchServiceOwnership(t *testing.T) {
+	gitignore, err := os.ReadFile(filepath.Join("..", ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "/deploy/docker/secrets/*.secrets.yaml") {
+		t.Fatalf(".gitignore must ignore local Docker Compose service secrets")
+	}
+	output, err := exec.Command("git", "-C", "..", "ls-files", "--", "deploy/docker/secrets/*.secrets.yaml").CombinedOutput()
+	if err != nil {
+		t.Fatalf("git ls-files Docker Compose service secrets: %v\n%s", err, output)
+	}
+	if tracked := strings.TrimSpace(string(output)); tracked != "" {
+		t.Fatalf("local Docker Compose service secrets must not be committed:\n%s", tracked)
+	}
+
+	expectedDatabaseOwners := map[string][]string{
+		"api-gateway":          nil,
+		"identity-auth":        {"identity-auth"},
+		"card-vault":           {"card-vault"},
+		"ebs-adapter":          {"ebs-adapter"},
+		"psp-webhook":          {"psp-webhook"},
+		"admin-reporting":      {"admin-reporting"},
+		"notification-chat":    {"notification-chat"},
+		"consumer-beneficiary": {"consumer-beneficiary"},
+		"wallet-api":           nil,
+		"wallet-ledger":        {"wallet-ledger"},
+		"wallet-worker":        {"wallet-ledger"},
+	}
+	for serviceName, owners := range expectedDatabaseOwners {
+		path := filepath.Join("..", "deploy", "docker", "secrets", serviceName+".secrets.yaml.example")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var example serviceSecretExample
+		if err := yaml.Unmarshal(data, &example); err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		if example.Noebs == nil {
+			t.Fatalf("%s missing noebs secret map", path)
+		}
+		if _, ok := example.Noebs["db_url"]; ok {
+			t.Fatalf("%s must not set noebs.db_url directly", path)
+		}
+		requirePlaceholderStrings(t, path, example.Noebs)
+		requireServiceDatabaseOwners(t, path, example.Noebs, owners)
 	}
 }
 
@@ -496,6 +557,10 @@ func TestFoundationDatabaseCatalogDeclaresOwnedDatabases(t *testing.T) {
 			MigrationRole: serviceName + "-migrate",
 		})
 	}
+	requireTerraformDatabaseCatalogEntry(t, catalog, "wallet-worker", terraformDatabaseCatalogEntry{
+		Database:   "wallet_ledger",
+		SecretName: "wallet-worker-secrets",
+	})
 	requireTerraformDatabaseCatalogEntry(t, catalog, "keycloak", terraformDatabaseCatalogEntry{
 		Database:   "keycloak",
 		SecretName: "keycloak-secrets",
@@ -1373,6 +1438,31 @@ func requireMount(t *testing.T, workload string, container manifestContainer, mo
 	t.Fatalf("%s/%s missing mount %s", workload, container.Name, mountPath)
 }
 
+func requireNoebsSecretVolume(t *testing.T, workload string, container manifestContainer, volumes []manifestVolume) {
+	t.Helper()
+	mount := findMount(container, "/app/secrets.yaml")
+	if mount == nil {
+		t.Fatalf("%s/%s missing /app/secrets.yaml mount", workload, container.Name)
+	}
+	if mount.Name == "" {
+		t.Fatalf("%s/%s /app/secrets.yaml mount missing volume name", workload, container.Name)
+	}
+	expectedSecret := composeSecretSourceForService(strings.TrimPrefix(workload, "noebs-"))
+	for _, volume := range volumes {
+		if volume.Name != mount.Name {
+			continue
+		}
+		if volume.Secret == nil {
+			t.Fatalf("%s volume %s is not a Secret volume", workload, mount.Name)
+		}
+		if volume.Secret.SecretName != expectedSecret {
+			t.Fatalf("%s secretName = %q, want %q", workload, volume.Secret.SecretName, expectedSecret)
+		}
+		return
+	}
+	t.Fatalf("%s missing secret volume %s", workload, mount.Name)
+}
+
 func requireDownwardAPIField(t *testing.T, workload string, volumes []manifestVolume, volumeName, path, fieldPath string) {
 	t.Helper()
 	for _, volume := range volumes {
@@ -1532,10 +1622,61 @@ func composeSecretSourceForService(serviceName string) string {
 		return "notification-chat-secrets"
 	case "consumer-beneficiary-migrate":
 		return "consumer-beneficiary-secrets"
-	case "wallet-ledger-migrate", "wallet-worker":
+	case "wallet-ledger-migrate":
 		return "wallet-ledger-secrets"
+	case "wallet-worker":
+		return "wallet-worker-secrets"
 	default:
 		return serviceName + "-secrets"
+	}
+}
+
+func requirePlaceholderStrings(t *testing.T, path string, value any) {
+	t.Helper()
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, child := range typed {
+			requirePlaceholderStrings(t, path, child)
+		}
+	case []any:
+		for _, child := range typed {
+			requirePlaceholderStrings(t, path, child)
+		}
+	case string:
+		if !strings.HasPrefix(typed, "REPLACE_WITH_") {
+			t.Fatalf("%s contains non-placeholder secret value %q", path, typed)
+		}
+	}
+}
+
+func requireServiceDatabaseOwners(t *testing.T, path string, noebs map[string]any, owners []string) {
+	t.Helper()
+	raw, ok := noebs["service_databases"]
+	if len(owners) == 0 {
+		if ok {
+			t.Fatalf("%s must not define noebs.service_databases", path)
+		}
+		return
+	}
+	if !ok {
+		t.Fatalf("%s missing noebs.service_databases", path)
+	}
+	databases, ok := raw.(map[string]any)
+	if !ok {
+		t.Fatalf("%s noebs.service_databases must be a map", path)
+	}
+	if len(databases) != len(owners) {
+		t.Fatalf("%s service_databases = %v, want owners %v", path, databases, owners)
+	}
+	for _, owner := range owners {
+		value, ok := databases[owner]
+		if !ok {
+			t.Fatalf("%s missing noebs.service_databases.%s", path, owner)
+		}
+		dbURL, ok := value.(string)
+		if !ok || !strings.HasPrefix(dbURL, "REPLACE_WITH_") {
+			t.Fatalf("%s noebs.service_databases.%s = %v, want placeholder", path, owner, value)
+		}
 	}
 }
 

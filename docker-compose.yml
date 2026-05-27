@@ -114,6 +114,13 @@ x-wallet-ledger-secret: &wallet-ledger-secret
   gid: "10001"
   mode: 0400
 
+x-wallet-worker-secret: &wallet-worker-secret
+  source: wallet-worker-secrets
+  target: /app/secrets.yaml
+  uid: "10001"
+  gid: "10001"
+  mode: 0400
+
 services:
   runtime-init:
     <<: *service-defaults
@@ -626,7 +633,7 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-worker.yaml:/app/service.yaml:ro"
     secrets:
-      - *wallet-ledger-secret
+      - *wallet-worker-secret
       - *sops-age-key-secret
     networks:
       - backend
@@ -697,6 +704,8 @@ secrets:
     file: ./deploy/docker/secrets/wallet-api.secrets.yaml
   wallet-ledger-secrets:
     file: ./deploy/docker/secrets/wallet-ledger.secrets.yaml
+  wallet-worker-secrets:
+    file: ./deploy/docker/secrets/wallet-worker.secrets.yaml
   sops_age_key:
     file: ./.sops/age-key.txt
   keycloak_config:
