@@ -90,17 +90,18 @@ type manifestServicePort struct {
 }
 
 type manifestContainer struct {
-	Name           string           `yaml:"name"`
-	Image          string           `yaml:"image"`
-	Command        []string         `yaml:"command"`
-	Args           []string         `yaml:"args"`
-	Env            []map[string]any `yaml:"env"`
-	EnvFrom        []map[string]any `yaml:"envFrom"`
-	Ports          []map[string]any `yaml:"ports"`
-	ReadinessProbe map[string]any   `yaml:"readinessProbe"`
-	LivenessProbe  map[string]any   `yaml:"livenessProbe"`
-	StartupProbe   map[string]any   `yaml:"startupProbe"`
-	VolumeMounts   []manifestMount  `yaml:"volumeMounts"`
+	Name            string           `yaml:"name"`
+	Image           string           `yaml:"image"`
+	ImagePullPolicy string           `yaml:"imagePullPolicy"`
+	Command         []string         `yaml:"command"`
+	Args            []string         `yaml:"args"`
+	Env             []map[string]any `yaml:"env"`
+	EnvFrom         []map[string]any `yaml:"envFrom"`
+	Ports           []map[string]any `yaml:"ports"`
+	ReadinessProbe  map[string]any   `yaml:"readinessProbe"`
+	LivenessProbe   map[string]any   `yaml:"livenessProbe"`
+	StartupProbe    map[string]any   `yaml:"startupProbe"`
+	VolumeMounts    []manifestMount  `yaml:"volumeMounts"`
 }
 
 type manifestMount struct {
@@ -252,6 +253,28 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatalf("no noebs Kubernetes containers were checked")
+	}
+}
+
+func TestNoebsKubernetesMutableImageTagIsAlwaysPulled(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	checked := 0
+	for _, object := range objects {
+		for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+			if !strings.Contains(container.Image, "ghcr.io/adonese/noebs:") {
+				continue
+			}
+			checked++
+			if !strings.HasSuffix(container.Image, ":master") {
+				t.Fatalf("%s/%s image = %q; update the image pull invariant for non-master tags", object.Metadata.Name, container.Name, container.Image)
+			}
+			if container.ImagePullPolicy != "Always" {
+				t.Fatalf("%s/%s imagePullPolicy = %q, want Always for mutable Noebs image tag %q", object.Metadata.Name, container.Name, container.ImagePullPolicy, container.Image)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatalf("no Noebs Kubernetes images were checked")
 	}
 }
 

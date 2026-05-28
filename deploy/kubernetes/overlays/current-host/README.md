@@ -61,6 +61,8 @@ When using the in-cluster `postgres` StatefulSet, service database URLs should p
 
 Noebs service roles and OTel service names are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
+Noebs workloads currently use the mutable `ghcr.io/adonese/noebs:master` image tag, so their Kubernetes `imagePullPolicy` is `Always`. Do not switch those workloads to `IfNotPresent` while the release tag is mutable; otherwise a k3s node can reuse a stale local image after Argo CD sync.
+
 The public Ingress routes both hostnames only to `api-gateway`. Internal HTTP routing is owned by the gateway through `noebs.service_discovery` in the mounted config. Wallet API to wallet ledger gRPC routing uses `noebs.grpc_service_discovery.wallet-ledger`.
 
 Render check:

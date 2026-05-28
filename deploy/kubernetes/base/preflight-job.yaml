@@ -27,7 +27,7 @@ spec:
       containers:
         - name: preflight
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command:
             - /usr/local/bin/noebs
           args:

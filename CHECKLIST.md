@@ -27,6 +27,7 @@ Last updated: 2026-05-28
 - [x] Added a current-secret-aware Kubernetes release input template command that prints only missing field placeholders.
 - [x] Added an API gateway invariant that every external HTTP route has exactly one service owner and is proxied to that owner.
 - [x] Added OpenTofu preconditions that block the Noebs Argo CD application unless required Kubernetes Secrets contain the expected data keys.
+- [x] Set Noebs Kubernetes workloads and migration/preflight jobs to always pull the mutable `master` image during Argo CD sync.
 
 ## Current Server State
 

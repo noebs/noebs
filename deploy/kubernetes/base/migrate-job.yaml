@@ -27,7 +27,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -91,7 +91,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -155,7 +155,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -219,7 +219,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -283,7 +283,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -347,7 +347,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -411,7 +411,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -475,7 +475,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/adonese/noebs:master
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
