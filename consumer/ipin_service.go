@@ -16,8 +16,9 @@ func (s *Service) GenerateIpin(ctx context.Context, tenantID string, fields ebs_
 	if s.Store == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
 	uid, _ := uuid.NewRandom()
@@ -44,8 +45,9 @@ func (s *Service) CompleteIpin(ctx context.Context, tenantID string, fields ebs_
 	if s.Store == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
 	uid, _ := uuid.NewRandom()
@@ -82,8 +84,9 @@ func (s *Service) IPINKey(ctx context.Context, tenantID string, fields ebs_field
 	if s.Store == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
 	req := fields

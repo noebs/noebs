@@ -21,8 +21,9 @@ func (s *Service) GenerateVoucher(ctx context.Context, tenantID string, fields e
 	if s.HTTPClient == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	if _, err := s.serviceDiscoveryEndpoint(notificationCommandTarget); err != nil {
 		return ebs_fields.EBSParserFields{}, err

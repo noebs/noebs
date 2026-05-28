@@ -22,8 +22,9 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 	if s.HTTPClient == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	if _, err := s.serviceDiscoveryEndpoint(notificationCommandTarget); err != nil {
 		return ebs_fields.EBSParserFields{}, err
@@ -100,8 +101,9 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 	if s.HTTPClient == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 
 	receiverMobile := strings.TrimSpace(fields.Mobile)

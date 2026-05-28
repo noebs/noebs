@@ -26,8 +26,9 @@ func (s *Service) BalanceStep(ctx context.Context, tenantID string, req BalanceS
 	if s.HTTPClient == nil {
 		return "", ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", err
 	}
 	mobile := strings.TrimSpace(req.Mobile)
 	if mobile == "" {

@@ -117,8 +117,9 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, e
 
 // isValidCard verifies card credentials with EBS.
 func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
-	if tenantID == "" {
-		return false, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return false, err
 	}
 	if strings.TrimSpace(card.Pan) == "" {
 		return false, store.ErrMissingPAN
@@ -171,8 +172,9 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	url := s.NoebsConfig.IPINIp + ebs_fields.QRPublicKey
 	id, _ := uuid.NewRandom()

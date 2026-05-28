@@ -21,8 +21,9 @@ func (s *Service) BillPayment(ctx context.Context, tenantID string, fields ebs_f
 	if s.HTTPClient == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	if _, err := s.serviceDiscoveryEndpoint(notificationCommandTarget); err != nil {
 		return ebs_fields.EBSParserFields{}, err
@@ -159,8 +160,9 @@ func moheArabicPaymentPhone(paymentInfo string) (string, error) {
 // GetBills inquires a bill (telecoms, utilities, government, etc.) and maintains a per-MSISDN cache.
 func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_fields.EBSParserFields, BillAmounts, error) {
 	var due BillAmounts
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, due, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, due, err
 	}
 	b.PayeeID = strings.TrimSpace(b.PayeeID)
 	if b.PayeeID == "" {
@@ -213,6 +215,10 @@ func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_f
 
 // GetBiller returns a cached biller id for the MSISDN.
 func (s *Service) GetBiller(ctx context.Context, tenantID, mobile string) (string, error) {
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", err
+	}
 	if mobile == "" {
 		return "", ErrMissingMobile
 	}

@@ -20,8 +20,9 @@ func (s *Service) RegisterWithCard(ctx context.Context, tenantID string, card eb
 	if s.HTTPClient == nil {
 		return ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	card.Mobile = strings.TrimSpace(card.Mobile)
 	card.PublicKey = strings.TrimSpace(card.PublicKey)
@@ -77,8 +78,9 @@ func (s *Service) CompleteRegistration(ctx context.Context, tenantID string, fie
 	if s.HTTPClient == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	mobile := strings.TrimSpace(fields.Mobile)
 	password := fields.NoebsPassword
