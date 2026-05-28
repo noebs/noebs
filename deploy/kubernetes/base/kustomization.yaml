@@ -10,6 +10,7 @@ resources:
   - kafka.yaml
   - temporal.yaml
   - keycloak.yaml
+  - network-policies.yaml
   - preflight-job.yaml
   - migrate-job.yaml
   - api-gateway.yaml

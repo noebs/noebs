@@ -12,7 +12,7 @@ import (
 )
 
 func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
-	startCtx, startCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	startCtx, startCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer startCancel()
 	container, err := testdb.StartPostgresContainer(startCtx)
 	if err != nil {

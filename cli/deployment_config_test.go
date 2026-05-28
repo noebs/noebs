@@ -39,10 +39,13 @@ type manifestObject struct {
 			Server    string `yaml:"server"`
 			Namespace string `yaml:"namespace"`
 		} `yaml:"destination"`
-		TLS        []manifestIngressTLS  `yaml:"tls"`
-		Rules      []manifestIngressRule `yaml:"rules"`
-		Ports      []manifestServicePort `yaml:"ports"`
-		SyncPolicy struct {
+		PodSelector manifestLabelSelector          `yaml:"podSelector"`
+		PolicyTypes []string                       `yaml:"policyTypes"`
+		Ingress     []manifestNetworkPolicyIngress `yaml:"ingress"`
+		TLS         []manifestIngressTLS           `yaml:"tls"`
+		Rules       []manifestIngressRule          `yaml:"rules"`
+		Ports       []manifestServicePort          `yaml:"ports"`
+		SyncPolicy  struct {
 			Automated struct {
 				Prune    bool `yaml:"prune"`
 				SelfHeal bool `yaml:"selfHeal"`
@@ -60,6 +63,24 @@ type manifestObject struct {
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
+}
+
+type manifestLabelSelector struct {
+	MatchLabels map[string]string `yaml:"matchLabels"`
+}
+
+type manifestNetworkPolicyIngress struct {
+	From  []manifestNetworkPolicyPeer `yaml:"from"`
+	Ports []manifestNetworkPolicyPort `yaml:"ports"`
+}
+
+type manifestNetworkPolicyPeer struct {
+	PodSelector *manifestLabelSelector `yaml:"podSelector"`
+}
+
+type manifestNetworkPolicyPort struct {
+	Protocol string `yaml:"protocol"`
+	Port     int    `yaml:"port"`
 }
 
 type manifestRef struct {
@@ -736,6 +757,93 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 		t.Fatalf("temporal_port = %q: %v", config.Noebs.TemporalPort, err)
 	}
 	requireKubernetesServicePort(t, services, config.Noebs.TemporalHost, temporalPort)
+}
+
+func TestKubernetesPlatformNetworkPoliciesRestrictIngress(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	expected := map[string]struct {
+		targetPod string
+		port      int
+		allowed   []string
+	}{
+		"postgres-ingress": {
+			targetPod: "postgres",
+			port:      5432,
+			allowed: []string{
+				"identity-auth",
+				"card-vault",
+				"ebs-adapter",
+				"ebs-adapter-events",
+				"psp-webhook",
+				"admin-reporting",
+				"admin-reporting-projector",
+				"notification-chat",
+				"consumer-beneficiary",
+				"wallet-ledger",
+				"wallet-worker",
+				"noebs-identity-auth-migrate",
+				"noebs-card-vault-migrate",
+				"noebs-ebs-adapter-migrate",
+				"noebs-psp-webhook-migrate",
+				"noebs-admin-reporting-migrate",
+				"noebs-notification-chat-migrate",
+				"noebs-consumer-beneficiary-migrate",
+				"noebs-wallet-ledger-migrate",
+			},
+		},
+		"kafka-ingress": {
+			targetPod: "kafka",
+			port:      9092,
+			allowed: []string{
+				"kafka-topics",
+				"ebs-adapter",
+				"ebs-adapter-events",
+				"admin-reporting-projector",
+			},
+		},
+		"temporal-postgres-ingress": {
+			targetPod: "temporal-postgres",
+			port:      5432,
+			allowed: []string{
+				"temporal",
+				"temporal-schema-migrate",
+			},
+		},
+		"temporal-frontend-ingress": {
+			targetPod: "temporal",
+			port:      7233,
+			allowed: []string{
+				"psp-webhook",
+				"wallet-ledger",
+				"wallet-worker",
+				"temporal-ui",
+			},
+		},
+		"keycloak-postgres-ingress": {
+			targetPod: "keycloak-postgres",
+			port:      5432,
+			allowed: []string{
+				"keycloak",
+			},
+		},
+	}
+	found := map[string]bool{}
+	for _, object := range objects {
+		if object.Kind != "NetworkPolicy" {
+			continue
+		}
+		want, ok := expected[object.Metadata.Name]
+		if !ok {
+			t.Fatalf("unexpected NetworkPolicy %q", object.Metadata.Name)
+		}
+		found[object.Metadata.Name] = true
+		requireExactIngressNetworkPolicy(t, object, want.targetPod, want.port, want.allowed)
+	}
+	for name := range expected {
+		if !found[name] {
+			t.Fatalf("missing NetworkPolicy %q", name)
+		}
+	}
 }
 
 func TestFoundationServiceCatalogMatchesKubernetesDiscovery(t *testing.T) {
@@ -2573,6 +2681,62 @@ func requireKubernetesServicePort(t *testing.T, services map[string]map[int]bool
 	}
 	if !ports[port] {
 		t.Fatalf("Service %s ports = %v; missing port %d", serviceName, ports, port)
+	}
+}
+
+func requireExactIngressNetworkPolicy(t *testing.T, object manifestObject, targetPod string, port int, allowedPods []string) {
+	t.Helper()
+	if len(object.Spec.PolicyTypes) != 1 || object.Spec.PolicyTypes[0] != "Ingress" {
+		t.Fatalf("%s policyTypes = %v, want [Ingress]", object.Metadata.Name, object.Spec.PolicyTypes)
+	}
+	if got := object.Spec.PodSelector.MatchLabels["app.kubernetes.io/name"]; got != targetPod {
+		t.Fatalf("%s podSelector app.kubernetes.io/name = %q, want %q", object.Metadata.Name, got, targetPod)
+	}
+	if len(object.Spec.PodSelector.MatchLabels) != 1 {
+		t.Fatalf("%s podSelector must select only app.kubernetes.io/name; got %v", object.Metadata.Name, object.Spec.PodSelector.MatchLabels)
+	}
+	if len(object.Spec.Ingress) != 1 {
+		t.Fatalf("%s ingress rule count = %d, want 1", object.Metadata.Name, len(object.Spec.Ingress))
+	}
+	rule := object.Spec.Ingress[0]
+	if len(rule.Ports) != 1 {
+		t.Fatalf("%s ingress ports = %v, want exactly one port", object.Metadata.Name, rule.Ports)
+	}
+	if rule.Ports[0].Protocol != "TCP" || rule.Ports[0].Port != port {
+		t.Fatalf("%s ingress port = %+v, want TCP/%d", object.Metadata.Name, rule.Ports[0], port)
+	}
+	if len(rule.From) != len(allowedPods) {
+		t.Fatalf("%s ingress peers = %d, want %d", object.Metadata.Name, len(rule.From), len(allowedPods))
+	}
+	want := map[string]bool{}
+	for _, name := range allowedPods {
+		want[name] = true
+	}
+	got := map[string]bool{}
+	for _, peer := range rule.From {
+		if peer.PodSelector == nil {
+			t.Fatalf("%s has ingress peer without podSelector: %#v", object.Metadata.Name, peer)
+		}
+		labels := peer.PodSelector.MatchLabels
+		if len(labels) != 1 {
+			t.Fatalf("%s peer selector must select only app.kubernetes.io/name; got %v", object.Metadata.Name, labels)
+		}
+		name := labels["app.kubernetes.io/name"]
+		if name == "" {
+			t.Fatalf("%s peer selector missing app.kubernetes.io/name: %v", object.Metadata.Name, labels)
+		}
+		if !want[name] {
+			t.Fatalf("%s allows unexpected pod %q", object.Metadata.Name, name)
+		}
+		if got[name] {
+			t.Fatalf("%s allows duplicate pod %q", object.Metadata.Name, name)
+		}
+		got[name] = true
+	}
+	for name := range want {
+		if !got[name] {
+			t.Fatalf("%s missing allowed pod %q", object.Metadata.Name, name)
+		}
 	}
 }
 

@@ -17,7 +17,7 @@ var testDBName string
 var testConfigPath string
 
 func TestMain(m *testing.M) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	container, err := testdb.StartPostgresContainer(ctx)

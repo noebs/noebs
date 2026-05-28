@@ -1,6 +1,6 @@
 # Noebs Microservices Migration Completion Checklist
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 This file is the migration completion ledger. The task is not complete until
 every item in "Completion Checklist" is checked.
@@ -15,6 +15,29 @@ health verification, and retirement of the old Docker Compose deployment.
 - `[x]` Implemented and locally verified.
 - `[~]` Implemented, server verification or deployment still in progress.
 - `[ ]` Not complete.
+
+## What We Have Now
+
+- [x] A documented microservices-only target architecture with no supported monolith compatibility deployment.
+- [x] Kubernetes manifests for the API gateway, service roles, background workers, Kafka, Temporal, Keycloak, Postgres platform services, preflight, and migration Jobs.
+- [x] Runtime service roles selected through mounted service config files, not environment variables.
+- [x] Service discovery configured through explicit mounted config for HTTP, gRPC, Kafka, Temporal, and platform services.
+- [x] API gateway route ownership invariants that keep external HTTP routes mapped to exactly one backend service owner.
+- [x] Service-owned migration Jobs for database-owning Noebs services.
+- [x] Kafka-backed EBS transaction event publishing and admin-reporting projection consumption.
+- [x] Keycloak deployable as an independent platform service with its own Postgres database; application auth wiring remains future work.
+- [x] Kubernetes NetworkPolicies for explicit platform backend ingress to Noebs Postgres, Kafka, Temporal, and Keycloak Postgres.
+- [x] Runtime config/secret rendering paths that reject stale, extra, missing, or empty release inputs instead of guessing values.
+- [x] OpenTofu foundation validation and Argo CD preconditions for required Kubernetes Secrets.
+- [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
+- [x] Local and server clean-archive verification for the latest implementation commit before this checklist update: `26462e3`.
+- [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
+- [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
+- [ ] Generated Kubernetes release Secret/config bundle from those explicit inputs.
+- [ ] Live Noebs Kubernetes replacement deployment on `100.102.164.34`.
+- [ ] Verified completed k3s/k8s migration Jobs for every service-owned database scope.
+- [ ] Verified in-cluster Kafka, EBS publisher, admin-reporting projector, Keycloak, and all Noebs service health checks.
+- [ ] Retired old Docker Compose Noebs deployment after Kubernetes health is confirmed.
 
 ## Target State
 
@@ -64,6 +87,8 @@ health verification, and retirement of the old Docker Compose deployment.
 - [x] Added an OpenTofu precondition that blocks the Noebs Argo CD application when required Kubernetes Secret keys exist but their values are empty.
 - [x] Added background health endpoints and Kubernetes probes for `wallet-worker`, `ebs-adapter-events`, and `admin-reporting-projector`.
 - [x] Mirrored the background health contract in Docker Compose health checks for local microservice parity.
+- [x] Added Kubernetes NetworkPolicy manifests and invariant tests for platform backend ingress ownership.
+- [x] Aligned testcontainer-backed migration test timeouts with the explicit Postgres wait strategy used by the suite.
 
 ## Verified Gates
 
@@ -75,6 +100,7 @@ health verification, and retirement of the old Docker Compose deployment.
 - [x] `tofu -chdir=foundation/terraform fmt -check` passed locally.
 - [x] `tofu -chdir=foundation/terraform validate` passed locally.
 - [x] Latest committed changes were server-verified on `100.102.164.34` from a clean temporary archive.
+- [x] Current NetworkPolicy and test-timeout patch was server-verified on `100.102.164.34` from a clean temporary archive based on `26462e3`.
 
 ## Current Server State
 
@@ -123,6 +149,30 @@ health verification, and retirement of the old Docker Compose deployment.
 - [ ] All pre-existing non-Noebs services on the server still report healthy/running.
 - [ ] Old Docker Compose Noebs deployment is retired after Kubernetes health is confirmed.
 - [ ] Runtime config and secret paths do not depend on environment variables.
+
+## Completion Decision
+
+After each deployment attempt, record the answer using this rule:
+
+- [ ] `COMPLETE`: every item in "Completion Checklist" is checked, and the verification record below names the commit, server, deployment method, migration Jobs, service health result, Kafka/projector result, Keycloak result, public health result, and old deployment retirement result.
+- [x] `NOT COMPLETE`: at least one item in "Completion Checklist" is unchecked. The unchecked items are the remaining blockers.
+
+Latest decision: `NOT COMPLETE`.
+
+Latest blocker summary:
+
+- Explicit Kubernetes release inputs and generated Secrets are not complete.
+- The Kubernetes replacement has not been applied on `100.102.164.34`.
+- Service-owned migration Jobs, Kafka/projector health, Keycloak health, and all Noebs service health checks have not been verified after cutover.
+- The old Docker Compose Noebs deployment is still active.
+
+## Verification Record
+
+- Latest implementation commit verified before this checklist update: `26462e3`.
+- Latest working-tree patch verified before commit: platform NetworkPolicies plus testcontainer timeout alignment on base `26462e3`.
+- Latest server checked: `100.102.164.34`.
+- Latest server deployment state: Docker Compose Noebs is still active; Kubernetes replacement is not active yet.
+- Latest goal decision: `NOT COMPLETE`.
 
 ## Completion Rule
 
