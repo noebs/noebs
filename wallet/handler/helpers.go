@@ -136,10 +136,6 @@ func renderComponent(c *fiber.Ctx, status int, component templ.Component) error 
 }
 
 func resolveTenantID(tenantID string) (string, error) {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return "", walletstore.ErrMissingTenantID
-	}
 	return walletstore.ValidateTenantID(tenantID)
 }
 

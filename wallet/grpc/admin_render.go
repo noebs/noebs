@@ -676,9 +676,7 @@ func adminHTML(ctx context.Context, component templ.Component) (*walletv1.AdminW
 }
 
 func adminRedirect(path, tenantID string) *walletv1.AdminWalletResponse {
-	if tenantID != "" {
-		path += "?tenant_id=" + url.QueryEscape(tenantID)
-	}
+	path += "?tenant_id=" + url.QueryEscape(tenantID)
 	return &walletv1.AdminWalletResponse{
 		StatusCode:       http.StatusSeeOther,
 		RedirectLocation: path,
@@ -702,10 +700,6 @@ func adminTenantIDFromContext(ctx context.Context) (string, error) {
 }
 
 func adminTenantID(tenantID string) (string, error) {
-	tenantID = strings.TrimSpace(tenantID)
-	if tenantID == "" {
-		return "", walletstore.ErrMissingTenantID
-	}
 	return walletstore.ValidateTenantID(tenantID)
 }
 

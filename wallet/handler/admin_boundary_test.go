@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	walletstore "github.com/adonese/noebs/wallet/store"
 )
 
 func TestWalletAdminHTTPSurfaceUsesGRPCBridgeOnly(t *testing.T) {
@@ -49,5 +52,24 @@ func TestWalletHTTPSurfaceDoesNotReadTenantFromPublicInputs(t *testing.T) {
 				t.Fatalf("%s contains %q; wallet user tenant must come only from gateway identity", path, token)
 			}
 		}
+	}
+}
+
+func TestResolveTenantIDRejectsMissingAndReservedTenant(t *testing.T) {
+	cases := []struct {
+		name     string
+		tenantID string
+		wantErr  error
+	}{
+		{"missing", "", walletstore.ErrMissingTenantID},
+		{"invalid", "default", walletstore.ErrInvalidTenantID},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := resolveTenantID(tc.tenantID)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("resolveTenantID() error = %v, want %v", err, tc.wantErr)
+			}
+		})
 	}
 }

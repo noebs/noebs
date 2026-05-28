@@ -223,15 +223,9 @@ func formatNullDecimal(nd decimal.NullDecimal) string {
 }
 
 func tenantQuery(tenantID string) string {
-	if tenantID == "" {
-		return ""
-	}
 	return "?tenant_id=" + url.QueryEscape(tenantID)
 }
 
 func displayTenant(tenantID string) string {
-	if tenantID == "" {
-		return "-"
-	}
 	return tenantID
 }

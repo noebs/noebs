@@ -3,6 +3,7 @@ package psp
 import (
 	"context"
 	"errors"
+	"strings"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletvalidation "github.com/adonese/noebs/wallet/validation"
@@ -31,8 +32,13 @@ func (l *Loader) LoadForScope(ctx context.Context, tenantID, providerCode string
 	if l == nil || l.Store == nil {
 		return nil, ErrPSPConfigInvalid
 	}
-	if tenantID == "" || providerCode == "" {
-		return nil, ErrPSPConfigInvalid
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	providerCode = strings.TrimSpace(providerCode)
+	if providerCode == "" {
+		return nil, walletstore.ErrMissingProviderCode
 	}
 	cfg, _, err := l.Store.ResolvePSPConfig(ctx, tenantID, providerCode, walletstore.PSPConfigScope{
 		Region:    scope.Region,
