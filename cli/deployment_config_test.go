@@ -37,6 +37,7 @@ type manifestObject struct {
 			Server    string `yaml:"server"`
 			Namespace string `yaml:"namespace"`
 		} `yaml:"destination"`
+		TLS        []manifestIngressTLS  `yaml:"tls"`
 		Rules      []manifestIngressRule `yaml:"rules"`
 		Ports      []manifestServicePort `yaml:"ports"`
 		SyncPolicy struct {
@@ -57,6 +58,10 @@ type manifestObject struct {
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
+}
+
+type manifestIngressTLS struct {
+	SecretName string `yaml:"secretName"`
 }
 
 type manifestIngressRule struct {
@@ -1621,6 +1626,50 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("noebs-deployment-preflight Job not found")
+	}
+}
+
+func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	objects = append(objects, decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "ingress.yaml"))...)
+
+	referencedSecrets := map[string]bool{}
+	for _, object := range objects {
+		for _, volume := range object.Spec.Template.Spec.Volumes {
+			if volume.Secret != nil && volume.Secret.SecretName != "" {
+				referencedSecrets[volume.Secret.SecretName] = true
+			}
+		}
+		for _, tls := range object.Spec.TLS {
+			if tls.SecretName != "" {
+				referencedSecrets[tls.SecretName] = true
+			}
+		}
+	}
+	if len(referencedSecrets) == 0 {
+		t.Fatalf("no Kubernetes Secret references were found")
+	}
+
+	renderedSecrets := map[string]bool{
+		"sops-age-key":                  true,
+		"postgres-credentials":          true,
+		"temporal-postgres-credentials": true,
+		"keycloak-postgres-credentials": true,
+		"keycloak-secrets":              true,
+		"noebs-tls":                     true,
+	}
+	for _, source := range kubernetesServiceSecretSources {
+		renderedSecrets[source.secretName] = true
+	}
+	for secretName := range referencedSecrets {
+		if !renderedSecrets[secretName] {
+			t.Fatalf("Kubernetes manifest references Secret %q but render-kubernetes-secrets does not render it", secretName)
+		}
+	}
+	for secretName := range renderedSecrets {
+		if !referencedSecrets[secretName] {
+			t.Fatalf("render-kubernetes-secrets renders Secret %q but no Kubernetes manifest references it", secretName)
+		}
 	}
 }
 
