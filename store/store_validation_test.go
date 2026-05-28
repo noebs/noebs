@@ -180,6 +180,163 @@ func TestStore_IdentityTenantValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
+	ctx := context.Background()
+	s := &Store{}
+	cases := []struct {
+		name string
+		run  func(string) error
+	}{
+		{"ListCardsByUserID", func(tenantID string) error {
+			_, err := s.ListCardsByUserID(ctx, tenantID, 1)
+			return err
+		}},
+		{"ListCardsByMobile", func(tenantID string) error {
+			_, err := s.ListCardsByMobile(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"AddCards", func(tenantID string) error {
+			return s.AddCards(ctx, tenantID, 1, []ebs_fields.Card{{Mobile: "0990000000"}})
+		}},
+		{"UpdateCard", func(tenantID string) error {
+			return s.UpdateCard(ctx, tenantID, 1, ebs_fields.Card{})
+		}},
+		{"DeleteCard", func(tenantID string) error {
+			return s.DeleteCard(ctx, tenantID, 1, "9222081700000000")
+		}},
+		{"SetMainCard", func(tenantID string) error {
+			return s.SetMainCard(ctx, tenantID, 1, "9222081700000000")
+		}},
+		{"ListBeneficiaries", func(tenantID string) error {
+			_, err := s.ListBeneficiaries(ctx, tenantID, 1)
+			return err
+		}},
+		{"UpsertBeneficiary", func(tenantID string) error {
+			return s.UpsertBeneficiary(ctx, tenantID, 1, ebs_fields.Beneficiary{Data: "meter", BillType: "electricity"})
+		}},
+		{"DeleteBeneficiary", func(tenantID string) error {
+			return s.DeleteBeneficiary(ctx, tenantID, 1, "meter")
+		}},
+		{"UpsertCacheCard", func(tenantID string) error {
+			return s.UpsertCacheCard(ctx, tenantID, ebs_fields.CacheCards{Pan: "9222081700000000"})
+		}},
+		{"GetCacheCard", func(tenantID string) error {
+			_, err := s.GetCacheCard(ctx, tenantID, "9222081700000000")
+			return err
+		}},
+		{"CardExists", func(tenantID string) error {
+			_, err := s.CardExists(ctx, tenantID, "9222081700000000")
+			return err
+		}},
+		{"UpsertCacheBiller", func(tenantID string) error {
+			return s.UpsertCacheBiller(ctx, tenantID, "0990000000", "biller")
+		}},
+		{"GetCacheBiller", func(tenantID string) error {
+			_, err := s.GetCacheBiller(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"RecordLoginAttempt", func(tenantID string) error {
+			_, err := s.RecordLoginAttempt(ctx, tenantID, "0990000000", true)
+			return err
+		}},
+		{"IncrementSuspicious", func(tenantID string) error {
+			return s.IncrementSuspicious(ctx, tenantID, "0990000000")
+		}},
+		{"CreateToken", func(tenantID string) error {
+			return s.CreateToken(ctx, tenantID, &ebs_fields.Token{UUID: "token-uuid"})
+		}},
+		{"GetTokenByUUID", func(tenantID string) error {
+			_, err := s.GetTokenByUUID(ctx, tenantID, "token-uuid")
+			return err
+		}},
+		{"MarkTokenPaid", func(tenantID string) error {
+			return s.MarkTokenPaid(ctx, tenantID, "token-uuid")
+		}},
+		{"CreateTransaction", func(tenantID string) error {
+			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{})
+		}},
+		{"GetTransactionsByMaskedPan", func(tenantID string) error {
+			_, err := s.GetTransactionsByMaskedPan(ctx, tenantID, "922208******0000")
+			return err
+		}},
+		{"GetTransactionByUUID", func(tenantID string) error {
+			_, err := s.GetTransactionByUUID(ctx, tenantID, "transaction-uuid")
+			return err
+		}},
+		{"CreatePushData", func(tenantID string) error {
+			return s.CreatePushData(ctx, tenantID, &ebs_fields.PushDataRecord{UUID: "push-uuid"})
+		}},
+		{"GetNotifications", func(tenantID string) error {
+			_, err := s.GetNotifications(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"MarkNotificationsRead", func(tenantID string) error {
+			return s.MarkNotificationsRead(ctx, tenantID, "0990000000")
+		}},
+		{"GetMeterName", func(tenantID string) error {
+			_, err := s.GetMeterName(ctx, tenantID, "nec")
+			return err
+		}},
+		{"UpdateKYC", func(tenantID string) error {
+			return s.UpdateKYC(ctx, tenantID, &ebs_fields.KYC{}, nil)
+		}},
+		{"GetUserWithKYC", func(tenantID string) error {
+			_, _, _, err := s.GetUserWithKYC(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"LinkAuthAccount", func(tenantID string) error {
+			return s.LinkAuthAccount(ctx, tenantID, &ebs_fields.AuthAccount{})
+		}},
+		{"FindAuthAccount", func(tenantID string) error {
+			_, err := s.FindAuthAccount(ctx, tenantID, "provider", "provider-user")
+			return err
+		}},
+		{"FindUserByEmail", func(tenantID string) error {
+			_, err := s.FindUserByEmail(ctx, tenantID, "user@example.test")
+			return err
+		}},
+		{"FindUserByID", func(tenantID string) error {
+			_, err := s.FindUserByID(ctx, tenantID, 1)
+			return err
+		}},
+		{"GetDeviceIDsByPan", func(tenantID string) error {
+			_, err := s.GetDeviceIDsByPan(ctx, tenantID, "9222081700000000")
+			return err
+		}},
+		{"GetAllTokensByUserID", func(tenantID string) error {
+			_, err := s.GetAllTokensByUserID(ctx, tenantID, 1)
+			return err
+		}},
+		{"GetAllTokensByUserIDAndCartID", func(tenantID string) error {
+			_, err := s.GetAllTokensByUserIDAndCartID(ctx, tenantID, 1, "cart")
+			return err
+		}},
+		{"UpdateTokenCard", func(tenantID string) error {
+			return s.UpdateTokenCard(ctx, tenantID, "token-uuid", "9222081700000000")
+		}},
+		{"UpdatePaymentRequest", func(tenantID string) error {
+			return s.UpdatePaymentRequest(ctx, tenantID, "push-uuid", ebs_fields.QrData{})
+		}},
+	}
+	tenantCases := []struct {
+		tenantID string
+		wantErr  error
+	}{
+		{"", ErrMissingTenantID},
+		{"default", ErrInvalidTenantID},
+	}
+	for _, tc := range cases {
+		for _, tenantCase := range tenantCases {
+			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
+				err := tc.run(tenantCase.tenantID)
+				if !errors.Is(err, tenantCase.wantErr) {
+					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
+				}
+			})
+		}
+	}
+}
+
 func TestStore_CreateUser_MissingUser(t *testing.T) {
 	s := newTestStore(t)
 	err := s.CreateUser(context.Background(), "t1", nil)
