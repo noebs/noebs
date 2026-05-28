@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,8 @@ import (
 	chat "github.com/tutipay/ws"
 	"gopkg.in/yaml.v3"
 )
+
+type chatGatewayIdentityContextKey struct{}
 
 func isTestRun() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
@@ -395,9 +398,16 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 }
 
 func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	route.Get("/ws", userIdentity, adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		chat.ServeWs(hub, w, r)
-	}))
+	route.Get("/ws", userIdentity, func(c *fiber.Ctx) error {
+		identity, err := chatGatewayIdentityFromFiber(c)
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "missing_gateway_identity", "message": "missing gateway identity"})
+		}
+		return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r = r.WithContext(context.WithValue(r.Context(), chatGatewayIdentityContextKey{}, identity))
+			chat.ServeWs(hub, w, r)
+		})(c)
+	})
 
 	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", adminIdentity, tenantIdentity), consumerHandler)
 
@@ -419,18 +429,40 @@ func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Hand
 }
 
 func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
-	identity, err := gateway.ParseInternalUserIdentity(
-		r.Header.Get(gateway.GatewayTenantIDHeader),
-		r.Header.Get(gateway.GatewayUserIDHeader),
-		r.Header.Get(gateway.GatewayMobileHeader),
-	)
-	if err != nil {
+	if r == nil {
+		return "", chat.ErrUnauthorized
+	}
+	identity, ok := r.Context().Value(chatGatewayIdentityContextKey{}).(gateway.UserIdentity)
+	if !ok {
 		return "", chat.ErrUnauthorized
 	}
 	if identity.Mobile == "" {
 		return "", chat.ErrUnauthorized
 	}
 	return identity.Mobile, nil
+}
+
+func chatGatewayIdentityFromFiber(c *fiber.Ctx) (gateway.UserIdentity, error) {
+	if c == nil {
+		return gateway.UserIdentity{}, chat.ErrUnauthorized
+	}
+	tenantID, ok := c.Locals("tenant_id").(string)
+	if !ok {
+		return gateway.UserIdentity{}, chat.ErrUnauthorized
+	}
+	userID, ok := c.Locals("user_id").(int64)
+	if !ok {
+		return gateway.UserIdentity{}, chat.ErrUnauthorized
+	}
+	mobile, ok := c.Locals("mobile").(string)
+	if !ok || strings.TrimSpace(mobile) == "" {
+		return gateway.UserIdentity{}, chat.ErrUnauthorized
+	}
+	identity, err := gateway.ParseInternalUserIdentity(tenantID, strconv.FormatInt(userID, 10), mobile)
+	if err != nil {
+		return gateway.UserIdentity{}, chat.ErrUnauthorized
+	}
+	return identity, nil
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {

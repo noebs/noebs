@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	chat "github.com/tutipay/ws"
 )
 
@@ -133,6 +135,14 @@ func TestChatClientIDUsesGatewayIdentity(t *testing.T) {
 	}
 
 	setGatewayUserIdentityHeaders(req, 1, "test-tenant", "0912345678")
+	if _, err := chatClientIDFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
+		t.Fatalf("header-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
+	}
+	req = req.WithContext(context.WithValue(req.Context(), chatGatewayIdentityContextKey{}, gateway.UserIdentity{
+		TenantID: "test-tenant",
+		UserID:   1,
+		Mobile:   "0912345678",
+	}))
 	got, err := chatClientIDFromGatewayIdentity(req)
 	if err != nil {
 		t.Fatalf("chatClientIDFromGatewayIdentity() error = %v", err)
