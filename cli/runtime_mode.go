@@ -134,6 +134,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	if err := validateOTelRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
+	if roleRequiresDataKey(role) && strings.TrimSpace(cfg.DataKey) == "" {
+		return fmt.Errorf("%w: %s", store.ErrMissingDataKey, role)
+	}
 	if err := validateEBSRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
@@ -196,6 +199,10 @@ func roleUsesWalletFeature(role serviceRole) bool {
 		role == serviceRoleWalletAPI ||
 		role == serviceRoleWalletLedger ||
 		role == serviceRoleWalletWorker
+}
+
+func roleRequiresDataKey(role serviceRole) bool {
+	return role == serviceRoleCardVault || role == serviceRoleCardVaultMigrate
 }
 
 func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {

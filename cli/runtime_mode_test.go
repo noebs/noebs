@@ -386,8 +386,11 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 }
 
 func TestServiceRoleRuntimeConfigDoesNotRequireCardVaultServiceDiscovery(t *testing.T) {
-	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{}); err != nil {
+	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{DataKey: "card-vault-data-key"}); err != nil {
 		t.Fatalf("card-vault runtime config error = %v", err)
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{}); !errors.Is(err, store.ErrMissingDataKey) {
+		t.Fatalf("card-vault missing data key error = %v, want %v", err, store.ErrMissingDataKey)
 	}
 }
 

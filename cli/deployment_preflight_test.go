@@ -40,6 +40,17 @@ func TestValidateDeploymentRootRejectsMissingEBSRuntimeInput(t *testing.T) {
 	}
 }
 
+func TestValidateDeploymentRootRejectsMissingCardVaultDataKey(t *testing.T) {
+	root := writePreflightRoot(t, preflightRootOptions{
+		omitCardVaultDataKey: true,
+	})
+
+	err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if !errors.Is(err, store.ErrMissingDataKey) {
+		t.Fatalf("validateDeploymentRootWithDecrypt() error = %v, want %v", err, store.ErrMissingDataKey)
+	}
+}
+
 func TestValidateDeploymentRootRejectsMissingDockerServiceConfig(t *testing.T) {
 	root := writePreflightRoot(t, preflightRootOptions{})
 	if err := os.Remove(filepath.Join(root, "deploy", "docker", "services", "wallet-api.yaml")); err != nil {
@@ -92,6 +103,24 @@ func TestValidateKubernetesDeploymentRootAcceptsMountedInputs(t *testing.T) {
 
 	if err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsMissingCardVaultDataKey(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	path := filepath.Join(root, "secrets", "card-vault.secrets.yaml")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read card-vault secrets: %v", err)
+	}
+	payload = []byte(strings.ReplaceAll(string(payload), "  data_key: card-vault-data-key\n", ""))
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write card-vault secrets: %v", err)
+	}
+
+	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if !errors.Is(err, store.ErrMissingDataKey) {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want %v", err, store.ErrMissingDataKey)
 	}
 }
 
@@ -155,6 +184,7 @@ func TestValidateKubernetesDeploymentRootRejectsUnexpectedSOPSFile(t *testing.T)
 type preflightRootOptions struct {
 	defaultTenantID         string
 	omitEBSConsumerEndpoint bool
+	omitCardVaultDataKey    bool
 	keycloakPassword        string
 }
 
@@ -188,6 +218,9 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 		payload = strings.ReplaceAll(payload, "tenant_1", defaultTenantID)
 		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSConsumerEndpoint {
 			payload = strings.ReplaceAll(payload, `  consumer_endpoint: "https://consumer.ebs.example"`+"\n", "")
+		}
+		if fileName == "card-vault.secrets.yaml" && opts.omitCardVaultDataKey {
+			payload = strings.ReplaceAll(payload, "  data_key: card-vault-data-key\n", "")
 		}
 		writePreflightFile(t, root, filepath.Join("deploy", "docker", "secrets", fileName), payload)
 	}

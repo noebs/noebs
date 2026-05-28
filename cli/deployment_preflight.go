@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"gopkg.in/yaml.v3"
 )
 
@@ -338,6 +339,9 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 	}
 	if err := validateServiceDiscoveryCatalog(serviceName, cfg); err != nil {
 		return err
+	}
+	if roleRequiresDataKey(role) && strings.TrimSpace(cfg.DataKey) == "" {
+		return fmt.Errorf("%s data_key: %w", serviceName, store.ErrMissingDataKey)
 	}
 	if !role.runsMigrations() {
 		if err := validateRoleRuntimeConfig(role, cfg); err != nil {
