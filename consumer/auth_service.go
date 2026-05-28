@@ -27,8 +27,9 @@ func (s *Service) GenerateAPIKey(ctx context.Context, tenantID, email string) (s
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", err
 	}
 	email = strings.TrimSpace(email)
 	if email == "" {
@@ -46,8 +47,9 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password s
 	if s == nil || s.Store == nil {
 		return "", empty, ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", empty, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", empty, err
 	}
 	emailOrMobile = strings.TrimSpace(emailOrMobile)
 	if emailOrMobile == "" {
@@ -72,8 +74,9 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 	if s == nil || s.Store == nil {
 		return "", empty, ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", empty, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", empty, err
 	}
 	if strings.TrimSpace(req.Mobile) == "" {
 		return "", empty, errors.New("missing mobile")
@@ -139,8 +142,9 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.User{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.User{}, err
 	}
 
 	// Make sure user is unique
@@ -172,8 +176,9 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.User{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.User{}, err
 	}
 	mobile = strings.ToLower(strings.TrimSpace(mobile))
 	if mobile == "" || strings.TrimSpace(otp) == "" {
@@ -195,8 +200,9 @@ func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassw
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.User{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.User{}, err
 	}
 	mobile = strings.ToLower(strings.TrimSpace(mobile))
 	if mobile == "" {
@@ -233,8 +239,9 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile strin
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {

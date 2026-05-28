@@ -118,6 +118,63 @@ func TestServiceRefreshJWTRequiresTenantClaim(t *testing.T) {
 	}
 }
 
+func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
+	service := &Service{
+		Store: &store.Store{},
+		Auth:  &refreshAuthStub{},
+	}
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		run  func(string) error
+	}{
+		{"GenerateAPIKey", func(tenantID string) error {
+			_, err := service.GenerateAPIKey(ctx, tenantID, "user@example.test")
+			return err
+		}},
+		{"Login", func(tenantID string) error {
+			_, _, err := service.Login(ctx, tenantID, "0990000000", "password")
+			return err
+		}},
+		{"SingleLogin", func(tenantID string) error {
+			_, _, err := service.SingleLogin(ctx, tenantID, gateway.Token{Mobile: "0990000000"})
+			return err
+		}},
+		{"CreateUser", func(tenantID string) error {
+			_, err := service.CreateUser(ctx, tenantID, ebs_fields.User{Mobile: "0990000000", Password: "password"})
+			return err
+		}},
+		{"VerifyOTP", func(tenantID string) error {
+			_, err := service.VerifyOTP(ctx, tenantID, "0990000000", "123456")
+			return err
+		}},
+		{"ChangePassword", func(tenantID string) error {
+			_, err := service.ChangePassword(ctx, tenantID, "0990000000", "new-password")
+			return err
+		}},
+		{"GenerateSignInCode", func(tenantID string) error {
+			return service.GenerateSignInCode(ctx, tenantID, "0990000000")
+		}},
+	}
+	tenantCases := []struct {
+		tenantID string
+		wantErr  error
+	}{
+		{"", store.ErrMissingTenantID},
+		{"default", store.ErrInvalidTenantID},
+	}
+	for _, tc := range cases {
+		for _, tenantCase := range tenantCases {
+			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
+				err := tc.run(tenantCase.tenantID)
+				if !errors.Is(err, tenantCase.wantErr) {
+					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
+				}
+			})
+		}
+	}
+}
+
 func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 	auth := &refreshAuthStub{
 		claims: &gateway.TokenClaims{UserID: 42, Mobile: "0990000000", TenantID: "tenant-a"},
