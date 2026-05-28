@@ -61,6 +61,83 @@ func TestAPIGatewayProxiesEveryServiceOwnedRoute(t *testing.T) {
 	}
 }
 
+func TestAPIGatewayProxyCatalogMatchesSingleServiceOwner(t *testing.T) {
+	ensureInit()
+	ownedRoutes := map[string]serviceRole{}
+	serviceRoles := []serviceRole{
+		serviceRoleIdentityAuth,
+		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
+		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleBeneficiary,
+		serviceRoleWalletAPI,
+	}
+	for _, role := range serviceRoles {
+		t.Run(string(role), func(t *testing.T) {
+			if role == serviceRoleWalletAPI {
+				configureWalletRouteTest(t)
+			} else {
+				setServiceRoleForTest(t, role)
+			}
+			route := GetMainEngine()
+			for _, owned := range route.GetRoutes(true) {
+				if isInternalServiceRoute(owned.Method, owned.Path) {
+					continue
+				}
+				recordOwnedExternalRoute(t, ownedRoutes, gatewayRouteKey(owned.Method, owned.Path), role)
+			}
+			for _, key := range explicitServiceOwnedExternalRoutes(role) {
+				recordOwnedExternalRoute(t, ownedRoutes, key, role)
+			}
+		})
+	}
+
+	proxiedRoutes := map[string]serviceRole{}
+	for _, spec := range gatewayProxyRouteSpecs() {
+		key := gatewayRouteKey(spec.method, spec.path)
+		if existing, ok := proxiedRoutes[key]; ok {
+			t.Fatalf("%s is proxied to both %s and %s", key, existing, spec.role)
+		}
+		proxiedRoutes[key] = spec.role
+	}
+
+	for key, owner := range ownedRoutes {
+		target, ok := proxiedRoutes[key]
+		if !ok {
+			t.Fatalf("%s owned by %s is missing from the API gateway proxy catalog", key, owner)
+		}
+		if target != owner {
+			t.Fatalf("%s owned by %s is proxied to %s", key, owner, target)
+		}
+	}
+	for key, target := range proxiedRoutes {
+		owner, ok := ownedRoutes[key]
+		if !ok {
+			t.Fatalf("%s is proxied to %s but no HTTP service owns it", key, target)
+		}
+		if owner != target {
+			t.Fatalf("%s is proxied to %s but owned by %s", key, target, owner)
+		}
+	}
+}
+
+func recordOwnedExternalRoute(t *testing.T, routes map[string]serviceRole, key string, role serviceRole) {
+	t.Helper()
+	if existing, ok := routes[key]; ok {
+		t.Fatalf("%s is owned by both %s and %s", key, existing, role)
+	}
+	routes[key] = role
+}
+
+func explicitServiceOwnedExternalRoutes(role serviceRole) []string {
+	if role == serviceRoleAdminReporting {
+		return []string{gatewayRouteKey(http.MethodGet, "/dashboard/assets/*")}
+	}
+	return nil
+}
+
 func TestAPIGatewayProxyCatalogTargetsRoutableHTTPServices(t *testing.T) {
 	config := decodeKubernetesBaseNoebsConfig(t)
 	services := map[string]map[string]int{}

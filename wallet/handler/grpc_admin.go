@@ -20,6 +20,7 @@ func NewGRPCAdminHandler(client walletv1.WalletAdminServiceClient) *GRPCAdminHan
 }
 
 func RegisterGRPCAdminRoutes(router fiber.Router, handler *GRPCAdminHandler) {
+	router.Get("", handler.Dashboard)
 	router.Get("/", handler.Dashboard)
 	router.Get("/wallets", handler.ListWallets)
 	router.Get("/wallets/:id", handler.WalletDetail)

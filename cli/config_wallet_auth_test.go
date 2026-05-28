@@ -467,21 +467,25 @@ func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 	configureWalletRouteTest(t)
 
 	route := GetMainEngine()
-	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/?tenant_id="+url.QueryEscape(noebsConfig.DefaultTenantID), nil)
-	setGatewayAdminIdentityHeader(req)
-	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
+	for _, path := range []string{"/admin/wallet", "/admin/wallet/"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path+"?tenant_id="+url.QueryEscape(noebsConfig.DefaultTenantID), nil)
+			setGatewayAdminIdentityHeader(req)
+			req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
 
-	resp, err := route.Test(req)
-	if err != nil {
-		t.Fatalf("wallet admin request failed: %v", err)
+			resp, err := route.Test(req)
+			if err != nil {
+				t.Fatalf("wallet admin request failed: %v", err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("wallet admin status = %d, want %d", resp.StatusCode, http.StatusOK)
+			}
+			if contentType := resp.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
+				t.Fatalf("content type = %q, want text/html; charset=utf-8", contentType)
+			}
+			_ = resp.Body.Close()
+		})
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("wallet admin status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	if contentType := resp.Header.Get("Content-Type"); contentType != "text/html; charset=utf-8" {
-		t.Fatalf("content type = %q, want text/html; charset=utf-8", contentType)
-	}
-	_ = resp.Body.Close()
 }
 
 func TestWalletAdminRouteRequiresGatewayTenantIdentity(t *testing.T) {
