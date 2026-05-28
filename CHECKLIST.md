@@ -55,6 +55,7 @@ every item in "Completion Checklist" is checked.
 - [x] Added an explicit `ghcr-credentials` image pull Secret contract for Noebs Kubernetes workloads.
 - [x] Installed GitHub CLI on `100.102.164.34` for explicit GHCR credential preparation; no GitHub auth state was configured.
 - [x] Refreshed the Caddy apt signing key on `100.102.164.34`; `apt-get update` now runs without the expired-key warning.
+- [x] Added a documentation invariant that the foundation and current-host runbooks list every required Kubernetes cutover Secret, including `ghcr-credentials`.
 
 ## Verified Gates
 

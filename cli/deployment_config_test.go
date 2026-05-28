@@ -823,6 +823,43 @@ func TestFoundationDatabaseCatalogDeclaresOwnedDatabases(t *testing.T) {
 	})
 }
 
+func TestRequiredKubernetesSecretDocsListEveryCutoverSecret(t *testing.T) {
+	required := map[string]string{
+		"sops-age-key":                  "age-key.txt",
+		"postgres-credentials":          "password",
+		"temporal-postgres-credentials": "password",
+		"keycloak-postgres-credentials": "password",
+		"keycloak-secrets":              "keycloak.conf",
+		"ghcr-credentials":              ".dockerconfigjson",
+		"noebs-tls":                     "",
+	}
+	for _, source := range kubernetesServiceSecretSources {
+		required[source.secretName] = "secrets.yaml"
+	}
+
+	docs := []string{
+		filepath.Join("..", "foundation", "terraform", "README.md"),
+		filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "README.md"),
+	}
+	for _, path := range docs {
+		t.Run(path, func(t *testing.T) {
+			payload, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			text := string(payload)
+			for secretName, key := range required {
+				if !strings.Contains(text, "`"+secretName+"`") {
+					t.Fatalf("%s missing required secret %s", path, secretName)
+				}
+				if key != "" && !strings.Contains(text, "`"+key+"`") {
+					t.Fatalf("%s missing required key %s for secret %s", path, key, secretName)
+				}
+			}
+		})
+	}
+}
+
 func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 

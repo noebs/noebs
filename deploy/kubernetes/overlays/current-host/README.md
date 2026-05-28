@@ -27,6 +27,7 @@ Required Kubernetes Secrets in namespace `noebs`:
 - `sops-age-key` with key `age-key.txt`.
 - `postgres-credentials` with key `password`.
 - `temporal-postgres-credentials` with key `password`.
+- `ghcr-credentials` with key `.dockerconfigjson`.
 - `noebs-tls` TLS secret for `api.noebs.sd` and `dsa.adonese.sd`.
 
 Render these Secrets from the prepared Kubernetes release input directory:
