@@ -23,8 +23,9 @@ func (s *Service) callEBSJSON(ctx context.Context, tenantID, endpoint string, re
 	if s.Store == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	url := s.NoebsConfig.MerchantIP + endpoint
 	payload, err := json.Marshal(req)
@@ -42,8 +43,9 @@ func (s *Service) callEBSRaw(ctx context.Context, tenantID, endpoint string, pay
 	if s.Store == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	url := s.NoebsConfig.MerchantIP + endpoint
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)

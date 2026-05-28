@@ -20,8 +20,9 @@ func (s *Service) callEBSJSONWithMutate(ctx context.Context, tenantID, baseURL, 
 	if s == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingService
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	url := baseURL + endpoint
 	payload, err := json.Marshal(req)
@@ -40,8 +41,9 @@ func (s *Service) callEBSRawWithMutate(ctx context.Context, tenantID, baseURL, e
 	if s == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingService
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	url := baseURL + endpoint
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)

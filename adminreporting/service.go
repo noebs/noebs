@@ -25,8 +25,9 @@ func (s *Service) StoreTransactionProjection(ctx context.Context, tenantID strin
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if cmd.Transaction == nil {
 		return ErrMissingTransactionProjection

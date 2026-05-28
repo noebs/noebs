@@ -11,8 +11,9 @@ func (s *Service) recordTransaction(ctx context.Context, tenantID string, res eb
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if err := s.Store.CreateTransaction(ctx, tenantID, res); err != nil {
 		return err

@@ -77,6 +77,9 @@ func TestStoreTransactionProjectionRejectsMissingInputs(t *testing.T) {
 	if err := service.StoreTransactionProjection(context.Background(), "", TransactionProjectionCommand{Transaction: &ebs_fields.EBSResponse{}}); !errors.Is(err, store.ErrMissingTenantID) {
 		t.Fatalf("missing tenant error = %v, want %v", err, store.ErrMissingTenantID)
 	}
+	if err := service.StoreTransactionProjection(context.Background(), "default", TransactionProjectionCommand{Transaction: &ebs_fields.EBSResponse{}}); !errors.Is(err, store.ErrInvalidTenantID) {
+		t.Fatalf("reserved tenant error = %v, want %v", err, store.ErrInvalidTenantID)
+	}
 	if err := service.StoreTransactionProjection(context.Background(), "tenant-a", TransactionProjectionCommand{}); !errors.Is(err, ErrMissingTransactionProjection) {
 		t.Fatalf("missing projection error = %v, want %v", err, ErrMissingTransactionProjection)
 	}
