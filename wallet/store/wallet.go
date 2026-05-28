@@ -14,6 +14,7 @@ type EnsureWalletParams struct {
 	OwnerID   string
 	UserID    int64
 	Currency  string
+	KYCTier   string
 }
 
 func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*Wallet, error) {
@@ -29,6 +30,9 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	}
 	if params.Currency == "" {
 		return nil, ErrMissingCurrency
+	}
+	if params.KYCTier == "" {
+		return nil, ErrMissingKYCTier
 	}
 	if params.OwnerType == OwnerTypeUser {
 		if params.UserID <= 0 {
@@ -48,22 +52,25 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO wallets(
 		tenant_id, owner_type, owner_id, user_id, currency,
-		balance, available_balance, status, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, 0, 0, 'active', ?, ?)
+		kyc_tier, balance, available_balance, status, created_at, updated_at
+	) VALUES(?, ?, ?, ?, ?, ?, 0, 0, 'active', ?, ?)
 	ON CONFLICT(tenant_id, owner_type, owner_id, currency) DO NOTHING`)
-	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, now, now); err != nil {
+	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, params.KYCTier, now, now); err != nil {
 		return nil, err
 	}
 	return s.GetWalletByOwner(ctx, tenantID, params.OwnerType, params.OwnerID, params.Currency)
 }
 
-func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*Wallet, error) {
+func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency, kycTier string) (map[string]*Wallet, error) {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
 	if currency == "" {
 		return nil, ErrMissingCurrency
+	}
+	if kycTier == "" {
+		return nil, ErrMissingKYCTier
 	}
 	systemWallets := make(map[string]*Wallet, len(SystemWalletCodes()))
 	for _, code := range SystemWalletCodes() {
@@ -72,6 +79,7 @@ func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency stri
 			OwnerType: OwnerTypeSystem,
 			OwnerID:   code,
 			Currency:  currency,
+			KYCTier:   kycTier,
 		})
 		if err != nil {
 			return nil, err

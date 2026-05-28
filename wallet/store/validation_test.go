@@ -19,42 +19,47 @@ func TestEnsureWalletValidation(t *testing.T) {
 	}{
 		{
 			name:    "missing-tenant",
-			params:  EnsureWalletParams{OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			params:  EnsureWalletParams{OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingTenantID,
 		},
 		{
 			name:    "invalid-tenant",
-			params:  EnsureWalletParams{TenantID: "default", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "default", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidTenantID,
 		},
 		{
 			name:    "missing-owner-type",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingOwnerType,
 		},
 		{
 			name:    "missing-owner-id",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, UserID: validUserID, Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingOwnerID,
 		},
 		{
 			name:    "missing-currency",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingCurrency,
 		},
 		{
+			name:    "missing-kyc-tier",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			wantErr: ErrMissingKYCTier,
+		},
+		{
 			name:    "missing-user-id",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidUserID,
 		},
 		{
 			name:    "invalid-user-id",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: -1, Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: -1, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidUserID,
 		},
 		{
 			name:    "user-id-on-system",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeSystem, OwnerID: "treasury", UserID: validUserID, Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeSystem, OwnerID: "treasury", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidUserID,
 		},
 	}
@@ -81,14 +86,17 @@ func TestGetWalletValidation(t *testing.T) {
 
 func TestEnsureSystemWalletsValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.EnsureSystemWallets(t.Context(), "", "USD")
+	_, err := s.EnsureSystemWallets(t.Context(), "", "USD", KYCTierUnverified)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	_, err = s.EnsureSystemWallets(t.Context(), "default", "USD")
+	_, err = s.EnsureSystemWallets(t.Context(), "default", "USD", KYCTierUnverified)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "")
+	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "", KYCTierUnverified)
 	assertErrorIs(t, err, ErrMissingCurrency)
+
+	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "USD", "")
+	assertErrorIs(t, err, ErrMissingKYCTier)
 }
 
 func TestListWalletLedgerEntriesValidation(t *testing.T) {

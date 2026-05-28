@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS withdrawal_destinations (
   display_name TEXT,
   currency TEXT NOT NULL,
   country TEXT,
-  ownership_status TEXT NOT NULL DEFAULT 'unverified'
+  ownership_status TEXT NOT NULL
     CHECK (ownership_status IN ('unverified', 'pending', 'verified', 'rejected')),
   ownership_verification_method TEXT,
   ownership_verified_at TIMESTAMPTZ,

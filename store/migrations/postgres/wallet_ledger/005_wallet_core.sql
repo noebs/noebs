@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS wallets (
   available_balance BIGINT NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'frozen', 'closed')),
   wallet_pin_hash TEXT,
-  kyc_tier TEXT NOT NULL DEFAULT 'unverified',
+  kyc_tier TEXT NOT NULL,
   version BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

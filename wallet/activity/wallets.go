@@ -14,6 +14,7 @@ type EnsureSystemWalletParams struct {
 	TenantID   string
 	Currency   string
 	WalletCode string
+	KYCTier    string
 }
 
 func NewWalletActivities(store *walletstore.Store) *WalletActivities {
@@ -29,5 +30,6 @@ func (a *WalletActivities) EnsureSystemWallet(ctx context.Context, params Ensure
 		OwnerType: walletstore.OwnerTypeSystem,
 		OwnerID:   params.WalletCode,
 		Currency:  params.Currency,
+		KYCTier:   params.KYCTier,
 	})
 }

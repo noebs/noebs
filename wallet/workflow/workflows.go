@@ -283,6 +283,7 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		TenantID:   params.TenantID,
 		Currency:   resolved.WalletCurrency,
 		WalletCode: walletstore.SystemTreasury,
+		KYCTier:    walletstore.KYCTierUnverified,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
 		return err
@@ -345,6 +346,7 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 			TenantID:   params.TenantID,
 			Currency:   resolved.WalletCurrency,
 			WalletCode: walletstore.SystemFees,
+			KYCTier:    walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
 			return err
@@ -873,6 +875,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		TenantID:   params.TenantID,
 		Currency:   validation.Currency,
 		WalletCode: walletstore.SystemTreasury,
+		KYCTier:    walletstore.KYCTierUnverified,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
 		releaseHold()
@@ -910,6 +913,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			TenantID:   params.TenantID,
 			Currency:   validation.Currency,
 			WalletCode: walletstore.SystemFees,
+			KYCTier:    walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
 			releaseHold()
@@ -1062,6 +1066,7 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 			TenantID:   params.TenantID,
 			Currency:   params.Currency,
 			WalletCode: walletstore.SystemFees,
+			KYCTier:    walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
 			return err
@@ -1299,6 +1304,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			TenantID:   params.TenantID,
 			Currency:   params.Currency,
 			WalletCode: walletstore.SystemTreasury,
+			KYCTier:    walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
 			return err

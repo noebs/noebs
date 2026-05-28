@@ -8,6 +8,10 @@ const (
 )
 
 const (
+	KYCTierUnverified = "unverified"
+)
+
+const (
 	SystemTreasury    = "treasury"
 	SystemFees        = "fees"
 	SystemSuspense    = "suspense"

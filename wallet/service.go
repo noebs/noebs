@@ -33,6 +33,7 @@ func (s *Service) EnsureUserWallet(ctx context.Context, tenantID string, userID 
 		OwnerID:   ownerID,
 		UserID:    userID,
 		Currency:  currency,
+		KYCTier:   walletstore.KYCTierUnverified,
 	})
 }
 
@@ -40,7 +41,7 @@ func (s *Service) EnsureSystemWallets(ctx context.Context, tenantID, currency st
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	return s.Store.EnsureSystemWallets(ctx, tenantID, currency)
+	return s.Store.EnsureSystemWallets(ctx, tenantID, currency, walletstore.KYCTierUnverified)
 }
 
 func (s *Service) GetWallet(ctx context.Context, tenantID string, walletID uuid.UUID) (*walletstore.Wallet, error) {
