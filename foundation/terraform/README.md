@@ -19,7 +19,7 @@ tofu -chdir=foundation/terraform apply
 
 The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host happens before applying this root so OpenTofu can manage Argo CD through the Kubernetes API.
 
-Runtime secrets are not stored in OpenTofu. Before syncing the Argo CD application, create the required Kubernetes Secrets in the OpenTofu-owned `noebs` namespace:
+Runtime secrets are not stored in OpenTofu. Before applying the Noebs Argo CD application, create the required Kubernetes Secrets in the OpenTofu-owned `noebs` namespace. The foundation root reads this exact Secret name set as Kubernetes data sources before creating the Argo CD application, so missing release Secrets fail the OpenTofu run instead of starting an Argo CD sync with incomplete inputs:
 
 - `api-gateway-secrets` with key `secrets.yaml`
 - `identity-auth-secrets` with key `secrets.yaml`

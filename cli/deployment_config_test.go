@@ -1389,6 +1389,9 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 
 	required := []string{
 		`resource "kubernetes_manifest" "noebs_project"`,
+		`data "kubernetes_secret_v1" "noebs_required"`,
+		`for_each = toset(local.noebs_required_kubernetes_secrets)`,
+		`name      = each.key`,
 		`resource "kubernetes_manifest" "noebs_application"`,
 		`namespace = var.argocd_namespace`,
 		`var.noebs_repo_url`,
@@ -1403,6 +1406,7 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 		`depends_on = [
     kubernetes_manifest.noebs_project,
     kubernetes_namespace_v1.noebs,
+    data.kubernetes_secret_v1.noebs_required,
   ]`,
 	}
 	for _, snippet := range required {

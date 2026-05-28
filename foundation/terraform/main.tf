@@ -71,6 +71,17 @@ resource "kubernetes_manifest" "noebs_project" {
   depends_on = [helm_release.argocd]
 }
 
+data "kubernetes_secret_v1" "noebs_required" {
+  for_each = toset(local.noebs_required_kubernetes_secrets)
+
+  metadata {
+    name      = each.key
+    namespace = kubernetes_namespace_v1.noebs.metadata[0].name
+  }
+
+  depends_on = [kubernetes_namespace_v1.noebs]
+}
+
 resource "kubernetes_manifest" "noebs_application" {
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
@@ -105,5 +116,6 @@ resource "kubernetes_manifest" "noebs_application" {
   depends_on = [
     kubernetes_manifest.noebs_project,
     kubernetes_namespace_v1.noebs,
+    data.kubernetes_secret_v1.noebs_required,
   ]
 }
