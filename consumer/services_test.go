@@ -32,17 +32,6 @@ func TestService_isValidCard(t *testing.T) {
 	}))
 	t.Cleanup(ebsServer.Close)
 
-	var sawAdminReporting bool
-	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/admin-reporting/transactions" {
-			t.Fatalf("admin-reporting path = %s", r.URL.Path)
-		}
-		assertAdminCommandHeaders(t, r, tenantID)
-		sawAdminReporting = true
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	t.Cleanup(adminReportingServer.Close)
-
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
@@ -51,9 +40,6 @@ func TestService_isValidCard(t *testing.T) {
 			ConsumerID:      "consumer-app",
 			EBSConsumerKey:  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4Jj+8WL5ANXllkz9lkOKRmXnDzQ+yS/VFKxKttkk4o5duJPPFZzJ0E3/m1F6xqEVPH2aM2IpSKN/SgeBv9NL6y+qgms7GbpnQ8MCilLIFWNGuTeRzDNVIR7yIqQ0jHX3dgrJyiDp02LQnQtMTRhzOYDZnwOnweixwEzAk8yPEeXQyzp867rUsLZ4jIIChRcI06UTFdMQrd7KZReTt5hunjQLH+qJBaMj1yAQGmf9C10MeC3Nnp4oE7m0OuTkTvekHnsaAtyY+TFg/UBvMQOyp9uJG6OwdvV6doI3MmXg16K6WJx1J1xewG6e28Tvt13z5mEljj8dnWQcqmhuASRlZwIDAQAB",
 			BillInquiryIPIN: "0000",
-			ServiceDiscovery: map[string]string{
-				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
-			},
 		},
 	}
 	type args struct {
@@ -79,8 +65,8 @@ func TestService_isValidCard(t *testing.T) {
 			}
 		})
 	}
-	if !sawEBS || !sawAdminReporting {
-		t.Fatalf("sawEBS=%v sawAdminReporting=%v", sawEBS, sawAdminReporting)
+	if !sawEBS {
+		t.Fatalf("sawEBS=%v", sawEBS)
 	}
 }
 

@@ -23,9 +23,6 @@ func (s *Service) callEBSJSONWithMutate(ctx context.Context, tenantID, baseURL, 
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
 	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return ebs_fields.EBSParserFields{}, err
-	}
 	url := baseURL + endpoint
 	payload, err := json.Marshal(req)
 	if err != nil {
@@ -45,9 +42,6 @@ func (s *Service) callEBSRawWithMutate(ctx context.Context, tenantID, baseURL, e
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
-	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return ebs_fields.EBSParserFields{}, err
 	}
 	url := baseURL + endpoint
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)

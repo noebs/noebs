@@ -278,33 +278,14 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 	}))
 	t.Cleanup(notificationServer.Close)
 
-	var sawAdminReporting bool
-	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/admin-reporting/transactions" {
-			t.Fatalf("admin-reporting path = %s", r.URL.Path)
-		}
-		assertAdminCommandHeaders(t, r, tenantID)
-		var cmd transactionProjectionCommand
-		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-			t.Fatalf("decode admin-reporting command: %v", err)
-		}
-		if cmd.Transaction == nil || cmd.Transaction.UUID != "quickpay-ebs-uuid" {
-			t.Fatalf("admin-reporting command = %+v", cmd)
-		}
-		sawAdminReporting = true
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	t.Cleanup(adminReportingServer.Close)
-
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: testHTTPClient(),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP: ebsServer.URL + "/",
 			ServiceDiscovery: map[string]string{
-				cardVaultServiceDiscoveryKey:      cardVaultServer.URL,
-				notificationServiceDiscoveryKey:   notificationServer.URL,
-				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
+				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
+				notificationServiceDiscoveryKey: notificationServer.URL,
 			},
 		},
 	}
@@ -331,8 +312,8 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 	if res.UUID != "quickpay-ebs-uuid" {
 		t.Fatalf("EBS response = %+v", res)
 	}
-	if !sawResolve || !sawMarkPaid || !sawEBS || !sawNotification || !sawAdminReporting {
-		t.Fatalf("sawResolve=%v sawMarkPaid=%v sawEBS=%v sawNotification=%v sawAdminReporting=%v", sawResolve, sawMarkPaid, sawEBS, sawNotification, sawAdminReporting)
+	if !sawResolve || !sawMarkPaid || !sawEBS || !sawNotification {
+		t.Fatalf("sawResolve=%v sawMarkPaid=%v sawEBS=%v sawNotification=%v", sawResolve, sawMarkPaid, sawEBS, sawNotification)
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("ebs-adapter scope should not create user tables, err=%v", err)

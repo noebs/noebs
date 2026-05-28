@@ -126,9 +126,6 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 	if strings.TrimSpace(card.Expiry) == "" {
 		return false, ErrMissingCardExpiry
 	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return false, err
-	}
 
 	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
 	var fields ebs_fields.ConsumerBalanceFields
@@ -176,9 +173,6 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	}
 	if tenantID == "" {
 		return store.ErrMissingTenantID
-	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return err
 	}
 	url := s.NoebsConfig.IPINIp + ebs_fields.QRPublicKey
 	id, _ := uuid.NewRandom()

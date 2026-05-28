@@ -86,24 +86,6 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 	}))
 	t.Cleanup(cardVaultServer.Close)
 
-	var sawAdminReporting bool
-	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/admin-reporting/transactions" {
-			t.Fatalf("admin-reporting path = %s", r.URL.Path)
-		}
-		assertAdminCommandHeaders(t, r, tenantID)
-		var cmd transactionProjectionCommand
-		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-			t.Fatalf("decode admin-reporting command: %v", err)
-		}
-		if cmd.Transaction == nil || cmd.Transaction.UUID != "register-with-card-balance" {
-			t.Fatalf("admin-reporting command = %+v", cmd)
-		}
-		sawAdminReporting = true
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	t.Cleanup(adminReportingServer.Close)
-
 	service := &Service{
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
@@ -113,9 +95,8 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 			EBSConsumerKey:  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4Jj+8WL5ANXllkz9lkOKRmXnDzQ+yS/VFKxKttkk4o5duJPPFZzJ0E3/m1F6xqEVPH2aM2IpSKN/SgeBv9NL6y+qgms7GbpnQ8MCilLIFWNGuTeRzDNVIR7yIqQ0jHX3dgrJyiDp02LQnQtMTRhzOYDZnwOnweixwEzAk8yPEeXQyzp867rUsLZ4jIIChRcI06UTFdMQrd7KZReTt5hunjQLH+qJBaMj1yAQGmf9C10MeC3Nnp4oE7m0OuTkTvekHnsaAtyY+TFg/UBvMQOyp9uJG6OwdvV6doI3MmXg16K6WJx1J1xewG6e28Tvt13z5mEljj8dnWQcqmhuASRlZwIDAQAB",
 			BillInquiryIPIN: "0000",
 			ServiceDiscovery: map[string]string{
-				cardVaultServiceDiscoveryKey:      cardVaultServer.URL,
-				identityAuthServiceDiscoveryKey:   identityServer.URL,
-				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
+				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
+				identityAuthServiceDiscoveryKey: identityServer.URL,
 			},
 		},
 	}
@@ -131,8 +112,8 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 	if err != nil {
 		t.Fatalf("register with card: %v", err)
 	}
-	if !sawEBS || !sawIdentity || !sawCardVault || !sawAdminReporting {
-		t.Fatalf("sawEBS=%v sawIdentity=%v sawCardVault=%v sawAdminReporting=%v", sawEBS, sawIdentity, sawCardVault, sawAdminReporting)
+	if !sawEBS || !sawIdentity || !sawCardVault {
+		t.Fatalf("sawEBS=%v sawIdentity=%v sawCardVault=%v", sawEBS, sawIdentity, sawCardVault)
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("ebs-adapter scope should not create user tables, err=%v", err)

@@ -34,5 +34,5 @@ func (s *Service) recordTransaction(ctx context.Context, tenantID string, res eb
 	if err := s.Store.CreateTransaction(ctx, tenantID, res); err != nil {
 		return err
 	}
-	return s.StoreTransactionProjectionInAdminReporting(ctx, tenantID, res)
+	return nil
 }

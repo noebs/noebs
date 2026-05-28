@@ -41,15 +41,6 @@ func TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError(t *testing.T
 		t.Fatalf("seed cached biller: %v", err)
 	}
 
-	adminReportingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/admin-reporting/transactions" {
-			t.Fatalf("admin-reporting path = %s", r.URL.Path)
-		}
-		assertAdminCommandHeaders(t, r, tenantID)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	t.Cleanup(adminReportingServer.Close)
-
 	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/"+ebs_fields.ConsumerBillInquiryEndpoint {
 			t.Fatalf("EBS path = %s", r.URL.Path)
@@ -82,9 +73,6 @@ func TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError(t *testing.T
 			BillInquiryIPIN:    "0000",
 			BillInquiryPAN:     "9222081700009999",
 			BillInquiryExpDate: "2601",
-			ServiceDiscovery: map[string]string{
-				adminReportingServiceDiscoveryKey: adminReportingServer.URL,
-			},
 		},
 	}
 

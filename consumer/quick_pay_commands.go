@@ -17,11 +17,10 @@ import (
 )
 
 const (
-	cardVaultServiceDiscoveryKey      = "card-vault"
-	identityAuthServiceDiscoveryKey   = "identity-auth"
-	notificationServiceDiscoveryKey   = "notification-chat"
-	adminReportingServiceDiscoveryKey = "admin-reporting"
-	internalTenantIDHeader            = "X-Tenant-ID"
+	cardVaultServiceDiscoveryKey    = "card-vault"
+	identityAuthServiceDiscoveryKey = "identity-auth"
+	notificationServiceDiscoveryKey = "notification-chat"
+	internalTenantIDHeader          = "X-Tenant-ID"
 )
 
 type serviceCommandTarget struct {
@@ -49,12 +48,6 @@ var (
 		missingErr:   ErrMissingNotification,
 		invalidErr:   ErrInvalidNotification,
 		commandErr:   ErrNotificationCommand,
-	}
-	adminReportingCommandTarget = serviceCommandTarget{
-		discoveryKey: adminReportingServiceDiscoveryKey,
-		missingErr:   ErrMissingAdminReporting,
-		invalidErr:   ErrInvalidAdminReporting,
-		commandErr:   ErrAdminReportingCommand,
 	}
 )
 
@@ -304,8 +297,6 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingStore
 	case ErrNotificationCommand.Error():
 		return ErrNotificationCommand
-	case ErrAdminReportingCommand.Error():
-		return ErrAdminReportingCommand
 	case ErrMissingMobile.Error():
 		return ErrMissingMobile
 	case ErrMissingPassword.Error():

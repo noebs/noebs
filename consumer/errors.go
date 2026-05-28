@@ -35,9 +35,6 @@ var (
 	ErrNotificationCommand       = errors.New("notification_chat_command_failed")
 	ErrInvalidBillerHookEndpoint = errors.New("invalid_biller_hook_endpoint")
 	ErrBillerHookPost            = errors.New("biller_hook_post_failed")
-	ErrMissingAdminReporting     = errors.New("missing_admin_reporting_service_discovery")
-	ErrInvalidAdminReporting     = errors.New("invalid_admin_reporting_service_discovery")
-	ErrAdminReportingCommand     = errors.New("admin_reporting_command_failed")
 
 	// Registration
 	ErrMissingMobile     = errors.New("missing mobile")

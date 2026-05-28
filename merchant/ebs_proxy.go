@@ -11,12 +11,9 @@ import (
 )
 
 var (
-	ErrMissingService        = errors.New("missing merchant service")
-	ErrMissingStore          = errors.New("missing merchant store")
-	ErrMissingHTTPClient     = errors.New("missing_http_client")
-	ErrMissingAdminReporting = errors.New("missing_admin_reporting_service_discovery")
-	ErrInvalidAdminReporting = errors.New("invalid_admin_reporting_service_discovery")
-	ErrAdminReportingCommand = errors.New("admin_reporting_command_failed")
+	ErrMissingService    = errors.New("missing merchant service")
+	ErrMissingStore      = errors.New("missing merchant store")
+	ErrMissingHTTPClient = errors.New("missing_http_client")
 )
 
 func (s *Service) callEBSJSON(ctx context.Context, tenantID, endpoint string, req any) (ebs_fields.EBSParserFields, error) {
@@ -28,9 +25,6 @@ func (s *Service) callEBSJSON(ctx context.Context, tenantID, endpoint string, re
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
-	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return ebs_fields.EBSParserFields{}, err
 	}
 	url := s.NoebsConfig.MerchantIP + endpoint
 	payload, err := json.Marshal(req)
@@ -50,9 +44,6 @@ func (s *Service) callEBSRaw(ctx context.Context, tenantID, endpoint string, pay
 	}
 	if tenantID == "" {
 		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
-	}
-	if err := s.requireTransactionProjectionTarget(); err != nil {
-		return ebs_fields.EBSParserFields{}, err
 	}
 	url := s.NoebsConfig.MerchantIP + endpoint
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)

@@ -73,13 +73,9 @@ func statusForError(err error) int {
 		return http.StatusBadRequest
 	case store.ErrNotFound(err):
 		return http.StatusNotFound
-	case errors.Is(err, merchant.ErrAdminReportingCommand):
-		return http.StatusBadGateway
 	case errors.Is(err, merchant.ErrMissingService),
 		errors.Is(err, merchant.ErrMissingStore),
 		errors.Is(err, merchant.ErrMissingHTTPClient),
-		errors.Is(err, merchant.ErrMissingAdminReporting),
-		errors.Is(err, merchant.ErrInvalidAdminReporting),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable
 	default:

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -61,6 +62,37 @@ func TestAdminReportingOwnsInternalTransactionProjectionCommand(t *testing.T) {
 	}()
 	if resp.StatusCode == http.StatusNotFound {
 		t.Fatalf("admin-reporting did not register transaction projection command")
+	}
+}
+
+func TestPaymentServicesDoNotCommandAdminReporting(t *testing.T) {
+	forbidden := []string{
+		"/internal/admin-reporting/transactions",
+		"admin_reporting_command_failed",
+		"missing_admin_reporting_service_discovery",
+		"invalid_admin_reporting_service_discovery",
+	}
+	for _, packageDir := range []string{"consumer", "merchant"} {
+		dir := filepath.Join("..", packageDir)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read %s: %v", dir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			for _, needle := range forbidden {
+				if strings.Contains(string(data), needle) {
+					t.Fatalf("%s contains %q; payment services must not synchronously command admin-reporting", path, needle)
+				}
+			}
+		}
 	}
 }
 

@@ -128,7 +128,6 @@ func statusForError(err error) int {
 	case errors.Is(err, consumer.ErrCardVaultCommand),
 		errors.Is(err, consumer.ErrIdentityAuthCommand),
 		errors.Is(err, consumer.ErrNotificationCommand),
-		errors.Is(err, consumer.ErrAdminReportingCommand),
 		errors.Is(err, consumer.ErrBillerHookPost),
 		errors.Is(err, consumer.ErrInvalidPaymentInfo),
 		errors.Is(err, consumer.ErrMissingIssuedPAN),
@@ -145,8 +144,6 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrMissingNotification),
 		errors.Is(err, consumer.ErrInvalidNotification),
 		errors.Is(err, consumer.ErrInvalidBillerHookEndpoint),
-		errors.Is(err, consumer.ErrMissingAdminReporting),
-		errors.Is(err, consumer.ErrInvalidAdminReporting),
 		errors.Is(err, store.ErrMissingDataKey),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable

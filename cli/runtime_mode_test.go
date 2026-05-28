@@ -375,10 +375,10 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingNotification); err == nil {
 		t.Fatalf("ebs-adapter should require notification-chat service discovery")
 	}
-	missingAdminReporting := explicitEBSRuntimeConfig()
-	delete(missingAdminReporting.ServiceDiscovery, string(serviceRoleAdminReporting))
-	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingAdminReporting); err == nil {
-		t.Fatalf("ebs-adapter should require admin-reporting service discovery")
+	withoutAdminReporting := explicitEBSRuntimeConfig()
+	delete(withoutAdminReporting.ServiceDiscovery, string(serviceRoleAdminReporting))
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, withoutAdminReporting); err != nil {
+		t.Fatalf("ebs-adapter should not require admin-reporting service discovery: %v", err)
 	}
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
 		t.Fatalf("identity-auth should not require EBS endpoint config: %v", err)
@@ -413,10 +413,9 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 			CustomFees:         85,
 		},
 		ServiceDiscovery: map[string]string{
-			string(serviceRoleIdentityAuth):   "http://identity-auth:8080",
-			string(serviceRoleCardVault):      "http://card-vault:8080",
-			string(serviceRoleNotification):   "http://notification-chat:8080",
-			string(serviceRoleAdminReporting): "http://admin-reporting:8080",
+			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
+			string(serviceRoleCardVault):    "http://card-vault:8080",
+			string(serviceRoleNotification): "http://notification-chat:8080",
 		},
 	}
 }
