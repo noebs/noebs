@@ -24,6 +24,7 @@ Last updated: 2026-05-28
 - [x] Installed and used `golangci-lint` locally and on the server gate path.
 - [x] Scrubbed ambient environment inheritance from SOPS release-secret encryption.
 - [x] Replaced SOPS CLI decryption's `SOPS_AGE_KEY_FILE` interface with an in-process age decrypt path.
+- [x] Added a current-secret-aware Kubernetes release input template command that prints only missing field placeholders.
 
 ## Current Server State
 

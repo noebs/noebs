@@ -46,6 +46,21 @@ func auditKubernetesReleaseInputsCommand() error {
 	return nil
 }
 
+func renderKubernetesReleaseInputTemplateCommand() error {
+	if len(os.Args) != 3 && len(os.Args) != 4 {
+		return errors.New("usage: noebs render-kubernetes-release-input-template <legacy-root> [inputs-yaml]")
+	}
+	inputsPath := ""
+	if len(os.Args) == 4 {
+		inputsPath = os.Args[3]
+	}
+	audit, err := auditKubernetesReleaseInputs(os.Args[2], inputsPath, decryptSopsFile)
+	if err != nil {
+		return err
+	}
+	return writeKubernetesReleaseInputTemplate(os.Stdout, audit)
+}
+
 func auditKubernetesReleaseInputs(legacyRoot, inputsPath string, decrypt deploymentDecryptFunc) (kubernetesReleaseInputAudit, error) {
 	legacyRoot, err := resolveDeploymentRoot(legacyRoot)
 	if err != nil {
@@ -188,4 +203,123 @@ func writeKubernetesReleaseInputAudit(w io.Writer, audit kubernetesReleaseInputA
 		return fmt.Errorf("write kubernetes release input audit: %w", err)
 	}
 	return nil
+}
+
+type kubernetesReleaseTemplateField struct {
+	label       string
+	key         string
+	placeholder string
+	section     string
+}
+
+var kubernetesReleaseTemplateFields = []kubernetesReleaseTemplateField{
+	{label: "noebs.default_tenant_id", key: "default_tenant_id", placeholder: "REPLACE_WITH_TENANT_ID"},
+	{label: "noebs.admin_key", key: "admin_key", placeholder: "REPLACE_WITH_GATEWAY_ADMIN_KEY"},
+	{label: "noebs.admin_user", key: "admin_user", placeholder: "REPLACE_WITH_GATEWAY_ADMIN_USER"},
+	{label: "noebs.admin_password", key: "admin_password", placeholder: "REPLACE_WITH_GATEWAY_ADMIN_PASSWORD"},
+	{label: "noebs.sms_key", key: "sms_key", placeholder: "REPLACE_WITH_SMS_API_KEY"},
+	{label: "noebs.sms_sender", key: "sms_sender", placeholder: "REPLACE_WITH_SMS_SENDER"},
+	{label: "noebs.sms_gateway", key: "sms_gateway", placeholder: "REPLACE_WITH_SMS_GATEWAY"},
+	{label: "noebs.sms_message", key: "sms_message", placeholder: "REPLACE_WITH_SMS_MESSAGE"},
+	{label: "noebs.google_client_id", key: "google_client_id", placeholder: "REPLACE_WITH_GOOGLE_CLIENT_ID"},
+	{label: "noebs.google_client_secret", key: "google_client_secret", placeholder: "REPLACE_WITH_GOOGLE_CLIENT_SECRET"},
+	{label: "noebs.google_redirect_url", key: "google_redirect_url", placeholder: "REPLACE_WITH_GOOGLE_REDIRECT_URL"},
+	{label: "noebs.card_vault_data_key", key: "card_vault_data_key", placeholder: "REPLACE_WITH_CARD_VAULT_DATA_KEY"},
+	{label: "noebs.temporal_postgres_password", key: "temporal_postgres_password", placeholder: "REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD"},
+	{label: "noebs.keycloak_postgres_password", key: "keycloak_postgres_password", placeholder: "REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD"},
+	{label: "noebs.keycloak_bootstrap_admin_username", key: "keycloak_bootstrap_admin_username", placeholder: "REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME"},
+	{label: "noebs.keycloak_bootstrap_admin_password", key: "keycloak_bootstrap_admin_password", placeholder: "REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD"},
+	{label: "noebs.ebs.consumer_endpoint", key: "consumer_endpoint", placeholder: "REPLACE_WITH_EBS_CONSUMER_ENDPOINT", section: "ebs"},
+	{label: "noebs.ebs.merchant_endpoint", key: "merchant_endpoint", placeholder: "REPLACE_WITH_EBS_MERCHANT_ENDPOINT", section: "ebs"},
+	{label: "noebs.ebs.ipin_endpoint", key: "ipin_endpoint", placeholder: "REPLACE_WITH_EBS_IPIN_ENDPOINT", section: "ebs"},
+	{label: "noebs.ebs.consumer_app_id", key: "consumer_app_id", placeholder: "REPLACE_WITH_EBS_CONSUMER_APP_ID", section: "ebs"},
+	{label: "noebs.ebs.merchant_app_id", key: "merchant_app_id", placeholder: "REPLACE_WITH_EBS_MERCHANT_APP_ID", section: "ebs"},
+	{label: "noebs.ebs.ipin_username", key: "ipin_username", placeholder: "REPLACE_WITH_EBS_IPIN_USERNAME", section: "ebs"},
+	{label: "noebs.ebs.ipin_password", key: "ipin_password", placeholder: "REPLACE_WITH_EBS_IPIN_PASSWORD", section: "ebs"},
+	{label: "noebs.ebs.pub_key", key: "pub_key", placeholder: "REPLACE_WITH_EBS_CONSUMER_PUBLIC_KEY", section: "ebs"},
+	{label: "noebs.ebs.ipin_key", key: "ipin_key", placeholder: "REPLACE_WITH_EBS_IPIN_PUBLIC_KEY", section: "ebs"},
+	{label: "noebs.ebs.pan", key: "pan", placeholder: "REPLACE_WITH_BILL_INQUIRY_PAN", section: "ebs"},
+	{label: "noebs.ebs.pin", key: "pin", placeholder: "REPLACE_WITH_BILL_INQUIRY_PIN", section: "ebs"},
+	{label: "noebs.ebs.ipin", key: "ipin", placeholder: "REPLACE_WITH_BILL_INQUIRY_IPIN", section: "ebs"},
+	{label: "noebs.ebs.exp_date", key: "exp_date", placeholder: "REPLACE_WITH_BILL_INQUIRY_EXPIRY", section: "ebs"},
+}
+
+func writeKubernetesReleaseInputTemplate(w io.Writer, audit kubernetesReleaseInputAudit) error {
+	missing := make(map[string]bool, len(audit.Missing))
+	for _, label := range audit.Missing {
+		missing[label] = true
+	}
+	known := map[string]bool{"noebs.psp": true}
+	for _, field := range kubernetesReleaseTemplateFields {
+		known[field.label] = true
+	}
+	var unsupported []string
+	for _, label := range audit.Missing {
+		if !known[label] {
+			unsupported = append(unsupported, label)
+		}
+	}
+	if len(unsupported) != 0 {
+		return fmt.Errorf("cannot template fields that must come from the current secret: %s", strings.Join(unsupported, ", "))
+	}
+	if len(audit.Duplicate) != 0 || len(audit.Invalid) != 0 {
+		return fmt.Errorf("kubernetes release input audit has duplicate or invalid fields")
+	}
+
+	root := &yaml.Node{Kind: yaml.MappingNode}
+	noebs := &yaml.Node{Kind: yaml.MappingNode}
+	var ebs *yaml.Node
+	for _, field := range kubernetesReleaseTemplateFields {
+		if !missing[field.label] {
+			continue
+		}
+		if field.section == "ebs" {
+			if ebs == nil {
+				ebs = &yaml.Node{Kind: yaml.MappingNode}
+			}
+			appendYAMLScalar(ebs, field.key, field.placeholder)
+			continue
+		}
+		appendYAMLScalar(noebs, field.key, field.placeholder)
+	}
+	if ebs != nil {
+		appendYAMLNode(noebs, "ebs", ebs)
+	}
+	if missing["noebs.psp"] {
+		appendYAMLNode(noebs, "psp", kubernetesReleasePSPTemplateNode())
+	}
+	appendYAMLNode(root, "noebs", noebs)
+
+	encoder := yaml.NewEncoder(w)
+	encoder.SetIndent(2)
+	defer func() {
+		_ = encoder.Close()
+	}()
+	if err := encoder.Encode(root); err != nil {
+		return fmt.Errorf("write kubernetes release input template: %w", err)
+	}
+	return nil
+}
+
+func appendYAMLScalar(parent *yaml.Node, key, value string) {
+	appendYAMLNode(parent, key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+}
+
+func appendYAMLNode(parent *yaml.Node, key string, value *yaml.Node) {
+	parent.Content = append(parent.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, value)
+}
+
+func kubernetesReleasePSPTemplateNode() *yaml.Node {
+	provider := &yaml.Node{Kind: yaml.MappingNode}
+	appendYAMLScalar(provider, "api_key", "REPLACE_WITH_PSP_API_KEY")
+	appendYAMLScalar(provider, "api_secret", "REPLACE_WITH_PSP_API_SECRET")
+	appendYAMLScalar(provider, "webhook_secret", "REPLACE_WITH_PSP_WEBHOOK_SECRET")
+	appendYAMLScalar(provider, "webhook_public_key", "REPLACE_WITH_PSP_WEBHOOK_PUBLIC_KEY")
+
+	tenant := &yaml.Node{Kind: yaml.MappingNode}
+	appendYAMLNode(tenant, "REPLACE_WITH_PROVIDER_CODE", provider)
+
+	psp := &yaml.Node{Kind: yaml.MappingNode}
+	appendYAMLNode(psp, "REPLACE_WITH_TENANT_ID", tenant)
+	return psp
 }

@@ -37,6 +37,14 @@ noebs prepare-kubernetes-release /path/to/noebs-repo /path/to/current-noebs-root
 
 `kubernetes-release.inputs.yaml.example` documents the required encrypted cutover input shape. The real file must be SOPS-encrypted with the same Age key used by the current Noebs root.
 
+To avoid duplicating values already transformed from the current encrypted root, render a current-secret-aware template first. The template prints placeholders for missing cutover fields only and never prints current secret values:
+
+```sh
+noebs render-kubernetes-release-input-template /path/to/current-noebs-root > /path/to/kubernetes-release.inputs.yaml.plain
+```
+
+Fill the placeholders, then encrypt the real `kubernetes-release.inputs.yaml` with the current root Age recipient. Do not add values already omitted from the template; those are transformed from the current encrypted root.
+
 ```sh
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
 ```

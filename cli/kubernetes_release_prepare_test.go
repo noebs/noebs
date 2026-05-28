@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/adonese/noebs/store"
+	"gopkg.in/yaml.v3"
 )
 
 func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
@@ -305,6 +306,94 @@ func TestAuditKubernetesReleaseInputsReportsDuplicatesAndDoesNotPrintSecretValue
 		if strings.Contains(out.String(), secretValue) {
 			t.Fatalf("audit output leaked secret value %q:\n%s", secretValue, out.String())
 		}
+	}
+}
+
+func TestKubernetesReleaseInputTemplateOmitsCurrentSecretValues(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	var out strings.Builder
+	if err := writeKubernetesReleaseInputTemplate(&out, audit); err != nil {
+		t.Fatalf("writeKubernetesReleaseInputTemplate() error = %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := yaml.Unmarshal([]byte(out.String()), &decoded); err != nil {
+		t.Fatalf("template is not valid YAML: %v\n%s", err, out.String())
+	}
+	noebs := getMap(decoded, "noebs")
+	if got := firstString(noebs, "admin_key"); got != "REPLACE_WITH_GATEWAY_ADMIN_KEY" {
+		t.Fatalf("admin_key placeholder = %q", got)
+	}
+	if got := firstString(noebs, "google_client_id"); got != "" {
+		t.Fatalf("google_client_id placeholder = %q, want omitted because current secret owns it", got)
+	}
+	if got := firstString(noebs, "google_client_secret"); got != "" {
+		t.Fatalf("google_client_secret placeholder = %q, want omitted because current secret owns it", got)
+	}
+	ebs := getMap(noebs, "ebs")
+	if got := firstString(ebs, "consumer_endpoint"); got != "REPLACE_WITH_EBS_CONSUMER_ENDPOINT" {
+		t.Fatalf("consumer endpoint placeholder = %q", got)
+	}
+	psp := getMap(noebs, "psp")
+	if len(psp) == 0 {
+		t.Fatalf("psp placeholder missing from template:\n%s", out.String())
+	}
+
+	for _, secretValue := range []string{
+		"legacy-user",
+		"legacy-pass",
+		"jwt-secret",
+		"legacy-google-client-id",
+		"legacy-google-client-secret",
+	} {
+		if strings.Contains(out.String(), secretValue) {
+			t.Fatalf("template leaked secret/current value %q:\n%s", secretValue, out.String())
+		}
+	}
+}
+
+func TestKubernetesReleaseInputTemplateUsesExistingInputs(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, inputsPath, readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	var out strings.Builder
+	if err := writeKubernetesReleaseInputTemplate(&out, audit); err != nil {
+		t.Fatalf("writeKubernetesReleaseInputTemplate() error = %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := yaml.Unmarshal([]byte(out.String()), &decoded); err != nil {
+		t.Fatalf("template is not valid YAML: %v\n%s", err, out.String())
+	}
+	noebs := getMap(decoded, "noebs")
+	if len(noebs) != 0 {
+		t.Fatalf("template noebs = %#v, want empty because inputs plus current secret cover release", noebs)
+	}
+}
+
+func TestKubernetesReleaseInputTemplateRejectsCurrentSecretOnlyMissing(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
+	payload = strings.ReplaceAll(payload, `  db_url: "postgres://legacy-user:legacy-pass@legacy-db:5432/noebs?sslmode=disable"`+"\n", "")
+	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	var out strings.Builder
+	err = writeKubernetesReleaseInputTemplate(&out, audit)
+	if err == nil || !strings.Contains(err.Error(), "noebs.db_url from current secret") {
+		t.Fatalf("writeKubernetesReleaseInputTemplate() error = %v, want current-secret-only rejection", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("template output = %q, want empty on current-secret-only rejection", out.String())
 	}
 }
 

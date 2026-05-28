@@ -44,6 +44,10 @@ func isPrepareKubernetesReleaseCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "prepare-kubernetes-release"
 }
 
+func isRenderKubernetesReleaseInputTemplateCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "render-kubernetes-release-input-template"
+}
+
 func isConfigUtilityCommand() bool {
 	return isRenderConfigCommand() ||
 		isRenderDatabasePasswordCommand() ||
@@ -51,6 +55,7 @@ func isConfigUtilityCommand() bool {
 		isValidateKubernetesDeploymentCommand() ||
 		isRenderKubernetesSecretsCommand() ||
 		isPrepareKubernetesReleaseCommand() ||
+		isRenderKubernetesReleaseInputTemplateCommand() ||
 		isAuditKubernetesReleaseInputsCommand()
 }
 

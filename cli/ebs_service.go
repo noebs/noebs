@@ -83,6 +83,12 @@ func main() {
 		}
 		return
 	}
+	if isRenderKubernetesReleaseInputTemplateCommand() {
+		if err := renderKubernetesReleaseInputTemplateCommand(); err != nil {
+			logrusLogger.Fatalf("render kubernetes release input template failed: %v", err)
+		}
+		return
+	}
 	if isAuditKubernetesReleaseInputsCommand() {
 		if err := auditKubernetesReleaseInputsCommand(); err != nil {
 			logrusLogger.Fatalf("audit kubernetes release inputs failed: %v", err)
