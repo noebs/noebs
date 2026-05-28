@@ -33,7 +33,7 @@ func (s *Server) claimsFromContext(ctx context.Context) (*gateway.TokenClaims, e
 	if err != nil {
 		return nil, err
 	}
-	if tenantID == "" && userID == "" && mobile == "" {
+	if !hasGatewayIdentityValues(tenantID, userID, mobile) {
 		return nil, nil
 	}
 	identity, err := gateway.ParseInternalUserIdentity(tenantID, userID, mobile)
@@ -69,6 +69,15 @@ func singleGatewayMetadataValue(md metadata.MD, header string) (string, error) {
 	return values[0], nil
 }
 
+func hasGatewayIdentityValues(values ...string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if claims == nil {
@@ -78,10 +87,7 @@ func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, e
 	if err != nil {
 		return "", status.Error(codes.Unauthenticated, "missing tenant in gateway identity")
 	}
-	if tenantID == "" {
-		return authenticated, nil
-	}
-	tenantID, err = validateGRPCTenantID(tenantID)
+	tenantID, err = requestTenantID(tenantID, authenticated)
 	if err != nil {
 		return "", err
 	}
@@ -89,6 +95,13 @@ func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, e
 		return "", status.Error(codes.PermissionDenied, "tenant mismatch")
 	}
 	return authenticated, nil
+}
+
+func requestTenantID(requested, authenticated string) (string, error) {
+	if strings.TrimSpace(requested) == "" {
+		return authenticated, nil
+	}
+	return validateGRPCTenantID(requested)
 }
 
 func validateGRPCTenantID(tenantID string) (string, error) {
