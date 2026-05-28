@@ -70,6 +70,46 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 	}
 }
 
+func TestLegacyInsecureOTPRouteIsNotExposed(t *testing.T) {
+	ensureInit()
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.method == http.MethodPost && spec.path == "/consumer/otp/generate_insecure" {
+			t.Fatalf("%s must not be proxied by api-gateway", spec.path)
+		}
+	}
+
+	tests := []struct {
+		name  string
+		setup func(*testing.T)
+	}{
+		{
+			name: "api gateway",
+			setup: func(t *testing.T) {
+				t.Helper()
+				configureGatewayProxyForTest(t)
+			},
+		},
+		{
+			name: "identity auth",
+			setup: func(t *testing.T) {
+				t.Helper()
+				setServiceRoleForTest(t, serviceRoleIdentityAuth)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(t)
+			route := GetMainEngine()
+			for _, registered := range route.GetRoutes(true) {
+				if registered.Method == http.MethodPost && registered.Path == "/consumer/otp/generate_insecure" {
+					t.Fatalf("%s registered by %s", registered.Path, tt.name)
+				}
+			}
+		})
+	}
+}
+
 func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)

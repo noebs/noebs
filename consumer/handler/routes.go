@@ -50,7 +50,6 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 
 	// OTP (public)
 	router.Post("/otp/generate", h.GenerateSignInCode)
-	router.Post("/otp/generate_insecure", h.GenerateSignInCodeInsecure)
 	router.Post("/otp/login", h.SingleLoginHandler)
 	router.Post("/otp/verify", h.VerifyOTP)
 

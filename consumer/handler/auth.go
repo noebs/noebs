@@ -225,14 +225,10 @@ func (h *Handler) ChangePassword(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GenerateSignInCode(c *fiber.Ctx) error {
-	return h.generateSignInCode(c, false)
+	return h.generateSignInCode(c)
 }
 
-func (h *Handler) GenerateSignInCodeInsecure(c *fiber.Ctx) error {
-	return h.generateSignInCode(c, true)
-}
-
-func (h *Handler) generateSignInCode(c *fiber.Ctx, _ bool) error {
+func (h *Handler) generateSignInCode(c *fiber.Ctx) error {
 	if h == nil || h.Service == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
 	}

@@ -141,7 +141,6 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/refresh", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/otp/generate", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/otp/generate_insecure", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/otp/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/otp/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/auth/google", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
