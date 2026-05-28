@@ -72,8 +72,23 @@ func TestGetWalletValidation(t *testing.T) {
 	_, err := s.GetWallet(t.Context(), "", uuid.New())
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.GetWallet(t.Context(), "default", uuid.New())
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.GetWallet(t.Context(), "tenant", uuid.Nil)
 	assertErrorIs(t, err, ErrMissingWalletID)
+}
+
+func TestEnsureSystemWalletsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.EnsureSystemWallets(t.Context(), "", "USD")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.EnsureSystemWallets(t.Context(), "default", "USD")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingCurrency)
 }
 
 func TestListWalletLedgerEntriesValidation(t *testing.T) {
@@ -110,6 +125,9 @@ func TestGetWalletByOwnerValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetWalletByOwner(t.Context(), "", OwnerTypeUser, "user-1", "USD")
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetWalletByOwner(t.Context(), "default", OwnerTypeUser, "user-1", "USD")
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.GetWalletByOwner(t.Context(), "tenant", "", "user-1", "USD")
 	assertErrorIs(t, err, ErrMissingOwnerType)
@@ -782,6 +800,9 @@ func TestUpdateWalletPINValidation(t *testing.T) {
 	s := &Store{}
 	err := s.UpdateWalletPIN(t.Context(), "", uuid.New(), "hash", time.Now().UTC())
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateWalletPIN(t.Context(), "default", uuid.New(), "hash", time.Now().UTC())
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.Nil, "hash", time.Now().UTC())
 	assertErrorIs(t, err, ErrMissingWalletID)

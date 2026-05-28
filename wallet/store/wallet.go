@@ -58,8 +58,9 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 }
 
 func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*Wallet, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if currency == "" {
 		return nil, ErrMissingCurrency
@@ -81,8 +82,9 @@ func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency stri
 }
 
 func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UUID) (*Wallet, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if walletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -103,8 +105,9 @@ func (s *Store) GetWallet(ctx context.Context, tenantID string, walletID uuid.UU
 }
 
 func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, ownerID, currency string) (*Wallet, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if ownerType == "" {
 		return nil, ErrMissingOwnerType
@@ -131,8 +134,9 @@ func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, owner
 }
 
 func (s *Store) UpdateWalletPIN(ctx context.Context, tenantID string, walletID uuid.UUID, pinHash string, updatedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if walletID == uuid.Nil {
 		return ErrMissingWalletID
