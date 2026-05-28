@@ -117,6 +117,8 @@ type composeService struct {
 	Environment any             `yaml:"environment"`
 	EnvFile     any             `yaml:"env_file"`
 	Entrypoint  []string        `yaml:"entrypoint"`
+	Ports       []string        `yaml:"ports"`
+	Profiles    []string        `yaml:"profiles"`
 	Volumes     []string        `yaml:"volumes"`
 	Secrets     []composeSecret `yaml:"secrets"`
 }
@@ -1224,6 +1226,7 @@ func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/temporal.yaml", "/opt/temporal/config/temporal.yaml")
 	requireComposeVolume(t, "temporal", temporal.Volumes, "./deploy/docker/temporal/dynamicconfig.yaml", "/opt/temporal/config/dynamicconfig/docker.yaml")
 	requireComposeSecret(t, "temporal", temporal.Secrets, "temporal_postgres_password", "/opt/temporal/secrets/postgres-password")
+	rejectComposePublishedPorts(t, "temporal", temporal.Ports)
 	temporalStart, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
 	if err != nil {
 		t.Fatalf("read Temporal start script: %v", err)
@@ -1244,6 +1247,7 @@ func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 		t.Fatalf("temporal-ui entrypoint = %v, want ui-server start", temporalUI.Entrypoint)
 	}
 	requireComposeVolume(t, "temporal-ui", temporalUI.Volumes, "./deploy/docker/temporal/ui.yaml", "/home/ui-server/config/development.yaml")
+	rejectComposePublishedPorts(t, "temporal-ui", temporalUI.Ports)
 	requireComposeTopLevelSecret(t, compose.Secrets, "temporal_postgres_password", "./deploy/docker/temporal/postgres-password.txt")
 }
 
@@ -1312,6 +1316,7 @@ func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	}
 	requireComposeSecret(t, "keycloak", keycloak.Secrets, "keycloak_config", "/opt/keycloak/conf/keycloak.conf")
 	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_config", "./deploy/docker/keycloak/keycloak.conf")
+	rejectComposePublishedPorts(t, "keycloak", keycloak.Ports)
 
 	keycloakPostgres, ok := compose.Services["keycloak-postgres"]
 	if !ok {
@@ -1332,6 +1337,33 @@ func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	serviceName, port := parseHTTPDiscoveryEndpoint(t, "keycloak", config.Noebs.ServiceDiscovery["keycloak"])
 	if serviceName != "keycloak" || port != 8080 {
 		t.Fatalf("keycloak service discovery = %s:%d, want keycloak:8080", serviceName, port)
+	}
+}
+
+func TestDockerComposePublishesOnlyAPIGatewayByDefault(t *testing.T) {
+	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+
+	for serviceName, service := range compose.Services {
+		if serviceName == "api-gateway" || serviceName == "caddy" {
+			continue
+		}
+		rejectComposePublishedPorts(t, serviceName, service.Ports)
+	}
+
+	apiGateway, ok := compose.Services["api-gateway"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing api-gateway service")
+	}
+	if !containsString(apiGateway.Ports, "0.0.0.0:8081:8080") {
+		t.Fatalf("api-gateway ports = %v, want host publication on 0.0.0.0:8081", apiGateway.Ports)
+	}
+
+	caddy, ok := compose.Services["caddy"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing caddy service")
+	}
+	if !containsString(caddy.Profiles, "edge") {
+		t.Fatalf("caddy profiles = %v, want edge profile", caddy.Profiles)
 	}
 }
 
@@ -1791,6 +1823,13 @@ func requireComposeSecret(t *testing.T, serviceName string, secrets []composeSec
 		}
 	}
 	t.Fatalf("%s secrets = %v; missing %s target %s", serviceName, secrets, source, target)
+}
+
+func rejectComposePublishedPorts(t *testing.T, serviceName string, ports []string) {
+	t.Helper()
+	if len(ports) != 0 {
+		t.Fatalf("%s must not publish host ports; got %v", serviceName, ports)
+	}
 }
 
 func rejectComposeSecret(t *testing.T, serviceName string, secrets []composeSecret, source string) {

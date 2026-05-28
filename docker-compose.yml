@@ -220,8 +220,6 @@ services:
     secrets:
       - source: temporal_postgres_password
         target: /opt/temporal/secrets/postgres-password
-    ports:
-      - "127.0.0.1:7233:7233"
     networks:
       backend:
         aliases:
@@ -240,8 +238,6 @@ services:
       temporal:
         condition: service_started
     entrypoint: ["/home/ui-server/ui-server", "--root", "/home/ui-server", "--config", "config", "start"]
-    ports:
-      - "127.0.0.1:8233:8080"
     volumes:
       - ./deploy/docker/temporal/ui.yaml:/home/ui-server/config/development.yaml:ro
     networks:
@@ -275,8 +271,6 @@ services:
       keycloak-postgres:
         condition: service_healthy
     command: ["start"]
-    ports:
-      - "127.0.0.1:8082:8080"
     secrets:
       - source: keycloak_config
         target: /opt/keycloak/conf/keycloak.conf
@@ -642,6 +636,7 @@ services:
   caddy:
     <<: *service-defaults
     image: caddy:2-alpine
+    profiles: ["edge"]
     depends_on:
       api-gateway:
         condition: service_healthy
