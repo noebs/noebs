@@ -48,7 +48,7 @@ The `noebs_required_kubernetes_secrets` output exposes this required Secret name
 
 For Docker Compose cutovers on the current host, run `noebs validate-deployment /path/to/noebs-release` against the prepared release directory before replacing the old project. It validates the same explicit config and secret contracts locally, including per-service database ownership, Keycloak inputs, Temporal/Postgres password files, non-reserved tenant IDs, and EBS adapter endpoint/app-id requirements.
 
-Before syncing the Argo CD application, render the runtime Kubernetes Secrets from a Kubernetes release input directory. The directory must use the same file layout as the in-cluster preflight mount: `config.yaml`, runtime and migration role files under `services/*.yaml`, service secret files under `secrets/*.secrets.yaml`, `.sops/age-key.txt`, and platform files under `platform/`. Extra service config or service secret YAML files are rejected so stale monolith or compatibility inputs cannot be carried into a Kubernetes release.
+Before syncing the Argo CD application, render the runtime Kubernetes Secrets from a Kubernetes release input directory. The directory must use the same file layout as the in-cluster preflight mount: `config.yaml`, runtime and migration role files under `services/*.yaml`, service secret files under `secrets/*.secrets.yaml`, `.sops/age-key.txt`, and platform files under `platform/`. Extra top-level, `.sops`, platform, service config, or service secret entries are rejected so stale monolith or compatibility inputs cannot be carried into a Kubernetes release.
 
 ```sh
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -

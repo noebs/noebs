@@ -147,6 +147,20 @@ func TestRenderKubernetesSecretsRejectsUnexpectedServiceSecret(t *testing.T) {
 	}
 }
 
+func TestRenderKubernetesSecretsRejectsUnexpectedRootEntry(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	certPath, keyPath := writeTestTLSPair(t)
+	writePreflightFile(t, root, "config.old.yaml", `noebs:
+  service_role: api-gateway
+`)
+
+	var output bytes.Buffer
+	err := renderKubernetesSecrets(&output, root, "noebs", certPath, keyPath, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release root entry") {
+		t.Fatalf("renderKubernetesSecrets() error = %v, want unexpected root entry rejection", err)
+	}
+}
+
 func TestRenderKubernetesSecretsRejectsInvalidTLSPair(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	certPath := filepath.Join(t.TempDir(), "tls.crt")

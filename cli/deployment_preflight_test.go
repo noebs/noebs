@@ -96,6 +96,26 @@ func TestValidateKubernetesDeploymentRootRejectsUnexpectedServiceConfig(t *testi
 	}
 }
 
+func TestValidateKubernetesDeploymentRootRejectsUnexpectedPlatformFile(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	writePreflightFile(t, root, "platform/temporal-broadcast-address.txt", "temporal:7233\n")
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release platform file") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want unexpected platform file rejection", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsUnexpectedSOPSFile(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	writePreflightFile(t, root, ".sops/old-age-key.txt", "AGE-SECRET-KEY-1OLD\n")
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release SOPS file") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want unexpected SOPS file rejection", err)
+	}
+}
+
 type preflightRootOptions struct {
 	defaultTenantID         string
 	omitEBSConsumerEndpoint bool

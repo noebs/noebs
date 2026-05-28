@@ -155,11 +155,39 @@ func validateKubernetesReleaseServices(root string, configMap map[string]interfa
 }
 
 func validateExactKubernetesReleaseFiles(root string) error {
+	expectedRootEntries := map[string]bool{
+		"config.yaml": true,
+		".sops":       true,
+		"platform":    true,
+		"secrets":     true,
+		"services":    true,
+	}
+	if err := rejectUnexpectedKubernetesReleaseEntries("root entry", root, expectedRootEntries); err != nil {
+		return err
+	}
+
+	expectedSOPSFiles := map[string]bool{
+		"age-key.txt": true,
+	}
+	if err := rejectUnexpectedKubernetesReleaseEntries("SOPS file", filepath.Join(root, ".sops"), expectedSOPSFiles); err != nil {
+		return err
+	}
+
+	expectedPlatformFiles := map[string]bool{
+		"postgres-password.txt":          true,
+		"temporal-postgres-password.txt": true,
+		"keycloak-postgres-password.txt": true,
+		"keycloak.conf":                  true,
+	}
+	if err := rejectUnexpectedKubernetesReleaseEntries("platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
+		return err
+	}
+
 	expectedServiceFiles := make(map[string]bool, len(kubernetesSecretReleaseServiceNames))
 	for _, serviceName := range kubernetesSecretReleaseServiceNames {
 		expectedServiceFiles[serviceName+".yaml"] = true
 	}
-	if err := rejectUnexpectedKubernetesReleaseFiles("service config", filepath.Join(root, "services", "*.yaml"), expectedServiceFiles); err != nil {
+	if err := rejectUnexpectedKubernetesReleaseEntries("service config file", filepath.Join(root, "services"), expectedServiceFiles); err != nil {
 		return err
 	}
 
@@ -167,20 +195,20 @@ func validateExactKubernetesReleaseFiles(root string) error {
 	for _, source := range kubernetesServiceSecretSources {
 		expectedSecretFiles[source.fileName] = true
 	}
-	if err := rejectUnexpectedKubernetesReleaseFiles("service secret", filepath.Join(root, "secrets", "*.yaml"), expectedSecretFiles); err != nil {
+	if err := rejectUnexpectedKubernetesReleaseEntries("service secret file", filepath.Join(root, "secrets"), expectedSecretFiles); err != nil {
 		return err
 	}
 	return nil
 }
 
-func rejectUnexpectedKubernetesReleaseFiles(label, pattern string, expected map[string]bool) error {
-	files, err := filepath.Glob(pattern)
+func rejectUnexpectedKubernetesReleaseEntries(label, dir string, expected map[string]bool) error {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("list Kubernetes release %s files: %w", label, err)
+		return fmt.Errorf("read Kubernetes release %s directory %s: %w", label, dir, err)
 	}
-	for _, file := range files {
-		if !expected[filepath.Base(file)] {
-			return fmt.Errorf("unexpected Kubernetes release %s file %s", label, file)
+	for _, entry := range entries {
+		if !expected[entry.Name()] {
+			return fmt.Errorf("unexpected Kubernetes release %s %s", label, filepath.Join(dir, entry.Name()))
 		}
 	}
 	return nil
