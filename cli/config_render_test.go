@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/adonese/noebs/store"
@@ -142,6 +143,54 @@ litestream:
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "litestream.yml")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("litestream.yml stat error = %v, want %v", err, os.ErrNotExist)
+	}
+}
+
+func TestDecryptSopsFileRequiresExplicitAgeKeyFile(t *testing.T) {
+	t.Setenv("SOPS_AGE_KEY_FILE", "/ambient/key.txt")
+
+	_, err := decryptSopsFile("secrets.yaml", "")
+	if !errors.Is(err, errMissingSopsAgeKeyFile) {
+		t.Fatalf("decryptSopsFile() error = %v, want %v", err, errMissingSopsAgeKeyFile)
+	}
+}
+
+func TestDecryptSopsFileUsesOnlyExplicitAgeKeyEnvironment(t *testing.T) {
+	tmp := t.TempDir()
+	fakeSOPS := filepath.Join(tmp, "sops")
+	if err := os.WriteFile(fakeSOPS, []byte(`#!/bin/sh
+printf 'key=%s\n' "$SOPS_AGE_KEY_FILE"
+printf 'ambient=%s\n' "${AMBIENT_SECRET-unset}"
+printf 'args=%s\n' "$*"
+`), 0o700); err != nil {
+		t.Fatalf("write fake sops: %v", err)
+	}
+	ageKeyFile := filepath.Join(tmp, "age-key.txt")
+	if err := os.WriteFile(ageKeyFile, []byte("AGE-SECRET-KEY-1LOCAL\n"), 0o600); err != nil {
+		t.Fatalf("write age key: %v", err)
+	}
+	secretFile := filepath.Join(tmp, "secrets.yaml")
+	if err := os.WriteFile(secretFile, []byte("noebs: {}\n"), 0o600); err != nil {
+		t.Fatalf("write secret: %v", err)
+	}
+
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("SOPS_AGE_KEY_FILE", "/ambient/key.txt")
+	t.Setenv("AMBIENT_SECRET", "must-not-leak")
+
+	output, err := decryptSopsFile(secretFile, ageKeyFile)
+	if err != nil {
+		t.Fatalf("decryptSopsFile() error = %v", err)
+	}
+	text := string(output)
+	if !strings.Contains(text, "key="+ageKeyFile+"\n") {
+		t.Fatalf("decryptSopsFile output = %q, want explicit age key", text)
+	}
+	if !strings.Contains(text, "ambient=unset\n") {
+		t.Fatalf("decryptSopsFile output = %q, want scrubbed ambient environment", text)
+	}
+	if strings.Contains(text, "must-not-leak") || strings.Contains(text, "/ambient/key.txt") {
+		t.Fatalf("decryptSopsFile output leaked ambient environment: %q", text)
 	}
 }
 

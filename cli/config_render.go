@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/url"
@@ -17,6 +18,8 @@ const (
 	defaultServiceConfigPath = "/app/service.yaml"
 	defaultSecretsPath       = "/app/secrets.yaml"
 )
+
+var errMissingSopsAgeKeyFile = errors.New("missing SOPS age key file")
 
 func isRenderConfigCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-config"
@@ -189,12 +192,22 @@ func optionalExistingPath(path string) (string, error) {
 }
 
 func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
-	cmd := exec.Command("sops", "-d", path)
-	if ageKeyFile != "" {
-		cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+ageKeyFile)
+	ageKeyFile = strings.TrimSpace(ageKeyFile)
+	if ageKeyFile == "" {
+		return nil, fmt.Errorf("%w: noebs.sops_age_key_file", errMissingSopsAgeKeyFile)
 	}
+	if _, err := requiredExistingPath("SOPS age key", ageKeyFile); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command("sops", "-d", path)
+	cmd.Env = []string{"SOPS_AGE_KEY_FILE=" + ageKeyFile}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		if text := strings.TrimSpace(stderr.String()); text != "" {
+			return nil, fmt.Errorf("sops -d %s: %w: %s", path, err, text)
+		}
 		return nil, fmt.Errorf("sops -d %s: %w", path, err)
 	}
 	return output, nil
