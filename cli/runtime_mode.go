@@ -29,6 +29,8 @@ var (
 	errMissingEBSConfig    = errors.New("missing ebs-adapter runtime config")
 	errLegacyEBSConfig     = errors.New("legacy ebs-adapter runtime selector not allowed")
 	errMissingKafkaConfig  = errors.New("missing kafka runtime config")
+	errMissingHealthPort   = errors.New("missing background health port")
+	errHealthNotAllowed    = errors.New("background health not allowed for service role")
 )
 
 const (
@@ -112,6 +114,10 @@ func (r serviceRole) startsAdminReportingProjector() bool {
 	return r == serviceRoleAdminReportingProjector
 }
 
+func (r serviceRole) startsBackgroundHealth() bool {
+	return r == serviceRoleWalletWorker || r == serviceRoleEBSAdapterEvents || r == serviceRoleAdminReportingProjector
+}
+
 func (r serviceRole) startsChat() bool {
 	return r == serviceRoleNotification
 }
@@ -163,6 +169,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	}
 	if err := validateKafkaRuntimeConfig(role, cfg); err != nil {
 		return err
+	}
+	if role.startsBackgroundHealth() && strings.TrimSpace(cfg.Port) == "" {
+		return fmt.Errorf("%w: %s requires noebs.port", errMissingHealthPort, role)
 	}
 	if role == serviceRoleIdentityAuth {
 		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleCardVault); err != nil {

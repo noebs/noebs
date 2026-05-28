@@ -27,6 +27,21 @@ spec:
         - name: wallet-worker
           image: ghcr.io/noebs/noebs:master
           imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /test
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /test
+              port: http
+            periodSeconds: 30
+            failureThreshold: 3
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

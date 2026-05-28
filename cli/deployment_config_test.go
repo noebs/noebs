@@ -1811,6 +1811,11 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"wallet-ledger":             false,
 		"wallet-worker":             false,
 	}
+	backgroundHealthDeployments := map[string]bool{
+		"ebs-adapter-events":        true,
+		"admin-reporting-projector": true,
+		"wallet-worker":             true,
+	}
 
 	for _, object := range objects {
 		switch object.Kind {
@@ -1836,6 +1841,11 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			expectedSubPath := object.Metadata.Name + ".service.yaml"
 			if serviceMount == nil || serviceMount.SubPath != expectedSubPath {
 				t.Fatalf("%s runtime service mount = %#v, want %q", object.Metadata.Name, serviceMount, expectedSubPath)
+			}
+			if backgroundHealthDeployments[object.Metadata.Name] {
+				requireContainerPort(t, object.Metadata.Name, container, "http", 8080)
+				requireHTTPProbe(t, object.Metadata.Name, "readinessProbe", container.ReadinessProbe, "/test", "http", 10, 6)
+				requireHTTPProbe(t, object.Metadata.Name, "livenessProbe", container.LivenessProbe, "/test", "http", 30, 3)
 			}
 		case "Job":
 			if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
@@ -2377,6 +2387,52 @@ func requireMount(t *testing.T, workload string, container manifestContainer, mo
 		return
 	}
 	t.Fatalf("%s/%s missing mount %s", workload, container.Name, mountPath)
+}
+
+func requireContainerPort(t *testing.T, workload string, container manifestContainer, name string, port int) {
+	t.Helper()
+	for _, entry := range container.Ports {
+		gotName, ok := entry["name"].(string)
+		if !ok {
+			t.Fatalf("%s/%s container port entry missing string name: %#v", workload, container.Name, entry)
+		}
+		if gotName != name {
+			continue
+		}
+		gotPort, ok := entry["containerPort"].(int)
+		if !ok {
+			t.Fatalf("%s/%s port %s containerPort = %#v, want int %d", workload, container.Name, name, entry["containerPort"], port)
+		}
+		if gotPort != port {
+			t.Fatalf("%s/%s port %s containerPort = %d, want %d", workload, container.Name, name, gotPort, port)
+		}
+		return
+	}
+	t.Fatalf("%s/%s missing container port %s:%d", workload, container.Name, name, port)
+}
+
+func requireHTTPProbe(t *testing.T, workload, probeName string, probe map[string]any, path, port string, periodSeconds, failureThreshold int) {
+	t.Helper()
+	httpGet, ok := probe["httpGet"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s %s missing httpGet: %#v", workload, probeName, probe)
+	}
+	gotPath, ok := httpGet["path"].(string)
+	if !ok || gotPath != path {
+		t.Fatalf("%s %s httpGet.path = %#v, want %q", workload, probeName, httpGet["path"], path)
+	}
+	gotPort, ok := httpGet["port"].(string)
+	if !ok || gotPort != port {
+		t.Fatalf("%s %s httpGet.port = %#v, want %q", workload, probeName, httpGet["port"], port)
+	}
+	gotPeriod, ok := probe["periodSeconds"].(int)
+	if !ok || gotPeriod != periodSeconds {
+		t.Fatalf("%s %s periodSeconds = %#v, want %d", workload, probeName, probe["periodSeconds"], periodSeconds)
+	}
+	gotFailureThreshold, ok := probe["failureThreshold"].(int)
+	if !ok || gotFailureThreshold != failureThreshold {
+		t.Fatalf("%s %s failureThreshold = %#v, want %d", workload, probeName, probe["failureThreshold"], failureThreshold)
+	}
 }
 
 func requireNoebsSecretVolume(t *testing.T, workload string, container manifestContainer, volumes []manifestVolume) {

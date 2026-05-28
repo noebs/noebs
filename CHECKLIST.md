@@ -5,6 +5,11 @@ Last updated: 2026-05-28
 This file is the migration completion ledger. The task is not complete until
 every item in "Completion Checklist" is checked.
 
+Current answer: the architecture and deployment path are mostly defined, but the
+goal is not complete. Server cutover is still blocked by explicit Kubernetes
+release inputs, generated release Secrets, the live k3s deployment, service
+health verification, and retirement of the old Docker Compose deployment.
+
 ## Status Key
 
 - `[x]` Implemented and locally verified.
@@ -57,6 +62,7 @@ every item in "Completion Checklist" is checked.
 - [x] Refreshed the Caddy apt signing key on `100.102.164.34`; `apt-get update` now runs without the expired-key warning.
 - [x] Added a documentation invariant that the foundation and current-host runbooks list every required Kubernetes cutover Secret, including `ghcr-credentials`.
 - [x] Added an OpenTofu precondition that blocks the Noebs Argo CD application when required Kubernetes Secret keys exist but their values are empty.
+- [x] Added background health endpoints and Kubernetes probes for `wallet-worker`, `ebs-adapter-events`, and `admin-reporting-projector`.
 
 ## Verified Gates
 

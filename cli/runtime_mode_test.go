@@ -87,6 +87,9 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	if serviceRoleEBSAdapterEvents.startsHTTP() || serviceRoleEBSAdapterEvents.startsGRPC() || serviceRoleEBSAdapterEvents.startsWalletWorker() || !serviceRoleEBSAdapterEvents.startsEBSEventPublisher() || serviceRoleEBSAdapterEvents.runsMigrations() {
 		t.Fatalf("ebs-adapter-events role should own only the transaction event publisher")
 	}
+	if !serviceRoleEBSAdapterEvents.startsBackgroundHealth() {
+		t.Fatalf("ebs-adapter-events role should expose background health")
+	}
 	if !serviceRolePSPWebhook.startsHTTP() || serviceRolePSPWebhook.startsGRPC() || serviceRolePSPWebhook.startsWalletWorker() || serviceRolePSPWebhook.runsMigrations() {
 		t.Fatalf("psp-webhook role should own only the HTTP process")
 	}
@@ -95,6 +98,9 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	}
 	if serviceRoleAdminReportingProjector.startsHTTP() || serviceRoleAdminReportingProjector.startsGRPC() || serviceRoleAdminReportingProjector.startsWalletWorker() || !serviceRoleAdminReportingProjector.startsAdminReportingProjector() || serviceRoleAdminReportingProjector.runsMigrations() {
 		t.Fatalf("admin-reporting-projector role should own only the Kafka projector")
+	}
+	if !serviceRoleAdminReportingProjector.startsBackgroundHealth() {
+		t.Fatalf("admin-reporting-projector role should expose background health")
 	}
 	if !serviceRoleNotification.startsHTTP() || !serviceRoleNotification.startsChat() || serviceRoleNotification.startsGRPC() || serviceRoleNotification.startsWalletWorker() || serviceRoleNotification.runsMigrations() {
 		t.Fatalf("notification-chat role should own only the HTTP chat process")
@@ -111,6 +117,28 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	if serviceRoleWalletWorker.startsHTTP() || serviceRoleWalletWorker.startsGRPC() || !serviceRoleWalletWorker.startsWalletWorker() || serviceRoleWalletWorker.runsMigrations() {
 		t.Fatalf("wallet-worker role should own only the Temporal worker process")
 	}
+	if !serviceRoleWalletWorker.startsBackgroundHealth() {
+		t.Fatalf("wallet-worker role should expose background health")
+	}
+	nonBackgroundHealthRoles := []serviceRole{
+		serviceRoleAPIGateway,
+		serviceRoleIdentityAuth,
+		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
+		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleBeneficiary,
+		serviceRoleWalletAPI,
+		serviceRoleWalletLedger,
+	}
+	for _, role := range nonBackgroundHealthRoles {
+		t.Run(string(role)+"/background-health", func(t *testing.T) {
+			if role.startsBackgroundHealth() {
+				t.Fatalf("%s role should not expose background health", role)
+			}
+		})
+	}
 	migrationRoles := []serviceRole{
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
@@ -125,6 +153,9 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 		t.Run(string(role), func(t *testing.T) {
 			if role.startsHTTP() || role.startsGRPC() || role.startsWalletWorker() || role.startsEBSEventPublisher() || role.startsAdminReportingProjector() || !role.runsMigrations() {
 				t.Fatalf("%s role should only run migrations", role)
+			}
+			if role.startsBackgroundHealth() {
+				t.Fatalf("%s migration role should not expose background health", role)
 			}
 			if _, ok := role.migrationScope(); !ok {
 				t.Fatalf("%s role should map to a migration scope", role)
@@ -269,6 +300,7 @@ func TestServiceRoleTemporalOwnership(t *testing.T) {
 
 func validWalletRuntimeConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
+		Port:                             ":8080",
 		WalletEnabled:                    true,
 		TemporalEnabled:                  true,
 		TemporalHost:                     "temporal-frontend",
@@ -486,6 +518,18 @@ func TestServiceRoleRuntimeConfigRequiresKafkaProjectionConfig(t *testing.T) {
 		t.Fatalf("ebs-adapter-events missing publisher poll interval error = %v, want %v", err, errMissingKafkaConfig)
 	}
 
+	adminConfig = kafkaProjectionRuntimeConfig()
+	adminConfig.Port = ""
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReportingProjector, adminConfig); !errors.Is(err, errMissingHealthPort) {
+		t.Fatalf("admin-reporting-projector missing health port error = %v, want %v", err, errMissingHealthPort)
+	}
+
+	publisherConfig = kafkaProjectionRuntimeConfig()
+	publisherConfig.Port = ""
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapterEvents, publisherConfig); !errors.Is(err, errMissingHealthPort) {
+		t.Fatalf("ebs-adapter-events missing health port error = %v, want %v", err, errMissingHealthPort)
+	}
+
 	if err := validateRoleRuntimeConfig(serviceRoleAdminReportingProjector, kafkaProjectionRuntimeConfig()); err != nil {
 		t.Fatalf("admin-reporting-projector kafka projection config error = %v", err)
 	}
@@ -549,10 +593,11 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 
 func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
-		KafkaBrokers:                               []string{"kafka:9092"},
-		KafkaTransactionTopic:                      "noebs-ebs-transactions-v1",
-		AdminReportingKafkaConsumerGroup:           "admin-reporting-projections",
-		EBSTransactionEventPublisherBatchSize:      100,
+		Port:                                  ":8080",
+		KafkaBrokers:                          []string{"kafka:9092"},
+		KafkaTransactionTopic:                 "noebs-ebs-transactions-v1",
+		AdminReportingKafkaConsumerGroup:      "admin-reporting-projections",
+		EBSTransactionEventPublisherBatchSize: 100,
 		EBSTransactionEventPublisherPollIntervalMs: 1000,
 	}
 }
@@ -661,6 +706,12 @@ func TestServiceRoleRuntimeConfigRequiresExplicitGRPCConfig(t *testing.T) {
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletWorkerSchedules(t *testing.T) {
+	missingHealthPort := validWalletRuntimeConfig()
+	missingHealthPort.Port = ""
+	if err := validateRoleRuntimeConfig(serviceRoleWalletWorker, missingHealthPort); !errors.Is(err, errMissingHealthPort) {
+		t.Fatalf("wallet-worker missing health port error = %v, want %v", err, errMissingHealthPort)
+	}
+
 	tests := []struct {
 		name   string
 		mutate func(*ebs_fields.NoebsConfig)

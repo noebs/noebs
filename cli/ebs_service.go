@@ -117,6 +117,12 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if role.startsBackgroundHealth() {
+		if _, err := startBackgroundHealthServer(ctx, role, noebsConfig.Port); err != nil {
+			logrusLogger.Fatalf("error starting background health server: %v", err)
+		}
+	}
+
 	if role.startsGRPC() && grpcServer != nil && grpcListener != nil {
 		go func() {
 			logrusLogger.Printf("grpc server listening on %s", grpcListener.Addr())
