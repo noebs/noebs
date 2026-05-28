@@ -7,8 +7,9 @@ import (
 )
 
 func (s *Store) GetFeeConfigForAmount(ctx context.Context, tenantID, txType, currency string, amount int64) (*FeeConfig, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if txType == "" {
 		return nil, ErrMissingTransactionType
@@ -39,8 +40,9 @@ func (s *Store) GetFeeConfigForAmount(ctx context.Context, tenantID, txType, cur
 }
 
 func (s *Store) ListFeeConfigs(ctx context.Context, filter FeeConfigFilter) ([]FeeConfig, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if filter.Limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -53,7 +55,7 @@ func (s *Store) ListFeeConfigs(ctx context.Context, filter FeeConfigFilter) ([]F
 		return nil, err
 	}
 	query := `SELECT * FROM fee_configs WHERE tenant_id = ?`
-	args := []any{filter.TenantID}
+	args := []any{tenantID}
 	if filter.TransactionType != "" {
 		query += " AND transaction_type = ?"
 		args = append(args, filter.TransactionType)
@@ -76,8 +78,9 @@ func (s *Store) ListFeeConfigs(ctx context.Context, filter FeeConfigFilter) ([]F
 }
 
 func (s *Store) CreateFeeConfig(ctx context.Context, cfg FeeConfig) (*FeeConfig, error) {
-	if cfg.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(cfg.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if cfg.TransactionType == "" {
 		return nil, ErrMissingTransactionType
@@ -112,7 +115,7 @@ func (s *Store) CreateFeeConfig(ctx context.Context, cfg FeeConfig) (*FeeConfig,
 	RETURNING *`)
 	var stored FeeConfig
 	if err := db.GetContext(ctx, &stored, stmt,
-		cfg.TenantID,
+		tenantID,
 		cfg.TransactionType,
 		cfg.Currency,
 		cfg.TierMin,

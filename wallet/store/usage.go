@@ -8,8 +8,9 @@ import (
 )
 
 func (s *Store) GetDailyUsage(ctx context.Context, tenantID string, walletID uuid.UUID, txType string) (int64, error) {
-	if tenantID == "" {
-		return 0, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return 0, err
 	}
 	if walletID == uuid.Nil {
 		return 0, ErrMissingWalletID
@@ -36,8 +37,9 @@ func (s *Store) GetDailyUsage(ctx context.Context, tenantID string, walletID uui
 }
 
 func (s *Store) GetMonthlyUsage(ctx context.Context, tenantID string, walletID uuid.UUID, txType string) (int64, error) {
-	if tenantID == "" {
-		return 0, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return 0, err
 	}
 	if walletID == uuid.Nil {
 		return 0, ErrMissingWalletID

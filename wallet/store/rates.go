@@ -9,8 +9,9 @@ import (
 )
 
 func (s *Store) GetActiveRate(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (*ExchangeRate, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if baseCurrency == "" {
 		return nil, ErrMissingBaseCurrency
@@ -39,8 +40,9 @@ func (s *Store) GetActiveRate(ctx context.Context, tenantID, baseCurrency, quote
 }
 
 func (s *Store) ListExchangeRates(ctx context.Context, filter ExchangeRateFilter) ([]ExchangeRate, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if filter.Limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -53,7 +55,7 @@ func (s *Store) ListExchangeRates(ctx context.Context, filter ExchangeRateFilter
 		return nil, err
 	}
 	query := `SELECT * FROM exchange_rates WHERE tenant_id = ?`
-	args := []any{filter.TenantID}
+	args := []any{tenantID}
 	if filter.BaseCurrency != "" {
 		query += " AND base_currency = ?"
 		args = append(args, filter.BaseCurrency)
@@ -77,8 +79,9 @@ func (s *Store) ListExchangeRates(ctx context.Context, filter ExchangeRateFilter
 }
 
 func (s *Store) CreateExchangeRate(ctx context.Context, rate ExchangeRate) (*ExchangeRate, error) {
-	if rate.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(rate.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if rate.BaseCurrency == "" {
 		return nil, ErrMissingBaseCurrency
@@ -110,7 +113,7 @@ func (s *Store) CreateExchangeRate(ctx context.Context, rate ExchangeRate) (*Exc
 	RETURNING *`)
 	var stored ExchangeRate
 	if err := db.GetContext(ctx, &stored, stmt,
-		rate.TenantID,
+		tenantID,
 		rate.BaseCurrency,
 		rate.QuoteCurrency,
 		rate.BuyRate,

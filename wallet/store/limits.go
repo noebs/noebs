@@ -6,8 +6,9 @@ import (
 )
 
 func (s *Store) GetLimits(ctx context.Context, tenantID, kycTier, txType, currency string) (*TransactionLimit, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if kycTier == "" {
 		return nil, ErrMissingKYCTier

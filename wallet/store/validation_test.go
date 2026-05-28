@@ -596,11 +596,32 @@ func TestListFeeConfigsValidation(t *testing.T) {
 	_, err := s.ListFeeConfigs(t.Context(), FeeConfigFilter{})
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "default", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", Limit: 0})
 	assertErrorIs(t, err, ErrInvalidLimit)
 
 	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", Limit: 10, Offset: -1})
 	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
+func TestGetFeeConfigForAmountValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetFeeConfigForAmount(t.Context(), "", "deposit", "USD", 100)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetFeeConfigForAmount(t.Context(), "default", "deposit", "USD", 100)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "", "USD", 100)
+	assertErrorIs(t, err, ErrMissingTransactionType)
+
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "", 100)
+	assertErrorIs(t, err, ErrMissingCurrency)
+
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", -1)
+	assertErrorIs(t, err, ErrInvalidAmount)
 }
 
 func TestCreateFeeConfigValidation(t *testing.T) {
@@ -620,6 +641,11 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingTenantID)
 
 	bad := cfg
+	bad.TenantID = "default"
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = cfg
 	bad.TransactionType = ""
 	_, err = s.CreateFeeConfig(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingTransactionType)
@@ -640,16 +666,82 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidPercentage)
 }
 
+func TestGetLimitsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetLimits(t.Context(), "", "basic", "withdrawal", "USD")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetLimits(t.Context(), "default", "basic", "withdrawal", "USD")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetLimits(t.Context(), "tenant", "", "withdrawal", "USD")
+	assertErrorIs(t, err, ErrMissingKYCTier)
+
+	_, err = s.GetLimits(t.Context(), "tenant", "basic", "", "USD")
+	assertErrorIs(t, err, ErrMissingTransactionType)
+
+	_, err = s.GetLimits(t.Context(), "tenant", "basic", "withdrawal", "")
+	assertErrorIs(t, err, ErrMissingCurrency)
+}
+
+func TestGetDailyUsageValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetDailyUsage(t.Context(), "", uuid.New(), "withdrawal")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetDailyUsage(t.Context(), "default", uuid.New(), "withdrawal")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetDailyUsage(t.Context(), "tenant", uuid.Nil, "withdrawal")
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	_, err = s.GetDailyUsage(t.Context(), "tenant", uuid.New(), "")
+	assertErrorIs(t, err, ErrMissingTransactionType)
+}
+
+func TestGetMonthlyUsageValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetMonthlyUsage(t.Context(), "", uuid.New(), "withdrawal")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetMonthlyUsage(t.Context(), "default", uuid.New(), "withdrawal")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetMonthlyUsage(t.Context(), "tenant", uuid.Nil, "withdrawal")
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	_, err = s.GetMonthlyUsage(t.Context(), "tenant", uuid.New(), "")
+	assertErrorIs(t, err, ErrMissingTransactionType)
+}
+
 func TestListExchangeRatesValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListExchangeRates(t.Context(), ExchangeRateFilter{})
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "default", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", Limit: 0})
 	assertErrorIs(t, err, ErrInvalidLimit)
 
 	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", Limit: 10, Offset: -1})
 	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
+func TestGetActiveRateValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetActiveRate(t.Context(), "", "USD", "EUR")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetActiveRate(t.Context(), "default", "USD", "EUR")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetActiveRate(t.Context(), "tenant", "", "EUR")
+	assertErrorIs(t, err, ErrMissingBaseCurrency)
+
+	_, err = s.GetActiveRate(t.Context(), "tenant", "USD", "")
+	assertErrorIs(t, err, ErrMissingQuoteCurrency)
 }
 
 func TestCreateExchangeRateValidation(t *testing.T) {
@@ -668,6 +760,11 @@ func TestCreateExchangeRateValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingTenantID)
 
 	bad := rate
+	bad.TenantID = "default"
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = rate
 	bad.BaseCurrency = ""
 	_, err = s.CreateExchangeRate(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingBaseCurrency)
