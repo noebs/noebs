@@ -40,6 +40,42 @@ func TestValidateDeploymentRootRejectsMissingEBSRuntimeInput(t *testing.T) {
 	}
 }
 
+func TestValidateDeploymentRootRejectsMissingDockerServiceConfig(t *testing.T) {
+	root := writePreflightRoot(t, preflightRootOptions{})
+	if err := os.Remove(filepath.Join(root, "deploy", "docker", "services", "wallet-api.yaml")); err != nil {
+		t.Fatalf("remove wallet-api service config: %v", err)
+	}
+
+	err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "wallet-api.yaml") {
+		t.Fatalf("validateDeploymentRootWithDecrypt() error = %v, want missing wallet-api service config rejection", err)
+	}
+}
+
+func TestValidateDeploymentRootRejectsUnexpectedDockerServiceSecret(t *testing.T) {
+	root := writePreflightRoot(t, preflightRootOptions{})
+	writePreflightFile(t, root, "deploy/docker/secrets/monolith.secrets.yaml", `noebs:
+  default_tenant_id: tenant_1
+`)
+
+	err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unexpected Docker Compose release service secret file") {
+		t.Fatalf("validateDeploymentRootWithDecrypt() error = %v, want unexpected Docker service secret rejection", err)
+	}
+}
+
+func TestValidateDeploymentRootAllowsTrackedDockerSecretExamples(t *testing.T) {
+	root := writePreflightRoot(t, preflightRootOptions{})
+	writePreflightFile(t, root, "deploy/docker/secrets/README.md", "local secret examples\n")
+	writePreflightFile(t, root, "deploy/docker/secrets/monolith.secrets.yaml.example", `noebs:
+  default_tenant_id: REPLACE_WITH_TENANT
+`)
+
+	if err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
+		t.Fatalf("validateDeploymentRootWithDecrypt() error = %v", err)
+	}
+}
+
 func TestValidateDeploymentRootRejectsPlaceholders(t *testing.T) {
 	root := writePreflightRoot(t, preflightRootOptions{
 		keycloakPassword: "REPLACE_WITH_KEYCLOAK_PASSWORD",
@@ -134,37 +170,27 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 		keycloakPassword = "keycloak-postgres-password"
 	}
 
-	writePreflightFile(t, root, "docker-compose.yml", "services:\n  ebs-adapter:\n    image: noebs\n")
+	writePreflightFile(t, root, "docker-compose.yml", "services:\n  api-gateway:\n    image: noebs\n")
 	writePreflightFile(t, root, ".sops/age-key.txt", "AGE-SECRET-KEY-1LOCAL")
-	writePreflightFile(t, root, "config.docker.yaml", `noebs:
-  service_discovery:
-    card-vault: "http://card-vault:8080"
-    identity-auth: "http://identity-auth:8080"
-    notification-chat: "http://notification-chat:8080"
-    admin-reporting: "http://admin-reporting:8080"
-  ebs_dynamic_fees:
-    p2p_fees: 30
-    custom_fees: 85
-    special_payment_fees: 2
-`)
-	writePreflightFile(t, root, "deploy/docker/services/ebs-adapter.yaml", `noebs:
-  service_role: ebs-adapter
-  otel_service_name: ebs-adapter
-  db_driver: pgx
-`)
-	consumerEndpoint := `  consumer_endpoint: "https://consumer.ebs.example"` + "\n"
-	if opts.omitEBSConsumerEndpoint {
-		consumerEndpoint = ""
+	configMapData := decodeKubernetesNoebsConfigMapData(t)
+	writePreflightFile(t, root, "config.docker.yaml", configMapData["config.yaml"])
+
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		configKey := serviceName + ".service.yaml"
+		payload := configMapData[configKey]
+		if payload == "" {
+			t.Fatalf("noebs-config missing %s", configKey)
+		}
+		writePreflightFile(t, root, filepath.Join("deploy", "docker", "services", serviceName+".yaml"), payload)
 	}
-	writePreflightFile(t, root, "deploy/docker/secrets/ebs-adapter.secrets.yaml", `noebs:
-  default_tenant_id: `+defaultTenantID+`
-  service_databases:
-    ebs-adapter: "postgres://noebs:service-password@postgres:5432/ebs_adapter?sslmode=disable"
-`+consumerEndpoint+`  merchant_endpoint: "https://merchant.ebs.example"
-  ipin_endpoint: "https://ipin.ebs.example"
-  consumer_app_id: "consumer-app"
-  merchant_app_id: "merchant-app"
-`)
+
+	for fileName, payload := range kubernetesSecretTestPayloads() {
+		payload = strings.ReplaceAll(payload, "tenant_1", defaultTenantID)
+		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSConsumerEndpoint {
+			payload = strings.ReplaceAll(payload, `  consumer_endpoint: "https://consumer.ebs.example"`+"\n", "")
+		}
+		writePreflightFile(t, root, filepath.Join("deploy", "docker", "secrets", fileName), payload)
+	}
 	writePreflightFile(t, root, "deploy/docker/postgres/bootstrap.secrets.yaml", `noebs:
   db_url: "postgres://noebs:postgres-password@db:5432/noebs?sslmode=disable"
 `)

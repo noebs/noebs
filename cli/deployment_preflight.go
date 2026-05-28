@@ -74,6 +74,9 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	if err := validateKeycloakConfig(filepath.Join(root, "deploy", "docker", "keycloak", "keycloak.conf")); err != nil {
 		return err
 	}
+	if err := validateExactDockerReleaseFiles(root); err != nil {
+		return err
+	}
 
 	serviceFiles, err := filepath.Glob(filepath.Join(root, "deploy", "docker", "services", "*.yaml"))
 	if err != nil {
@@ -88,6 +91,28 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 		}
 	}
 	return nil
+}
+
+func validateExactDockerReleaseFiles(root string) error {
+	expectedServiceFiles := make(map[string]bool, len(kubernetesSecretReleaseServiceNames))
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		expectedServiceFiles[serviceName+".yaml"] = true
+	}
+	serviceDir := filepath.Join(root, "deploy", "docker", "services")
+	if err := rejectUnexpectedDeploymentEntries("Docker Compose", "service config file", serviceDir, expectedServiceFiles); err != nil {
+		return err
+	}
+	for fileName := range expectedServiceFiles {
+		if err := requireReadableFile("Docker Compose service config", filepath.Join(serviceDir, fileName)); err != nil {
+			return err
+		}
+	}
+
+	expectedSecretFiles := make(map[string]bool, len(kubernetesServiceSecretSources))
+	for _, source := range kubernetesServiceSecretSources {
+		expectedSecretFiles[source.fileName] = true
+	}
+	return rejectUnexpectedDeploymentFiles("Docker Compose", "service secret file", filepath.Join(root, "deploy", "docker", "secrets"), ".secrets.yaml", expectedSecretFiles)
 }
 
 func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFunc) error {
@@ -162,14 +187,14 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		"secrets":     true,
 		"services":    true,
 	}
-	if err := rejectUnexpectedKubernetesReleaseEntries("root entry", root, expectedRootEntries); err != nil {
+	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "root entry", root, expectedRootEntries); err != nil {
 		return err
 	}
 
 	expectedSOPSFiles := map[string]bool{
 		"age-key.txt": true,
 	}
-	if err := rejectUnexpectedKubernetesReleaseEntries("SOPS file", filepath.Join(root, ".sops"), expectedSOPSFiles); err != nil {
+	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "SOPS file", filepath.Join(root, ".sops"), expectedSOPSFiles); err != nil {
 		return err
 	}
 
@@ -179,7 +204,7 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		"keycloak-postgres-password.txt": true,
 		"keycloak.conf":                  true,
 	}
-	if err := rejectUnexpectedKubernetesReleaseEntries("platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
+	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
 		return err
 	}
 
@@ -187,7 +212,7 @@ func validateExactKubernetesReleaseFiles(root string) error {
 	for _, serviceName := range kubernetesSecretReleaseServiceNames {
 		expectedServiceFiles[serviceName+".yaml"] = true
 	}
-	if err := rejectUnexpectedKubernetesReleaseEntries("service config file", filepath.Join(root, "services"), expectedServiceFiles); err != nil {
+	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "service config file", filepath.Join(root, "services"), expectedServiceFiles); err != nil {
 		return err
 	}
 
@@ -195,20 +220,36 @@ func validateExactKubernetesReleaseFiles(root string) error {
 	for _, source := range kubernetesServiceSecretSources {
 		expectedSecretFiles[source.fileName] = true
 	}
-	if err := rejectUnexpectedKubernetesReleaseEntries("service secret file", filepath.Join(root, "secrets"), expectedSecretFiles); err != nil {
+	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "service secret file", filepath.Join(root, "secrets"), expectedSecretFiles); err != nil {
 		return err
 	}
 	return nil
 }
 
-func rejectUnexpectedKubernetesReleaseEntries(label, dir string, expected map[string]bool) error {
+func rejectUnexpectedDeploymentEntries(releaseLabel, entryLabel, dir string, expected map[string]bool) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return fmt.Errorf("read Kubernetes release %s directory %s: %w", label, dir, err)
+		return fmt.Errorf("read %s release %s directory %s: %w", releaseLabel, entryLabel, dir, err)
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {
-			return fmt.Errorf("unexpected Kubernetes release %s %s", label, filepath.Join(dir, entry.Name()))
+			return fmt.Errorf("unexpected %s release %s %s", releaseLabel, entryLabel, filepath.Join(dir, entry.Name()))
+		}
+	}
+	return nil
+}
+
+func rejectUnexpectedDeploymentFiles(releaseLabel, entryLabel, dir, suffix string, expected map[string]bool) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read %s release %s directory %s: %w", releaseLabel, entryLabel, dir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), suffix) {
+			continue
+		}
+		if !expected[entry.Name()] {
+			return fmt.Errorf("unexpected %s release %s %s", releaseLabel, entryLabel, filepath.Join(dir, entry.Name()))
 		}
 	}
 	return nil
