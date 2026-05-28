@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	gateway "github.com/adonese/noebs/apigateway"
 )
 
 func TestPSPWebhookRouteIsProxiedByAPIGateway(t *testing.T) {
@@ -11,7 +13,7 @@ func TestPSPWebhookRouteIsProxiedByAPIGateway(t *testing.T) {
 	configureGatewayProxyForTest(t)
 	route := GetMainEngine()
 
-	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", nil)
+	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop?tenant_id=test-tenant", nil)
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
@@ -25,6 +27,7 @@ func TestPSPWebhookRouteIsOwnedByPSPWebhookService(t *testing.T) {
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", nil)
+	req.Header.Set(gateway.GatewayTenantIDHeader, "test-tenant")
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)

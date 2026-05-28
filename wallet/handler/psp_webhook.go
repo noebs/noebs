@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/apperr"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -51,8 +52,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid webhook payload"))
 	}
 
-	tenantID := strings.TrimSpace(c.Query("tenant_id"))
-	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	tenantID, err := walletstore.ValidateTenantID(c.Get(gateway.GatewayTenantIDHeader))
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}

@@ -20,6 +20,7 @@ type gatewayAuthMode int
 const (
 	gatewayAuthPublic gatewayAuthMode = iota
 	gatewayAuthPublicTenant
+	gatewayAuthPublicQueryTenant
 	gatewayAuthUser
 	gatewayAuthAdmin
 	gatewayAuthAdminTenant
@@ -54,6 +55,8 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			handlers = append(handlers, clearPublicCredentialHeaders)
 		case gatewayAuthPublicTenant:
 			handlers = append(handlers, propagateGatewayPublicTenant)
+		case gatewayAuthPublicQueryTenant:
+			handlers = append(handlers, propagateGatewayPublicQueryTenant)
 		case gatewayAuthUser:
 			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
 		case gatewayAuthAdmin:
@@ -126,6 +129,16 @@ func stripPublicCredentialHeaders(c *fiber.Ctx) {
 
 func propagateGatewayPublicTenant(c *fiber.Ctx) error {
 	tenantID, err := store.ValidateTenantID(c.Get("X-Tenant-ID"))
+	if err != nil {
+		return tenantValidationError(c, err)
+	}
+	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	stripPublicCredentialHeaders(c)
+	return c.Next()
+}
+
+func propagateGatewayPublicQueryTenant(c *fiber.Ctx) error {
+	tenantID, err := store.ValidateTenantID(string(c.Request().URI().QueryArgs().Peek("tenant_id")))
 	if err != nil {
 		return tenantValidationError(c, err)
 	}
@@ -292,7 +305,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/consumer/notifications", role: serviceRoleNotification, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/submit_contacts", role: serviceRoleNotification, auth: gatewayAuthUser},
 
-		{method: fiber.MethodPost, path: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthPublic},
+		{method: fiber.MethodPost, path: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthPublicQueryTenant},
 
 		{method: fiber.MethodGet, path: "/wallet/methods", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthUser},

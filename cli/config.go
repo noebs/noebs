@@ -515,7 +515,7 @@ func GetMainEngine() *fiber.App {
 
 	if role == serviceRolePSPWebhook {
 		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(pspWebhookStore, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
-		wallethandler.RegisterWebhookRoutes(route, walletWebhookHandler)
+		wallethandler.RegisterWebhookRoutes(route.Group("", tenantIdentity), walletWebhookHandler)
 		return route
 	}
 	if role == serviceRoleIdentityAuth {

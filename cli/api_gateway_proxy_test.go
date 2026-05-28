@@ -544,6 +544,79 @@ func TestAPIGatewayRejectsMissingPublicTenantBeforeProxy(t *testing.T) {
 	}
 }
 
+func TestAPIGatewayPropagatesValidatedWebhookQueryTenant(t *testing.T) {
+	ensureInit()
+	type observedHeaders struct {
+		internalTenant string
+		publicTenant   string
+		auth           string
+		adminKey       string
+	}
+	observed := make(chan observedHeaders, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- observedHeaders{
+			internalTenant: r.Header.Get(gateway.GatewayTenantIDHeader),
+			publicTenant:   r.Header.Get("X-Tenant-ID"),
+			auth:           r.Header.Get("Authorization"),
+			adminKey:       r.Header.Get("X-Admin-Key"),
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop?tenant_id=%20test-tenant%20", nil)
+	req.Header.Set("X-Tenant-ID", "ignored-public-tenant")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
+	req.Header.Set("Authorization", "Bearer public-token")
+	req.Header.Set("X-Admin-Key", "public-admin")
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	assertGatewayProxied(t, resp)
+
+	got := <-observed
+	if got.internalTenant != "test-tenant" {
+		t.Fatalf("forwarded tenant = %q, want test-tenant", got.internalTenant)
+	}
+	if got.publicTenant != "" || got.auth != "" || got.adminKey != "" {
+		t.Fatalf("gateway forwarded public webhook tenant or credentials: %+v", got)
+	}
+}
+
+func TestAPIGatewayRejectsWebhookTenantFallbacksBeforeProxy(t *testing.T) {
+	ensureInit()
+	var hits atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", strings.NewReader("tenant_id=test-tenant"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Tenant-ID", "test-tenant")
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	}
+}
+
 func gatewayRouteKey(method, path string) string {
 	return fmt.Sprintf("%s %s", strings.ToUpper(method), path)
 }

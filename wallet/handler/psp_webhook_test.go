@@ -8,9 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/internal/testdb"
 	basestore "github.com/adonese/noebs/store"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
@@ -48,13 +51,14 @@ func TestWebhookIPAllowed(t *testing.T) {
 	}
 }
 
-func TestPSPWebhookRequiresTenantQueryNotPayload(t *testing.T) {
+func TestPSPWebhookRequiresGatewayTenantHeaderNotPayloadOrQuery(t *testing.T) {
 	app := fiber.New()
 	handler := &PSPWebhookHandler{Store: &walletstore.Store{}}
 	app.Post("/psp/webhooks/:provider", handler.Handle)
 
-	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", bytes.NewBufferString(`{"tenant_id":"tenant-from-payload"}`))
+	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop?tenant_id=tenant-from-query", bytes.NewBufferString(`{"tenant_id":"tenant-from-payload"}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Tenant-ID", "tenant-from-public-header")
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -64,6 +68,16 @@ func TestPSPWebhookRequiresTenantQueryNotPayload(t *testing.T) {
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
+func TestPSPWebhookHandlerDoesNotReadPublicTenantQuery(t *testing.T) {
+	data, err := os.ReadFile("psp_webhook.go")
+	if err != nil {
+		t.Fatalf("read psp_webhook.go: %v", err)
+	}
+	if strings.Contains(string(data), `c.Query("tenant_id")`) {
+		t.Fatalf("psp_webhook.go reads public tenant query; webhook tenant must come from %s", gateway.GatewayTenantIDHeader)
 	}
 }
 
@@ -175,8 +189,9 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 	app.Post("/psp/webhooks/:provider", NewPSPWebhookHandler(store, loader, registry, nil).Handle)
 
 	payload := `{"ref":"missing-ref","psp_tx":"psp-missing","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`
-	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/"+providerCode+"?tenant_id="+tenantID, bytes.NewBufferString(payload))
+	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/"+providerCode+"?tenant_id=default", bytes.NewBufferString(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 
 	resp, err := app.Test(req)
 	if err != nil {
