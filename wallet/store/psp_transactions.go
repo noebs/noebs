@@ -33,8 +33,9 @@ type PSPTransactionFilter struct {
 }
 
 func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*PSPTransaction, error) {
-	if txn.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(txn.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if txn.PSPProvider == "" {
 		return nil, ErrMissingProviderCode
@@ -74,7 +75,7 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 
 	var stored PSPTransaction
 	if err := db.GetContext(ctx, &stored, stmt,
-		txn.TenantID,
+		tenantID,
 		txn.PSPProvider,
 		txn.PSPTransactionID,
 		txn.IdempotencyKey,
@@ -107,8 +108,9 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 }
 
 func (s *Store) GetPSPTransactionByReference(ctx context.Context, tenantID, clientReference string) (*PSPTransaction, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if clientReference == "" {
 		return nil, ErrMissingClientReference
@@ -129,8 +131,9 @@ func (s *Store) GetPSPTransactionByReference(ctx context.Context, tenantID, clie
 }
 
 func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, clientReference string, update PSPStatusUpdate) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if clientReference == "" {
 		return ErrMissingClientReference
@@ -205,8 +208,9 @@ func isTerminalPSPTransactionStatus(status string) bool {
 }
 
 func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID string, limit int) ([]PSPTransaction, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -231,8 +235,9 @@ func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID stri
 }
 
 func (s *Store) ListPSPTransactions(ctx context.Context, filter PSPTransactionFilter) ([]PSPTransaction, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if filter.Limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -254,7 +259,7 @@ func (s *Store) ListPSPTransactions(ctx context.Context, filter PSPTransactionFi
 		return nil, err
 	}
 	query := `SELECT * FROM psp_transactions WHERE tenant_id = ?`
-	args := []any{filter.TenantID}
+	args := []any{tenantID}
 	if filter.Status != "" {
 		query += " AND status = ?"
 		args = append(args, filter.Status)
@@ -286,8 +291,9 @@ func (s *Store) ListPSPTransactions(ctx context.Context, filter PSPTransactionFi
 }
 
 func (s *Store) ListPendingWithdrawalApprovals(ctx context.Context, tenantID string, limit, offset int) ([]PSPTransaction, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -314,8 +320,9 @@ func (s *Store) ListPendingWithdrawalApprovals(ctx context.Context, tenantID str
 }
 
 func (s *Store) ListPSPTransactionsByStatus(ctx context.Context, tenantID, status string, start, end time.Time, limit int) ([]PSPTransaction, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if status == "" {
 		return nil, ErrMissingStatus
@@ -348,8 +355,9 @@ func (s *Store) ListPSPTransactionsByStatus(ctx context.Context, tenantID, statu
 }
 
 func (s *Store) TryAcquirePSPTransactionLock(ctx context.Context, tenantID, clientReference, lockToken string, lockExpiresAt time.Time) (bool, error) {
-	if tenantID == "" {
-		return false, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return false, err
 	}
 	if clientReference == "" {
 		return false, ErrMissingClientReference

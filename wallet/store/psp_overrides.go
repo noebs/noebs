@@ -7,8 +7,9 @@ import (
 )
 
 func (s *Store) GetPSPConfigOverride(ctx context.Context, tenantID, providerCode string, scope PSPConfigScope) (*PSPConfigOverride, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if providerCode == "" {
 		return nil, ErrMissingProviderCode

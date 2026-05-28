@@ -431,6 +431,7 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 		wantErr error
 	}{
 		{"missing-tenant", func(txn *PSPTransaction) { txn.TenantID = "" }, ErrMissingTenantID},
+		{"invalid-tenant", func(txn *PSPTransaction) { txn.TenantID = "default" }, ErrInvalidTenantID},
 		{"missing-provider", func(txn *PSPTransaction) { txn.PSPProvider = "" }, ErrMissingProviderCode},
 		{"missing-idempotency", func(txn *PSPTransaction) { txn.IdempotencyKey = "" }, ErrMissingIdempotencyKey},
 		{"missing-reference", func(txn *PSPTransaction) { txn.ClientReference = "" }, ErrMissingClientReference},
@@ -464,6 +465,7 @@ func TestRecordPSPInteractionValidation(t *testing.T) {
 		wantErr error
 	}{
 		{"missing-tenant", func(interaction *PSPInteraction) { interaction.TenantID = "" }, ErrMissingTenantID},
+		{"invalid-tenant", func(interaction *PSPInteraction) { interaction.TenantID = "default" }, ErrInvalidTenantID},
 		{"missing-provider", func(interaction *PSPInteraction) { interaction.PSPProvider = "" }, ErrMissingProviderCode},
 		{"missing-interaction-type", func(interaction *PSPInteraction) { interaction.InteractionType = "" }, ErrMissingInteractionType},
 	}
@@ -483,6 +485,9 @@ func TestGetPSPTransactionByReferenceValidation(t *testing.T) {
 	_, err := s.GetPSPTransactionByReference(t.Context(), "", "ref-1")
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.GetPSPTransactionByReference(t.Context(), "default", "ref-1")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.GetPSPTransactionByReference(t.Context(), "tenant", "")
 	assertErrorIs(t, err, ErrMissingClientReference)
 }
@@ -493,6 +498,9 @@ func TestUpdatePSPTransactionStatusValidation(t *testing.T) {
 
 	err := s.UpdatePSPTransactionStatus(t.Context(), "", "ref-1", update)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdatePSPTransactionStatus(t.Context(), "default", "ref-1", update)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	err = s.UpdatePSPTransactionStatus(t.Context(), "tenant", "", update)
 	assertErrorIs(t, err, ErrMissingClientReference)
@@ -507,6 +515,9 @@ func TestListPSPTransactionsForPollingValidation(t *testing.T) {
 	_, err := s.ListPSPTransactionsForPolling(t.Context(), "", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.ListPSPTransactionsForPolling(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.ListPSPTransactionsForPolling(t.Context(), "tenant", 0)
 	assertErrorIs(t, err, ErrInvalidLimit)
 }
@@ -518,6 +529,9 @@ func TestListPSPTransactionsByStatusValidation(t *testing.T) {
 
 	_, err := s.ListPSPTransactionsByStatus(t.Context(), "", "success", start, end, 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "default", "success", start, end, 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "", start, end, 1)
 	assertErrorIs(t, err, ErrMissingStatus)
@@ -541,6 +555,9 @@ func TestTryAcquirePSPTransactionLockValidation(t *testing.T) {
 
 	_, err := s.TryAcquirePSPTransactionLock(t.Context(), "", "ref-1", "token", now)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.TryAcquirePSPTransactionLock(t.Context(), "default", "ref-1", "token", now)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.TryAcquirePSPTransactionLock(t.Context(), "tenant", "", "token", now)
 	assertErrorIs(t, err, ErrMissingClientReference)
@@ -909,6 +926,9 @@ func TestListPendingWithdrawalApprovalsValidation(t *testing.T) {
 	_, err := s.ListPendingWithdrawalApprovals(t.Context(), "", 10, 0)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.ListPendingWithdrawalApprovals(t.Context(), "default", 10, 0)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.ListPendingWithdrawalApprovals(t.Context(), "tenant", 0, 0)
 	assertErrorIs(t, err, ErrInvalidLimit)
 
@@ -920,6 +940,9 @@ func TestListPSPTransactionsValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListPSPTransactions(t.Context(), PSPTransactionFilter{})
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "default", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 0})
 	assertErrorIs(t, err, ErrInvalidLimit)
@@ -1153,6 +1176,7 @@ func TestAddPSPTransactionAmountValidation(t *testing.T) {
 		wantErr error
 	}{
 		{"missing-tenant", func(a *PSPTransactionAmount) { a.TenantID = "" }, ErrMissingTenantID},
+		{"invalid-tenant", func(a *PSPTransactionAmount) { a.TenantID = "default" }, ErrInvalidTenantID},
 		{"missing-psp-tx", func(a *PSPTransactionAmount) { a.PSPTransactionID = 0 }, ErrMissingPSPTransactionID},
 		{"missing-kind", func(a *PSPTransactionAmount) { a.AmountKind = "" }, ErrMissingAmountKind},
 		{"invalid-kind", func(a *PSPTransactionAmount) { a.AmountKind = PSPAmountKind("bogus") }, ErrInvalidAmountKind},
@@ -1210,6 +1234,9 @@ func TestAddPSPTransactionAmountsValidation(t *testing.T) {
 	_, err := s.AddPSPTransactionAmounts(t.Context(), "", 1, inputs)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.AddPSPTransactionAmounts(t.Context(), "default", 1, inputs)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.AddPSPTransactionAmounts(t.Context(), "tenant", 0, inputs)
 	assertErrorIs(t, err, ErrMissingPSPTransactionID)
 
@@ -1232,6 +1259,9 @@ func TestListPSPTransactionAmountsValidation(t *testing.T) {
 	_, err := s.ListPSPTransactionAmounts(t.Context(), "", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.ListPSPTransactionAmounts(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.ListPSPTransactionAmounts(t.Context(), "tenant", 0)
 	assertErrorIs(t, err, ErrMissingPSPTransactionID)
 }
@@ -1240,6 +1270,9 @@ func TestListPSPTransactionAmountsByKindValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListPSPTransactionAmountsByKind(t.Context(), "", 1, PSPAmountReported)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListPSPTransactionAmountsByKind(t.Context(), "default", 1, PSPAmountReported)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListPSPTransactionAmountsByKind(t.Context(), "tenant", 0, PSPAmountReported)
 	assertErrorIs(t, err, ErrMissingPSPTransactionID)
@@ -1433,14 +1466,35 @@ func TestGetPSPConfigOverrideValidation(t *testing.T) {
 	_, err := s.GetPSPConfigOverride(t.Context(), "", "provider", PSPConfigScope{})
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.GetPSPConfigOverride(t.Context(), "default", "provider", PSPConfigScope{})
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.GetPSPConfigOverride(t.Context(), "tenant", "", PSPConfigScope{})
 	assertErrorIs(t, err, ErrMissingProviderCode)
+}
+
+func TestGetPSPConfigValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetPSPConfig(t.Context(), "", "provider")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetPSPConfig(t.Context(), "default", "provider")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetPSPConfig(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingProviderCode)
+
+	_, _, err = s.ResolvePSPConfig(t.Context(), "default", "provider", PSPConfigScope{})
+	assertErrorIs(t, err, ErrInvalidTenantID)
 }
 
 func TestListAvailablePSPMethodsValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{Direction: "deposit", Limit: 10})
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "default", Direction: "deposit", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListAvailablePSPMethods(t.Context(), PSPMethodFilter{TenantID: "tenant", Limit: 10})
 	assertErrorIs(t, err, ErrMissingDirection)

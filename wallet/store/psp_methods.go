@@ -6,8 +6,9 @@ import (
 )
 
 func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFilter) ([]PSPPaymentMethod, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	direction := normalizeMethodDirection(filter.Direction)
 	if direction == "" {
@@ -34,7 +35,7 @@ func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFil
 		ORDER BY provider_name ASC, provider_code ASC
 		LIMIT ? OFFSET ?`)
 	var configs []PSPConfig
-	if err := db.SelectContext(ctx, &configs, stmt, filter.TenantID, filter.Limit, filter.Offset); err != nil {
+	if err := db.SelectContext(ctx, &configs, stmt, tenantID, filter.Limit, filter.Offset); err != nil {
 		return nil, err
 	}
 
@@ -45,7 +46,7 @@ func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFil
 		Direction: direction,
 	}
 	for _, base := range configs {
-		cfg, _, err := s.ResolvePSPConfig(ctx, filter.TenantID, base.ProviderCode, scope)
+		cfg, _, err := s.ResolvePSPConfig(ctx, tenantID, base.ProviderCode, scope)
 		if err != nil {
 			return nil, err
 		}

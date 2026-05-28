@@ -26,8 +26,9 @@ type PSPInteraction struct {
 }
 
 func (s *Store) RecordPSPInteraction(ctx context.Context, interaction PSPInteraction) (*PSPInteraction, error) {
-	if interaction.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(interaction.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if interaction.PSPProvider == "" {
 		return nil, ErrMissingProviderCode
@@ -47,7 +48,7 @@ func (s *Store) RecordPSPInteraction(ctx context.Context, interaction PSPInterac
 	RETURNING *`)
 	var stored PSPInteraction
 	if err := db.GetContext(ctx, &stored, stmt,
-		interaction.TenantID,
+		tenantID,
 		interaction.PSPProvider,
 		interaction.PSPTransactionID,
 		interaction.ClientReference,

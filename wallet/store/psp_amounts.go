@@ -5,34 +5,35 @@ import (
 	"database/sql"
 )
 
-func validatePSPTransactionAmount(amount PSPTransactionAmount) error {
-	if amount.TenantID == "" {
-		return ErrMissingTenantID
+func validatePSPTransactionAmount(amount PSPTransactionAmount) (string, error) {
+	tenantID, err := ValidateTenantID(amount.TenantID)
+	if err != nil {
+		return "", err
 	}
 	if amount.PSPTransactionID <= 0 {
-		return ErrMissingPSPTransactionID
+		return "", ErrMissingPSPTransactionID
 	}
 	if amount.AmountKind == "" {
-		return ErrMissingAmountKind
+		return "", ErrMissingAmountKind
 	}
 	if !amount.AmountKind.Valid() {
-		return ErrInvalidAmountKind
+		return "", ErrInvalidAmountKind
 	}
 	if amount.Amount <= 0 {
-		return ErrInvalidAmount
+		return "", ErrInvalidAmount
 	}
 	if amount.Currency == "" {
-		return ErrMissingCurrency
+		return "", ErrMissingCurrency
 	}
 	if amount.FxRate.Valid {
 		if !amount.FxBaseCurrency.Valid || !amount.FxQuoteCurrency.Valid {
-			return ErrMissingFXCurrency
+			return "", ErrMissingFXCurrency
 		}
 	}
 	if (amount.FxBaseCurrency.Valid || amount.FxQuoteCurrency.Valid) && !amount.FxRate.Valid {
-		return ErrMissingFXRate
+		return "", ErrMissingFXRate
 	}
-	return nil
+	return tenantID, nil
 }
 
 func buildPSPTransactionAmount(tenantID string, pspTransactionID int64, input PSPTransactionAmountInput) PSPTransactionAmount {
@@ -57,7 +58,8 @@ func nullString(value string) sql.NullString {
 }
 
 func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransactionAmount) (*PSPTransactionAmount, error) {
-	if err := validatePSPTransactionAmount(amount); err != nil {
+	tenantID, err := validatePSPTransactionAmount(amount)
+	if err != nil {
 		return nil, err
 	}
 
@@ -79,7 +81,7 @@ func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransacti
 	RETURNING *`)
 	var stored PSPTransactionAmount
 	if err := db.GetContext(ctx, &stored, stmt,
-		amount.TenantID,
+		tenantID,
 		amount.PSPTransactionID,
 		amount.AmountKind,
 		amount.Amount,
@@ -95,8 +97,9 @@ func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransacti
 }
 
 func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, pspTransactionID int64, amounts []PSPTransactionAmountInput) ([]PSPTransactionAmount, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if pspTransactionID <= 0 {
 		return nil, ErrMissingPSPTransactionID
@@ -107,7 +110,7 @@ func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, p
 	prepared := make([]PSPTransactionAmount, 0, len(amounts))
 	for _, input := range amounts {
 		amount := buildPSPTransactionAmount(tenantID, pspTransactionID, input)
-		if err := validatePSPTransactionAmount(amount); err != nil {
+		if _, err := validatePSPTransactionAmount(amount); err != nil {
 			return nil, err
 		}
 		prepared = append(prepared, amount)
@@ -159,8 +162,9 @@ func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, p
 }
 
 func (s *Store) ListPSPTransactionAmounts(ctx context.Context, tenantID string, pspTransactionID int64) ([]PSPTransactionAmount, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if pspTransactionID <= 0 {
 		return nil, ErrMissingPSPTransactionID
@@ -180,8 +184,9 @@ func (s *Store) ListPSPTransactionAmounts(ctx context.Context, tenantID string, 
 }
 
 func (s *Store) ListPSPTransactionAmountsByKind(ctx context.Context, tenantID string, pspTransactionID int64, kind PSPAmountKind) ([]PSPTransactionAmount, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if pspTransactionID <= 0 {
 		return nil, ErrMissingPSPTransactionID

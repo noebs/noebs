@@ -72,8 +72,9 @@ type PSPPaymentMethod struct {
 }
 
 func (s *Store) GetPSPConfig(ctx context.Context, tenantID, providerCode string) (*PSPConfig, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if providerCode == "" {
 		return nil, ErrMissingProviderCode
