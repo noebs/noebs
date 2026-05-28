@@ -474,6 +474,9 @@ func TestUpdateWithdrawalDestinationUsageValidation(t *testing.T) {
 	err := s.UpdateWithdrawalDestinationUsage(t.Context(), "", 1, 100, now)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "default", 1, 100, now)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 0, 100, now)
 	assertErrorIs(t, err, ErrMissingDestinationID)
 
@@ -491,6 +494,9 @@ func TestUpdateFundingSourceUsageValidation(t *testing.T) {
 	err := s.UpdateFundingSourceUsage(t.Context(), "", 1, 100, now)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	err = s.UpdateFundingSourceUsage(t.Context(), "default", 1, 100, now)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 0, 100, now)
 	assertErrorIs(t, err, ErrMissingFundingSourceID)
 
@@ -506,6 +512,9 @@ func TestGetFundingSourceByIDValidation(t *testing.T) {
 	_, err := s.GetFundingSourceByID(t.Context(), "", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.GetFundingSourceByID(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.GetFundingSourceByID(t.Context(), "tenant", 0)
 	assertErrorIs(t, err, ErrMissingFundingSourceID)
 }
@@ -516,6 +525,9 @@ func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
 
 	err := s.UpdateWithdrawalDestinationOwnership(t.Context(), "", 1, "verified", sql.NullTime{Time: now, Valid: true}, now)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "default", 1, "verified", sql.NullTime{Time: now, Valid: true}, now)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 0, "verified", sql.NullTime{Time: now, Valid: true}, now)
 	assertErrorIs(t, err, ErrMissingDestinationID)
@@ -547,6 +559,11 @@ func TestCreateOwnershipVerificationValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingTenantID)
 
 	bad := base
+	bad.TenantID = "default"
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = base
 	bad.DestinationID = 0
 	_, err = s.CreateOwnershipVerification(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingDestinationID)
@@ -570,6 +587,209 @@ func TestCreateOwnershipVerificationValidation(t *testing.T) {
 	bad.ExpiresAt = time.Time{}
 	_, err = s.CreateOwnershipVerification(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingVerificationExpiry)
+}
+
+func TestGetOwnershipVerificationValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetOwnershipVerification(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetOwnershipVerification(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetOwnershipVerification(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrMissingVerificationID)
+}
+
+func TestUpdateOwnershipVerificationStatusValidation(t *testing.T) {
+	s := &Store{}
+	now := time.Now().UTC()
+
+	err := s.UpdateOwnershipVerificationStatus(t.Context(), "", 1, "completed", now)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "default", 1, "completed", now)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 0, "completed", now)
+	assertErrorIs(t, err, ErrMissingVerificationID)
+
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "", now)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "completed", time.Time{})
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+}
+
+func TestWithdrawalDestinationValidation(t *testing.T) {
+	s := &Store{}
+	dest := WithdrawalDestination{
+		TenantID:           "tenant",
+		WalletID:           uuid.New(),
+		DestinationType:    "bank_account",
+		Currency:           "USD",
+		DestinationDetails: []byte(`{"account":"123"}`),
+		OwnershipStatus:    "pending",
+	}
+
+	_, err := s.CreateWithdrawalDestination(t.Context(), WithdrawalDestination{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := dest
+	bad.TenantID = "default"
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = dest
+	bad.WalletID = uuid.Nil
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	bad = dest
+	bad.DestinationType = ""
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingDestinationType)
+
+	bad = dest
+	bad.Currency = ""
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrency)
+
+	bad = dest
+	bad.DestinationDetails = nil
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingDestinationDetails)
+
+	bad = dest
+	bad.OwnershipStatus = ""
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	_, err = s.GetWithdrawalDestination(t.Context(), "", 1)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetWithdrawalDestination(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetWithdrawalDestination(t.Context(), "tenant", 0)
+	assertErrorIs(t, err, ErrMissingDestinationID)
+
+	_, err = s.ListWithdrawalDestinations(t.Context(), "", uuid.New(), true)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListWithdrawalDestinations(t.Context(), "default", uuid.New(), true)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.ListWithdrawalDestinations(t.Context(), "tenant", uuid.Nil, true)
+	assertErrorIs(t, err, ErrMissingWalletID)
+}
+
+func TestFundingSourceValidation(t *testing.T) {
+	s := &Store{}
+	source := FundingSource{
+		TenantID:   "tenant",
+		WalletID:   uuid.New(),
+		SourceType: "card",
+		Currency:   "USD",
+	}
+
+	_, err := s.UpsertFundingSource(t.Context(), FundingSource{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := source
+	bad.TenantID = "default"
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = source
+	bad.WalletID = uuid.Nil
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	bad = source
+	bad.SourceType = ""
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingSourceType)
+
+	bad = source
+	bad.Currency = ""
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrency)
+
+	_, err = s.GetFundingSource(t.Context(), "", uuid.New(), "card", sql.NullString{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetFundingSource(t.Context(), "default", uuid.New(), "card", sql.NullString{})
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetFundingSource(t.Context(), "tenant", uuid.Nil, "card", sql.NullString{})
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	_, err = s.GetFundingSource(t.Context(), "tenant", uuid.New(), "", sql.NullString{})
+	assertErrorIs(t, err, ErrMissingSourceType)
+
+	_, err = s.ListFundingSources(t.Context(), "", uuid.New())
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListFundingSources(t.Context(), "default", uuid.New())
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.ListFundingSources(t.Context(), "tenant", uuid.Nil)
+	assertErrorIs(t, err, ErrMissingWalletID)
+}
+
+func TestCreateFundingLinkValidation(t *testing.T) {
+	s := &Store{}
+	link := LedgerFundingLink{
+		TenantID:        "tenant",
+		LedgerEntryID:   1,
+		FundingSourceID: 2,
+		Amount:          100,
+		Currency:        "USD",
+	}
+
+	_, err := s.CreateFundingLink(t.Context(), LedgerFundingLink{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := link
+	bad.TenantID = "default"
+	_, err = s.CreateFundingLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = link
+	bad.LedgerEntryID = 0
+	_, err = s.CreateFundingLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingLedgerEntryID)
+
+	bad = link
+	bad.FundingSourceID = 0
+	_, err = s.CreateFundingLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingFundingSourceID)
+
+	bad = link
+	bad.Amount = 0
+	_, err = s.CreateFundingLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	bad = link
+	bad.Currency = ""
+	_, err = s.CreateFundingLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrency)
+}
+
+func TestGetFundingSourceByPSPRefValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetFundingSourceByPSPRef(t.Context(), "", "coinsbuy", "ref-1")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetFundingSourceByPSPRef(t.Context(), "default", "coinsbuy", "ref-1")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetFundingSourceByPSPRef(t.Context(), "tenant", "", "ref-1")
+	assertErrorIs(t, err, ErrMissingProviderCode)
+
+	_, err = s.GetFundingSourceByPSPRef(t.Context(), "tenant", "coinsbuy", "")
+	assertErrorIs(t, err, ErrMissingReferenceID)
 }
 
 func TestListPendingWithdrawalApprovalsValidation(t *testing.T) {
@@ -941,6 +1161,9 @@ func TestDeactivateWithdrawalDestinationValidation(t *testing.T) {
 	s := &Store{}
 	err := s.DeactivateWithdrawalDestination(t.Context(), "", 1, time.Now().UTC())
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.DeactivateWithdrawalDestination(t.Context(), "default", 1, time.Now().UTC())
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	err = s.DeactivateWithdrawalDestination(t.Context(), "tenant", 0, time.Now().UTC())
 	assertErrorIs(t, err, ErrMissingDestinationID)

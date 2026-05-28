@@ -9,8 +9,9 @@ import (
 )
 
 func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest WithdrawalDestination) (*WithdrawalDestination, error) {
-	if dest.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(dest.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if dest.WalletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -42,7 +43,7 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	RETURNING *`)
 	var stored WithdrawalDestination
 	if err := db.GetContext(ctx, &stored, stmt,
-		dest.TenantID,
+		tenantID,
 		dest.WalletID,
 		dest.DestinationType,
 		dest.PSPProvider,
@@ -69,8 +70,9 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 }
 
 func (s *Store) GetWithdrawalDestination(ctx context.Context, tenantID string, destinationID int64) (*WithdrawalDestination, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if destinationID <= 0 {
 		return nil, ErrMissingDestinationID
@@ -91,8 +93,9 @@ func (s *Store) GetWithdrawalDestination(ctx context.Context, tenantID string, d
 }
 
 func (s *Store) ListWithdrawalDestinations(ctx context.Context, tenantID string, walletID uuid.UUID, activeOnly bool) ([]WithdrawalDestination, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if walletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -116,8 +119,9 @@ func (s *Store) ListWithdrawalDestinations(ctx context.Context, tenantID string,
 }
 
 func (s *Store) UpdateWithdrawalDestinationUsage(ctx context.Context, tenantID string, destinationID int64, amount int64, usedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if destinationID <= 0 {
 		return ErrMissingDestinationID
@@ -150,8 +154,9 @@ func (s *Store) UpdateWithdrawalDestinationUsage(ctx context.Context, tenantID s
 }
 
 func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenantID string, destinationID int64, status string, verifiedAt sql.NullTime, updatedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if destinationID <= 0 {
 		return ErrMissingDestinationID
@@ -190,8 +195,9 @@ func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenant
 }
 
 func (s *Store) DeactivateWithdrawalDestination(ctx context.Context, tenantID string, destinationID int64, updatedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if destinationID <= 0 {
 		return ErrMissingDestinationID

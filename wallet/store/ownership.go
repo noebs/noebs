@@ -7,8 +7,9 @@ import (
 )
 
 func (s *Store) CreateOwnershipVerification(ctx context.Context, verification OwnershipVerification) (*OwnershipVerification, error) {
-	if verification.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(verification.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if verification.DestinationID <= 0 {
 		return nil, ErrMissingDestinationID
@@ -39,7 +40,7 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	RETURNING *`)
 	var stored OwnershipVerification
 	if err := db.GetContext(ctx, &stored, stmt,
-		verification.TenantID,
+		tenantID,
 		verification.DestinationID,
 		verification.VerificationType,
 		verification.Status,
@@ -63,8 +64,9 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 }
 
 func (s *Store) GetOwnershipVerification(ctx context.Context, tenantID string, verificationID int64) (*OwnershipVerification, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if verificationID <= 0 {
 		return nil, ErrMissingVerificationID
@@ -85,8 +87,9 @@ func (s *Store) GetOwnershipVerification(ctx context.Context, tenantID string, v
 }
 
 func (s *Store) UpdateOwnershipVerificationStatus(ctx context.Context, tenantID string, verificationID int64, status string, completedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if verificationID <= 0 {
 		return ErrMissingVerificationID

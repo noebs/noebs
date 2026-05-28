@@ -9,8 +9,9 @@ import (
 )
 
 func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (*FundingSource, error) {
-	if source.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(source.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if source.WalletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -47,7 +48,7 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 	now := time.Now().UTC()
 	var stored FundingSource
 	if err := db.GetContext(ctx, &stored, stmt,
-		source.TenantID,
+		tenantID,
 		source.WalletID,
 		source.SourceType,
 		source.PSPProvider,
@@ -67,7 +68,7 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 		now,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return s.GetFundingSource(ctx, source.TenantID, source.WalletID, source.SourceType, source.ExternalReference)
+			return s.GetFundingSource(ctx, tenantID, source.WalletID, source.SourceType, source.ExternalReference)
 		}
 		return nil, err
 	}
@@ -75,8 +76,9 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 }
 
 func (s *Store) GetFundingSource(ctx context.Context, tenantID string, walletID uuid.UUID, sourceType string, externalRef sql.NullString) (*FundingSource, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if walletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -106,8 +108,9 @@ func (s *Store) GetFundingSource(ctx context.Context, tenantID string, walletID 
 }
 
 func (s *Store) ListFundingSources(ctx context.Context, tenantID string, walletID uuid.UUID) ([]FundingSource, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if walletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -127,8 +130,9 @@ func (s *Store) ListFundingSources(ctx context.Context, tenantID string, walletI
 }
 
 func (s *Store) GetFundingSourceByID(ctx context.Context, tenantID string, sourceID int64) (*FundingSource, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if sourceID <= 0 {
 		return nil, ErrMissingFundingSourceID
@@ -149,8 +153,9 @@ func (s *Store) GetFundingSourceByID(ctx context.Context, tenantID string, sourc
 }
 
 func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (*LedgerFundingLink, error) {
-	if link.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(link.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if link.LedgerEntryID <= 0 {
 		return nil, ErrMissingLedgerEntryID
@@ -174,7 +179,7 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	RETURNING *`)
 	var stored LedgerFundingLink
 	if err := db.GetContext(ctx, &stored, stmt,
-		link.TenantID,
+		tenantID,
 		link.LedgerEntryID,
 		link.FundingSourceID,
 		link.Amount,
@@ -186,8 +191,9 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 }
 
 func (s *Store) UpdateFundingSourceUsage(ctx context.Context, tenantID string, sourceID int64, amount int64, usedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if sourceID <= 0 {
 		return ErrMissingFundingSourceID
@@ -220,8 +226,9 @@ func (s *Store) UpdateFundingSourceUsage(ctx context.Context, tenantID string, s
 }
 
 func (s *Store) GetFundingSourceByPSPRef(ctx context.Context, tenantID, provider string, externalRef string) (*FundingSource, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if provider == "" {
 		return nil, ErrMissingProviderCode
