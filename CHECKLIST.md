@@ -1,12 +1,35 @@
-# Noebs Microservices Migration Checklist
+# Noebs Microservices Migration Completion Checklist
 
 Last updated: 2026-05-28
+
+This file is the migration completion ledger. The task is not complete until
+every item in "Completion Checklist" is checked.
 
 ## Status Key
 
 - `[x]` Implemented and locally verified.
 - `[~]` Implemented, server verification or deployment still in progress.
 - `[ ]` Not complete.
+
+## Target State
+
+- [ ] Noebs runs as Kubernetes/k3s-managed microservices, not as a monolith plus side services.
+- [ ] The old Docker Compose deployment is replaced after the Kubernetes deployment is confirmed healthy.
+- [ ] Service migrations run through k8s/k3s migration Jobs.
+- [ ] Tests are allowed to run migrations and use testcontainers-backed database setup.
+- [ ] Runtime config and secrets are loaded from explicit merged config/secret files, not ambient environment variables.
+- [ ] Each service owns its database and migration scope where applicable.
+- [ ] API Gateway/BFF owns edge HTTP, CORS, auth enforcement, metrics, and public REST proxying.
+- [ ] Identity/Auth owns users, OAuth/JWT, profile, API keys, and device identity.
+- [ ] Card/Vault owns PAN/IPIN/tokenization/encryption/card lookup concerns.
+- [ ] EBS Adapter owns EBS protocol integration, EBS retries/circuit behavior, and raw EBS logging.
+- [ ] Wallet/Ledger owns wallets, balances, holds, double entry, fees, limits, rates, and funding sources.
+- [ ] Wallet Worker owns Temporal workers and scheduled PSP/reconciliation workflows.
+- [ ] PSP/Webhook owns PSP config, webhook verification, request-response mapping, and wallet workflow signalling.
+- [ ] Notification/Chat owns websocket, push, biller callbacks, and notification projections.
+- [ ] Admin/Reporting consumes events/projections and does not block payment writes.
+- [ ] Kafka carries service events needed for admin/reporting projections.
+- [ ] Keycloak is deployable as a platform service; application auth data wiring is a later task.
 
 ## Completed Work
 
@@ -28,6 +51,17 @@ Last updated: 2026-05-28
 - [x] Added an API gateway invariant that every external HTTP route has exactly one service owner and is proxied to that owner.
 - [x] Added OpenTofu preconditions that block the Noebs Argo CD application unless required Kubernetes Secrets contain the expected data keys.
 - [x] Set Noebs Kubernetes workloads and migration/preflight jobs to always pull the mutable `master` image during Argo CD sync.
+
+## Verified Gates
+
+- [x] `go test ./...` passed locally for the latest committed state.
+- [x] `golangci-lint run --new-from-rev=HEAD ./...` passed locally before commit.
+- [x] `docker compose config -q` passed locally.
+- [x] `kubectl kustomize deploy/kubernetes/base` passed locally.
+- [x] `kubectl kustomize deploy/kubernetes/overlays/current-host` passed locally.
+- [x] `tofu -chdir=foundation/terraform fmt -check` passed locally.
+- [x] `tofu -chdir=foundation/terraform validate` passed locally.
+- [x] Latest committed changes were server-verified on `100.102.164.34` from a clean temporary archive.
 
 ## Current Server State
 
@@ -54,6 +88,22 @@ Last updated: 2026-05-28
 - [ ] The current server audit still reports missing explicit cutover inputs.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.
+
+## Completion Checklist
+
+- [ ] Required Kubernetes release inputs are complete and explicit.
+- [ ] Current server secrets have been transformed only where exact source keys exist.
+- [ ] Kubernetes release secret/config bundle has been generated from the complete inputs.
+- [ ] Noebs image published for the deployment tag consumed by Kubernetes manifests.
+- [ ] Kubernetes microservices replacement has been applied on `100.102.164.34`.
+- [ ] Service-owned migration Jobs completed successfully in k3s/k8s.
+- [ ] API gateway routes proxy only to their single service owners.
+- [ ] Kafka broker, EBS event publishing, and admin-reporting projector are healthy.
+- [ ] Keycloak is running as a deployable service.
+- [ ] Public Noebs health endpoint passes after cutover.
+- [ ] All pre-existing non-Noebs services on the server still report healthy/running.
+- [ ] Old Docker Compose Noebs deployment is retired after Kubernetes health is confirmed.
+- [ ] Runtime config and secret paths do not depend on environment variables.
 
 ## Completion Rule
 
