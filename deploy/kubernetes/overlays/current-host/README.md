@@ -29,13 +29,13 @@ Required Kubernetes Secrets in namespace `noebs`:
 - `temporal-postgres-credentials` with key `password`.
 - `noebs-tls` TLS secret for `api.noebs.sd` and `dsa.adonese.sd`.
 
-Render these Secrets from the prepared file-based release inputs:
+Render these Secrets from the prepared Kubernetes release input directory:
 
 ```sh
-noebs render-kubernetes-secrets /path/to/noebs-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
+noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
 ```
 
-The renderer first runs the same release preflight as Docker Compose, then emits Kubernetes `Secret` manifests. It copies service SOPS files into `*-secrets`, extracts the in-cluster Postgres password from the explicit bootstrap `noebs.db_url`, mounts Temporal and Keycloak platform secret files, includes the SOPS age key, and renders `noebs-tls` from the explicit certificate and key paths. Missing files, placeholders, invalid TLS material, and incomplete service database/EBS/Keycloak inputs fail before any manifest is written.
+The renderer first validates the Kubernetes release layout, then emits Kubernetes `Secret` manifests. The input directory must contain `config.yaml`, one `services/<service>.yaml` file per rendered noebs service secret, one `secrets/<service>.secrets.yaml` file per service, `.sops/age-key.txt`, and explicit platform files under `platform/`: `postgres-password.txt`, `temporal-postgres-password.txt`, `keycloak-postgres-password.txt`, and `keycloak.conf`. Missing files, placeholders, invalid TLS material, and incomplete service database/EBS/Keycloak inputs fail before any manifest is written.
 
 Each noebs service secret must contain the merged secret material expected by that service, including `noebs.default_tenant_id`, JWT/admin keys it owns, EBS credentials it owns, data key material it owns, and PSP secrets it owns. Database-opening service secrets must include `noebs.service_databases` keyed only by the database owner role. Runtime config copies the owner URL into `noebs.db_url` for that role and rejects non-owner database entries. `api-gateway-secrets` and `wallet-api-secrets` must not contain `noebs.db_url` or `noebs.service_databases`. `wallet-worker-secrets` uses the `wallet-ledger` owner key because wallet-ledger owns wallet state; the worker has no separate database or migration scope.
 

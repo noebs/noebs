@@ -94,7 +94,7 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 func TestRenderKubernetesSecretsRejectsMissingServiceSecret(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	certPath, keyPath := writeTestTLSPair(t)
-	if err := os.Remove(filepath.Join(root, "deploy", "docker", "secrets", "wallet-api.secrets.yaml")); err != nil {
+	if err := os.Remove(filepath.Join(root, "secrets", "wallet-api.secrets.yaml")); err != nil {
 		t.Fatalf("remove wallet-api secret: %v", err)
 	}
 
@@ -102,6 +102,20 @@ func TestRenderKubernetesSecretsRejectsMissingServiceSecret(t *testing.T) {
 	err := renderKubernetesSecrets(&output, root, "noebs", certPath, keyPath, readPlainPreflightSecret)
 	if err == nil || !strings.Contains(err.Error(), "wallet-api secrets") {
 		t.Fatalf("renderKubernetesSecrets() error = %v, want missing wallet-api secret rejection", err)
+	}
+}
+
+func TestRenderKubernetesSecretsRejectsMissingServiceConfig(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	certPath, keyPath := writeTestTLSPair(t)
+	if err := os.Remove(filepath.Join(root, "services", "wallet-api.yaml")); err != nil {
+		t.Fatalf("remove wallet-api service config: %v", err)
+	}
+
+	var output bytes.Buffer
+	err := renderKubernetesSecrets(&output, root, "noebs", certPath, keyPath, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "wallet-api.yaml") {
+		t.Fatalf("renderKubernetesSecrets() error = %v, want missing wallet-api service config rejection", err)
 	}
 }
 
@@ -122,24 +136,23 @@ func TestRenderKubernetesSecretsRejectsInvalidTLSPair(t *testing.T) {
 func writeKubernetesSecretReleaseRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	writePreflightFile(t, root, "docker-compose.yml", "services:\n  api-gateway:\n    image: noebs\n")
-	copyPreflightFile(t, filepath.Join("..", "config.docker.yaml"), root, "config.docker.yaml")
 	writePreflightFile(t, root, ".sops/age-key.txt", "AGE-SECRET-KEY-1LOCAL\n")
+	configMapData := decodeKubernetesNoebsConfigMapData(t)
+	writePreflightFile(t, root, "config.yaml", configMapData["config.yaml"])
 
-	serviceFiles, err := filepath.Glob(filepath.Join("..", "deploy", "docker", "services", "*.yaml"))
-	if err != nil {
-		t.Fatalf("list service files: %v", err)
-	}
-	for _, source := range serviceFiles {
-		copyPreflightFile(t, source, root, filepath.Join("deploy", "docker", "services", filepath.Base(source)))
+	for _, source := range kubernetesServiceSecretSources {
+		configKey := source.serviceName + ".service.yaml"
+		payload := configMapData[configKey]
+		if payload == "" {
+			t.Fatalf("noebs-config missing %s", configKey)
+		}
+		writePreflightFile(t, root, filepath.Join("services", source.serviceName+".yaml"), payload)
 	}
 
-	writePreflightFile(t, root, "deploy/docker/postgres/bootstrap.secrets.yaml", `noebs:
-  db_url: "postgres://noebs:postgres-password@postgres:5432/noebs?sslmode=disable"
-`)
-	writePreflightFile(t, root, "deploy/docker/temporal/postgres-password.txt", "temporal-postgres-password\n")
-	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-password.txt", "keycloak-postgres-password\n")
-	writePreflightFile(t, root, "deploy/docker/keycloak/keycloak.conf", `http-enabled=true
+	writePreflightFile(t, root, "platform/postgres-password.txt", "postgres-password\n")
+	writePreflightFile(t, root, "platform/temporal-postgres-password.txt", "temporal-postgres-password\n")
+	writePreflightFile(t, root, "platform/keycloak-postgres-password.txt", "keycloak-postgres-password\n")
+	writePreflightFile(t, root, "platform/keycloak.conf", `http-enabled=true
 http-port=8080
 hostname-strict=false
 proxy-headers=xforwarded
@@ -155,7 +168,7 @@ bootstrap-admin-username=admin
 bootstrap-admin-password=admin-password
 `)
 	for fileName, payload := range kubernetesSecretTestPayloads() {
-		writePreflightFile(t, root, filepath.Join("deploy", "docker", "secrets", fileName), payload)
+		writePreflightFile(t, root, filepath.Join("secrets", fileName), payload)
 	}
 	return root
 }
@@ -224,15 +237,6 @@ func pspSecretMap() string {
         webhook_secret: psp-webhook-secret
         webhook_public_key: psp-webhook-public-key
 `
-}
-
-func copyPreflightFile(t *testing.T, source, root, target string) {
-	t.Helper()
-	payload, err := os.ReadFile(source)
-	if err != nil {
-		t.Fatalf("read %s: %v", source, err)
-	}
-	writePreflightFile(t, root, target, string(payload))
 }
 
 func writeTestTLSPair(t *testing.T) (string, string) {

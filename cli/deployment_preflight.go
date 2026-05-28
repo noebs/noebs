@@ -107,11 +107,32 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
 		return err
 	}
+	if err := validateKubernetesPlatformInputs(root); err != nil {
+		return err
+	}
 
 	configMap, err := readYAMLMapFile(configPath)
 	if err != nil {
 		return err
 	}
+	serviceFiles, err := filepath.Glob(filepath.Join(root, "services", "*.yaml"))
+	if err != nil {
+		return fmt.Errorf("list Kubernetes service configs: %w", err)
+	}
+	if len(serviceFiles) == 0 {
+		return errors.New("no service configs found under services")
+	}
+	for _, serviceFile := range serviceFiles {
+		serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
+		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
+		if err := validateDeploymentServiceWithSecretPath(configMap, serviceFile, secretPath, ageKeyPath, decrypt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateKubernetesPlatformInputs(root string) error {
 	for _, requiredFile := range []struct {
 		label string
 		path  string
@@ -126,21 +147,6 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	}
 	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf")); err != nil {
 		return err
-	}
-
-	serviceFiles, err := filepath.Glob(filepath.Join(root, "services", "*.yaml"))
-	if err != nil {
-		return fmt.Errorf("list Kubernetes service configs: %w", err)
-	}
-	if len(serviceFiles) == 0 {
-		return errors.New("no service configs found under services")
-	}
-	for _, serviceFile := range serviceFiles {
-		serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
-		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
-		if err := validateDeploymentServiceWithSecretPath(configMap, serviceFile, secretPath, ageKeyPath, decrypt); err != nil {
-			return err
-		}
 	}
 	return nil
 }

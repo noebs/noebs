@@ -50,7 +50,7 @@ var kubernetesServiceSecretSources = []kubernetesServiceSecretSource{
 
 func renderKubernetesSecretsCommand() error {
 	if len(os.Args) != 6 {
-		return errors.New("usage: noebs render-kubernetes-secrets <release-root> <namespace> <tls-cert> <tls-key>")
+		return errors.New("usage: noebs render-kubernetes-secrets <kubernetes-release-root> <namespace> <tls-cert> <tls-key>")
 	}
 	return renderKubernetesSecrets(os.Stdout, os.Args[2], os.Args[3], os.Args[4], os.Args[5], decryptSopsFile)
 }
@@ -67,24 +67,24 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 	if decrypt == nil {
 		return errors.New("deployment decrypt function is required")
 	}
-	if err := validateDeploymentRootWithDecrypt(root, decrypt); err != nil {
+	if err := validateKubernetesSecretReleaseRootWithDecrypt(root, decrypt); err != nil {
 		return err
 	}
 
 	ageKeyPath := filepath.Join(root, ".sops", "age-key.txt")
-	postgresPassword, err := readPostgresBootstrapPassword(root, decrypt, ageKeyPath)
+	postgresPassword, err := readRequiredSecretValue("Noebs Postgres password", filepath.Join(root, "platform", "postgres-password.txt"))
 	if err != nil {
 		return err
 	}
-	temporalPostgresPassword, err := readRequiredSecretValue("Temporal Postgres password", filepath.Join(root, "deploy", "docker", "temporal", "postgres-password.txt"))
+	temporalPostgresPassword, err := readRequiredSecretValue("Temporal Postgres password", filepath.Join(root, "platform", "temporal-postgres-password.txt"))
 	if err != nil {
 		return err
 	}
-	keycloakPostgresPassword, err := readRequiredSecretValue("Keycloak Postgres password", filepath.Join(root, "deploy", "docker", "keycloak", "postgres-password.txt"))
+	keycloakPostgresPassword, err := readRequiredSecretValue("Keycloak Postgres password", filepath.Join(root, "platform", "keycloak-postgres-password.txt"))
 	if err != nil {
 		return err
 	}
-	keycloakConfig, err := readRequiredSecretText("Keycloak config", filepath.Join(root, "deploy", "docker", "keycloak", "keycloak.conf"))
+	keycloakConfig, err := readRequiredSecretText("Keycloak config", filepath.Join(root, "platform", "keycloak.conf"))
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 
 	manifests := make([]kubernetesSecretManifest, 0, len(kubernetesServiceSecretSources)+6)
 	for _, source := range kubernetesServiceSecretSources {
-		payload, err := readRequiredSecretText(source.serviceName+" secrets", filepath.Join(root, "deploy", "docker", "secrets", source.fileName))
+		payload, err := readRequiredSecretText(source.serviceName+" secrets", filepath.Join(root, "secrets", source.fileName))
 		if err != nil {
 			return err
 		}
@@ -134,6 +134,41 @@ func validateKubernetesNamespace(namespace string) error {
 	return nil
 }
 
+func validateKubernetesSecretReleaseRootWithDecrypt(root string, decrypt deploymentDecryptFunc) error {
+	root, err := resolveDeploymentRoot(root)
+	if err != nil {
+		return err
+	}
+	if decrypt == nil {
+		return errors.New("deployment decrypt function is required")
+	}
+
+	configPath := filepath.Join(root, "config.yaml")
+	ageKeyPath := filepath.Join(root, ".sops", "age-key.txt")
+	if err := requireReadableFile("config.yaml", configPath); err != nil {
+		return err
+	}
+	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
+		return err
+	}
+	if err := validateKubernetesPlatformInputs(root); err != nil {
+		return err
+	}
+
+	configMap, err := readYAMLMapFile(configPath)
+	if err != nil {
+		return err
+	}
+	for _, source := range kubernetesServiceSecretSources {
+		servicePath := filepath.Join(root, "services", source.serviceName+".yaml")
+		secretPath := filepath.Join(root, "secrets", source.fileName)
+		if err := validateDeploymentServiceWithSecretPath(configMap, servicePath, secretPath, ageKeyPath, decrypt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func newOpaqueSecret(namespace, name string, data map[string]string) kubernetesSecretManifest {
 	return kubernetesSecretManifest{
 		APIVersion: "v1",
@@ -142,29 +177,6 @@ func newOpaqueSecret(namespace, name string, data map[string]string) kubernetesS
 		Metadata:   kubernetesMeta{Name: name, Namespace: namespace},
 		StringData: data,
 	}
-}
-
-func readPostgresBootstrapPassword(root string, decrypt deploymentDecryptFunc, ageKeyPath string) (string, error) {
-	secretPath := filepath.Join(root, "deploy", "docker", "postgres", "bootstrap.secrets.yaml")
-	payload, err := decrypt(secretPath, ageKeyPath)
-	if err != nil {
-		return "", fmt.Errorf("decrypt Postgres bootstrap secret: %w", err)
-	}
-	secretMap, err := parseYAMLMap(secretPath, payload)
-	if err != nil {
-		return "", err
-	}
-	noebs := getMap(secretMap, "noebs")
-	if noebs == nil {
-		return "", errors.New("postgres bootstrap secret missing noebs")
-	}
-	if err := rejectLegacyDatabasePath(noebs); err != nil {
-		return "", fmt.Errorf("postgres bootstrap database config: %w", err)
-	}
-	if err := rejectPlaceholders("Postgres bootstrap secret", noebs); err != nil {
-		return "", err
-	}
-	return databaseURLPassword("Postgres bootstrap db_url", firstString(noebs, "db_url"))
 }
 
 func readRequiredSecretValue(label, path string) (string, error) {
