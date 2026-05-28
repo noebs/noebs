@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
@@ -40,7 +41,7 @@ func TestHandleConfiguredEBSAppliesMountedConfigBeforeValidation(t *testing.T) {
 	body := []byte(`{"tranDateTime":"20260528120000","UUID":"uuid-1","PAN":"9222081700000000","IPIN":"123456","expDate":"2601","tranAmount":25,"serviceProviderId":"provider-1"}`)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tenant-ID", " tenant_1 ")
+	req.Header.Set(gateway.GatewayTenantIDHeader, " tenant_1 ")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -68,7 +69,7 @@ func TestCompleteRegistrationAppliesMountedConfigBeforeValidation(t *testing.T) 
 	body := []byte(`{"tranDateTime":"20260528120000","UUID":"uuid-1","otp":"123456","IPIN":"123456","originalTranUUID":"original-uuid","userPassword":"ebs-password","mobile":"0912141660"}`)
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tenant-ID", "tenant_1")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)

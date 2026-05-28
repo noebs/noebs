@@ -97,6 +97,7 @@ func TestEBSAdapterRoutesAreProxiedByAPIGateway(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
+			req.Header.Set("X-Tenant-ID", "test-tenant")
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

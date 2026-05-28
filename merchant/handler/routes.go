@@ -2,28 +2,35 @@ package handler
 
 import "github.com/gofiber/fiber/v2"
 
-func RegisterRoutes(router fiber.Router, h *Handler) {
+func RegisterRoutes(router fiber.Router, h *Handler, middleware ...fiber.Handler) {
+	post := func(path string, handler fiber.Handler) {
+		handlers := make([]fiber.Handler, 0, len(middleware)+1)
+		handlers = append(handlers, middleware...)
+		handlers = append(handlers, handler)
+		router.Post(path, handlers...)
+	}
+
 	// EBS passthrough (merchant)
-	router.Post("/ebs/*", h.EBS)
+	post("/ebs/*", h.EBS)
 
 	// Primary merchant endpoints
-	router.Post("/workingKey", h.WorkingKey)
-	router.Post("/cardTransfer", h.CardTransfer)
-	router.Post("/voucher", h.GenerateVoucher)
-	router.Post("/voucher/cash_in", h.VoucherCashIn)
-	router.Post("/cashout", h.VoucherCashOut)
-	router.Post("/voucher/cash_out", h.VoucherCashOut)
-	router.Post("/purchase", h.Purchase)
-	router.Post("/cashIn", h.CashIn)
-	router.Post("/cashOut", h.CashOut)
-	router.Post("/billInquiry", h.BillInquiry)
-	router.Post("/billPayment", h.BillPayment)
-	router.Post("/bills", h.TopUpPayment)
-	router.Post("/changePin", h.ChangePIN)
-	router.Post("/miniStatement", h.MiniStatement)
-	router.Post("/isAlive", h.IsAlive)
-	router.Post("/balance", h.Balance)
-	router.Post("/refund", h.Refund)
-	router.Post("/toAccount", h.ToAccount)
-	router.Post("/statement", h.Statement)
+	post("/workingKey", h.WorkingKey)
+	post("/cardTransfer", h.CardTransfer)
+	post("/voucher", h.GenerateVoucher)
+	post("/voucher/cash_in", h.VoucherCashIn)
+	post("/cashout", h.VoucherCashOut)
+	post("/voucher/cash_out", h.VoucherCashOut)
+	post("/purchase", h.Purchase)
+	post("/cashIn", h.CashIn)
+	post("/cashOut", h.CashOut)
+	post("/billInquiry", h.BillInquiry)
+	post("/billPayment", h.BillPayment)
+	post("/bills", h.TopUpPayment)
+	post("/changePin", h.ChangePIN)
+	post("/miniStatement", h.MiniStatement)
+	post("/isAlive", h.IsAlive)
+	post("/balance", h.Balance)
+	post("/refund", h.Refund)
+	post("/toAccount", h.ToAccount)
+	post("/statement", h.Statement)
 }

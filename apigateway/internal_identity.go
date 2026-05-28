@@ -25,6 +25,19 @@ type UserIdentity struct {
 	Mobile   string
 }
 
+// InternalTenantIdentityMiddleware binds a gateway-issued tenant identity header
+// to Fiber locals for public service routes that still require tenant scope.
+func InternalTenantIdentityMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		tenantID, err := ParseInternalTenantIdentity(c.Get(GatewayTenantIDHeader))
+		if err != nil {
+			return unauthorizedGatewayIdentity(c)
+		}
+		c.Locals("tenant_id", tenantID)
+		return c.Next()
+	}
+}
+
 // InternalUserIdentityMiddleware binds the gateway-issued user identity headers
 // to Fiber locals for service-owned user routes.
 func InternalUserIdentityMiddleware() fiber.Handler {
@@ -55,6 +68,10 @@ func InternalAdminIdentityMiddleware() fiber.Handler {
 		}
 		return c.Next()
 	}
+}
+
+func ParseInternalTenantIdentity(rawTenantID string) (string, error) {
+	return validateTenantID(rawTenantID)
 }
 
 func ParseInternalUserIdentity(rawTenantID, rawUserID, rawMobile string) (UserIdentity, error) {

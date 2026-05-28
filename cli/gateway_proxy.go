@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,6 +10,7 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/proxy"
 )
@@ -17,6 +19,7 @@ type gatewayAuthMode int
 
 const (
 	gatewayAuthPublic gatewayAuthMode = iota
+	gatewayAuthPublicTenant
 	gatewayAuthUser
 	gatewayAuthAdmin
 )
@@ -46,6 +49,8 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 		switch spec.auth {
 		case gatewayAuthPublic:
 			handlers = append(handlers, clearPublicCredentialHeaders)
+		case gatewayAuthPublicTenant:
+			handlers = append(handlers, propagateGatewayPublicTenant)
 		case gatewayAuthUser:
 			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
 		case gatewayAuthAdmin:
@@ -104,9 +109,24 @@ func clearPublicCredentialHeaders(c *fiber.Ctx) error {
 
 func stripPublicCredentialHeaders(c *fiber.Ctx) {
 	c.Request().Header.Del("Authorization")
+	c.Request().Header.Del("X-Tenant-ID")
 	c.Request().Header.Del("X-Admin-Key")
 	c.Request().Header.Del("X-Admin-Role")
 	c.Request().Header.Del("X-Admin-Permissions")
+}
+
+func propagateGatewayPublicTenant(c *fiber.Ctx) error {
+	tenantID, err := store.ValidateTenantID(c.Get("X-Tenant-ID"))
+	if err != nil {
+		code := "invalid_tenant_id"
+		if errors.Is(err, store.ErrMissingTenantID) {
+			code = "missing_tenant_id"
+		}
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": code, "message": err.Error()})
+	}
+	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	stripPublicCredentialHeaders(c)
+	return c.Next()
 }
 
 func propagateGatewayUserIdentity(c *fiber.Ctx) error {
@@ -137,15 +157,15 @@ func propagateGatewayAdminIdentity(c *fiber.Ctx) error {
 func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 	return []gatewayRouteSpec{
 		{method: fiber.MethodPost, path: "/generate_api_key", role: serviceRoleIdentityAuth, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/consumer/register", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/refresh", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/otp/generate", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/otp/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/otp/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/auth/google", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/check_user", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthPublic},
+		{method: fiber.MethodPost, path: "/consumer/register", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/refresh", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/otp/generate", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/otp/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/otp/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/auth/google", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/check_user", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
 		{method: fiber.MethodPost, path: "/consumer/auth/complete_profile", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/auth/me", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
@@ -164,56 +184,56 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/payment_request", role: serviceRoleCardVault, auth: gatewayAuthUser},
 
-		{method: fiber.MethodPost, path: "/ebs/*", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/card_info", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/otp/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/register_with_card", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/cards/new", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/cards/complete", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodGet, path: "/consumer/nec2name", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/workingKey", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/cardTransfer", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/voucher", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/voucher/cash_in", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/cashout", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/voucher/cash_out", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/purchase", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/cashIn", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/cashOut", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/billInquiry", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/billPayment", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/bills", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/changePin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/miniStatement", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/isAlive", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/refund", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/toAccount", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/statement", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/is_alive", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/bill_payment", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/bills", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodGet, path: "/consumer/biller", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/bill_inquiry", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/p2p", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/cashIn", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/cashOut", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/account", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/purchase", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/n/status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/key", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/generate_qr", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/qr_payment", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/qr_status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/qr_refund", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/qr_complete", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/ipin_key", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/generate_ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/complete_ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodPost, path: "/consumer/vouchers/generate", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
+		{method: fiber.MethodPost, path: "/ebs/*", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/card_info", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/otp/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/register_with_card", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/cards/new", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/cards/complete", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodGet, path: "/consumer/nec2name", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/workingKey", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/cardTransfer", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/voucher", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/voucher/cash_in", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/cashout", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/voucher/cash_out", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/purchase", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/cashIn", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/cashOut", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/billInquiry", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/billPayment", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/bills", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/changePin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/miniStatement", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/isAlive", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/refund", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/toAccount", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/statement", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/is_alive", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/bill_payment", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/bills", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodGet, path: "/consumer/biller", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/bill_inquiry", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/p2p", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/cashIn", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/cashOut", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/account", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/purchase", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/n/status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/key", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/generate_qr", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/qr_payment", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/qr_status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/qr_refund", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/qr_complete", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/ipin_key", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/generate_ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/complete_ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/vouchers/generate", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
 		{method: fiber.MethodGet, path: "/consumer/transaction", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/transactions", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/p2p_mobile", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},

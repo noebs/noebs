@@ -432,12 +432,12 @@ func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
 	return identity.Mobile, nil
 }
 
-func registerIdentityAuthRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Post("/generate_api_key", adminIdentity, consumerHandler.GenerateAPIKey)
 	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", adminIdentity), consumerHandler)
 
 	cons := route.Group("/consumer")
-	consumerhandler.RegisterIdentityPublicRoutes(cons, consumerHandler)
+	consumerhandler.RegisterIdentityPublicRoutes(cons.Group("", tenantIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
@@ -448,11 +448,11 @@ func registerCardVaultRoutes(route *fiber.App, userIdentity fiber.Handler, admin
 	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", adminIdentity), consumerHandler)
 }
 
-func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
-	merchanthandler.RegisterRoutes(route, merchantHandler)
+func registerEBSAdapterRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
+	merchanthandler.RegisterRoutes(route, merchantHandler, tenantIdentity)
 
 	cons := route.Group("/consumer")
-	consumerhandler.RegisterEBSAdapterPublicRoutes(cons, consumerHandler)
+	consumerhandler.RegisterEBSAdapterPublicRoutes(cons.Group("", tenantIdentity), consumerHandler)
 	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
@@ -478,6 +478,7 @@ func GetMainEngine() *fiber.App {
 	}
 	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
+	tenantIdentity := gateway.InternalTenantIdentityMiddleware()
 	userIdentity := gateway.InternalUserIdentityMiddleware()
 	adminIdentity := gateway.InternalAdminIdentityMiddleware()
 	if otelEnabled {
@@ -518,7 +519,7 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleIdentityAuth {
 		consumerHandler := consumerhandler.New(&consumerService)
-		registerIdentityAuthRoutes(route, userIdentity, adminIdentity, consumerHandler)
+		registerIdentityAuthRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleCardVault {
@@ -529,7 +530,7 @@ func GetMainEngine() *fiber.App {
 	if role == serviceRoleEBSAdapter {
 		consumerHandler := consumerhandler.New(&consumerService)
 		merchantHandler := merchanthandler.New(&merchantServices)
-		registerEBSAdapterRoutes(route, userIdentity, consumerHandler, merchantHandler)
+		registerEBSAdapterRoutes(route, tenantIdentity, userIdentity, consumerHandler, merchantHandler)
 		return route
 	}
 	if role == serviceRoleAdminReporting {

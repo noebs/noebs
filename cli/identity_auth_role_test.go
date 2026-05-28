@@ -28,6 +28,7 @@ func TestIdentityRoutesAreProxiedByAPIGateway(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
+			req.Header.Set("X-Tenant-ID", "test-tenant")
 			req.Header.Set("X-Admin-Key", adminKey)
 			resp, err := route.Test(req)
 			if err != nil {

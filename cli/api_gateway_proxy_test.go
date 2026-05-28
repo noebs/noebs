@@ -301,7 +301,7 @@ func TestServiceMetricsAcceptGatewayAdminIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -378,24 +378,26 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	ensureInit()
 	authorization := testAuthorizationHeader(t)
 	type observedHeaders struct {
-		tenant      string
-		userID      string
-		mobile      string
-		auth        string
-		adminKey    string
-		adminRole   string
-		permissions string
+		tenant       string
+		userID       string
+		mobile       string
+		publicTenant string
+		auth         string
+		adminKey     string
+		adminRole    string
+		permissions  string
 	}
 	observed := make(chan observedHeaders, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		observed <- observedHeaders{
-			tenant:      r.Header.Get(gateway.GatewayTenantIDHeader),
-			userID:      r.Header.Get(gateway.GatewayUserIDHeader),
-			mobile:      r.Header.Get(gateway.GatewayMobileHeader),
-			auth:        r.Header.Get("Authorization"),
-			adminKey:    r.Header.Get("X-Admin-Key"),
-			adminRole:   r.Header.Get("X-Admin-Role"),
-			permissions: r.Header.Get("X-Admin-Permissions"),
+			tenant:       r.Header.Get(gateway.GatewayTenantIDHeader),
+			userID:       r.Header.Get(gateway.GatewayUserIDHeader),
+			mobile:       r.Header.Get(gateway.GatewayMobileHeader),
+			publicTenant: r.Header.Get("X-Tenant-ID"),
+			auth:         r.Header.Get("Authorization"),
+			adminKey:     r.Header.Get("X-Admin-Key"),
+			adminRole:    r.Header.Get("X-Admin-Role"),
+			permissions:  r.Header.Get("X-Admin-Permissions"),
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -408,6 +410,7 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/consumer/get_cards", nil)
 	req.Header.Set("Authorization", authorization)
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
+	req.Header.Set("X-Tenant-ID", "public-tenant")
 	req.Header.Set(gateway.GatewayUserIDHeader, "999")
 	req.Header.Set(gateway.GatewayMobileHeader, "0911111111")
 	req.Header.Set("X-Admin-Key", "public-admin")
@@ -423,7 +426,7 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	if got.tenant != "test-tenant" || got.userID != "1" || got.mobile != "0912345678" {
 		t.Fatalf("forwarded identity = %+v, want tenant=test-tenant userID=1 mobile=0912345678", got)
 	}
-	if got.auth != "" || got.adminKey != "" || got.adminRole != "" || got.permissions != "" {
+	if got.publicTenant != "" || got.auth != "" || got.adminKey != "" || got.adminRole != "" || got.permissions != "" {
 		t.Fatalf("gateway forwarded public credentials on user route: %+v", got)
 	}
 }
@@ -439,6 +442,7 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 			r.Header.Get(gateway.GatewayAdminRoleHeader) == "" &&
 			r.Header.Get(gateway.GatewayAdminPermissionsHeader) == "" &&
 			r.Header.Get("Authorization") == "" &&
+			r.Header.Get("X-Tenant-ID") == "" &&
 			r.Header.Get("X-Admin-Key") == "" &&
 			r.Header.Get("X-Admin-Role") == "" &&
 			r.Header.Get("X-Admin-Permissions") == ""
@@ -450,11 +454,12 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 	setServiceRoleForTest(t, serviceRoleAPIGateway)
 	route := GetMainEngine()
 
-	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/app.css", nil)
 	setTestGatewayUserIdentityHeaders(req)
 	setGatewayAdminIdentityHeader(req)
 	req.Header.Set(gateway.GatewayAdminPermissionsHeader, "config:manage")
 	req.Header.Set("Authorization", "Bearer public-token")
+	req.Header.Set("X-Tenant-ID", "public-tenant")
 	req.Header.Set("X-Admin-Key", "public-admin")
 	req.Header.Set("X-Admin-Role", "admin")
 	req.Header.Set("X-Admin-Permissions", "config:manage")
@@ -465,6 +470,77 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 	assertGatewayProxied(t, resp)
 	if cleared := <-observed; !cleared {
 		t.Fatalf("gateway forwarded caller-supplied identity headers on public route")
+	}
+}
+
+func TestAPIGatewayPropagatesValidatedPublicTenant(t *testing.T) {
+	ensureInit()
+	type observedHeaders struct {
+		internalTenant string
+		publicTenant   string
+		auth           string
+		adminKey       string
+	}
+	observed := make(chan observedHeaders, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		observed <- observedHeaders{
+			internalTenant: r.Header.Get(gateway.GatewayTenantIDHeader),
+			publicTenant:   r.Header.Get("X-Tenant-ID"),
+			auth:           r.Header.Get("Authorization"),
+			adminKey:       r.Header.Get("X-Admin-Key"),
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
+	req.Header.Set("X-Tenant-ID", " test-tenant ")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
+	req.Header.Set("Authorization", "Bearer public-token")
+	req.Header.Set("X-Admin-Key", "public-admin")
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	assertGatewayProxied(t, resp)
+
+	got := <-observed
+	if got.internalTenant != "test-tenant" {
+		t.Fatalf("forwarded tenant = %q, want test-tenant", got.internalTenant)
+	}
+	if got.publicTenant != "" || got.auth != "" || got.adminKey != "" {
+		t.Fatalf("gateway forwarded public tenant or credentials: %+v", got)
+	}
+}
+
+func TestAPIGatewayRejectsMissingPublicTenantBeforeProxy(t *testing.T) {
+	ensureInit()
+	var hits atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("upstream hits = %d, want 0", hits.Load())
 	}
 }
 
@@ -500,7 +576,7 @@ func TestAPIGatewayEnforcesAdminAuthBeforeProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}

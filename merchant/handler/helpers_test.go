@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 )
@@ -26,7 +27,7 @@ func TestResolveTenantIDRequiresExplicitTenant(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestResolveTenantIDUsesExplicitTenantHeader(t *testing.T) {
+func TestResolveTenantIDUsesGatewayTenantHeader(t *testing.T) {
 	app := fiber.New()
 	app.Get("/", func(c *fiber.Ctx) error {
 		tenantID, err := resolveTenantID(c)
@@ -40,7 +41,25 @@ func TestResolveTenantIDUsesExplicitTenantHeader(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-Tenant-ID", " tenant_1 ")
+	req.Header.Set(gateway.GatewayTenantIDHeader, " tenant_1 ")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		if _, err := resolveTenantID(c); !errors.Is(err, store.ErrMissingTenantID) {
+			t.Fatalf("resolveTenantID() error = %v, want %v", err, store.ErrMissingTenantID)
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Tenant-ID", "tenant_1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
