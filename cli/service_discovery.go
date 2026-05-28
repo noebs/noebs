@@ -17,12 +17,12 @@ var (
 	errInvalidServiceDiscoveryEntry    = errors.New("invalid service discovery entry")
 )
 
-func validateDeploymentServiceDiscoveryCatalog(serviceName string, cfg ebs_fields.NoebsConfig) error {
+func validateServiceDiscoveryCatalog(label string, cfg ebs_fields.NoebsConfig) error {
 	if err := validateExactHTTPServiceDiscoveryCatalog(cfg.ServiceDiscovery); err != nil {
-		return fmt.Errorf("%s service discovery: %w", serviceName, err)
+		return fmt.Errorf("%s service discovery: %w", label, err)
 	}
 	if err := validateExactGRPCServiceDiscoveryCatalog(cfg.GRPCServiceDiscovery); err != nil {
-		return fmt.Errorf("%s grpc service discovery: %w", serviceName, err)
+		return fmt.Errorf("%s grpc service discovery: %w", label, err)
 	}
 	return nil
 }

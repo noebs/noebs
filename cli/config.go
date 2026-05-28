@@ -595,6 +595,9 @@ func initConfig() {
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
 	}
+	if err := validateServiceDiscoveryCatalog(string(role), noebsConfig); err != nil {
+		logrusLogger.Fatalf("error in runtime service discovery config: %v", err)
+	}
 	tenantID, err := configuredTenantID(noebsConfig)
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime config: %v", err)

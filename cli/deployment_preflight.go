@@ -336,7 +336,7 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 	if err := json.Unmarshal(payload, &cfg); err != nil {
 		return fmt.Errorf("%s decode merged config: %w", serviceName, err)
 	}
-	if err := validateDeploymentServiceDiscoveryCatalog(serviceName, cfg); err != nil {
+	if err := validateServiceDiscoveryCatalog(serviceName, cfg); err != nil {
 		return err
 	}
 	if !role.runsMigrations() {

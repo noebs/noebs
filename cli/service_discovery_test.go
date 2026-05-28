@@ -9,59 +9,59 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestValidateDeploymentServiceDiscoveryCatalogAcceptsExactCatalog(t *testing.T) {
-	if err := validateDeploymentServiceDiscoveryCatalog("api-gateway", exactServiceDiscoveryConfig()); err != nil {
-		t.Fatalf("validateDeploymentServiceDiscoveryCatalog() error = %v", err)
+func TestValidateServiceDiscoveryCatalogAcceptsExactCatalog(t *testing.T) {
+	if err := validateServiceDiscoveryCatalog("api-gateway", exactServiceDiscoveryConfig()); err != nil {
+		t.Fatalf("validateServiceDiscoveryCatalog() error = %v", err)
 	}
 }
 
-func TestValidateDeploymentServiceDiscoveryCatalogRejectsMissingHTTPEntry(t *testing.T) {
+func TestValidateServiceDiscoveryCatalogRejectsMissingHTTPEntry(t *testing.T) {
 	cfg := exactServiceDiscoveryConfig()
 	delete(cfg.ServiceDiscovery, string(serviceRoleCardVault))
 
-	err := validateDeploymentServiceDiscoveryCatalog("api-gateway", cfg)
+	err := validateServiceDiscoveryCatalog("api-gateway", cfg)
 	if !errors.Is(err, errMissingServiceDiscoveryEntry) {
-		t.Fatalf("validateDeploymentServiceDiscoveryCatalog() error = %v, want %v", err, errMissingServiceDiscoveryEntry)
+		t.Fatalf("validateServiceDiscoveryCatalog() error = %v, want %v", err, errMissingServiceDiscoveryEntry)
 	}
 }
 
-func TestValidateDeploymentServiceDiscoveryCatalogRejectsUnexpectedHTTPEntry(t *testing.T) {
+func TestValidateServiceDiscoveryCatalogRejectsUnexpectedHTTPEntry(t *testing.T) {
 	cfg := exactServiceDiscoveryConfig()
 	cfg.ServiceDiscovery["monolith"] = "http://monolith:8080"
 
-	err := validateDeploymentServiceDiscoveryCatalog("api-gateway", cfg)
+	err := validateServiceDiscoveryCatalog("api-gateway", cfg)
 	if !errors.Is(err, errUnexpectedServiceDiscoveryEntry) {
-		t.Fatalf("validateDeploymentServiceDiscoveryCatalog() error = %v, want %v", err, errUnexpectedServiceDiscoveryEntry)
+		t.Fatalf("validateServiceDiscoveryCatalog() error = %v, want %v", err, errUnexpectedServiceDiscoveryEntry)
 	}
 }
 
-func TestValidateDeploymentServiceDiscoveryCatalogRejectsInvalidHTTPEntry(t *testing.T) {
+func TestValidateServiceDiscoveryCatalogRejectsInvalidHTTPEntry(t *testing.T) {
 	cfg := exactServiceDiscoveryConfig()
 	cfg.ServiceDiscovery[string(serviceRoleEBSAdapter)] = "ebs-adapter:8080"
 
-	err := validateDeploymentServiceDiscoveryCatalog("api-gateway", cfg)
+	err := validateServiceDiscoveryCatalog("api-gateway", cfg)
 	if !errors.Is(err, errInvalidServiceDiscoveryEntry) {
-		t.Fatalf("validateDeploymentServiceDiscoveryCatalog() error = %v, want %v", err, errInvalidServiceDiscoveryEntry)
+		t.Fatalf("validateServiceDiscoveryCatalog() error = %v, want %v", err, errInvalidServiceDiscoveryEntry)
 	}
 }
 
-func TestValidateDeploymentServiceDiscoveryCatalogRejectsMissingGRPCEntry(t *testing.T) {
+func TestValidateServiceDiscoveryCatalogRejectsMissingGRPCEntry(t *testing.T) {
 	cfg := exactServiceDiscoveryConfig()
 	delete(cfg.GRPCServiceDiscovery, string(serviceRoleWalletLedger))
 
-	err := validateDeploymentServiceDiscoveryCatalog("api-gateway", cfg)
+	err := validateServiceDiscoveryCatalog("api-gateway", cfg)
 	if !errors.Is(err, errMissingServiceDiscoveryEntry) {
-		t.Fatalf("validateDeploymentServiceDiscoveryCatalog() error = %v, want %v", err, errMissingServiceDiscoveryEntry)
+		t.Fatalf("validateServiceDiscoveryCatalog() error = %v, want %v", err, errMissingServiceDiscoveryEntry)
 	}
 }
 
-func TestValidateDeploymentServiceDiscoveryCatalogRejectsUnexpectedGRPCEntry(t *testing.T) {
+func TestValidateServiceDiscoveryCatalogRejectsUnexpectedGRPCEntry(t *testing.T) {
 	cfg := exactServiceDiscoveryConfig()
 	cfg.GRPCServiceDiscovery["wallet-worker"] = "wallet-worker:9090"
 
-	err := validateDeploymentServiceDiscoveryCatalog("api-gateway", cfg)
+	err := validateServiceDiscoveryCatalog("api-gateway", cfg)
 	if !errors.Is(err, errUnexpectedServiceDiscoveryEntry) {
-		t.Fatalf("validateDeploymentServiceDiscoveryCatalog() error = %v, want %v", err, errUnexpectedServiceDiscoveryEntry)
+		t.Fatalf("validateServiceDiscoveryCatalog() error = %v, want %v", err, errUnexpectedServiceDiscoveryEntry)
 	}
 }
 
