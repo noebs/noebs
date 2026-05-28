@@ -20,8 +20,9 @@ func (s *Service) ResolveIdentityUserByMobile(ctx context.Context, tenantID stri
 	if s == nil || s.Store == nil {
 		return IdentityUserByMobileResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return IdentityUserByMobileResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return IdentityUserByMobileResult{}, err
 	}
 	mobile := strings.TrimSpace(cmd.Mobile)
 	if mobile == "" {

@@ -51,8 +51,9 @@ func (s *Service) GoogleAuth(ctx context.Context, tenantID string, code, codeVer
 	if s == nil || s.Store == nil {
 		return "", empty, false, ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", empty, false, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", empty, false, err
 	}
 	if strings.TrimSpace(code) == "" {
 		return "", empty, false, errors.New("missing_code")
@@ -95,8 +96,9 @@ func (s *Service) CompleteProfile(ctx context.Context, tenantID string, userID i
 	if s == nil || s.Store == nil {
 		return "", empty, ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", empty, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", empty, err
 	}
 	if userID <= 0 {
 		return "", empty, store.ErrInvalidUserID
@@ -129,8 +131,9 @@ func (s *Service) AuthMe(ctx context.Context, tenantID string, userID int64) (eb
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.User{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.User{}, err
 	}
 	if userID <= 0 {
 		return ebs_fields.User{}, store.ErrInvalidUserID
@@ -215,8 +218,9 @@ func (s *Service) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID string, info googleUserInfo) (ebs_fields.User, bool, error) {
 	var user ebs_fields.User
 	isNew := false
-	if tenantID == "" {
-		return user, false, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return user, false, err
 	}
 
 	if account, err := s.Store.FindAuthAccount(ctx, tenantID, googleProvider, info.Sub); err == nil {

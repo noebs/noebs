@@ -23,8 +23,9 @@ func (s *Service) IssueRecoveryJWT(ctx context.Context, tenantID string, cmd Rec
 	if s.Auth == nil {
 		return RecoveryJWTResult{}, ErrMissingAuth
 	}
-	if tenantID == "" {
-		return RecoveryJWTResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return RecoveryJWTResult{}, err
 	}
 	if cmd.UserID <= 0 {
 		return RecoveryJWTResult{}, store.ErrInvalidUserID
