@@ -506,9 +506,6 @@ func GetMainEngine() *fiber.App {
 		metricsGuard = adminIdentity
 	}
 
-	consumerHandler := consumerhandler.New(&consumerService)
-	merchantHandler := merchanthandler.New(&merchantServices)
-
 	route.Get("/test", func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 	})
@@ -520,14 +517,18 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleIdentityAuth {
+		consumerHandler := consumerhandler.New(&consumerService)
 		registerIdentityAuthRoutes(route, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleCardVault {
+		consumerHandler := consumerhandler.New(&consumerService)
 		registerCardVaultRoutes(route, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleEBSAdapter {
+		consumerHandler := consumerhandler.New(&consumerService)
+		merchantHandler := merchanthandler.New(&merchantServices)
 		registerEBSAdapterRoutes(route, userIdentity, consumerHandler, merchantHandler)
 		return route
 	}
@@ -536,10 +537,12 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleNotification {
+		consumerHandler := consumerhandler.New(&consumerService)
 		registerNotificationChatRoutes(route, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleBeneficiary {
+		consumerHandler := consumerhandler.New(&consumerService)
 		registerConsumerBeneficiaryRoutes(route, userIdentity, consumerHandler)
 		return route
 	}
