@@ -100,6 +100,51 @@ func TestAPIGatewayProxyCatalogTargetsRoutableHTTPServices(t *testing.T) {
 	}
 }
 
+func TestAPIGatewayProxyCatalogCoversPublicHTTPServiceRoles(t *testing.T) {
+	targetRoles := map[serviceRole]bool{}
+	for _, spec := range gatewayProxyRouteSpecs() {
+		targetRoles[spec.role] = true
+	}
+
+	publicHTTPRoles := []serviceRole{
+		serviceRoleIdentityAuth,
+		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
+		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleBeneficiary,
+		serviceRoleWalletAPI,
+	}
+	for _, role := range publicHTTPRoles {
+		if !role.startsHTTP() || role == serviceRoleAPIGateway {
+			t.Fatalf("%s is not a public HTTP service role", role)
+		}
+		if !targetRoles[role] {
+			t.Fatalf("public HTTP service role %s has no API gateway route", role)
+		}
+	}
+
+	privateRoles := []serviceRole{
+		serviceRoleAPIGateway,
+		serviceRoleWalletLedger,
+		serviceRoleWalletWorker,
+		serviceRoleIdentityAuthMigrate,
+		serviceRoleCardVaultMigrate,
+		serviceRoleEBSAdapterMigrate,
+		serviceRolePSPWebhookMigrate,
+		serviceRoleAdminReportingMigrate,
+		serviceRoleNotificationMigrate,
+		serviceRoleBeneficiaryMigrate,
+		serviceRoleWalletLedgerMigrate,
+	}
+	for _, role := range privateRoles {
+		if targetRoles[role] {
+			t.Fatalf("private service role %s must not be an API gateway proxy target", role)
+		}
+	}
+}
+
 func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 	ensureInit()
 	authorization := testAuthorizationHeader(t)
