@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 )
@@ -42,7 +42,7 @@ func resolveTenantID(c *fiber.Ctx) (string, error) {
 			return store.ValidateTenantID(tenantID)
 		}
 	}
-	return store.ValidateTenantID(strings.TrimSpace(c.Get("X-Tenant-ID")))
+	return store.ValidateTenantID(c.Get(gateway.GatewayTenantIDHeader))
 }
 
 func statusForError(err error) int {

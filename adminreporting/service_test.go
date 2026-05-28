@@ -3,12 +3,16 @@ package adminreporting
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/testdb"
 	"github.com/adonese/noebs/store"
+	"github.com/gofiber/fiber/v2"
 )
 
 func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
@@ -76,4 +80,44 @@ func TestStoreTransactionProjectionRejectsMissingInputs(t *testing.T) {
 	if err := service.StoreTransactionProjection(context.Background(), "tenant-a", TransactionProjectionCommand{}); !errors.Is(err, ErrMissingTransactionProjection) {
 		t.Fatalf("missing projection error = %v, want %v", err, ErrMissingTransactionProjection)
 	}
+}
+
+func TestResolveTenantIDUsesGatewayTenantHeader(t *testing.T) {
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		tenantID, err := resolveTenantID(c)
+		if err != nil {
+			t.Fatalf("resolveTenantID() error = %v", err)
+		}
+		if tenantID != "tenant-a" {
+			t.Fatalf("tenantID = %q, want tenant-a", tenantID)
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(gateway.GatewayTenantIDHeader, " tenant-a ")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		if _, err := resolveTenantID(c); !errors.Is(err, store.ErrMissingTenantID) {
+			t.Fatalf("resolveTenantID() error = %v, want %v", err, store.ErrMissingTenantID)
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Tenant-ID", "tenant-a")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	_ = resp.Body.Close()
 }

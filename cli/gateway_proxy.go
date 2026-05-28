@@ -22,6 +22,7 @@ const (
 	gatewayAuthPublicTenant
 	gatewayAuthUser
 	gatewayAuthAdmin
+	gatewayAuthAdminTenant
 )
 
 type gatewayRouteSpec struct {
@@ -55,6 +56,8 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
 		case gatewayAuthAdmin:
 			handlers = append(handlers, adminGuard, propagateGatewayAdminIdentity)
+		case gatewayAuthAdminTenant:
+			handlers = append(handlers, adminGuard, propagateGatewayAdminTenantIdentity)
 		default:
 			return fmt.Errorf("unknown gateway auth mode %d for %s %s", spec.auth, spec.method, spec.path)
 		}
@@ -118,15 +121,19 @@ func stripPublicCredentialHeaders(c *fiber.Ctx) {
 func propagateGatewayPublicTenant(c *fiber.Ctx) error {
 	tenantID, err := store.ValidateTenantID(c.Get("X-Tenant-ID"))
 	if err != nil {
-		code := "invalid_tenant_id"
-		if errors.Is(err, store.ErrMissingTenantID) {
-			code = "missing_tenant_id"
-		}
-		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": code, "message": err.Error()})
+		return tenantValidationError(c, err)
 	}
 	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	stripPublicCredentialHeaders(c)
 	return c.Next()
+}
+
+func tenantValidationError(c *fiber.Ctx, err error) error {
+	code := "invalid_tenant_id"
+	if errors.Is(err, store.ErrMissingTenantID) {
+		code = "missing_tenant_id"
+	}
+	return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": code, "message": err.Error()})
 }
 
 func propagateGatewayUserIdentity(c *fiber.Ctx) error {
@@ -149,6 +156,18 @@ func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 
 func propagateGatewayAdminIdentity(c *fiber.Ctx) error {
 	stripPublicCredentialHeaders(c)
+	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
+	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
+	return c.Next()
+}
+
+func propagateGatewayAdminTenantIdentity(c *fiber.Ctx) error {
+	tenantID, err := store.ValidateTenantID(c.Get("X-Tenant-ID"))
+	if err != nil {
+		return tenantValidationError(c, err)
+	}
+	stripPublicCredentialHeaders(c)
+	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
 	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
 	return c.Next()
@@ -272,18 +291,18 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/admin/wallet/audit", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
 
 		{method: fiber.MethodGet, path: "/dashboard/assets/*", role: serviceRoleAdminReporting, auth: gatewayAuthPublic},
-		{method: fiber.MethodGet, path: "/dashboard", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/get_tid", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/get", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/all", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/all/:id", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/count", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/settlement", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/merchant", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/merchant/:id", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/status", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/test_browser", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/dashboard/stream", role: serviceRoleAdminReporting, auth: gatewayAuthAdmin},
+		{method: fiber.MethodGet, path: "/dashboard", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/get_tid", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/get", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/all", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/all/:id", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/count", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/settlement", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/merchant", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/merchant/:id", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/status", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/test_browser", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/dashboard/stream", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
 	}
 }

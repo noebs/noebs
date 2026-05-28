@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	gateway "github.com/adonese/noebs/apigateway"
 )
 
 func TestDashboardRouteIsProxiedByAPIGateway(t *testing.T) {
@@ -18,6 +20,7 @@ func TestDashboardRouteIsProxiedByAPIGateway(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
@@ -32,7 +35,7 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	setGatewayAdminIdentityHeader(req)
-	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
+	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
@@ -52,7 +55,7 @@ func TestAdminReportingOwnsInternalTransactionProjectionCommand(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/internal/admin-reporting/transactions", nil)
 	setGatewayAdminIdentityHeader(req)
-	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
+	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
 	resp, err := route.Test(req)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
@@ -142,13 +145,35 @@ func TestAdminReportingRequiresExplicitTenantAtHTTPBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
 
-func TestAdminReportingAcceptsExplicitTenantHeader(t *testing.T) {
+func TestAdminReportingAcceptsGatewayTenantHeader(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
+	setGatewayAdminIdentityHeader(req)
+	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestAdminReportingIgnoresPublicTenantHeader(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleAdminReporting)
 	route := GetMainEngine()
@@ -160,9 +185,11 @@ func TestAdminReportingAcceptsExplicitTenantHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
 

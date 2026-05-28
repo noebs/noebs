@@ -371,26 +371,27 @@ func pspStoreForRole(role serviceRole) (*walletstore.Store, error) {
 	}
 }
 
-func registerAdminReportingRoutes(route *fiber.App, adminIdentity fiber.Handler, service *adminreporting.Service) {
-	adminreporting.RegisterInternalRoutes(route.Group("/internal/admin-reporting", adminIdentity), service)
+func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler, adminIdentity fiber.Handler, service *adminreporting.Service) {
+	adminreporting.RegisterInternalRoutes(route.Group("/internal/admin-reporting", adminIdentity, tenantIdentity), service)
 	route.Use("/dashboard/assets", filesystem.New(filesystem.Config{
 		Root: dashboard.AssetFileSystem(),
 	}))
-	dashboardGroup := route.Group("/dashboard", adminIdentity)
-	{
-		dashboardGroup.Get("/", wrapHandler(dashService.BrowserDashboard))
-		dashboardGroup.Get("/get_tid", wrapHandler(dashService.TransactionByTid))
-		dashboardGroup.Get("/get", wrapHandler(dashService.TransactionByTid))
-		dashboardGroup.Get("/all", wrapHandler(dashService.GetAll))
-		dashboardGroup.Get("/all/:id", wrapHandler(dashService.GetID))
-		dashboardGroup.Get("/count", wrapHandler(dashService.TransactionsCount))
-		dashboardGroup.Get("/settlement", wrapHandler(dashService.DailySettlement))
-		dashboardGroup.Get("/merchant", wrapHandler(dashService.MerchantTransactionsEndpoint))
-		dashboardGroup.Get("/merchant/:id", wrapHandler(dashService.MerchantViews))
-		dashboardGroup.Get("/status", wrapHandler(dashService.QRStatus))
-		dashboardGroup.Get("/test_browser", wrapHandler(dashService.IndexPage))
-		dashboardGroup.Get("/stream", wrapHandler(dashService.Stream))
+	dashboardGet := func(path string, handler interface{}) {
+		route.Get(path, adminIdentity, tenantIdentity, wrapHandler(handler))
 	}
+	dashboardGet("/dashboard", dashService.BrowserDashboard)
+	dashboardGet("/dashboard/", dashService.BrowserDashboard)
+	dashboardGet("/dashboard/get_tid", dashService.TransactionByTid)
+	dashboardGet("/dashboard/get", dashService.TransactionByTid)
+	dashboardGet("/dashboard/all", dashService.GetAll)
+	dashboardGet("/dashboard/all/:id", dashService.GetID)
+	dashboardGet("/dashboard/count", dashService.TransactionsCount)
+	dashboardGet("/dashboard/settlement", dashService.DailySettlement)
+	dashboardGet("/dashboard/merchant", dashService.MerchantTransactionsEndpoint)
+	dashboardGet("/dashboard/merchant/:id", dashService.MerchantViews)
+	dashboardGet("/dashboard/status", dashService.QRStatus)
+	dashboardGet("/dashboard/test_browser", dashService.IndexPage)
+	dashboardGet("/dashboard/stream", dashService.Stream)
 }
 
 func registerNotificationChatRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
@@ -534,7 +535,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleAdminReporting {
-		registerAdminReportingRoutes(route, adminIdentity, &adminReportingService)
+		registerAdminReportingRoutes(route, tenantIdentity, adminIdentity, &adminReportingService)
 		return route
 	}
 	if role == serviceRoleNotification {
