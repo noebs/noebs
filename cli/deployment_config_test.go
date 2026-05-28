@@ -1650,17 +1650,7 @@ func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
 		t.Fatalf("no Kubernetes Secret references were found")
 	}
 
-	renderedSecrets := map[string]bool{
-		"sops-age-key":                  true,
-		"postgres-credentials":          true,
-		"temporal-postgres-credentials": true,
-		"keycloak-postgres-credentials": true,
-		"keycloak-secrets":              true,
-		"noebs-tls":                     true,
-	}
-	for _, source := range kubernetesServiceSecretSources {
-		renderedSecrets[source.secretName] = true
-	}
+	renderedSecrets := renderedKubernetesSecretNames()
 	for secretName := range referencedSecrets {
 		if !renderedSecrets[secretName] {
 			t.Fatalf("Kubernetes manifest references Secret %q but render-kubernetes-secrets does not render it", secretName)
@@ -1671,6 +1661,45 @@ func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
 			t.Fatalf("render-kubernetes-secrets renders Secret %q but no Kubernetes manifest references it", secretName)
 		}
 	}
+}
+
+func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
+	requiredSecrets := parseTerraformStringListLocal(t, filepath.Join("..", "foundation", "terraform", "locals.tf"), "noebs_required_kubernetes_secrets")
+	renderedSecrets := renderedKubernetesSecretNames()
+
+	for secretName := range renderedSecrets {
+		if !requiredSecrets[secretName] {
+			t.Fatalf("render-kubernetes-secrets renders Secret %q but noebs_required_kubernetes_secrets does not declare it", secretName)
+		}
+	}
+	for secretName := range requiredSecrets {
+		if !renderedSecrets[secretName] {
+			t.Fatalf("noebs_required_kubernetes_secrets declares Secret %q but render-kubernetes-secrets does not render it", secretName)
+		}
+	}
+
+	outputs, err := os.ReadFile(filepath.Join("..", "foundation", "terraform", "outputs.tf"))
+	if err != nil {
+		t.Fatalf("read foundation/terraform/outputs.tf: %v", err)
+	}
+	if !strings.Contains(string(outputs), `output "noebs_required_kubernetes_secrets"`) {
+		t.Fatalf("foundation/terraform/outputs.tf must expose noebs_required_kubernetes_secrets")
+	}
+}
+
+func renderedKubernetesSecretNames() map[string]bool {
+	secrets := map[string]bool{
+		"sops-age-key":                  true,
+		"postgres-credentials":          true,
+		"temporal-postgres-credentials": true,
+		"keycloak-postgres-credentials": true,
+		"keycloak-secrets":              true,
+		"noebs-tls":                     true,
+	}
+	for _, source := range kubernetesServiceSecretSources {
+		secrets[source.secretName] = true
+	}
+	return secrets
 }
 
 func decodeManifestObjects(t *testing.T, path string) []manifestObject {
@@ -2280,6 +2309,48 @@ func parseTerraformDatabaseCatalog(t *testing.T, path string) map[string]terrafo
 		t.Fatalf("noebs_database_catalog not found in %s", path)
 	}
 	return catalog
+}
+
+func parseTerraformStringListLocal(t *testing.T, path, localName string) map[string]bool {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	startRe := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(localName) + `\s*=\s*\[\s*$`)
+	valueRe := regexp.MustCompile(`^\s*"([^"]+)"\s*,?\s*$`)
+	values := map[string]bool{}
+	inList := false
+	for _, line := range lines {
+		if !inList {
+			if startRe.MatchString(line) {
+				inList = true
+			}
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "]" {
+			if len(values) == 0 {
+				t.Fatalf("Terraform local %s is empty in %s", localName, path)
+			}
+			return values
+		}
+		if trimmed == "" {
+			continue
+		}
+		match := valueRe.FindStringSubmatch(line)
+		if len(match) != 2 {
+			t.Fatalf("Terraform local %s has unsupported list item %q in %s", localName, line, path)
+		}
+		if values[match[1]] {
+			t.Fatalf("Terraform local %s repeats %q in %s", localName, match[1], path)
+		}
+		values[match[1]] = true
+	}
+	t.Fatalf("Terraform local %s not found in %s", localName, path)
+	return nil
 }
 
 func requireTerraformServiceCatalogEntry(t *testing.T, catalog map[string]terraformServiceCatalogEntry, name string, port int, protocol string) {

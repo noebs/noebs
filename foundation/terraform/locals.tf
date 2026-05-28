@@ -131,6 +131,26 @@ locals {
       managed_by     = "temporal"
     }
   }
+
+  noebs_required_kubernetes_secrets = [
+    "api-gateway-secrets",
+    "identity-auth-secrets",
+    "card-vault-secrets",
+    "ebs-adapter-secrets",
+    "psp-webhook-secrets",
+    "admin-reporting-secrets",
+    "notification-chat-secrets",
+    "consumer-beneficiary-secrets",
+    "wallet-api-secrets",
+    "wallet-ledger-secrets",
+    "wallet-worker-secrets",
+    "sops-age-key",
+    "postgres-credentials",
+    "temporal-postgres-credentials",
+    "keycloak-postgres-credentials",
+    "keycloak-secrets",
+    "noebs-tls",
+  ]
 }
 
 check "noebs_manifest_path_exists" {
