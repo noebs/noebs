@@ -40,7 +40,7 @@ Before replacing a host deployment, run the explicit preflight against the relea
 noebs validate-deployment /path/to/noebs-release
 ```
 
-The preflight decrypts every service secret with the release age key and validates the merged service configs before any containers are started. It requires the exact runtime and migration role files under `deploy/docker/services`, rejects extra real `*.secrets.yaml` service secret files under `deploy/docker/secrets`, and rejects missing files, placeholder values, reserved tenant IDs, legacy `noebs.db_path`, non-owner database entries, missing service-owned database URLs, missing EBS adapter endpoints/app IDs, and incomplete Keycloak/Temporal/Postgres platform inputs.
+The preflight decrypts every service secret with the release age key and validates the merged service configs before any containers are started. It requires the exact runtime and migration role files under `deploy/docker/services`, rejects extra real `*.secrets.yaml` service secret files under `deploy/docker/secrets`, and rejects missing files, placeholder values, reserved tenant IDs, legacy `noebs.db_path`, non-owner database entries, missing service-owned database URLs, missing EBS adapter endpoints/app IDs, incomplete Keycloak/Temporal/Postgres platform inputs, and missing or extra HTTP/gRPC service discovery entries.
 
 For Kubernetes cutovers, render the required Secret manifests from a Kubernetes release input directory and explicit TLS files:
 
