@@ -63,6 +63,7 @@ health verification, and retirement of the old Docker Compose deployment.
 - [x] Added a documentation invariant that the foundation and current-host runbooks list every required Kubernetes cutover Secret, including `ghcr-credentials`.
 - [x] Added an OpenTofu precondition that blocks the Noebs Argo CD application when required Kubernetes Secret keys exist but their values are empty.
 - [x] Added background health endpoints and Kubernetes probes for `wallet-worker`, `ebs-adapter-events`, and `admin-reporting-projector`.
+- [x] Mirrored the background health contract in Docker Compose health checks for local microservice parity.
 
 ## Verified Gates
 

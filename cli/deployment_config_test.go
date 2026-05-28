@@ -130,13 +130,22 @@ type composeDocument struct {
 }
 
 type composeService struct {
-	Environment any             `yaml:"environment"`
-	EnvFile     any             `yaml:"env_file"`
-	Entrypoint  []string        `yaml:"entrypoint"`
-	Ports       []string        `yaml:"ports"`
-	Profiles    []string        `yaml:"profiles"`
-	Volumes     []string        `yaml:"volumes"`
-	Secrets     []composeSecret `yaml:"secrets"`
+	Environment any                 `yaml:"environment"`
+	EnvFile     any                 `yaml:"env_file"`
+	Entrypoint  []string            `yaml:"entrypoint"`
+	Healthcheck *composeHealthcheck `yaml:"healthcheck"`
+	Ports       []string            `yaml:"ports"`
+	Profiles    []string            `yaml:"profiles"`
+	Volumes     []string            `yaml:"volumes"`
+	Secrets     []composeSecret     `yaml:"secrets"`
+}
+
+type composeHealthcheck struct {
+	Test        []string `yaml:"test"`
+	Interval    string   `yaml:"interval"`
+	Timeout     string   `yaml:"timeout"`
+	Retries     int      `yaml:"retries"`
+	StartPeriod string   `yaml:"start_period"`
 }
 
 type composeSecret struct {
@@ -1203,6 +1212,11 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 	if len(serviceFiles) == 0 {
 		t.Fatalf("no docker service configs found")
 	}
+	backgroundHealthServices := map[string]bool{
+		"ebs-adapter-events":        true,
+		"admin-reporting-projector": true,
+		"wallet-worker":             true,
+	}
 
 	for _, serviceFile := range serviceFiles {
 		serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
@@ -1224,6 +1238,9 @@ func TestNoebsDockerComposeServicesUseMountedConfigFiles(t *testing.T) {
 		requireComposeSecret(t, serviceName, service.Secrets, "sops_age_key", "/app/.sops/age-key.txt")
 		rejectComposeSecret(t, serviceName, service.Secrets, "postgres-bootstrap-secrets")
 		requireComposeTopLevelSecret(t, compose.Secrets, secretSource, "./deploy/docker/secrets/"+strings.TrimSuffix(secretSource, "-secrets")+".secrets.yaml")
+		if backgroundHealthServices[serviceName] {
+			requireComposeHTTPHealthcheck(t, serviceName, service.Healthcheck, "curl -fsS http://localhost:8080/test || exit 1")
+		}
 	}
 }
 
@@ -2578,6 +2595,28 @@ func requireComposeVolume(t *testing.T, serviceName string, volumes []string, so
 		}
 	}
 	t.Fatalf("%s volumes = %v; missing %s:%s", serviceName, volumes, source, target)
+}
+
+func requireComposeHTTPHealthcheck(t *testing.T, serviceName string, healthcheck *composeHealthcheck, command string) {
+	t.Helper()
+	if healthcheck == nil {
+		t.Fatalf("%s missing healthcheck", serviceName)
+	}
+	if len(healthcheck.Test) != 2 || healthcheck.Test[0] != "CMD-SHELL" || healthcheck.Test[1] != command {
+		t.Fatalf("%s healthcheck test = %v, want CMD-SHELL %q", serviceName, healthcheck.Test, command)
+	}
+	if healthcheck.Interval != "30s" {
+		t.Fatalf("%s healthcheck interval = %q, want 30s", serviceName, healthcheck.Interval)
+	}
+	if healthcheck.Timeout != "3s" {
+		t.Fatalf("%s healthcheck timeout = %q, want 3s", serviceName, healthcheck.Timeout)
+	}
+	if healthcheck.Retries != 3 {
+		t.Fatalf("%s healthcheck retries = %d, want 3", serviceName, healthcheck.Retries)
+	}
+	if healthcheck.StartPeriod != "10s" {
+		t.Fatalf("%s healthcheck start_period = %q, want 10s", serviceName, healthcheck.StartPeriod)
+	}
 }
 
 func requireComposeSecret(t *testing.T, serviceName string, secrets []composeSecret, source, target string) {
