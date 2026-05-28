@@ -133,6 +133,20 @@ func TestRenderKubernetesSecretsRejectsMissingMigrationServiceConfig(t *testing.
 	}
 }
 
+func TestRenderKubernetesSecretsRejectsUnexpectedServiceSecret(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	certPath, keyPath := writeTestTLSPair(t)
+	writePreflightFile(t, root, "secrets/monolith.secrets.yaml", `noebs:
+  default_tenant_id: tenant_1
+`)
+
+	var output bytes.Buffer
+	err := renderKubernetesSecrets(&output, root, "noebs", certPath, keyPath, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release service secret file") {
+		t.Fatalf("renderKubernetesSecrets() error = %v, want unexpected service secret rejection", err)
+	}
+}
+
 func TestRenderKubernetesSecretsRejectsInvalidTLSPair(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	certPath := filepath.Join(t.TempDir(), "tls.crt")

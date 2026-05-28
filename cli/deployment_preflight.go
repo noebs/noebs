@@ -141,11 +141,46 @@ func validateKubernetesPlatformInputs(root string) error {
 }
 
 func validateKubernetesReleaseServices(root string, configMap map[string]interface{}, ageKeyPath string, decrypt deploymentDecryptFunc) error {
+	if err := validateExactKubernetesReleaseFiles(root); err != nil {
+		return err
+	}
 	for _, serviceName := range kubernetesSecretReleaseServiceNames {
 		servicePath := filepath.Join(root, "services", serviceName+".yaml")
 		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
 		if err := validateDeploymentServiceWithSecretPath(configMap, servicePath, secretPath, ageKeyPath, decrypt); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateExactKubernetesReleaseFiles(root string) error {
+	expectedServiceFiles := make(map[string]bool, len(kubernetesSecretReleaseServiceNames))
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		expectedServiceFiles[serviceName+".yaml"] = true
+	}
+	if err := rejectUnexpectedKubernetesReleaseFiles("service config", filepath.Join(root, "services", "*.yaml"), expectedServiceFiles); err != nil {
+		return err
+	}
+
+	expectedSecretFiles := make(map[string]bool, len(kubernetesServiceSecretSources))
+	for _, source := range kubernetesServiceSecretSources {
+		expectedSecretFiles[source.fileName] = true
+	}
+	if err := rejectUnexpectedKubernetesReleaseFiles("service secret", filepath.Join(root, "secrets", "*.yaml"), expectedSecretFiles); err != nil {
+		return err
+	}
+	return nil
+}
+
+func rejectUnexpectedKubernetesReleaseFiles(label, pattern string, expected map[string]bool) error {
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return fmt.Errorf("list Kubernetes release %s files: %w", label, err)
+	}
+	for _, file := range files {
+		if !expected[filepath.Base(file)] {
+			return fmt.Errorf("unexpected Kubernetes release %s file %s", label, file)
 		}
 	}
 	return nil

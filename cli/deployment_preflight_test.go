@@ -83,6 +83,19 @@ func TestValidateKubernetesDeploymentRootRejectsMissingMigrationServiceConfig(t 
 	}
 }
 
+func TestValidateKubernetesDeploymentRootRejectsUnexpectedServiceConfig(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	writePreflightFile(t, root, "services/monolith.yaml", `noebs:
+  service_role: api-gateway
+  otel_service_name: api-gateway
+`)
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release service config file") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want unexpected service config rejection", err)
+	}
+}
+
 type preflightRootOptions struct {
 	defaultTenantID         string
 	omitEBSConsumerEndpoint bool
