@@ -120,7 +120,29 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 					t.Fatalf("forbidden table %s exists in %s migration scope", table, role)
 				}
 			}
+			if role == serviceRoleWalletLedgerMigrate {
+				assertNoColumnDefault(t, ctx, db, "wallets", "currency")
+				assertNoColumnDefault(t, ctx, db, "fee_configs", "currency")
+				assertNoColumnDefault(t, ctx, db, "transaction_limits", "currency")
+			}
 		})
+	}
+}
+
+func assertNoColumnDefault(t *testing.T, ctx context.Context, db *store.DB, tableName, columnName string) {
+	t.Helper()
+	var defaultValue *string
+	if err := db.DB.QueryRowContext(ctx, `
+		SELECT column_default
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name = $1
+			AND column_name = $2
+	`, tableName, columnName).Scan(&defaultValue); err != nil {
+		t.Fatalf("read %s.%s default: %v", tableName, columnName, err)
+	}
+	if defaultValue != nil {
+		t.Fatalf("%s.%s default = %q, want no DB-layer currency default", tableName, columnName, *defaultValue)
 	}
 }
 

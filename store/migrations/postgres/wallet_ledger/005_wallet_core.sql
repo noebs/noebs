@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS wallets (
   owner_type TEXT NOT NULL DEFAULT 'user' CHECK (owner_type IN ('user', 'system', 'merchant', 'psp')),
   owner_id TEXT NOT NULL,
   user_id BIGINT,
-  currency TEXT NOT NULL DEFAULT 'USD',
+  currency TEXT NOT NULL,
   balance BIGINT NOT NULL DEFAULT 0,
   available_balance BIGINT NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'frozen', 'closed')),
