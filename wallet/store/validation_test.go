@@ -249,6 +249,9 @@ func TestUpdateManualTransferStatusValidation(t *testing.T) {
 	err := s.UpdateManualTransferStatus(t.Context(), "", "wf-1", update)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	err = s.UpdateManualTransferStatus(t.Context(), "default", "wf-1", update)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	err = s.UpdateManualTransferStatus(t.Context(), "tenant", "", update)
 	assertErrorIs(t, err, ErrMissingWorkflowID)
 
@@ -263,11 +266,117 @@ func TestGetManualTransferByWorkflowIDValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingWorkflowID)
 }
 
+func TestCreateManualTransferValidation(t *testing.T) {
+	s := &Store{}
+	transfer := ManualTransfer{
+		TenantID:       "tenant",
+		WorkflowID:     "wf-1",
+		IdempotencyKey: "idem-1",
+		TransferType:   "bank_transfer",
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "withdrawal",
+		Status:         "pending",
+	}
+
+	_, err := s.CreateManualTransfer(t.Context(), ManualTransfer{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := transfer
+	bad.TenantID = "default"
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = transfer
+	bad.WorkflowID = ""
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingWorkflowID)
+
+	bad = transfer
+	bad.IdempotencyKey = ""
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingIdempotencyKey)
+
+	bad = transfer
+	bad.TransferType = ""
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingTransferType)
+
+	bad = transfer
+	bad.Amount = 0
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	bad = transfer
+	bad.Currency = ""
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrency)
+
+	bad = transfer
+	bad.Reason = ""
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingReason)
+
+	bad = transfer
+	bad.Status = ""
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingStatus)
+}
+
+func TestAddManualTransferApprovalValidation(t *testing.T) {
+	s := &Store{}
+	approval := ManualTransferApproval{
+		TenantID:         "tenant",
+		ManualTransferID: 1,
+		ApproverID:       2,
+		Decision:         "approved",
+	}
+
+	_, err := s.AddManualTransferApproval(t.Context(), ManualTransferApproval{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := approval
+	bad.TenantID = "default"
+	_, err = s.AddManualTransferApproval(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = approval
+	bad.ManualTransferID = 0
+	_, err = s.AddManualTransferApproval(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingManualTransferID)
+
+	bad = approval
+	bad.ApproverID = 0
+	_, err = s.AddManualTransferApproval(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingApproverID)
+
+	bad = approval
+	bad.Decision = ""
+	_, err = s.AddManualTransferApproval(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingDecision)
+}
+
+func TestGetManualTransferByWorkflowValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetManualTransferByWorkflow(t.Context(), "", "wf-1")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetManualTransferByWorkflow(t.Context(), "default", "wf-1")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetManualTransferByWorkflow(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingWorkflowID)
+}
+
 func TestListManualTransfersValidation(t *testing.T) {
 	s := &Store{}
 	filter := ManualTransferFilter{TenantID: "", Limit: 10}
 	_, err := s.ListManualTransfers(t.Context(), filter)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	filter = ManualTransferFilter{TenantID: "default", Limit: 10}
+	_, err = s.ListManualTransfers(t.Context(), filter)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	filter = ManualTransferFilter{TenantID: "tenant", Limit: 0}
 	_, err = s.ListManualTransfers(t.Context(), filter)
@@ -295,6 +404,9 @@ func TestListManualTransferApprovalsValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListManualTransferApprovals(t.Context(), "", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListManualTransferApprovals(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListManualTransferApprovals(t.Context(), "tenant", 0)
 	assertErrorIs(t, err, ErrMissingManualTransferID)
@@ -1176,6 +1288,9 @@ func TestListManualTransfersByStatusValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListManualTransfersByStatus(t.Context(), "", "pending", 10, 0)
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListManualTransfersByStatus(t.Context(), "default", "pending", 10, 0)
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "", 10, 0)
 	assertErrorIs(t, err, ErrMissingStatus)

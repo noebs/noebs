@@ -7,8 +7,9 @@ import (
 )
 
 func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfer) (*ManualTransfer, error) {
-	if transfer.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(transfer.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if transfer.WorkflowID == "" {
 		return nil, ErrMissingWorkflowID
@@ -45,7 +46,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	RETURNING *`)
 	var stored ManualTransfer
 	if err := db.GetContext(ctx, &stored, stmt,
-		transfer.TenantID,
+		tenantID,
 		transfer.WorkflowID,
 		transfer.IdempotencyKey,
 		transfer.TransferType,
@@ -70,8 +71,9 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 }
 
 func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTransferApproval) (*ManualTransferApproval, error) {
-	if approval.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(approval.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if approval.ManualTransferID <= 0 {
 		return nil, ErrMissingManualTransferID
@@ -94,7 +96,7 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	RETURNING *`)
 	var stored ManualTransferApproval
 	if err := db.GetContext(ctx, &stored, stmt,
-		approval.TenantID,
+		tenantID,
 		approval.ManualTransferID,
 		approval.ApproverID,
 		approval.Decision,
@@ -107,8 +109,9 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 }
 
 func (s *Store) GetManualTransferByWorkflow(ctx context.Context, tenantID, workflowID string) (*ManualTransfer, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if workflowID == "" {
 		return nil, ErrMissingWorkflowID
@@ -148,8 +151,9 @@ func (s *Store) GetManualTransferByWorkflowID(ctx context.Context, workflowID st
 }
 
 func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workflowID string, update ManualTransferStatusUpdate) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if workflowID == "" {
 		return ErrMissingWorkflowID
@@ -189,8 +193,9 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 }
 
 func (s *Store) ListManualTransfers(ctx context.Context, filter ManualTransferFilter) ([]ManualTransfer, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if filter.Limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -212,7 +217,7 @@ func (s *Store) ListManualTransfers(ctx context.Context, filter ManualTransferFi
 		return nil, err
 	}
 	query := `SELECT * FROM manual_transfers WHERE tenant_id = ?`
-	args := []any{filter.TenantID}
+	args := []any{tenantID}
 	if filter.Status != "" {
 		query += " AND status = ?"
 		args = append(args, filter.Status)
@@ -244,8 +249,9 @@ func (s *Store) ListManualTransfers(ctx context.Context, filter ManualTransferFi
 }
 
 func (s *Store) ListManualTransferApprovals(ctx context.Context, tenantID string, manualTransferID int64) ([]ManualTransferApproval, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if manualTransferID <= 0 {
 		return nil, ErrMissingManualTransferID
@@ -265,8 +271,9 @@ func (s *Store) ListManualTransferApprovals(ctx context.Context, tenantID string
 }
 
 func (s *Store) ListManualTransfersByStatus(ctx context.Context, tenantID, status string, limit, offset int) ([]ManualTransfer, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if status == "" {
 		return nil, ErrMissingStatus
