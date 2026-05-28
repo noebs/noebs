@@ -41,12 +41,17 @@ func isRenderKubernetesSecretsCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-kubernetes-secrets"
 }
 
+func isPrepareKubernetesReleaseCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "prepare-kubernetes-release"
+}
+
 func isConfigUtilityCommand() bool {
 	return isRenderConfigCommand() ||
 		isRenderDatabasePasswordCommand() ||
 		isValidateDeploymentCommand() ||
 		isValidateKubernetesDeploymentCommand() ||
-		isRenderKubernetesSecretsCommand()
+		isRenderKubernetesSecretsCommand() ||
+		isPrepareKubernetesReleaseCommand()
 }
 
 func renderConfigFiles() error {

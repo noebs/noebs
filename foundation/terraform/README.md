@@ -50,6 +50,16 @@ For Docker Compose cutovers on the current host, run `noebs validate-deployment 
 
 Before syncing the Argo CD application, render the runtime Kubernetes Secrets from a Kubernetes release input directory. The directory must use the same file layout as the in-cluster preflight mount: `config.yaml`, runtime and migration role files under `services/*.yaml`, service secret files under `secrets/*.secrets.yaml`, `.sops/age-key.txt`, and platform files under `platform/`. Extra top-level, `.sops`, platform, service config, or service secret entries are rejected so stale monolith or compatibility inputs cannot be carried into a Kubernetes release.
 
+To build that release input directory from the current server material, use the explicit preparation command. It reads Kubernetes config and service role files from the repo root, reads the current encrypted Noebs secret from the legacy root, decrypts an encrypted cutover input file for values that do not exist in the legacy secret, writes an empty output directory, encrypts generated service secret files with SOPS, and immediately validates the prepared Kubernetes release root.
+
+```sh
+noebs prepare-kubernetes-release /path/to/noebs-repo /path/to/current-noebs-root /path/to/kubernetes-release.inputs.yaml /path/to/noebs-kubernetes-release
+```
+
+The command fails instead of deriving missing values. The cutover inputs file must explicitly provide the non-legacy values required for the microservice release, including `noebs.default_tenant_id`, API gateway admin credentials, Keycloak bootstrap/database credentials, card-vault data key, PSP provider secrets, and the EBS IPIN/app-id fields. The legacy root supplies only values that already exist there, such as the Postgres password inside `noebs.db_url`, JWT/SMS values, and resolved EBS consumer/merchant endpoints selected by the legacy boolean selectors.
+
+`deploy/kubernetes/overlays/current-host/kubernetes-release.inputs.yaml.example` documents the required input keys. The real input file is secret material and must be SOPS-encrypted before use.
+
 ```sh
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
 ```

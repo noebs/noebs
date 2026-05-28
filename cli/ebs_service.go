@@ -74,6 +74,12 @@ func main() {
 		}
 		return
 	}
+	if isPrepareKubernetesReleaseCommand() {
+		if err := prepareKubernetesReleaseCommand(); err != nil {
+			logrusLogger.Fatalf("prepare kubernetes release failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
