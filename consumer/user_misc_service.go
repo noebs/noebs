@@ -65,13 +65,13 @@ func (s *Service) SetMainCardForUserID(ctx context.Context, tenantID string, use
 	}
 	pan = strings.TrimSpace(pan)
 	if pan == "" {
-		return errors.New("missing pan")
+		return store.ErrMissingPAN
 	}
 	if ok, err := s.Store.CardExists(ctx, tenantID, pan); err != nil || !ok {
 		if err != nil {
 			return err
 		}
-		return errors.New("card does not exist")
+		return ErrCardNotFound
 	}
 	return s.Store.SetMainCard(ctx, tenantID, userID, pan)
 }

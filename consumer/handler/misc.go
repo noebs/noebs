@@ -68,7 +68,7 @@ func (h *Handler) SetMainCard(c *fiber.Ctx) error {
 	}
 
 	if err := h.Service.SetMainCardForUserID(c.UserContext(), tenantID, userID, req.Pan); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": err.Error()})
+		return jsonResponse(c, statusForError(err), fiber.Map{"error": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 }

@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -142,5 +143,24 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	}
 	if _, _, err := service.GetCardsByUserID(ctx, tenantID, userID); err == nil {
 		t.Fatalf("expected no cards after removal")
+	}
+}
+
+func TestSetMainCardForUserIDRejectsMissingPAN(t *testing.T) {
+	service := &Service{Store: store.New(&store.DB{})}
+
+	err := service.SetMainCardForUserID(context.Background(), "tenant-1", 42, " ")
+	if !errors.Is(err, store.ErrMissingPAN) {
+		t.Fatalf("expected ErrMissingPAN, got %v", err)
+	}
+}
+
+func TestSetMainCardForUserIDRejectsUnknownCard(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
+	service := &Service{Store: storeSvc}
+
+	err := service.SetMainCardForUserID(context.Background(), tenantID, 42, "9222081700000000")
+	if !errors.Is(err, ErrCardNotFound) {
+		t.Fatalf("expected ErrCardNotFound, got %v", err)
 	}
 }

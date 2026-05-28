@@ -14,6 +14,7 @@ var (
 
 	// Account recovery / balance step
 	ErrCardNotMatched    = errors.New("card_not_matched")
+	ErrCardNotFound      = errors.New("card_not_found")
 	ErrTransactionFailed = errors.New("transaction_failed")
 
 	// Payments / transfers

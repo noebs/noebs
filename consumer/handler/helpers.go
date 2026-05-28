@@ -123,6 +123,8 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidCard),
 		errors.Is(err, consumer.ErrUserAlreadyExists):
 		return http.StatusBadRequest
+	case errors.Is(err, consumer.ErrCardNotFound):
+		return http.StatusNotFound
 	case store.ErrNotFound(err):
 		return http.StatusNotFound
 	case errors.Is(err, consumer.ErrCardVaultCommand),

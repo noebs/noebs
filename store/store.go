@@ -554,6 +554,9 @@ func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, 
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
+	if strings.TrimSpace(cardIdx) == "" {
+		return ErrMissingPAN
+	}
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
@@ -696,6 +699,9 @@ func (s *Store) CardExists(ctx context.Context, tenantID, pan string) (bool, err
 	}
 	if tenantID == "" {
 		return false, ErrMissingTenantID
+	}
+	if strings.TrimSpace(pan) == "" {
+		return false, ErrMissingPAN
 	}
 	stmt := s.DB.Rebind("SELECT 1 FROM cards WHERE tenant_id = ? AND " + s.panLookupClause("pan") + " AND deleted_at IS NULL LIMIT 1")
 	var one int
