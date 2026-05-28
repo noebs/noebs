@@ -51,7 +51,7 @@ func TestWebhookIPAllowed(t *testing.T) {
 	}
 }
 
-func TestPSPWebhookRequiresGatewayTenantHeaderNotPayloadOrQuery(t *testing.T) {
+func TestPSPWebhookRequiresValidatedGatewayTenantIdentity(t *testing.T) {
 	app := fiber.New()
 	handler := &PSPWebhookHandler{Store: &walletstore.Store{}}
 	app.Post("/psp/webhooks/:provider", handler.Handle)
@@ -66,8 +66,8 @@ func TestPSPWebhookRequiresGatewayTenantHeaderNotPayloadOrQuery(t *testing.T) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
 
@@ -76,8 +76,10 @@ func TestPSPWebhookHandlerDoesNotReadPublicTenantQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read psp_webhook.go: %v", err)
 	}
-	if strings.Contains(string(data), `c.Query("tenant_id")`) {
-		t.Fatalf("psp_webhook.go reads public tenant query; webhook tenant must come from %s", gateway.GatewayTenantIDHeader)
+	for _, token := range []string{`c.Query("tenant_id")`, `c.Get(gateway.GatewayTenantIDHeader)`} {
+		if strings.Contains(string(data), token) {
+			t.Fatalf("psp_webhook.go reads %q; webhook tenant must come from validated gateway identity", token)
+		}
 	}
 }
 
@@ -186,7 +188,7 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
-	app.Post("/psp/webhooks/:provider", NewPSPWebhookHandler(store, loader, registry, nil).Handle)
+	app.Post("/psp/webhooks/:provider", gateway.InternalTenantIdentityMiddleware(), NewPSPWebhookHandler(store, loader, registry, nil).Handle)
 
 	payload := `{"ref":"missing-ref","psp_tx":"psp-missing","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/"+providerCode+"?tenant_id=default", bytes.NewBufferString(payload))

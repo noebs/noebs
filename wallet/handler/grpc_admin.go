@@ -115,13 +115,20 @@ func (h *GRPCAdminHandler) RejectTransfer(c *fiber.Ctx) error {
 }
 
 func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletAction, path fiber.Map) error {
+	if err := authenticatedAdminIdentity(c); err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	tenantID, err := authenticatedTenantID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
 	req := &walletv1.AdminWalletRequest{
 		Action: action,
 		Query:  queryArgs(c),
 		Form:   formArgs(c),
 		Path:   stringMap(path),
 	}
-	resp, err := h.Client.RenderWalletAdmin(adminOutgoingContext(c), req)
+	resp, err := h.Client.RenderWalletAdmin(adminOutgoingContext(c, tenantID), req)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletGRPCError(err))
 	}
@@ -135,13 +142,13 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 	return c.Status(statusCode).Send(resp.GetBody())
 }
 
-func adminOutgoingContext(c *fiber.Ctx) context.Context {
+func adminOutgoingContext(c *fiber.Ctx, tenantID string) context.Context {
 	return metadata.AppendToOutgoingContext(
 		c.UserContext(),
 		strings.ToLower(gateway.GatewayAdminIdentityHeader),
-		c.Get(gateway.GatewayAdminIdentityHeader),
+		gateway.GatewayAdminIdentityValue,
 		strings.ToLower(gateway.GatewayTenantIDHeader),
-		c.Get(gateway.GatewayTenantIDHeader),
+		tenantID,
 	)
 }
 

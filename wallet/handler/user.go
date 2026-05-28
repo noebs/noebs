@@ -294,6 +294,17 @@ func authenticatedTenantID(c *fiber.Ctx) (string, error) {
 	return tenantID, nil
 }
 
+func authenticatedAdminIdentity(c *fiber.Ctx) error {
+	if c == nil {
+		return apperr.ErrUnauthorized
+	}
+	authenticated, ok := c.Locals("admin_identity").(bool)
+	if !ok || !authenticated {
+		return apperr.ErrUnauthorized
+	}
+	return nil
+}
+
 func validateRequestedUserID(requested *int64, authenticated int64) error {
 	if requested == nil {
 		return nil

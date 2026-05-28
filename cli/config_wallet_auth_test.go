@@ -495,8 +495,8 @@ func TestWalletAdminRouteRequiresGatewayTenantIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wallet admin request failed: %v", err)
 	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("wallet admin status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("wallet admin status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 	_ = resp.Body.Close()
 }

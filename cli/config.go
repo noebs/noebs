@@ -457,7 +457,7 @@ func registerEBSAdapterRoutes(route *fiber.App, tenantIdentity fiber.Handler, us
 	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerWalletAPIRoutes(route *fiber.App, userIdentity fiber.Handler, adminIdentity fiber.Handler) {
+func registerWalletAPIRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler) {
 	if walletPublicClient == nil {
 		logrusLogger.Fatal("wallet-api role requires an initialized wallet-ledger grpc client")
 	}
@@ -467,7 +467,7 @@ func registerWalletAPIRoutes(route *fiber.App, userIdentity fiber.Handler, admin
 	walletUserHandler := wallethandler.NewGRPCUserHandler(walletPublicClient, noebsConfig)
 	walletAdminHandler := wallethandler.NewGRPCAdminHandler(walletAdminClient)
 	wallethandler.RegisterGRPCUserRoutes(route.Group("/wallet", userIdentity), walletUserHandler)
-	wallethandler.RegisterGRPCAdminRoutes(route.Group("/admin/wallet", adminIdentity), walletAdminHandler)
+	wallethandler.RegisterGRPCAdminRoutes(route.Group("/admin/wallet", adminIdentity, tenantIdentity), walletAdminHandler)
 }
 
 // GetMainEngine function responsible for getting all of our routes to be delivered for fiber
@@ -549,7 +549,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleWalletAPI {
-		registerWalletAPIRoutes(route, userIdentity, adminIdentity)
+		registerWalletAPIRoutes(route, tenantIdentity, userIdentity, adminIdentity)
 		return route
 	}
 	if role != serviceRoleAPIGateway {

@@ -66,7 +66,7 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
-	w, err := h.Client.EnsureWalletPublic(walletOutgoingContext(c), &walletv1.EnsureWalletRequest{
+	w, err := h.Client.EnsureWalletPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.EnsureWalletRequest{
 		TenantId: tenantID,
 		UserId:   userID,
 		Currency: currency,
@@ -95,7 +95,8 @@ func (h *GRPCUserHandler) GetWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid wallet id"))
 	}
 
-	if _, err := authenticatedUserID(c); err != nil {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	tenantID, err := authenticatedTenantID(c)
@@ -106,7 +107,7 @@ func (h *GRPCUserHandler) GetWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, err)
 	}
 
-	w, err := h.Client.GetWalletPublic(walletOutgoingContext(c), &walletv1.GetWalletRequest{
+	w, err := h.Client.GetWalletPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.GetWalletRequest{
 		TenantId: tenantID,
 		WalletId: walletID.String(),
 	})
@@ -134,7 +135,8 @@ func (h *GRPCUserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid wallet id"))
 	}
 
-	if _, err := authenticatedUserID(c); err != nil {
+	userID, err := authenticatedUserID(c)
+	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	tenantID, err := authenticatedTenantID(c)
@@ -153,7 +155,7 @@ func (h *GRPCUserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
 
-	entries, err := h.Client.ListWalletTransactionsPublic(walletOutgoingContext(c), &walletv1.ListWalletTransactionsRequest{
+	entries, err := h.Client.ListWalletTransactionsPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.ListWalletTransactionsRequest{
 		TenantId:  tenantID,
 		WalletId:  walletID.String(),
 		EntryType: c.Query("entry_type"),
@@ -182,6 +184,10 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
 	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
@@ -198,7 +204,7 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
 
-	methods, err := h.Client.ListPaymentMethodsPublic(walletOutgoingContext(c), &walletv1.ListPaymentMethodsRequest{
+	methods, err := h.Client.ListPaymentMethodsPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.ListPaymentMethodsRequest{
 		TenantId:  tenantID,
 		Direction: c.Query("direction"),
 		Currency:  c.Query("currency"),
@@ -217,12 +223,12 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, fiber.Map{"methods": resp})
 }
 
-func walletOutgoingContext(c *fiber.Ctx) context.Context {
+func walletOutgoingContext(c *fiber.Ctx, tenantID string, userID int64) context.Context {
 	values := []string{
-		strings.ToLower(gateway.GatewayTenantIDHeader), c.Get(gateway.GatewayTenantIDHeader),
-		strings.ToLower(gateway.GatewayUserIDHeader), c.Get(gateway.GatewayUserIDHeader),
+		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,
+		strings.ToLower(gateway.GatewayUserIDHeader), strconv.FormatInt(userID, 10),
 	}
-	if mobile := c.Get(gateway.GatewayMobileHeader); mobile != "" {
+	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
 		values = append(values, strings.ToLower(gateway.GatewayMobileHeader), mobile)
 	}
 	return metadata.AppendToOutgoingContext(c.UserContext(), values...)

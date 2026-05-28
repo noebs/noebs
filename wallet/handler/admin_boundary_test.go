@@ -33,12 +33,13 @@ func TestWalletAdminHTTPSurfaceUsesGRPCBridgeOnly(t *testing.T) {
 	}
 }
 
-func TestWalletUserHTTPSurfaceDoesNotReadTenantQuery(t *testing.T) {
+func TestWalletHTTPSurfaceDoesNotReadTenantFromPublicInputs(t *testing.T) {
 	forbidden := []string{
 		`c.Query("tenant_id")`,
 		"requestedTenantIDFromQuery",
+		`c.Get(gateway.GatewayTenantIDHeader)`,
 	}
-	for _, path := range []string{"user.go", "grpc_user.go"} {
+	for _, path := range []string{"user.go", "grpc_user.go", "grpc_admin.go", "psp_webhook.go"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)

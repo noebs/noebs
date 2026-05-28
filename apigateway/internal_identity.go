@@ -66,6 +66,7 @@ func InternalAdminIdentityMiddleware() fiber.Handler {
 		if c.Get(GatewayAdminIdentityHeader) != GatewayAdminIdentityValue {
 			return unauthorizedGatewayIdentity(c)
 		}
+		c.Locals("admin_identity", true)
 		return c.Next()
 	}
 }
