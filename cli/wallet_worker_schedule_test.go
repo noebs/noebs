@@ -61,6 +61,11 @@ func TestStartWalletCronWorkflowsDoesNotFallbackToDefaultTenant(t *testing.T) {
 	if !errors.Is(err, store.ErrMissingTenantID) {
 		t.Fatalf("blank tenant error = %v, want %v", err, store.ErrMissingTenantID)
 	}
+
+	err = startWalletCronWorkflows(context.Background(), nil, []string{"default"}, cfg, walletworker.TaskQueueMain)
+	if !errors.Is(err, store.ErrInvalidTenantID) {
+		t.Fatalf("reserved tenant error = %v, want %v", err, store.ErrInvalidTenantID)
+	}
 }
 
 func TestStartWalletCronWorkflowsRequiresConfiguredSchedules(t *testing.T) {

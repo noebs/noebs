@@ -36,12 +36,8 @@ func parseJSON(c *fiber.Ctx, dst any) error {
 }
 
 func resolveTenantID(c *fiber.Ctx) (string, error) {
-	if v := c.Locals("tenant_id"); v != nil {
-		if tenantID, ok := v.(string); ok && tenantID != "" {
-			return store.ValidateTenantID(tenantID)
-		}
-	}
-	return "", store.ErrMissingTenantID
+	tenantID, _ := c.Locals("tenant_id").(string)
+	return store.ValidateTenantID(tenantID)
 }
 
 func statusForError(err error) int {

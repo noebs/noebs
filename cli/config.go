@@ -227,9 +227,9 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 	}
 	normalizedTenants := make([]string, 0, len(tenants))
 	for _, tenantID := range tenants {
-		tenantID = strings.TrimSpace(tenantID)
-		if tenantID == "" {
-			return store.ErrMissingTenantID
+		tenantID, err := store.ValidateTenantID(tenantID)
+		if err != nil {
+			return err
 		}
 		normalizedTenants = append(normalizedTenants, tenantID)
 	}
