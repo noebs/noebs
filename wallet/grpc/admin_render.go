@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -22,6 +23,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -67,17 +69,17 @@ func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.AdminWalle
 }
 
 func (s *Server) renderAdminDashboard(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	return adminHTML(ctx, wallethandler.WalletDashboardPage(wallethandler.WalletDashboardView{TenantID: tenantID}))
 }
 
 func (s *Server) renderAdminWallets(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 50)
 	if err != nil {
@@ -94,9 +96,9 @@ func (s *Server) renderAdminWallets(ctx context.Context, req *walletv1.AdminWall
 }
 
 func (s *Server) renderAdminWalletDetail(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	walletID, err := adminUUID(adminPath(req, "id"))
 	if err != nil {
@@ -123,9 +125,9 @@ func (s *Server) renderAdminWalletDetail(ctx context.Context, req *walletv1.Admi
 }
 
 func (s *Server) renderAdminPendingApprovals(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 50)
 	if err != nil {
@@ -153,9 +155,9 @@ func (s *Server) renderAdminPendingApprovals(ctx context.Context, req *walletv1.
 }
 
 func (s *Server) renderAdminAudit(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 100)
 	if err != nil {
@@ -201,9 +203,9 @@ func (s *Server) renderAdminAudit(ctx context.Context, req *walletv1.AdminWallet
 }
 
 func (s *Server) renderAdminTransactions(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 100)
 	if err != nil {
@@ -245,9 +247,9 @@ func (s *Server) renderAdminTransactions(ctx context.Context, req *walletv1.Admi
 }
 
 func (s *Server) renderAdminTransactionDetail(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	clientRef := strings.TrimSpace(adminPath(req, "client_reference"))
 	if clientRef == "" {
@@ -264,9 +266,9 @@ func (s *Server) renderAdminTransactionDetail(ctx context.Context, req *walletv1
 }
 
 func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 50)
 	if err != nil {
@@ -317,9 +319,9 @@ func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.A
 
 func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
-	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	amount, err := adminPositiveInt64(form, "amount", walletstore.ErrInvalidAmount)
 	if err != nil {
@@ -397,9 +399,9 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Ad
 }
 
 func (s *Server) renderAdminManualTransferDetail(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	workflowID := strings.TrimSpace(adminPath(req, "workflow_id"))
 	if workflowID == "" {
@@ -421,9 +423,9 @@ func (s *Server) renderAdminManualTransferDetail(ctx context.Context, req *walle
 }
 
 func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 100)
 	if err != nil {
@@ -460,9 +462,9 @@ func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletR
 
 func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
-	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	txType := adminForm(form, "transaction_type")
 	if txType == "" {
@@ -517,9 +519,9 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRe
 }
 
 func (s *Server) renderAdminRates(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	tenantID, err := adminTenantID(adminQuery(req, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	limit, offset, err := adminLimitOffset(req.Query, 100)
 	if err != nil {
@@ -552,9 +554,9 @@ func (s *Server) renderAdminRates(ctx context.Context, req *walletv1.AdminWallet
 
 func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
-	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	base := adminForm(form, "base_currency")
 	if base == "" {
@@ -630,9 +632,9 @@ func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWal
 	if !approved && reason == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
-	tenantID, err := adminTenantID(adminForm(form, "tenant_id"))
+	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 
 	switch kind {
@@ -681,6 +683,22 @@ func adminRedirect(path, tenantID string) *walletv1.AdminWalletResponse {
 		StatusCode:       http.StatusSeeOther,
 		RedirectLocation: path,
 	}
+}
+
+func adminTenantIDFromContext(ctx context.Context) (string, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	}
+	tenantID, err := singleGatewayMetadataValue(md, gateway.GatewayTenantIDHeader)
+	if err != nil {
+		return "", err
+	}
+	tenantID, err = adminTenantID(tenantID)
+	if err != nil {
+		return "", mapError(err)
+	}
+	return tenantID, nil
 }
 
 func adminTenantID(tenantID string) (string, error) {

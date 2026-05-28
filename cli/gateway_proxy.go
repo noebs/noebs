@@ -23,6 +23,8 @@ const (
 	gatewayAuthUser
 	gatewayAuthAdmin
 	gatewayAuthAdminTenant
+	gatewayAuthAdminWalletQueryTenant
+	gatewayAuthAdminWalletFormTenant
 )
 
 type gatewayRouteSpec struct {
@@ -58,6 +60,10 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			handlers = append(handlers, adminGuard, propagateGatewayAdminIdentity)
 		case gatewayAuthAdminTenant:
 			handlers = append(handlers, adminGuard, propagateGatewayAdminTenantIdentity)
+		case gatewayAuthAdminWalletQueryTenant:
+			handlers = append(handlers, adminGuard, propagateGatewayAdminWalletQueryTenantIdentity)
+		case gatewayAuthAdminWalletFormTenant:
+			handlers = append(handlers, adminGuard, propagateGatewayAdminWalletFormTenantIdentity)
 		default:
 			return fmt.Errorf("unknown gateway auth mode %d for %s %s", spec.auth, spec.method, spec.path)
 		}
@@ -173,6 +179,26 @@ func propagateGatewayAdminTenantIdentity(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+func propagateGatewayAdminWalletQueryTenantIdentity(c *fiber.Ctx) error {
+	return propagateGatewayAdminWalletTenantIdentity(c, string(c.Request().URI().QueryArgs().Peek("tenant_id")))
+}
+
+func propagateGatewayAdminWalletFormTenantIdentity(c *fiber.Ctx) error {
+	return propagateGatewayAdminWalletTenantIdentity(c, string(c.Request().PostArgs().Peek("tenant_id")))
+}
+
+func propagateGatewayAdminWalletTenantIdentity(c *fiber.Ctx, rawTenantID string) error {
+	tenantID, err := store.ValidateTenantID(rawTenantID)
+	if err != nil {
+		return tenantValidationError(c, err)
+	}
+	stripPublicCredentialHeaders(c)
+	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
+	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
+	return c.Next()
+}
+
 func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 	return []gatewayRouteSpec{
 		{method: fiber.MethodPost, path: "/generate_api_key", role: serviceRoleIdentityAuth, auth: gatewayAuthAdmin},
@@ -272,23 +298,23 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/wallet/wallets/:id/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/admin/wallet", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/transactions/:client_reference", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/pending", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/manual", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/admin/wallet/manual", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/manual/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/fees", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/admin/wallet/fees", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/rates", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/admin/wallet/rates", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/admin/wallet/approve/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/admin/wallet/reject/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
-		{method: fiber.MethodGet, path: "/admin/wallet/audit", role: serviceRoleWalletAPI, auth: gatewayAuthAdmin},
+		{method: fiber.MethodGet, path: "/admin/wallet", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/transactions/:client_reference", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/pending", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/manual", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodPost, path: "/admin/wallet/manual", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/manual/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/fees", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodPost, path: "/admin/wallet/fees", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/rates", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
+		{method: fiber.MethodPost, path: "/admin/wallet/rates", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
+		{method: fiber.MethodPost, path: "/admin/wallet/approve/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
+		{method: fiber.MethodPost, path: "/admin/wallet/reject/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
+		{method: fiber.MethodGet, path: "/admin/wallet/audit", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
 
 		{method: fiber.MethodGet, path: "/dashboard/assets/*", role: serviceRoleAdminReporting, auth: gatewayAuthPublic},
 		{method: fiber.MethodGet, path: "/dashboard", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},

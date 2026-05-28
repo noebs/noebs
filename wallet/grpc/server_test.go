@@ -2,12 +2,15 @@ package walletgrpc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -40,6 +43,26 @@ func TestRenderWalletAdminRequiresExplicitTenant(t *testing.T) {
 	}
 }
 
+func TestRenderWalletAdminUsesGatewayTenantMetadata(t *testing.T) {
+	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+
+	resp, err := server.RenderWalletAdmin(walletAdminTenantContext("context-tenant"), &walletv1.AdminWalletRequest{
+		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
+		Query: map[string]string{
+			"tenant_id": "default",
+		},
+	})
+	if err != nil {
+		t.Fatalf("RenderWalletAdmin() error = %v", err)
+	}
+	if resp.GetStatusCode() != 200 {
+		t.Fatalf("status = %d, want 200", resp.GetStatusCode())
+	}
+	if !strings.Contains(string(resp.GetBody()), "context-tenant") {
+		t.Fatalf("admin dashboard body does not contain gateway tenant")
+	}
+}
+
 func TestRenderWalletAdminDecisionRequiresExplicitTenant(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
 
@@ -66,4 +89,10 @@ func TestAdminCurrencyRequiresExplicitCurrency(t *testing.T) {
 	if _, err := adminCurrency(" "); err != walletstore.ErrMissingCurrency {
 		t.Fatalf("adminCurrency() error = %v, want %v", err, walletstore.ErrMissingCurrency)
 	}
+}
+
+func walletAdminTenantContext(tenantID string) context.Context {
+	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
+		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,
+	))
 }

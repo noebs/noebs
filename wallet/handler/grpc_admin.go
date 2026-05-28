@@ -140,6 +140,8 @@ func adminOutgoingContext(c *fiber.Ctx) context.Context {
 		c.UserContext(),
 		strings.ToLower(gateway.GatewayAdminIdentityHeader),
 		c.Get(gateway.GatewayAdminIdentityHeader),
+		strings.ToLower(gateway.GatewayTenantIDHeader),
+		c.Get(gateway.GatewayTenantIDHeader),
 	)
 }
 

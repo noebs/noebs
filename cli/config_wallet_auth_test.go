@@ -206,7 +206,7 @@ func TestWalletRoutesAreProxiedByAPIGateway(t *testing.T) {
 	}{
 		{name: "user wallet", method: http.MethodPost, path: "/wallet/wallets"},
 		{name: "wallet methods", method: http.MethodGet, path: "/wallet/methods"},
-		{name: "wallet admin", method: http.MethodGet, path: "/admin/wallet"},
+		{name: "wallet admin", method: http.MethodGet, path: "/admin/wallet?tenant_id=" + url.QueryEscape(noebsConfig.DefaultTenantID)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -462,6 +462,7 @@ func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 	route := GetMainEngine()
 	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/?tenant_id="+url.QueryEscape(noebsConfig.DefaultTenantID), nil)
 	setGatewayAdminIdentityHeader(req)
+	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
 
 	resp, err := route.Test(req)
 	if err != nil {
@@ -476,7 +477,7 @@ func TestWalletAdminRouteUsesLedgerGRPC(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
-func TestWalletAdminRouteRequiresTenantQuery(t *testing.T) {
+func TestWalletAdminRouteRequiresGatewayTenantIdentity(t *testing.T) {
 	configureWalletRouteTest(t)
 
 	route := GetMainEngine()
