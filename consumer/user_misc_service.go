@@ -22,8 +22,9 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 	if s.HTTPClient == nil {
 		return nil, ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if len(phones) == 0 {
 		return nil, errors.New("empty phones")
@@ -57,8 +58,9 @@ func (s *Service) SetMainCardForUserID(ctx context.Context, tenantID string, use
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -80,8 +82,9 @@ func (s *Service) GetTransactionsForUserID(ctx context.Context, tenantID string,
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	if tenantID == "" {
-		return nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if userID <= 0 {
 		return nil, store.ErrInvalidUserID
