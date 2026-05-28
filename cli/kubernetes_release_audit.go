@@ -13,13 +13,14 @@ import (
 )
 
 type kubernetesReleaseInputAudit struct {
-	Ready              bool     `yaml:"ready"`
-	CurrentSecret      []string `yaml:"current_secret,omitempty"`
-	EmptyCurrentSecret []string `yaml:"empty_current_secret,omitempty"`
-	CutoverInput       []string `yaml:"cutover_input,omitempty"`
-	Missing            []string `yaml:"missing,omitempty"`
-	Duplicate          []string `yaml:"duplicate,omitempty"`
-	Invalid            []string `yaml:"invalid,omitempty"`
+	Ready                    bool     `yaml:"ready"`
+	CurrentSecret            []string `yaml:"current_secret,omitempty"`
+	EmptyCurrentSecret       []string `yaml:"empty_current_secret,omitempty"`
+	UnsupportedCurrentSecret []string `yaml:"unsupported_current_secret,omitempty"`
+	CutoverInput             []string `yaml:"cutover_input,omitempty"`
+	Missing                  []string `yaml:"missing,omitempty"`
+	Duplicate                []string `yaml:"duplicate,omitempty"`
+	Invalid                  []string `yaml:"invalid,omitempty"`
 }
 
 func isAuditKubernetesReleaseInputsCommand() bool {
@@ -111,6 +112,7 @@ func (r preparedKubernetesRelease) auditInputs() kubernetesReleaseInputAudit {
 	audit.auditPSPSecrets(r, tenantID, tenantReady)
 	audit.auditCurrentSecretOnly(r, "noebs.db_url", "db_url")
 	audit.auditCurrentSecretOnly(r, "noebs.jwt_secret", "jwt_secret")
+	audit.auditUnsupportedLegacyEBSConfig(r)
 	if _, err := r.serviceDatabaseURL("identity-auth"); err != nil {
 		audit.Invalid = append(audit.Invalid, err.Error())
 	}
@@ -164,6 +166,44 @@ func (a *kubernetesReleaseInputAudit) auditCurrentSecretOnly(r preparedKubernete
 	}
 }
 
+func (a *kubernetesReleaseInputAudit) auditUnsupportedLegacyEBSConfig(r preparedKubernetesRelease) {
+	for _, field := range []struct {
+		key    string
+		target string
+	}{
+		{key: "consumer_qa", target: "noebs.ebs.consumer_endpoint"},
+		{key: "consumer_prod", target: "noebs.ebs.consumer_endpoint"},
+		{key: "merchant_qa", target: "noebs.ebs.merchant_endpoint"},
+		{key: "merchant_prod", target: "noebs.ebs.merchant_endpoint"},
+		{key: "ipin_qa", target: "noebs.ebs.ipin_endpoint"},
+		{key: "ipin_prod", target: "noebs.ebs.ipin_endpoint"},
+		{key: "consumer_qa_id", target: "noebs.ebs.consumer_app_id"},
+		{key: "consumer_prod_id", target: "noebs.ebs.consumer_app_id"},
+		{key: "merchant_qa_id", target: "noebs.ebs.merchant_app_id"},
+		{key: "merchant_prod_id", target: "noebs.ebs.merchant_app_id"},
+	} {
+		value, _, present := r.firstLegacyValue(field.key)
+		if !present || value == "" {
+			continue
+		}
+		a.UnsupportedCurrentSecret = append(a.UnsupportedCurrentSecret, fmt.Sprintf("current secret noebs.%s cannot be transformed; provide %s", field.key, field.target))
+	}
+
+	for _, field := range []struct {
+		key    string
+		target string
+	}{
+		{key: "is_consumer_prod", target: "noebs.ebs.consumer_endpoint and noebs.ebs.consumer_app_id"},
+		{key: "is_merchant_prod", target: "noebs.ebs.merchant_endpoint and noebs.ebs.merchant_app_id"},
+	} {
+		value, ok := r.legacy[field.key].(bool)
+		if !ok || !value {
+			continue
+		}
+		a.UnsupportedCurrentSecret = append(a.UnsupportedCurrentSecret, fmt.Sprintf("current secret noebs.%s cannot select an EBS runtime; provide %s", field.key, field.target))
+	}
+}
+
 func (a *kubernetesReleaseInputAudit) auditPSPSecrets(r preparedKubernetesRelease, tenantID string, tenantReady bool) {
 	legacyPSP := getMap(r.legacy, "psp")
 	inputPSP := pspInputsToMap(r.inputs.Noebs.PSP)
@@ -195,6 +235,7 @@ func (a *kubernetesReleaseInputAudit) auditPSPSecrets(r preparedKubernetesReleas
 func (a *kubernetesReleaseInputAudit) normalize() {
 	sort.Strings(a.CurrentSecret)
 	sort.Strings(a.EmptyCurrentSecret)
+	sort.Strings(a.UnsupportedCurrentSecret)
 	sort.Strings(a.CutoverInput)
 	sort.Strings(a.Missing)
 	sort.Strings(a.Duplicate)

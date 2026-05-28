@@ -280,6 +280,26 @@ func TestAuditKubernetesReleaseInputsReportsEmptyCurrentSecretValues(t *testing.
 	requireStringEntry(t, audit.Missing, "noebs.google_client_id")
 }
 
+func TestAuditKubernetesReleaseInputsReportsUnsupportedLegacyEBSSelectors(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
+	payload = strings.Replace(payload, "  google_client_secret: legacy-google-client-secret\n", `  google_client_secret: legacy-google-client-secret
+  consumer_qa: "https://legacy-consumer-qa.example"
+  is_merchant_prod: true
+`, 1)
+	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	if audit.Ready {
+		t.Fatalf("audit ready = true, want false")
+	}
+	requireStringEntry(t, audit.UnsupportedCurrentSecret, "current secret noebs.consumer_qa cannot be transformed; provide noebs.ebs.consumer_endpoint")
+	requireStringEntry(t, audit.UnsupportedCurrentSecret, "current secret noebs.is_merchant_prod cannot select an EBS runtime; provide noebs.ebs.merchant_endpoint and noebs.ebs.merchant_app_id")
+}
+
 func TestAuditKubernetesReleaseInputsReportsReadyCompleteCurrentSecret(t *testing.T) {
 	legacyRoot := writeCompleteLegacyReleaseRoot(t)
 

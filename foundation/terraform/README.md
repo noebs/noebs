@@ -72,7 +72,7 @@ To include an encrypted cutover input file in the audit, run:
 noebs audit-kubernetes-release-inputs /path/to/current-noebs-root /path/to/kubernetes-release.inputs.yaml
 ```
 
-The audit reports only input names and sources. `current_secret` means a non-empty value can be transformed from the current encrypted root; `empty_current_secret` means the key exists there but has no usable value and still needs explicit cutover input. It does not print secret values, derive missing values, choose QA or production EBS endpoints, or make deployment changes.
+The audit reports only input names and sources. `current_secret` means a non-empty value can be transformed from the current encrypted root; `empty_current_secret` means the key exists there but has no usable value and still needs explicit cutover input; `unsupported_current_secret` means legacy material exists but is intentionally not transformed, such as QA/production EBS selectors that must be replaced by explicit resolved EBS inputs. It does not print secret values, derive missing values, choose QA or production EBS endpoints, or make deployment changes.
 
 ```sh
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
