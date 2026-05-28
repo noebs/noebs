@@ -22,18 +22,25 @@ func validateDeploymentCommand() error {
 	return validateDeploymentRoot(os.Args[2])
 }
 
+func validateKubernetesDeploymentCommand() error {
+	if len(os.Args) != 3 {
+		return errors.New("usage: noebs validate-kubernetes-deployment <mounted-root>")
+	}
+	return validateKubernetesDeploymentRoot(os.Args[2])
+}
+
 func validateDeploymentRoot(root string) error {
 	return validateDeploymentRootWithDecrypt(root, decryptSopsFile)
 }
 
+func validateKubernetesDeploymentRoot(root string) error {
+	return validateKubernetesDeploymentRootWithDecrypt(root, decryptSopsFile)
+}
+
 func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFunc) error {
-	root = strings.TrimSpace(root)
-	if root == "" {
-		return errors.New("deployment root is required")
-	}
-	root, err := filepath.Abs(root)
+	root, err := resolveDeploymentRoot(root)
 	if err != nil {
-		return fmt.Errorf("resolve deployment root: %w", err)
+		return err
 	}
 	if err := requireReadableFile("docker-compose.yml", filepath.Join(root, "docker-compose.yml")); err != nil {
 		return err
@@ -83,7 +90,80 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	return nil
 }
 
+func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFunc) error {
+	root, err := resolveDeploymentRoot(root)
+	if err != nil {
+		return err
+	}
+	if decrypt == nil {
+		return errors.New("deployment decrypt function is required")
+	}
+
+	configPath := filepath.Join(root, "config.yaml")
+	ageKeyPath := filepath.Join(root, ".sops", "age-key.txt")
+	if err := requireReadableFile("config.yaml", configPath); err != nil {
+		return err
+	}
+	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
+		return err
+	}
+
+	configMap, err := readYAMLMapFile(configPath)
+	if err != nil {
+		return err
+	}
+	for _, requiredFile := range []struct {
+		label string
+		path  string
+	}{
+		{label: "Noebs Postgres password", path: filepath.Join(root, "platform", "postgres-password.txt")},
+		{label: "Temporal Postgres password", path: filepath.Join(root, "platform", "temporal-postgres-password.txt")},
+		{label: "Keycloak Postgres password", path: filepath.Join(root, "platform", "keycloak-postgres-password.txt")},
+	} {
+		if err := validatePlainSecretFile(requiredFile.label, requiredFile.path); err != nil {
+			return err
+		}
+	}
+	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf")); err != nil {
+		return err
+	}
+
+	serviceFiles, err := filepath.Glob(filepath.Join(root, "services", "*.yaml"))
+	if err != nil {
+		return fmt.Errorf("list Kubernetes service configs: %w", err)
+	}
+	if len(serviceFiles) == 0 {
+		return errors.New("no service configs found under services")
+	}
+	for _, serviceFile := range serviceFiles {
+		serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
+		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
+		if err := validateDeploymentServiceWithSecretPath(configMap, serviceFile, secretPath, ageKeyPath, decrypt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resolveDeploymentRoot(root string) (string, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return "", errors.New("deployment root is required")
+	}
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve deployment root: %w", err)
+	}
+	return absoluteRoot, nil
+}
+
 func validateDeploymentService(root string, configMap map[string]interface{}, serviceFile, ageKeyPath string, decrypt deploymentDecryptFunc) error {
+	serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
+	secretPath := filepath.Join(root, "deploy", "docker", "secrets", serviceSecretFileName(serviceName))
+	return validateDeploymentServiceWithSecretPath(configMap, serviceFile, secretPath, ageKeyPath, decrypt)
+}
+
+func validateDeploymentServiceWithSecretPath(configMap map[string]interface{}, serviceFile, secretPath, ageKeyPath string, decrypt deploymentDecryptFunc) error {
 	serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
 	serviceConfigMap, err := readYAMLMapFile(serviceFile)
 	if err != nil {
@@ -102,7 +182,6 @@ func validateDeploymentService(root string, configMap map[string]interface{}, se
 		return fmt.Errorf("%s service_role = %q, want %q", serviceFile, role, serviceName)
 	}
 
-	secretPath := filepath.Join(root, "deploy", "docker", "secrets", serviceSecretFileName(serviceName))
 	if err := requireReadableFile(serviceName+" secrets", secretPath); err != nil {
 		return err
 	}

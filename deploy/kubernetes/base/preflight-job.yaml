@@ -1,0 +1,238 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: noebs-deployment-preflight
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "0"
+  labels:
+    app.kubernetes.io/name: noebs-deployment-preflight
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: noebs-deployment-preflight
+    spec:
+      serviceAccountName: deployment-preflight
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: preflight
+          image: ghcr.io/adonese/noebs:master
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/noebs
+          args:
+            - validate-kubernetes-deployment
+            - /preflight
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: config
+              mountPath: /preflight/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/api-gateway.yaml
+              subPath: api-gateway.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/identity-auth.yaml
+              subPath: identity-auth.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/card-vault.yaml
+              subPath: card-vault.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/ebs-adapter.yaml
+              subPath: ebs-adapter.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/psp-webhook.yaml
+              subPath: psp-webhook.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/admin-reporting.yaml
+              subPath: admin-reporting.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/notification-chat.yaml
+              subPath: notification-chat.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/consumer-beneficiary.yaml
+              subPath: consumer-beneficiary.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/wallet-api.yaml
+              subPath: wallet-api.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/wallet-ledger.yaml
+              subPath: wallet-ledger.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/wallet-worker.yaml
+              subPath: wallet-worker.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/identity-auth-migrate.yaml
+              subPath: identity-auth-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/card-vault-migrate.yaml
+              subPath: card-vault-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/ebs-adapter-migrate.yaml
+              subPath: ebs-adapter-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/psp-webhook-migrate.yaml
+              subPath: psp-webhook-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/admin-reporting-migrate.yaml
+              subPath: admin-reporting-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/notification-chat-migrate.yaml
+              subPath: notification-chat-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/consumer-beneficiary-migrate.yaml
+              subPath: consumer-beneficiary-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/wallet-ledger-migrate.yaml
+              subPath: wallet-ledger-migrate.service.yaml
+              readOnly: true
+            - name: api-gateway-secrets
+              mountPath: /preflight/secrets/api-gateway.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: identity-auth-secrets
+              mountPath: /preflight/secrets/identity-auth.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: card-vault-secrets
+              mountPath: /preflight/secrets/card-vault.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: ebs-adapter-secrets
+              mountPath: /preflight/secrets/ebs-adapter.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: psp-webhook-secrets
+              mountPath: /preflight/secrets/psp-webhook.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: admin-reporting-secrets
+              mountPath: /preflight/secrets/admin-reporting.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: notification-chat-secrets
+              mountPath: /preflight/secrets/notification-chat.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: consumer-beneficiary-secrets
+              mountPath: /preflight/secrets/consumer-beneficiary.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: wallet-api-secrets
+              mountPath: /preflight/secrets/wallet-api.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: wallet-ledger-secrets
+              mountPath: /preflight/secrets/wallet-ledger.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: wallet-worker-secrets
+              mountPath: /preflight/secrets/wallet-worker.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: sops-age-key
+              mountPath: /preflight/.sops/age-key.txt
+              subPath: age-key.txt
+              readOnly: true
+            - name: postgres-credentials
+              mountPath: /preflight/platform/postgres-password.txt
+              subPath: password
+              readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /preflight/platform/temporal-postgres-password.txt
+              subPath: password
+              readOnly: true
+            - name: keycloak-postgres-credentials
+              mountPath: /preflight/platform/keycloak-postgres-password.txt
+              subPath: password
+              readOnly: true
+            - name: keycloak-secrets
+              mountPath: /preflight/platform/keycloak.conf
+              subPath: keycloak.conf
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: noebs-config
+        - name: api-gateway-secrets
+          secret:
+            secretName: api-gateway-secrets
+        - name: identity-auth-secrets
+          secret:
+            secretName: identity-auth-secrets
+        - name: card-vault-secrets
+          secret:
+            secretName: card-vault-secrets
+        - name: ebs-adapter-secrets
+          secret:
+            secretName: ebs-adapter-secrets
+        - name: psp-webhook-secrets
+          secret:
+            secretName: psp-webhook-secrets
+        - name: admin-reporting-secrets
+          secret:
+            secretName: admin-reporting-secrets
+        - name: notification-chat-secrets
+          secret:
+            secretName: notification-chat-secrets
+        - name: consumer-beneficiary-secrets
+          secret:
+            secretName: consumer-beneficiary-secrets
+        - name: wallet-api-secrets
+          secret:
+            secretName: wallet-api-secrets
+        - name: wallet-ledger-secrets
+          secret:
+            secretName: wallet-ledger-secrets
+        - name: wallet-worker-secrets
+          secret:
+            secretName: wallet-worker-secrets
+        - name: sops-age-key
+          secret:
+            secretName: sops-age-key
+        - name: postgres-credentials
+          secret:
+            secretName: postgres-credentials
+        - name: temporal-postgres-credentials
+          secret:
+            secretName: temporal-postgres-credentials
+        - name: keycloak-postgres-credentials
+          secret:
+            secretName: keycloak-postgres-credentials
+        - name: keycloak-secrets
+          secret:
+            secretName: keycloak-secrets

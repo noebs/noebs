@@ -9,6 +9,7 @@ resources:
   - postgres.yaml
   - temporal.yaml
   - keycloak.yaml
+  - preflight-job.yaml
   - migrate-job.yaml
   - api-gateway.yaml
   - identity-auth.yaml

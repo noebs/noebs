@@ -218,6 +218,9 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 				if !strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
 					continue
 				}
+				if object.Kind == "Job" && object.Metadata.Name == "noebs-deployment-preflight" {
+					continue
+				}
 				checked++
 				if len(container.Env) != 0 {
 					t.Fatalf("%s/%s defines env; noebs service config must be file-mounted", object.Metadata.Name, container.Name)
@@ -1473,6 +1476,9 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
 				continue
 			}
+			if object.Metadata.Name == "noebs-deployment-preflight" {
+				continue
+			}
 			if _, ok := expectedJobs[object.Metadata.Name]; !ok {
 				t.Fatalf("unexpected migration Job %q", object.Metadata.Name)
 			}
@@ -1514,6 +1520,107 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		if !found {
 			t.Fatalf("runtime Deployment %q not found", deployment)
 		}
+	}
+}
+
+func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	serviceConfigs := map[string]string{
+		"api-gateway":                  "api-gateway.service.yaml",
+		"identity-auth":                "identity-auth.service.yaml",
+		"card-vault":                   "card-vault.service.yaml",
+		"ebs-adapter":                  "ebs-adapter.service.yaml",
+		"psp-webhook":                  "psp-webhook.service.yaml",
+		"admin-reporting":              "admin-reporting.service.yaml",
+		"notification-chat":            "notification-chat.service.yaml",
+		"consumer-beneficiary":         "consumer-beneficiary.service.yaml",
+		"wallet-api":                   "wallet-api.service.yaml",
+		"wallet-ledger":                "wallet-ledger.service.yaml",
+		"wallet-worker":                "wallet-worker.service.yaml",
+		"identity-auth-migrate":        "identity-auth-migrate.service.yaml",
+		"card-vault-migrate":           "card-vault-migrate.service.yaml",
+		"ebs-adapter-migrate":          "ebs-adapter-migrate.service.yaml",
+		"psp-webhook-migrate":          "psp-webhook-migrate.service.yaml",
+		"admin-reporting-migrate":      "admin-reporting-migrate.service.yaml",
+		"notification-chat-migrate":    "notification-chat-migrate.service.yaml",
+		"consumer-beneficiary-migrate": "consumer-beneficiary-migrate.service.yaml",
+		"wallet-ledger-migrate":        "wallet-ledger-migrate.service.yaml",
+	}
+	serviceSecrets := map[string]string{
+		"api-gateway":          "api-gateway-secrets",
+		"identity-auth":        "identity-auth-secrets",
+		"card-vault":           "card-vault-secrets",
+		"ebs-adapter":          "ebs-adapter-secrets",
+		"psp-webhook":          "psp-webhook-secrets",
+		"admin-reporting":      "admin-reporting-secrets",
+		"notification-chat":    "notification-chat-secrets",
+		"consumer-beneficiary": "consumer-beneficiary-secrets",
+		"wallet-api":           "wallet-api-secrets",
+		"wallet-ledger":        "wallet-ledger-secrets",
+		"wallet-worker":        "wallet-worker-secrets",
+	}
+
+	var found bool
+	for _, object := range objects {
+		if object.Kind != "Job" || object.Metadata.Name != "noebs-deployment-preflight" {
+			continue
+		}
+		found = true
+		if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "Sync" {
+			t.Fatalf("preflight hook = %q, want Sync", object.Metadata.Annotations["argocd.argoproj.io/hook"])
+		}
+		if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "0" {
+			t.Fatalf("preflight sync-wave = %q, want 0", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+		}
+		if object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"] != "BeforeHookCreation,HookSucceeded" {
+			t.Fatalf("preflight hook delete policy = %q", object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"])
+		}
+		if object.Spec.Template.Spec.ServiceAccountName != "deployment-preflight" {
+			t.Fatalf("preflight serviceAccountName = %q", object.Spec.Template.Spec.ServiceAccountName)
+		}
+		if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+			t.Fatalf("preflight must disable service account token automount")
+		}
+		if object.Spec.Template.Spec.RestartPolicy != "Never" {
+			t.Fatalf("preflight restartPolicy = %q, want Never", object.Spec.Template.Spec.RestartPolicy)
+		}
+		if len(object.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("preflight containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+		}
+		container := object.Spec.Template.Spec.Containers[0]
+		if container.Image != "ghcr.io/adonese/noebs:master" {
+			t.Fatalf("preflight image = %q", container.Image)
+		}
+		if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+			t.Fatalf("preflight must use mounted config/secrets instead of env/envFrom")
+		}
+		if !containsString(container.Command, "/usr/local/bin/noebs") {
+			t.Fatalf("preflight command = %v, want noebs binary", container.Command)
+		}
+		if !containsString(container.Args, "validate-kubernetes-deployment") || !containsString(container.Args, "/preflight") {
+			t.Fatalf("preflight args = %v, want validate-kubernetes-deployment /preflight", container.Args)
+		}
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/config.yaml", "config.yaml")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/.sops/age-key.txt", "age-key.txt")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/postgres-password.txt", "password")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/temporal-postgres-password.txt", "password")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak-postgres-password.txt", "password")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak.conf", "keycloak.conf")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "postgres-credentials", "postgres-credentials")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "temporal-postgres-credentials", "temporal-postgres-credentials")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-postgres-credentials", "keycloak-postgres-credentials")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-secrets", "keycloak-secrets")
+
+		for serviceName, subPath := range serviceConfigs {
+			requireMount(t, "noebs-deployment-preflight", container, "/preflight/services/"+serviceName+".yaml", subPath)
+		}
+		for serviceName, volumeName := range serviceSecrets {
+			requireMount(t, "noebs-deployment-preflight", container, "/preflight/secrets/"+serviceName+".secrets.yaml", "secrets.yaml")
+			requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, volumeName, volumeName)
+		}
+	}
+	if !found {
+		t.Fatalf("noebs-deployment-preflight Job not found")
 	}
 }
 
@@ -1710,6 +1817,23 @@ func requireNoebsSecretVolume(t *testing.T, workload string, container manifestC
 		return
 	}
 	t.Fatalf("%s missing secret volume %s", workload, mount.Name)
+}
+
+func requireSecretVolume(t *testing.T, workload string, volumes []manifestVolume, volumeName, secretName string) {
+	t.Helper()
+	for _, volume := range volumes {
+		if volume.Name != volumeName {
+			continue
+		}
+		if volume.Secret == nil {
+			t.Fatalf("%s volume %s is not a Secret volume", workload, volumeName)
+		}
+		if volume.Secret.SecretName != secretName {
+			t.Fatalf("%s volume %s secretName = %q, want %q", workload, volumeName, volume.Secret.SecretName, secretName)
+		}
+		return
+	}
+	t.Fatalf("%s missing Secret volume %s", workload, volumeName)
 }
 
 func parseHTTPDiscoveryEndpoint(t *testing.T, role, endpoint string) (string, int) {

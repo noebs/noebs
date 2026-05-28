@@ -62,6 +62,12 @@ func main() {
 		}
 		return
 	}
+	if isValidateKubernetesDeploymentCommand() {
+		if err := validateKubernetesDeploymentCommand(); err != nil {
+			logrusLogger.Fatalf("validate kubernetes deployment failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
