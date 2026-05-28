@@ -37,8 +37,9 @@ func (s *Service) SubmitBillerHook(ctx context.Context, tenantID string, cmd Bil
 	if s == nil {
 		return ErrMissingService
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	_, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	token := strings.TrimSpace(cmd.Token)
 	if token == "" {
