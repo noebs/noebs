@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
@@ -30,18 +29,15 @@ func (s *Service) ensureDB() (*sqlx.DB, error) {
 }
 
 func (s *Service) resolveTenantID(c *fiber.Ctx) (string, error) {
-	tenantID := ""
-	if c != nil {
-		if c.Locals("tenant_id") != nil {
-			v := c.Locals("tenant_id")
-			if t, ok := v.(string); ok && t != "" {
-				tenantID = t
-			}
-		}
-		if tenantID == "" {
-			tenantID = c.Get(gateway.GatewayTenantIDHeader)
-		}
+	if c == nil {
+		return "", store.ErrMissingTenantID
 	}
+
+	tenantID, ok := c.Locals("tenant_id").(string)
+	if !ok {
+		return "", store.ErrMissingTenantID
+	}
+
 	return store.ValidateTenantID(tenantID)
 }
 

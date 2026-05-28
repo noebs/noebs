@@ -55,10 +55,10 @@ func TestResolveTenantIDDoesNotDefaultFromServiceConfig(t *testing.T) {
 	}
 }
 
-func TestResolveTenantIDUsesGatewayTenantHeader(t *testing.T) {
+func TestResolveTenantIDUsesValidatedTenantIdentity(t *testing.T) {
 	app := fiber.New()
 	service := Service{}
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/", gateway.InternalTenantIdentityMiddleware(), func(c *fiber.Ctx) error {
 		tenantID, err := service.resolveTenantID(c)
 		if err != nil {
 			t.Fatalf("resolveTenantID() error = %v", err)
@@ -71,6 +71,25 @@ func TestResolveTenantIDUsesGatewayTenantHeader(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set(gateway.GatewayTenantIDHeader, " tenant_1 ")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
+func TestResolveTenantIDDoesNotReadGatewayTenantHeaderDirectly(t *testing.T) {
+	app := fiber.New()
+	service := Service{}
+	app.Get("/", func(c *fiber.Ctx) error {
+		if _, err := service.resolveTenantID(c); !errors.Is(err, store.ErrMissingTenantID) {
+			t.Fatalf("resolveTenantID() error = %v, want %v", err, store.ErrMissingTenantID)
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
