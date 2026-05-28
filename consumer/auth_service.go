@@ -165,7 +165,6 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	if err := s.Store.CreateUser(ctx, tenantID, &u); err != nil {
 		return ebs_fields.User{}, err
 	}
-	go gateway.SyncLedger(u)
 	return sanitizeUser(u), nil
 }
 

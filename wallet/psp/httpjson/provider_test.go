@@ -32,6 +32,29 @@ func TestNewProviderRequiresExplicitRequestRoutes(t *testing.T) {
 	}
 }
 
+func TestNewProviderDoesNotUseEnvironmentProxy(t *testing.T) {
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           "https://pay.example",
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposit/verify",
+		PayoutRequestMethod:  http.MethodPost,
+		PayoutRequestPath:    "/payouts",
+		StatusRequestMethod:  http.MethodGet,
+		StatusRequestPath:    "/transactions/{transaction_id}",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+	transport, ok := provider.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T, want *http.Transport", provider.client.Transport)
+	}
+	if transport.Proxy != nil {
+		t.Fatalf("transport.Proxy must be nil; PSP providers must not read proxy environment variables")
+	}
+}
+
 func TestAppendQueryForMethodAddsMappedGETFields(t *testing.T) {
 	path := appendQueryForMethod(http.MethodGet, "/status", map[string]any{
 		"reference": "ref-1",

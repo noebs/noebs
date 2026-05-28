@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adonese/noebs/internal/httpclient"
 	"github.com/adonese/noebs/wallet/psp"
 )
 
@@ -32,7 +33,7 @@ func NewProvider(cfg *psp.Config) (*Provider, error) {
 	}
 	return &Provider{
 		config: cfg,
-		client: &http.Client{Timeout: 15 * time.Second},
+		client: httpclient.New(httpclient.WithTimeout(15 * time.Second)),
 	}, nil
 }
 

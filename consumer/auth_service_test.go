@@ -3,9 +3,14 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -25,6 +30,61 @@ func (a *refreshAuthStub) GenerateJWT(_ int64, _ string, tenantID string) (strin
 	a.generated = true
 	a.generatedTenant = tenantID
 	return "new-token", nil
+}
+
+type oauthRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f oauthRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func oauthHTTPResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func TestServiceGoogleAuthRequiresHTTPClient(t *testing.T) {
+	service := &Service{
+		Store:       &store.Store{},
+		NoebsConfig: ebs_fields.NoebsConfig{GoogleClientID: "client-id"},
+	}
+
+	_, _, _, err := service.GoogleAuth(context.Background(), "tenant-a", "code", "", "")
+	if !errors.Is(err, ErrMissingHTTPClient) {
+		t.Fatalf("GoogleAuth() error = %v, want %v", err, ErrMissingHTTPClient)
+	}
+}
+
+func TestServiceGoogleAuthUsesConfiguredHTTPClient(t *testing.T) {
+	requests := []string{}
+	client := &http.Client{Transport: oauthRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests = append(requests, req.URL.String())
+		switch req.URL.String() {
+		case googleTokenURL:
+			return oauthHTTPResponse(http.StatusOK, `{"access_token":"token"}`), nil
+		case googleUserURL:
+			return oauthHTTPResponse(http.StatusOK, `{"email":"user@example.com"}`), nil
+		default:
+			return nil, fmt.Errorf("unexpected oauth request %s", req.URL.String())
+		}
+	})}
+	service := &Service{
+		Store:       &store.Store{},
+		NoebsConfig: ebs_fields.NoebsConfig{GoogleClientID: "client-id"},
+		HTTPClient:  client,
+	}
+
+	_, _, _, err := service.GoogleAuth(context.Background(), "tenant-a", "code", "verifier", "https://app.example/callback")
+	if err == nil || err.Error() != "invalid_userinfo" {
+		t.Fatalf("GoogleAuth() error = %v, want invalid_userinfo after configured client requests", err)
+	}
+	want := []string{googleTokenURL, googleUserURL}
+	if fmt.Sprint(requests) != fmt.Sprint(want) {
+		t.Fatalf("oauth requests = %v, want %v", requests, want)
+	}
 }
 
 func TestServiceRefreshJWTRequiresTenantClaim(t *testing.T) {

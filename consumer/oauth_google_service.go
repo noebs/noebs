@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -60,6 +59,9 @@ func (s *Service) GoogleAuth(ctx context.Context, tenantID string, code, codeVer
 	}
 	if s.NoebsConfig.GoogleClientID == "" {
 		return "", empty, false, errors.New("missing_google_client")
+	}
+	if s.HTTPClient == nil {
+		return "", empty, false, ErrMissingHTTPClient
 	}
 
 	req := googleAuthRequest{Code: code, CodeVerifier: codeVerifier, RedirectURI: redirectURI}
@@ -167,8 +169,7 @@ func (s *Service) exchangeGoogleCode(ctx context.Context, req googleAuthRequest)
 	}
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(httpReq)
+	resp, err := s.HTTPClient.Do(httpReq)
 	if err != nil {
 		return token, err
 	}
@@ -196,8 +197,7 @@ func (s *Service) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 		return info, err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := s.HTTPClient.Do(req)
 	if err != nil {
 		return info, err
 	}
@@ -245,10 +245,10 @@ func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID strin
 	// Create a new local user with an internal mobile placeholder until profile completion.
 	mobile := fmt.Sprintf("google:%s", info.Sub)
 	user = ebs_fields.User{
-		Mobile:    mobile,
-		Username:  mobile,
-		Fullname:  info.Name,
-		Email:     email,
+		Mobile:     mobile,
+		Username:   mobile,
+		Fullname:   info.Name,
+		Email:      email,
 		IsVerified: true,
 	}
 	user.Password = uuid.New().String()

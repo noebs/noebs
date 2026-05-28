@@ -1,17 +1,11 @@
 package gateway
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
 	"log"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/adonese/noebs/ebs_fields"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -130,58 +124,3 @@ func Instrumentation() fiber.Handler {
 		return err
 	}
 }
-
-// SyncLedger sends the user data to the server endpoint (dapi.noebs.sd) for backup
-func SyncLedger(user ebs_fields.User) error {
-	client := &http.Client{Timeout: 15 * time.Second}
-	safeUser := sanitizeLedgerUser(user)
-	body, err := json.Marshal(&safeUser)
-	if err != nil {
-		log.Printf("error in marshaling user data: %v", err)
-		return err
-	}
-	expBackoff := backoff.NewExponentialBackOff()
-	expBackoff.MaxElapsedTime = 5 * time.Minute
-	op := func() error {
-
-		req, err := http.NewRequest("POST", "https://dapi.nil.sd/updates", bytes.NewBuffer(body))
-		if err != nil {
-			log.Printf("error in creating request: %v", err)
-			return err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("error in sending request: %v", err)
-			return err
-		}
-		defer resp.Body.Close()
-		res, err := io.ReadAll(resp.Body)
-		log.Printf("response from server: %v", string(res))
-		return nil
-	}
-	err = backoff.Retry(op, expBackoff)
-	return err
-}
-
-func sanitizeLedgerUser(user ebs_fields.User) ebs_fields.User {
-	user.Password = ""
-	user.Password2 = ""
-	user.PublicKey = ""
-	user.OTP = ""
-	user.SignedOTP = ""
-	user.MainCard = ""
-	user.ExpDate = ""
-	user.DeviceID = ""
-	user.DeviceToken = ""
-	user.NewPassword = ""
-	user.KYC = nil
-	user.Cards = nil
-	user.Tokens = nil
-	user.Beneficiaries = nil
-	return user
-}
-
-const (
-	BACKUP_TIME = 24 * time.Minute
-)
