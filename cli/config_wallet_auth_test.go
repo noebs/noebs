@@ -266,15 +266,15 @@ func TestWalletRoutesUseGatewayIdentity(t *testing.T) {
 	}
 	_ = mismatchUserResp.Body.Close()
 
-	mismatchTenantReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"tenant_id":"other-tenant","currency":"USD"}`))
-	mismatchTenantReq.Header.Set("Content-Type", "application/json")
-	setWalletGatewayIdentity(mismatchTenantReq, 42)
-	mismatchTenantResp, err := route.Test(mismatchTenantReq, 5_000)
+	tenantOverrideReq := httptest.NewRequest(http.MethodPost, "/wallet/wallets", bytes.NewBufferString(`{"tenant_id":"other-tenant","currency":"USD"}`))
+	tenantOverrideReq.Header.Set("Content-Type", "application/json")
+	setWalletGatewayIdentity(tenantOverrideReq, 42)
+	mismatchTenantResp, err := route.Test(tenantOverrideReq, 5_000)
 	if err != nil {
-		t.Fatalf("mismatch tenant request failed: %v", err)
+		t.Fatalf("tenant override request failed: %v", err)
 	}
-	if mismatchTenantResp.StatusCode != http.StatusForbidden {
-		t.Fatalf("mismatch tenant status = %d, want %d", mismatchTenantResp.StatusCode, http.StatusForbidden)
+	if mismatchTenantResp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("tenant override status = %d, want %d", mismatchTenantResp.StatusCode, http.StatusBadRequest)
 	}
 	_ = mismatchTenantResp.Body.Close()
 
@@ -381,6 +381,13 @@ func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {
 			body:       `{"tenant_id":"   ","currency":"USD"}`,
 			wantStatus: http.StatusBadRequest,
 		},
+		{
+			name:       "null tenant override",
+			method:     http.MethodPost,
+			path:       "/wallet/wallets",
+			body:       `{"tenant_id":null,"currency":"USD"}`,
+			wantStatus: http.StatusBadRequest,
+		},
 	}
 
 	for _, tt := range tests {
@@ -401,7 +408,7 @@ func TestWalletRoutesRejectMalformedIdentityOverrides(t *testing.T) {
 	}
 }
 
-func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
+func TestWalletGetRouteRejectsTenantQuery(t *testing.T) {
 	configureWalletRouteTest(t)
 
 	route := GetMainEngine()
@@ -418,15 +425,15 @@ func TestWalletGetRouteRejectsBlankTenantQuery(t *testing.T) {
 	}
 	ownerWallet := decodeWalletRouteResponse(t, ownerWalletResp)
 
-	req := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"?tenant_id=", nil)
+	req := httptest.NewRequest(http.MethodGet, "/wallet/wallets/"+ownerWallet.ID+"?tenant_id="+url.QueryEscape(noebsConfig.DefaultTenantID), nil)
 	setWalletGatewayIdentity(req, 42)
 
 	resp, err := route.Test(req)
 	if err != nil {
-		t.Fatalf("blank tenant query request failed: %v", err)
+		t.Fatalf("tenant query request failed: %v", err)
 	}
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("blank tenant query status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+		t.Fatalf("tenant query status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 	_ = resp.Body.Close()
 }

@@ -32,3 +32,21 @@ func TestWalletAdminHTTPSurfaceUsesGRPCBridgeOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestWalletUserHTTPSurfaceDoesNotReadTenantQuery(t *testing.T) {
+	forbidden := []string{
+		`c.Query("tenant_id")`,
+		"requestedTenantIDFromQuery",
+	}
+	for _, path := range []string{"user.go", "grpc_user.go"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for _, token := range forbidden {
+			if strings.Contains(string(data), token) {
+				t.Fatalf("%s contains %q; wallet user tenant must come only from gateway identity", path, token)
+			}
+		}
+	}
+}

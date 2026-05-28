@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,10 +19,11 @@ type UserHandler struct {
 	Service *wallet.Service
 }
 
+var errWalletTenantOverride = errors.New("tenant_id is not accepted on wallet user routes")
+
 type ensureWalletRequest struct {
-	TenantID *string `json:"tenant_id"`
-	UserID   *int64  `json:"user_id"`
-	Currency string  `json:"currency"`
+	UserID   *int64 `json:"user_id"`
+	Currency string `json:"currency"`
 }
 
 type walletResponse struct {
@@ -89,6 +91,9 @@ func (h *UserHandler) EnsureWallet(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, 0, err)
 	}
+	if err := rejectJSONField(c, "tenant_id"); err != nil {
+		return jsonResponse(c, 0, err)
+	}
 
 	userID, err := authenticatedUserID(c)
 	if err != nil {
@@ -96,9 +101,6 @@ func (h *UserHandler) EnsureWallet(c *fiber.Ctx) error {
 	}
 	tenantID, err := authenticatedTenantID(c)
 	if err != nil {
-		return jsonResponse(c, 0, err)
-	}
-	if err := validateRequestedTenantID(req.TenantID, tenantID); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	if err := validateRequestedUserID(req.UserID, userID); err != nil {
@@ -142,7 +144,7 @@ func (h *UserHandler) GetWallet(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 
@@ -182,7 +184,7 @@ func (h *UserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 
@@ -230,7 +232,7 @@ func (h *UserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	amount, err := optionalInt64Query(c, "amount")
@@ -292,21 +294,6 @@ func authenticatedTenantID(c *fiber.Ctx) (string, error) {
 	return tenantID, nil
 }
 
-func validateRequestedTenantID(requested *string, authenticated string) error {
-	if requested == nil {
-		return nil
-	}
-	tenantID := strings.TrimSpace(*requested)
-	tenantID, err := walletstore.ValidateTenantID(tenantID)
-	if err != nil {
-		return mapWalletError(err)
-	}
-	if tenantID != authenticated {
-		return apperr.ErrForbidden
-	}
-	return nil
-}
-
 func validateRequestedUserID(requested *int64, authenticated int64) error {
 	if requested == nil {
 		return nil
@@ -320,12 +307,22 @@ func validateRequestedUserID(requested *int64, authenticated int64) error {
 	return nil
 }
 
-func requestedTenantIDFromQuery(c *fiber.Ctx) *string {
-	if c == nil || !c.Request().URI().QueryArgs().Has("tenant_id") {
-		return nil
+func rejectJSONField(c *fiber.Ctx, field string) error {
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(c.Body(), &payload); err != nil {
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	}
-	tenantID := c.Query("tenant_id")
-	return &tenantID
+	if _, ok := payload[field]; ok {
+		return apperr.Wrap(errWalletTenantOverride, apperr.ErrBadRequest, errWalletTenantOverride.Error())
+	}
+	return nil
+}
+
+func rejectTenantIDQuery(c *fiber.Ctx) error {
+	if c != nil && c.Request().URI().QueryArgs().Has("tenant_id") {
+		return apperr.Wrap(errWalletTenantOverride, apperr.ErrBadRequest, errWalletTenantOverride.Error())
+	}
+	return nil
 }
 
 func optionalIntQuery(c *fiber.Ctx, key string, defaultValue int) (int, error) {

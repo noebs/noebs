@@ -46,6 +46,9 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, 0, err)
 	}
+	if err := rejectJSONField(c, "tenant_id"); err != nil {
+		return jsonResponse(c, 0, err)
+	}
 
 	userID, err := authenticatedUserID(c)
 	if err != nil {
@@ -53,9 +56,6 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 	}
 	tenantID, err := authenticatedTenantID(c)
 	if err != nil {
-		return jsonResponse(c, 0, err)
-	}
-	if err := validateRequestedTenantID(req.TenantID, tenantID); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	if err := validateRequestedUserID(req.UserID, userID); err != nil {
@@ -102,7 +102,7 @@ func (h *GRPCUserHandler) GetWallet(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 
@@ -141,7 +141,7 @@ func (h *GRPCUserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	limit, err := optionalIntQuery(c, "limit", 100)
@@ -182,7 +182,7 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	if err := validateRequestedTenantID(requestedTenantIDFromQuery(c), tenantID); err != nil {
+	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
 	amount, err := optionalInt64Query(c, "amount")

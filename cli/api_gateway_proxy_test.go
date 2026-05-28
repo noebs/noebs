@@ -431,6 +431,35 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	}
 }
 
+func TestAPIGatewayRejectsUserTenantQueryBeforeProxy(t *testing.T) {
+	ensureInit()
+	authorization := testAuthorizationHeader(t)
+	var hits atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/wallet/methods?tenant_id=test-tenant", nil)
+	req.Header.Set("Authorization", authorization)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	}
+}
+
 func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T) {
 	ensureInit()
 	observed := make(chan bool, 1)

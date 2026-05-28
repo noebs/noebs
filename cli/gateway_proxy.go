@@ -156,6 +156,9 @@ func tenantValidationError(c *fiber.Ctx, err error) error {
 }
 
 func propagateGatewayUserIdentity(c *fiber.Ctx) error {
+	if c.Request().URI().QueryArgs().Has("tenant_id") {
+		return unexpectedTenantIDError(c)
+	}
 	tenantID, ok := c.Locals("tenant_id").(string)
 	if !ok || strings.TrimSpace(tenantID) == "" {
 		return fiber.NewError(http.StatusUnauthorized, "missing gateway tenant identity")
@@ -171,6 +174,13 @@ func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 	}
 	stripPublicCredentialHeaders(c)
 	return c.Next()
+}
+
+func unexpectedTenantIDError(c *fiber.Ctx) error {
+	return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+		"code":    "unexpected_tenant_id",
+		"message": "tenant_id is not accepted on authenticated routes",
+	})
 }
 
 func propagateGatewayAdminIdentity(c *fiber.Ctx) error {
