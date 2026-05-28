@@ -24,7 +24,6 @@ func handleEBS[Req any](
 	h *Handler,
 	c *fiber.Ctx,
 	req *Req,
-	applyDefaults func(*Req),
 	call ebsCall[Req],
 ) error {
 	if h == nil || h.Service == nil {
@@ -36,9 +35,6 @@ func handleEBS[Req any](
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	if applyDefaults != nil {
-		applyDefaults(req)
 	}
 
 	res, callErr := call(c.UserContext(), tenantID, *req)

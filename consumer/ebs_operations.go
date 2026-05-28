@@ -8,7 +8,7 @@ import (
 
 // EBS-backed Consumer API operations.
 //
-// Handlers are responsible for validation and applying config-provided values
+// Handlers are responsible for validation and applying explicit config values
 // such as ApplicationId and dynamic fees. Service methods assume validated inputs.
 
 func (s *Service) Purchase(ctx context.Context, tenantID string, req ebs_fields.ConsumerPurchaseFields) (ebs_fields.EBSParserFields, error) {

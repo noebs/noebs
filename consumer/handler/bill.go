@@ -11,28 +11,10 @@ import (
 )
 
 func (h *Handler) BillPayment(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req ebs_fields.ConsumerBillPaymentFields
-	if err := bindJSON(c, &req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
-	}
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	req.ApplicationId = h.Service.NoebsConfig.ConsumerID
-
-	res, err := h.Service.BillPayment(c.UserContext(), tenantID, req)
-	if err != nil {
-		var callErr *ebs_fields.CallError
-		if errors.As(err, &callErr) && callErr != nil {
-			return jsonResponse(c, statusForError(err), ebsErrorDetails(callErr.Response))
-		}
-		return jsonResponse(c, statusForError(err), fiber.Map{"code": "bad_request", "message": err.Error()})
-	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"ebs_response": res})
+	return handleConfiguredEBS(h, c, &req, func(r *ebs_fields.ConsumerBillPaymentFields) {
+		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
+	}, h.Service.BillPayment, nil)
 }
 
 func (h *Handler) GetBills(c *fiber.Ctx) error {

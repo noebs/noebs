@@ -11,95 +11,95 @@ import (
 
 func (h *Handler) IsAlive(c *fiber.Ctx) error {
 	var req ebs_fields.IsAliveFields
-	return handleEBS(h, c, &req, nil, h.Service.IsAlive)
+	return handleEBS(h, c, &req, h.Service.IsAlive)
 }
 
 func (h *Handler) WorkingKey(c *fiber.Ctx) error {
 	var req ebs_fields.WorkingKeyFields
-	return handleEBS(h, c, &req, nil, h.Service.WorkingKey)
+	return handleEBS(h, c, &req, h.Service.WorkingKey)
 }
 
 func (h *Handler) Purchase(c *fiber.Ctx) error {
 	var req ebs_fields.PurchaseFields
-	return handleEBS(h, c, &req, nil, h.Service.Purchase)
+	return handleEBS(h, c, &req, h.Service.Purchase)
 }
 
 func (h *Handler) Balance(c *fiber.Ctx) error {
 	var req ebs_fields.BalanceFields
-	return handleEBS(h, c, &req, nil, h.Service.Balance)
+	return handleEBS(h, c, &req, h.Service.Balance)
 }
 
 func (h *Handler) CardTransfer(c *fiber.Ctx) error {
 	var req ebs_fields.CardTransferFields
-	return handleEBS(h, c, &req, nil, h.Service.CardTransfer)
+	return handleEBS(h, c, &req, h.Service.CardTransfer)
 }
 
 func (h *Handler) BillInquiry(c *fiber.Ctx) error {
 	var req ebs_fields.BillInquiryFields
-	return handleEBS(h, c, &req, nil, h.Service.BillInquiry)
+	return handleEBS(h, c, &req, h.Service.BillInquiry)
 }
 
 func (h *Handler) BillPayment(c *fiber.Ctx) error {
 	var req ebs_fields.BillPaymentFields
-	return handleEBS(h, c, &req, nil, h.Service.BillPayment)
+	return handleEBS(h, c, &req, h.Service.BillPayment)
 }
 
 func (h *Handler) TopUpPayment(c *fiber.Ctx) error {
 	var req ebs_fields.BillPaymentFields
-	return handleEBS(h, c, &req, nil, h.Service.TopUpPayment)
+	return handleEBS(h, c, &req, h.Service.TopUpPayment)
 }
 
 func (h *Handler) ChangePIN(c *fiber.Ctx) error {
 	var req ebs_fields.ChangePINFields
-	return handleEBS(h, c, &req, nil, h.Service.ChangePIN)
+	return handleEBS(h, c, &req, h.Service.ChangePIN)
 }
 
 func (h *Handler) CashOut(c *fiber.Ctx) error {
 	var req ebs_fields.CashOutFields
-	return handleEBS(h, c, &req, nil, h.Service.CashOut)
+	return handleEBS(h, c, &req, h.Service.CashOut)
 }
 
 func (h *Handler) VoucherCashOut(c *fiber.Ctx) error {
 	var req ebs_fields.VoucherCashOutFields
-	return handleEBS(h, c, &req, nil, h.Service.VoucherCashOut)
+	return handleEBS(h, c, &req, h.Service.VoucherCashOut)
 }
 
 func (h *Handler) VoucherCashIn(c *fiber.Ctx) error {
 	var req ebs_fields.VoucherCashInFields
-	return handleEBS(h, c, &req, nil, h.Service.VoucherCashIn)
+	return handleEBS(h, c, &req, h.Service.VoucherCashIn)
 }
 
 // Statement maps to EBS mini-statement.
 func (h *Handler) Statement(c *fiber.Ctx) error {
 	var req ebs_fields.MiniStatementFields
-	return handleEBS(h, c, &req, nil, h.Service.Statement)
+	return handleEBS(h, c, &req, h.Service.Statement)
 }
 
 // GenerateVoucher requests a voucher from EBS.
 func (h *Handler) GenerateVoucher(c *fiber.Ctx) error {
 	var req ebs_fields.GenerateVoucherFields
-	return handleEBS(h, c, &req, nil, h.Service.GenerateVoucher)
+	return handleEBS(h, c, &req, h.Service.GenerateVoucher)
 }
 
 func (h *Handler) CashIn(c *fiber.Ctx) error {
 	var req ebs_fields.CashInFields
-	return handleEBS(h, c, &req, nil, h.Service.CashIn)
+	return handleEBS(h, c, &req, h.Service.CashIn)
 }
 
 func (h *Handler) ToAccount(c *fiber.Ctx) error {
 	var req ebs_fields.AccountTransferFields
-	return handleEBS(h, c, &req, nil, h.Service.ToAccount)
+	return handleEBS(h, c, &req, h.Service.ToAccount)
 }
 
 func (h *Handler) MiniStatement(c *fiber.Ctx) error {
 	var req ebs_fields.MiniStatementFields
-	return handleEBS(h, c, &req, nil, h.Service.MiniStatement)
+	return handleEBS(h, c, &req, h.Service.MiniStatement)
 }
 
 // Refund requests a refund for supported refund services in EBS merchant.
 func (h *Handler) Refund(c *fiber.Ctx) error {
 	var req ebs_fields.RefundFields
-	return handleEBS(h, c, &req, nil, h.Service.Refund)
+	return handleEBS(h, c, &req, h.Service.Refund)
 }
 
 // EBS is an EBS compatible endpoint that proxies /ebs/* to the upstream EBS merchant endpoint.

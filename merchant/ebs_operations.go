@@ -8,7 +8,7 @@ import (
 
 // EBS-backed Merchant API operations.
 //
-// Handlers are responsible for validation and applying any config-driven defaults.
+// Handlers are responsible for validation and applying explicit config values.
 // Service methods assume validated inputs.
 
 func (s *Service) IsAlive(ctx context.Context, tenantID string, req ebs_fields.IsAliveFields) (ebs_fields.EBSParserFields, error) {

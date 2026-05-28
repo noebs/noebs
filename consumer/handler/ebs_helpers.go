@@ -24,25 +24,70 @@ func handleEBS[Req any](
 	h *Handler,
 	c *fiber.Ctx,
 	req *Req,
-	applyDefaults func(*Req),
 	call ebsCall[Req],
 	successPayload func(ebs_fields.EBSParserFields) interface{},
 ) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	tenantID, err := prepareEBS(h, c, req)
+	if err != nil {
+		return err
 	}
-	if err := bindJSON(c, req); err != nil {
+
+	return completeEBS(c, tenantID, *req, call, successPayload)
+}
+
+func handleConfiguredEBS[Req any](
+	h *Handler,
+	c *fiber.Ctx,
+	req *Req,
+	applyConfig func(*Req),
+	call ebsCall[Req],
+	successPayload func(ebs_fields.EBSParserFields) interface{},
+) error {
+	tenantID, err := parseEBS(h, c, req)
+	if err != nil {
+		return err
+	}
+	applyConfig(req)
+	if err := ebs_fields.ValidateStruct(req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
+	}
+
+	return completeEBS(c, tenantID, *req, call, successPayload)
+}
+
+func prepareEBS[Req any](h *Handler, c *fiber.Ctx, req *Req) (string, error) {
+	tenantID, err := parseEBS(h, c, req)
+	if err != nil {
+		return "", err
+	}
+	if err := ebs_fields.ValidateStruct(req); err != nil {
+		return "", jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
+	}
+	return tenantID, nil
+}
+
+func parseEBS[Req any](h *Handler, c *fiber.Ctx, req *Req) (string, error) {
+	if h == nil || h.Service == nil {
+		return "", jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
+	}
+	if err := parseJSON(c, req); err != nil {
+		return "", jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+		return "", jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if applyDefaults != nil {
-		applyDefaults(req)
-	}
+	return tenantID, nil
+}
 
-	res, callErr := call(c.UserContext(), tenantID, *req)
+func completeEBS[Req any](
+	c *fiber.Ctx,
+	tenantID string,
+	req Req,
+	call ebsCall[Req],
+	successPayload func(ebs_fields.EBSParserFields) interface{},
+) error {
+	res, callErr := call(c.UserContext(), tenantID, req)
 	if callErr != nil {
 		var ebsCallErr *ebs_fields.CallError
 		if errors.As(callErr, &ebsCallErr) && ebsCallErr != nil {
