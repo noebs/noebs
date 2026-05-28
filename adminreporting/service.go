@@ -32,5 +32,5 @@ func (s *Service) StoreTransactionProjection(ctx context.Context, tenantID strin
 	if cmd.Transaction == nil {
 		return ErrMissingTransactionProjection
 	}
-	return s.Store.CreateTransaction(ctx, tenantID, *cmd.Transaction)
+	return s.Store.UpsertTransactionProjection(ctx, tenantID, *cmd.Transaction)
 }

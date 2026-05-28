@@ -58,13 +58,24 @@ func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store transaction projection: %v", err)
 	}
+	err = service.StoreTransactionProjection(ctx, tenantID, TransactionProjectionCommand{
+		Transaction: &ebs_fields.EBSResponse{
+			UUID:            "projection-uuid",
+			ResponseCode:    0,
+			ResponseMessage: "Approved",
+			TerminalID:      "terminal-b",
+		},
+	})
+	if err != nil {
+		t.Fatalf("update transaction projection: %v", err)
+	}
 
 	got, err := storeSvc.GetTransactionByUUID(ctx, tenantID, "projection-uuid")
 	if err != nil {
 		t.Fatalf("get projection: %v", err)
 	}
-	if got.TerminalID != "terminal-a" {
-		t.Fatalf("projection terminal = %q, want terminal-a", got.TerminalID)
+	if got.TerminalID != "terminal-b" {
+		t.Fatalf("projection terminal = %q, want terminal-b", got.TerminalID)
 	}
 }
 
@@ -78,5 +89,8 @@ func TestStoreTransactionProjectionRejectsMissingInputs(t *testing.T) {
 	}
 	if err := service.StoreTransactionProjection(context.Background(), "tenant-a", TransactionProjectionCommand{}); !errors.Is(err, ErrMissingTransactionProjection) {
 		t.Fatalf("missing projection error = %v, want %v", err, ErrMissingTransactionProjection)
+	}
+	if err := service.StoreTransactionProjection(context.Background(), "tenant-a", TransactionProjectionCommand{Transaction: &ebs_fields.EBSResponse{}}); !errors.Is(err, store.ErrMissingUUID) {
+		t.Fatalf("missing projection uuid error = %v, want %v", err, store.ErrMissingUUID)
 	}
 }

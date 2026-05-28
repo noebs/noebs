@@ -92,7 +92,8 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
 		NoebsConfig: ebs_fields.NoebsConfig{
-			ConsumerIP: ebsServer.URL + "/",
+			ConsumerIP:            ebsServer.URL + "/",
+			KafkaTransactionTopic: testKafkaTransactionTopic,
 			ServiceDiscovery: map[string]string{
 				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
 				identityAuthServiceDiscoveryKey: identityServer.URL,

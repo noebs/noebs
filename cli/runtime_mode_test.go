@@ -40,8 +40,10 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 		serviceRoleIdentityAuth,
 		serviceRoleCardVault,
 		serviceRoleEBSAdapter,
+		serviceRoleEBSAdapterEvents,
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
+		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
 		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
@@ -79,14 +81,20 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	if !serviceRoleCardVault.startsHTTP() || serviceRoleCardVault.startsGRPC() || serviceRoleCardVault.startsWalletWorker() || serviceRoleCardVault.runsMigrations() {
 		t.Fatalf("card-vault role should own only the HTTP process")
 	}
-	if !serviceRoleEBSAdapter.startsHTTP() || serviceRoleEBSAdapter.startsGRPC() || serviceRoleEBSAdapter.startsWalletWorker() || serviceRoleEBSAdapter.runsMigrations() {
+	if !serviceRoleEBSAdapter.startsHTTP() || serviceRoleEBSAdapter.startsGRPC() || serviceRoleEBSAdapter.startsWalletWorker() || serviceRoleEBSAdapter.startsEBSEventPublisher() || serviceRoleEBSAdapter.runsMigrations() {
 		t.Fatalf("ebs-adapter role should own only the HTTP process")
+	}
+	if serviceRoleEBSAdapterEvents.startsHTTP() || serviceRoleEBSAdapterEvents.startsGRPC() || serviceRoleEBSAdapterEvents.startsWalletWorker() || !serviceRoleEBSAdapterEvents.startsEBSEventPublisher() || serviceRoleEBSAdapterEvents.runsMigrations() {
+		t.Fatalf("ebs-adapter-events role should own only the transaction event publisher")
 	}
 	if !serviceRolePSPWebhook.startsHTTP() || serviceRolePSPWebhook.startsGRPC() || serviceRolePSPWebhook.startsWalletWorker() || serviceRolePSPWebhook.runsMigrations() {
 		t.Fatalf("psp-webhook role should own only the HTTP process")
 	}
 	if !serviceRoleAdminReporting.startsHTTP() || serviceRoleAdminReporting.startsGRPC() || serviceRoleAdminReporting.startsWalletWorker() || serviceRoleAdminReporting.runsMigrations() {
 		t.Fatalf("admin-reporting role should own only the HTTP process")
+	}
+	if serviceRoleAdminReportingProjector.startsHTTP() || serviceRoleAdminReportingProjector.startsGRPC() || serviceRoleAdminReportingProjector.startsWalletWorker() || !serviceRoleAdminReportingProjector.startsAdminReportingProjector() || serviceRoleAdminReportingProjector.runsMigrations() {
+		t.Fatalf("admin-reporting-projector role should own only the Kafka projector")
 	}
 	if !serviceRoleNotification.startsHTTP() || !serviceRoleNotification.startsChat() || serviceRoleNotification.startsGRPC() || serviceRoleNotification.startsWalletWorker() || serviceRoleNotification.runsMigrations() {
 		t.Fatalf("notification-chat role should own only the HTTP chat process")
@@ -115,7 +123,7 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	}
 	for _, role := range migrationRoles {
 		t.Run(string(role), func(t *testing.T) {
-			if role.startsHTTP() || role.startsGRPC() || role.startsWalletWorker() || !role.runsMigrations() {
+			if role.startsHTTP() || role.startsGRPC() || role.startsWalletWorker() || role.startsEBSEventPublisher() || role.startsAdminReportingProjector() || !role.runsMigrations() {
 				t.Fatalf("%s role should only run migrations", role)
 			}
 			if _, ok := role.migrationScope(); !ok {
@@ -146,8 +154,10 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 		serviceRoleIdentityAuth,
 		serviceRoleCardVault,
 		serviceRoleEBSAdapter,
+		serviceRoleEBSAdapterEvents,
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
+		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
 		serviceRoleBeneficiary,
 		serviceRoleWalletLedger,
@@ -192,10 +202,12 @@ func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
 		{role: serviceRoleCardVault, want: serviceRoleCardVault},
 		{role: serviceRoleCardVaultMigrate, want: serviceRoleCardVault},
 		{role: serviceRoleEBSAdapter, want: serviceRoleEBSAdapter},
+		{role: serviceRoleEBSAdapterEvents, want: serviceRoleEBSAdapter},
 		{role: serviceRoleEBSAdapterMigrate, want: serviceRoleEBSAdapter},
 		{role: serviceRolePSPWebhook, want: serviceRolePSPWebhook},
 		{role: serviceRolePSPWebhookMigrate, want: serviceRolePSPWebhook},
 		{role: serviceRoleAdminReporting, want: serviceRoleAdminReporting},
+		{role: serviceRoleAdminReportingProjector, want: serviceRoleAdminReporting},
 		{role: serviceRoleAdminReportingMigrate, want: serviceRoleAdminReporting},
 		{role: serviceRoleNotification, want: serviceRoleNotification},
 		{role: serviceRoleNotificationMigrate, want: serviceRoleNotification},
@@ -458,12 +470,27 @@ func TestServiceRoleRuntimeConfigRequiresKafkaProjectionConfig(t *testing.T) {
 
 	adminConfig := kafkaProjectionRuntimeConfig()
 	adminConfig.AdminReportingKafkaConsumerGroup = ""
-	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, adminConfig); !errors.Is(err, errMissingKafkaConfig) {
-		t.Fatalf("admin-reporting missing kafka consumer group error = %v, want %v", err, errMissingKafkaConfig)
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReportingProjector, adminConfig); !errors.Is(err, errMissingKafkaConfig) {
+		t.Fatalf("admin-reporting-projector missing kafka consumer group error = %v, want %v", err, errMissingKafkaConfig)
 	}
 
-	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, kafkaProjectionRuntimeConfig()); err != nil {
-		t.Fatalf("admin-reporting kafka projection config error = %v", err)
+	publisherConfig := kafkaProjectionRuntimeConfig()
+	publisherConfig.EBSTransactionEventPublisherBatchSize = 0
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapterEvents, publisherConfig); !errors.Is(err, errMissingKafkaConfig) {
+		t.Fatalf("ebs-adapter-events missing publisher batch error = %v, want %v", err, errMissingKafkaConfig)
+	}
+
+	publisherConfig = kafkaProjectionRuntimeConfig()
+	publisherConfig.EBSTransactionEventPublisherPollIntervalMs = 0
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapterEvents, publisherConfig); !errors.Is(err, errMissingKafkaConfig) {
+		t.Fatalf("ebs-adapter-events missing publisher poll interval error = %v, want %v", err, errMissingKafkaConfig)
+	}
+
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReportingProjector, kafkaProjectionRuntimeConfig()); err != nil {
+		t.Fatalf("admin-reporting-projector kafka projection config error = %v", err)
+	}
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, ebs_fields.NoebsConfig{}); err != nil {
+		t.Fatalf("admin-reporting HTTP runtime should not require kafka config: %v", err)
 	}
 }
 
@@ -512,17 +539,21 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 			string(serviceRoleCardVault):    "http://card-vault:8080",
 			string(serviceRoleNotification): "http://notification-chat:8080",
 		},
-		KafkaBrokers:                     []string{"kafka:9092"},
-		KafkaTransactionTopic:            "noebs-ebs-transactions-v1",
-		AdminReportingKafkaConsumerGroup: "admin-reporting-projections",
+		KafkaBrokers:                               []string{"kafka:9092"},
+		KafkaTransactionTopic:                      "noebs-ebs-transactions-v1",
+		AdminReportingKafkaConsumerGroup:           "admin-reporting-projections",
+		EBSTransactionEventPublisherBatchSize:      100,
+		EBSTransactionEventPublisherPollIntervalMs: 1000,
 	}
 }
 
 func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
-		KafkaBrokers:                     []string{"kafka:9092"},
-		KafkaTransactionTopic:            "noebs-ebs-transactions-v1",
-		AdminReportingKafkaConsumerGroup: "admin-reporting-projections",
+		KafkaBrokers:                               []string{"kafka:9092"},
+		KafkaTransactionTopic:                      "noebs-ebs-transactions-v1",
+		AdminReportingKafkaConsumerGroup:           "admin-reporting-projections",
+		EBSTransactionEventPublisherBatchSize:      100,
+		EBSTransactionEventPublisherPollIntervalMs: 1000,
 	}
 }
 
@@ -672,8 +703,10 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 		{role: serviceRoleIdentityAuth, consumer: true},
 		{role: serviceRoleCardVault, consumer: true},
 		{role: serviceRoleEBSAdapter, consumer: true, merchant: true},
+		{role: serviceRoleEBSAdapterEvents},
 		{role: serviceRolePSPWebhook, pspStore: true, walletPSPDeps: true},
 		{role: serviceRoleAdminReporting, adminReports: true, dashboard: true},
+		{role: serviceRoleAdminReportingProjector, adminReports: true},
 		{role: serviceRoleNotification, consumer: true},
 		{role: serviceRoleBeneficiary, consumer: true},
 		{role: serviceRoleWalletAPI},

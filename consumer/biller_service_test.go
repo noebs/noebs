@@ -67,12 +67,13 @@ func TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError(t *testing.T
 		Store:      storeSvc,
 		HTTPClient: testHTTPClient(),
 		NoebsConfig: ebs_fields.NoebsConfig{
-			ConsumerIP:         ebsServer.URL + "/",
-			ConsumerID:         "consumer-app",
-			EBSConsumerKey:     "test-key",
-			BillInquiryIPIN:    "0000",
-			BillInquiryPAN:     "9222081700009999",
-			BillInquiryExpDate: "2601",
+			ConsumerIP:            ebsServer.URL + "/",
+			ConsumerID:            "consumer-app",
+			EBSConsumerKey:        "test-key",
+			BillInquiryIPIN:       "0000",
+			BillInquiryPAN:        "9222081700009999",
+			BillInquiryExpDate:    "2601",
+			KafkaTransactionTopic: testKafkaTransactionTopic,
 		},
 	}
 

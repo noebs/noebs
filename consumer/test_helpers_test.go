@@ -24,6 +24,8 @@ type testEnv struct {
 	Tenant  string
 }
 
+const testKafkaTransactionTopic = "test-ebs-transactions"
+
 var (
 	postgresOnce      sync.Once
 	postgresContainer *testdb.PostgresContainer
@@ -105,14 +107,15 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(smsServer.Close)
 
 	cfg := ebs_fields.NoebsConfig{
-		JWTKey:          "test-secret",
-		BillInquiryIPIN: "0000",
-		EBSConsumerKey:  "test-key",
-		SMSGateway:      smsServer.URL + "?",
-		SMSAPIKey:       "test-key",
-		SMSSender:       "noebs",
-		SMSMessage:      "test",
-		DefaultTenantID: tenantID,
+		JWTKey:                "test-secret",
+		BillInquiryIPIN:       "0000",
+		EBSConsumerKey:        "test-key",
+		SMSGateway:            smsServer.URL + "?",
+		SMSAPIKey:             "test-key",
+		SMSSender:             "noebs",
+		SMSMessage:            "test",
+		DefaultTenantID:       tenantID,
+		KafkaTransactionTopic: testKafkaTransactionTopic,
 	}
 
 	auth := &gateway.JWTAuth{NoebsConfig: cfg}

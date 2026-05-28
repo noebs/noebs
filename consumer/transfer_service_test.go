@@ -79,7 +79,8 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		Store:      storeSvc,
 		HTTPClient: testHTTPClient(),
 		NoebsConfig: ebs_fields.NoebsConfig{
-			ConsumerIP: ebsServer.URL + "/",
+			ConsumerIP:            ebsServer.URL + "/",
+			KafkaTransactionTopic: testKafkaTransactionTopic,
 			ServiceDiscovery: map[string]string{
 				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
 				notificationServiceDiscoveryKey: notificationServer.URL,

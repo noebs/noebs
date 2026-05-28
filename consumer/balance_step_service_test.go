@@ -83,8 +83,9 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 		Store:      storeSvc,
 		HTTPClient: &http.Client{Timeout: 2 * time.Second},
 		NoebsConfig: ebs_fields.NoebsConfig{
-			ConsumerIP: ebsServer.URL + "/",
-			ConsumerID: "consumer-app",
+			ConsumerIP:            ebsServer.URL + "/",
+			ConsumerID:            "consumer-app",
+			KafkaTransactionTopic: testKafkaTransactionTopic,
 			ServiceDiscovery: map[string]string{
 				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
 				identityAuthServiceDiscoveryKey: identityServer.URL,

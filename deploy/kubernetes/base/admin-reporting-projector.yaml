@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-reporting-projector
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+  labels:
+    app.kubernetes.io/name: admin-reporting-projector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: admin-reporting-projector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: admin-reporting-projector
+    spec:
+      serviceAccountName: admin-reporting-projector
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: admin-reporting-projector
+          image: ghcr.io/adonese/noebs:master
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/service.yaml
+              subPath: admin-reporting-projector.service.yaml
+              readOnly: true
+            - name: admin-reporting-secrets
+              mountPath: /app/secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: sops-age-key
+              mountPath: /app/.sops/age-key.txt
+              subPath: age-key.txt
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: noebs-config
+        - name: admin-reporting-secrets
+          secret:
+            secretName: admin-reporting-secrets
+        - name: sops-age-key
+          secret:
+            secretName: sops-age-key

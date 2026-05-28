@@ -34,6 +34,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"tenants",
 			"cache_billers",
 			"transactions",
+			"transaction_events",
 			"meter_names",
 		},
 		serviceRolePSPWebhookMigrate: {

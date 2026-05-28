@@ -1,0 +1,4 @@
+noebs:
+  service_role: admin-reporting-projector
+  otel_service_name: admin-reporting-projector
+  db_driver: pgx

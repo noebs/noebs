@@ -253,7 +253,7 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 			return s.MarkTokenPaid(ctx, tenantID, "token-uuid")
 		}},
 		{"CreateTransaction", func(tenantID string) error {
-			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{})
+			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{UUID: "transaction-uuid"})
 		}},
 		{"GetTransactionsByMaskedPan", func(tenantID string) error {
 			_, err := s.GetTransactionsByMaskedPan(ctx, tenantID, "922208******0000")
@@ -356,6 +356,14 @@ func TestStore_CreateToken_MissingTenantID(t *testing.T) {
 func TestStore_CreateToken_MissingUUID(t *testing.T) {
 	s := newTestStore(t)
 	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{})
+	if !errors.Is(err, ErrMissingUUID) {
+		t.Fatalf("expected ErrMissingUUID, got %v", err)
+	}
+}
+
+func TestStore_CreateTransaction_MissingUUID(t *testing.T) {
+	s := newTestStore(t)
+	err := s.CreateTransaction(context.Background(), "t1", ebs_fields.EBSResponse{})
 	if !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("expected ErrMissingUUID, got %v", err)
 	}

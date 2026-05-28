@@ -59,6 +59,12 @@ func TestMain(m *testing.M) {
     wallet-api: "http://127.0.0.1:1"
   grpc_service_discovery:
     wallet-ledger: "127.0.0.1:1"
+  kafka_brokers:
+    - "127.0.0.1:9092"
+  kafka_transaction_topic: "test-ebs-transactions"
+  admin_reporting_kafka_consumer_group: "test-admin-reporting-projector"
+  ebs_transaction_event_publisher_batch_size: 10
+  ebs_transaction_event_publisher_poll_interval_ms: 1000
 `, dbURL, "postgres", "test-tenant", serviceRoleIdentityAuth)
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))

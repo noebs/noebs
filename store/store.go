@@ -917,19 +917,32 @@ func (s *Store) CreateTransaction(ctx context.Context, tenantID string, res ebs_
 	if err != nil {
 		return err
 	}
+	if strings.TrimSpace(res.UUID) == "" {
+		return ErrMissingUUID
+	}
 	res.MaskPAN()
-	payload, _ := json.Marshal(res)
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
+	_, err = s.insertTransaction(ctx, db, tenantID, res, now)
+	return err
+}
+
+type transactionQueryer interface {
+	QueryRowxContext(ctx context.Context, query string, args ...any) *sqlx.Row
+}
+
+func (s *Store) insertTransaction(ctx context.Context, q transactionQueryer, tenantID string, res ebs_fields.EBSResponse, now time.Time) (int64, error) {
+	payload, _ := json.Marshal(res)
 	stmt := s.DB.Rebind(`INSERT INTO transactions(
 		tenant_id, token_id, uuid, response_code, response_message, response_status, tran_date_time, tran_amount, tran_fee,
 		pan, sender_pan, receiver_pan, terminal_id, system_trace_audit_number, approval_code, service_id, merchant_id,
 		bill_type, bill_to, bill_info2, payload, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-	_, err = db.ExecContext(ctx, stmt,
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+	var id int64
+	err := q.QueryRowxContext(ctx, stmt,
 		tenantID,
 		res.TokenID,
 		res.UUID,
@@ -953,8 +966,8 @@ func (s *Store) CreateTransaction(ctx context.Context, tenantID string, res ebs_
 		string(payload),
 		now,
 		now,
-	)
-	return err
+	).Scan(&id)
+	return id, err
 }
 
 func (s *Store) GetTransactionsByMaskedPan(ctx context.Context, tenantID string, maskedPan string) ([]ebs_fields.EBSResponse, error) {

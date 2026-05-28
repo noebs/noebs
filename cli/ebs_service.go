@@ -11,6 +11,7 @@ import (
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
@@ -35,6 +36,8 @@ var merchantServices = merchant.Service{}
 var walletService *wallet.Service
 var pspWebhookStore *walletstore.Store
 var walletWorker *walletworker.Runner
+var ebsEventPublisher *eventing.OutboxPublisher
+var adminReportingProjector *eventing.AdminReportingProjector
 var walletPSPRegistry *walletpsp.Registry
 var walletPSPLoader *walletpsp.Loader
 var rawSecrets map[string]interface{}
@@ -129,6 +132,24 @@ func main() {
 		}
 		<-ctx.Done()
 		walletWorker.Stop()
+		return
+	}
+	if role.startsEBSEventPublisher() {
+		if ebsEventPublisher == nil {
+			logrusLogger.Fatal("ebs-adapter-events role requires an initialized event publisher")
+		}
+		if err := ebsEventPublisher.Run(ctx); err != nil {
+			logrusLogger.Fatalf("ebs-adapter-events stopped: %v", err)
+		}
+		return
+	}
+	if role.startsAdminReportingProjector() {
+		if adminReportingProjector == nil {
+			logrusLogger.Fatal("admin-reporting-projector role requires an initialized projector")
+		}
+		if err := adminReportingProjector.Run(ctx); err != nil {
+			logrusLogger.Fatalf("admin-reporting-projector stopped: %v", err)
+		}
 		return
 	}
 	if !role.startsHTTP() {

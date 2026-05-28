@@ -148,6 +148,8 @@ type mountedNoebsConfig struct {
 		KafkaBrokers                               []string              `yaml:"kafka_brokers"`
 		KafkaTransactionTopic                      string                `yaml:"kafka_transaction_topic"`
 		AdminReportingKafkaConsumerGroup           string                `yaml:"admin_reporting_kafka_consumer_group"`
+		EBSTransactionEventPublisherBatchSize      int                   `yaml:"ebs_transaction_event_publisher_batch_size"`
+		EBSTransactionEventPublisherPollIntervalMs int                   `yaml:"ebs_transaction_event_publisher_poll_interval_ms"`
 		EBSDynamicFees                             mountedEBSDynamicFees `yaml:"ebs_dynamic_fees"`
 		TemporalHost                               string                `yaml:"temporal_host"`
 		TemporalPort                               string                `yaml:"temporal_port"`
@@ -1330,6 +1332,18 @@ func TestDockerComposeKafkaRuntimeConfigMatchesKubernetes(t *testing.T) {
 	if dockerConfig.Noebs.AdminReportingKafkaConsumerGroup != kubernetesConfig.Noebs.AdminReportingKafkaConsumerGroup {
 		t.Fatalf("config.docker.yaml admin_reporting_kafka_consumer_group = %q, want Kubernetes value %q", dockerConfig.Noebs.AdminReportingKafkaConsumerGroup, kubernetesConfig.Noebs.AdminReportingKafkaConsumerGroup)
 	}
+	if dockerConfig.Noebs.EBSTransactionEventPublisherBatchSize <= 0 {
+		t.Fatalf("config.docker.yaml ebs_transaction_event_publisher_batch_size must be explicit")
+	}
+	if dockerConfig.Noebs.EBSTransactionEventPublisherBatchSize != kubernetesConfig.Noebs.EBSTransactionEventPublisherBatchSize {
+		t.Fatalf("config.docker.yaml ebs_transaction_event_publisher_batch_size = %d, want Kubernetes value %d", dockerConfig.Noebs.EBSTransactionEventPublisherBatchSize, kubernetesConfig.Noebs.EBSTransactionEventPublisherBatchSize)
+	}
+	if dockerConfig.Noebs.EBSTransactionEventPublisherPollIntervalMs <= 0 {
+		t.Fatalf("config.docker.yaml ebs_transaction_event_publisher_poll_interval_ms must be explicit")
+	}
+	if dockerConfig.Noebs.EBSTransactionEventPublisherPollIntervalMs != kubernetesConfig.Noebs.EBSTransactionEventPublisherPollIntervalMs {
+		t.Fatalf("config.docker.yaml ebs_transaction_event_publisher_poll_interval_ms = %d, want Kubernetes value %d", dockerConfig.Noebs.EBSTransactionEventPublisherPollIntervalMs, kubernetesConfig.Noebs.EBSTransactionEventPublisherPollIntervalMs)
+	}
 }
 
 func TestDockerComposeEBSRuntimeConfigMatchesKubernetes(t *testing.T) {
@@ -1641,17 +1655,19 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"noebs-wallet-ledger-migrate":        false,
 	}
 	expectedRuntimeDeployments := map[string]bool{
-		"api-gateway":          false,
-		"identity-auth":        false,
-		"card-vault":           false,
-		"ebs-adapter":          false,
-		"psp-webhook":          false,
-		"admin-reporting":      false,
-		"notification-chat":    false,
-		"consumer-beneficiary": false,
-		"wallet-api":           false,
-		"wallet-ledger":        false,
-		"wallet-worker":        false,
+		"api-gateway":               false,
+		"identity-auth":             false,
+		"card-vault":                false,
+		"ebs-adapter":               false,
+		"ebs-adapter-events":        false,
+		"psp-webhook":               false,
+		"admin-reporting":           false,
+		"admin-reporting-projector": false,
+		"notification-chat":         false,
+		"consumer-beneficiary":      false,
+		"wallet-api":                false,
+		"wallet-ledger":             false,
+		"wallet-worker":             false,
 	}
 
 	for _, object := range objects {
@@ -1744,8 +1760,10 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 		"identity-auth":                "identity-auth.service.yaml",
 		"card-vault":                   "card-vault.service.yaml",
 		"ebs-adapter":                  "ebs-adapter.service.yaml",
+		"ebs-adapter-events":           "ebs-adapter-events.service.yaml",
 		"psp-webhook":                  "psp-webhook.service.yaml",
 		"admin-reporting":              "admin-reporting.service.yaml",
+		"admin-reporting-projector":    "admin-reporting-projector.service.yaml",
 		"notification-chat":            "notification-chat.service.yaml",
 		"consumer-beneficiary":         "consumer-beneficiary.service.yaml",
 		"wallet-api":                   "wallet-api.service.yaml",
@@ -2326,9 +2344,13 @@ func composeSecretSourceForService(serviceName string) string {
 		return "card-vault-secrets"
 	case "ebs-adapter-migrate":
 		return "ebs-adapter-secrets"
+	case "ebs-adapter-events":
+		return "ebs-adapter-secrets"
 	case "psp-webhook-migrate":
 		return "psp-webhook-secrets"
 	case "admin-reporting-migrate":
+		return "admin-reporting-secrets"
+	case "admin-reporting-projector":
 		return "admin-reporting-secrets"
 	case "notification-chat-migrate":
 		return "notification-chat-secrets"

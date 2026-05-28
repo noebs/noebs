@@ -1,0 +1,4 @@
+noebs:
+  service_role: ebs-adapter-events
+  otel_service_name: ebs-adapter-events
+  db_driver: pgx

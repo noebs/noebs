@@ -18,6 +18,7 @@ import (
 	consumerhandler "github.com/adonese/noebs/consumer/handler"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/internal/httpclient"
 	"github.com/adonese/noebs/merchant"
 	merchanthandler "github.com/adonese/noebs/merchant/handler"
@@ -282,7 +283,7 @@ func initRoleServices(role serviceRole) error {
 	walletPSPRegistry = nil
 	walletPSPLoader = nil
 
-	if roleNeedsConsumerService(role) || roleNeedsDashboardService(role) || roleNeedsMerchantService(role) {
+	if roleNeedsConsumerService(role) || roleNeedsAdminReportingService(role) || roleNeedsDashboardService(role) || roleNeedsMerchantService(role) {
 		if storeSvc == nil {
 			return fmt.Errorf("%w: %s", errRoleDatabaseNotInitialized, role)
 		}
@@ -301,8 +302,10 @@ func initRoleServices(role serviceRole) error {
 	if roleNeedsConsumerService(role) {
 		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth, HTTPClient: httpclient.Default()}
 	}
-	if roleNeedsDashboardService(role) {
+	if roleNeedsAdminReportingService(role) {
 		adminReportingService = adminreporting.Service{Store: storeSvc}
+	}
+	if roleNeedsDashboardService(role) {
 		dashService = dashboard.Service{Store: storeSvc, NoebsConfig: noebsConfig}
 	}
 	if roleNeedsMerchantService(role) {
@@ -337,6 +340,10 @@ func roleNeedsConsumerService(role serviceRole) bool {
 
 func roleNeedsDashboardService(role serviceRole) bool {
 	return role == serviceRoleAdminReporting
+}
+
+func roleNeedsAdminReportingService(role serviceRole) bool {
+	return role == serviceRoleAdminReporting || role == serviceRoleAdminReportingProjector
 }
 
 func roleNeedsMerchantService(role serviceRole) bool {
@@ -711,6 +718,30 @@ func initConfig() {
 	}
 	if err := initRoleServices(role); err != nil {
 		logrusLogger.Fatalf("error initializing role services: %v", err)
+	}
+	if role.startsEBSEventPublisher() {
+		writer, err := eventing.NewKafkaWriter(noebsConfig.KafkaBrokers, noebsConfig.KafkaTransactionTopic)
+		if err != nil {
+			logrusLogger.Fatalf("error creating ebs transaction event writer: %v", err)
+		}
+		ebsEventPublisher = &eventing.OutboxPublisher{
+			Store:        storeSvc,
+			Writer:       writer,
+			Topic:        noebsConfig.KafkaTransactionTopic,
+			BatchSize:    noebsConfig.EBSTransactionEventPublisherBatchSize,
+			PollInterval: time.Duration(noebsConfig.EBSTransactionEventPublisherPollIntervalMs) * time.Millisecond,
+		}
+	}
+	if role.startsAdminReportingProjector() {
+		reader, err := eventing.NewKafkaReader(noebsConfig.KafkaBrokers, noebsConfig.KafkaTransactionTopic, noebsConfig.AdminReportingKafkaConsumerGroup)
+		if err != nil {
+			logrusLogger.Fatalf("error creating admin-reporting transaction event reader: %v", err)
+		}
+		adminReportingProjector = &eventing.AdminReportingProjector{
+			Reader:  reader,
+			Service: &adminReportingService,
+			Topic:   noebsConfig.KafkaTransactionTopic,
+		}
 	}
 	if role == serviceRolePSPWebhook {
 		client, err := walletworker.NewClient(walletworker.Options{

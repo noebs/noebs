@@ -32,17 +32,19 @@ var (
 )
 
 const (
-	serviceRoleAPIGateway     serviceRole = "api-gateway"
-	serviceRoleIdentityAuth   serviceRole = "identity-auth"
-	serviceRoleCardVault      serviceRole = "card-vault"
-	serviceRoleEBSAdapter     serviceRole = "ebs-adapter"
-	serviceRolePSPWebhook     serviceRole = "psp-webhook"
-	serviceRoleAdminReporting serviceRole = "admin-reporting"
-	serviceRoleNotification   serviceRole = "notification-chat"
-	serviceRoleBeneficiary    serviceRole = "consumer-beneficiary"
-	serviceRoleWalletAPI      serviceRole = "wallet-api"
-	serviceRoleWalletLedger   serviceRole = "wallet-ledger"
-	serviceRoleWalletWorker   serviceRole = "wallet-worker"
+	serviceRoleAPIGateway              serviceRole = "api-gateway"
+	serviceRoleIdentityAuth            serviceRole = "identity-auth"
+	serviceRoleCardVault               serviceRole = "card-vault"
+	serviceRoleEBSAdapter              serviceRole = "ebs-adapter"
+	serviceRoleEBSAdapterEvents        serviceRole = "ebs-adapter-events"
+	serviceRolePSPWebhook              serviceRole = "psp-webhook"
+	serviceRoleAdminReporting          serviceRole = "admin-reporting"
+	serviceRoleAdminReportingProjector serviceRole = "admin-reporting-projector"
+	serviceRoleNotification            serviceRole = "notification-chat"
+	serviceRoleBeneficiary             serviceRole = "consumer-beneficiary"
+	serviceRoleWalletAPI               serviceRole = "wallet-api"
+	serviceRoleWalletLedger            serviceRole = "wallet-ledger"
+	serviceRoleWalletWorker            serviceRole = "wallet-worker"
 
 	serviceRoleIdentityAuthMigrate   serviceRole = "identity-auth-migrate"
 	serviceRoleCardVaultMigrate      serviceRole = "card-vault-migrate"
@@ -67,8 +69,10 @@ func parseServiceRole(value string) (serviceRole, error) {
 		serviceRoleIdentityAuth,
 		serviceRoleCardVault,
 		serviceRoleEBSAdapter,
+		serviceRoleEBSAdapterEvents,
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
+		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
 		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
@@ -98,6 +102,14 @@ func (r serviceRole) startsGRPC() bool {
 
 func (r serviceRole) startsWalletWorker() bool {
 	return r == serviceRoleWalletWorker
+}
+
+func (r serviceRole) startsEBSEventPublisher() bool {
+	return r == serviceRoleEBSAdapterEvents
+}
+
+func (r serviceRole) startsAdminReportingProjector() bool {
+	return r == serviceRoleAdminReportingProjector
 }
 
 func (r serviceRole) startsChat() bool {
@@ -326,7 +338,7 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 }
 
 func validateKafkaRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
-	if role != serviceRoleEBSAdapter && role != serviceRoleAdminReporting {
+	if role != serviceRoleEBSAdapter && role != serviceRoleEBSAdapterEvents && role != serviceRoleAdminReportingProjector {
 		return nil
 	}
 	if len(cfg.KafkaBrokers) == 0 {
@@ -343,8 +355,16 @@ func validateKafkaRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) er
 	if strings.TrimSpace(cfg.KafkaTransactionTopic) == "" {
 		return fmt.Errorf("%w: noebs.kafka_transaction_topic", errMissingKafkaConfig)
 	}
-	if role == serviceRoleAdminReporting && strings.TrimSpace(cfg.AdminReportingKafkaConsumerGroup) == "" {
+	if role == serviceRoleAdminReportingProjector && strings.TrimSpace(cfg.AdminReportingKafkaConsumerGroup) == "" {
 		return fmt.Errorf("%w: noebs.admin_reporting_kafka_consumer_group", errMissingKafkaConfig)
+	}
+	if role == serviceRoleEBSAdapterEvents {
+		if cfg.EBSTransactionEventPublisherBatchSize <= 0 {
+			return fmt.Errorf("%w: noebs.ebs_transaction_event_publisher_batch_size", errMissingKafkaConfig)
+		}
+		if cfg.EBSTransactionEventPublisherPollIntervalMs <= 0 {
+			return fmt.Errorf("%w: noebs.ebs_transaction_event_publisher_poll_interval_ms", errMissingKafkaConfig)
+		}
 	}
 	return nil
 }
@@ -401,11 +421,11 @@ func (r serviceRole) databaseOwnerRole() (serviceRole, bool) {
 		return serviceRoleIdentityAuth, true
 	case serviceRoleCardVault, serviceRoleCardVaultMigrate:
 		return serviceRoleCardVault, true
-	case serviceRoleEBSAdapter, serviceRoleEBSAdapterMigrate:
+	case serviceRoleEBSAdapter, serviceRoleEBSAdapterEvents, serviceRoleEBSAdapterMigrate:
 		return serviceRoleEBSAdapter, true
 	case serviceRolePSPWebhook, serviceRolePSPWebhookMigrate:
 		return serviceRolePSPWebhook, true
-	case serviceRoleAdminReporting, serviceRoleAdminReportingMigrate:
+	case serviceRoleAdminReporting, serviceRoleAdminReportingProjector, serviceRoleAdminReportingMigrate:
 		return serviceRoleAdminReporting, true
 	case serviceRoleNotification, serviceRoleNotificationMigrate:
 		return serviceRoleNotification, true

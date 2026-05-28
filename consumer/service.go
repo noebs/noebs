@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/store"
 	"github.com/sirupsen/logrus"
 )
@@ -32,7 +33,11 @@ func (s *Service) recordTransaction(ctx context.Context, tenantID string, res eb
 	if err != nil {
 		return err
 	}
-	if err := s.Store.CreateTransaction(ctx, tenantID, res); err != nil {
+	event, err := eventing.NewTransactionRecordedStoreEvent(s.NoebsConfig.KafkaTransactionTopic, tenantID, res)
+	if err != nil {
+		return err
+	}
+	if err := s.Store.CreateTransactionWithEvent(ctx, tenantID, res, event); err != nil {
 		return err
 	}
 	return nil

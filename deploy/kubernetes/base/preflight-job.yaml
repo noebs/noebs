@@ -61,12 +61,20 @@ spec:
               subPath: ebs-adapter.service.yaml
               readOnly: true
             - name: config
+              mountPath: /preflight/services/ebs-adapter-events.yaml
+              subPath: ebs-adapter-events.service.yaml
+              readOnly: true
+            - name: config
               mountPath: /preflight/services/psp-webhook.yaml
               subPath: psp-webhook.service.yaml
               readOnly: true
             - name: config
               mountPath: /preflight/services/admin-reporting.yaml
               subPath: admin-reporting.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/admin-reporting-projector.yaml
+              subPath: admin-reporting-projector.service.yaml
               readOnly: true
             - name: config
               mountPath: /preflight/services/notification-chat.yaml

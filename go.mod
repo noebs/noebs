@@ -9,7 +9,6 @@ require (
 	github.com/adonese/crypto v1.1.0
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
 	github.com/bradfitz/iter v0.0.0-20191230175014-e8f45d346db8
-	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/go-playground/validator/v10 v10.21.0
 	github.com/gofiber/adaptor/v2 v2.2.1
 	github.com/gofiber/contrib/otelfiber v1.0.10
@@ -22,6 +21,7 @@ require (
 	github.com/noebs/ipin v0.0.0-20210301180224-78c1bef582f2
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/prometheus/client_golang v1.13.0
+	github.com/segmentio/kafka-go v0.4.51
 	github.com/sirupsen/logrus v1.9.4
 	github.com/testcontainers/testcontainers-go v0.42.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
@@ -46,6 +46,7 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/boombuler/barcode v1.0.1 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -89,6 +90,7 @@ require (
 	github.com/nexus-rpc/sdk-go v0.5.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rivo/uniseg v0.4.3 // indirect

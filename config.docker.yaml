@@ -42,6 +42,8 @@ noebs:
     - "kafka:9092"
   kafka_transaction_topic: "noebs-ebs-transactions-v1"
   admin_reporting_kafka_consumer_group: "admin-reporting-projections"
+  ebs_transaction_event_publisher_batch_size: 100
+  ebs_transaction_event_publisher_poll_interval_ms: 1000
   is_debug: false
   # Only enable for local/dev when the EBS endpoint uses a self-signed cert.
   ebs_insecure_skip_verify: false

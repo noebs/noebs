@@ -539,9 +539,13 @@ func serviceSecretFileName(serviceName string) string {
 		return "card-vault.secrets.yaml"
 	case "ebs-adapter-migrate":
 		return "ebs-adapter.secrets.yaml"
+	case "ebs-adapter-events":
+		return "ebs-adapter.secrets.yaml"
 	case "psp-webhook-migrate":
 		return "psp-webhook.secrets.yaml"
 	case "admin-reporting-migrate":
+		return "admin-reporting.secrets.yaml"
+	case "admin-reporting-projector":
 		return "admin-reporting.secrets.yaml"
 	case "notification-chat-migrate":
 		return "notification-chat.secrets.yaml"

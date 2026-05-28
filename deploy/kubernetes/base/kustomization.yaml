@@ -16,8 +16,10 @@ resources:
   - identity-auth.yaml
   - card-vault.yaml
   - ebs-adapter.yaml
+  - ebs-adapter-events.yaml
   - psp-webhook.yaml
   - admin-reporting.yaml
+  - admin-reporting-projector.yaml
   - notification-chat.yaml
   - consumer-beneficiary.yaml
   - wallet-api.yaml

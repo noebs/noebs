@@ -80,7 +80,7 @@ func TestAPIGatewayProxyCatalogTargetsRoutableHTTPServices(t *testing.T) {
 		if spec.role == serviceRoleAPIGateway {
 			t.Fatalf("%s %s proxies back to api-gateway", spec.method, spec.path)
 		}
-		if spec.role.runsMigrations() || spec.role.startsGRPC() || spec.role.startsWalletWorker() || !spec.role.startsHTTP() {
+		if spec.role.runsMigrations() || spec.role.startsGRPC() || spec.role.startsWalletWorker() || spec.role.startsEBSEventPublisher() || spec.role.startsAdminReportingProjector() || !spec.role.startsHTTP() {
 			t.Fatalf("%s %s targets non-routable role %s", spec.method, spec.path, spec.role)
 		}
 		targetRoles[spec.role] = true
@@ -127,6 +127,8 @@ func TestAPIGatewayProxyCatalogCoversPublicHTTPServiceRoles(t *testing.T) {
 
 	privateRoles := []serviceRole{
 		serviceRoleAPIGateway,
+		serviceRoleEBSAdapterEvents,
+		serviceRoleAdminReportingProjector,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleIdentityAuthMigrate,

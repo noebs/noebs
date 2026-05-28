@@ -53,6 +53,8 @@ data:
         - "kafka:9092"
       kafka_transaction_topic: "noebs-ebs-transactions-v1"
       admin_reporting_kafka_consumer_group: "admin-reporting-projections"
+      ebs_transaction_event_publisher_batch_size: 100
+      ebs_transaction_event_publisher_poll_interval_ms: 1000
       ebs_dynamic_fees:
         p2p_fees: 30
         custom_fees: 85
@@ -76,6 +78,11 @@ data:
       service_role: ebs-adapter
       otel_service_name: ebs-adapter
       db_driver: pgx
+  ebs-adapter-events.service.yaml: |
+    noebs:
+      service_role: ebs-adapter-events
+      otel_service_name: ebs-adapter-events
+      db_driver: pgx
   psp-webhook.service.yaml: |
     noebs:
       service_role: psp-webhook
@@ -85,6 +92,11 @@ data:
     noebs:
       service_role: admin-reporting
       otel_service_name: admin-reporting
+      db_driver: pgx
+  admin-reporting-projector.service.yaml: |
+    noebs:
+      service_role: admin-reporting-projector
+      otel_service_name: admin-reporting-projector
       db_driver: pgx
   notification-chat.service.yaml: |
     noebs:

@@ -18,7 +18,7 @@ Expected files:
 
 Each expected file has a checked-in `*.example` next to it. The examples define shape only; every scalar value is a `REPLACE_WITH_*` placeholder and must be replaced in the local SOPS-encrypted file.
 
-Database-opening services get `noebs.db_driver` from their mounted service config and must include `noebs.service_databases` in secrets with only their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url` or `noebs.service_databases`. `wallet-worker.secrets.yaml` uses the `wallet-ledger` owner key because the worker uses ledger state without owning a separate database or migration scope.
+Database-opening services get `noebs.db_driver` from their mounted service config and must include `noebs.service_databases` in secrets with only their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url` or `noebs.service_databases`. `ebs-adapter-events` mounts `ebs-adapter.secrets.yaml` because it publishes the EBS-owned outbox, and `admin-reporting-projector` mounts `admin-reporting.secrets.yaml` because it writes the reporting projection. `wallet-worker.secrets.yaml` uses the `wallet-ledger` owner key because the worker uses ledger state without owning a separate database or migration scope.
 
 `ebs-adapter.secrets.yaml` must carry explicit resolved EBS runtime values: `consumer_endpoint`, `merchant_endpoint`, `ipin_endpoint`, `consumer_app_id`, `merchant_app_id`, `ipin_username`, `ipin_password`, `pub_key`, `ipin_key`, `pan`, `pin`, `ipin`, and `exp_date`. Do not provide QA/prod pairs or mode booleans and expect the runtime to choose. EBS dynamic fees are explicit shared runtime config in `config.docker.yaml` under `noebs.ebs_dynamic_fees`; do not move them into code defaults.
 
@@ -32,7 +32,7 @@ Local Compose also requires explicit, ignored runtime inputs for non-Noebs platf
 
 These files are local-only and must not be committed. The repository carries `deploy/docker/keycloak/keycloak.conf.example` with placeholders only; replace every placeholder in the local ignored file. Kubernetes uses `temporal-postgres-credentials`, `keycloak-secrets`, and `keycloak-postgres-credentials` Secrets instead of these Compose files.
 
-The default Compose deployment publishes only `api-gateway` on host port `8081`. Temporal, Temporal UI, and Keycloak remain reachable through the Compose network. Caddy is available through the explicit `edge` profile for hosts where this stack owns ports `80` and `443`.
+The default Compose deployment publishes only `api-gateway` on host port `8081`. Temporal, Temporal UI, Keycloak, and Kafka remain reachable through the Compose network. Caddy is available through the explicit `edge` profile for hosts where this stack owns ports `80` and `443`.
 
 Before replacing a host deployment, run the explicit preflight against the release directory:
 
