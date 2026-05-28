@@ -258,7 +258,7 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 	return nil
 }
 
-var walletWorkflowClient wallethandler.TemporalClient
+var walletWorkflowClient wallethandler.TemporalSignaler
 var walletWorkflowCloser interface{ Close() }
 
 func closeWalletWorkflowClient() {
