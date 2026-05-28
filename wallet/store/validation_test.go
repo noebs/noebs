@@ -144,6 +144,21 @@ func TestGetWalletByOwnerValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingCurrency)
 }
 
+func TestListWalletsValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.ListWallets(t.Context(), "", 10, 0)
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.ListWallets(t.Context(), "default", 10, 0)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.ListWallets(t.Context(), "tenant", 0, 0)
+	assertErrorIs(t, err, ErrInvalidLimit)
+
+	_, err = s.ListWallets(t.Context(), "tenant", 10, -1)
+	assertErrorIs(t, err, ErrInvalidOffset)
+}
+
 func TestPostDoubleEntryValidation(t *testing.T) {
 	s := &Store{}
 	params := DoubleEntryParams{
@@ -954,6 +969,9 @@ func TestListAuditEventsValidation(t *testing.T) {
 	_, err := s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "", Limit: 10})
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "default", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.ListAuditEvents(t.Context(), AuditLogFilter{TenantID: "tenant", Limit: 0})
 	assertErrorIs(t, err, ErrInvalidLimit)
 
@@ -964,10 +982,52 @@ func TestListAuditEventsValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingEndTime)
 }
 
+func TestInsertAuditEventValidation(t *testing.T) {
+	s := &Store{}
+	event := AuditEvent{
+		TenantID:  "tenant",
+		EventType: "wallet",
+		ActorType: "admin",
+		ActorID:   "admin-1",
+		Action:    "update",
+	}
+
+	err := s.InsertAuditEvent(t.Context(), AuditEvent{})
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	bad := event
+	bad.TenantID = "default"
+	err = s.InsertAuditEvent(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	bad = event
+	bad.EventType = ""
+	err = s.InsertAuditEvent(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingEventType)
+
+	bad = event
+	bad.ActorType = ""
+	err = s.InsertAuditEvent(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingActorType)
+
+	bad = event
+	bad.ActorID = ""
+	err = s.InsertAuditEvent(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingActorID)
+
+	bad = event
+	bad.Action = ""
+	err = s.InsertAuditEvent(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingAction)
+}
+
 func TestUserTwoFAValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.CreateOrResetUserTwoFA(t.Context(), "", 1, "secret")
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.CreateOrResetUserTwoFA(t.Context(), "default", 1, "secret")
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.CreateOrResetUserTwoFA(t.Context(), "tenant", 0, "secret")
 	assertErrorIs(t, err, ErrInvalidUserID)
@@ -978,17 +1038,56 @@ func TestUserTwoFAValidation(t *testing.T) {
 	_, err = s.GetUserTwoFA(t.Context(), "", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.GetUserTwoFA(t.Context(), "default", 1)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.GetUserTwoFA(t.Context(), "tenant", 0)
 	assertErrorIs(t, err, ErrInvalidUserID)
 
 	err = s.SetUserTwoFAEnabled(t.Context(), "", 1, true, time.Now().UTC())
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	err = s.SetUserTwoFAEnabled(t.Context(), "default", 1, true, time.Now().UTC())
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	err = s.SetUserTwoFAEnabled(t.Context(), "tenant", 0, true, time.Now().UTC())
 	assertErrorIs(t, err, ErrInvalidUserID)
 
 	err = s.SetUserTwoFAEnabled(t.Context(), "tenant", 1, true, time.Time{})
 	assertErrorIs(t, err, ErrMissingUpdatedAt)
+
+	err = s.TouchUserTwoFALastUsed(t.Context(), "", 1, time.Now().UTC())
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	err = s.TouchUserTwoFALastUsed(t.Context(), "default", 1, time.Now().UTC())
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	err = s.TouchUserTwoFALastUsed(t.Context(), "tenant", 0, time.Now().UTC())
+	assertErrorIs(t, err, ErrInvalidUserID)
+
+	err = s.TouchUserTwoFALastUsed(t.Context(), "tenant", 1, time.Time{})
+	assertErrorIs(t, err, ErrMissingUsageTime)
+}
+
+func TestAdminLookupValidation(t *testing.T) {
+	s := &Store{}
+	_, err := s.GetAdminRoleByName(t.Context(), "", "owner")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetAdminRoleByName(t.Context(), "default", "owner")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetAdminRoleByName(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingRoleName)
+
+	_, err = s.GetAdminUserByEmail(t.Context(), "", "admin@example.test")
+	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.GetAdminUserByEmail(t.Context(), "default", "admin@example.test")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	_, err = s.GetAdminUserByEmail(t.Context(), "tenant", "")
+	assertErrorIs(t, err, ErrMissingAdminEmail)
 }
 
 func TestGetPSPConfigOverrideValidation(t *testing.T) {

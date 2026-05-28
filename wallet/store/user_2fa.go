@@ -7,8 +7,9 @@ import (
 )
 
 func (s *Store) CreateOrResetUserTwoFA(ctx context.Context, tenantID string, userID int64, secret string) (*UserTwoFA, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if userID <= 0 {
 		return nil, ErrInvalidUserID
@@ -39,8 +40,9 @@ func (s *Store) CreateOrResetUserTwoFA(ctx context.Context, tenantID string, use
 }
 
 func (s *Store) GetUserTwoFA(ctx context.Context, tenantID string, userID int64) (*UserTwoFA, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if userID <= 0 {
 		return nil, ErrInvalidUserID
@@ -61,8 +63,9 @@ func (s *Store) GetUserTwoFA(ctx context.Context, tenantID string, userID int64)
 }
 
 func (s *Store) SetUserTwoFAEnabled(ctx context.Context, tenantID string, userID int64, enabled bool, changedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return ErrInvalidUserID
@@ -101,8 +104,9 @@ func (s *Store) SetUserTwoFAEnabled(ctx context.Context, tenantID string, userID
 }
 
 func (s *Store) TouchUserTwoFALastUsed(ctx context.Context, tenantID string, userID int64, usedAt time.Time) error {
-	if tenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return ErrInvalidUserID

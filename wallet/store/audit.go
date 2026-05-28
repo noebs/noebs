@@ -41,8 +41,9 @@ type AuditLogFilter struct {
 }
 
 func (s *Store) InsertAuditEvent(ctx context.Context, event AuditEvent) error {
-	if event.TenantID == "" {
-		return ErrMissingTenantID
+	tenantID, err := ValidateTenantID(event.TenantID)
+	if err != nil {
+		return err
 	}
 	if event.EventType == "" {
 		return ErrMissingEventType
@@ -65,7 +66,7 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event AuditEvent) error {
 		old_value, new_value, metadata, ip_address, user_agent, workflow_id, request_id, trace_id
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	_, err = db.ExecContext(ctx, stmt,
-		event.TenantID,
+		tenantID,
 		event.EventType,
 		event.ActorType,
 		event.ActorID,
@@ -85,8 +86,9 @@ func (s *Store) InsertAuditEvent(ctx context.Context, event AuditEvent) error {
 }
 
 func (s *Store) ListAuditEvents(ctx context.Context, filter AuditLogFilter) ([]AuditEvent, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if filter.Limit <= 0 {
 		return nil, ErrInvalidLimit
@@ -110,7 +112,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, filter AuditLogFilter) ([]A
 	query := `SELECT tenant_id, event_type, actor_type, actor_id, target_type, target_id, action,
 		old_value, new_value, metadata, ip_address, user_agent, workflow_id, request_id, trace_id, created_at
 		FROM wallet_audit_log WHERE tenant_id = ?`
-	args := []any{filter.TenantID}
+	args := []any{tenantID}
 	if filter.EventType != "" {
 		query += " AND event_type = ?"
 		args = append(args, filter.EventType)

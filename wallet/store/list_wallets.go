@@ -3,8 +3,9 @@ package store
 import "context"
 
 func (s *Store) ListWallets(ctx context.Context, tenantID string, limit, offset int) ([]Wallet, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if limit <= 0 {
 		return nil, ErrInvalidLimit

@@ -6,8 +6,9 @@ import (
 )
 
 func (s *Store) GetAdminRoleByName(ctx context.Context, tenantID, roleName string) (*AdminRole, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if roleName == "" {
 		return nil, ErrMissingRoleName
@@ -28,8 +29,9 @@ func (s *Store) GetAdminRoleByName(ctx context.Context, tenantID, roleName strin
 }
 
 func (s *Store) GetAdminUserByEmail(ctx context.Context, tenantID, email string) (*AdminUser, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if email == "" {
 		return nil, ErrMissingAdminEmail
