@@ -28,6 +28,7 @@ var (
 	errInvalidWalletConfig = errors.New("invalid wallet runtime config")
 	errMissingEBSConfig    = errors.New("missing ebs-adapter runtime config")
 	errLegacyEBSConfig     = errors.New("legacy ebs-adapter runtime selector not allowed")
+	errMissingKafkaConfig  = errors.New("missing kafka runtime config")
 )
 
 const (
@@ -146,6 +147,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 		return err
 	}
 	if err := validateEBSRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
+	if err := validateKafkaRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
 	if role == serviceRoleIdentityAuth {
@@ -317,6 +321,30 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 	}
 	if cfg.EBSDynamicFees.CustomFees <= 0 {
 		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.custom_fees", errMissingEBSConfig)
+	}
+	return nil
+}
+
+func validateKafkaRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if role != serviceRoleEBSAdapter && role != serviceRoleAdminReporting {
+		return nil
+	}
+	if len(cfg.KafkaBrokers) == 0 {
+		return fmt.Errorf("%w: noebs.kafka_brokers", errMissingKafkaConfig)
+	}
+	for i, broker := range cfg.KafkaBrokers {
+		if strings.TrimSpace(broker) == "" {
+			return fmt.Errorf("%w: noebs.kafka_brokers[%d]", errMissingKafkaConfig, i)
+		}
+		if err := validateHostPortServiceDiscoveryEndpoint(fmt.Sprintf("noebs.kafka_brokers[%d]", i), broker); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(cfg.KafkaTransactionTopic) == "" {
+		return fmt.Errorf("%w: noebs.kafka_transaction_topic", errMissingKafkaConfig)
+	}
+	if role == serviceRoleAdminReporting && strings.TrimSpace(cfg.AdminReportingKafkaConsumerGroup) == "" {
+		return fmt.Errorf("%w: noebs.admin_reporting_kafka_consumer_group", errMissingKafkaConfig)
 	}
 	return nil
 }

@@ -170,6 +170,41 @@ services:
       retries: 5
       start_period: 20s
 
+  kafka:
+    <<: *service-defaults
+    image: apache/kafka:3.9.1
+    init: true
+    entrypoint: ["/bin/bash", "/opt/noebs-kafka/bin/start.sh"]
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+      - ./deploy/docker/kafka/server.properties:/mnt/shared/config/server.properties:ro
+      - ./deploy/docker/kafka/cluster.id:/mnt/shared/config/cluster.id:ro
+      - ./deploy/docker/kafka/start.sh:/opt/noebs-kafka/bin/start.sh:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  kafka-topics:
+    <<: *service-defaults
+    image: apache/kafka:3.9.1
+    init: true
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/opt/noebs-kafka/bin/create-topics.sh"]
+    volumes:
+      - ./deploy/docker/kafka/bootstrap-server:/mnt/shared/config/bootstrap-server:ro
+      - ./deploy/docker/kafka/topics.txt:/mnt/shared/config/topics.txt:ro
+      - ./deploy/docker/kafka/create-topics.sh:/opt/noebs-kafka/bin/create-topics.sh:ro
+    networks:
+      - backend
+    restart: "no"
+
   temporal-postgres:
     <<: *service-defaults
     image: postgres:16
@@ -670,6 +705,7 @@ services:
 volumes:
   noebs-postgres:
   noebs-runtime:
+  kafka-data:
   temporal-postgres:
   keycloak-postgres-data:
   caddy_data:

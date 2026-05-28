@@ -443,6 +443,30 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	}
 }
 
+func TestServiceRoleRuntimeConfigRequiresKafkaProjectionConfig(t *testing.T) {
+	ebsConfig := explicitEBSRuntimeConfig()
+	ebsConfig.KafkaBrokers = nil
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, ebsConfig); !errors.Is(err, errMissingKafkaConfig) {
+		t.Fatalf("ebs-adapter missing kafka brokers error = %v, want %v", err, errMissingKafkaConfig)
+	}
+
+	ebsConfig = explicitEBSRuntimeConfig()
+	ebsConfig.KafkaTransactionTopic = ""
+	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, ebsConfig); !errors.Is(err, errMissingKafkaConfig) {
+		t.Fatalf("ebs-adapter missing kafka transaction topic error = %v, want %v", err, errMissingKafkaConfig)
+	}
+
+	adminConfig := kafkaProjectionRuntimeConfig()
+	adminConfig.AdminReportingKafkaConsumerGroup = ""
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, adminConfig); !errors.Is(err, errMissingKafkaConfig) {
+		t.Fatalf("admin-reporting missing kafka consumer group error = %v, want %v", err, errMissingKafkaConfig)
+	}
+
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, kafkaProjectionRuntimeConfig()); err != nil {
+		t.Fatalf("admin-reporting kafka projection config error = %v", err)
+	}
+}
+
 func TestServiceRoleRuntimeConfigDoesNotRequireCardVaultServiceDiscovery(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{DataKey: "card-vault-data-key"}); err != nil {
 		t.Fatalf("card-vault runtime config error = %v", err)
@@ -488,6 +512,17 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 			string(serviceRoleCardVault):    "http://card-vault:8080",
 			string(serviceRoleNotification): "http://notification-chat:8080",
 		},
+		KafkaBrokers:                     []string{"kafka:9092"},
+		KafkaTransactionTopic:            "noebs-ebs-transactions-v1",
+		AdminReportingKafkaConsumerGroup: "admin-reporting-projections",
+	}
+}
+
+func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
+	return ebs_fields.NoebsConfig{
+		KafkaBrokers:                     []string{"kafka:9092"},
+		KafkaTransactionTopic:            "noebs-ebs-transactions-v1",
+		AdminReportingKafkaConsumerGroup: "admin-reporting-projections",
 	}
 }
 

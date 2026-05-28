@@ -49,6 +49,10 @@ data:
         wallet-api: "http://wallet-api:8080"
       grpc_service_discovery:
         wallet-ledger: "wallet-ledger:9090"
+      kafka_brokers:
+        - "kafka:9092"
+      kafka_transaction_topic: "noebs-ebs-transactions-v1"
+      admin_reporting_kafka_consumer_group: "admin-reporting-projections"
       ebs_dynamic_fees:
         p2p_fees: 30
         custom_fees: 85

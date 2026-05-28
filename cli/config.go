@@ -374,8 +374,7 @@ func pspStoreForRole(role serviceRole) (*walletstore.Store, error) {
 	}
 }
 
-func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler, adminIdentity fiber.Handler, service *adminreporting.Service) {
-	adminreporting.RegisterInternalRoutes(route.Group("/internal/admin-reporting", adminIdentity, tenantIdentity), service)
+func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler, adminIdentity fiber.Handler) {
 	route.Use("/dashboard/assets", filesystem.New(filesystem.Config{
 		Root: dashboard.AssetFileSystem(),
 	}))
@@ -567,7 +566,7 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleAdminReporting {
-		registerAdminReportingRoutes(route, tenantIdentity, adminIdentity, &adminReportingService)
+		registerAdminReportingRoutes(route, tenantIdentity, adminIdentity)
 		return route
 	}
 	if role == serviceRoleNotification {

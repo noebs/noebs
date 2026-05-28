@@ -62,6 +62,10 @@ locals {
       port     = 5432
       protocol = "postgres"
     }
+    kafka = {
+      port     = 9092
+      protocol = "kafka"
+    }
     "keycloak-postgres" = {
       port     = 5432
       protocol = "postgres"

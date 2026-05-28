@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -144,6 +145,9 @@ type mountedNoebsConfig struct {
 		OtelServiceName                            string                `yaml:"otel_service_name"`
 		ServiceDiscovery                           map[string]string     `yaml:"service_discovery"`
 		GRPCServiceDiscovery                       map[string]string     `yaml:"grpc_service_discovery"`
+		KafkaBrokers                               []string              `yaml:"kafka_brokers"`
+		KafkaTransactionTopic                      string                `yaml:"kafka_transaction_topic"`
+		AdminReportingKafkaConsumerGroup           string                `yaml:"admin_reporting_kafka_consumer_group"`
 		EBSDynamicFees                             mountedEBSDynamicFees `yaml:"ebs_dynamic_fees"`
 		TemporalHost                               string                `yaml:"temporal_host"`
 		TemporalPort                               string                `yaml:"temporal_port"`
@@ -601,6 +605,13 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 		serviceName, port := parseHostPortDiscoveryEndpoint(t, role, endpoint)
 		requireKubernetesServicePort(t, services, serviceName, port)
 	}
+	if len(config.Noebs.KafkaBrokers) == 0 {
+		t.Fatalf("kafka_brokers must be explicit in mounted config")
+	}
+	for i, endpoint := range config.Noebs.KafkaBrokers {
+		serviceName, port := parseHostPortDiscoveryEndpoint(t, fmt.Sprintf("kafka_brokers[%d]", i), endpoint)
+		requireKubernetesServicePort(t, services, serviceName, port)
+	}
 	if config.Noebs.TemporalHost == "" || config.Noebs.TemporalPort == "" {
 		t.Fatalf("temporal host/port must be explicit in mounted config")
 	}
@@ -658,6 +669,10 @@ func TestFoundationServiceCatalogMatchesKubernetesDiscovery(t *testing.T) {
 	for role, endpoint := range config.Noebs.GRPCServiceDiscovery {
 		name, port := parseHostPortDiscoveryEndpoint(t, role, endpoint)
 		requireTerraformServiceCatalogEntry(t, catalog, name, port, "grpc")
+	}
+	for i, endpoint := range config.Noebs.KafkaBrokers {
+		name, port := parseHostPortDiscoveryEndpoint(t, fmt.Sprintf("kafka_brokers[%d]", i), endpoint)
+		requireTerraformServiceCatalogEntry(t, catalog, name, port, "kafka")
 	}
 	temporalPort, err := strconv.Atoi(config.Noebs.TemporalPort)
 	if err != nil {
@@ -1131,6 +1146,136 @@ func TestNoebsPostgresDockerComposeUsesMountedBootstrapFiles(t *testing.T) {
 	}
 }
 
+func TestKafkaDockerComposeUsesMountedConfigFiles(t *testing.T) {
+	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
+
+	kafka, ok := compose.Services["kafka"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing kafka service")
+	}
+	if kafka.Environment != nil {
+		t.Fatalf("kafka defines environment; Kafka config must be file-mounted")
+	}
+	if kafka.EnvFile != nil {
+		t.Fatalf("kafka defines env_file; Kafka config must be file-mounted")
+	}
+	if !containsString(kafka.Entrypoint, "/opt/noebs-kafka/bin/start.sh") {
+		t.Fatalf("kafka entrypoint = %v, want mounted start.sh", kafka.Entrypoint)
+	}
+	requireComposeVolume(t, "kafka", kafka.Volumes, "./deploy/docker/kafka/server.properties", "/mnt/shared/config/server.properties")
+	requireComposeVolume(t, "kafka", kafka.Volumes, "./deploy/docker/kafka/cluster.id", "/mnt/shared/config/cluster.id")
+	requireComposeVolume(t, "kafka", kafka.Volumes, "./deploy/docker/kafka/start.sh", "/opt/noebs-kafka/bin/start.sh")
+	requireComposeVolume(t, "kafka", kafka.Volumes, "kafka-data", "/var/lib/kafka/data")
+
+	kafkaTopics, ok := compose.Services["kafka-topics"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing kafka-topics service")
+	}
+	if kafkaTopics.Environment != nil {
+		t.Fatalf("kafka-topics defines environment; Kafka topic config must be file-mounted")
+	}
+	if kafkaTopics.EnvFile != nil {
+		t.Fatalf("kafka-topics defines env_file; Kafka topic config must be file-mounted")
+	}
+	if !containsString(kafkaTopics.Entrypoint, "/opt/noebs-kafka/bin/create-topics.sh") {
+		t.Fatalf("kafka-topics entrypoint = %v, want mounted create-topics.sh", kafkaTopics.Entrypoint)
+	}
+	requireComposeVolume(t, "kafka-topics", kafkaTopics.Volumes, "./deploy/docker/kafka/bootstrap-server", "/mnt/shared/config/bootstrap-server")
+	requireComposeVolume(t, "kafka-topics", kafkaTopics.Volumes, "./deploy/docker/kafka/topics.txt", "/mnt/shared/config/topics.txt")
+	requireComposeVolume(t, "kafka-topics", kafkaTopics.Volumes, "./deploy/docker/kafka/create-topics.sh", "/opt/noebs-kafka/bin/create-topics.sh")
+}
+
+func TestKafkaKubernetesStatefulSetUsesMountedConfigFiles(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+
+	var foundStatefulSet bool
+	var foundService bool
+	var foundTopicsJob bool
+	var kafkaConfig map[string]string
+	for _, object := range objects {
+		if object.Kind == "Service" && object.Metadata.Name == "kafka" {
+			foundService = true
+			requireManifestServicePort(t, object, 9092)
+		}
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "kafka-config" {
+			kafkaConfig = object.Data
+		}
+		if object.Kind == "Job" && object.Metadata.Name == "kafka-topics" {
+			foundTopicsJob = true
+			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "Sync" {
+				t.Fatalf("kafka-topics hook = %q, want Sync", object.Metadata.Annotations["argocd.argoproj.io/hook"])
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "5" {
+				t.Fatalf("kafka-topics sync-wave = %q, want 5", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if object.Spec.Template.Spec.ServiceAccountName != "kafka-topics" {
+				t.Fatalf("kafka-topics serviceAccountName = %q", object.Spec.Template.Spec.ServiceAccountName)
+			}
+			if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+				t.Fatalf("kafka-topics must set automountServiceAccountToken: false")
+			}
+			if object.Spec.Template.Spec.RestartPolicy != "Never" {
+				t.Fatalf("kafka-topics restartPolicy = %q, want Never", object.Spec.Template.Spec.RestartPolicy)
+			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("kafka-topics containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("kafka-topics must use mounted config instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/opt/noebs-kafka/bin/create-topics.sh") {
+				t.Fatalf("kafka-topics command = %v, want mounted create-topics.sh", container.Command)
+			}
+			requireMount(t, "kafka-topics", container, "/mnt/shared/config/bootstrap-server", "bootstrap-server")
+			requireMount(t, "kafka-topics", container, "/mnt/shared/config/topics.txt", "topics.txt")
+			requireMount(t, "kafka-topics", container, "/opt/noebs-kafka/bin/create-topics.sh", "create-topics.sh")
+		}
+		if object.Kind != "StatefulSet" || object.Metadata.Name != "kafka" {
+			continue
+		}
+		foundStatefulSet = true
+		if object.Spec.Template.Spec.ServiceAccountName != "kafka" {
+			t.Fatalf("kafka serviceAccountName = %q", object.Spec.Template.Spec.ServiceAccountName)
+		}
+		if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+			t.Fatalf("kafka must set automountServiceAccountToken: false")
+		}
+		if len(object.Spec.Template.Spec.Containers) != 1 {
+			t.Fatalf("kafka containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+		}
+		container := object.Spec.Template.Spec.Containers[0]
+		if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+			t.Fatalf("kafka must use mounted config instead of env/envFrom")
+		}
+		if !containsString(container.Command, "/opt/noebs-kafka/bin/start.sh") {
+			t.Fatalf("kafka command = %v, want mounted start.sh", container.Command)
+		}
+		requireMount(t, "kafka", container, "/mnt/shared/config/server.properties", "server.properties")
+		requireMount(t, "kafka", container, "/mnt/shared/config/cluster.id", "cluster.id")
+		requireMount(t, "kafka", container, "/opt/noebs-kafka/bin/start.sh", "start.sh")
+		requireMount(t, "kafka", container, "/var/lib/kafka/data", "")
+	}
+	if !foundService {
+		t.Fatalf("kafka Service not found")
+	}
+	if kafkaConfig == nil {
+		t.Fatalf("kafka-config ConfigMap not found")
+	}
+	if !foundStatefulSet {
+		t.Fatalf("kafka StatefulSet not found")
+	}
+	if !foundTopicsJob {
+		t.Fatalf("kafka-topics Job not found")
+	}
+	requireKubernetesConfigMapDataMatchesFile(t, "kafka-config server.properties", kafkaConfig["server.properties"], filepath.Join("..", "deploy", "docker", "kafka", "server.properties"))
+	requireKubernetesConfigMapDataMatchesFile(t, "kafka-config cluster.id", kafkaConfig["cluster.id"], filepath.Join("..", "deploy", "docker", "kafka", "cluster.id"))
+	requireKubernetesConfigMapDataMatchesFile(t, "kafka-config bootstrap-server", kafkaConfig["bootstrap-server"], filepath.Join("..", "deploy", "docker", "kafka", "bootstrap-server"))
+	requireKubernetesConfigMapDataMatchesFile(t, "kafka-config topics.txt", kafkaConfig["topics.txt"], filepath.Join("..", "deploy", "docker", "kafka", "topics.txt"))
+	requireKubernetesConfigMapDataMatchesFile(t, "kafka-config start.sh", kafkaConfig["start.sh"], filepath.Join("..", "deploy", "docker", "kafka", "start.sh"))
+	requireKubernetesConfigMapDataMatchesFile(t, "kafka-config create-topics.sh", kafkaConfig["create-topics.sh"], filepath.Join("..", "deploy", "docker", "kafka", "create-topics.sh"))
+}
+
 func TestDockerComposeWalletRuntimeConfigMatchesKubernetes(t *testing.T) {
 	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
 	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
@@ -1160,6 +1305,30 @@ func TestDockerComposeWalletRuntimeConfigMatchesKubernetes(t *testing.T) {
 		if check.docker != check.k8s {
 			t.Fatalf("config.docker.yaml %s = %v, want Kubernetes value %v", check.name, check.docker, check.k8s)
 		}
+	}
+}
+
+func TestDockerComposeKafkaRuntimeConfigMatchesKubernetes(t *testing.T) {
+	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
+	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
+
+	if strings.Join(dockerConfig.Noebs.KafkaBrokers, ",") == "" {
+		t.Fatalf("config.docker.yaml kafka_brokers must be explicit")
+	}
+	if strings.Join(dockerConfig.Noebs.KafkaBrokers, ",") != strings.Join(kubernetesConfig.Noebs.KafkaBrokers, ",") {
+		t.Fatalf("config.docker.yaml kafka_brokers = %v, want Kubernetes value %v", dockerConfig.Noebs.KafkaBrokers, kubernetesConfig.Noebs.KafkaBrokers)
+	}
+	if dockerConfig.Noebs.KafkaTransactionTopic == "" {
+		t.Fatalf("config.docker.yaml kafka_transaction_topic must be explicit")
+	}
+	if dockerConfig.Noebs.KafkaTransactionTopic != kubernetesConfig.Noebs.KafkaTransactionTopic {
+		t.Fatalf("config.docker.yaml kafka_transaction_topic = %q, want Kubernetes value %q", dockerConfig.Noebs.KafkaTransactionTopic, kubernetesConfig.Noebs.KafkaTransactionTopic)
+	}
+	if dockerConfig.Noebs.AdminReportingKafkaConsumerGroup == "" {
+		t.Fatalf("config.docker.yaml admin_reporting_kafka_consumer_group must be explicit")
+	}
+	if dockerConfig.Noebs.AdminReportingKafkaConsumerGroup != kubernetesConfig.Noebs.AdminReportingKafkaConsumerGroup {
+		t.Fatalf("config.docker.yaml admin_reporting_kafka_consumer_group = %q, want Kubernetes value %q", dockerConfig.Noebs.AdminReportingKafkaConsumerGroup, kubernetesConfig.Noebs.AdminReportingKafkaConsumerGroup)
 	}
 }
 

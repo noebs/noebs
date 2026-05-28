@@ -38,6 +38,10 @@ noebs:
     wallet-api: "http://wallet-api:8080"
   grpc_service_discovery:
     wallet-ledger: "wallet-ledger:9090"
+  kafka_brokers:
+    - "kafka:9092"
+  kafka_transaction_topic: "noebs-ebs-transactions-v1"
+  admin_reporting_kafka_consumer_group: "admin-reporting-projections"
   is_debug: false
   # Only enable for local/dev when the EBS endpoint uses a self-signed cert.
   ebs_insecure_skip_verify: false

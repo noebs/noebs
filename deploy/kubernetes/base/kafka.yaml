@@ -1,0 +1,259 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: kafka
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  labels:
+    app.kubernetes.io/name: kafka
+data:
+  server.properties: |
+    process.roles=broker,controller
+    node.id=1
+    controller.quorum.voters=1@127.0.0.1:9093
+
+    listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://127.0.0.1:9093
+    advertised.listeners=PLAINTEXT://kafka:9092
+    listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+    inter.broker.listener.name=PLAINTEXT
+    controller.listener.names=CONTROLLER
+
+    log.dirs=/var/lib/kafka/data
+    num.partitions=3
+    auto.create.topics.enable=false
+    offsets.topic.replication.factor=1
+    transaction.state.log.replication.factor=1
+    transaction.state.log.min.isr=1
+    group.initial.rebalance.delay.ms=0
+  cluster.id: |
+    MkU3OEVBNTcwNTJENDM2Qk
+  bootstrap-server: |
+    kafka:9092
+  topics.txt: |
+    noebs-ebs-transactions-v1 3 1
+  start.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    config_file="/mnt/shared/config/server.properties"
+    cluster_id_file="/mnt/shared/config/cluster.id"
+    log_dir="/var/lib/kafka/data"
+    meta_file="$log_dir/meta.properties"
+
+    read_required_file() {
+      local label="$1"
+      local path="$2"
+      if [ ! -s "$path" ]; then
+        echo "missing $label file: $path" >&2
+        exit 1
+      fi
+      tr -d '\r\n' < "$path"
+    }
+
+    if [ ! -s "$config_file" ]; then
+      echo "missing Kafka server properties file: $config_file" >&2
+      exit 1
+    fi
+
+    cluster_id="$(read_required_file "Kafka cluster id" "$cluster_id_file")"
+    if [ "$cluster_id" = "" ]; then
+      echo "Kafka cluster id file is empty: $cluster_id_file" >&2
+      exit 1
+    fi
+
+    mkdir -p "$log_dir"
+    if [ ! -w "$log_dir" ]; then
+      echo "Kafka log directory is not writable: $log_dir" >&2
+      exit 1
+    fi
+
+    if [ ! -s "$meta_file" ]; then
+      /opt/kafka/bin/kafka-storage.sh format --standalone -t "$cluster_id" -c "$config_file"
+    fi
+
+    exec /opt/kafka/bin/kafka-server-start.sh "$config_file"
+  create-topics.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    bootstrap_server_file="/mnt/shared/config/bootstrap-server"
+    topics_file="/mnt/shared/config/topics.txt"
+
+    read_required_file() {
+      local label="$1"
+      local path="$2"
+      if [ ! -s "$path" ]; then
+        echo "missing $label file: $path" >&2
+        exit 1
+      fi
+      tr -d '\r\n' < "$path"
+    }
+
+    bootstrap_server="$(read_required_file "Kafka bootstrap server" "$bootstrap_server_file")"
+    if [ "$bootstrap_server" = "" ]; then
+      echo "Kafka bootstrap server file is empty: $bootstrap_server_file" >&2
+      exit 1
+    fi
+    if [ ! -s "$topics_file" ]; then
+      echo "missing Kafka topics file: $topics_file" >&2
+      exit 1
+    fi
+
+    while read -r topic partitions replication_factor; do
+      if [ "$topic" = "" ]; then
+        continue
+      fi
+      if [ "$partitions" = "" ] || [ "$replication_factor" = "" ]; then
+        echo "invalid Kafka topic declaration: $topic $partitions $replication_factor" >&2
+        exit 1
+      fi
+      /opt/kafka/bin/kafka-topics.sh \
+        --bootstrap-server "$bootstrap_server" \
+        --create \
+        --if-not-exists \
+        --topic "$topic" \
+        --partitions "$partitions" \
+        --replication-factor "$replication_factor"
+    done < "$topics_file"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  labels:
+    app.kubernetes.io/name: kafka
+spec:
+  serviceName: kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+    spec:
+      serviceAccountName: kafka
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: kafka
+          image: apache/kafka:3.9.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /opt/noebs-kafka/bin/start.sh
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+          ports:
+            - name: kafka
+              containerPort: 9092
+          readinessProbe:
+            exec:
+              command:
+                - /opt/kafka/bin/kafka-broker-api-versions.sh
+                - --bootstrap-server
+                - localhost:9092
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command:
+                - /opt/kafka/bin/kafka-broker-api-versions.sh
+                - --bootstrap-server
+                - localhost:9092
+            periodSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: kafka-config
+              mountPath: /mnt/shared/config/server.properties
+              subPath: server.properties
+              readOnly: true
+            - name: kafka-config
+              mountPath: /mnt/shared/config/cluster.id
+              subPath: cluster.id
+              readOnly: true
+            - name: kafka-config
+              mountPath: /opt/noebs-kafka/bin/start.sh
+              subPath: start.sh
+              readOnly: true
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+      volumes:
+        - name: kafka-config
+          configMap:
+            name: kafka-config
+            defaultMode: 0555
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics
+  labels:
+    app.kubernetes.io/name: kafka-topics
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka-topics
+    spec:
+      serviceAccountName: kafka-topics
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: kafka-topics
+          image: apache/kafka:3.9.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /opt/noebs-kafka/bin/create-topics.sh
+          volumeMounts:
+            - name: kafka-config
+              mountPath: /mnt/shared/config/bootstrap-server
+              subPath: bootstrap-server
+              readOnly: true
+            - name: kafka-config
+              mountPath: /mnt/shared/config/topics.txt
+              subPath: topics.txt
+              readOnly: true
+            - name: kafka-config
+              mountPath: /opt/noebs-kafka/bin/create-topics.sh
+              subPath: create-topics.sh
+              readOnly: true
+      volumes:
+        - name: kafka-config
+          configMap:
+            name: kafka-config
+            defaultMode: 0555
+  ttlSecondsAfterFinished: 300

@@ -7,6 +7,7 @@ resources:
   - configmap.yaml
   - service-accounts.yaml
   - postgres.yaml
+  - kafka.yaml
   - temporal.yaml
   - keycloak.yaml
   - preflight-job.yaml

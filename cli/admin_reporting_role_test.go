@@ -48,7 +48,7 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	}
 }
 
-func TestAdminReportingOwnsInternalTransactionProjectionCommand(t *testing.T) {
+func TestAdminReportingDoesNotExposeInternalTransactionProjectionWrites(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleAdminReporting)
 	route := GetMainEngine()
@@ -63,8 +63,8 @@ func TestAdminReportingOwnsInternalTransactionProjectionCommand(t *testing.T) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	if resp.StatusCode == http.StatusNotFound {
-		t.Fatalf("admin-reporting did not register transaction projection command")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
 }
 
