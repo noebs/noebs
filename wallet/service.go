@@ -27,7 +27,13 @@ func (s *Service) EnsureUserWallet(ctx context.Context, tenantID string, userID 
 		return nil, ErrMissingStore
 	}
 	ownerID := fmt.Sprintf("%d", userID)
-	return s.Store.EnsureWallet(ctx, tenantID, walletstore.OwnerTypeUser, ownerID, currency, &userID)
+	return s.Store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: walletstore.OwnerTypeUser,
+		OwnerID:   ownerID,
+		UserID:    userID,
+		Currency:  currency,
+	})
 }
 
 func (s *Service) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*walletstore.Wallet, error) {

@@ -24,5 +24,10 @@ func (a *WalletActivities) EnsureSystemWallet(ctx context.Context, params Ensure
 	if a == nil || a.Store == nil {
 		return nil, ErrMissingStore
 	}
-	return a.Store.EnsureWallet(ctx, params.TenantID, walletstore.OwnerTypeSystem, params.WalletCode, params.Currency, nil)
+	return a.Store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
+		TenantID:  params.TenantID,
+		OwnerType: walletstore.OwnerTypeSystem,
+		OwnerID:   params.WalletCode,
+		Currency:  params.Currency,
+	})
 }

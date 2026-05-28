@@ -13,26 +13,55 @@ import (
 func TestEnsureWalletValidation(t *testing.T) {
 	validUserID := int64(42)
 	cases := []struct {
-		name      string
-		tenantID  string
-		ownerType string
-		ownerID   string
-		currency  string
-		userID    *int64
-		wantErr   error
+		name    string
+		params  EnsureWalletParams
+		wantErr error
 	}{
-		{"missing-tenant", "", OwnerTypeUser, "user-1", "USD", &validUserID, ErrMissingTenantID},
-		{"missing-owner-type", "tenant", "", "user-1", "USD", &validUserID, ErrMissingOwnerType},
-		{"missing-owner-id", "tenant", OwnerTypeUser, "", "USD", &validUserID, ErrMissingOwnerID},
-		{"missing-currency", "tenant", OwnerTypeUser, "user-1", "", &validUserID, ErrMissingCurrency},
-		{"missing-user-id", "tenant", OwnerTypeUser, "user-1", "USD", nil, ErrInvalidUserID},
-		{"invalid-user-id", "tenant", OwnerTypeUser, "user-1", "USD", ptrInt64(0), ErrInvalidUserID},
-		{"user-id-on-system", "tenant", OwnerTypeSystem, "treasury", "USD", &validUserID, ErrInvalidUserID},
+		{
+			name:    "missing-tenant",
+			params:  EnsureWalletParams{OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			wantErr: ErrMissingTenantID,
+		},
+		{
+			name:    "invalid-tenant",
+			params:  EnsureWalletParams{TenantID: "default", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			wantErr: ErrInvalidTenantID,
+		},
+		{
+			name:    "missing-owner-type",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			wantErr: ErrMissingOwnerType,
+		},
+		{
+			name:    "missing-owner-id",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, UserID: validUserID, Currency: "USD"},
+			wantErr: ErrMissingOwnerID,
+		},
+		{
+			name:    "missing-currency",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID},
+			wantErr: ErrMissingCurrency,
+		},
+		{
+			name:    "missing-user-id",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", Currency: "USD"},
+			wantErr: ErrInvalidUserID,
+		},
+		{
+			name:    "invalid-user-id",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: -1, Currency: "USD"},
+			wantErr: ErrInvalidUserID,
+		},
+		{
+			name:    "user-id-on-system",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeSystem, OwnerID: "treasury", UserID: validUserID, Currency: "USD"},
+			wantErr: ErrInvalidUserID,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := &Store{}
-			_, err := s.EnsureWallet(t.Context(), tc.tenantID, tc.ownerType, tc.ownerID, tc.currency, tc.userID)
+			_, err := s.EnsureWallet(t.Context(), tc.params)
 			assertErrorIs(t, err, tc.wantErr)
 		})
 	}
@@ -868,8 +897,4 @@ func assertErrorIs(t *testing.T, err, want error) {
 	if !errors.Is(err, want) {
 		t.Fatalf("expected %v, got %v", want, err)
 	}
-}
-
-func ptrInt64(v int64) *int64 {
-	return &v
 }

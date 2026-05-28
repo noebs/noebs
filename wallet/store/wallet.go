@@ -8,24 +8,33 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, currency string, userID *int64) (*Wallet, error) {
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+type EnsureWalletParams struct {
+	TenantID  string
+	OwnerType string
+	OwnerID   string
+	UserID    int64
+	Currency  string
+}
+
+func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*Wallet, error) {
+	tenantID, err := ValidateTenantID(params.TenantID)
+	if err != nil {
+		return nil, err
 	}
-	if ownerType == "" {
+	if params.OwnerType == "" {
 		return nil, ErrMissingOwnerType
 	}
-	if ownerID == "" {
+	if params.OwnerID == "" {
 		return nil, ErrMissingOwnerID
 	}
-	if currency == "" {
+	if params.Currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	if ownerType == OwnerTypeUser {
-		if userID == nil || *userID <= 0 {
+	if params.OwnerType == OwnerTypeUser {
+		if params.UserID <= 0 {
 			return nil, ErrInvalidUserID
 		}
-	} else if userID != nil {
+	} else if params.UserID != 0 {
 		return nil, ErrInvalidUserID
 	}
 	db, err := s.ensureDB()
@@ -33,8 +42,8 @@ func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, 
 		return nil, err
 	}
 	var uid sql.NullInt64
-	if userID != nil {
-		uid = sql.NullInt64{Int64: *userID, Valid: true}
+	if params.OwnerType == OwnerTypeUser {
+		uid = sql.NullInt64{Int64: params.UserID, Valid: true}
 	}
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO wallets(
@@ -42,10 +51,10 @@ func (s *Store) EnsureWallet(ctx context.Context, tenantID, ownerType, ownerID, 
 		balance, available_balance, status, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, 0, 0, 'active', ?, ?)
 	ON CONFLICT(tenant_id, owner_type, owner_id, currency) DO NOTHING`)
-	if _, err := db.ExecContext(ctx, stmt, tenantID, ownerType, ownerID, uid, currency, now, now); err != nil {
+	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, now, now); err != nil {
 		return nil, err
 	}
-	return s.GetWalletByOwner(ctx, tenantID, ownerType, ownerID, currency)
+	return s.GetWalletByOwner(ctx, tenantID, params.OwnerType, params.OwnerID, params.Currency)
 }
 
 func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string) (map[string]*Wallet, error) {
@@ -57,7 +66,12 @@ func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency stri
 	}
 	systemWallets := make(map[string]*Wallet, len(SystemWalletCodes()))
 	for _, code := range SystemWalletCodes() {
-		w, err := s.EnsureWallet(ctx, tenantID, OwnerTypeSystem, code, currency, nil)
+		w, err := s.EnsureWallet(ctx, EnsureWalletParams{
+			TenantID:  tenantID,
+			OwnerType: OwnerTypeSystem,
+			OwnerID:   code,
+			Currency:  currency,
+		})
 		if err != nil {
 			return nil, err
 		}
