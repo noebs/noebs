@@ -77,7 +77,7 @@ Startup invariants: wallet-worker requires Temporal config, wallet PSP dependenc
 
 Owns PSP config loading, webhook signature verification, PSP request/response mapping, idempotent webhook persistence, and workflow signaling. It must not post ledger entries directly; successful webhooks signal wallet workflows.
 
-Initial package owner: `wallet/psp`, PSP rows in `wallet/store`, and `wallet/handler/psp_webhook.go`. The runtime initializes a PSP/webhook store directly against the `psp-webhook` database; it does not initialize `wallet.Service` or open wallet-ledger state. Webhooks require an explicit `tenant_id` query parameter, and provider payload fields are read only through configured PSP response mappings. The handler does not infer tenant, client reference, status, currency, direction, or messages from ad hoc payload aliases.
+Initial package owner: `wallet/psp`, PSP rows in `wallet/store`, and `wallet/handler/psp_webhook.go`. The runtime initializes a PSP/webhook store directly against the `psp-webhook` database; it does not initialize `wallet.Service` or open wallet-ledger state. Webhooks require an explicit `tenant_id` query parameter, and provider payload fields are read only through configured PSP response mappings. The handler does not infer tenant, client reference, status, currency, direction, or messages from ad hoc payload aliases. Workflow-backed webhook updates require an initialized Temporal signaler and a mapped webhook currency before the PSP status write; the handler does not fall back to the stored PSP transaction currency.
 
 ### Notification/Chat Service
 

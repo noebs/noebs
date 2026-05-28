@@ -15,8 +15,9 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/fiber/v2"
-	"go.temporal.io/api/serviceerror"
 )
+
+var ErrMissingTemporalSignaler = errors.New("missing temporal signaler")
 
 type TemporalSignaler interface {
 	SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error
@@ -128,6 +129,19 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
+	signalCurrency := strings.TrimSpace(fields.Currency)
+	if stored.WorkflowID.Valid {
+		if h.Temporal == nil {
+			return jsonResponse(c, http.StatusServiceUnavailable, apperr.Wrap(ErrMissingTemporalSignaler, apperr.ErrUnavailable, ErrMissingTemporalSignaler.Error()))
+		}
+		if signalCurrency == "" {
+			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, stored.Direction, http.StatusBadRequest, fiber.Map{"error": walletstore.ErrMissingCurrency.Error()}, walletstore.ErrMissingCurrency.Error(), payload); err != nil {
+				return jsonResponse(c, 0, mapWalletError(err))
+			}
+			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletstore.ErrMissingCurrency, apperr.ErrBadRequest, "missing currency"))
+		}
+	}
+
 	update := walletstore.PSPStatusUpdate{Status: fields.Status}
 	if pspTransactionID != "" {
 		update.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
@@ -143,11 +157,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
-	if h.Temporal != nil && stored.WorkflowID.Valid {
-		signalCurrency := fields.Currency
-		if signalCurrency == "" {
-			signalCurrency = stored.Currency
-		}
+	if stored.WorkflowID.Valid {
 		signal := walletpsp.TxStatus{
 			ProviderTxID: pspTransactionID,
 			Amount:       fields.Amount,
@@ -156,9 +166,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			RawResponse:  payloadMap,
 		}
 		if err := h.Temporal.SignalWorkflow(c.Context(), stored.WorkflowID.String, "", walletworkflow.PSPStatusUpdateSignal, signal); err != nil {
-			if _, ok := err.(*serviceerror.NotFound); !ok {
-				return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": update.Status, "client_reference": clientRef, "signal_error": err.Error()})
-			}
+			return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": update.Status, "client_reference": clientRef, "signal_error": err.Error()})
 		}
 	}
 
