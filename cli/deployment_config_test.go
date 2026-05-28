@@ -1375,63 +1375,79 @@ func TestDockerComposePublishesOnlyAPIGatewayByDefault(t *testing.T) {
 	}
 }
 
-func TestArgoCDApplicationTargetsCurrentHostOverlay(t *testing.T) {
-	path := filepath.Join("..", "deploy", "argocd", "noebs.yaml")
-	objects := decodeManifestObjects(t, path)
+func TestFoundationOwnsArgoCDApplication(t *testing.T) {
+	mainPath := filepath.Join("..", "foundation", "terraform", "main.tf")
+	data, err := os.ReadFile(mainPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", mainPath, err)
+	}
+	mainText := string(data)
 
-	var projectFound bool
-	var appFound bool
-	for _, object := range objects {
-		switch object.Kind {
-		case "AppProject":
-			if object.Metadata.Name == "noebs" {
-				projectFound = true
-				if object.Metadata.Namespace != "argocd" {
-					t.Fatalf("AppProject namespace = %q, want argocd", object.Metadata.Namespace)
-				}
-			}
-		case "Application":
-			if object.Metadata.Name != "noebs" {
-				continue
-			}
-			appFound = true
-			if object.Metadata.Namespace != "argocd" {
-				t.Fatalf("Application namespace = %q, want argocd", object.Metadata.Namespace)
-			}
-			if object.Spec.Project != "noebs" {
-				t.Fatalf("Application project = %q, want noebs", object.Spec.Project)
-			}
-			if object.Spec.Source.RepoURL != "https://github.com/adonese/noebs.git" {
-				t.Fatalf("Application repoURL = %q", object.Spec.Source.RepoURL)
-			}
-			if object.Spec.Source.TargetRevision != "master" {
-				t.Fatalf("Application targetRevision = %q, want master", object.Spec.Source.TargetRevision)
-			}
-			if object.Spec.Source.Path != "deploy/kubernetes/overlays/current-host" {
-				t.Fatalf("Application path = %q, want deploy/kubernetes/overlays/current-host", object.Spec.Source.Path)
-			}
-			if _, err := os.Stat(filepath.Join("..", object.Spec.Source.Path, "kustomization.yaml")); err != nil {
-				t.Fatalf("Application path does not contain kustomization.yaml: %v", err)
-			}
-			if object.Spec.Destination.Server != "https://kubernetes.default.svc" {
-				t.Fatalf("Application destination server = %q", object.Spec.Destination.Server)
-			}
-			if object.Spec.Destination.Namespace != "noebs" {
-				t.Fatalf("Application destination namespace = %q, want noebs", object.Spec.Destination.Namespace)
-			}
-			if !object.Spec.SyncPolicy.Automated.Prune || !object.Spec.SyncPolicy.Automated.SelfHeal {
-				t.Fatalf("Application automated sync must enable prune and selfHeal")
-			}
-			if !containsString(object.Spec.SyncPolicy.SyncOptions, "PruneLast=true") {
-				t.Fatalf("Application syncOptions = %v, want PruneLast=true", object.Spec.SyncPolicy.SyncOptions)
-			}
+	required := []string{
+		`resource "kubernetes_manifest" "noebs_project"`,
+		`resource "kubernetes_manifest" "noebs_application"`,
+		`namespace = var.argocd_namespace`,
+		`var.noebs_repo_url`,
+		`repoURL        = var.noebs_repo_url`,
+		`targetRevision = var.noebs_target_revision`,
+		`path           = var.noebs_manifest_path`,
+		`namespace = kubernetes_namespace_v1.noebs.metadata[0].name`,
+		`server    = "https://kubernetes.default.svc"`,
+		`prune    = true`,
+		`selfHeal = true`,
+		`"PruneLast=true"`,
+		`depends_on = [
+    kubernetes_manifest.noebs_project,
+    kubernetes_namespace_v1.noebs,
+  ]`,
+	}
+	for _, snippet := range required {
+		if !strings.Contains(mainText, snippet) {
+			t.Fatalf("%s missing required Argo CD ownership snippet:\n%s", mainPath, snippet)
 		}
 	}
-	if !projectFound {
-		t.Fatalf("noebs AppProject not found")
+
+	tfvarsExamplePath := filepath.Join("..", "foundation", "terraform", "terraform.tfvars.example")
+	tfvarsExample, err := os.ReadFile(tfvarsExamplePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", tfvarsExamplePath, err)
 	}
-	if !appFound {
-		t.Fatalf("noebs Application not found")
+	manifestPathRe := regexp.MustCompile(`(?m)^\s*noebs_manifest_path\s*=\s*"([^"]+)"\s*$`)
+	match := manifestPathRe.FindStringSubmatch(string(tfvarsExample))
+	if len(match) != 2 {
+		t.Fatalf("%s must assign noebs_manifest_path", tfvarsExamplePath)
+	}
+	if match[1] != "deploy/kubernetes/overlays/current-host" {
+		t.Fatalf("noebs_manifest_path = %q, want deploy/kubernetes/overlays/current-host", match[1])
+	}
+	if _, err := os.Stat(filepath.Join("..", filepath.FromSlash(match[1]), "kustomization.yaml")); err != nil {
+		t.Fatalf("noebs_manifest_path does not contain kustomization.yaml: %v", err)
+	}
+}
+
+func TestArgoCDApplicationIsOwnedByFoundationOnly(t *testing.T) {
+	dir := filepath.Join("..", "deploy", "argocd")
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	}
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		ext := filepath.Ext(entry.Name())
+		if ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		for _, object := range decodeManifestObjects(t, path) {
+			if object.Kind == "Application" || object.Kind == "AppProject" {
+				t.Fatalf("%s contains Argo CD %s %q; Foundation/OpenTofu must own Argo CD application resources", path, object.Kind, object.Metadata.Name)
+			}
+		}
 	}
 }
 
