@@ -295,6 +295,14 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 		"ipin_endpoint":     cfg.IPINIp,
 		"consumer_app_id":   cfg.ConsumerID,
 		"merchant_app_id":   cfg.MerchantID,
+		"ipin_username":     cfg.EBSIPINUsername,
+		"ipin_password":     cfg.EBSIPINPassword,
+		"pub_key":           cfg.EBSConsumerKey,
+		"ipin_key":          cfg.EBSIpinKey,
+		"pan":               cfg.BillInquiryPAN,
+		"pin":               cfg.BillInquiryPIN,
+		"ipin":              cfg.BillInquiryIPIN,
+		"exp_date":          cfg.BillInquiryExpDate,
 	}
 	for key, value := range required {
 		if strings.TrimSpace(value) == "" {

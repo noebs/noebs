@@ -20,7 +20,7 @@ Each expected file has a checked-in `*.example` next to it. The examples define 
 
 Database-opening services get `noebs.db_driver` from their mounted service config and must include `noebs.service_databases` in secrets with only their owner-role database URL. `api-gateway.secrets.yaml` and `wallet-api.secrets.yaml` must not include `noebs.db_url` or `noebs.service_databases`. `wallet-worker.secrets.yaml` uses the `wallet-ledger` owner key because the worker uses ledger state without owning a separate database or migration scope.
 
-`ebs-adapter.secrets.yaml` must carry explicit resolved EBS runtime values: `consumer_endpoint`, `merchant_endpoint`, `ipin_endpoint`, `consumer_app_id`, and `merchant_app_id`. Do not provide QA/prod pairs or mode booleans and expect the runtime to choose. EBS dynamic fees are explicit shared runtime config in `config.docker.yaml` under `noebs.ebs_dynamic_fees`; do not move them into code defaults.
+`ebs-adapter.secrets.yaml` must carry explicit resolved EBS runtime values: `consumer_endpoint`, `merchant_endpoint`, `ipin_endpoint`, `consumer_app_id`, `merchant_app_id`, `ipin_username`, `ipin_password`, `pub_key`, `ipin_key`, `pan`, `pin`, `ipin`, and `exp_date`. Do not provide QA/prod pairs or mode booleans and expect the runtime to choose. EBS dynamic fees are explicit shared runtime config in `config.docker.yaml` under `noebs.ebs_dynamic_fees`; do not move them into code defaults.
 
 `secrets-init` uses the explicit ignored bootstrap secret at `deploy/docker/postgres/bootstrap.secrets.yaml` to run `noebs render-db-password` and render the local Postgres password file before Postgres starts. The repository carries `deploy/docker/postgres/bootstrap.secrets.yaml.example` with placeholders only. The root `secrets.yaml` is not a Docker Compose bootstrap contract and is not mounted into Noebs app or migration services.
 
@@ -40,7 +40,7 @@ Before replacing a host deployment, run the explicit preflight against the relea
 noebs validate-deployment /path/to/noebs-release
 ```
 
-The preflight decrypts every service secret with the release age key and validates the merged service configs before any containers are started. It requires the exact runtime and migration role files under `deploy/docker/services`, rejects extra real `*.secrets.yaml` service secret files under `deploy/docker/secrets`, and rejects missing files, placeholder values, reserved tenant IDs, legacy `noebs.db_path`, non-owner database entries, missing service-owned database URLs, missing EBS adapter endpoints/app IDs, incomplete Keycloak/Temporal/Postgres platform inputs, and missing or extra HTTP/gRPC service discovery entries.
+The preflight decrypts every service secret with the release age key and validates the merged service configs before any containers are started. It requires the exact runtime and migration role files under `deploy/docker/services`, rejects extra real `*.secrets.yaml` service secret files under `deploy/docker/secrets`, and rejects missing files, placeholder values, reserved tenant IDs, legacy `noebs.db_path`, non-owner database entries, missing service-owned database URLs, incomplete EBS adapter endpoint/app-id/IPIN/key/bill-inquiry inputs, incomplete Keycloak/Temporal/Postgres platform inputs, and missing or extra HTTP/gRPC service discovery entries.
 
 For Kubernetes cutovers, render the required Secret manifests from a Kubernetes release input directory and explicit TLS files:
 

@@ -2231,6 +2231,14 @@ func requireEBSAdapterSecrets(t *testing.T, path string, noebs map[string]any) {
 		"ipin_endpoint",
 		"consumer_app_id",
 		"merchant_app_id",
+		"ipin_username",
+		"ipin_password",
+		"pub_key",
+		"ipin_key",
+		"pan",
+		"pin",
+		"ipin",
+		"exp_date",
 	} {
 		value, ok := noebs[key]
 		text, isString := value.(string)

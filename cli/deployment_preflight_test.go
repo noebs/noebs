@@ -40,6 +40,17 @@ func TestValidateDeploymentRootRejectsMissingEBSRuntimeInput(t *testing.T) {
 	}
 }
 
+func TestValidateDeploymentRootRejectsMissingEBSCredentialInput(t *testing.T) {
+	root := writePreflightRoot(t, preflightRootOptions{
+		omitEBSIPINKey: true,
+	})
+
+	err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if !errors.Is(err, errMissingEBSConfig) {
+		t.Fatalf("validateDeploymentRootWithDecrypt() error = %v, want %v", err, errMissingEBSConfig)
+	}
+}
+
 func TestValidateDeploymentRootRejectsMissingCardVaultDataKey(t *testing.T) {
 	root := writePreflightRoot(t, preflightRootOptions{
 		omitCardVaultDataKey: true,
@@ -124,6 +135,24 @@ func TestValidateKubernetesDeploymentRootRejectsMissingCardVaultDataKey(t *testi
 	}
 }
 
+func TestValidateKubernetesDeploymentRootRejectsMissingEBSCredentialInput(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	path := filepath.Join(root, "secrets", "ebs-adapter.secrets.yaml")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read ebs-adapter secrets: %v", err)
+	}
+	payload = []byte(strings.ReplaceAll(string(payload), "  ipin_key: ipin-public-key\n", ""))
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write ebs-adapter secrets: %v", err)
+	}
+
+	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if !errors.Is(err, errMissingEBSConfig) {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want %v", err, errMissingEBSConfig)
+	}
+}
+
 func TestValidateKubernetesDeploymentRootRejectsMissingPlatformSecret(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	if err := os.Remove(filepath.Join(root, "platform", "postgres-password.txt")); err != nil {
@@ -184,6 +213,7 @@ func TestValidateKubernetesDeploymentRootRejectsUnexpectedSOPSFile(t *testing.T)
 type preflightRootOptions struct {
 	defaultTenantID         string
 	omitEBSConsumerEndpoint bool
+	omitEBSIPINKey          bool
 	omitCardVaultDataKey    bool
 	keycloakPassword        string
 }
@@ -218,6 +248,9 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 		payload = strings.ReplaceAll(payload, "tenant_1", defaultTenantID)
 		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSConsumerEndpoint {
 			payload = strings.ReplaceAll(payload, `  consumer_endpoint: "https://consumer.ebs.example"`+"\n", "")
+		}
+		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSIPINKey {
+			payload = strings.ReplaceAll(payload, "  ipin_key: ipin-public-key\n", "")
 		}
 		if fileName == "card-vault.secrets.yaml" && opts.omitCardVaultDataKey {
 			payload = strings.ReplaceAll(payload, "  data_key: card-vault-data-key\n", "")
