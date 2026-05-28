@@ -76,8 +76,9 @@ func (s *Service) ResolveQuickPaymentTokenForUserID(ctx context.Context, tenantI
 	if s == nil || s.Store == nil {
 		return QuickPaymentTokenResolution{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return QuickPaymentTokenResolution{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return QuickPaymentTokenResolution{}, err
 	}
 	if userID <= 0 {
 		return QuickPaymentTokenResolution{}, store.ErrInvalidUserID
@@ -108,8 +109,9 @@ func (s *Service) MarkQuickPaymentTokenPaidForUserID(ctx context.Context, tenant
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -147,8 +149,9 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 	if s.HTTPClient == nil {
 		return ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -198,8 +201,9 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 	if s.HTTPClient == nil {
 		return ErrMissingHTTPClient
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	endpoint, err := s.serviceDiscoveryEndpoint(target)
 	if err != nil {

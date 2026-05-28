@@ -41,8 +41,9 @@ func (s *Service) CreateCompletedRegistrationIdentity(ctx context.Context, tenan
 	if s == nil || s.Store == nil {
 		return CompletedRegistrationIdentityResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return CompletedRegistrationIdentityResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return CompletedRegistrationIdentityResult{}, err
 	}
 	mobile := strings.TrimSpace(cmd.Mobile)
 	if mobile == "" {
@@ -73,8 +74,9 @@ func (s *Service) RegisterWithCardIdentity(ctx context.Context, tenantID string,
 	if s == nil || s.Store == nil {
 		return RegisterWithCardIdentityResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return RegisterWithCardIdentityResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return RegisterWithCardIdentityResult{}, err
 	}
 	mobile := strings.TrimSpace(cmd.Mobile)
 	if mobile == "" {
@@ -140,8 +142,9 @@ func (s *Service) StoreCompletedRegistrationCard(ctx context.Context, tenantID s
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if cmd.UserID <= 0 {
 		return store.ErrInvalidUserID

@@ -45,8 +45,9 @@ func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd 
 	if s == nil || s.Store == nil {
 		return CardByMobileResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return CardByMobileResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return CardByMobileResult{}, err
 	}
 	mobile := strings.TrimSpace(cmd.Mobile)
 	if mobile == "" {
@@ -70,8 +71,9 @@ func (s *Service) ResolveCardByMobilePAN(ctx context.Context, tenantID string, c
 	if s == nil || s.Store == nil {
 		return CardByMobilePANResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return CardByMobilePANResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return CardByMobilePANResult{}, err
 	}
 	mobile := strings.TrimSpace(cmd.Mobile)
 	if mobile == "" {
@@ -105,8 +107,9 @@ func (s *Service) ListMaskedCardsForUserID(ctx context.Context, tenantID string,
 	if s == nil || s.Store == nil {
 		return MaskedCardsResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return MaskedCardsResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return MaskedCardsResult{}, err
 	}
 	if userID <= 0 {
 		return MaskedCardsResult{}, store.ErrInvalidUserID
@@ -138,8 +141,9 @@ func (s *Service) ResolveMaskedCardByMobile(ctx context.Context, tenantID string
 	if s == nil || s.Store == nil {
 		return MaskedCardByMobileResult{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return MaskedCardByMobileResult{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return MaskedCardByMobileResult{}, err
 	}
 	mobile := strings.TrimSpace(cmd.Mobile)
 	if mobile == "" {

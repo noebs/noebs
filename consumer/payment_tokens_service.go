@@ -17,8 +17,9 @@ func (s *Service) GeneratePaymentTokenForUserID(ctx context.Context, tenantID st
 	if s == nil || s.Store == nil {
 		return ebs_fields.Token{}, "", "", ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.Token{}, "", "", store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.Token{}, "", "", err
 	}
 	if userID <= 0 {
 		return ebs_fields.Token{}, "", "", store.ErrInvalidUserID
@@ -76,8 +77,9 @@ func (s *Service) GetPaymentTokenForUserID(ctx context.Context, tenantID string,
 	if s == nil || s.Store == nil {
 		return nil, nil, ErrMissingStore
 	}
-	if tenantID == "" {
-		return nil, nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, nil, err
 	}
 	if userID <= 0 {
 		return nil, nil, store.ErrInvalidUserID
@@ -111,8 +113,9 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 	if s == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingService
 	}
-	if tenantID == "" {
-		return ebs_fields.EBSParserFields{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
 	}
 	if userID <= 0 {
 		return ebs_fields.EBSParserFields{}, store.ErrInvalidUserID
