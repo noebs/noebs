@@ -69,7 +69,6 @@ func buildClient(opts Options) *http.Client {
 		KeepAlive: opts.KeepAlive,
 	}
 	transport := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialer.DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          opts.MaxIdleConns,
