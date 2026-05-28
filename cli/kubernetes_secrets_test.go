@@ -119,6 +119,20 @@ func TestRenderKubernetesSecretsRejectsMissingServiceConfig(t *testing.T) {
 	}
 }
 
+func TestRenderKubernetesSecretsRejectsMissingMigrationServiceConfig(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	certPath, keyPath := writeTestTLSPair(t)
+	if err := os.Remove(filepath.Join(root, "services", "wallet-ledger-migrate.yaml")); err != nil {
+		t.Fatalf("remove wallet-ledger-migrate service config: %v", err)
+	}
+
+	var output bytes.Buffer
+	err := renderKubernetesSecrets(&output, root, "noebs", certPath, keyPath, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "wallet-ledger-migrate.yaml") {
+		t.Fatalf("renderKubernetesSecrets() error = %v, want missing wallet-ledger-migrate service config rejection", err)
+	}
+}
+
 func TestRenderKubernetesSecretsRejectsInvalidTLSPair(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	certPath := filepath.Join(t.TempDir(), "tls.crt")
@@ -140,13 +154,13 @@ func writeKubernetesSecretReleaseRoot(t *testing.T) string {
 	configMapData := decodeKubernetesNoebsConfigMapData(t)
 	writePreflightFile(t, root, "config.yaml", configMapData["config.yaml"])
 
-	for _, source := range kubernetesServiceSecretSources {
-		configKey := source.serviceName + ".service.yaml"
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		configKey := serviceName + ".service.yaml"
 		payload := configMapData[configKey]
 		if payload == "" {
 			t.Fatalf("noebs-config missing %s", configKey)
 		}
-		writePreflightFile(t, root, filepath.Join("services", source.serviceName+".yaml"), payload)
+		writePreflightFile(t, root, filepath.Join("services", serviceName+".yaml"), payload)
 	}
 
 	writePreflightFile(t, root, "platform/postgres-password.txt", "postgres-password\n")

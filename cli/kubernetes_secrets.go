@@ -48,6 +48,28 @@ var kubernetesServiceSecretSources = []kubernetesServiceSecretSource{
 	{serviceName: "wallet-worker", secretName: "wallet-worker-secrets", fileName: "wallet-worker.secrets.yaml"},
 }
 
+var kubernetesSecretReleaseServiceNames = []string{
+	"api-gateway",
+	"identity-auth",
+	"card-vault",
+	"ebs-adapter",
+	"psp-webhook",
+	"admin-reporting",
+	"notification-chat",
+	"consumer-beneficiary",
+	"wallet-api",
+	"wallet-ledger",
+	"wallet-worker",
+	"identity-auth-migrate",
+	"card-vault-migrate",
+	"ebs-adapter-migrate",
+	"psp-webhook-migrate",
+	"admin-reporting-migrate",
+	"notification-chat-migrate",
+	"consumer-beneficiary-migrate",
+	"wallet-ledger-migrate",
+}
+
 func renderKubernetesSecretsCommand() error {
 	if len(os.Args) != 6 {
 		return errors.New("usage: noebs render-kubernetes-secrets <kubernetes-release-root> <namespace> <tls-cert> <tls-key>")
@@ -159,9 +181,9 @@ func validateKubernetesSecretReleaseRootWithDecrypt(root string, decrypt deploym
 	if err != nil {
 		return err
 	}
-	for _, source := range kubernetesServiceSecretSources {
-		servicePath := filepath.Join(root, "services", source.serviceName+".yaml")
-		secretPath := filepath.Join(root, "secrets", source.fileName)
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		servicePath := filepath.Join(root, "services", serviceName+".yaml")
+		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
 		if err := validateDeploymentServiceWithSecretPath(configMap, servicePath, secretPath, ageKeyPath, decrypt); err != nil {
 			return err
 		}

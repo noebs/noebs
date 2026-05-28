@@ -1551,6 +1551,20 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 		"consumer-beneficiary-migrate": "consumer-beneficiary-migrate.service.yaml",
 		"wallet-ledger-migrate":        "wallet-ledger-migrate.service.yaml",
 	}
+	rendererServiceConfigs := map[string]bool{}
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		rendererServiceConfigs[serviceName] = true
+	}
+	for serviceName := range serviceConfigs {
+		if !rendererServiceConfigs[serviceName] {
+			t.Fatalf("preflight validates service config %s but render-kubernetes-secrets release validation does not", serviceName)
+		}
+	}
+	for serviceName := range rendererServiceConfigs {
+		if _, ok := serviceConfigs[serviceName]; !ok {
+			t.Fatalf("render-kubernetes-secrets release validation expects service config %s but preflight does not mount it", serviceName)
+		}
+	}
 	serviceSecrets := map[string]string{
 		"api-gateway":          "api-gateway-secrets",
 		"identity-auth":        "identity-auth-secrets",

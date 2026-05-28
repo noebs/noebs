@@ -48,6 +48,6 @@ For Kubernetes cutovers, render the required Secret manifests from a Kubernetes 
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
 ```
 
-That renderer uses the Kubernetes preflight layout (`config.yaml`, `services/`, `secrets/`, `.sops/age-key.txt`, and `platform/`) instead of the Docker Compose release layout.
+That renderer uses the Kubernetes preflight layout (`config.yaml`, runtime and migration role files under `services/`, service secret files under `secrets/`, `.sops/age-key.txt`, and `platform/`) instead of the Docker Compose release layout.
 
 The renderer validates the release before writing manifests. It does not derive EBS endpoints, tenant IDs, database URLs, passwords, or TLS material.
