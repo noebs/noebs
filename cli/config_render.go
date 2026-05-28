@@ -51,7 +51,8 @@ func isConfigUtilityCommand() bool {
 		isValidateDeploymentCommand() ||
 		isValidateKubernetesDeploymentCommand() ||
 		isRenderKubernetesSecretsCommand() ||
-		isPrepareKubernetesReleaseCommand()
+		isPrepareKubernetesReleaseCommand() ||
+		isAuditKubernetesReleaseInputsCommand()
 }
 
 func renderConfigFiles() error {

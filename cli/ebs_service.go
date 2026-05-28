@@ -83,6 +83,12 @@ func main() {
 		}
 		return
 	}
+	if isAuditKubernetesReleaseInputsCommand() {
+		if err := auditKubernetesReleaseInputsCommand(); err != nil {
+			logrusLogger.Fatalf("audit kubernetes release inputs failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)

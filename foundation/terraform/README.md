@@ -60,6 +60,20 @@ The command fails instead of deriving missing values. For each cutover value, th
 
 `deploy/kubernetes/overlays/current-host/kubernetes-release.inputs.yaml.example` documents the required input keys. The real input file is secret material and must be SOPS-encrypted before use.
 
+To audit the current encrypted root before preparing the release, run:
+
+```sh
+noebs audit-kubernetes-release-inputs /path/to/current-noebs-root
+```
+
+To include an encrypted cutover input file in the audit, run:
+
+```sh
+noebs audit-kubernetes-release-inputs /path/to/current-noebs-root /path/to/kubernetes-release.inputs.yaml
+```
+
+The audit reports only input names and sources. It does not print secret values, derive missing values, choose QA or production EBS endpoints, or make deployment changes.
+
 ```sh
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
 ```

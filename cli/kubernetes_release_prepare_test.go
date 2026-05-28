@@ -239,6 +239,75 @@ func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
 	requirePreparedFile(t, outputRoot, "secrets/ebs-adapter.secrets.yaml")
 }
 
+func TestAuditKubernetesReleaseInputsReportsMissingCurrentAndCutoverValues(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	if audit.Ready {
+		t.Fatalf("audit ready = true, want false")
+	}
+	requireStringEntry(t, audit.CurrentSecret, "noebs.db_url from current secret")
+	requireStringEntry(t, audit.CurrentSecret, "noebs.jwt_secret from current secret")
+	requireStringEntry(t, audit.CurrentSecret, "noebs.google_client_id from current secret noebs.google_client_id")
+	requireStringEntry(t, audit.Missing, "noebs.default_tenant_id")
+	requireStringEntry(t, audit.Missing, "noebs.admin_key")
+	requireStringEntry(t, audit.Missing, "noebs.ebs.consumer_endpoint")
+	requireStringEntry(t, audit.Missing, "noebs.psp")
+}
+
+func TestAuditKubernetesReleaseInputsReportsReadyCompleteCurrentSecret(t *testing.T) {
+	legacyRoot := writeCompleteLegacyReleaseRoot(t)
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	if !audit.Ready {
+		t.Fatalf("audit ready = false, missing=%v duplicate=%v invalid=%v", audit.Missing, audit.Duplicate, audit.Invalid)
+	}
+	requireStringEntry(t, audit.CurrentSecret, "noebs.default_tenant_id from current secret noebs.default_tenant_id")
+	requireStringEntry(t, audit.CurrentSecret, "noebs.psp from current secret")
+	if len(audit.Missing) != 0 || len(audit.Duplicate) != 0 || len(audit.Invalid) != 0 {
+		t.Fatalf("audit has failures: missing=%v duplicate=%v invalid=%v", audit.Missing, audit.Duplicate, audit.Invalid)
+	}
+}
+
+func TestAuditKubernetesReleaseInputsReportsDuplicatesAndDoesNotPrintSecretValues(t *testing.T) {
+	legacyRoot := writeCompleteLegacyReleaseRoot(t)
+	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, inputsPath, readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	if audit.Ready {
+		t.Fatalf("audit ready = true, want false")
+	}
+	requireStringEntry(t, audit.Duplicate, "noebs.admin_key duplicates current secret noebs.admin_key")
+	requireStringEntry(t, audit.Duplicate, "noebs.ebs.consumer_endpoint duplicates current secret noebs.consumer_endpoint")
+	requireStringEntry(t, audit.Duplicate, "noebs.psp duplicates current secret noebs.psp")
+
+	var out strings.Builder
+	if err := writeKubernetesReleaseInputAudit(&out, audit); err != nil {
+		t.Fatalf("writeKubernetesReleaseInputAudit() error = %v", err)
+	}
+	for _, secretValue := range []string{
+		"legacy-admin-key",
+		"admin-key",
+		"legacy-ipin-password",
+		"ipin-password",
+		"legacy-psp-api-key",
+		"psp-api-key",
+	} {
+		if strings.Contains(out.String(), secretValue) {
+			t.Fatalf("audit output leaked secret value %q:\n%s", secretValue, out.String())
+		}
+	}
+}
+
 func writeLegacyReleaseRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -390,6 +459,16 @@ func replaceKubernetesReleaseInputPlaceholders(t *testing.T, payload string) str
 
 func plainKubernetesSecretEncrypt(_ string, payload []byte, _ string) ([]byte, error) {
 	return payload, nil
+}
+
+func requireStringEntry(t *testing.T, entries []string, want string) {
+	t.Helper()
+	for _, entry := range entries {
+		if entry == want {
+			return
+		}
+	}
+	t.Fatalf("entries missing %q: %v", want, entries)
 }
 
 func readPreparedFile(t *testing.T, root, name string) string {
