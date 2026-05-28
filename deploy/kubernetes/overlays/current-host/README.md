@@ -45,6 +45,8 @@ noebs render-kubernetes-release-input-template /path/to/current-noebs-root > /pa
 
 Fill the placeholders, then encrypt the real `kubernetes-release.inputs.yaml` with the current root Age recipient. Do not add values already omitted from the template; those are transformed from the current encrypted root.
 
+The audit/template path reports field names only. `current_secret` means the current encrypted root has a non-empty value that can be transformed; `empty_current_secret` means the key exists there but still needs explicit cutover input because the value is empty.
+
 ```sh
 noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
 ```

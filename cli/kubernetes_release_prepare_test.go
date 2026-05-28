@@ -263,6 +263,23 @@ func TestAuditKubernetesReleaseInputsReportsMissingCurrentAndCutoverValues(t *te
 	requireStringEntry(t, audit.Missing, "noebs.psp")
 }
 
+func TestAuditKubernetesReleaseInputsReportsEmptyCurrentSecretValues(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
+	payload = strings.Replace(payload, "  google_client_id: legacy-google-client-id\n", "  google_client_id: \"\"\n", 1)
+	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	if audit.Ready {
+		t.Fatalf("audit ready = true, want false")
+	}
+	requireStringEntry(t, audit.EmptyCurrentSecret, "current secret noebs.google_client_id is empty")
+	requireStringEntry(t, audit.Missing, "noebs.google_client_id")
+}
+
 func TestAuditKubernetesReleaseInputsReportsReadyCompleteCurrentSecret(t *testing.T) {
 	legacyRoot := writeCompleteLegacyReleaseRoot(t)
 

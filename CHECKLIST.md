@@ -87,7 +87,7 @@ every item in "Completion Checklist" is checked.
 
 ## Server Release Blockers
 
-- [ ] The current server audit still reports missing explicit cutover inputs.
+- [ ] The current server audit still reports missing explicit cutover inputs; `noebs.db_url` and `noebs.jwt_secret` are transformable from the current encrypted root, while current `noebs.sms_key`, `noebs.sms_sender`, and `noebs.sms_gateway` keys exist but are empty.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.
 

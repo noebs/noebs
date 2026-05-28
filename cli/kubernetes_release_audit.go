@@ -13,12 +13,13 @@ import (
 )
 
 type kubernetesReleaseInputAudit struct {
-	Ready         bool     `yaml:"ready"`
-	CurrentSecret []string `yaml:"current_secret,omitempty"`
-	CutoverInput  []string `yaml:"cutover_input,omitempty"`
-	Missing       []string `yaml:"missing,omitempty"`
-	Duplicate     []string `yaml:"duplicate,omitempty"`
-	Invalid       []string `yaml:"invalid,omitempty"`
+	Ready              bool     `yaml:"ready"`
+	CurrentSecret      []string `yaml:"current_secret,omitempty"`
+	EmptyCurrentSecret []string `yaml:"empty_current_secret,omitempty"`
+	CutoverInput       []string `yaml:"cutover_input,omitempty"`
+	Missing            []string `yaml:"missing,omitempty"`
+	Duplicate          []string `yaml:"duplicate,omitempty"`
+	Invalid            []string `yaml:"invalid,omitempty"`
 }
 
 func isAuditKubernetesReleaseInputsCommand() bool {
@@ -119,7 +120,7 @@ func (r preparedKubernetesRelease) auditInputs() kubernetesReleaseInputAudit {
 }
 
 func (a *kubernetesReleaseInputAudit) auditCutoverField(r preparedKubernetesRelease, field cutoverStringField) (string, bool) {
-	legacyValue, legacyKey := r.firstLegacyString(field.legacyKeys...)
+	legacyValue, legacyKey, legacyPresent := r.firstLegacyValue(field.legacyKeys...)
 	input := strings.TrimSpace(field.input)
 	switch {
 	case legacyValue != "" && input != "":
@@ -140,15 +141,21 @@ func (a *kubernetesReleaseInputAudit) auditCutoverField(r preparedKubernetesRele
 		a.CutoverInput = append(a.CutoverInput, field.label)
 		return input, true
 	default:
+		if legacyPresent {
+			a.EmptyCurrentSecret = append(a.EmptyCurrentSecret, fmt.Sprintf("current secret noebs.%s is empty", legacyKey))
+		}
 		a.Missing = append(a.Missing, field.label)
 		return "", false
 	}
 }
 
 func (a *kubernetesReleaseInputAudit) auditCurrentSecretOnly(r preparedKubernetesRelease, label, key string) {
-	value := strings.TrimSpace(firstString(r.legacy, key))
+	value, _, present := r.firstLegacyValue(key)
 	switch {
 	case value == "":
+		if present {
+			a.EmptyCurrentSecret = append(a.EmptyCurrentSecret, "current secret "+label+" is empty")
+		}
 		a.Missing = append(a.Missing, label+" from current secret")
 	case strings.Contains(value, "REPLACE_WITH_"):
 		a.Invalid = append(a.Invalid, "current secret "+label+" contains placeholder")
@@ -187,6 +194,7 @@ func (a *kubernetesReleaseInputAudit) auditPSPSecrets(r preparedKubernetesReleas
 
 func (a *kubernetesReleaseInputAudit) normalize() {
 	sort.Strings(a.CurrentSecret)
+	sort.Strings(a.EmptyCurrentSecret)
 	sort.Strings(a.CutoverInput)
 	sort.Strings(a.Missing)
 	sort.Strings(a.Duplicate)

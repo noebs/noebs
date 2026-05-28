@@ -581,13 +581,22 @@ func (r preparedKubernetesRelease) cutoverString(label string, legacyKeys []stri
 }
 
 func (r preparedKubernetesRelease) firstLegacyString(keys ...string) (string, string) {
+	value, key, _ := r.firstLegacyValue(keys...)
+	return value, key
+}
+
+func (r preparedKubernetesRelease) firstLegacyValue(keys ...string) (string, string, bool) {
 	for _, key := range keys {
-		value := strings.TrimSpace(firstString(r.legacy, key))
-		if value != "" {
-			return value, key
+		raw, ok := r.legacy[key]
+		if !ok {
+			continue
 		}
+		if text, ok := raw.(string); ok {
+			return strings.TrimSpace(text), key, true
+		}
+		return "", key, true
 	}
-	return "", ""
+	return "", "", false
 }
 
 func (r preparedKubernetesRelease) pspSecrets() (map[string]interface{}, error) {
