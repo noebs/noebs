@@ -109,6 +109,77 @@ func TestStore_CreateUser_MissingTenantID(t *testing.T) {
 	}
 }
 
+func TestStore_IdentityTenantValidationFailsBeforeDB(t *testing.T) {
+	ctx := context.Background()
+	s := &Store{}
+	user := &ebs_fields.User{Mobile: "0990000000"}
+	cases := []struct {
+		name string
+		run  func(string) error
+	}{
+		{"CreateAPIKey", func(tenantID string) error {
+			return s.CreateAPIKey(ctx, tenantID, "user@example.test", "api-key")
+		}},
+		{"ValidateAPIKey", func(tenantID string) error {
+			_, err := s.ValidateAPIKey(ctx, tenantID, "user@example.test", "api-key")
+			return err
+		}},
+		{"ValidateAPIKeyValue", func(tenantID string) error {
+			_, err := s.ValidateAPIKeyValue(ctx, tenantID, "api-key")
+			return err
+		}},
+		{"CreateUser", func(tenantID string) error {
+			return s.CreateUser(ctx, tenantID, &ebs_fields.User{Mobile: "0990000000"})
+		}},
+		{"GetUserByMobile", func(tenantID string) error {
+			_, err := s.GetUserByMobile(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"GetUserByEmailOrMobile", func(tenantID string) error {
+			_, err := s.GetUserByEmailOrMobile(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"GetUserByCard", func(tenantID string) error {
+			_, err := s.GetUserByCard(ctx, tenantID, "9222081700000000")
+			return err
+		}},
+		{"FindUserByUsername", func(tenantID string) error {
+			_, err := s.FindUserByUsername(ctx, tenantID, "user")
+			return err
+		}},
+		{"GetUserByUsernameEmailOrMobile", func(tenantID string) error {
+			_, err := s.GetUserByUsernameEmailOrMobile(ctx, tenantID, "user")
+			return err
+		}},
+		{"UpdateUser", func(tenantID string) error {
+			return s.UpdateUser(ctx, tenantID, user)
+		}},
+		{"UpdateUserColumns", func(tenantID string) error {
+			return s.UpdateUserColumns(ctx, tenantID, 1, map[string]any{"fullname": "User"})
+		}},
+		{"UpsertDeviceToken", func(tenantID string) error {
+			return s.UpsertDeviceToken(ctx, tenantID, "0990000000", "device-token")
+		}},
+	}
+	tenantCases := []struct {
+		tenantID string
+		wantErr  error
+	}{
+		{"", ErrMissingTenantID},
+		{"default", ErrInvalidTenantID},
+	}
+	for _, tc := range cases {
+		for _, tenantCase := range tenantCases {
+			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
+				err := tc.run(tenantCase.tenantID)
+				if !errors.Is(err, tenantCase.wantErr) {
+					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
+				}
+			})
+		}
+	}
+}
+
 func TestStore_CreateUser_MissingUser(t *testing.T) {
 	s := newTestStore(t)
 	err := s.CreateUser(context.Background(), "t1", nil)

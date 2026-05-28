@@ -66,12 +66,13 @@ func (s *Store) ListTenants(ctx context.Context) ([]string, error) {
 }
 
 func (s *Store) CreateAPIKey(ctx context.Context, tenantID, email, apiKey string) error {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
 	}
-	if tenantID == "" {
-		return ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
 	}
 	stmt := s.DB.Rebind("INSERT INTO api_keys(tenant_id, email, api_key, created_at) VALUES(?, ?, ?, ?) ON CONFLICT(tenant_id, email) DO UPDATE SET api_key = excluded.api_key")
 	_, err = db.ExecContext(ctx, stmt, tenantID, strings.ToLower(email), apiKey, time.Now().UTC())
@@ -79,12 +80,13 @@ func (s *Store) CreateAPIKey(ctx context.Context, tenantID, email, apiKey string
 }
 
 func (s *Store) ValidateAPIKey(ctx context.Context, tenantID, email, apiKey string) (bool, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return false, err
 	}
-	if tenantID == "" {
-		return false, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return false, err
 	}
 	stmt := s.DB.Rebind("SELECT api_key FROM api_keys WHERE tenant_id = ? AND email = ?")
 	var stored string
@@ -95,12 +97,13 @@ func (s *Store) ValidateAPIKey(ctx context.Context, tenantID, email, apiKey stri
 }
 
 func (s *Store) ValidateAPIKeyValue(ctx context.Context, tenantID, apiKey string) (bool, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return false, err
 	}
-	if tenantID == "" {
-		return false, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return false, err
 	}
 	stmt := s.DB.Rebind("SELECT api_key FROM api_keys WHERE tenant_id = ? AND api_key = ? LIMIT 1")
 	var stored string
@@ -111,12 +114,13 @@ func (s *Store) ValidateAPIKeyValue(ctx context.Context, tenantID, apiKey string
 }
 
 func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_fields.User) error {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
 	}
-	if tenantID == "" {
-		return ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
 	}
 	if user == nil {
 		return ErrMissingUser
@@ -175,12 +179,13 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 }
 
 func (s *Store) GetUserByMobile(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
 	}
 	stmt := s.DB.Rebind("SELECT * FROM users WHERE tenant_id = ? AND mobile = ? AND deleted_at IS NULL")
 	var user ebs_fields.User
@@ -192,12 +197,13 @@ func (s *Store) GetUserByMobile(ctx context.Context, tenantID, mobile string) (*
 }
 
 func (s *Store) GetUserByEmailOrMobile(ctx context.Context, tenantID, query string) (*ebs_fields.User, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
 	}
 	q := strings.ToLower(query)
 	stmt := s.DB.Rebind("SELECT * FROM users WHERE tenant_id = ? AND deleted_at IS NULL AND (email = ? OR mobile = ?)")
@@ -210,12 +216,13 @@ func (s *Store) GetUserByEmailOrMobile(ctx context.Context, tenantID, query stri
 }
 
 func (s *Store) GetUserByCard(ctx context.Context, tenantID, pan string) (*ebs_fields.User, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
 	}
 	args := []any{tenantID, tenantID}
 	args = append(args, s.panLookupArgs(pan)...)
@@ -232,12 +239,13 @@ func (s *Store) GetUserByCard(ctx context.Context, tenantID, pan string) (*ebs_f
 }
 
 func (s *Store) FindUserByUsername(ctx context.Context, tenantID, username string) (*ebs_fields.User, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
 	}
 	stmt := s.DB.Rebind("SELECT * FROM users WHERE tenant_id = ? AND username = ? AND deleted_at IS NULL")
 	var user ebs_fields.User
@@ -249,12 +257,13 @@ func (s *Store) FindUserByUsername(ctx context.Context, tenantID, username strin
 }
 
 func (s *Store) GetUserByUsernameEmailOrMobile(ctx context.Context, tenantID, query string) (*ebs_fields.User, error) {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if tenantID == "" {
-		return nil, ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
 	}
 	q := strings.ToLower(query)
 	stmt := s.DB.Rebind("SELECT * FROM users WHERE tenant_id = ? AND deleted_at IS NULL AND (username = ? OR email = ? OR mobile = ?)")
@@ -267,12 +276,13 @@ func (s *Store) GetUserByUsernameEmailOrMobile(ctx context.Context, tenantID, qu
 }
 
 func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_fields.User) error {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
 	}
-	if tenantID == "" {
-		return ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
 	}
 	if user == nil {
 		return ErrMissingUser
@@ -317,12 +327,9 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 }
 
 func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID int64, updates map[string]any) error {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
-	}
-	if tenantID == "" {
-		return ErrMissingTenantID
 	}
 	if userID <= 0 {
 		return ErrInvalidUserID
@@ -348,6 +355,10 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 			}
 		}
 	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
 	setParts := []string{}
 	args := []any{}
 	for key, value := range updates {
@@ -363,12 +374,13 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 }
 
 func (s *Store) UpsertDeviceToken(ctx context.Context, tenantID string, mobile, deviceToken string) error {
-	db, err := s.ensureDB()
+	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
 	}
-	if tenantID == "" {
-		return ErrMissingTenantID
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
 	}
 	stmt := s.DB.Rebind("UPDATE users SET device_token = ?, updated_at = ? WHERE tenant_id = ? AND mobile = ?")
 	res, err := db.ExecContext(ctx, stmt, deviceToken, time.Now().UTC(), tenantID, mobile)
