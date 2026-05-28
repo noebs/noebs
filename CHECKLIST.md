@@ -23,6 +23,7 @@ Last updated: 2026-05-28
 - [x] Bumped the SDK to `26.05.40`; no later SDK bump was needed for backend-only changes.
 - [x] Installed and used `golangci-lint` locally and on the server gate path.
 - [x] Scrubbed ambient environment inheritance from SOPS release-secret encryption.
+- [x] Replaced SOPS CLI decryption's `SOPS_AGE_KEY_FILE` interface with an in-process age decrypt path.
 
 ## Current Server State
 
@@ -42,7 +43,6 @@ Last updated: 2026-05-28
 - [ ] Confirm migration jobs complete through k3s/k8s for each service-owned database scope.
 - [ ] Confirm Kafka broker, EBS event publisher, and admin-reporting projector are healthy in-cluster.
 - [ ] Confirm Keycloak deploys as a service; no application auth data wiring is expected yet.
-- [ ] Replace SOPS CLI decryption's `SOPS_AGE_KEY_FILE` interface with a non-environment decrypt path.
 - [ ] Remove or retire the old Docker Compose deployment after Kubernetes replacement is confirmed.
 
 ## Server Release Blockers

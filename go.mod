@@ -5,6 +5,7 @@ go 1.25.0
 toolchain go1.25.3
 
 require (
+	filippo.io/age v1.2.1
 	github.com/a-h/templ v0.3.977
 	github.com/adonese/crypto v1.1.0
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751

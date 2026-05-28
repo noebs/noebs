@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net/url"
@@ -203,32 +202,6 @@ func sopsExecutable() (string, error) {
 		return "", fmt.Errorf("find sops executable: %w", err)
 	}
 	return path, nil
-}
-
-func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
-	ageKeyFile = strings.TrimSpace(ageKeyFile)
-	if ageKeyFile == "" {
-		return nil, fmt.Errorf("%w: noebs.sops_age_key_file", errMissingSopsAgeKeyFile)
-	}
-	if _, err := requiredExistingPath("SOPS age key", ageKeyFile); err != nil {
-		return nil, err
-	}
-	sopsPath, err := sopsExecutable()
-	if err != nil {
-		return nil, err
-	}
-	cmd := exec.Command(sopsPath, "-d", path)
-	cmd.Env = []string{"SOPS_AGE_KEY_FILE=" + ageKeyFile}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
-	if err != nil {
-		if text := strings.TrimSpace(stderr.String()); text != "" {
-			return nil, fmt.Errorf("sops -d %s: %w: %s", path, err, text)
-		}
-		return nil, fmt.Errorf("sops -d %s: %w", path, err)
-	}
-	return output, nil
 }
 
 func mergeConfig(base, override interface{}) interface{} {
