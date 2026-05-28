@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -57,6 +58,45 @@ func TestAPIGatewayProxiesEveryServiceOwnedRoute(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAPIGatewayProxyCatalogTargetsRoutableHTTPServices(t *testing.T) {
+	config := decodeKubernetesBaseNoebsConfig(t)
+	services := map[string]map[string]int{}
+	for _, object := range decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base")) {
+		if object.Kind != "Service" {
+			continue
+		}
+		ports := map[string]int{}
+		for _, port := range object.Spec.Ports {
+			ports[port.Name] = port.Port
+		}
+		services[object.Metadata.Name] = ports
+	}
+
+	targetRoles := map[serviceRole]bool{}
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.role == serviceRoleAPIGateway {
+			t.Fatalf("%s %s proxies back to api-gateway", spec.method, spec.path)
+		}
+		if spec.role.runsMigrations() || spec.role.startsGRPC() || spec.role.startsWalletWorker() || !spec.role.startsHTTP() {
+			t.Fatalf("%s %s targets non-routable role %s", spec.method, spec.path, spec.role)
+		}
+		targetRoles[spec.role] = true
+	}
+	for role := range targetRoles {
+		endpoint := strings.TrimSpace(config.Noebs.ServiceDiscovery[string(role)])
+		if endpoint == "" {
+			t.Fatalf("gateway route catalog targets %s but noebs-config service_discovery does not declare it", role)
+		}
+		ports, ok := services[string(role)]
+		if !ok {
+			t.Fatalf("gateway route catalog targets %s but Kubernetes Service %q is missing", role, role)
+		}
+		if ports["http"] != 8080 {
+			t.Fatalf("Kubernetes Service %s http port = %d, want 8080", role, ports["http"])
+		}
 	}
 }
 
