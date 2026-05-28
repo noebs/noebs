@@ -9,6 +9,8 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 			"state":       "SUCCESS",
 			"minor_units": float64(2500),
 			"currency":    "AED",
+			"direction":   "inbound",
+			"message":     "accepted",
 		},
 		"meta": map[string]any{"card_last4": "4242"},
 	}
@@ -17,6 +19,8 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 		Status:        []string{"result.state"},
 		Amount:        []string{"result.minor_units"},
 		Currency:      []string{"result.currency"},
+		Direction:     []string{"result.direction"},
+		Message:       []string{"result.message"},
 		Metadata:      []string{"meta"},
 	})
 
@@ -31,6 +35,12 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 	}
 	if mapped.Currency != "AED" {
 		t.Fatalf("expected mapped currency AED, got %q", mapped.Currency)
+	}
+	if mapped.Direction != "inbound" {
+		t.Fatalf("expected mapped direction inbound, got %q", mapped.Direction)
+	}
+	if mapped.Message != "accepted" {
+		t.Fatalf("expected mapped message accepted, got %q", mapped.Message)
 	}
 	if mapped.Metadata["card_last4"] != "4242" {
 		t.Fatalf("expected mapped metadata, got %v", mapped.Metadata)
@@ -65,7 +75,7 @@ func TestMapResponseRequiresConfiguredPaths(t *testing.T) {
 		"currency":           "USD",
 	}
 	mapped := MapResponse(payload, ResponseMapping{})
-	if mapped.ClientReference != "" || mapped.TransactionID != "" || mapped.Status != "" || mapped.Amount != 0 || mapped.Currency != "" {
+	if mapped.ClientReference != "" || mapped.TransactionID != "" || mapped.Status != "" || mapped.Amount != 0 || mapped.Currency != "" || mapped.Direction != "" || mapped.Message != "" {
 		t.Fatalf("MapResponse() = %+v, want empty fields without configured paths", mapped)
 	}
 }

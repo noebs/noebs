@@ -13,6 +13,8 @@ type ResponseMapping struct {
 	Status          []string `json:"status"`
 	Amount          []string `json:"amount"`
 	Currency        []string `json:"currency"`
+	Direction       []string `json:"direction"`
+	Message         []string `json:"message"`
 	Metadata        []string `json:"metadata"`
 }
 
@@ -22,6 +24,8 @@ type MappedResponse struct {
 	Status          string
 	Amount          int64
 	Currency        string
+	Direction       string
+	Message         string
 	Metadata        map[string]any
 }
 
@@ -32,6 +36,8 @@ func MapResponse(payload map[string]any, mapping ResponseMapping) MappedResponse
 		Status:          strings.ToLower(stringFromPaths(payload, mapping.Status)),
 		Amount:          int64FromPaths(payload, mapping.Amount),
 		Currency:        stringFromPaths(payload, mapping.Currency),
+		Direction:       stringFromPaths(payload, mapping.Direction),
+		Message:         stringFromPaths(payload, mapping.Message),
 		Metadata:        mapFromPaths(payload, mapping.Metadata),
 	}
 }

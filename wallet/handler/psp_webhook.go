@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -16,7 +15,6 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"go.temporal.io/api/serviceerror"
 )
 
@@ -54,29 +52,21 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	}
 
 	tenantID := strings.TrimSpace(c.Query("tenant_id"))
-	if tenantID == "" {
-		tenantID = stringFromMap(payloadMap, "tenant_id", "tenantId")
-	}
 	tenantID, err := walletstore.ValidateTenantID(tenantID)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
-	clientRef := stringFromMap(payloadMap, "client_reference", "clientReference", "client_ref", "reference")
-	status := strings.ToLower(stringFromMap(payloadMap, "status", "state"))
-	pspTransactionID := stringFromMap(payloadMap, "psp_transaction_id", "transaction_id", "id")
-	currency := stringFromMap(payloadMap, "currency")
-	direction := normalizeDirection(stringFromMap(payloadMap, "direction"))
-	region := stringFromMap(payloadMap, "region")
+	scope := walletpsp.Scope{
+		Region:    strings.TrimSpace(c.Query("region")),
+		Currency:  strings.TrimSpace(c.Query("currency")),
+		Direction: normalizeDirection(c.Query("direction")),
+	}
 
 	if h.Loader == nil || h.Registry == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	cfg, err := h.Loader.LoadForScope(c.Context(), tenantID, providerCode, walletpsp.Scope{
-		Region:    region,
-		Currency:  currency,
-		Direction: direction,
-	})
+	cfg, err := h.Loader.LoadForScope(c.Context(), tenantID, providerCode, scope)
 	if err != nil {
 		switch {
 		case errors.Is(err, walletpsp.ErrPSPNotRegistered), errors.Is(err, walletpsp.ErrPSPConfigInvalid):
@@ -87,19 +77,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
 		}
 	}
-	mappedWebhook := walletpsp.MapResponse(payloadMap, cfg.WebhookResponseMapping)
-	if mappedWebhook.ClientReference != "" {
-		clientRef = mappedWebhook.ClientReference
-	}
-	if mappedWebhook.TransactionID != "" {
-		pspTransactionID = mappedWebhook.TransactionID
-	}
-	if mappedWebhook.Status != "" {
-		status = mappedWebhook.Status
-	}
-	if mappedWebhook.Currency != "" {
-		currency = mappedWebhook.Currency
-	}
+	fields := mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
 	provider, err := h.Registry.Resolve(cfg)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, err.Error()))
@@ -108,91 +86,50 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	signature := strings.TrimSpace(firstHeader(c, "X-Webhook-Signature", "X-Signature", "Signature"))
 	signatureValid := provider.VerifyWebhook(payload, signature)
 	if !signatureValid {
-		checkedMap, checkedPayload, err := h.authorizeUnsignedWebhook(c, cfg, provider, providerCode, tenantID, clientRef, pspTransactionID, direction, payloadMap, payload)
+		checkedMap, checkedPayload, err := h.authorizeUnsignedWebhook(c, cfg, provider, providerCode, tenantID, fields.ClientReference, fields.PSPTransactionID, fields.Direction, payloadMap, payload)
 		if err != nil {
 			errMsg := err.Error()
 			if errors.Is(err, walletpsp.ErrPSPWebhookInvalid) {
 				errMsg = "invalid webhook signature"
 			}
-			if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
+			if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, fields.ClientReference, fields.PSPTransactionID, fields.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
 				return jsonResponse(c, 0, mapWalletError(logErr))
 			}
 			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletpsp.ErrPSPWebhookInvalid, apperr.ErrBadRequest, errMsg))
 		}
 		payloadMap = checkedMap
 		payload = checkedPayload
-		mappedWebhook = walletpsp.MapResponse(payloadMap, cfg.WebhookResponseMapping)
-		if mappedWebhook.ClientReference != "" {
-			clientRef = mappedWebhook.ClientReference
-		}
-		if mappedWebhook.TransactionID != "" {
-			pspTransactionID = mappedWebhook.TransactionID
-		}
-		if mappedWebhook.Status != "" {
-			status = mappedWebhook.Status
-		}
-		if mappedWebhook.Currency != "" {
-			currency = mappedWebhook.Currency
-		}
-		if value := normalizeDirection(stringFromMap(payloadMap, "direction")); value != "" {
-			direction = value
-		}
-	}
-	if status == "" {
-		status = strings.ToLower(stringFromMap(payloadMap, "status", "state"))
+		fields = mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
 	}
 
-	if clientRef == "" {
-		amount := mappedWebhook.Amount
-		if amount <= 0 || currency == "" {
-			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, direction, http.StatusBadRequest, fiber.Map{"error": walletstore.ErrMissingClientReference.Error()}, walletstore.ErrMissingClientReference.Error(), payload); err != nil {
-				return jsonResponse(c, 0, mapWalletError(err))
-			}
-			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletstore.ErrMissingClientReference, apperr.ErrBadRequest, "missing client reference"))
-		}
-		clientRef = "psp-webhook-" + uuid.NewString()
-		txn := walletstore.PSPTransaction{
-			TenantID:        tenantID,
-			PSPProvider:     providerCode,
-			IdempotencyKey:  clientRef,
-			ClientReference: clientRef,
-			Direction:       normalizePSPDirection(direction),
-			Amount:          amount,
-			Currency:        currency,
-			Status:          "held",
-			RawResponse:     walletstore.RawJSON(payload),
-		}
-		if pspTransactionID != "" {
-			txn.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
-		}
-		if _, err := h.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
+	if fields.ClientReference == "" {
+		if err := h.recordWebhookInteraction(c, tenantID, providerCode, fields.ClientReference, fields.PSPTransactionID, fields.Direction, http.StatusBadRequest, fiber.Map{"error": walletstore.ErrMissingClientReference.Error()}, walletstore.ErrMissingClientReference.Error(), payload); err != nil {
 			return jsonResponse(c, 0, mapWalletError(err))
 		}
-		if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, txn.Direction, http.StatusAccepted, fiber.Map{"status": "held", "client_reference": clientRef}, "", payload); err != nil {
-			return jsonResponse(c, 0, mapWalletError(err))
-		}
-		return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": "held", "client_reference": clientRef})
+		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletstore.ErrMissingClientReference, apperr.ErrBadRequest, "missing client reference"))
 	}
+	if fields.Status == "" {
+		if err := h.recordWebhookInteraction(c, tenantID, providerCode, fields.ClientReference, fields.PSPTransactionID, fields.Direction, http.StatusBadRequest, fiber.Map{"error": walletstore.ErrMissingStatus.Error()}, walletstore.ErrMissingStatus.Error(), payload); err != nil {
+			return jsonResponse(c, 0, mapWalletError(err))
+		}
+		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletstore.ErrMissingStatus, apperr.ErrBadRequest, "missing status"))
+	}
+
+	clientRef := fields.ClientReference
+	pspTransactionID := fields.PSPTransactionID
 
 	stored, err := h.Store.GetPSPTransactionByReference(c.Context(), tenantID, clientRef)
 	if err != nil {
 		if errors.Is(err, walletstore.ErrPSPTransactionNotFound) {
-			amount := mappedWebhook.Amount
-			if amount <= 0 || currency == "" {
-				if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, direction, http.StatusBadRequest, fiber.Map{"error": err.Error()}, err.Error(), payload); logErr != nil {
-					return jsonResponse(c, 0, mapWalletError(logErr))
-				}
-				return jsonResponse(c, 0, mapWalletError(err))
-			}
 			txn := walletstore.PSPTransaction{
 				TenantID:        tenantID,
 				PSPProvider:     providerCode,
 				IdempotencyKey:  clientRef,
 				ClientReference: clientRef,
-				Direction:       normalizePSPDirection(direction),
-				Amount:          amount,
-				Currency:        currency,
-				Status:          status,
+				Direction:       normalizePSPDirection(fields.Direction),
+				Amount:          fields.Amount,
+				Currency:        fields.Currency,
+				Status:          fields.Status,
 				RawResponse:     walletstore.RawJSON(payload),
 			}
 			if pspTransactionID != "" {
@@ -201,24 +138,20 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			if _, err := h.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
 				return jsonResponse(c, 0, mapWalletError(err))
 			}
-			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, txn.Direction, http.StatusAccepted, fiber.Map{"status": status, "client_reference": clientRef}, "", payload); err != nil {
+			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, txn.Direction, http.StatusAccepted, fiber.Map{"status": fields.Status, "client_reference": clientRef}, "", payload); err != nil {
 				return jsonResponse(c, 0, mapWalletError(err))
 			}
-			return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": status, "client_reference": clientRef})
+			return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": fields.Status, "client_reference": clientRef})
 		}
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
-	update := walletstore.PSPStatusUpdate{Status: stored.Status}
-	if status != "" {
-		update.Status = status
-	}
+	update := walletstore.PSPStatusUpdate{Status: fields.Status}
 	if pspTransactionID != "" {
 		update.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
 	}
-	message := stringFromMap(payloadMap, "message", "error", "reason")
-	if message != "" {
-		update.ResponseMessage = sql.NullString{String: message, Valid: true}
+	if fields.Message != "" {
+		update.ResponseMessage = sql.NullString{String: fields.Message, Valid: true}
 	}
 	update.RawResponse = walletstore.RawJSON(payload)
 	if update.Status == "success" {
@@ -229,13 +162,13 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	}
 
 	if h.Temporal != nil && stored.WorkflowID.Valid {
-		signalCurrency := currency
+		signalCurrency := fields.Currency
 		if signalCurrency == "" {
 			signalCurrency = stored.Currency
 		}
 		signal := walletpsp.TxStatus{
 			ProviderTxID: pspTransactionID,
-			Amount:       mappedWebhook.Amount,
+			Amount:       fields.Amount,
 			Currency:     signalCurrency,
 			Status:       update.Status,
 			RawResponse:  payloadMap,
@@ -251,6 +184,29 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"status": update.Status, "client_reference": clientRef})
+}
+
+type pspWebhookFields struct {
+	ClientReference  string
+	PSPTransactionID string
+	Status           string
+	Amount           int64
+	Currency         string
+	Direction        string
+	Message          string
+}
+
+func mappedPSPWebhookFields(payload map[string]any, mapping walletpsp.ResponseMapping) pspWebhookFields {
+	mapped := walletpsp.MapResponse(payload, mapping)
+	return pspWebhookFields{
+		ClientReference:  mapped.ClientReference,
+		PSPTransactionID: mapped.TransactionID,
+		Status:           mapped.Status,
+		Amount:           mapped.Amount,
+		Currency:         mapped.Currency,
+		Direction:        normalizeDirection(mapped.Direction),
+		Message:          mapped.Message,
+	}
 }
 
 func (h *PSPWebhookHandler) recordWebhookInteraction(c *fiber.Ctx, tenantID, providerCode, clientReference, pspTransactionID, direction string, statusCode int, responseBody any, errorMessage string, payload []byte) error {
@@ -308,9 +264,6 @@ func (h *PSPWebhookHandler) authorizeUnsignedWebhook(c *fiber.Ctx, cfg *walletps
 	transactionID := pspTransactionID
 	if transactionID == "" {
 		transactionID = clientReference
-	}
-	if transactionID == "" {
-		transactionID = stringFromMap(payloadMap, "psp_transaction_id", "transaction_id", "id", "client_reference", "clientReference", "client_ref", "reference")
 	}
 	if transactionID == "" {
 		return nil, nil, walletstore.ErrMissingPSPTransactionID
@@ -449,52 +402,6 @@ func firstHeader(c *fiber.Ctx, keys ...string) string {
 		}
 	}
 	return ""
-}
-
-func stringFromMap(payload map[string]any, keys ...string) string {
-	for _, key := range keys {
-		value, ok := payload[key]
-		if !ok {
-			continue
-		}
-		switch typed := value.(type) {
-		case string:
-			if typed != "" {
-				return typed
-			}
-		case []byte:
-			if len(typed) > 0 {
-				return string(typed)
-			}
-		case json.Number:
-			return typed.String()
-		case float64:
-			return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.0f", typed), "0"), ".")
-		}
-	}
-	return ""
-}
-
-func int64FromMap(payload map[string]any, keys ...string) int64 {
-	for _, key := range keys {
-		value, ok := payload[key]
-		if !ok {
-			continue
-		}
-		switch typed := value.(type) {
-		case int64:
-			return typed
-		case int:
-			return int64(typed)
-		case float64:
-			return int64(typed)
-		case json.Number:
-			if parsed, err := typed.Int64(); err == nil {
-				return parsed
-			}
-		}
-	}
-	return 0
 }
 
 func rawJSONFromAny(value any) (walletstore.RawJSON, error) {
