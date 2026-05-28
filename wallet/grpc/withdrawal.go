@@ -32,8 +32,9 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.ClientReference == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingClientReference.Error())
@@ -64,7 +65,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if err != nil {
 		return nil, err
 	}
-	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	tenantID, err = bindTenantToClaims(tenantID, claims)
 	if err != nil {
 		return nil, err
 	}
@@ -321,9 +322,6 @@ func withdrawalRequirements(cfg ebs_fields.NoebsConfig, amount int64) (bool, boo
 }
 
 func withdrawalWorkflowID(tenantID, clientReference string) string {
-	if tenantID == "" {
-		return fmt.Sprintf("wallet-withdrawal-%s", clientReference)
-	}
 	return fmt.Sprintf("wallet-withdrawal-%s-%s", tenantID, clientReference)
 }
 

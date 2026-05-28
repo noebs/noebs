@@ -27,8 +27,9 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.TenantId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTenantID.Error())
+	tenantID, err := validateGRPCTenantID(req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 	if req.ClientReference == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingClientReference.Error())
@@ -59,7 +60,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if err != nil {
 		return nil, err
 	}
-	tenantID, err := bindTenantToClaims(req.TenantId, claims)
+	tenantID, err = bindTenantToClaims(tenantID, claims)
 	if err != nil {
 		return nil, err
 	}
@@ -170,9 +171,6 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 }
 
 func depositWorkflowID(tenantID, clientReference string) string {
-	if tenantID == "" {
-		return fmt.Sprintf("wallet-deposit-%s", clientReference)
-	}
 	return fmt.Sprintf("wallet-deposit-%s-%s", tenantID, clientReference)
 }
 

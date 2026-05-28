@@ -39,8 +39,9 @@ func (a *SecurityActivities) VerifyUserTOTP(ctx context.Context, tenantID string
 	if a == nil || a.Store == nil {
 		return false, ErrMissingStore
 	}
-	if tenantID == "" {
-		return false, walletstore.ErrMissingTenantID
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
+		return false, err
 	}
 	if userID <= 0 {
 		return false, walletstore.ErrInvalidUserID

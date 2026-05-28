@@ -147,9 +147,6 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 }
 
 func p2pWorkflowID(tenantID, idempotencyKey string) string {
-	if tenantID == "" {
-		return fmt.Sprintf("wallet-p2p-%s", idempotencyKey)
-	}
 	return fmt.Sprintf("wallet-p2p-%s-%s", tenantID, idempotencyKey)
 }
 

@@ -152,8 +152,5 @@ func (s *Server) SignalManualTransferDecision(ctx context.Context, req *walletv1
 }
 
 func manualTransferWorkflowID(tenantID, idempotencyKey string) string {
-	if tenantID == "" {
-		return fmt.Sprintf("wallet-manual-%s", idempotencyKey)
-	}
 	return fmt.Sprintf("wallet-manual-%s-%s", tenantID, idempotencyKey)
 }

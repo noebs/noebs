@@ -59,6 +59,26 @@ func TestVerifyUserTOTPRequiresWalletOwnedTwoFA(t *testing.T) {
 	}
 }
 
+func TestVerifyUserTOTPValidatesTenantBeforeStore(t *testing.T) {
+	activities := NewSecurityActivities(&walletstore.Store{})
+	cases := []struct {
+		name     string
+		tenantID string
+		wantErr  error
+	}{
+		{"missing", "", walletstore.ErrMissingTenantID},
+		{"invalid", "default", walletstore.ErrInvalidTenantID},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := activities.VerifyUserTOTP(t.Context(), tc.tenantID, 42, "123456")
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("VerifyUserTOTP() error = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func newWalletActivityStore(t *testing.T) (*walletstore.Store, string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
