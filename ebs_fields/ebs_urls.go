@@ -58,7 +58,6 @@ const (
 	ConsumerQRPaymentEndpoint         = "doQRPurchase"
 	ConsumerQRGenerationEndpoint      = "doMerchantsRegistration" // NOTE: EBS naming is inconsistent; kept for compatibility.
 	ConsumerQRRefundEndpoint          = "doQRRefund"
-	ConsumerPANFromMobile             = "checkMsisdnAganistPAN"
 	ConsumerCardInfo                  = "getCustomerInfo"
 	ConsumerGenerateVoucher           = "generateVoucher"
 	ConsumerCashInEndpoint            = "doCashIn"

@@ -134,13 +134,6 @@ func (h *Handler) EbsGetCardInfo(c *fiber.Ctx) error {
 	}, h.Service.EbsGetCardInfo, nil)
 }
 
-func (h *Handler) GetMSISDNFromCard(c *fiber.Ctx) error {
-	var req ebs_fields.ConsumerPANFromMobileFields
-	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerPANFromMobileFields) {
-		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-	}, h.Service.GetMSISDNFromCard, nil)
-}
-
 func (h *Handler) RegisterCard(c *fiber.Ctx) error {
 	var req ebs_fields.ConsumerRegistrationFields
 	return handleEBS(h, c, &req, func(r *ebs_fields.ConsumerRegistrationFields) {

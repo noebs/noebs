@@ -157,7 +157,6 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
 		{name: "ebs card info", method: http.MethodPost, path: "/consumer/card_info"},
 		{name: "quick pay execution", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
-		{name: "ebs pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
 		{name: "ebs card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
 		{name: "ebs card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
 		{name: "ebs meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},

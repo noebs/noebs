@@ -846,12 +846,6 @@ type ConsumerGenerateIPinCompletion struct {
 	Ipin     string `json:"ipin" binding:"required"`
 }
 
-type ConsumerPANFromMobileFields struct {
-	ConsumerCommonFields
-	EntityID string `json:"entityId" binding:"required"`
-	Last4PAN string `json:"last4PANDigits" binding:"required"`
-}
-
 type ConsumerCardInfoFields struct {
 	ConsumerCommonFields
 	PAN string `json:"PAN" binding:"required"`

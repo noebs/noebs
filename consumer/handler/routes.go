@@ -7,7 +7,6 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/otp/balance", h.BalanceStep)
 	router.Post("/register_with_card", h.RegisterWithCard)
 	router.Post("/card_info", h.EbsGetCardInfo)
-	router.Post("/pan_from_mobile", h.GetMSISDNFromCard)
 	router.Post("/cards/new", h.RegisterCard)
 	router.Post("/cards/complete", h.CompleteRegistration)
 	router.Get("/nec2name", h.NecToName)

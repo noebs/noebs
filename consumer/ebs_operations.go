@@ -79,10 +79,6 @@ func (s *Service) EbsGetCardInfo(ctx context.Context, tenantID string, req ebs_f
 	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerCardInfo, req)
 }
 
-func (s *Service) GetMSISDNFromCard(ctx context.Context, tenantID string, req ebs_fields.ConsumerPANFromMobileFields) (ebs_fields.EBSParserFields, error) {
-	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerPANFromMobile, req)
-}
-
 func (s *Service) RegisterCard(ctx context.Context, tenantID string, req ebs_fields.ConsumerRegistrationFields) (ebs_fields.EBSParserFields, error) {
 	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerRegister, req)
 }

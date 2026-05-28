@@ -17,7 +17,6 @@ type ebsAdapterRoute struct {
 func ebsAdapterRoutes() []ebsAdapterRoute {
 	return []ebsAdapterRoute{
 		{name: "consumer card info", method: http.MethodPost, path: "/consumer/card_info"},
-		{name: "consumer pan from mobile", method: http.MethodPost, path: "/consumer/pan_from_mobile"},
 		{name: "consumer recovery balance", method: http.MethodPost, path: "/consumer/otp/balance"},
 		{name: "consumer register with card", method: http.MethodPost, path: "/consumer/register_with_card"},
 		{name: "consumer card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
@@ -170,5 +169,28 @@ func TestEBSAdapterDoesNotOwnLegacyGuessBillerRoute(t *testing.T) {
 	}()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestEBSAdapterDoesNotExposePublicMobilePANLookup(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleEBSAdapter)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/pan_from_mobile", nil)
+	setTestGatewayUserIdentityHeaders(req)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.path == "/consumer/pan_from_mobile" {
+			t.Fatalf("%s must not be proxied as a public route; use card-vault internal lookup commands", spec.path)
+		}
 	}
 }

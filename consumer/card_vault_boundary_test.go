@@ -27,6 +27,13 @@ func TestLegacyMobileBasedCardVaultHelpersStayRemoved(t *testing.T) {
 		"handler/routes.go": {
 			`router.Get("/users/cards"`,
 			`router.Get("/mobile2pan"`,
+			`router.Post("/pan_from_mobile"`,
+		},
+		"handler/ebs.go": {
+			"func (h *Handler) GetMSISDNFromCard(",
+		},
+		"ebs_operations.go": {
+			"func (s *Service) GetMSISDNFromCard(",
 		},
 		"handler/user.go": {
 			"func (h *Handler) CardFromNumber(",
