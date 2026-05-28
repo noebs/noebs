@@ -215,7 +215,7 @@ func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setGatewayAdminIdentityHeader(req)
+			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

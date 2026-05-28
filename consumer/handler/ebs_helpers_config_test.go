@@ -24,6 +24,7 @@ func TestHandleConfiguredEBSAppliesMountedConfigBeforeValidation(t *testing.T) {
 			SpecialPaymentFees: 17,
 		},
 	}}}
+	app.Use(gateway.InternalTenantIdentityMiddleware())
 	app.Post("/", func(c *fiber.Ctx) error {
 		var req ebs_fields.ConsumerPurchaseFields
 		return handleConfiguredEBS(h, c, &req, func(r *ebs_fields.ConsumerPurchaseFields) {
@@ -64,6 +65,7 @@ func TestCompleteRegistrationAppliesMountedConfigBeforeValidation(t *testing.T) 
 	h := &Handler{Service: &consumer.Service{NoebsConfig: ebs_fields.NoebsConfig{
 		ConsumerID: "mounted-consumer-app",
 	}}}
+	app.Use(gateway.InternalTenantIdentityMiddleware())
 	app.Post("/", h.CompleteRegistration)
 
 	body := []byte(`{"tranDateTime":"20260528120000","UUID":"uuid-1","otp":"123456","IPIN":"123456","originalTranUUID":"original-uuid","userPassword":"ebs-password","mobile":"0912141660"}`)

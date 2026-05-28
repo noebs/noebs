@@ -96,7 +96,7 @@ func TestNotificationChatOwnsInternalCommands(t *testing.T) {
 	for _, path := range tests {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, path, nil)
-			setGatewayAdminIdentityHeader(req)
+			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
 			resp, err := route.Test(req)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)

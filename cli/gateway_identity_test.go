@@ -27,6 +27,11 @@ func setGatewayAdminIdentityHeader(req *http.Request) {
 	req.Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
 }
 
+func setGatewayAdminTenantIdentityHeaders(req *http.Request, tenantID string) {
+	setGatewayAdminIdentityHeader(req)
+	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+}
+
 func gatewayUserIdentityContext(userID int64, tenantID, mobile string) context.Context {
 	values := []string{
 		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,

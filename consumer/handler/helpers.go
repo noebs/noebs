@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 
-	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
@@ -80,9 +79,6 @@ func getTenantID(c *fiber.Ctx) string {
 		if s, ok := v.(string); ok && s != "" {
 			return s
 		}
-	}
-	if v := c.Get(gateway.GatewayTenantIDHeader); v != "" {
-		return v
 	}
 	return ""
 }
