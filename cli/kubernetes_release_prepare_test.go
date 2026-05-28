@@ -28,11 +28,11 @@ func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
 	}
 	ebsSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "ebs-adapter.secrets.yaml"))
 	ebsNoebs := getMap(ebsSecret, "noebs")
-	if got := firstString(ebsNoebs, "consumer_endpoint"); got != "https://consumer.qa.example" {
-		t.Fatalf("consumer_endpoint = %q, want QA endpoint selected from explicit legacy selector", got)
+	if got := firstString(ebsNoebs, "consumer_endpoint"); got != "https://consumer.input.example" {
+		t.Fatalf("consumer_endpoint = %q, want explicit input", got)
 	}
-	if got := firstString(ebsNoebs, "merchant_endpoint"); got != "https://merchant.prod.example" {
-		t.Fatalf("merchant_endpoint = %q, want prod endpoint selected from explicit legacy selector", got)
+	if got := firstString(ebsNoebs, "merchant_endpoint"); got != "https://merchant.input.example" {
+		t.Fatalf("merchant_endpoint = %q, want explicit input", got)
 	}
 	if got := firstString(ebsNoebs, "consumer_app_id"); got != "consumer-app" {
 		t.Fatalf("consumer_app_id = %q, want explicit input", got)
@@ -122,21 +122,17 @@ func TestPrepareKubernetesReleaseRejectsMissingLegacyGoogle(t *testing.T) {
 	}
 }
 
-func TestPrepareKubernetesReleaseRejectsMissingLegacySelector(t *testing.T) {
+func TestPrepareKubernetesReleaseRejectsMissingExplicitEBSRuntimeEndpoint(t *testing.T) {
 	legacyRoot := writeLegacyReleaseRoot(t)
-	secretPath := filepath.Join(legacyRoot, "secrets.yaml")
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.ReplaceAll(payload, "  is_consumer_prod: false\n", "")
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
 	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	payload := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
+	payload = strings.ReplaceAll(payload, "    consumer_endpoint: \"https://consumer.input.example\"\n", "")
+	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), payload)
 	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
 
 	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "legacy noebs.is_consumer_prod") {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want missing legacy selector rejection", err)
-	}
-	if _, statErr := os.Stat(secretPath); statErr != nil {
-		t.Fatalf("legacy secret file should remain in place: %v", statErr)
+	if err == nil || !strings.Contains(err.Error(), "noebs.ebs.consumer_endpoint") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want missing explicit EBS endpoint rejection", err)
 	}
 }
 
@@ -162,12 +158,6 @@ func writeLegacyReleaseRoot(t *testing.T) string {
   jwt_secret: jwt-secret
   google_client_id: legacy-google-client-id
   google_client_secret: legacy-google-client-secret
-  is_consumer_prod: false
-  consumer_qa: "https://consumer.qa.example"
-  consumer_prod: "https://consumer.prod.example"
-  is_merchant_prod: true
-  merchant_qa: "https://merchant.qa.example"
-  merchant_prod: "https://merchant.prod.example"
 `)
 	return root
 }
@@ -190,6 +180,8 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
   keycloak_bootstrap_admin_username: keycloak-admin
   keycloak_bootstrap_admin_password: keycloak-admin-password
   ebs:
+    consumer_endpoint: "https://consumer.input.example"
+    merchant_endpoint: "https://merchant.input.example"
     ipin_endpoint: "https://ipin.example"
     consumer_app_id: consumer-app
     merchant_app_id: merchant-app

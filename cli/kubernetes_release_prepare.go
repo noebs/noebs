@@ -40,17 +40,19 @@ type kubernetesReleaseNoebsInputs struct {
 }
 
 type kubernetesReleaseEBSInputs struct {
-	IPINEndpoint  string `yaml:"ipin_endpoint"`
-	ConsumerAppID string `yaml:"consumer_app_id"`
-	MerchantAppID string `yaml:"merchant_app_id"`
-	IPINUsername  string `yaml:"ipin_username"`
-	IPINPassword  string `yaml:"ipin_password"`
-	PublicKey     string `yaml:"pub_key"`
-	IPINKey       string `yaml:"ipin_key"`
-	PAN           string `yaml:"pan"`
-	PIN           string `yaml:"pin"`
-	IPIN          string `yaml:"ipin"`
-	Expiry        string `yaml:"exp_date"`
+	ConsumerEndpoint string `yaml:"consumer_endpoint"`
+	MerchantEndpoint string `yaml:"merchant_endpoint"`
+	IPINEndpoint     string `yaml:"ipin_endpoint"`
+	ConsumerAppID    string `yaml:"consumer_app_id"`
+	MerchantAppID    string `yaml:"merchant_app_id"`
+	IPINUsername     string `yaml:"ipin_username"`
+	IPINPassword     string `yaml:"ipin_password"`
+	PublicKey        string `yaml:"pub_key"`
+	IPINKey          string `yaml:"ipin_key"`
+	PAN              string `yaml:"pan"`
+	PIN              string `yaml:"pin"`
+	IPIN             string `yaml:"ipin"`
+	Expiry           string `yaml:"exp_date"`
 }
 
 type pspSecret struct {
@@ -245,6 +247,8 @@ func (r preparedKubernetesRelease) validate() error {
 		{"noebs.keycloak_postgres_password", r.inputs.Noebs.KeycloakPostgresPassword},
 		{"noebs.keycloak_bootstrap_admin_username", r.inputs.Noebs.KeycloakBootstrapAdminUsername},
 		{"noebs.keycloak_bootstrap_admin_password", r.inputs.Noebs.KeycloakBootstrapAdminPassword},
+		{"noebs.ebs.consumer_endpoint", r.inputs.Noebs.EBS.ConsumerEndpoint},
+		{"noebs.ebs.merchant_endpoint", r.inputs.Noebs.EBS.MerchantEndpoint},
 		{"noebs.ebs.ipin_endpoint", r.inputs.Noebs.EBS.IPINEndpoint},
 		{"noebs.ebs.consumer_app_id", r.inputs.Noebs.EBS.ConsumerAppID},
 		{"noebs.ebs.merchant_app_id", r.inputs.Noebs.EBS.MerchantAppID},
@@ -284,12 +288,6 @@ func (r preparedKubernetesRelease) validate() error {
 		}
 	}
 	if _, err := r.serviceDatabaseURL("identity-auth"); err != nil {
-		return err
-	}
-	if _, err := r.legacySelectedEBSValue("consumer_endpoint", "is_consumer_prod", "consumer_qa", "consumer_prod"); err != nil {
-		return err
-	}
-	if _, err := r.legacySelectedEBSValue("merchant_endpoint", "is_merchant_prod", "merchant_qa", "merchant_prod"); err != nil {
 		return err
 	}
 	return nil
@@ -413,16 +411,8 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	consumerEndpoint, err := r.legacySelectedEBSValue("consumer_endpoint", "is_consumer_prod", "consumer_qa", "consumer_prod")
-	if err != nil {
-		return nil, err
-	}
-	merchantEndpoint, err := r.legacySelectedEBSValue("merchant_endpoint", "is_merchant_prod", "merchant_qa", "merchant_prod")
-	if err != nil {
-		return nil, err
-	}
-	ebsAdapter["consumer_endpoint"] = consumerEndpoint
-	ebsAdapter["merchant_endpoint"] = merchantEndpoint
+	ebsAdapter["consumer_endpoint"] = strings.TrimSpace(r.inputs.Noebs.EBS.ConsumerEndpoint)
+	ebsAdapter["merchant_endpoint"] = strings.TrimSpace(r.inputs.Noebs.EBS.MerchantEndpoint)
 	ebsAdapter["ipin_endpoint"] = strings.TrimSpace(r.inputs.Noebs.EBS.IPINEndpoint)
 	ebsAdapter["consumer_app_id"] = strings.TrimSpace(r.inputs.Noebs.EBS.ConsumerAppID)
 	ebsAdapter["merchant_app_id"] = strings.TrimSpace(r.inputs.Noebs.EBS.MerchantAppID)
@@ -505,26 +495,6 @@ func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, err
 	}
 	if strings.Contains(value, "REPLACE_WITH_") {
 		return "", fmt.Errorf("legacy noebs.%s contains placeholder", key)
-	}
-	return value, nil
-}
-
-func (r preparedKubernetesRelease) legacySelectedEBSValue(label, selectorKey, qaKey, prodKey string) (string, error) {
-	rawSelector, ok := r.legacy[selectorKey]
-	if !ok {
-		return "", fmt.Errorf("legacy noebs.%s is required to prepare %s", selectorKey, label)
-	}
-	selector, ok := rawSelector.(bool)
-	if !ok {
-		return "", fmt.Errorf("legacy noebs.%s must be boolean", selectorKey)
-	}
-	sourceKey := qaKey
-	if selector {
-		sourceKey = prodKey
-	}
-	value := strings.TrimSpace(firstString(r.legacy, sourceKey))
-	if value == "" {
-		return "", fmt.Errorf("legacy noebs.%s is required to prepare %s", sourceKey, label)
 	}
 	return value, nil
 }

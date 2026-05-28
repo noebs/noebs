@@ -14,6 +14,8 @@ noebs:
   keycloak_bootstrap_admin_username: REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME
   keycloak_bootstrap_admin_password: REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD
   ebs:
+    consumer_endpoint: REPLACE_WITH_EBS_CONSUMER_ENDPOINT
+    merchant_endpoint: REPLACE_WITH_EBS_MERCHANT_ENDPOINT
     ipin_endpoint: REPLACE_WITH_EBS_IPIN_ENDPOINT
     consumer_app_id: REPLACE_WITH_EBS_CONSUMER_APP_ID
     merchant_app_id: REPLACE_WITH_EBS_MERCHANT_APP_ID
