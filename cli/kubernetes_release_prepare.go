@@ -580,7 +580,7 @@ func encryptSopsYAML(label string, payload []byte, ageKeyPath string) ([]byte, e
 	if err := tmp.Close(); err != nil {
 		return nil, fmt.Errorf("close temporary %s plaintext: %w", label, err)
 	}
-	cmd := exec.Command("sops", "--encrypt", "--age", recipient, "--input-type", "yaml", "--output-type", "yaml", tmpPath)
+	cmd := exec.Command("sops", "--config", "/dev/null", "--encrypt", "--age", recipient, "--input-type", "yaml", "--output-type", "yaml", tmpPath)
 	cmd.Env = os.Environ()
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
