@@ -37,6 +37,17 @@ func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
 	if got := firstString(ebsNoebs, "consumer_app_id"); got != "consumer-app" {
 		t.Fatalf("consumer_app_id = %q, want explicit input", got)
 	}
+	identitySecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "identity-auth.secrets.yaml"))
+	identityNoebs := getMap(identitySecret, "noebs")
+	if got := firstString(identityNoebs, "google_client_id"); got != "legacy-google-client-id" {
+		t.Fatalf("google_client_id = %q, want legacy secret value", got)
+	}
+	if got := firstString(identityNoebs, "google_client_secret"); got != "legacy-google-client-secret" {
+		t.Fatalf("google_client_secret = %q, want legacy secret value", got)
+	}
+	if got := firstString(identityNoebs, "google_redirect_url"); got != "https://legacy.noebs.sd/oauth/callback" {
+		t.Fatalf("google_redirect_url = %q, want legacy secret value", got)
+	}
 	walletWorkerSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "wallet-worker.secrets.yaml"))
 	walletWorkerNoebs := getMap(walletWorkerSecret, "noebs")
 	serviceDatabases := getMap(walletWorkerNoebs, "service_databases")
@@ -67,6 +78,38 @@ func TestPrepareKubernetesReleaseRejectsMissingExplicitInput(t *testing.T) {
 	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
 	if err == nil || !strings.Contains(err.Error(), "noebs.ebs.ipin_endpoint") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want missing explicit ipin endpoint rejection", err)
+	}
+}
+
+func TestPrepareKubernetesReleaseRejectsStaleExplicitGoogleInput(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	payload := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
+	payload = strings.Replace(payload, "  card_vault_data_key: card-vault-data-key\n", "  google_client_id: stale-google-client-id\n  card_vault_data_key: card-vault-data-key\n", 1)
+	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), payload)
+	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
+
+	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "field google_client_id not found") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want stale explicit google input rejection", err)
+	}
+}
+
+func TestPrepareKubernetesReleaseRejectsMissingLegacyGoogle(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	secretPath := filepath.Join(legacyRoot, "secrets.yaml")
+	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
+	payload = strings.ReplaceAll(payload, "  google_client_id: legacy-google-client-id\n", "")
+	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
+	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
+
+	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "legacy noebs.google_client_id") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want missing legacy google rejection", err)
+	}
+	if _, statErr := os.Stat(secretPath); statErr != nil {
+		t.Fatalf("legacy secret file should remain in place: %v", statErr)
 	}
 }
 
@@ -111,6 +154,9 @@ func writeLegacyReleaseRoot(t *testing.T) string {
   sms_key: sms-key
   sms_sender: noebs
   sms_gateway: "https://sms.example"
+  google_client_id: legacy-google-client-id
+  google_client_secret: legacy-google-client-secret
+  google_redirect_url: "https://legacy.noebs.sd/oauth/callback"
   is_consumer_prod: false
   consumer_qa: "https://consumer.qa.example"
   consumer_prod: "https://consumer.prod.example"
@@ -129,9 +175,6 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
   admin_user: admin
   admin_password: admin-password
   sms_message: "code"
-  google_client_id: google-client-id
-  google_client_secret: google-client-secret
-  google_redirect_url: "https://api.noebs.sd/oauth/callback"
   card_vault_data_key: card-vault-data-key
   temporal_postgres_password: temporal-postgres-password
   keycloak_postgres_password: keycloak-postgres-password

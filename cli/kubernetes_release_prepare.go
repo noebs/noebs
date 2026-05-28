@@ -26,9 +26,6 @@ type kubernetesReleaseNoebsInputs struct {
 	AdminUser                      string                          `yaml:"admin_user"`
 	AdminPassword                  string                          `yaml:"admin_password"`
 	SMSMessage                     string                          `yaml:"sms_message"`
-	GoogleClientID                 string                          `yaml:"google_client_id"`
-	GoogleClientSecret             string                          `yaml:"google_client_secret"`
-	GoogleRedirectURL              string                          `yaml:"google_redirect_url"`
 	CardVaultDataKey               string                          `yaml:"card_vault_data_key"`
 	TemporalPostgresPassword       string                          `yaml:"temporal_postgres_password"`
 	KeycloakPostgresPassword       string                          `yaml:"keycloak_postgres_password"`
@@ -215,7 +212,9 @@ func readKubernetesReleaseInputs(path, ageKeyPath string, decrypt deploymentDecr
 		return kubernetesReleaseInputs{}, fmt.Errorf("decrypt kubernetes release inputs: %w", err)
 	}
 	var inputs kubernetesReleaseInputs
-	if err := yaml.Unmarshal(payload, &inputs); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(payload))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&inputs); err != nil {
 		return kubernetesReleaseInputs{}, fmt.Errorf("parse kubernetes release inputs: %w", err)
 	}
 	return inputs, nil
@@ -266,9 +265,18 @@ func (r preparedKubernetesRelease) validate() error {
 	}, r.inputs.Noebs.DefaultTenantID); err != nil {
 		return fmt.Errorf("kubernetes release input PSP secrets: %w", err)
 	}
-	for _, key := range []string{"db_url", "jwt_secret", "sms_key", "sms_sender", "sms_gateway"} {
-		if strings.TrimSpace(firstString(r.legacy, key)) == "" {
-			return fmt.Errorf("legacy noebs.%s is required to prepare Kubernetes release", key)
+	for _, key := range []string{
+		"db_url",
+		"jwt_secret",
+		"sms_key",
+		"sms_sender",
+		"sms_gateway",
+		"google_client_id",
+		"google_client_secret",
+		"google_redirect_url",
+	} {
+		if _, err := r.requiredLegacyString(key); err != nil {
+			return err
 		}
 	}
 	if _, err := r.serviceDatabaseURL("identity-auth"); err != nil {
@@ -361,7 +369,11 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	}
 
 	apiGateway := base()
-	apiGateway["jwt_secret"] = strings.TrimSpace(firstString(r.legacy, "jwt_secret"))
+	jwtSecret, err := r.requiredLegacyString("jwt_secret")
+	if err != nil {
+		return nil, err
+	}
+	apiGateway["jwt_secret"] = jwtSecret
 	apiGateway["admin_key"] = strings.TrimSpace(r.inputs.Noebs.AdminKey)
 	apiGateway["admin_user"] = strings.TrimSpace(r.inputs.Noebs.AdminUser)
 	apiGateway["admin_password"] = strings.TrimSpace(r.inputs.Noebs.AdminPassword)
@@ -370,14 +382,38 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	identityAuth["jwt_secret"] = strings.TrimSpace(firstString(r.legacy, "jwt_secret"))
-	identityAuth["sms_key"] = strings.TrimSpace(firstString(r.legacy, "sms_key"))
-	identityAuth["sms_sender"] = strings.TrimSpace(firstString(r.legacy, "sms_sender"))
-	identityAuth["sms_gateway"] = strings.TrimSpace(firstString(r.legacy, "sms_gateway"))
+	smsKey, err := r.requiredLegacyString("sms_key")
+	if err != nil {
+		return nil, err
+	}
+	smsSender, err := r.requiredLegacyString("sms_sender")
+	if err != nil {
+		return nil, err
+	}
+	smsGateway, err := r.requiredLegacyString("sms_gateway")
+	if err != nil {
+		return nil, err
+	}
+	googleClientID, err := r.requiredLegacyString("google_client_id")
+	if err != nil {
+		return nil, err
+	}
+	googleClientSecret, err := r.requiredLegacyString("google_client_secret")
+	if err != nil {
+		return nil, err
+	}
+	googleRedirectURL, err := r.requiredLegacyString("google_redirect_url")
+	if err != nil {
+		return nil, err
+	}
+	identityAuth["jwt_secret"] = jwtSecret
+	identityAuth["sms_key"] = smsKey
+	identityAuth["sms_sender"] = smsSender
+	identityAuth["sms_gateway"] = smsGateway
 	identityAuth["sms_message"] = strings.TrimSpace(r.inputs.Noebs.SMSMessage)
-	addOptional(identityAuth, "google_client_id", r.inputs.Noebs.GoogleClientID)
-	addOptional(identityAuth, "google_client_secret", r.inputs.Noebs.GoogleClientSecret)
-	addOptional(identityAuth, "google_redirect_url", r.inputs.Noebs.GoogleRedirectURL)
+	identityAuth["google_client_id"] = googleClientID
+	identityAuth["google_client_secret"] = googleClientSecret
+	identityAuth["google_redirect_url"] = googleRedirectURL
 
 	cardVault, err := withDB("card-vault")
 	if err != nil {
@@ -449,7 +485,10 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 
 func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (string, error) {
 	databaseName := strings.ReplaceAll(serviceName, "-", "_")
-	source := firstString(r.legacy, "db_url")
+	source, err := r.requiredLegacyString("db_url")
+	if err != nil {
+		return "", err
+	}
 	parsed, err := url.Parse(source)
 	if err != nil {
 		return "", fmt.Errorf("parse legacy noebs.db_url: %w", err)
@@ -469,6 +508,17 @@ func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (strin
 		RawQuery: "sslmode=disable",
 	}
 	return result.String(), nil
+}
+
+func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, error) {
+	value := strings.TrimSpace(firstString(r.legacy, key))
+	if value == "" {
+		return "", fmt.Errorf("legacy noebs.%s is required to prepare Kubernetes release", key)
+	}
+	if strings.Contains(value, "REPLACE_WITH_") {
+		return "", fmt.Errorf("legacy noebs.%s contains placeholder", key)
+	}
+	return value, nil
 }
 
 func (r preparedKubernetesRelease) legacySelectedEBSValue(label, selectorKey, qaKey, prodKey string) (string, error) {
@@ -530,13 +580,6 @@ func writeReleaseFile(root, name, payload string) error {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
-}
-
-func addOptional(target map[string]interface{}, key, value string) {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		target[key] = value
-	}
 }
 
 func pspInputsToMap(inputs map[string]map[string]pspSecret) map[string]interface{} {
