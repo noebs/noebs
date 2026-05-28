@@ -29,6 +29,8 @@ type kubernetesReleaseNoebsInputs struct {
 	SMSSender                      string                          `yaml:"sms_sender"`
 	SMSGateway                     string                          `yaml:"sms_gateway"`
 	SMSMessage                     string                          `yaml:"sms_message"`
+	GoogleClientID                 string                          `yaml:"google_client_id"`
+	GoogleClientSecret             string                          `yaml:"google_client_secret"`
 	GoogleRedirectURL              string                          `yaml:"google_redirect_url"`
 	CardVaultDataKey               string                          `yaml:"card_vault_data_key"`
 	TemporalPostgresPassword       string                          `yaml:"temporal_postgres_password"`
@@ -67,6 +69,12 @@ type preparedKubernetesRelease struct {
 	legacy     map[string]interface{}
 	inputs     kubernetesReleaseInputs
 	ageKeyPath string
+}
+
+type cutoverStringField struct {
+	label      string
+	legacyKeys []string
+	input      string
 }
 
 func prepareKubernetesReleaseCommand() error {
@@ -224,61 +232,28 @@ func readKubernetesReleaseInputs(path, ageKeyPath string, decrypt deploymentDecr
 }
 
 func (r preparedKubernetesRelease) validate() error {
-	if _, err := validateTenantID(r.inputs.Noebs.DefaultTenantID); err != nil {
+	tenantID, err := r.releaseDefaultTenantID()
+	if err != nil {
+		return err
+	}
+	if _, err := validateTenantID(tenantID); err != nil {
 		return fmt.Errorf("kubernetes release input default_tenant_id: %w", err)
 	}
-	for _, check := range []struct {
-		label string
-		value string
-	}{
-		{"noebs.admin_key", r.inputs.Noebs.AdminKey},
-		{"noebs.admin_user", r.inputs.Noebs.AdminUser},
-		{"noebs.admin_password", r.inputs.Noebs.AdminPassword},
-		{"noebs.sms_key", r.inputs.Noebs.SMSKey},
-		{"noebs.sms_sender", r.inputs.Noebs.SMSSender},
-		{"noebs.sms_gateway", r.inputs.Noebs.SMSGateway},
-		{"noebs.sms_message", r.inputs.Noebs.SMSMessage},
-		{"noebs.google_redirect_url", r.inputs.Noebs.GoogleRedirectURL},
-		{"noebs.card_vault_data_key", r.inputs.Noebs.CardVaultDataKey},
-		{"noebs.temporal_postgres_password", r.inputs.Noebs.TemporalPostgresPassword},
-		{"noebs.keycloak_postgres_password", r.inputs.Noebs.KeycloakPostgresPassword},
-		{"noebs.keycloak_bootstrap_admin_username", r.inputs.Noebs.KeycloakBootstrapAdminUsername},
-		{"noebs.keycloak_bootstrap_admin_password", r.inputs.Noebs.KeycloakBootstrapAdminPassword},
-		{"noebs.ebs.consumer_endpoint", r.inputs.Noebs.EBS.ConsumerEndpoint},
-		{"noebs.ebs.merchant_endpoint", r.inputs.Noebs.EBS.MerchantEndpoint},
-		{"noebs.ebs.ipin_endpoint", r.inputs.Noebs.EBS.IPINEndpoint},
-		{"noebs.ebs.consumer_app_id", r.inputs.Noebs.EBS.ConsumerAppID},
-		{"noebs.ebs.merchant_app_id", r.inputs.Noebs.EBS.MerchantAppID},
-		{"noebs.ebs.ipin_username", r.inputs.Noebs.EBS.IPINUsername},
-		{"noebs.ebs.ipin_password", r.inputs.Noebs.EBS.IPINPassword},
-		{"noebs.ebs.pub_key", r.inputs.Noebs.EBS.PublicKey},
-		{"noebs.ebs.ipin_key", r.inputs.Noebs.EBS.IPINKey},
-		{"noebs.ebs.pan", r.inputs.Noebs.EBS.PAN},
-		{"noebs.ebs.pin", r.inputs.Noebs.EBS.PIN},
-		{"noebs.ebs.ipin", r.inputs.Noebs.EBS.IPIN},
-		{"noebs.ebs.exp_date", r.inputs.Noebs.EBS.Expiry},
-	} {
-		if strings.TrimSpace(check.value) == "" {
-			return fmt.Errorf("missing kubernetes release input %s", check.label)
-		}
-		if strings.Contains(check.value, "REPLACE_WITH_") {
-			return fmt.Errorf("kubernetes release input %s contains placeholder", check.label)
+	for _, field := range r.cutoverStringFields() {
+		if _, err := r.cutoverField(field); err != nil {
+			return err
 		}
 	}
-	if len(r.inputs.Noebs.PSP) == 0 {
-		return errors.New("missing kubernetes release input noebs.psp")
+	psp, err := r.pspSecrets()
+	if err != nil {
+		return err
 	}
-	if err := validatePSPSecretMap(map[string]interface{}{
-		"psp":               pspInputsToMap(r.inputs.Noebs.PSP),
-		"default_tenant_id": r.inputs.Noebs.DefaultTenantID,
-	}, r.inputs.Noebs.DefaultTenantID); err != nil {
+	if err := validatePSPSecretMap(map[string]interface{}{"psp": psp, "default_tenant_id": tenantID}, tenantID); err != nil {
 		return fmt.Errorf("kubernetes release input PSP secrets: %w", err)
 	}
 	for _, key := range []string{
 		"db_url",
 		"jwt_secret",
-		"google_client_id",
-		"google_client_secret",
 	} {
 		if _, err := r.requiredLegacyString(key); err != nil {
 			return err
@@ -322,13 +297,25 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 	if err := writeReleaseFile(outputRoot, "platform/postgres-password.txt", postgresPassword+"\n"); err != nil {
 		return err
 	}
-	if err := writeReleaseFile(outputRoot, "platform/temporal-postgres-password.txt", strings.TrimSpace(r.inputs.Noebs.TemporalPostgresPassword)+"\n"); err != nil {
+	temporalPostgresPassword, err := r.cutoverString("noebs.temporal_postgres_password", []string{"temporal_postgres_password"}, r.inputs.Noebs.TemporalPostgresPassword)
+	if err != nil {
 		return err
 	}
-	if err := writeReleaseFile(outputRoot, "platform/keycloak-postgres-password.txt", strings.TrimSpace(r.inputs.Noebs.KeycloakPostgresPassword)+"\n"); err != nil {
+	if err := writeReleaseFile(outputRoot, "platform/temporal-postgres-password.txt", temporalPostgresPassword+"\n"); err != nil {
 		return err
 	}
-	if err := writeReleaseFile(outputRoot, "platform/keycloak.conf", r.keycloakConfig()); err != nil {
+	keycloakPostgresPassword, err := r.cutoverString("noebs.keycloak_postgres_password", []string{"keycloak_postgres_password"}, r.inputs.Noebs.KeycloakPostgresPassword)
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/keycloak-postgres-password.txt", keycloakPostgresPassword+"\n"); err != nil {
+		return err
+	}
+	keycloakConfig, err := r.keycloakConfig()
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/keycloak.conf", keycloakConfig); err != nil {
 		return err
 	}
 
@@ -353,7 +340,10 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 }
 
 func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]interface{}, error) {
-	tenantID := strings.TrimSpace(r.inputs.Noebs.DefaultTenantID)
+	tenantID, err := r.releaseDefaultTenantID()
+	if err != nil {
+		return nil, err
+	}
 	base := func() map[string]interface{} {
 		return map[string]interface{}{"default_tenant_id": tenantID}
 	}
@@ -373,66 +363,91 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 		return nil, err
 	}
 	apiGateway["jwt_secret"] = jwtSecret
-	apiGateway["admin_key"] = strings.TrimSpace(r.inputs.Noebs.AdminKey)
-	apiGateway["admin_user"] = strings.TrimSpace(r.inputs.Noebs.AdminUser)
-	apiGateway["admin_password"] = strings.TrimSpace(r.inputs.Noebs.AdminPassword)
+	apiGateway["admin_key"], err = r.cutoverString("noebs.admin_key", []string{"admin_key"}, r.inputs.Noebs.AdminKey)
+	if err != nil {
+		return nil, err
+	}
+	apiGateway["admin_user"], err = r.cutoverString("noebs.admin_user", []string{"admin_user"}, r.inputs.Noebs.AdminUser)
+	if err != nil {
+		return nil, err
+	}
+	apiGateway["admin_password"], err = r.cutoverString("noebs.admin_password", []string{"admin_password"}, r.inputs.Noebs.AdminPassword)
+	if err != nil {
+		return nil, err
+	}
 
 	identityAuth, err := withDB("identity-auth")
 	if err != nil {
 		return nil, err
 	}
-	googleClientID, err := r.requiredLegacyString("google_client_id")
+	googleClientID, err := r.cutoverString("noebs.google_client_id", []string{"google_client_id"}, r.inputs.Noebs.GoogleClientID)
 	if err != nil {
 		return nil, err
 	}
-	googleClientSecret, err := r.requiredLegacyString("google_client_secret")
+	googleClientSecret, err := r.cutoverString("noebs.google_client_secret", []string{"google_client_secret"}, r.inputs.Noebs.GoogleClientSecret)
 	if err != nil {
 		return nil, err
 	}
 	identityAuth["jwt_secret"] = jwtSecret
-	identityAuth["sms_key"] = strings.TrimSpace(r.inputs.Noebs.SMSKey)
-	identityAuth["sms_sender"] = strings.TrimSpace(r.inputs.Noebs.SMSSender)
-	identityAuth["sms_gateway"] = strings.TrimSpace(r.inputs.Noebs.SMSGateway)
-	identityAuth["sms_message"] = strings.TrimSpace(r.inputs.Noebs.SMSMessage)
+	identityAuth["sms_key"], err = r.cutoverString("noebs.sms_key", []string{"sms_key"}, r.inputs.Noebs.SMSKey)
+	if err != nil {
+		return nil, err
+	}
+	identityAuth["sms_sender"], err = r.cutoverString("noebs.sms_sender", []string{"sms_sender"}, r.inputs.Noebs.SMSSender)
+	if err != nil {
+		return nil, err
+	}
+	identityAuth["sms_gateway"], err = r.cutoverString("noebs.sms_gateway", []string{"sms_gateway"}, r.inputs.Noebs.SMSGateway)
+	if err != nil {
+		return nil, err
+	}
+	identityAuth["sms_message"], err = r.cutoverString("noebs.sms_message", []string{"sms_message"}, r.inputs.Noebs.SMSMessage)
+	if err != nil {
+		return nil, err
+	}
 	identityAuth["google_client_id"] = googleClientID
 	identityAuth["google_client_secret"] = googleClientSecret
-	identityAuth["google_redirect_url"] = strings.TrimSpace(r.inputs.Noebs.GoogleRedirectURL)
+	identityAuth["google_redirect_url"], err = r.cutoverString("noebs.google_redirect_url", []string{"google_redirect_url"}, r.inputs.Noebs.GoogleRedirectURL)
+	if err != nil {
+		return nil, err
+	}
 
 	cardVault, err := withDB("card-vault")
 	if err != nil {
 		return nil, err
 	}
-	cardVault["data_key"] = strings.TrimSpace(r.inputs.Noebs.CardVaultDataKey)
+	cardVault["data_key"], err = r.cutoverString("noebs.card_vault_data_key", []string{"data_key", "card_vault_data_key"}, r.inputs.Noebs.CardVaultDataKey)
+	if err != nil {
+		return nil, err
+	}
 
 	ebsAdapter, err := withDB("ebs-adapter")
 	if err != nil {
 		return nil, err
 	}
-	ebsAdapter["consumer_endpoint"] = strings.TrimSpace(r.inputs.Noebs.EBS.ConsumerEndpoint)
-	ebsAdapter["merchant_endpoint"] = strings.TrimSpace(r.inputs.Noebs.EBS.MerchantEndpoint)
-	ebsAdapter["ipin_endpoint"] = strings.TrimSpace(r.inputs.Noebs.EBS.IPINEndpoint)
-	ebsAdapter["consumer_app_id"] = strings.TrimSpace(r.inputs.Noebs.EBS.ConsumerAppID)
-	ebsAdapter["merchant_app_id"] = strings.TrimSpace(r.inputs.Noebs.EBS.MerchantAppID)
-	ebsAdapter["ipin_username"] = strings.TrimSpace(r.inputs.Noebs.EBS.IPINUsername)
-	ebsAdapter["ipin_password"] = strings.TrimSpace(r.inputs.Noebs.EBS.IPINPassword)
-	ebsAdapter["pub_key"] = strings.TrimSpace(r.inputs.Noebs.EBS.PublicKey)
-	ebsAdapter["ipin_key"] = strings.TrimSpace(r.inputs.Noebs.EBS.IPINKey)
-	ebsAdapter["pan"] = strings.TrimSpace(r.inputs.Noebs.EBS.PAN)
-	ebsAdapter["pin"] = strings.TrimSpace(r.inputs.Noebs.EBS.PIN)
-	ebsAdapter["ipin"] = strings.TrimSpace(r.inputs.Noebs.EBS.IPIN)
-	ebsAdapter["exp_date"] = strings.TrimSpace(r.inputs.Noebs.EBS.Expiry)
+	for _, field := range r.ebsCutoverStringFields() {
+		key := strings.TrimPrefix(field.label, "noebs.ebs.")
+		ebsAdapter[key], err = r.cutoverField(field)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	pspWebhook, err := withDB("psp-webhook")
 	if err != nil {
 		return nil, err
 	}
-	pspWebhook["psp"] = pspInputsToMap(r.inputs.Noebs.PSP)
+	psp, err := r.pspSecrets()
+	if err != nil {
+		return nil, err
+	}
+	pspWebhook["psp"] = psp
 
 	walletWorker, err := withDB("wallet-ledger")
 	if err != nil {
 		return nil, err
 	}
-	walletWorker["psp"] = pspInputsToMap(r.inputs.Noebs.PSP)
+	walletWorker["psp"] = psp
 
 	result := map[string]map[string]interface{}{
 		"api-gateway.secrets.yaml":   apiGateway,
@@ -485,6 +500,101 @@ func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (strin
 	return result.String(), nil
 }
 
+func (r preparedKubernetesRelease) releaseDefaultTenantID() (string, error) {
+	return r.cutoverString("noebs.default_tenant_id", []string{"default_tenant_id"}, r.inputs.Noebs.DefaultTenantID)
+}
+
+func (r preparedKubernetesRelease) cutoverStringFields() []cutoverStringField {
+	fields := []cutoverStringField{
+		{label: "noebs.admin_key", legacyKeys: []string{"admin_key"}, input: r.inputs.Noebs.AdminKey},
+		{label: "noebs.admin_user", legacyKeys: []string{"admin_user"}, input: r.inputs.Noebs.AdminUser},
+		{label: "noebs.admin_password", legacyKeys: []string{"admin_password"}, input: r.inputs.Noebs.AdminPassword},
+		{label: "noebs.sms_key", legacyKeys: []string{"sms_key"}, input: r.inputs.Noebs.SMSKey},
+		{label: "noebs.sms_sender", legacyKeys: []string{"sms_sender"}, input: r.inputs.Noebs.SMSSender},
+		{label: "noebs.sms_gateway", legacyKeys: []string{"sms_gateway"}, input: r.inputs.Noebs.SMSGateway},
+		{label: "noebs.sms_message", legacyKeys: []string{"sms_message"}, input: r.inputs.Noebs.SMSMessage},
+		{label: "noebs.google_client_id", legacyKeys: []string{"google_client_id"}, input: r.inputs.Noebs.GoogleClientID},
+		{label: "noebs.google_client_secret", legacyKeys: []string{"google_client_secret"}, input: r.inputs.Noebs.GoogleClientSecret},
+		{label: "noebs.google_redirect_url", legacyKeys: []string{"google_redirect_url"}, input: r.inputs.Noebs.GoogleRedirectURL},
+		{label: "noebs.card_vault_data_key", legacyKeys: []string{"data_key", "card_vault_data_key"}, input: r.inputs.Noebs.CardVaultDataKey},
+		{label: "noebs.temporal_postgres_password", legacyKeys: []string{"temporal_postgres_password"}, input: r.inputs.Noebs.TemporalPostgresPassword},
+		{label: "noebs.keycloak_postgres_password", legacyKeys: []string{"keycloak_postgres_password"}, input: r.inputs.Noebs.KeycloakPostgresPassword},
+		{label: "noebs.keycloak_bootstrap_admin_username", legacyKeys: []string{"keycloak_bootstrap_admin_username"}, input: r.inputs.Noebs.KeycloakBootstrapAdminUsername},
+		{label: "noebs.keycloak_bootstrap_admin_password", legacyKeys: []string{"keycloak_bootstrap_admin_password"}, input: r.inputs.Noebs.KeycloakBootstrapAdminPassword},
+	}
+	return append(fields, r.ebsCutoverStringFields()...)
+}
+
+func (r preparedKubernetesRelease) ebsCutoverStringFields() []cutoverStringField {
+	return []cutoverStringField{
+		{label: "noebs.ebs.consumer_endpoint", legacyKeys: []string{"consumer_endpoint"}, input: r.inputs.Noebs.EBS.ConsumerEndpoint},
+		{label: "noebs.ebs.merchant_endpoint", legacyKeys: []string{"merchant_endpoint"}, input: r.inputs.Noebs.EBS.MerchantEndpoint},
+		{label: "noebs.ebs.ipin_endpoint", legacyKeys: []string{"ipin_endpoint"}, input: r.inputs.Noebs.EBS.IPINEndpoint},
+		{label: "noebs.ebs.consumer_app_id", legacyKeys: []string{"consumer_app_id"}, input: r.inputs.Noebs.EBS.ConsumerAppID},
+		{label: "noebs.ebs.merchant_app_id", legacyKeys: []string{"merchant_app_id"}, input: r.inputs.Noebs.EBS.MerchantAppID},
+		{label: "noebs.ebs.ipin_username", legacyKeys: []string{"ipin_username"}, input: r.inputs.Noebs.EBS.IPINUsername},
+		{label: "noebs.ebs.ipin_password", legacyKeys: []string{"ipin_password"}, input: r.inputs.Noebs.EBS.IPINPassword},
+		{label: "noebs.ebs.pub_key", legacyKeys: []string{"pub_key"}, input: r.inputs.Noebs.EBS.PublicKey},
+		{label: "noebs.ebs.ipin_key", legacyKeys: []string{"ipin_key"}, input: r.inputs.Noebs.EBS.IPINKey},
+		{label: "noebs.ebs.pan", legacyKeys: []string{"pan"}, input: r.inputs.Noebs.EBS.PAN},
+		{label: "noebs.ebs.pin", legacyKeys: []string{"pin"}, input: r.inputs.Noebs.EBS.PIN},
+		{label: "noebs.ebs.ipin", legacyKeys: []string{"ipin"}, input: r.inputs.Noebs.EBS.IPIN},
+		{label: "noebs.ebs.exp_date", legacyKeys: []string{"exp_date"}, input: r.inputs.Noebs.EBS.Expiry},
+	}
+}
+
+func (r preparedKubernetesRelease) cutoverField(field cutoverStringField) (string, error) {
+	return r.cutoverString(field.label, field.legacyKeys, field.input)
+}
+
+func (r preparedKubernetesRelease) cutoverString(label string, legacyKeys []string, input string) (string, error) {
+	legacyValue, legacyKey := r.firstLegacyString(legacyKeys...)
+	input = strings.TrimSpace(input)
+	switch {
+	case legacyValue != "" && input != "":
+		return "", fmt.Errorf("kubernetes release input %s duplicates current secret noebs.%s", label, legacyKey)
+	case legacyValue != "":
+		if strings.Contains(legacyValue, "REPLACE_WITH_") {
+			return "", fmt.Errorf("current secret noebs.%s contains placeholder", legacyKey)
+		}
+		return legacyValue, nil
+	case input != "":
+		if strings.Contains(input, "REPLACE_WITH_") {
+			return "", fmt.Errorf("kubernetes release input %s contains placeholder", label)
+		}
+		return input, nil
+	default:
+		return "", fmt.Errorf("missing kubernetes release input %s", label)
+	}
+}
+
+func (r preparedKubernetesRelease) firstLegacyString(keys ...string) (string, string) {
+	for _, key := range keys {
+		value := strings.TrimSpace(firstString(r.legacy, key))
+		if value != "" {
+			return value, key
+		}
+	}
+	return "", ""
+}
+
+func (r preparedKubernetesRelease) pspSecrets() (map[string]interface{}, error) {
+	legacyPSP := getMap(r.legacy, "psp")
+	inputPSP := pspInputsToMap(r.inputs.Noebs.PSP)
+	hasLegacy := len(legacyPSP) != 0
+	hasInput := len(inputPSP) != 0
+	switch {
+	case hasLegacy && hasInput:
+		return nil, errors.New("kubernetes release input noebs.psp duplicates current secret noebs.psp")
+	case hasLegacy:
+		return legacyPSP, nil
+	case hasInput:
+		return inputPSP, nil
+	default:
+		return nil, errors.New("missing kubernetes release input noebs.psp")
+	}
+}
+
 func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, error) {
 	value := strings.TrimSpace(firstString(r.legacy, key))
 	if value == "" {
@@ -496,7 +606,19 @@ func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, err
 	return value, nil
 }
 
-func (r preparedKubernetesRelease) keycloakConfig() string {
+func (r preparedKubernetesRelease) keycloakConfig() (string, error) {
+	postgresPassword, err := r.cutoverString("noebs.keycloak_postgres_password", []string{"keycloak_postgres_password"}, r.inputs.Noebs.KeycloakPostgresPassword)
+	if err != nil {
+		return "", err
+	}
+	adminUsername, err := r.cutoverString("noebs.keycloak_bootstrap_admin_username", []string{"keycloak_bootstrap_admin_username"}, r.inputs.Noebs.KeycloakBootstrapAdminUsername)
+	if err != nil {
+		return "", err
+	}
+	adminPassword, err := r.cutoverString("noebs.keycloak_bootstrap_admin_password", []string{"keycloak_bootstrap_admin_password"}, r.inputs.Noebs.KeycloakBootstrapAdminPassword)
+	if err != nil {
+		return "", err
+	}
 	return fmt.Sprintf(`http-enabled=true
 http-port=8080
 hostname-strict=false
@@ -512,10 +634,10 @@ db-password=%s
 bootstrap-admin-username=%s
 bootstrap-admin-password=%s
 `,
-		strings.TrimSpace(r.inputs.Noebs.KeycloakPostgresPassword),
-		strings.TrimSpace(r.inputs.Noebs.KeycloakBootstrapAdminUsername),
-		strings.TrimSpace(r.inputs.Noebs.KeycloakBootstrapAdminPassword),
-	)
+		postgresPassword,
+		adminUsername,
+		adminPassword,
+	), nil
 }
 
 func configMapDataValue(data map[string]string, key string) (string, error) {

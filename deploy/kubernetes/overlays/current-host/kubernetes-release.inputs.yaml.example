@@ -7,6 +7,8 @@ noebs:
   sms_sender: REPLACE_WITH_SMS_SENDER
   sms_gateway: REPLACE_WITH_SMS_GATEWAY
   sms_message: REPLACE_WITH_SMS_MESSAGE
+  google_client_id: REPLACE_WITH_GOOGLE_CLIENT_ID
+  google_client_secret: REPLACE_WITH_GOOGLE_CLIENT_SECRET
   google_redirect_url: REPLACE_WITH_GOOGLE_REDIRECT_URL
   card_vault_data_key: REPLACE_WITH_CARD_VAULT_DATA_KEY
   temporal_postgres_password: REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD
