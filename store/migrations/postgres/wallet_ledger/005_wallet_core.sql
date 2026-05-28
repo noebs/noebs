@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE TABLE IF NOT EXISTS wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id TEXT NOT NULL,
-  owner_type TEXT NOT NULL DEFAULT 'user' CHECK (owner_type IN ('user', 'system', 'merchant', 'psp')),
+  owner_type TEXT NOT NULL CHECK (owner_type IN ('user', 'system', 'merchant', 'psp')),
   owner_id TEXT NOT NULL,
   user_id BIGINT,
   currency TEXT NOT NULL,

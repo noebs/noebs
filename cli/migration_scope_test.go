@@ -121,6 +121,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 				}
 			}
 			if role == serviceRoleWalletLedgerMigrate {
+				assertNoColumnDefault(t, ctx, db, "wallets", "owner_type")
 				assertNoColumnDefault(t, ctx, db, "wallets", "currency")
 				assertNoColumnDefault(t, ctx, db, "fee_configs", "currency")
 				assertNoColumnDefault(t, ctx, db, "transaction_limits", "currency")
