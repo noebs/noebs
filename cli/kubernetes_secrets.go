@@ -112,6 +112,13 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 	if err != nil {
 		return err
 	}
+	ghcrDockerConfig, err := readRequiredSecretText("GHCR Docker config JSON", filepath.Join(root, "platform", "ghcr-dockerconfigjson"))
+	if err != nil {
+		return err
+	}
+	if err := validateDockerConfigJSONPayload("GHCR Docker config JSON", ghcrDockerConfig); err != nil {
+		return err
+	}
 	ageKey, err := readRequiredSecretText("SOPS age key", ageKeyPath)
 	if err != nil {
 		return err
@@ -121,7 +128,7 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 		return err
 	}
 
-	manifests := make([]kubernetesSecretManifest, 0, len(kubernetesServiceSecretSources)+6)
+	manifests := make([]kubernetesSecretManifest, 0, len(kubernetesServiceSecretSources)+7)
 	for _, source := range kubernetesServiceSecretSources {
 		payload, err := readRequiredSecretText(source.serviceName+" secrets", filepath.Join(root, "secrets", source.fileName))
 		if err != nil {
@@ -137,6 +144,13 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 		newOpaqueSecret(namespace, "temporal-postgres-credentials", map[string]string{"password": temporalPostgresPassword}),
 		newOpaqueSecret(namespace, "keycloak-postgres-credentials", map[string]string{"password": keycloakPostgresPassword}),
 		newOpaqueSecret(namespace, "keycloak-secrets", map[string]string{"keycloak.conf": keycloakConfig}),
+		kubernetesSecretManifest{
+			APIVersion: "v1",
+			Kind:       "Secret",
+			Type:       "kubernetes.io/dockerconfigjson",
+			Metadata:   kubernetesMeta{Name: "ghcr-credentials", Namespace: namespace},
+			StringData: map[string]string{".dockerconfigjson": ghcrDockerConfig},
+		},
 		kubernetesSecretManifest{
 			APIVersion: "v1",
 			Kind:       "Secret",

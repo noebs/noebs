@@ -52,6 +52,7 @@ every item in "Completion Checklist" is checked.
 - [x] Added OpenTofu preconditions that block the Noebs Argo CD application unless required Kubernetes Secrets contain the expected data keys.
 - [x] Set Noebs Kubernetes workloads and migration/preflight jobs to always pull the mutable `master` image during Argo CD sync.
 - [x] Added a CI image job and invariant test that publish the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image after tests pass on `master`.
+- [x] Added an explicit `ghcr-credentials` image pull Secret contract for Noebs Kubernetes workloads.
 
 ## Verified Gates
 

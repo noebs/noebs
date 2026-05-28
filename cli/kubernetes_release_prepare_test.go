@@ -25,8 +25,12 @@ func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
 	requirePreparedFile(t, outputRoot, "services/api-gateway.yaml")
 	requirePreparedFile(t, outputRoot, "services/wallet-ledger-migrate.yaml")
 	requirePreparedFile(t, outputRoot, "platform/keycloak.conf")
+	requirePreparedFile(t, outputRoot, "platform/ghcr-dockerconfigjson")
 	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/postgres-password.txt")); got != "legacy-pass" {
 		t.Fatalf("postgres password = %q, want legacy-pass", got)
+	}
+	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/ghcr-dockerconfigjson")); !strings.Contains(got, `"ghcr.io"`) {
+		t.Fatalf("ghcr docker config json = %q, want ghcr.io auth", got)
 	}
 	ebsSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "ebs-adapter.secrets.yaml"))
 	ebsNoebs := getMap(ebsSecret, "noebs")
@@ -338,6 +342,9 @@ func TestKubernetesReleaseInputTemplateOmitsCurrentSecretValues(t *testing.T) {
 	if got := firstString(ebs, "consumer_endpoint"); got != "REPLACE_WITH_EBS_CONSUMER_ENDPOINT" {
 		t.Fatalf("consumer endpoint placeholder = %q", got)
 	}
+	if got := firstString(noebs, "ghcr_dockerconfigjson"); !strings.Contains(got, "REPLACE_WITH_GHCR_AUTH_BASE64") {
+		t.Fatalf("ghcr dockerconfigjson placeholder = %q", got)
+	}
 	psp := getMap(noebs, "psp")
 	if len(psp) == 0 {
 		t.Fatalf("psp placeholder missing from template:\n%s", out.String())
@@ -471,6 +478,7 @@ func writeCompleteLegacyReleaseRoot(t *testing.T) string {
   keycloak_postgres_password: legacy-keycloak-postgres-password
   keycloak_bootstrap_admin_username: legacy-keycloak-admin
   keycloak_bootstrap_admin_password: legacy-keycloak-admin-password
+  ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"bGVnYWN5OnRva2Vu"}}}'
   consumer_endpoint: "https://legacy-consumer.example"
   merchant_endpoint: "https://legacy-merchant.example"
   ipin_endpoint: "https://legacy-ipin.example"
@@ -512,6 +520,7 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
   keycloak_postgres_password: keycloak-postgres-password
   keycloak_bootstrap_admin_username: keycloak-admin
   keycloak_bootstrap_admin_password: keycloak-admin-password
+  ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"bm9lYnM6dG9rZW4="}}}'
   ebs:
     consumer_endpoint: "https://consumer.input.example"
     merchant_endpoint: "https://merchant.input.example"
@@ -556,6 +565,7 @@ func replaceKubernetesReleaseInputPlaceholders(t *testing.T, payload string) str
 		"REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD":        "keycloak-postgres-password",
 		"REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME": "keycloak-admin",
 		"REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD": "keycloak-admin-password",
+		"REPLACE_WITH_GHCR_AUTH_BASE64":                  "bm9lYnM6dG9rZW4=",
 		"REPLACE_WITH_EBS_CONSUMER_ENDPOINT":             "https://consumer.input.example",
 		"REPLACE_WITH_EBS_MERCHANT_ENDPOINT":             "https://merchant.input.example",
 		"REPLACE_WITH_EBS_IPIN_ENDPOINT":                 "https://ipin.example",

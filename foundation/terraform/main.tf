@@ -134,5 +134,10 @@ resource "kubernetes_manifest" "noebs_application" {
       condition     = data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"
       error_message = "noebs-tls must be a kubernetes.io/tls Secret."
     }
+
+    precondition {
+      condition     = data.kubernetes_secret_v1.noebs_required["ghcr-credentials"].type == "kubernetes.io/dockerconfigjson"
+      error_message = "ghcr-credentials must be a kubernetes.io/dockerconfigjson Secret."
+    }
   }
 }

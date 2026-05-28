@@ -160,6 +160,9 @@ func validateKubernetesPlatformInputs(root string) error {
 			return err
 		}
 	}
+	if err := validateDockerConfigJSONFile("GHCR Docker config JSON", filepath.Join(root, "platform", "ghcr-dockerconfigjson")); err != nil {
+		return err
+	}
 	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf")); err != nil {
 		return err
 	}
@@ -203,6 +206,7 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		"postgres-password.txt":          true,
 		"temporal-postgres-password.txt": true,
 		"keycloak-postgres-password.txt": true,
+		"ghcr-dockerconfigjson":          true,
 		"keycloak.conf":                  true,
 	}
 	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
@@ -447,6 +451,45 @@ func validatePlainSecretFile(label, path string) error {
 	}
 	if strings.Contains(value, "REPLACE_WITH_") {
 		return fmt.Errorf("%s contains placeholder", label)
+	}
+	return nil
+}
+
+type dockerConfigJSON struct {
+	Auths map[string]struct {
+		Auth string `json:"auth"`
+	} `json:"auths"`
+}
+
+func validateDockerConfigJSONFile(label, path string) error {
+	if err := requireReadableFile(label, path); err != nil {
+		return err
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", label, err)
+	}
+	return validateDockerConfigJSONPayload(label, string(payload))
+}
+
+func validateDockerConfigJSONPayload(label, payload string) error {
+	payload = strings.TrimSpace(payload)
+	if payload == "" {
+		return fmt.Errorf("%s is empty", label)
+	}
+	if strings.Contains(payload, "REPLACE_WITH_") {
+		return fmt.Errorf("%s contains placeholder", label)
+	}
+	var config dockerConfigJSON
+	if err := json.Unmarshal([]byte(payload), &config); err != nil {
+		return fmt.Errorf("parse %s: %w", label, err)
+	}
+	entry, ok := config.Auths["ghcr.io"]
+	if !ok {
+		return fmt.Errorf("%s missing auths.ghcr.io", label)
+	}
+	if strings.TrimSpace(entry.Auth) == "" {
+		return fmt.Errorf("%s auths.ghcr.io.auth is empty", label)
 	}
 	return nil
 }

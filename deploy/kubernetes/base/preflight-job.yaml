@@ -188,6 +188,10 @@ spec:
               mountPath: /preflight/platform/keycloak-postgres-password.txt
               subPath: password
               readOnly: true
+            - name: ghcr-credentials
+              mountPath: /preflight/platform/ghcr-dockerconfigjson
+              subPath: .dockerconfigjson
+              readOnly: true
             - name: keycloak-secrets
               mountPath: /preflight/platform/keycloak.conf
               subPath: keycloak.conf
@@ -241,6 +245,9 @@ spec:
         - name: keycloak-postgres-credentials
           secret:
             secretName: keycloak-postgres-credentials
+        - name: ghcr-credentials
+          secret:
+            secretName: ghcr-credentials
         - name: keycloak-secrets
           secret:
             secretName: keycloak-secrets

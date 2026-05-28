@@ -37,6 +37,7 @@ type kubernetesReleaseNoebsInputs struct {
 	KeycloakPostgresPassword       string                          `yaml:"keycloak_postgres_password"`
 	KeycloakBootstrapAdminUsername string                          `yaml:"keycloak_bootstrap_admin_username"`
 	KeycloakBootstrapAdminPassword string                          `yaml:"keycloak_bootstrap_admin_password"`
+	GHCRDockerConfigJSON           string                          `yaml:"ghcr_dockerconfigjson"`
 	EBS                            kubernetesReleaseEBSInputs      `yaml:"ebs"`
 	PSP                            map[string]map[string]pspSecret `yaml:"psp"`
 }
@@ -244,6 +245,9 @@ func (r preparedKubernetesRelease) validate() error {
 			return err
 		}
 	}
+	if _, err := r.ghcrDockerConfigJSON(); err != nil {
+		return err
+	}
 	psp, err := r.pspSecrets()
 	if err != nil {
 		return err
@@ -316,6 +320,13 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 		return err
 	}
 	if err := writeReleaseFile(outputRoot, "platform/keycloak.conf", keycloakConfig); err != nil {
+		return err
+	}
+	ghcrDockerConfig, err := r.ghcrDockerConfigJSON()
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/ghcr-dockerconfigjson", ghcrDockerConfig+"\n"); err != nil {
 		return err
 	}
 
@@ -521,6 +532,7 @@ func (r preparedKubernetesRelease) cutoverStringFields() []cutoverStringField {
 		{label: "noebs.keycloak_postgres_password", legacyKeys: []string{"keycloak_postgres_password"}, input: r.inputs.Noebs.KeycloakPostgresPassword},
 		{label: "noebs.keycloak_bootstrap_admin_username", legacyKeys: []string{"keycloak_bootstrap_admin_username"}, input: r.inputs.Noebs.KeycloakBootstrapAdminUsername},
 		{label: "noebs.keycloak_bootstrap_admin_password", legacyKeys: []string{"keycloak_bootstrap_admin_password"}, input: r.inputs.Noebs.KeycloakBootstrapAdminPassword},
+		{label: "noebs.ghcr_dockerconfigjson", legacyKeys: []string{"ghcr_dockerconfigjson"}, input: r.inputs.Noebs.GHCRDockerConfigJSON},
 	}
 	return append(fields, r.ebsCutoverStringFields()...)
 }
@@ -604,6 +616,17 @@ func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, err
 		return "", fmt.Errorf("legacy noebs.%s contains placeholder", key)
 	}
 	return value, nil
+}
+
+func (r preparedKubernetesRelease) ghcrDockerConfigJSON() (string, error) {
+	payload, err := r.cutoverString("noebs.ghcr_dockerconfigjson", []string{"ghcr_dockerconfigjson"}, r.inputs.Noebs.GHCRDockerConfigJSON)
+	if err != nil {
+		return "", err
+	}
+	if err := validateDockerConfigJSONPayload("kubernetes release input noebs.ghcr_dockerconfigjson", payload); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(payload), nil
 }
 
 func (r preparedKubernetesRelease) keycloakConfig() (string, error) {

@@ -54,6 +54,7 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 		"temporal-postgres-credentials": false,
 		"keycloak-postgres-credentials": false,
 		"keycloak-secrets":              false,
+		"ghcr-credentials":              false,
 		"noebs-tls":                     false,
 	}
 	for _, secret := range secrets {
@@ -81,6 +82,7 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	requireRenderedSecretValue(t, secrets, "postgres-credentials", "password", "postgres-password")
 	requireRenderedSecretValue(t, secrets, "temporal-postgres-credentials", "password", "temporal-postgres-password")
 	requireRenderedSecretValue(t, secrets, "keycloak-postgres-credentials", "password", "keycloak-postgres-password")
+	requireRenderedSecretContains(t, secrets, "ghcr-credentials", ".dockerconfigjson", `"ghcr.io"`)
 	requireRenderedSecretContains(t, secrets, "ebs-adapter-secrets", "secrets.yaml", "consumer_endpoint")
 	requireRenderedSecretContains(t, secrets, "sops-age-key", "age-key.txt", "AGE-SECRET-KEY-1LOCAL")
 	requireRenderedSecretContains(t, secrets, "keycloak-secrets", "keycloak.conf", "bootstrap-admin-password")
@@ -88,6 +90,9 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	requireRenderedSecretContains(t, secrets, "noebs-tls", "tls.key", "BEGIN RSA PRIVATE KEY")
 	if secretByName(t, secrets, "noebs-tls").Type != "kubernetes.io/tls" {
 		t.Fatalf("noebs-tls type = %q, want kubernetes.io/tls", secretByName(t, secrets, "noebs-tls").Type)
+	}
+	if secretByName(t, secrets, "ghcr-credentials").Type != "kubernetes.io/dockerconfigjson" {
+		t.Fatalf("ghcr-credentials type = %q, want kubernetes.io/dockerconfigjson", secretByName(t, secrets, "ghcr-credentials").Type)
 	}
 }
 
@@ -194,6 +199,7 @@ func writeKubernetesSecretReleaseRoot(t *testing.T) string {
 	writePreflightFile(t, root, "platform/postgres-password.txt", "postgres-password\n")
 	writePreflightFile(t, root, "platform/temporal-postgres-password.txt", "temporal-postgres-password\n")
 	writePreflightFile(t, root, "platform/keycloak-postgres-password.txt", "keycloak-postgres-password\n")
+	writePreflightFile(t, root, "platform/ghcr-dockerconfigjson", `{"auths":{"ghcr.io":{"auth":"bm9lYnM6dG9rZW4="}}}`+"\n")
 	writePreflightFile(t, root, "platform/keycloak.conf", `http-enabled=true
 http-port=8080
 hostname-strict=false

@@ -153,6 +153,7 @@ locals {
     "temporal-postgres-credentials",
     "keycloak-postgres-credentials",
     "keycloak-secrets",
+    "ghcr-credentials",
     "noebs-tls",
   ]
 
@@ -204,6 +205,9 @@ locals {
     ]
     "keycloak-secrets" = [
       "keycloak.conf",
+    ]
+    "ghcr-credentials" = [
+      ".dockerconfigjson",
     ]
     "noebs-tls" = [
       "tls.crt",

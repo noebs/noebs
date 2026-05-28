@@ -39,7 +39,7 @@ Runtime secrets are not stored in OpenTofu. Before applying the Noebs Argo CD ap
 - `temporal-postgres-credentials` with key `password`
 - `noebs-tls` for `api.noebs.sd` and `dsa.adonese.sd`
 
-The foundation root also checks each required Secret's expected data keys before it creates the Argo CD `Application`; `noebs-tls` must be a `kubernetes.io/tls` Secret. The `noebs_required_kubernetes_secrets` and `noebs_required_kubernetes_secret_keys` outputs expose this required shape for deployment checks without storing any secret values in OpenTofu state.
+The foundation root also checks each required Secret's expected data keys before it creates the Argo CD `Application`; `noebs-tls` must be a `kubernetes.io/tls` Secret and `ghcr-credentials` must be a `kubernetes.io/dockerconfigjson` Secret. The `noebs_required_kubernetes_secrets` and `noebs_required_kubernetes_secret_keys` outputs expose this required shape for deployment checks without storing any secret values in OpenTofu state.
 
 `api-gateway-secrets` carries edge auth/admin material only; it must not include `noebs.db_url`.
 `wallet-api-secrets` carries wallet HTTP facade auth/admin material only; it must not include `noebs.db_url`.
@@ -56,7 +56,7 @@ To build that release input directory from the current server material, use the 
 noebs prepare-kubernetes-release /path/to/noebs-repo /path/to/current-noebs-root /path/to/kubernetes-release.inputs.yaml /path/to/noebs-kubernetes-release
 ```
 
-The command fails instead of deriving missing values. For each cutover value, the current encrypted `secrets.yaml` wins when it already contains a non-empty value; the encrypted cutover inputs file supplies only values absent from the current secret. Duplicate non-empty values across the current secret and cutover input are rejected instead of being silently chosen. The legacy root must still supply the existing Postgres password through `noebs.db_url` and the JWT secret through `noebs.jwt_secret`; all other required service-owned values, including API gateway admin credentials, SMS provider values, Google OAuth client values, Keycloak bootstrap/database credentials, card-vault data key, PSP provider secrets, and resolved EBS endpoint/app-id/IPIN/key/bill-inquiry fields, may come from either current secret material or the encrypted cutover input.
+The command fails instead of deriving missing values. For each cutover value, the current encrypted `secrets.yaml` wins when it already contains a non-empty value; the encrypted cutover inputs file supplies only values absent from the current secret. Duplicate non-empty values across the current secret and cutover input are rejected instead of being silently chosen. The legacy root must still supply the existing Postgres password through `noebs.db_url` and the JWT secret through `noebs.jwt_secret`; all other required service-owned values, including API gateway admin credentials, SMS provider values, Google OAuth client values, Keycloak bootstrap/database credentials, GHCR Docker config JSON, card-vault data key, PSP provider secrets, and resolved EBS endpoint/app-id/IPIN/key/bill-inquiry fields, may come from either current secret material or the encrypted cutover input.
 
 `deploy/kubernetes/overlays/current-host/kubernetes-release.inputs.yaml.example` documents the required input keys. The real input file is secret material and must be SOPS-encrypted before use.
 

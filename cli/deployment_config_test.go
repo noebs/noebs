@@ -21,6 +21,7 @@ import (
 type manifestObject struct {
 	Kind                         string            `yaml:"kind"`
 	AutomountServiceAccountToken *bool             `yaml:"automountServiceAccountToken"`
+	ImagePullSecrets             []manifestRef     `yaml:"imagePullSecrets"`
 	Data                         map[string]string `yaml:"data"`
 	Metadata                     struct {
 		Name        string            `yaml:"name"`
@@ -59,6 +60,10 @@ type manifestObject struct {
 			} `yaml:"spec"`
 		} `yaml:"template"`
 	} `yaml:"spec"`
+}
+
+type manifestRef struct {
+	Name string `yaml:"name"`
 }
 
 type manifestIngressTLS struct {
@@ -317,6 +322,41 @@ func TestCIWorkflowPublishesKubernetesNoebsImage(t *testing.T) {
 		if !strings.Contains(workflowText, image) {
 			t.Fatalf("Kubernetes image %q is not published by %s", image, workflowPath)
 		}
+	}
+}
+
+func TestNoebsServiceAccountsUseGHCRPullSecret(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	serviceAccounts := map[string]manifestObject{}
+	for _, object := range objects {
+		if object.Kind == "ServiceAccount" {
+			serviceAccounts[object.Metadata.Name] = object
+		}
+	}
+	if len(serviceAccounts) == 0 {
+		t.Fatalf("no Kubernetes ServiceAccounts were found")
+	}
+
+	checked := 0
+	for _, object := range objects {
+		if !isKubernetesWorkloadKind(object.Kind) || !workloadUsesNoebsImage(object) {
+			continue
+		}
+		serviceAccountName := object.Spec.Template.Spec.ServiceAccountName
+		if serviceAccountName == "" {
+			t.Fatalf("%s/%s does not declare serviceAccountName", object.Kind, object.Metadata.Name)
+		}
+		serviceAccount, ok := serviceAccounts[serviceAccountName]
+		if !ok {
+			t.Fatalf("%s/%s references missing ServiceAccount %q", object.Kind, object.Metadata.Name, serviceAccountName)
+		}
+		checked++
+		if !manifestRefsContain(serviceAccount.ImagePullSecrets, "ghcr-credentials") {
+			t.Fatalf("ServiceAccount %q must reference ghcr-credentials for %s/%s", serviceAccountName, object.Kind, object.Metadata.Name)
+		}
+	}
+	if checked == 0 {
+		t.Fatalf("no Noebs Kubernetes workloads were checked")
 	}
 }
 
@@ -1916,10 +1956,12 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/postgres-password.txt", "password")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/temporal-postgres-password.txt", "password")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak-postgres-password.txt", "password")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/ghcr-dockerconfigjson", ".dockerconfigjson")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak.conf", "keycloak.conf")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "postgres-credentials", "postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "temporal-postgres-credentials", "temporal-postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-postgres-credentials", "keycloak-postgres-credentials")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "ghcr-credentials", "ghcr-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-secrets", "keycloak-secrets")
 
 		for serviceName, subPath := range serviceConfigs {
@@ -1941,6 +1983,13 @@ func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
 
 	referencedSecrets := map[string]bool{}
 	for _, object := range objects {
+		if object.Kind == "ServiceAccount" {
+			for _, imagePullSecret := range object.ImagePullSecrets {
+				if imagePullSecret.Name != "" {
+					referencedSecrets[imagePullSecret.Name] = true
+				}
+			}
+		}
 		for _, volume := range object.Spec.Template.Spec.Volumes {
 			if volume.Secret != nil && volume.Secret.SecretName != "" {
 				referencedSecrets[volume.Secret.SecretName] = true
@@ -2032,6 +2081,7 @@ func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 		`precondition {`,
 		`contains(keys(data.kubernetes_secret_v1.noebs_required[secret_name].data), required_key)`,
 		`data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"`,
+		`data.kubernetes_secret_v1.noebs_required["ghcr-credentials"].type == "kubernetes.io/dockerconfigjson"`,
 	} {
 		if !strings.Contains(string(main), required) {
 			t.Fatalf("foundation/terraform/main.tf must contain %q", required)
@@ -2087,6 +2137,7 @@ func renderedKubernetesSecretNames() map[string]bool {
 		"temporal-postgres-credentials": true,
 		"keycloak-postgres-credentials": true,
 		"keycloak-secrets":              true,
+		"ghcr-credentials":              true,
 		"noebs-tls":                     true,
 	}
 	for _, source := range kubernetesServiceSecretSources {
@@ -2102,6 +2153,7 @@ func renderedKubernetesSecretKeys() map[string]map[string]bool {
 		"temporal-postgres-credentials": {"password": true},
 		"keycloak-postgres-credentials": {"password": true},
 		"keycloak-secrets":              {"keycloak.conf": true},
+		"ghcr-credentials":              {".dockerconfigjson": true},
 		"noebs-tls":                     {"tls.crt": true, "tls.key": true},
 	}
 	for _, source := range kubernetesServiceSecretSources {
@@ -2249,6 +2301,15 @@ func isKubernetesWorkloadKind(kind string) bool {
 func workloadUsesNoebsImage(object manifestObject) bool {
 	for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
 		if strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
+			return true
+		}
+	}
+	return false
+}
+
+func manifestRefsContain(refs []manifestRef, name string) bool {
+	for _, ref := range refs {
+		if ref.Name == name {
 			return true
 		}
 	}
