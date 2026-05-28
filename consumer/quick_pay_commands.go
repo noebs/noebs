@@ -20,7 +20,6 @@ const (
 	cardVaultServiceDiscoveryKey    = "card-vault"
 	identityAuthServiceDiscoveryKey = "identity-auth"
 	notificationServiceDiscoveryKey = "notification-chat"
-	internalTenantIDHeader          = "X-Tenant-ID"
 )
 
 type serviceCommandTarget struct {
@@ -215,7 +214,7 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(internalTenantIDHeader, tenantID)
+	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	req.Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
 	req.Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
 

@@ -135,8 +135,11 @@ func TestSubmitBillerHookInNotificationChatUsesAdminCommand(t *testing.T) {
 		if r.Header.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue {
 			t.Fatalf("admin identity header = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
 		}
-		if r.Header.Get(internalTenantIDHeader) != "tenant-a" {
-			t.Fatalf("tenant header = %q", r.Header.Get(internalTenantIDHeader))
+		if r.Header.Get(gateway.GatewayTenantIDHeader) != "tenant-a" {
+			t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
+		}
+		if r.Header.Get("X-Tenant-ID") != "" {
+			t.Fatalf("public tenant header forwarded = %q", r.Header.Get("X-Tenant-ID"))
 		}
 		var cmd BillerHookCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {

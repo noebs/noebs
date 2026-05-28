@@ -230,8 +230,11 @@ func TestCompletedRegistrationCommandsRejectMissingInputs(t *testing.T) {
 
 func assertAdminCommandHeaders(t *testing.T, r *http.Request, tenantID string) {
 	t.Helper()
-	if r.Header.Get(internalTenantIDHeader) != tenantID {
-		t.Fatalf("tenant header = %q", r.Header.Get(internalTenantIDHeader))
+	if r.Header.Get(gateway.GatewayTenantIDHeader) != tenantID {
+		t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
+	}
+	if r.Header.Get("X-Tenant-ID") != "" {
+		t.Fatalf("public tenant header forwarded = %q", r.Header.Get("X-Tenant-ID"))
 	}
 	if r.Header.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue {
 		t.Fatalf("admin identity header = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
