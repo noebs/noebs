@@ -152,6 +152,24 @@ func TestPrepareKubernetesReleaseRejectsNonEmptyOutputRoot(t *testing.T) {
 	}
 }
 
+func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kubernetes-release.inputs.yaml.example"))
+	if err != nil {
+		t.Fatalf("read kubernetes release inputs example: %v", err)
+	}
+	inputs := replaceKubernetesReleaseInputPlaceholders(t, string(payload))
+	legacyRoot := writeLegacyReleaseRoot(t)
+	writePreflightFile(t, legacyRoot, "kubernetes-release.inputs.yaml", inputs)
+	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
+
+	err = prepareKubernetesRelease("..", legacyRoot, filepath.Join(legacyRoot, "kubernetes-release.inputs.yaml"), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err != nil {
+		t.Fatalf("prepareKubernetesRelease() with example-derived inputs error = %v", err)
+	}
+	requirePreparedFile(t, outputRoot, "secrets/identity-auth.secrets.yaml")
+	requirePreparedFile(t, outputRoot, "secrets/ebs-adapter.secrets.yaml")
+}
+
 func writeLegacyReleaseRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -206,6 +224,51 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
         webhook_public_key: psp-webhook-public-key
 `)
 	return filepath.Join(root, "kubernetes-release.inputs.yaml")
+}
+
+func replaceKubernetesReleaseInputPlaceholders(t *testing.T, payload string) string {
+	t.Helper()
+	replacements := map[string]string{
+		"REPLACE_WITH_TENANT_ID":                         "tenant_1",
+		"REPLACE_WITH_GATEWAY_ADMIN_KEY":                 "admin-key",
+		"REPLACE_WITH_GATEWAY_ADMIN_USER":                "admin",
+		"REPLACE_WITH_GATEWAY_ADMIN_PASSWORD":            "admin-password",
+		"REPLACE_WITH_SMS_API_KEY":                       "input-sms-key",
+		"REPLACE_WITH_SMS_SENDER":                        "input-sms-sender",
+		"REPLACE_WITH_SMS_GATEWAY":                       "https://input.sms.example",
+		"REPLACE_WITH_SMS_MESSAGE":                       "code",
+		"REPLACE_WITH_GOOGLE_REDIRECT_URL":               "https://api.noebs.sd/oauth/callback",
+		"REPLACE_WITH_CARD_VAULT_DATA_KEY":               "card-vault-data-key",
+		"REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD":        "temporal-postgres-password",
+		"REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD":        "keycloak-postgres-password",
+		"REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME": "keycloak-admin",
+		"REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD": "keycloak-admin-password",
+		"REPLACE_WITH_EBS_CONSUMER_ENDPOINT":             "https://consumer.input.example",
+		"REPLACE_WITH_EBS_MERCHANT_ENDPOINT":             "https://merchant.input.example",
+		"REPLACE_WITH_EBS_IPIN_ENDPOINT":                 "https://ipin.example",
+		"REPLACE_WITH_EBS_CONSUMER_APP_ID":               "consumer-app",
+		"REPLACE_WITH_EBS_MERCHANT_APP_ID":               "merchant-app",
+		"REPLACE_WITH_EBS_IPIN_USERNAME":                 "ipin-user",
+		"REPLACE_WITH_EBS_IPIN_PASSWORD":                 "ipin-password",
+		"REPLACE_WITH_EBS_CONSUMER_PUBLIC_KEY":           "consumer-public-key",
+		"REPLACE_WITH_EBS_IPIN_PUBLIC_KEY":               "ipin-public-key",
+		"REPLACE_WITH_BILL_INQUIRY_PAN":                  "1234567890123456",
+		"REPLACE_WITH_BILL_INQUIRY_PIN":                  "1234",
+		"REPLACE_WITH_BILL_INQUIRY_IPIN":                 "123456",
+		"REPLACE_WITH_BILL_INQUIRY_EXPIRY":               "0129",
+		"REPLACE_WITH_PROVIDER_CODE":                     "test-provider",
+		"REPLACE_WITH_PSP_API_KEY":                       "psp-api-key",
+		"REPLACE_WITH_PSP_API_SECRET":                    "psp-api-secret",
+		"REPLACE_WITH_PSP_WEBHOOK_SECRET":                "psp-webhook-secret",
+		"REPLACE_WITH_PSP_WEBHOOK_PUBLIC_KEY":            "psp-webhook-public-key",
+	}
+	for placeholder, value := range replacements {
+		payload = strings.ReplaceAll(payload, placeholder, value)
+	}
+	if strings.Contains(payload, "REPLACE_WITH_") {
+		t.Fatalf("kubernetes release inputs example contains unreplaced placeholder:\n%s", payload)
+	}
+	return payload
 }
 
 func plainKubernetesSecretEncrypt(_ string, payload []byte, _ string) ([]byte, error) {
