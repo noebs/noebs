@@ -308,6 +308,44 @@ func TestAuditKubernetesReleaseInputsReportsDuplicatesAndDoesNotPrintSecretValue
 	}
 }
 
+func TestEncryptSopsYAMLScrubsAmbientEnvironment(t *testing.T) {
+	tmp := t.TempDir()
+	fakeSOPS := filepath.Join(tmp, "sops")
+	if err := os.WriteFile(fakeSOPS, []byte(`#!/bin/sh
+printf 'age_key=%s\n' "${SOPS_AGE_KEY_FILE-unset}"
+printf 'ambient=%s\n' "${AMBIENT_SECRET-unset}"
+printf 'args=%s\n' "$*"
+`), 0o700); err != nil {
+		t.Fatalf("write fake sops: %v", err)
+	}
+	ageKeyFile := filepath.Join(tmp, "age-key.txt")
+	if err := os.WriteFile(ageKeyFile, []byte("# public key: age1testrecipient\nAGE-SECRET-KEY-1LOCAL\n"), 0o600); err != nil {
+		t.Fatalf("write age key: %v", err)
+	}
+
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("SOPS_AGE_KEY_FILE", "/ambient/key.txt")
+	t.Setenv("AMBIENT_SECRET", "must-not-leak")
+
+	encrypted, err := encryptSopsYAML("test-secret", []byte("noebs:\n  admin_key: secret\n"), ageKeyFile)
+	if err != nil {
+		t.Fatalf("encryptSopsYAML() error = %v", err)
+	}
+	text := string(encrypted)
+	if !strings.Contains(text, "age_key=unset\n") {
+		t.Fatalf("encryptSopsYAML output = %q, want no SOPS age key environment", text)
+	}
+	if !strings.Contains(text, "ambient=unset\n") {
+		t.Fatalf("encryptSopsYAML output = %q, want scrubbed ambient environment", text)
+	}
+	if strings.Contains(text, "must-not-leak") || strings.Contains(text, "/ambient/key.txt") {
+		t.Fatalf("encryptSopsYAML output leaked ambient environment: %q", text)
+	}
+	if !strings.Contains(text, "--config /dev/null --encrypt --age age1testrecipient") {
+		t.Fatalf("encryptSopsYAML output = %q, want explicit recipient argument", text)
+	}
+}
+
 func writeLegacyReleaseRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

@@ -197,6 +197,14 @@ func optionalExistingPath(path string) (string, error) {
 	return path, nil
 }
 
+func sopsExecutable() (string, error) {
+	path, err := exec.LookPath("sops")
+	if err != nil {
+		return "", fmt.Errorf("find sops executable: %w", err)
+	}
+	return path, nil
+}
+
 func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
 	ageKeyFile = strings.TrimSpace(ageKeyFile)
 	if ageKeyFile == "" {
@@ -205,7 +213,11 @@ func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
 	if _, err := requiredExistingPath("SOPS age key", ageKeyFile); err != nil {
 		return nil, err
 	}
-	cmd := exec.Command("sops", "-d", path)
+	sopsPath, err := sopsExecutable()
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.Command(sopsPath, "-d", path)
 	cmd.Env = []string{"SOPS_AGE_KEY_FILE=" + ageKeyFile}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
