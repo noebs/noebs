@@ -85,7 +85,7 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 	if err != nil {
 		return err
 	}
-	outputRoot, err = prepareOutputRoot(outputRoot)
+	outputRoot, err = resolveKubernetesReleaseOutputRoot(outputRoot)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 	return validateKubernetesSecretReleaseRootWithDecrypt(outputRoot, decrypt)
 }
 
-func prepareOutputRoot(outputRoot string) (string, error) {
+func resolveKubernetesReleaseOutputRoot(outputRoot string) (string, error) {
 	outputRoot = strings.TrimSpace(outputRoot)
 	if outputRoot == "" {
 		return "", errors.New("kubernetes release output root is required")
@@ -147,9 +147,6 @@ func prepareOutputRoot(outputRoot string) (string, error) {
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("read kubernetes release output root %s: %w", absoluteRoot, err)
-	}
-	if err := os.MkdirAll(absoluteRoot, 0o700); err != nil {
-		return "", fmt.Errorf("create kubernetes release output root: %w", err)
 	}
 	return absoluteRoot, nil
 }

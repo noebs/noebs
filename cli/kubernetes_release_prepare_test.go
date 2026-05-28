@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,6 +89,7 @@ func TestPrepareKubernetesReleaseRejectsMissingExplicitInput(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "noebs.ebs.ipin_endpoint") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want missing explicit ipin endpoint rejection", err)
 	}
+	assertPathMissing(t, outputRoot)
 }
 
 func TestPrepareKubernetesReleaseRejectsStaleExplicitGoogleInput(t *testing.T) {
@@ -117,6 +119,7 @@ func TestPrepareKubernetesReleaseRejectsMissingLegacyGoogle(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "legacy noebs.google_client_id") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want missing legacy google rejection", err)
 	}
+	assertPathMissing(t, outputRoot)
 	if _, statErr := os.Stat(secretPath); statErr != nil {
 		t.Fatalf("legacy secret file should remain in place: %v", statErr)
 	}
@@ -134,6 +137,7 @@ func TestPrepareKubernetesReleaseRejectsMissingExplicitEBSRuntimeEndpoint(t *tes
 	if err == nil || !strings.Contains(err.Error(), "noebs.ebs.consumer_endpoint") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want missing explicit EBS endpoint rejection", err)
 	}
+	assertPathMissing(t, outputRoot)
 }
 
 func TestPrepareKubernetesReleaseRejectsNonEmptyOutputRoot(t *testing.T) {
@@ -221,6 +225,13 @@ func requirePreparedFile(t *testing.T, root, name string) {
 	t.Helper()
 	if _, err := os.Stat(filepath.Join(root, name)); err != nil {
 		t.Fatalf("stat %s: %v", filepath.Join(root, name), err)
+	}
+}
+
+func assertPathMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stat %s error = %v, want not exist", path, err)
 	}
 }
 
