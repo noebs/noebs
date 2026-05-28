@@ -231,7 +231,7 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 				t.Fatalf("decode %s: %v", path, err)
 			}
 			for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
-				if !strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
+				if !strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
 					continue
 				}
 				if object.Kind == "Job" && object.Metadata.Name == "noebs-deployment-preflight" {
@@ -261,7 +261,7 @@ func TestNoebsKubernetesMutableImageTagIsAlwaysPulled(t *testing.T) {
 	checked := 0
 	for _, object := range objects {
 		for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
-			if !strings.Contains(container.Image, "ghcr.io/adonese/noebs:") {
+			if !strings.Contains(container.Image, "ghcr.io/noebs/noebs:") {
 				continue
 			}
 			checked++
@@ -293,7 +293,7 @@ func TestCIWorkflowPublishesKubernetesNoebsImage(t *testing.T) {
 		"docker/login-action@v3",
 		"docker/build-push-action@v6",
 		"push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}",
-		"ghcr.io/adonese/noebs:${{ github.sha }}",
+		"ghcr.io/noebs/noebs:${{ github.sha }}",
 	}
 	for _, text := range required {
 		if !strings.Contains(workflowText, text) {
@@ -305,7 +305,7 @@ func TestCIWorkflowPublishesKubernetesNoebsImage(t *testing.T) {
 	images := map[string]bool{}
 	for _, object := range objects {
 		for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
-			if strings.HasPrefix(container.Image, "ghcr.io/adonese/noebs:") {
+			if strings.HasPrefix(container.Image, "ghcr.io/noebs/noebs:") {
 				images[container.Image] = true
 			}
 		}
@@ -1787,7 +1787,7 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 				t.Fatalf("%s containers = %d, want 1", object.Metadata.Name, len(object.Spec.Template.Spec.Containers))
 			}
 			container := object.Spec.Template.Spec.Containers[0]
-			if !strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
+			if !strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
 				t.Fatalf("%s container image = %q", object.Metadata.Name, container.Image)
 			}
 			serviceMount := findMount(container, "/app/service.yaml")
@@ -1899,7 +1899,7 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 			t.Fatalf("preflight containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
 		}
 		container := object.Spec.Template.Spec.Containers[0]
-		if container.Image != "ghcr.io/adonese/noebs:master" {
+		if container.Image != "ghcr.io/noebs/noebs:master" {
 			t.Fatalf("preflight image = %q", container.Image)
 		}
 		if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
@@ -2248,7 +2248,7 @@ func isKubernetesWorkloadKind(kind string) bool {
 
 func workloadUsesNoebsImage(object manifestObject) bool {
 	for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
-		if strings.Contains(container.Image, "ghcr.io/adonese/noebs") {
+		if strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
 			return true
 		}
 	}

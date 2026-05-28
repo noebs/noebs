@@ -51,7 +51,7 @@ every item in "Completion Checklist" is checked.
 - [x] Added an API gateway invariant that every external HTTP route has exactly one service owner and is proxied to that owner.
 - [x] Added OpenTofu preconditions that block the Noebs Argo CD application unless required Kubernetes Secrets contain the expected data keys.
 - [x] Set Noebs Kubernetes workloads and migration/preflight jobs to always pull the mutable `master` image during Argo CD sync.
-- [x] Added a CI image job and invariant test that publish the Kubernetes-consumed `ghcr.io/adonese/noebs:master` image after tests pass on `master`.
+- [x] Added a CI image job and invariant test that publish the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image after tests pass on `master`.
 
 ## Verified Gates
 

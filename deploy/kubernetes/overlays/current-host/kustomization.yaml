@@ -6,5 +6,5 @@ resources:
   - ingress.yaml
 
 images:
-  - name: ghcr.io/adonese/noebs
+  - name: ghcr.io/noebs/noebs
     newTag: master

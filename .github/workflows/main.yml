@@ -58,5 +58,5 @@ jobs:
           context: .
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
           tags: |
-            ghcr.io/adonese/noebs:master
-            ghcr.io/adonese/noebs:${{ github.sha }}
+            ghcr.io/noebs/noebs:master
+            ghcr.io/noebs/noebs:${{ github.sha }}

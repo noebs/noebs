@@ -25,7 +25,7 @@ spec:
         fsGroup: 10001
       containers:
         - name: wallet-ledger
-          image: ghcr.io/adonese/noebs:master
+          image: ghcr.io/noebs/noebs:master
           imagePullPolicy: Always
           ports:
             - name: grpc
