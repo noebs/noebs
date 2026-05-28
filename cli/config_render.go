@@ -26,8 +26,12 @@ func isRenderDatabasePasswordCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-db-password"
 }
 
+func isValidateDeploymentCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "validate-deployment"
+}
+
 func isConfigUtilityCommand() bool {
-	return isRenderConfigCommand() || isRenderDatabasePasswordCommand()
+	return isRenderConfigCommand() || isRenderDatabasePasswordCommand() || isValidateDeploymentCommand()
 }
 
 func renderConfigFiles() error {

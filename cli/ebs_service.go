@@ -56,6 +56,12 @@ func main() {
 		}
 		return
 	}
+	if isValidateDeploymentCommand() {
+		if err := validateDeploymentCommand(); err != nil {
+			logrusLogger.Fatalf("validate deployment failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)

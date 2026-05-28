@@ -163,6 +163,7 @@ For local Docker Compose, each Noebs service mounts its own SOPS secret file fro
 
 - `go test ./...`
 - `go test ./cli ./apigateway ./store ./wallet/...`
+- `noebs validate-deployment /path/to/noebs-release`
 - `kubectl kustomize deploy/kubernetes/overlays/current-host`
 - `tofu -chdir=foundation/terraform fmt -check`
 - `tofu -chdir=foundation/terraform validate`

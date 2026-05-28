@@ -33,3 +33,11 @@ Local Compose also requires explicit, ignored runtime inputs for non-Noebs platf
 These files are local-only and must not be committed. The repository carries `deploy/docker/keycloak/keycloak.conf.example` with placeholders only; replace every placeholder in the local ignored file. Kubernetes uses `temporal-postgres-credentials`, `keycloak-secrets`, and `keycloak-postgres-credentials` Secrets instead of these Compose files.
 
 The default Compose deployment publishes only `api-gateway` on host port `8081`. Temporal, Temporal UI, and Keycloak remain reachable through the Compose network. Caddy is available through the explicit `edge` profile for hosts where this stack owns ports `80` and `443`.
+
+Before replacing a host deployment, run the explicit preflight against the release directory:
+
+```sh
+noebs validate-deployment /path/to/noebs-release
+```
+
+The preflight decrypts every service secret with the release age key and validates the merged service configs before any containers are started. It rejects missing files, placeholder values, reserved tenant IDs, legacy `noebs.db_path`, non-owner database entries, missing service-owned database URLs, missing EBS adapter endpoints/app IDs, and incomplete Keycloak/Temporal/Postgres platform inputs.
