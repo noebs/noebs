@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -114,15 +113,12 @@ func TestWithdrawalSignalsValidateAfterAdminAuth(t *testing.T) {
 }
 
 func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
-	if os.Getenv("DOCKER_HOST") == "" && os.Getenv("XDG_RUNTIME_DIR") == "" {
-		t.Skip("docker host not configured")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	container, err := testdb.StartPostgresContainer(ctx)
 	if err != nil {
-		t.Skipf("postgres container unavailable: %v", err)
+		t.Fatalf("start postgres container: %v", err)
 	}
 	defer func() {
 		_ = container.Terminate(context.Background())

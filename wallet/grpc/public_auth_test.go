@@ -3,7 +3,6 @@ package walletgrpc
 import (
 	"context"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -20,16 +19,13 @@ import (
 
 func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Wallet, *walletstore.Wallet) {
 	t.Helper()
-	if os.Getenv("DOCKER_HOST") == "" && os.Getenv("XDG_RUNTIME_DIR") == "" {
-		t.Skip("docker host not configured")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	container, err := testdb.StartPostgresContainer(ctx)
 	if err != nil {
-		t.Skipf("postgres container unavailable: %v", err)
+		t.Fatalf("start postgres container: %v", err)
 	}
 	t.Cleanup(func() {
 		_ = container.Terminate(context.Background())

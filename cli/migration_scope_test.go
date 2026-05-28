@@ -12,7 +12,7 @@ import (
 
 func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 	if testPostgres == nil {
-		t.Skip("postgres testcontainer unavailable")
+		t.Fatalf("postgres testcontainer not started")
 	}
 	roles := map[serviceRole][]string{
 		serviceRoleIdentityAuthMigrate: {

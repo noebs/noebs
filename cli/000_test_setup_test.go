@@ -22,8 +22,8 @@ func TestMain(m *testing.M) {
 
 	container, err := testdb.StartPostgresContainer(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "skipping cli tests: postgres testcontainer unavailable: %v\n", err)
-		os.Exit(0)
+		fmt.Fprintf(os.Stderr, "start postgres testcontainer: %v\n", err)
+		os.Exit(1)
 	}
 	testPostgres = container
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -62,9 +61,6 @@ func TestVerifyUserTOTPRequiresWalletOwnedTwoFA(t *testing.T) {
 
 func newWalletActivityStore(t *testing.T) (*walletstore.Store, string) {
 	t.Helper()
-	if os.Getenv("DOCKER_HOST") == "" && os.Getenv("XDG_RUNTIME_DIR") == "" {
-		t.Skip("docker runtime not configured for testcontainers")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
 

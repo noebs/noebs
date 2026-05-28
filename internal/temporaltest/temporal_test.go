@@ -2,10 +2,8 @@ package temporaltest
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"os"
 	"testing"
 	"time"
 
@@ -17,20 +15,12 @@ import (
 )
 
 func TestTemporalContainer(t *testing.T) {
-	if os.Getenv("DOCKER_HOST") == "" && os.Getenv("XDG_RUNTIME_DIR") == "" {
-		t.Skip("docker host not configured")
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			t.Skipf("docker unavailable: %v", r)
-		}
-	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
 	nw, err := network.New(ctx, network.WithAttachable())
 	if err != nil {
-		t.Skipf("docker network unavailable: %v", err)
+		t.Fatalf("create docker network: %v", err)
 	}
 	defer func() {
 		_ = nw.Remove(ctx)
@@ -47,7 +37,7 @@ func TestTemporalContainer(t *testing.T) {
 		),
 	)
 	if err != nil {
-		t.Skipf("postgres container unavailable: %v", err)
+		t.Fatalf("start postgres container: %v", err)
 	}
 	defer func() {
 		_ = pg.Terminate(ctx)
@@ -74,10 +64,7 @@ func TestTemporalContainer(t *testing.T) {
 		Started:          true,
 	})
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			t.Skipf("temporal container startup timed out: %v", err)
-		}
-		t.Skipf("temporal container unavailable: %v", err)
+		t.Fatalf("start temporal container: %v", err)
 	}
 	defer func() {
 		_ = ctr.Terminate(ctx)
