@@ -13,8 +13,9 @@ func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID 
 	if s == nil || s.Store == nil {
 		return nil, nil, ErrMissingStore
 	}
-	if tenantID == "" {
-		return nil, nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, nil, err
 	}
 	if userID <= 0 {
 		return nil, nil, store.ErrInvalidUserID
@@ -34,8 +35,9 @@ func (s *Service) AddDeviceToken(ctx context.Context, tenantID, mobile, token st
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {
@@ -52,8 +54,9 @@ func (s *Service) ListBeneficiariesForUserID(ctx context.Context, tenantID strin
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	if tenantID == "" {
-		return nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	if userID <= 0 {
 		return nil, store.ErrInvalidUserID
@@ -65,8 +68,9 @@ func (s *Service) UpsertBeneficiaryForUserID(ctx context.Context, tenantID strin
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -79,8 +83,9 @@ func (s *Service) DeleteBeneficiaryForUserID(ctx context.Context, tenantID strin
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -92,8 +97,9 @@ func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -118,8 +124,9 @@ func (s *Service) EditCardForUserID(ctx context.Context, tenantID string, userID
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -135,8 +142,9 @@ func (s *Service) RemoveCardForUserID(ctx context.Context, tenantID string, user
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if userID <= 0 {
 		return store.ErrInvalidUserID
@@ -152,8 +160,9 @@ func (s *Service) NecToName(ctx context.Context, tenantID, nec string) (string, 
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", err
 	}
 	nec = strings.TrimSpace(nec)
 	if nec == "" {
@@ -166,8 +175,9 @@ func (s *Service) Notifications(ctx context.Context, tenantID, mobile string) ([
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	if tenantID == "" {
-		return nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {
@@ -187,8 +197,9 @@ func (s *Service) GetUserProfile(ctx context.Context, tenantID, mobile string) (
 	if s == nil || s.Store == nil {
 		return ebs_fields.UserProfile{}, ErrMissingStore
 	}
-	if tenantID == "" {
-		return ebs_fields.UserProfile{}, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return ebs_fields.UserProfile{}, err
 	}
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {
@@ -211,8 +222,9 @@ func (s *Service) UpdateUserProfile(ctx context.Context, tenantID, mobile string
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {
@@ -234,8 +246,9 @@ func (s *Service) GetUserLanguage(ctx context.Context, tenantID, mobile string) 
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
-	if tenantID == "" {
-		return "", store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", err
 	}
 	user, err := s.Store.GetUserByMobile(ctx, tenantID, strings.TrimSpace(mobile))
 	if err != nil {
@@ -248,8 +261,9 @@ func (s *Service) SetUserLanguage(ctx context.Context, tenantID, mobile, languag
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	user, err := s.Store.GetUserByMobile(ctx, tenantID, strings.TrimSpace(mobile))
 	if err != nil {
@@ -266,8 +280,9 @@ func (s *Service) UpdateKYC(ctx context.Context, tenantID string, req ebs_fields
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	if tenantID == "" {
-		return store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return err
 	}
 	if strings.TrimSpace(req.Mobile) == "" {
 		return ErrMissingMobile
@@ -287,8 +302,9 @@ func (s *Service) GetTransactionByUUID(ctx context.Context, tenantID, uuid strin
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	if tenantID == "" {
-		return nil, store.ErrMissingTenantID
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
 	}
 	uuid = strings.TrimSpace(uuid)
 	if uuid == "" {
