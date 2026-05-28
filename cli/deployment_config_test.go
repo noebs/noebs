@@ -278,6 +278,48 @@ func TestNoebsKubernetesMutableImageTagIsAlwaysPulled(t *testing.T) {
 	}
 }
 
+func TestCIWorkflowPublishesKubernetesNoebsImage(t *testing.T) {
+	workflowPath := filepath.Join("..", ".github", "workflows", "main.yml")
+	workflow, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", workflowPath, err)
+	}
+	workflowText := string(workflow)
+	required := []string{
+		"needs: test",
+		"permissions:",
+		"packages: write",
+		"docker/setup-buildx-action@v3",
+		"docker/login-action@v3",
+		"docker/build-push-action@v6",
+		"push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}",
+		"ghcr.io/adonese/noebs:${{ github.sha }}",
+	}
+	for _, text := range required {
+		if !strings.Contains(workflowText, text) {
+			t.Fatalf("%s must contain %q", workflowPath, text)
+		}
+	}
+
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	images := map[string]bool{}
+	for _, object := range objects {
+		for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+			if strings.HasPrefix(container.Image, "ghcr.io/adonese/noebs:") {
+				images[container.Image] = true
+			}
+		}
+	}
+	if len(images) == 0 {
+		t.Fatalf("no Kubernetes Noebs images were found")
+	}
+	for image := range images {
+		if !strings.Contains(workflowText, image) {
+			t.Fatalf("Kubernetes image %q is not published by %s", image, workflowPath)
+		}
+	}
+}
+
 func TestNoebsImageRequiresMountedRuntimeConfig(t *testing.T) {
 	entrypoint, err := os.ReadFile(filepath.Join("..", "scripts", "entrypoint.sh"))
 	if err != nil {
