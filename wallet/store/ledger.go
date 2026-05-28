@@ -176,8 +176,9 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 }
 
 func (s *Store) LedgerTransactionExists(ctx context.Context, tenantID, idempotencyKey string) (bool, error) {
-	if tenantID == "" {
-		return false, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return false, err
 	}
 	if idempotencyKey == "" {
 		return false, ErrMissingIdempotencyKey

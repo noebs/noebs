@@ -101,6 +101,11 @@ func TestListWalletLedgerEntriesValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingTenantID)
 
 	invalid = filter
+	invalid.TenantID = "default"
+	_, err = s.ListWalletLedgerEntries(t.Context(), invalid)
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
+	invalid = filter
 	invalid.WalletID = uuid.Nil
 	_, err = s.ListWalletLedgerEntries(t.Context(), invalid)
 	assertErrorIs(t, err, ErrMissingWalletID)
@@ -425,6 +430,9 @@ func TestLedgerTransactionExistsValidation(t *testing.T) {
 	_, err := s.LedgerTransactionExists(t.Context(), "", "idem-1")
 	assertErrorIs(t, err, ErrMissingTenantID)
 
+	_, err = s.LedgerTransactionExists(t.Context(), "default", "idem-1")
+	assertErrorIs(t, err, ErrInvalidTenantID)
+
 	_, err = s.LedgerTransactionExists(t.Context(), "tenant", "")
 	assertErrorIs(t, err, ErrMissingIdempotencyKey)
 }
@@ -433,6 +441,9 @@ func TestLedgerTransactionExistsByReferenceValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.LedgerTransactionExistsByReference(t.Context(), "", "deposit", "ref-1")
 	assertErrorIs(t, err, ErrMissingTenantID)
+
+	_, err = s.LedgerTransactionExistsByReference(t.Context(), "default", "deposit", "ref-1")
+	assertErrorIs(t, err, ErrInvalidTenantID)
 
 	_, err = s.LedgerTransactionExistsByReference(t.Context(), "tenant", "", "ref-1")
 	assertErrorIs(t, err, ErrMissingReferenceType)

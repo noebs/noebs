@@ -35,8 +35,9 @@ type WalletLedgerEntry struct {
 }
 
 func (s *Store) ListWalletLedgerEntries(ctx context.Context, filter WalletLedgerEntryFilter) ([]WalletLedgerEntry, error) {
-	if filter.TenantID == "" {
-		return nil, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(filter.TenantID)
+	if err != nil {
+		return nil, err
 	}
 	if filter.WalletID == uuid.Nil {
 		return nil, ErrMissingWalletID
@@ -73,7 +74,7 @@ func (s *Store) ListWalletLedgerEntries(ctx context.Context, filter WalletLedger
 		FROM ledger_entries le
 		JOIN ledger_transactions lt ON lt.tenant_id = le.tenant_id AND lt.id = le.transaction_id
 		WHERE le.tenant_id = ? AND le.wallet_id = ?`
-	args := []any{filter.TenantID, filter.WalletID}
+	args := []any{tenantID, filter.WalletID}
 	if filter.EntryType != "" {
 		query += " AND le.entry_type = ?"
 		args = append(args, filter.EntryType)
@@ -89,8 +90,9 @@ func (s *Store) ListWalletLedgerEntries(ctx context.Context, filter WalletLedger
 }
 
 func (s *Store) LedgerTransactionExistsByReference(ctx context.Context, tenantID, referenceType, referenceID string) (bool, error) {
-	if tenantID == "" {
-		return false, ErrMissingTenantID
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return false, err
 	}
 	if referenceType == "" {
 		return false, ErrMissingReferenceType
