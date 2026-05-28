@@ -121,27 +121,10 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	stored, err := h.Store.GetPSPTransactionByReference(c.Context(), tenantID, clientRef)
 	if err != nil {
 		if errors.Is(err, walletstore.ErrPSPTransactionNotFound) {
-			txn := walletstore.PSPTransaction{
-				TenantID:        tenantID,
-				PSPProvider:     providerCode,
-				IdempotencyKey:  clientRef,
-				ClientReference: clientRef,
-				Direction:       normalizePSPDirection(fields.Direction),
-				Amount:          fields.Amount,
-				Currency:        fields.Currency,
-				Status:          fields.Status,
-				RawResponse:     walletstore.RawJSON(payload),
-			}
-			if pspTransactionID != "" {
-				txn.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
-			}
-			if _, err := h.Store.CreatePSPTransaction(c.Context(), txn); err != nil {
+			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, fields.Direction, http.StatusNotFound, fiber.Map{"error": err.Error(), "client_reference": clientRef}, err.Error(), payload); err != nil {
 				return jsonResponse(c, 0, mapWalletError(err))
 			}
-			if err := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, txn.Direction, http.StatusAccepted, fiber.Map{"status": fields.Status, "client_reference": clientRef}, "", payload); err != nil {
-				return jsonResponse(c, 0, mapWalletError(err))
-			}
-			return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": fields.Status, "client_reference": clientRef})
+			return jsonResponse(c, 0, mapWalletError(err))
 		}
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -261,15 +244,11 @@ func (h *PSPWebhookHandler) authorizeUnsignedWebhook(c *fiber.Ctx, cfg *walletps
 	if !cfg.StatusCheckWebhook {
 		return payloadMap, payload, nil
 	}
-	transactionID := pspTransactionID
-	if transactionID == "" {
-		transactionID = clientReference
-	}
-	if transactionID == "" {
+	if pspTransactionID == "" {
 		return nil, nil, walletstore.ErrMissingPSPTransactionID
 	}
-	status, callErr := provider.GetTransactionStatus(c.Context(), transactionID)
-	auditErr := h.recordWebhookStatusCheck(c, cfg, tenantID, providerCode, clientReference, transactionID, direction, status, callErr)
+	status, callErr := provider.GetTransactionStatus(c.Context(), pspTransactionID)
+	auditErr := h.recordWebhookStatusCheck(c, cfg, tenantID, providerCode, clientReference, pspTransactionID, direction, status, callErr)
 	if auditErr != nil {
 		return nil, nil, auditErr
 	}
@@ -437,16 +416,5 @@ func normalizeDirection(value string) string {
 		return "withdrawal"
 	default:
 		return normalized
-	}
-}
-
-func normalizePSPDirection(value string) string {
-	switch normalizeDirection(value) {
-	case "withdrawal":
-		return "outbound"
-	case "deposit":
-		return "inbound"
-	default:
-		return ""
 	}
 }
