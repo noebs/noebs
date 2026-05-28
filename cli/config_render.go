@@ -34,8 +34,16 @@ func isValidateKubernetesDeploymentCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "validate-kubernetes-deployment"
 }
 
+func isRenderKubernetesSecretsCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "render-kubernetes-secrets"
+}
+
 func isConfigUtilityCommand() bool {
-	return isRenderConfigCommand() || isRenderDatabasePasswordCommand() || isValidateDeploymentCommand() || isValidateKubernetesDeploymentCommand()
+	return isRenderConfigCommand() ||
+		isRenderDatabasePasswordCommand() ||
+		isValidateDeploymentCommand() ||
+		isValidateKubernetesDeploymentCommand() ||
+		isRenderKubernetesSecretsCommand()
 }
 
 func renderConfigFiles() error {

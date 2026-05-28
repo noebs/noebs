@@ -41,3 +41,11 @@ noebs validate-deployment /path/to/noebs-release
 ```
 
 The preflight decrypts every service secret with the release age key and validates the merged service configs before any containers are started. It rejects missing files, placeholder values, reserved tenant IDs, legacy `noebs.db_path`, non-owner database entries, missing service-owned database URLs, missing EBS adapter endpoints/app IDs, and incomplete Keycloak/Temporal/Postgres platform inputs.
+
+For Kubernetes cutovers, render the required Secret manifests from the same explicit release files and explicit TLS files:
+
+```sh
+noebs render-kubernetes-secrets /path/to/noebs-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
+```
+
+The renderer validates the release before writing manifests. It does not derive EBS endpoints, tenant IDs, database URLs, passwords, or TLS material.

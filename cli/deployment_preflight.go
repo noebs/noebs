@@ -294,20 +294,26 @@ func validateDeploymentBootstrapSecret(root string, decrypt deploymentDecryptFun
 }
 
 func validateDatabaseURLPassword(label, value string) error {
+	_, err := databaseURLPassword(label, value)
+	return err
+}
+
+func databaseURLPassword(label, value string) (string, error) {
 	if strings.TrimSpace(value) == "" {
-		return fmt.Errorf("%s is required", label)
+		return "", fmt.Errorf("%s is required", label)
 	}
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return fmt.Errorf("%s parse: %w", label, err)
+		return "", fmt.Errorf("%s parse: %w", label, err)
 	}
 	if parsed.User == nil {
-		return fmt.Errorf("%s missing user info", label)
+		return "", fmt.Errorf("%s missing user info", label)
 	}
-	if password, ok := parsed.User.Password(); !ok || strings.TrimSpace(password) == "" {
-		return fmt.Errorf("%s missing password", label)
+	password, ok := parsed.User.Password()
+	if !ok || strings.TrimSpace(password) == "" {
+		return "", fmt.Errorf("%s missing password", label)
 	}
-	return nil
+	return password, nil
 }
 
 func validatePlainSecretFile(label, path string) error {

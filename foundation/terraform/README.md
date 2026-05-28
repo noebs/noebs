@@ -46,6 +46,14 @@ Runtime secrets are not stored in OpenTofu. Before syncing the Argo CD applicati
 
 For Docker Compose cutovers on the current host, run `noebs validate-deployment /path/to/noebs-release` against the prepared release directory before replacing the old project. It validates the same explicit config and secret contracts locally, including per-service database ownership, Keycloak inputs, Temporal/Postgres password files, non-reserved tenant IDs, and EBS adapter endpoint/app-id requirements.
 
+Before syncing the Argo CD application, render the runtime Kubernetes Secrets from the same explicit release files:
+
+```sh
+noebs render-kubernetes-secrets /path/to/noebs-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
+```
+
+The generated manifests are sensitive deployment output and must not be committed.
+
 For Kubernetes cutovers, Argo CD runs `noebs-deployment-preflight` at sync wave 0 before Temporal and service migration jobs. The hook runs `noebs validate-kubernetes-deployment /preflight` against mounted ConfigMap and Secret files, so missing or placeholder platform/service inputs fail the sync before any schema changes run.
 
 The `noebs_service_discovery` output is the explicit platform service catalog for every Kubernetes Service in the noebs base. The `noebs_database_ownership` output lists each service-owned database, including Temporal's `temporal` and `temporal_visibility` schemas migrated by `temporal-schema-migrate`.

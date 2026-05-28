@@ -68,6 +68,12 @@ func main() {
 		}
 		return
 	}
+	if isRenderKubernetesSecretsCommand() {
+		if err := renderKubernetesSecretsCommand(); err != nil {
+			logrusLogger.Fatalf("render kubernetes secrets failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
