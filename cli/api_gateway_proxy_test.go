@@ -240,6 +240,17 @@ func TestAPIGatewayMetricsAcceptsPublicAdminKey(t *testing.T) {
 	}
 }
 
+func TestAPIGatewayDoesNotExposeLegacyConsumerTestRoute(t *testing.T) {
+	ensureInit()
+	configureGatewayProxyForTest(t)
+	route := GetMainEngine()
+	for _, registered := range route.GetRoutes(true) {
+		if registered.Method == http.MethodPost && registered.Path == "/consumer/test" {
+			t.Fatalf("api-gateway registered legacy route %s", registered.Path)
+		}
+	}
+}
+
 func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	ensureInit()
 	tests := []struct {

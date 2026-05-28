@@ -556,13 +556,6 @@ func GetMainEngine() *fiber.App {
 
 	route.Get("/app/config", appConfigHandler)
 
-	cons := route.Group("/consumer")
-
-	{
-		cons.Post("/test", func(c *fiber.Ctx) error {
-			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
-		})
-	}
 	return route
 }
 

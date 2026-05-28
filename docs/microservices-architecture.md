@@ -25,7 +25,7 @@ The code already has useful extraction points:
 
 ### API Gateway/BFF
 
-Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state, open a service database, or accept `noebs.db_url`. It calls internal services over gRPC/HTTP using config-driven service discovery and maps their typed errors to the public REST contract.
+Owns public HTTP shape, Fiber edge routing, request IDs, CORS, auth enforcement, public metrics, request logs, and compatibility routing for legacy clients. It must not own payment state, open a service database, or accept `noebs.db_url`. It calls internal services over gRPC/HTTP using config-driven service discovery and maps their typed errors to the public REST contract. Gateway-local health is `GET /test`; legacy consumer test endpoints such as `POST /consumer/test` are not part of the gateway surface.
 
 Initial package owner: `apigateway`, route composition from `cli`.
 
