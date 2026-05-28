@@ -26,7 +26,4 @@ func RegisterRoutes(router fiber.Router, h *Handler) {
 	router.Post("/refund", h.Refund)
 	router.Post("/toAccount", h.ToAccount)
 	router.Post("/statement", h.Statement)
-
-	// Manual test route (legacy)
-	router.Get("/wrk", h.IsAliveWrk)
 }

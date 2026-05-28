@@ -191,7 +191,6 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/refund", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/toAccount", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/statement", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
-		{method: fiber.MethodGet, path: "/wrk", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/status", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},
 		{method: fiber.MethodPost, path: "/consumer/is_alive", role: serviceRoleEBSAdapter, auth: gatewayAuthPublic},

@@ -14,28 +14,6 @@ func (h *Handler) IsAlive(c *fiber.Ctx) error {
 	return handleEBS(h, c, &req, nil, h.Service.IsAlive)
 }
 
-// IsAliveWrk is for manual testing only. It bypasses validation/binding and posts a fixed payload to EBS.
-func (h *Handler) IsAliveWrk(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-
-	payload := []byte(`{"clientId":"ACTS","systemTraceAuditNumber":79,"tranDateTime":"200419085611","terminalId":"18000377"}`)
-	res, callErr := h.Service.Proxy(c.UserContext(), tenantID, ebs_fields.IsAliveEndpoint, payload)
-	if callErr != nil {
-		var ebsCallErr *ebs_fields.CallError
-		if errors.As(callErr, &ebsCallErr) && ebsCallErr != nil {
-			return jsonResponse(c, statusForError(callErr), ebsErrorDetails(ebsCallErr.Response))
-		}
-		return jsonResponse(c, statusForError(callErr), fiber.Map{"code": "bad_request", "message": callErr.Error()})
-	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"ebs_response": res})
-}
-
 func (h *Handler) WorkingKey(c *fiber.Ctx) error {
 	var req ebs_fields.WorkingKeyFields
 	return handleEBS(h, c, &req, nil, h.Service.WorkingKey)

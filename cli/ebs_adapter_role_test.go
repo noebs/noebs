@@ -70,7 +70,6 @@ func ebsAdapterRoutes() []ebsAdapterRoute {
 		{name: "merchant refund", method: http.MethodPost, path: "/refund"},
 		{name: "merchant account transfer", method: http.MethodPost, path: "/toAccount"},
 		{name: "merchant statement", method: http.MethodPost, path: "/statement"},
-		{name: "merchant manual test", method: http.MethodGet, path: "/wrk"},
 	}
 }
 
@@ -191,6 +190,28 @@ func TestEBSAdapterDoesNotExposePublicMobilePANLookup(t *testing.T) {
 	for _, spec := range gatewayProxyRouteSpecs() {
 		if spec.path == "/consumer/pan_from_mobile" {
 			t.Fatalf("%s must not be proxied as a public route; use card-vault internal lookup commands", spec.path)
+		}
+	}
+}
+
+func TestEBSAdapterDoesNotExposeLegacyManualTestRoute(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleEBSAdapter)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/wrk", nil)
+	resp, err := route.Test(req)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	}
+
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.path == "/wrk" {
+			t.Fatalf("%s must not be proxied as a public route; use explicit EBS request routes", spec.path)
 		}
 	}
 }
