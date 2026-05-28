@@ -45,8 +45,17 @@ func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
 	if got := firstString(identityNoebs, "google_client_secret"); got != "legacy-google-client-secret" {
 		t.Fatalf("google_client_secret = %q, want legacy secret value", got)
 	}
-	if got := firstString(identityNoebs, "google_redirect_url"); got != "https://legacy.noebs.sd/oauth/callback" {
-		t.Fatalf("google_redirect_url = %q, want legacy secret value", got)
+	if got := firstString(identityNoebs, "google_redirect_url"); got != "https://api.noebs.sd/oauth/callback" {
+		t.Fatalf("google_redirect_url = %q, want explicit input", got)
+	}
+	if got := firstString(identityNoebs, "sms_key"); got != "input-sms-key" {
+		t.Fatalf("sms_key = %q, want explicit input", got)
+	}
+	if got := firstString(identityNoebs, "sms_sender"); got != "input-sms-sender" {
+		t.Fatalf("sms_sender = %q, want explicit input", got)
+	}
+	if got := firstString(identityNoebs, "sms_gateway"); got != "https://input.sms.example" {
+		t.Fatalf("sms_gateway = %q, want explicit input", got)
 	}
 	walletWorkerSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "wallet-worker.secrets.yaml"))
 	walletWorkerNoebs := getMap(walletWorkerSecret, "noebs")
@@ -85,7 +94,7 @@ func TestPrepareKubernetesReleaseRejectsStaleExplicitGoogleInput(t *testing.T) {
 	legacyRoot := writeLegacyReleaseRoot(t)
 	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
 	payload := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
-	payload = strings.Replace(payload, "  card_vault_data_key: card-vault-data-key\n", "  google_client_id: stale-google-client-id\n  card_vault_data_key: card-vault-data-key\n", 1)
+	payload = strings.Replace(payload, "  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", "  google_client_id: stale-google-client-id\n  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", 1)
 	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), payload)
 	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
 
@@ -151,12 +160,8 @@ func writeLegacyReleaseRoot(t *testing.T) string {
 	writePreflightFile(t, root, "secrets.yaml", `noebs:
   db_url: "postgres://legacy-user:legacy-pass@legacy-db:5432/noebs?sslmode=disable"
   jwt_secret: jwt-secret
-  sms_key: sms-key
-  sms_sender: noebs
-  sms_gateway: "https://sms.example"
   google_client_id: legacy-google-client-id
   google_client_secret: legacy-google-client-secret
-  google_redirect_url: "https://legacy.noebs.sd/oauth/callback"
   is_consumer_prod: false
   consumer_qa: "https://consumer.qa.example"
   consumer_prod: "https://consumer.prod.example"
@@ -174,7 +179,11 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
   admin_key: admin-key
   admin_user: admin
   admin_password: admin-password
+  sms_key: input-sms-key
+  sms_sender: input-sms-sender
+  sms_gateway: "https://input.sms.example"
   sms_message: "code"
+  google_redirect_url: "https://api.noebs.sd/oauth/callback"
   card_vault_data_key: card-vault-data-key
   temporal_postgres_password: temporal-postgres-password
   keycloak_postgres_password: keycloak-postgres-password

@@ -25,7 +25,11 @@ type kubernetesReleaseNoebsInputs struct {
 	AdminKey                       string                          `yaml:"admin_key"`
 	AdminUser                      string                          `yaml:"admin_user"`
 	AdminPassword                  string                          `yaml:"admin_password"`
+	SMSKey                         string                          `yaml:"sms_key"`
+	SMSSender                      string                          `yaml:"sms_sender"`
+	SMSGateway                     string                          `yaml:"sms_gateway"`
 	SMSMessage                     string                          `yaml:"sms_message"`
+	GoogleRedirectURL              string                          `yaml:"google_redirect_url"`
 	CardVaultDataKey               string                          `yaml:"card_vault_data_key"`
 	TemporalPostgresPassword       string                          `yaml:"temporal_postgres_password"`
 	KeycloakPostgresPassword       string                          `yaml:"keycloak_postgres_password"`
@@ -231,7 +235,11 @@ func (r preparedKubernetesRelease) validate() error {
 		{"noebs.admin_key", r.inputs.Noebs.AdminKey},
 		{"noebs.admin_user", r.inputs.Noebs.AdminUser},
 		{"noebs.admin_password", r.inputs.Noebs.AdminPassword},
+		{"noebs.sms_key", r.inputs.Noebs.SMSKey},
+		{"noebs.sms_sender", r.inputs.Noebs.SMSSender},
+		{"noebs.sms_gateway", r.inputs.Noebs.SMSGateway},
 		{"noebs.sms_message", r.inputs.Noebs.SMSMessage},
+		{"noebs.google_redirect_url", r.inputs.Noebs.GoogleRedirectURL},
 		{"noebs.card_vault_data_key", r.inputs.Noebs.CardVaultDataKey},
 		{"noebs.temporal_postgres_password", r.inputs.Noebs.TemporalPostgresPassword},
 		{"noebs.keycloak_postgres_password", r.inputs.Noebs.KeycloakPostgresPassword},
@@ -268,12 +276,8 @@ func (r preparedKubernetesRelease) validate() error {
 	for _, key := range []string{
 		"db_url",
 		"jwt_secret",
-		"sms_key",
-		"sms_sender",
-		"sms_gateway",
 		"google_client_id",
 		"google_client_secret",
-		"google_redirect_url",
 	} {
 		if _, err := r.requiredLegacyString(key); err != nil {
 			return err
@@ -382,18 +386,6 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	smsKey, err := r.requiredLegacyString("sms_key")
-	if err != nil {
-		return nil, err
-	}
-	smsSender, err := r.requiredLegacyString("sms_sender")
-	if err != nil {
-		return nil, err
-	}
-	smsGateway, err := r.requiredLegacyString("sms_gateway")
-	if err != nil {
-		return nil, err
-	}
 	googleClientID, err := r.requiredLegacyString("google_client_id")
 	if err != nil {
 		return nil, err
@@ -402,18 +394,14 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	googleRedirectURL, err := r.requiredLegacyString("google_redirect_url")
-	if err != nil {
-		return nil, err
-	}
 	identityAuth["jwt_secret"] = jwtSecret
-	identityAuth["sms_key"] = smsKey
-	identityAuth["sms_sender"] = smsSender
-	identityAuth["sms_gateway"] = smsGateway
+	identityAuth["sms_key"] = strings.TrimSpace(r.inputs.Noebs.SMSKey)
+	identityAuth["sms_sender"] = strings.TrimSpace(r.inputs.Noebs.SMSSender)
+	identityAuth["sms_gateway"] = strings.TrimSpace(r.inputs.Noebs.SMSGateway)
 	identityAuth["sms_message"] = strings.TrimSpace(r.inputs.Noebs.SMSMessage)
 	identityAuth["google_client_id"] = googleClientID
 	identityAuth["google_client_secret"] = googleClientSecret
-	identityAuth["google_redirect_url"] = googleRedirectURL
+	identityAuth["google_redirect_url"] = strings.TrimSpace(r.inputs.Noebs.GoogleRedirectURL)
 
 	cardVault, err := withDB("card-vault")
 	if err != nil {
