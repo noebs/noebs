@@ -155,6 +155,61 @@ locals {
     "keycloak-secrets",
     "noebs-tls",
   ]
+
+  noebs_required_kubernetes_secret_keys = {
+    "api-gateway-secrets" = [
+      "secrets.yaml",
+    ]
+    "identity-auth-secrets" = [
+      "secrets.yaml",
+    ]
+    "card-vault-secrets" = [
+      "secrets.yaml",
+    ]
+    "ebs-adapter-secrets" = [
+      "secrets.yaml",
+    ]
+    "psp-webhook-secrets" = [
+      "secrets.yaml",
+    ]
+    "admin-reporting-secrets" = [
+      "secrets.yaml",
+    ]
+    "notification-chat-secrets" = [
+      "secrets.yaml",
+    ]
+    "consumer-beneficiary-secrets" = [
+      "secrets.yaml",
+    ]
+    "wallet-api-secrets" = [
+      "secrets.yaml",
+    ]
+    "wallet-ledger-secrets" = [
+      "secrets.yaml",
+    ]
+    "wallet-worker-secrets" = [
+      "secrets.yaml",
+    ]
+    "sops-age-key" = [
+      "age-key.txt",
+    ]
+    "postgres-credentials" = [
+      "password",
+    ]
+    "temporal-postgres-credentials" = [
+      "password",
+    ]
+    "keycloak-postgres-credentials" = [
+      "password",
+    ]
+    "keycloak-secrets" = [
+      "keycloak.conf",
+    ]
+    "noebs-tls" = [
+      "tls.crt",
+      "tls.key",
+    ]
+  }
 }
 
 check "noebs_manifest_path_exists" {

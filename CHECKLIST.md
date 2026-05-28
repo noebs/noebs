@@ -26,6 +26,7 @@ Last updated: 2026-05-28
 - [x] Replaced SOPS CLI decryption's `SOPS_AGE_KEY_FILE` interface with an in-process age decrypt path.
 - [x] Added a current-secret-aware Kubernetes release input template command that prints only missing field placeholders.
 - [x] Added an API gateway invariant that every external HTTP route has exactly one service owner and is proxied to that owner.
+- [x] Added OpenTofu preconditions that block the Noebs Argo CD application unless required Kubernetes Secrets contain the expected data keys.
 
 ## Current Server State
 

@@ -118,4 +118,21 @@ resource "kubernetes_manifest" "noebs_application" {
     kubernetes_namespace_v1.noebs,
     data.kubernetes_secret_v1.noebs_required,
   ]
+
+  lifecycle {
+    precondition {
+      condition = alltrue(flatten([
+        for secret_name, required_keys in local.noebs_required_kubernetes_secret_keys : [
+          for required_key in required_keys :
+          contains(keys(data.kubernetes_secret_v1.noebs_required[secret_name].data), required_key)
+        ]
+      ]))
+      error_message = "required noebs Kubernetes Secrets must contain the exact required data keys."
+    }
+
+    precondition {
+      condition     = data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"
+      error_message = "noebs-tls must be a kubernetes.io/tls Secret."
+    }
+  }
 }

@@ -32,3 +32,7 @@ output "noebs_database_ownership" {
 output "noebs_required_kubernetes_secrets" {
   value = sort(local.noebs_required_kubernetes_secrets)
 }
+
+output "noebs_required_kubernetes_secret_keys" {
+  value = local.noebs_required_kubernetes_secret_keys
+}

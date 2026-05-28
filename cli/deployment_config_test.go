@@ -1906,7 +1906,9 @@ func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
 
 func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 	requiredSecrets := parseTerraformStringListLocal(t, filepath.Join("..", "foundation", "terraform", "locals.tf"), "noebs_required_kubernetes_secrets")
+	requiredSecretKeys := parseTerraformStringListMapLocal(t, filepath.Join("..", "foundation", "terraform", "locals.tf"), "noebs_required_kubernetes_secret_keys")
 	renderedSecrets := renderedKubernetesSecretNames()
+	renderedSecretKeys := renderedKubernetesSecretKeys()
 
 	for secretName := range renderedSecrets {
 		if !requiredSecrets[secretName] {
@@ -1917,6 +1919,33 @@ func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 		if !renderedSecrets[secretName] {
 			t.Fatalf("noebs_required_kubernetes_secrets declares Secret %q but render-kubernetes-secrets does not render it", secretName)
 		}
+		if _, ok := requiredSecretKeys[secretName]; !ok {
+			t.Fatalf("noebs_required_kubernetes_secrets declares Secret %q but noebs_required_kubernetes_secret_keys does not declare its data keys", secretName)
+		}
+	}
+	for secretName := range requiredSecretKeys {
+		if !requiredSecrets[secretName] {
+			t.Fatalf("noebs_required_kubernetes_secret_keys declares Secret %q but noebs_required_kubernetes_secrets does not declare it", secretName)
+		}
+		if !renderedSecrets[secretName] {
+			t.Fatalf("noebs_required_kubernetes_secret_keys declares Secret %q but render-kubernetes-secrets does not render it", secretName)
+		}
+	}
+	for secretName, keys := range renderedSecretKeys {
+		requiredKeys, ok := requiredSecretKeys[secretName]
+		if !ok {
+			t.Fatalf("render-kubernetes-secrets renders Secret %q but noebs_required_kubernetes_secret_keys does not declare it", secretName)
+		}
+		for key := range keys {
+			if !requiredKeys[key] {
+				t.Fatalf("render-kubernetes-secrets renders Secret %q key %q but foundation does not require it", secretName, key)
+			}
+		}
+		for key := range requiredKeys {
+			if !keys[key] {
+				t.Fatalf("foundation requires Secret %q key %q but render-kubernetes-secrets does not render it", secretName, key)
+			}
+		}
 	}
 
 	outputs, err := os.ReadFile(filepath.Join("..", "foundation", "terraform", "outputs.tf"))
@@ -1925,6 +1954,23 @@ func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 	}
 	if !strings.Contains(string(outputs), `output "noebs_required_kubernetes_secrets"`) {
 		t.Fatalf("foundation/terraform/outputs.tf must expose noebs_required_kubernetes_secrets")
+	}
+	if !strings.Contains(string(outputs), `output "noebs_required_kubernetes_secret_keys"`) {
+		t.Fatalf("foundation/terraform/outputs.tf must expose noebs_required_kubernetes_secret_keys")
+	}
+
+	main, err := os.ReadFile(filepath.Join("..", "foundation", "terraform", "main.tf"))
+	if err != nil {
+		t.Fatalf("read foundation/terraform/main.tf: %v", err)
+	}
+	for _, required := range []string{
+		`precondition {`,
+		`contains(keys(data.kubernetes_secret_v1.noebs_required[secret_name].data), required_key)`,
+		`data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"`,
+	} {
+		if !strings.Contains(string(main), required) {
+			t.Fatalf("foundation/terraform/main.tf must contain %q", required)
+		}
 	}
 }
 
@@ -1980,6 +2026,21 @@ func renderedKubernetesSecretNames() map[string]bool {
 	}
 	for _, source := range kubernetesServiceSecretSources {
 		secrets[source.secretName] = true
+	}
+	return secrets
+}
+
+func renderedKubernetesSecretKeys() map[string]map[string]bool {
+	secrets := map[string]map[string]bool{
+		"sops-age-key":                  {"age-key.txt": true},
+		"postgres-credentials":          {"password": true},
+		"temporal-postgres-credentials": {"password": true},
+		"keycloak-postgres-credentials": {"password": true},
+		"keycloak-secrets":              {"keycloak.conf": true},
+		"noebs-tls":                     {"tls.crt": true, "tls.key": true},
+	}
+	for _, source := range kubernetesServiceSecretSources {
+		secrets[source.secretName] = map[string]bool{"secrets.yaml": true}
 	}
 	return secrets
 }
@@ -2642,6 +2703,75 @@ func parseTerraformStringListLocal(t *testing.T, path, localName string) map[str
 			t.Fatalf("Terraform local %s repeats %q in %s", localName, match[1], path)
 		}
 		values[match[1]] = true
+	}
+	t.Fatalf("Terraform local %s not found in %s", localName, path)
+	return nil
+}
+
+func parseTerraformStringListMapLocal(t *testing.T, path, localName string) map[string]map[string]bool {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	startRe := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(localName) + `\s*=\s*\{\s*$`)
+	entryStartRe := regexp.MustCompile(`^\s*"([^"]+)"\s*=\s*\[\s*$`)
+	valueRe := regexp.MustCompile(`^\s*"([^"]+)"\s*,?\s*$`)
+	values := map[string]map[string]bool{}
+	inMap := false
+	currentName := ""
+	currentValues := map[string]bool{}
+	for _, line := range lines {
+		if !inMap {
+			if startRe.MatchString(line) {
+				inMap = true
+			}
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if currentName == "" && trimmed == "}" {
+			if len(values) == 0 {
+				t.Fatalf("Terraform local %s is empty in %s", localName, path)
+			}
+			return values
+		}
+		if trimmed == "" {
+			continue
+		}
+		if currentName == "" {
+			match := entryStartRe.FindStringSubmatch(line)
+			if len(match) != 2 {
+				t.Fatalf("Terraform local %s has unsupported map entry %q in %s", localName, line, path)
+			}
+			currentName = match[1]
+			if _, exists := values[currentName]; exists {
+				t.Fatalf("Terraform local %s repeats %q in %s", localName, currentName, path)
+			}
+			currentValues = map[string]bool{}
+			continue
+		}
+		if trimmed == "]" {
+			if len(currentValues) == 0 {
+				t.Fatalf("Terraform local %s entry %s is empty in %s", localName, currentName, path)
+			}
+			values[currentName] = currentValues
+			currentName = ""
+			currentValues = map[string]bool{}
+			continue
+		}
+		match := valueRe.FindStringSubmatch(line)
+		if len(match) != 2 {
+			t.Fatalf("Terraform local %s entry %s has unsupported list item %q in %s", localName, currentName, line, path)
+		}
+		if currentValues[match[1]] {
+			t.Fatalf("Terraform local %s entry %s repeats %q in %s", localName, currentName, match[1], path)
+		}
+		currentValues[match[1]] = true
+	}
+	if currentName != "" {
+		t.Fatalf("Terraform local %s entry %s is not closed in %s", localName, currentName, path)
 	}
 	t.Fatalf("Terraform local %s not found in %s", localName, path)
 	return nil
