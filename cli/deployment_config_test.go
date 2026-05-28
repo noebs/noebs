@@ -89,13 +89,17 @@ type manifestServicePort struct {
 }
 
 type manifestContainer struct {
-	Name         string           `yaml:"name"`
-	Image        string           `yaml:"image"`
-	Command      []string         `yaml:"command"`
-	Args         []string         `yaml:"args"`
-	Env          []map[string]any `yaml:"env"`
-	EnvFrom      []map[string]any `yaml:"envFrom"`
-	VolumeMounts []manifestMount  `yaml:"volumeMounts"`
+	Name           string           `yaml:"name"`
+	Image          string           `yaml:"image"`
+	Command        []string         `yaml:"command"`
+	Args           []string         `yaml:"args"`
+	Env            []map[string]any `yaml:"env"`
+	EnvFrom        []map[string]any `yaml:"envFrom"`
+	Ports          []map[string]any `yaml:"ports"`
+	ReadinessProbe map[string]any   `yaml:"readinessProbe"`
+	LivenessProbe  map[string]any   `yaml:"livenessProbe"`
+	StartupProbe   map[string]any   `yaml:"startupProbe"`
+	VolumeMounts   []manifestMount  `yaml:"volumeMounts"`
 }
 
 type manifestMount struct {
@@ -1493,6 +1497,15 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "" {
 				t.Fatalf("%s runtime must not be an Argo hook", object.Metadata.Name)
 			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("%s runtime containers = %d, want 1", object.Metadata.Name, len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			serviceMount := findMount(container, "/app/service.yaml")
+			expectedSubPath := object.Metadata.Name + ".service.yaml"
+			if serviceMount == nil || serviceMount.SubPath != expectedSubPath {
+				t.Fatalf("%s runtime service mount = %#v, want %q", object.Metadata.Name, serviceMount, expectedSubPath)
+			}
 		case "Job":
 			if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
 				continue
@@ -1524,8 +1537,15 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 				t.Fatalf("%s container image = %q", object.Metadata.Name, container.Image)
 			}
 			serviceMount := findMount(container, "/app/service.yaml")
-			if serviceMount == nil || !strings.HasSuffix(serviceMount.SubPath, "-migrate.service.yaml") {
-				t.Fatalf("%s service mount = %#v, want migrate service config", object.Metadata.Name, serviceMount)
+			expectedSubPath := strings.TrimPrefix(object.Metadata.Name, "noebs-") + ".service.yaml"
+			if serviceMount == nil || serviceMount.SubPath != expectedSubPath {
+				t.Fatalf("%s service mount = %#v, want %q", object.Metadata.Name, serviceMount, expectedSubPath)
+			}
+			if len(container.Ports) != 0 {
+				t.Fatalf("%s migration Job must not expose container ports", object.Metadata.Name)
+			}
+			if len(container.ReadinessProbe) != 0 || len(container.LivenessProbe) != 0 || len(container.StartupProbe) != 0 {
+				t.Fatalf("%s migration Job must not define runtime probes", object.Metadata.Name)
 			}
 			requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
 			requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
