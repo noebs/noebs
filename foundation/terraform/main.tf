@@ -131,6 +131,16 @@ resource "kubernetes_manifest" "noebs_application" {
     }
 
     precondition {
+      condition = alltrue(flatten([
+        for secret_name, required_keys in local.noebs_required_kubernetes_secret_keys : [
+          for required_key in required_keys :
+          length(trimspace(lookup(data.kubernetes_secret_v1.noebs_required[secret_name].data, required_key, ""))) > 0
+        ]
+      ]))
+      error_message = "required noebs Kubernetes Secret data values must be non-empty."
+    }
+
+    precondition {
       condition     = data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"
       error_message = "noebs-tls must be a kubernetes.io/tls Secret."
     }

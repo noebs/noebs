@@ -56,6 +56,7 @@ every item in "Completion Checklist" is checked.
 - [x] Installed GitHub CLI on `100.102.164.34` for explicit GHCR credential preparation; no GitHub auth state was configured.
 - [x] Refreshed the Caddy apt signing key on `100.102.164.34`; `apt-get update` now runs without the expired-key warning.
 - [x] Added a documentation invariant that the foundation and current-host runbooks list every required Kubernetes cutover Secret, including `ghcr-credentials`.
+- [x] Added an OpenTofu precondition that blocks the Noebs Argo CD application when required Kubernetes Secret keys exist but their values are empty.
 
 ## Verified Gates
 
@@ -93,7 +94,9 @@ every item in "Completion Checklist" is checked.
 
 ## Server Release Blockers
 
-- [ ] The current server audit still reports missing explicit cutover inputs; `noebs.db_url` and `noebs.jwt_secret` are transformable from the current encrypted root, while current `noebs.sms_key`, `noebs.sms_sender`, and `noebs.sms_gateway` keys exist but are empty.
+- [ ] The current server audit still reports missing explicit cutover inputs; only `noebs.db_url` and `noebs.jwt_secret` are transformable from the current encrypted root.
+- [ ] The current server audit reports empty current `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender`; these still need explicit cutover input.
+- [ ] The current server audit reports missing explicit values for tenant/admin, card-vault data key, all resolved EBS runtime fields, GHCR Docker config JSON, Google OAuth, Keycloak bootstrap/database, PSP, SMS message, and Temporal Postgres password.
 - [ ] GHCR credentials have not been configured on the server; the required `ghcr-credentials` pull Secret remains an explicit cutover input.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.

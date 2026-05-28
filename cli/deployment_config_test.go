@@ -2117,6 +2117,7 @@ func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 	for _, required := range []string{
 		`precondition {`,
 		`contains(keys(data.kubernetes_secret_v1.noebs_required[secret_name].data), required_key)`,
+		`length(trimspace(lookup(data.kubernetes_secret_v1.noebs_required[secret_name].data, required_key, ""))) > 0`,
 		`data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"`,
 		`data.kubernetes_secret_v1.noebs_required["ghcr-credentials"].type == "kubernetes.io/dockerconfigjson"`,
 	} {
