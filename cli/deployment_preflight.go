@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -490,6 +491,14 @@ func validateDockerConfigJSONPayload(label, payload string) error {
 	}
 	if strings.TrimSpace(entry.Auth) == "" {
 		return fmt.Errorf("%s auths.ghcr.io.auth is empty", label)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(entry.Auth))
+	if err != nil {
+		return fmt.Errorf("%s auths.ghcr.io.auth must be base64 username:token", label)
+	}
+	username, token, ok := strings.Cut(string(decoded), ":")
+	if !ok || strings.TrimSpace(username) == "" || strings.TrimSpace(token) == "" {
+		return fmt.Errorf("%s auths.ghcr.io.auth must decode to username:token", label)
 	}
 	return nil
 }

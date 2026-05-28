@@ -165,6 +165,29 @@ func TestValidateKubernetesDeploymentRootRejectsMissingPlatformSecret(t *testing
 	}
 }
 
+func TestValidateKubernetesDeploymentRootRejectsInvalidGHCRDockerConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{name: "missing ghcr", payload: `{"auths":{"docker.io":{"auth":"bm9lYnM6dG9rZW4="}}}`, want: "missing auths.ghcr.io"},
+		{name: "bad base64", payload: `{"auths":{"ghcr.io":{"auth":"not-base64"}}}`, want: "must be base64 username:token"},
+		{name: "missing token", payload: `{"auths":{"ghcr.io":{"auth":"bm9lYnM6"}}}`, want: "must decode to username:token"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := writeKubernetesSecretReleaseRoot(t)
+			writePreflightFile(t, root, "platform/ghcr-dockerconfigjson", tt.payload+"\n")
+
+			err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateKubernetesDeploymentRootRejectsMissingMigrationServiceConfig(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	if err := os.Remove(filepath.Join(root, "services", "wallet-ledger-migrate.yaml")); err != nil {
