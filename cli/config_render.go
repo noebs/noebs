@@ -215,7 +215,7 @@ func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
 
 func mergeConfig(base, override interface{}) interface{} {
 	if override == nil {
-		return base
+		return nil
 	}
 
 	switch overrideTyped := override.(type) {
@@ -233,14 +233,8 @@ func mergeConfig(base, override interface{}) interface{} {
 		}
 		return result
 	case []interface{}:
-		if len(overrideTyped) == 0 {
-			return base
-		}
 		return overrideTyped
 	case string:
-		if overrideTyped == "" {
-			return base
-		}
 		return overrideTyped
 	default:
 		return override

@@ -51,6 +51,19 @@ func TestRenderConfigFilesRejectsDefaultTenantAfterMerge(t *testing.T) {
 	}
 }
 
+func TestRenderConfigFilesRejectsBlankTenantOverrideAfterMerge(t *testing.T) {
+	renderConfigTempDirWithService(t, `noebs:
+  default_tenant_id: tenant_1
+  db_driver: pgx
+`, `noebs:
+  service_role: api-gateway
+  default_tenant_id: ""
+`)
+	if err := renderConfigFiles(); !errors.Is(err, store.ErrMissingTenantID) {
+		t.Fatalf("renderConfigFiles() error = %v, want %v", err, store.ErrMissingTenantID)
+	}
+}
+
 func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
   default_tenant_id: tenant_1
@@ -143,6 +156,34 @@ litestream:
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "litestream.yml")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("litestream.yml stat error = %v, want %v", err, os.ErrNotExist)
+	}
+}
+
+func TestMergeConfigDoesNotIgnoreExplicitEmptyValues(t *testing.T) {
+	base := map[string]interface{}{
+		"noebs": map[string]interface{}{
+			"admin_key": "existing-key",
+			"cors":      []interface{}{"*"},
+		},
+	}
+	override := map[string]interface{}{
+		"noebs": map[string]interface{}{
+			"admin_key": "",
+			"cors":      []interface{}{},
+		},
+	}
+
+	merged := mergeConfig(base, override).(map[string]interface{})
+	noebs := merged["noebs"].(map[string]interface{})
+	if got, ok := noebs["admin_key"].(string); !ok || got != "" {
+		t.Fatalf("admin_key = %#v, want explicit empty string", noebs["admin_key"])
+	}
+	cors, ok := noebs["cors"].([]interface{})
+	if !ok {
+		t.Fatalf("cors = %#v, want []interface{}", noebs["cors"])
+	}
+	if len(cors) != 0 {
+		t.Fatalf("cors = %#v, want explicit empty list", cors)
 	}
 }
 
