@@ -7,7 +7,7 @@ This root owns platform-level deployment wiring for the existing host `100.102.1
 - create the noebs Argo CD project;
 - create the noebs Argo CD application pointing at `deploy/kubernetes/overlays/current-host`.
 
-Defaults are pinned for the current host, namespace names, Argo CD chart version, repository, branch, and manifest path. Override them only when intentionally moving infrastructure ownership.
+Every input is explicit. Copy `terraform.tfvars.example` to `terraform.tfvars`, review each value, and keep the chosen host, kubeconfig, namespaces, Argo CD chart version, repository, branch, and manifest path in that file rather than relying on OpenTofu defaults.
 
 Commands:
 

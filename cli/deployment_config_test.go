@@ -1701,6 +1701,47 @@ func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 	}
 }
 
+func TestFoundationTerraformVariablesRequireExplicitInputs(t *testing.T) {
+	variablesPath := filepath.Join("..", "foundation", "terraform", "variables.tf")
+	tfvarsExamplePath := filepath.Join("..", "foundation", "terraform", "terraform.tfvars.example")
+
+	blocks := parseTerraformVariableBlocks(t, variablesPath)
+	tfvarsExample, err := os.ReadFile(tfvarsExamplePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", tfvarsExamplePath, err)
+	}
+	tfvarsExampleText := string(tfvarsExample)
+
+	explicitInputs := []string{
+		"deployment_host",
+		"kubeconfig_path",
+		"argocd_namespace",
+		"noebs_namespace",
+		"argocd_chart_version",
+		"noebs_repo_url",
+		"noebs_target_revision",
+		"noebs_manifest_path",
+	}
+	defaultRe := regexp.MustCompile(`(?m)^\s*default\s*=`)
+	nullableFalseRe := regexp.MustCompile(`(?m)^\s*nullable\s*=\s*false\s*$`)
+	for _, name := range explicitInputs {
+		block, ok := blocks[name]
+		if !ok {
+			t.Fatalf("foundation variable %q not found", name)
+		}
+		if defaultRe.MatchString(block) {
+			t.Fatalf("foundation variable %q must not define a default; record the value in terraform.tfvars", name)
+		}
+		if !nullableFalseRe.MatchString(block) {
+			t.Fatalf("foundation variable %q must set nullable = false", name)
+		}
+		assignmentRe := regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(name) + `\s*=`)
+		if !assignmentRe.MatchString(tfvarsExampleText) {
+			t.Fatalf("%s must assign %q", tfvarsExamplePath, name)
+		}
+	}
+}
+
 func renderedKubernetesSecretNames() map[string]bool {
 	secrets := map[string]bool{
 		"sops-age-key":                  true,
@@ -2365,6 +2406,50 @@ func parseTerraformStringListLocal(t *testing.T, path, localName string) map[str
 	}
 	t.Fatalf("Terraform local %s not found in %s", localName, path)
 	return nil
+}
+
+func parseTerraformVariableBlocks(t *testing.T, path string) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	startRe := regexp.MustCompile(`^\s*variable\s+"([^"]+)"\s*\{\s*$`)
+	blocks := map[string]string{}
+	currentName := ""
+	currentLines := []string{}
+	depth := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		if currentName == "" {
+			match := startRe.FindStringSubmatch(line)
+			if len(match) != 2 {
+				continue
+			}
+			currentName = match[1]
+			currentLines = []string{line}
+			depth = strings.Count(line, "{") - strings.Count(line, "}")
+			continue
+		}
+
+		currentLines = append(currentLines, line)
+		depth += strings.Count(line, "{")
+		depth -= strings.Count(line, "}")
+		if depth == 0 {
+			if blocks[currentName] != "" {
+				t.Fatalf("Terraform variable %q is repeated in %s", currentName, path)
+			}
+			blocks[currentName] = strings.Join(currentLines, "\n")
+			currentName = ""
+			currentLines = nil
+		}
+	}
+	if currentName != "" {
+		t.Fatalf("Terraform variable %q is not closed in %s", currentName, path)
+	}
+	if len(blocks) == 0 {
+		t.Fatalf("no Terraform variables found in %s", path)
+	}
+	return blocks
 }
 
 func requireTerraformServiceCatalogEntry(t *testing.T, catalog map[string]terraformServiceCatalogEntry, name string, port int, protocol string) {

@@ -1,7 +1,7 @@
 variable "deployment_host" {
   description = "Existing noebs deployment host."
   type        = string
-  default     = "100.102.164.34"
+  nullable    = false
 
   validation {
     condition     = var.deployment_host == "100.102.164.34"
@@ -12,41 +12,76 @@ variable "deployment_host" {
 variable "kubeconfig_path" {
   description = "Path to the kubeconfig for the cluster on the deployment host."
   type        = string
-  default     = "~/.kube/noebs-current-host.yaml"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.kubeconfig_path) != ""
+    error_message = "kubeconfig_path must be explicit."
+  }
 }
 
 variable "argocd_namespace" {
   description = "Namespace where Argo CD is installed."
   type        = string
-  default     = "argocd"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.argocd_namespace) != ""
+    error_message = "argocd_namespace must be explicit."
+  }
 }
 
 variable "noebs_namespace" {
   description = "Namespace where noebs microservices are deployed."
   type        = string
-  default     = "noebs"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.noebs_namespace) != ""
+    error_message = "noebs_namespace must be explicit."
+  }
 }
 
 variable "argocd_chart_version" {
   description = "argo-cd Helm chart version."
   type        = string
-  default     = "8.5.7"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.argocd_chart_version) != ""
+    error_message = "argocd_chart_version must be explicit."
+  }
 }
 
 variable "noebs_repo_url" {
   description = "Git repository URL used by Argo CD."
   type        = string
-  default     = "https://github.com/adonese/noebs.git"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.noebs_repo_url) != ""
+    error_message = "noebs_repo_url must be explicit."
+  }
 }
 
 variable "noebs_target_revision" {
   description = "Git revision used by Argo CD."
   type        = string
-  default     = "master"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.noebs_target_revision) != ""
+    error_message = "noebs_target_revision must be explicit."
+  }
 }
 
 variable "noebs_manifest_path" {
   description = "Kustomize path used by Argo CD for noebs."
   type        = string
-  default     = "deploy/kubernetes/overlays/current-host"
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.noebs_manifest_path) != ""
+    error_message = "noebs_manifest_path must be explicit."
+  }
 }
