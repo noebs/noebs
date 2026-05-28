@@ -53,6 +53,8 @@ every item in "Completion Checklist" is checked.
 - [x] Set Noebs Kubernetes workloads and migration/preflight jobs to always pull the mutable `master` image during Argo CD sync.
 - [x] Added a CI image job and invariant test that publish the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image after tests pass on `master`.
 - [x] Added an explicit `ghcr-credentials` image pull Secret contract for Noebs Kubernetes workloads.
+- [x] Installed GitHub CLI on `100.102.164.34` for explicit GHCR credential preparation; no GitHub auth state was configured.
+- [x] Refreshed the Caddy apt signing key on `100.102.164.34`; `apt-get update` now runs without the expired-key warning.
 
 ## Verified Gates
 
@@ -71,6 +73,9 @@ every item in "Completion Checklist" is checked.
 - [x] k3s is installed and the node is Ready.
 - [x] Argo CD is installed.
 - [x] Existing Docker Compose Noebs service is still running and healthy; `/test` returned `{"message":true}` after server gates.
+- [x] GitHub CLI is installed on the server; `gh auth status` reports no configured GitHub login.
+- [x] Server package metadata refresh is clean after the Caddy apt key update.
+- [x] No unhealthy Docker containers or non-running k8s pods were reported after the latest server tooling change.
 - [ ] Noebs Kubernetes replacement deployment has not been applied yet.
 - [ ] Argo CD does not yet manage the Noebs Kubernetes app.
 
@@ -88,6 +93,7 @@ every item in "Completion Checklist" is checked.
 ## Server Release Blockers
 
 - [ ] The current server audit still reports missing explicit cutover inputs; `noebs.db_url` and `noebs.jwt_secret` are transformable from the current encrypted root, while current `noebs.sms_key`, `noebs.sms_sender`, and `noebs.sms_gateway` keys exist but are empty.
+- [ ] GHCR credentials have not been configured on the server; the required `ghcr-credentials` pull Secret remains an explicit cutover input.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.
 
