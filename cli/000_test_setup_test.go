@@ -39,6 +39,14 @@ func TestMain(m *testing.M) {
   db_driver: %q
   default_tenant_id: %q
   service_role: %q
+  jwt_secret: "test-jwt-secret"
+  sms_key: "test-sms-key"
+  sms_sender: "NOEBS"
+  sms_gateway: "https://sms.example/send?"
+  sms_message: "code"
+  google_client_id: "test-google-client-id"
+  google_client_secret: "test-google-client-secret"
+  google_redirect_url: "https://app.example/auth/google/callback"
   service_discovery:
     identity-auth: "http://127.0.0.1:1"
     keycloak: "http://127.0.0.1:1"

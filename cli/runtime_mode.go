@@ -23,6 +23,8 @@ var (
 	errGRPCNotEnabled      = errors.New("grpc_enabled required for service role")
 	errMissingGRPCPort     = errors.New("missing noebs.grpc_port")
 	errMissingGRPCGateway  = errors.New("missing noebs.grpc_gateway_port")
+	errMissingGatewayAuth  = errors.New("missing api-gateway auth runtime config")
+	errMissingIdentityAuth = errors.New("missing identity-auth runtime config")
 	errInvalidWalletConfig = errors.New("invalid wallet runtime config")
 	errMissingEBSConfig    = errors.New("missing ebs-adapter runtime config")
 	errLegacyEBSConfig     = errors.New("legacy ebs-adapter runtime selector not allowed")
@@ -137,6 +139,12 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	if roleRequiresDataKey(role) && strings.TrimSpace(cfg.DataKey) == "" {
 		return fmt.Errorf("%w: %s", store.ErrMissingDataKey, role)
 	}
+	if err := validateGatewayAuthRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
+	if err := validateIdentityAuthRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
 	if err := validateEBSRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
@@ -203,6 +211,52 @@ func roleUsesWalletFeature(role serviceRole) bool {
 
 func roleRequiresDataKey(role serviceRole) bool {
 	return role == serviceRoleCardVault || role == serviceRoleCardVaultMigrate
+}
+
+func validateGatewayAuthRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if role != serviceRoleAPIGateway {
+		return nil
+	}
+	required := []struct {
+		key   string
+		value string
+	}{
+		{key: "jwt_secret", value: cfg.JWTKey},
+		{key: "admin_key", value: cfg.AdminKey},
+		{key: "admin_user", value: cfg.AdminUser},
+		{key: "admin_password", value: cfg.AdminPassword},
+	}
+	for _, field := range required {
+		if strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("%w: noebs.%s", errMissingGatewayAuth, field.key)
+		}
+	}
+	return nil
+}
+
+func validateIdentityAuthRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if role != serviceRoleIdentityAuth {
+		return nil
+	}
+	required := []struct {
+		key   string
+		value string
+	}{
+		{key: "jwt_secret", value: cfg.JWTKey},
+		{key: "sms_key", value: cfg.SMSAPIKey},
+		{key: "sms_sender", value: cfg.SMSSender},
+		{key: "sms_gateway", value: cfg.SMSGateway},
+		{key: "sms_message", value: cfg.SMSMessage},
+		{key: "google_client_id", value: cfg.GoogleClientID},
+		{key: "google_client_secret", value: cfg.GoogleClientSecret},
+		{key: "google_redirect_url", value: cfg.GoogleRedirectURL},
+	}
+	for _, field := range required {
+		if strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("%w: noebs.%s", errMissingIdentityAuth, field.key)
+		}
+	}
+	return nil
 }
 
 func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
