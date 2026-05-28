@@ -115,19 +115,8 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	if err != nil {
 		return err
 	}
-	serviceFiles, err := filepath.Glob(filepath.Join(root, "services", "*.yaml"))
-	if err != nil {
-		return fmt.Errorf("list Kubernetes service configs: %w", err)
-	}
-	if len(serviceFiles) == 0 {
-		return errors.New("no service configs found under services")
-	}
-	for _, serviceFile := range serviceFiles {
-		serviceName := strings.TrimSuffix(filepath.Base(serviceFile), ".yaml")
-		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
-		if err := validateDeploymentServiceWithSecretPath(configMap, serviceFile, secretPath, ageKeyPath, decrypt); err != nil {
-			return err
-		}
+	if err := validateKubernetesReleaseServices(root, configMap, ageKeyPath, decrypt); err != nil {
+		return err
 	}
 	return nil
 }
@@ -147,6 +136,17 @@ func validateKubernetesPlatformInputs(root string) error {
 	}
 	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf")); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateKubernetesReleaseServices(root string, configMap map[string]interface{}, ageKeyPath string, decrypt deploymentDecryptFunc) error {
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		servicePath := filepath.Join(root, "services", serviceName+".yaml")
+		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
+		if err := validateDeploymentServiceWithSecretPath(configMap, servicePath, secretPath, ageKeyPath, decrypt); err != nil {
+			return err
+		}
 	}
 	return nil
 }

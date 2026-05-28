@@ -181,12 +181,8 @@ func validateKubernetesSecretReleaseRootWithDecrypt(root string, decrypt deploym
 	if err != nil {
 		return err
 	}
-	for _, serviceName := range kubernetesSecretReleaseServiceNames {
-		servicePath := filepath.Join(root, "services", serviceName+".yaml")
-		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
-		if err := validateDeploymentServiceWithSecretPath(configMap, servicePath, secretPath, ageKeyPath, decrypt); err != nil {
-			return err
-		}
+	if err := validateKubernetesReleaseServices(root, configMap, ageKeyPath, decrypt); err != nil {
+		return err
 	}
 	return nil
 }
