@@ -2,13 +2,16 @@
 
 Last updated: 2026-05-29
 
-This file is the migration completion ledger. The task is not complete until
-every item in "Completion Checklist" is checked.
+This file is the migration completion ledger. It answers two questions after
+each implementation or deployment pass: what exists now, and whether the
+microservices migration goal can be called complete. The task is not complete
+until every item in "Completion Checklist" is checked.
 
-Current answer: the architecture and deployment path are mostly defined, but the
-goal is not complete. Server cutover is still blocked by explicit Kubernetes
-release inputs, generated release Secrets, the live k3s deployment, service
-health verification, and retirement of the old Docker Compose deployment.
+Current answer: `NOT COMPLETE`. The architecture and deployment path are mostly
+defined, and latest committed implementation work is `4e7ac90`. Server cutover
+is still blocked by explicit Kubernetes release inputs, generated release
+Secrets, the live k3s deployment, service health verification, and retirement
+of the old Docker Compose deployment.
 
 ## Status Key
 
@@ -27,10 +30,11 @@ health verification, and retirement of the old Docker Compose deployment.
 - [x] Kafka-backed EBS transaction event publishing and admin-reporting projection consumption.
 - [x] Keycloak deployable as an independent platform service with its own Postgres database; application auth wiring remains future work.
 - [x] Kubernetes NetworkPolicies for explicit platform backend ingress to Noebs Postgres, Kafka, Temporal, and Keycloak Postgres.
+- [x] Kubernetes NetworkPolicies for explicit app service ingress to public HTTP service roles and wallet-ledger gRPC.
 - [x] Runtime config/secret rendering paths that reject stale, extra, missing, or empty release inputs instead of guessing values.
 - [x] OpenTofu foundation validation and Argo CD preconditions for required Kubernetes Secrets.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
-- [x] Local and server clean-archive verification for the latest implementation commit before this checklist update: `26462e3`.
+- [x] Local verification passed for latest implementation commit `4e7ac90`; server non-Docker gates passed from a clean temporary archive.
 - [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
 - [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
 - [ ] Generated Kubernetes release Secret/config bundle from those explicit inputs.
@@ -88,7 +92,9 @@ health verification, and retirement of the old Docker Compose deployment.
 - [x] Added background health endpoints and Kubernetes probes for `wallet-worker`, `ebs-adapter-events`, and `admin-reporting-projector`.
 - [x] Mirrored the background health contract in Docker Compose health checks for local microservice parity.
 - [x] Added Kubernetes NetworkPolicy manifests and invariant tests for platform backend ingress ownership.
+- [x] Added Kubernetes NetworkPolicy manifests and invariant tests for app service ingress ownership.
 - [x] Aligned testcontainer-backed migration test timeouts with the explicit Postgres wait strategy used by the suite.
+- [x] Replaced remaining CLI Fiber route-test default one-second timeouts with the explicit route test budget used by slow server runs.
 
 ## Verified Gates
 
@@ -100,17 +106,24 @@ health verification, and retirement of the old Docker Compose deployment.
 - [x] `tofu -chdir=foundation/terraform fmt -check` passed locally.
 - [x] `tofu -chdir=foundation/terraform validate` passed locally.
 - [x] Latest committed changes were server-verified on `100.102.164.34` from a clean temporary archive.
-- [x] Current NetworkPolicy and test-timeout patch was server-verified on `100.102.164.34` from a clean temporary archive based on `26462e3`.
+- [x] GitHub Actions run `26603575493` passed for `b34ad53`.
+- [x] Current NetworkPolicy and test-timeout patch was server-verified on `100.102.164.34` from a clean temporary archive based on `26462e3`; that patch became `b34ad53`.
+- [x] Implementation commit `4e7ac90` passed local `go test ./...`.
+- [x] Implementation commit `4e7ac90` passed local `golangci-lint run --new-from-rev=HEAD ./...`.
+- [x] Implementation commit `4e7ac90` passed local `docker compose config -q`, both Kubernetes kustomize renders, OpenTofu `fmt -check`, OpenTofu `validate`, and `git diff --check`.
+- [x] Implementation commit `4e7ac90` passed server non-Docker gates from a clean temporary archive: `golangci-lint`, `docker compose config -q`, both Kubernetes kustomize renders, OpenTofu `fmt -check`, OpenTofu `init -backend=false`, OpenTofu `validate`, and `git diff --check`.
+- [ ] Implementation commit `4e7ac90` did not pass server Docker-backed `go test -p 1 ./...`; the first testcontainer-backed Postgres startup failed through Docker API context deadlines even after Docker restart and host reboot.
 
 ## Current Server State
 
 - [x] SSH reaches `100.102.164.34`.
 - [x] k3s is installed and the node is Ready.
 - [x] Argo CD is installed.
-- [x] Existing Docker Compose Noebs service is still running and healthy; `/test` returned `{"message":true}` after server gates.
+- [x] Existing Docker Compose Noebs service is still running and healthy; `/test` returned `{"message":true}` after Docker recovery.
 - [x] GitHub CLI is installed on the server; `gh auth status` reports no configured GitHub login.
 - [x] Server package metadata refresh is clean after the Caddy apt key update.
-- [x] No unhealthy Docker containers or non-running k8s pods were reported after the latest server tooling change.
+- [x] No unhealthy Docker containers or non-running k8s pods were reported after Docker recovery.
+- [x] No Noebs Kubernetes replacement resources are currently applied in the `noebs` namespace.
 - [ ] Noebs Kubernetes replacement deployment has not been applied yet.
 - [ ] Argo CD does not yet manage the Noebs Kubernetes app.
 
@@ -133,6 +146,7 @@ health verification, and retirement of the old Docker Compose deployment.
 - [ ] GHCR credentials have not been configured on the server; the required `ghcr-credentials` pull Secret remains an explicit cutover input.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.
+- [ ] Server Docker currently cannot reliably start testcontainer Postgres during `go test`; clean-archive server Go verification is blocked until Docker testcontainer startup succeeds.
 
 ## Completion Checklist
 
@@ -168,8 +182,11 @@ Latest blocker summary:
 
 ## Verification Record
 
-- Latest implementation commit verified before this checklist update: `26462e3`.
-- Latest working-tree patch verified before commit: platform NetworkPolicies plus testcontainer timeout alignment on base `26462e3`.
+- Latest implementation commit: `4e7ac90`.
+- Latest CI verification: GitHub Actions run `26603575493` passed for `b34ad53`.
+- Latest implementation details: app service NetworkPolicies, NetworkPolicy invariants, Temporal SQL readiness, explicit server testcontainer startup budgets, and CLI route-test timeout normalization on base `b34ad53`.
+- Latest local implementation verification: `go test ./...`, `golangci-lint run --new-from-rev=HEAD ./...`, `docker compose config -q`, both Kubernetes kustomize renders, OpenTofu `fmt -check`, OpenTofu `validate`, and `git diff --check` passed.
+- Latest server implementation verification: non-Docker gates passed from a clean temporary archive after `tofu init -backend=false`; Docker-backed `go test -p 1 ./...` is blocked by server Docker testcontainer startup deadlines.
 - Latest server checked: `100.102.164.34`.
 - Latest server deployment state: Docker Compose Noebs is still active; Kubernetes replacement is not active yet.
 - Latest goal decision: `NOT COMPLETE`.
