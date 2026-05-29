@@ -53,6 +53,8 @@ The Noebs deployment on `100.102.164.34` has been cut over from the old Docker C
   - `git diff --check`
 - Server Noebs focused verification:
   - `timeout 30m go test ./cli -run "TestTemporalKubernetesUsesMountedConfigAndSchemaJob|TestTemporalDockerComposeUsesMountedConfigAndSchemaJob|TestKubernetesNetworkPoliciesDeclareIngressPorts|TestKubernetesAPIGatewayTargetsHaveIngressPolicies|TestMigrationJobsRunBeforeNoebsRuntimeWorkloads"`
+- Server Noebs full verification:
+  - `timeout 90m go test -p 1 -count=1 ./...`
 - SDK verification:
   - `./gradlew test`
 
