@@ -8,7 +8,7 @@ microservices migration goal can be called complete. The task is not complete
 until every item in "Completion Checklist" is checked.
 
 Current answer: `NOT COMPLETE`. The architecture and deployment path are mostly
-defined, and the latest implementation code commit is `6d03050`. Server cutover
+defined, and the latest implementation code commit is `03e82ae`. Server cutover
 is still blocked by explicit Kubernetes release inputs, generated release
 Secrets, the live k3s deployment, service health verification after cutover, and
 retirement of the old Docker Compose deployment.
@@ -33,9 +33,10 @@ retirement of the old Docker Compose deployment.
 - [x] Kubernetes NetworkPolicies for explicit app service ingress to public HTTP service roles and wallet-ledger gRPC.
 - [x] Runtime config/secret rendering paths that reject stale, extra, missing, or empty release inputs instead of guessing values.
 - [x] OpenTofu foundation validation and Argo CD preconditions for required Kubernetes Secrets.
+- [x] OpenTofu foundation phase controls that bind to the current host's existing Argo CD install and create the Noebs Argo CD application only after explicit release Secrets exist.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
-- [x] Local verification passed for implementation commit `6d03050`; server Docker-backed `go test -p 1 -count=1 ./...` passed from a clean temporary archive.
-- [x] GitHub Actions run `26613199076` passed for committed state `673e906`.
+- [x] Local verification passed for implementation commit `03e82ae`; server OpenTofu bootstrap plan passed from a clean temporary tree against `100.102.164.34`.
+- [x] GitHub Actions run `26617505980` passed for committed state `195c8d7`.
 - [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
 - [x] Server release audit ran from a clean temporary copy of `673e906` against `/app/noebs` without printing secret values.
 - [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
@@ -97,6 +98,8 @@ retirement of the old Docker Compose deployment.
 - [x] Added Kubernetes NetworkPolicy manifests and invariant tests for app service ingress ownership.
 - [x] Aligned testcontainer-backed migration test deadlines with the explicit Postgres wait strategy used by the suite.
 - [x] Replaced remaining CLI Fiber route-test default one-second timeouts with the explicit route test budget used by slow server runs.
+- [x] Added explicit OpenTofu phase inputs: `argocd_installation_mode` and `create_noebs_application`.
+- [x] Corrected the foundation current-host Argo CD repository URL to `https://github.com/noebs/noebs.git`.
 
 ## Verified Gates
 
@@ -116,20 +119,27 @@ retirement of the old Docker Compose deployment.
 - [x] Implementation commit `6d03050` passed server Docker-backed `timeout 60m go test -p 1 -count=1 ./...` from a clean temporary tree on `100.102.164.34`.
 - [x] GitHub Actions run `26612719090` passed for `038eb88`.
 - [x] GitHub Actions run `26613199076` passed for `673e906`.
+- [x] GitHub Actions run `26617505980` passed for `195c8d7`.
+- [x] Implementation commit `03e82ae` passed local `go test ./...`.
+- [x] Implementation commit `03e82ae` passed local `golangci-lint run --new-from-rev=HEAD ./...`.
+- [x] Implementation commit `03e82ae` passed local `tofu -chdir=foundation/terraform fmt -check`, `tofu -chdir=foundation/terraform validate`, and `git diff --check`.
+- [x] Implementation commit `03e82ae` passed server OpenTofu bootstrap planning from `/tmp/noebs-foundation-phase`: `argocd_installation_mode=existing`, `create_noebs_application=false`, and `noebs_repo_url=https://github.com/noebs/noebs.git`; the plan reads existing `argocd` and creates only the `noebs` namespace plus Noebs AppProject.
 - [x] Server audit at `100.102.164.34` with `/tmp/noebs-head-audit/noebs audit-kubernetes-release-inputs /app/noebs` identified transformable current-secret fields without printing secret values.
 
 ## Current Server State
 
 - [x] SSH reaches `100.102.164.34`.
 - [x] k3s is installed and the node is Ready.
-- [x] Argo CD is installed.
+- [x] Argo CD is installed in namespace `argocd`; the current host install is not a Helm release, so foundation uses explicit `argocd_installation_mode = "existing"`.
 - [x] Existing Docker Compose Noebs service is still running and healthy; host port `8081` `/test` returned `{"message":true}` after the full server test suite.
 - [x] GitHub CLI is installed on the server; `gh auth status` reports no configured GitHub login.
 - [x] Server package metadata refresh is clean after the Caddy apt key update.
 - [x] `/home/adonese/.testcontainers.properties` sets explicit Testcontainers Ryuk timeouts: `ryuk.connection.timeout=4m` and `ryuk.reconnection.timeout=2m`.
 - [x] No unhealthy Docker containers or non-running k8s pods were reported after the full server test suite.
 - [x] No Noebs Kubernetes replacement resources are currently applied in the `noebs` namespace.
+- [x] Server OpenTofu bootstrap plan with `create_noebs_application=false` succeeds without requiring Noebs release Secrets and plans only the Noebs namespace plus Noebs AppProject.
 - [x] Current-secret-aware Kubernetes release input template was rendered on the server at `/tmp/noebs-kubernetes-release.inputs.yaml.plain`.
+- [ ] Foundation bootstrap plan has not yet been applied from a persistent server checkout/state path.
 - [ ] Noebs Kubernetes replacement deployment has not been applied yet.
 - [ ] Argo CD does not yet manage the Noebs Kubernetes app.
 
@@ -152,6 +162,7 @@ retirement of the old Docker Compose deployment.
 - [ ] GHCR credentials have not been configured on the server; the required `ghcr-credentials` pull Secret remains an explicit cutover input.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.
+- [ ] Foundation bootstrap should be applied only from a persistent server checkout/state path, not from `/tmp/noebs-foundation-phase`.
 
 ## Completion Checklist
 
@@ -187,11 +198,11 @@ Latest blocker summary:
 
 ## Verification Record
 
-- Latest implementation commit: `6d03050`.
-- Latest recorded CI verification: GitHub Actions run `26613199076` passed for `673e906`.
-- Latest implementation details: explicit Testcontainers wait deadlines for Postgres-backed tests, preserving migration-backed testcontainers without ambient environment variables.
-- Latest local implementation verification: `go test ./...`, `golangci-lint run --new-from-rev=HEAD ./...`, and `git diff --check` passed.
-- Latest server implementation verification: `timeout 60m go test -p 1 -count=1 ./...` passed from a clean temporary tree on `100.102.164.34`; Noebs `/test` returned `{"message":true}` on host port `8081`; no unhealthy Docker containers or non-running k8s pods were reported.
+- Latest implementation commit: `03e82ae`.
+- Latest recorded CI verification: GitHub Actions run `26617505980` passed for `195c8d7`.
+- Latest implementation details: explicit OpenTofu Argo CD installation mode, explicit Noebs application creation phase, and corrected current-host Argo CD repository URL.
+- Latest local implementation verification: `go test ./...`, `golangci-lint run --new-from-rev=HEAD ./...`, `tofu -chdir=foundation/terraform fmt -check`, `tofu -chdir=foundation/terraform validate`, and `git diff --check` passed.
+- Latest server implementation verification: OpenTofu initialized and planned from `/tmp/noebs-foundation-phase` on `100.102.164.34` with `argocd_installation_mode=existing` and `create_noebs_application=false`; the plan reads the existing `argocd` namespace and creates only the `noebs` namespace plus Noebs AppProject. The plan was not applied because `/tmp` is not a persistent state path.
 - Latest server release-input audit: `/app/noebs` provides `noebs.db_url`, `noebs.jwt_secret`, `noebs.google_client_id`, and `noebs.google_client_secret`; `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender` exist but are empty; the remaining required cutover fields are still missing.
 - Latest server checked: `100.102.164.34`.
 - Latest server deployment state: Docker Compose Noebs is still active; Kubernetes replacement is not active yet.
