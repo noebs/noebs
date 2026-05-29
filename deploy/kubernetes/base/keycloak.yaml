@@ -122,6 +122,7 @@ spec:
                 - keycloak
                 - -d
                 - keycloak
+            timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
@@ -132,8 +133,20 @@ spec:
                 - keycloak
                 - -d
                 - keycloak
+            timeoutSeconds: 5
             periodSeconds: 30
             failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - keycloak
+                - -d
+                - keycloak
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 60
           volumeMounts:
             - name: keycloak-postgres-bootstrap
               mountPath: /opt/keycloak-postgres/bin/start.sh
@@ -219,14 +232,23 @@ spec:
             httpGet:
               path: /health/ready
               port: management
+            timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 12
           livenessProbe:
             httpGet:
               path: /health/live
               port: management
+            timeoutSeconds: 5
             periodSeconds: 30
             failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 60
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

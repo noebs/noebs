@@ -405,6 +405,7 @@ spec:
                 - temporal
                 - -d
                 - temporal
+            timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
@@ -415,8 +416,20 @@ spec:
                 - temporal
                 - -d
                 - temporal
+            timeoutSeconds: 5
             periodSeconds: 30
             failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - temporal
+                - -d
+                - temporal
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 60
           volumeMounts:
             - name: temporal-postgres-bootstrap
               mountPath: /opt/temporal-postgres/bin/start.sh
@@ -560,13 +573,21 @@ spec:
           readinessProbe:
             tcpSocket:
               port: grpc
+            timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 12
           livenessProbe:
             tcpSocket:
               port: grpc
+            timeoutSeconds: 5
             periodSeconds: 30
             failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: grpc
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 60
           volumeMounts:
             - name: temporal-config
               mountPath: /opt/temporal/bin/temporal-start.sh

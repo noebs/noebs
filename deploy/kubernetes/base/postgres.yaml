@@ -143,6 +143,7 @@ spec:
                 - noebs
                 - -d
                 - postgres
+            timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
@@ -153,8 +154,20 @@ spec:
                 - noebs
                 - -d
                 - postgres
+            timeoutSeconds: 5
             periodSeconds: 30
             failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - noebs
+                - -d
+                - postgres
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 60
           volumeMounts:
             - name: postgres-bootstrap
               mountPath: /opt/noebs-postgres/bin/start.sh

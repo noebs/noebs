@@ -171,6 +171,7 @@ spec:
                 - /opt/kafka/bin/kafka-broker-api-versions.sh
                 - --bootstrap-server
                 - localhost:9092
+            timeoutSeconds: 10
             periodSeconds: 10
             failureThreshold: 12
           livenessProbe:
@@ -179,8 +180,18 @@ spec:
                 - /opt/kafka/bin/kafka-broker-api-versions.sh
                 - --bootstrap-server
                 - localhost:9092
+            timeoutSeconds: 10
             periodSeconds: 30
             failureThreshold: 3
+          startupProbe:
+            exec:
+              command:
+                - /opt/kafka/bin/kafka-broker-api-versions.sh
+                - --bootstrap-server
+                - localhost:9092
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
           volumeMounts:
             - name: kafka-config
               mountPath: /mnt/shared/config/server.properties
