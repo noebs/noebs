@@ -219,8 +219,8 @@ Latest blocker summary:
 
 ## Verification Record
 
-- Latest implementation commit: current `HEAD` (`Add offline service database reset`).
-- Latest recorded CI verification before the offline reset commit: GitHub Actions run `26619908642` passed for `b1769b7`.
+- Latest implementation commit: `8b7bf93` (`Add offline service database reset`).
+- Latest recorded CI verification for implementation code: GitHub Actions run `26622276839` passed for `8b7bf93`, including the `test` and `image` jobs.
 - Latest implementation details: release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of allowing explicit cutover input to mask them. The latest commit adds an offline-only database reset task, removes `noebs` database recreation from platform Postgres bootstrap, and adds invariant tests that reject Kubernetes-owned database reset hooks.
 - Latest local implementation verification: `go test -c ./cli`, `golangci-lint run --new-from-rev=HEAD ./...`, and `git diff --check` passed. Local `go test ./cli` could not run because local Docker is not reachable.
 - Latest server implementation verification: server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"` passed from a clean temporary tree on `100.102.164.34`; foundation remains applied; Docker Compose Noebs remains active; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.
