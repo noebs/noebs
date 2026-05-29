@@ -69,7 +69,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "11"
   labels:
     app.kubernetes.io/name: noebs-card-vault-migrate
 spec:
@@ -133,7 +133,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "12"
   labels:
     app.kubernetes.io/name: noebs-ebs-adapter-migrate
 spec:
@@ -197,7 +197,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "13"
   labels:
     app.kubernetes.io/name: noebs-psp-webhook-migrate
 spec:
@@ -261,7 +261,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "14"
   labels:
     app.kubernetes.io/name: noebs-admin-reporting-migrate
 spec:
@@ -325,7 +325,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "15"
   labels:
     app.kubernetes.io/name: noebs-notification-chat-migrate
 spec:
@@ -389,7 +389,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "16"
   labels:
     app.kubernetes.io/name: noebs-consumer-beneficiary-migrate
 spec:
@@ -453,7 +453,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "17"
   labels:
     app.kubernetes.io/name: noebs-wallet-ledger-migrate
 spec:

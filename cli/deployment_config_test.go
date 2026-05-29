@@ -2066,6 +2066,16 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"noebs-consumer-beneficiary-migrate": false,
 		"noebs-wallet-ledger-migrate":        false,
 	}
+	expectedMigrationWaves := map[string]string{
+		"noebs-identity-auth-migrate":        "10",
+		"noebs-card-vault-migrate":           "11",
+		"noebs-ebs-adapter-migrate":          "12",
+		"noebs-psp-webhook-migrate":          "13",
+		"noebs-admin-reporting-migrate":      "14",
+		"noebs-notification-chat-migrate":    "15",
+		"noebs-consumer-beneficiary-migrate": "16",
+		"noebs-wallet-ledger-migrate":        "17",
+	}
 	expectedRuntimeDeployments := map[string]bool{
 		"api-gateway":               false,
 		"identity-auth":             false,
@@ -2131,8 +2141,8 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "Sync" {
 				t.Fatalf("%s hook = %q, want Sync", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/hook"])
 			}
-			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "10" {
-				t.Fatalf("%s sync-wave = %q, want 10", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != expectedMigrationWaves[object.Metadata.Name] {
+				t.Fatalf("%s sync-wave = %q, want %s", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"], expectedMigrationWaves[object.Metadata.Name])
 			}
 			if object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"] != "BeforeHookCreation,HookSucceeded" {
 				t.Fatalf("%s hook delete policy = %q", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/hook-delete-policy"])
