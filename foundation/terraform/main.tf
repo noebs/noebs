@@ -9,6 +9,16 @@ provider "helm" {
 }
 
 resource "kubernetes_namespace_v1" "argocd" {
+  count = var.argocd_installation_mode == "helm" ? 1 : 0
+
+  metadata {
+    name = var.argocd_namespace
+  }
+}
+
+data "kubernetes_namespace_v1" "argocd_existing" {
+  count = var.argocd_installation_mode == "existing" ? 1 : 0
+
   metadata {
     name = var.argocd_namespace
   }
@@ -27,11 +37,13 @@ resource "kubernetes_namespace_v1" "noebs" {
 }
 
 resource "helm_release" "argocd" {
+  count = var.argocd_installation_mode == "helm" ? 1 : 0
+
   name       = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
   version    = var.argocd_chart_version
-  namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
+  namespace  = var.argocd_namespace
 
   set = [
     {
@@ -68,11 +80,14 @@ resource "kubernetes_manifest" "noebs_project" {
     }
   }
 
-  depends_on = [helm_release.argocd]
+  depends_on = [
+    helm_release.argocd,
+    data.kubernetes_namespace_v1.argocd_existing,
+  ]
 }
 
 data "kubernetes_secret_v1" "noebs_required" {
-  for_each = toset(local.noebs_required_kubernetes_secrets)
+  for_each = var.create_noebs_application ? toset(local.noebs_required_kubernetes_secrets) : toset([])
 
   metadata {
     name      = each.key
@@ -83,6 +98,8 @@ data "kubernetes_secret_v1" "noebs_required" {
 }
 
 resource "kubernetes_manifest" "noebs_application" {
+  count = var.create_noebs_application ? 1 : 0
+
   manifest = {
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"

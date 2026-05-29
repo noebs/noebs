@@ -53,6 +53,17 @@ variable "argocd_chart_version" {
   }
 }
 
+variable "argocd_installation_mode" {
+  description = "How foundation handles Argo CD installation: existing for the current host install, helm for a foundation-managed Helm install."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = contains(["existing", "helm"], var.argocd_installation_mode)
+    error_message = "argocd_installation_mode must be either existing or helm."
+  }
+}
+
 variable "noebs_repo_url" {
   description = "Git repository URL used by Argo CD."
   type        = string
@@ -84,4 +95,10 @@ variable "noebs_manifest_path" {
     condition     = trimspace(var.noebs_manifest_path) != ""
     error_message = "noebs_manifest_path must be explicit."
   }
+}
+
+variable "create_noebs_application" {
+  description = "Whether to create the Noebs Argo CD Application after the explicit release Secrets exist."
+  type        = bool
+  nullable    = false
 }

@@ -1922,11 +1922,17 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 	mainText := string(data)
 
 	required := []string{
+		`resource "kubernetes_namespace_v1" "argocd"`,
+		`count = var.argocd_installation_mode == "helm" ? 1 : 0`,
+		`data "kubernetes_namespace_v1" "argocd_existing"`,
+		`count = var.argocd_installation_mode == "existing" ? 1 : 0`,
+		`resource "helm_release" "argocd"`,
 		`resource "kubernetes_manifest" "noebs_project"`,
 		`data "kubernetes_secret_v1" "noebs_required"`,
-		`for_each = toset(local.noebs_required_kubernetes_secrets)`,
+		`for_each = var.create_noebs_application ? toset(local.noebs_required_kubernetes_secrets) : toset([])`,
 		`name      = each.key`,
 		`resource "kubernetes_manifest" "noebs_application"`,
+		`count = var.create_noebs_application ? 1 : 0`,
 		`namespace = var.argocd_namespace`,
 		`var.noebs_repo_url`,
 		`repoURL        = var.noebs_repo_url`,
@@ -1961,6 +1967,22 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 	}
 	if match[1] != "deploy/kubernetes/overlays/current-host" {
 		t.Fatalf("noebs_manifest_path = %q, want deploy/kubernetes/overlays/current-host", match[1])
+	}
+	repoURLRe := regexp.MustCompile(`(?m)^\s*noebs_repo_url\s*=\s*"([^"]+)"\s*$`)
+	repoURLMatch := repoURLRe.FindStringSubmatch(string(tfvarsExample))
+	if len(repoURLMatch) != 2 {
+		t.Fatalf("%s must assign noebs_repo_url", tfvarsExamplePath)
+	}
+	if repoURLMatch[1] != "https://github.com/noebs/noebs.git" {
+		t.Fatalf("noebs_repo_url = %q, want https://github.com/noebs/noebs.git", repoURLMatch[1])
+	}
+	argocdModeRe := regexp.MustCompile(`(?m)^\s*argocd_installation_mode\s*=\s*"([^"]+)"\s*$`)
+	argocdModeMatch := argocdModeRe.FindStringSubmatch(string(tfvarsExample))
+	if len(argocdModeMatch) != 2 {
+		t.Fatalf("%s must assign argocd_installation_mode", tfvarsExamplePath)
+	}
+	if argocdModeMatch[1] != "existing" {
+		t.Fatalf("argocd_installation_mode = %q, want existing for current host", argocdModeMatch[1])
 	}
 	if _, err := os.Stat(filepath.Join("..", filepath.FromSlash(match[1]), "kustomization.yaml")); err != nil {
 		t.Fatalf("noebs_manifest_path does not contain kustomization.yaml: %v", err)
@@ -2363,9 +2385,11 @@ func TestFoundationTerraformVariablesRequireExplicitInputs(t *testing.T) {
 		"argocd_namespace",
 		"noebs_namespace",
 		"argocd_chart_version",
+		"argocd_installation_mode",
 		"noebs_repo_url",
 		"noebs_target_revision",
 		"noebs_manifest_path",
+		"create_noebs_application",
 	}
 	defaultRe := regexp.MustCompile(`(?m)^\s*default\s*=`)
 	nullableFalseRe := regexp.MustCompile(`(?m)^\s*nullable\s*=\s*false\s*$`)

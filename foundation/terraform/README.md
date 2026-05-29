@@ -2,12 +2,12 @@
 
 This root owns platform-level deployment wiring for the existing host `100.102.164.34`:
 
-- install Argo CD into the configured cluster;
+- install Argo CD into the configured cluster or bind to the existing Argo CD install on the current host;
 - create the `noebs` namespace for microservice workloads;
 - create the noebs Argo CD project;
 - create the noebs Argo CD application pointing at `deploy/kubernetes/overlays/current-host`.
 
-Every input is explicit. Copy `terraform.tfvars.example` to `terraform.tfvars`, review each value, and keep the chosen host, kubeconfig, namespaces, Argo CD chart version, repository, branch, and manifest path in that file rather than relying on OpenTofu defaults.
+Every input is explicit. Copy `terraform.tfvars.example` to `terraform.tfvars`, review each value, and keep the chosen host, kubeconfig, namespaces, Argo CD installation mode, Argo CD chart version, repository, branch, manifest path, and application-creation phase in that file rather than relying on OpenTofu defaults. The current host already has Argo CD installed, so its explicit mode is `existing`; use `helm` only when foundation should create the Argo CD Helm release on a fresh cluster.
 
 Commands:
 
@@ -19,7 +19,7 @@ tofu -chdir=foundation/terraform apply
 
 The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host happens before applying this root so OpenTofu can manage Argo CD through the Kubernetes API.
 
-Runtime secrets are not stored in OpenTofu. Before applying the Noebs Argo CD application, create the required Kubernetes Secrets in the OpenTofu-owned `noebs` namespace. The foundation root reads this exact Secret name set as Kubernetes data sources before creating the Argo CD application, so missing release Secrets fail the OpenTofu run instead of starting an Argo CD sync with incomplete inputs:
+Runtime secrets are not stored in OpenTofu. Bootstrap the foundation with `create_noebs_application = false` while preparing release Secrets; this still creates Argo CD, the Noebs namespace, and the Noebs AppProject. After the explicit release Secrets have been applied, set `create_noebs_application = true` and apply again to create the Noebs Argo CD application. The foundation root reads this exact Secret name set as Kubernetes data sources before creating the Argo CD application, so missing release Secrets fail the OpenTofu run instead of starting an Argo CD sync with incomplete inputs:
 
 - `api-gateway-secrets` with key `secrets.yaml`
 - `identity-auth-secrets` with key `secrets.yaml`

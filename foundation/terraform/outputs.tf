@@ -14,6 +14,10 @@ output "noebs_manifest_path" {
   value = var.noebs_manifest_path
 }
 
+output "create_noebs_application" {
+  value = var.create_noebs_application
+}
+
 output "noebs_service_discovery" {
   value = {
     for name, service in local.noebs_service_catalog :
