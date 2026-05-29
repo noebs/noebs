@@ -133,7 +133,7 @@ data:
     global:
       membership:
         maxJoinDuration: 30s
-        broadcastAddress: temporal-frontend
+        broadcastAddress: 127.0.0.1
       pprof:
         port: 0
       authorization:

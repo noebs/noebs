@@ -1374,7 +1374,7 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 	}
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-postgres-bootstrap start.sh", postgresBootstrap, filepath.Join("..", "deploy", "docker", "temporal", "postgres-start.sh"))
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal.yaml", temporalConfig["temporal.yaml"], filepath.Join("..", "deploy", "docker", "temporal", "temporal.yaml"))
-	if !strings.Contains(temporalConfig["temporal.yaml"], "broadcastAddress: temporal-frontend") {
+	if !strings.Contains(temporalConfig["temporal.yaml"], "broadcastAddress: 127.0.0.1") {
 		t.Fatalf("temporal.yaml must carry an explicit broadcast address")
 	}
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal-start.sh", temporalConfig["temporal-start.sh"], filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
