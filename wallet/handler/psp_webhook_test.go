@@ -23,6 +23,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+const pspWebhookRouteTestTimeout = 5_000
+
 func TestWebhookIPAllowed(t *testing.T) {
 	allowed, err := webhookIPAllowed("192.0.2.10", []string{"192.0.2.10"})
 	if err != nil {
@@ -62,7 +64,7 @@ func TestPSPWebhookRequiresValidatedGatewayTenantIdentity(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Tenant-ID", "tenant-from-public-header")
 
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, pspWebhookRouteTestTimeout)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
 	}
@@ -197,7 +199,7 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, pspWebhookRouteTestTimeout)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
 	}
@@ -321,7 +323,7 @@ func TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewBufferString(`{"ref":"client-ref"}`))
 	req.Header.Set(fiber.HeaderXForwardedFor, "192.0.2.10")
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, pspWebhookRouteTestTimeout)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
 	}
@@ -453,7 +455,7 @@ func (f *pspWebhookTestFixture) postWebhook(t *testing.T, app *fiber.App, payloa
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(gateway.GatewayTenantIDHeader, f.tenantID)
 
-	resp, err := app.Test(req)
+	resp, err := app.Test(req, pspWebhookRouteTestTimeout)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
 	}
