@@ -8,10 +8,10 @@ microservices migration goal can be called complete. The task is not complete
 until every item in "Completion Checklist" is checked.
 
 Current answer: `NOT COMPLETE`. The architecture and deployment path are mostly
-defined, and latest committed implementation work is `4e7ac90`. Server cutover
-is still blocked by explicit Kubernetes release inputs, generated release
-Secrets, the live k3s deployment, service health verification, and retirement
-of the old Docker Compose deployment.
+defined, the latest committed state is `038eb88`, and the latest implementation
+code commit is `4e7ac90`. Server cutover is still blocked by explicit Kubernetes
+release inputs, generated release Secrets, the live k3s deployment, service
+health verification, and retirement of the old Docker Compose deployment.
 
 ## Status Key
 
@@ -34,8 +34,10 @@ of the old Docker Compose deployment.
 - [x] Runtime config/secret rendering paths that reject stale, extra, missing, or empty release inputs instead of guessing values.
 - [x] OpenTofu foundation validation and Argo CD preconditions for required Kubernetes Secrets.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
-- [x] Local verification passed for latest implementation commit `4e7ac90`; server non-Docker gates passed from a clean temporary archive.
+- [x] Local verification passed for implementation commit `4e7ac90`; server non-Docker gates passed from a clean temporary archive.
+- [x] GitHub Actions run `26612719090` passed for committed state `038eb88`.
 - [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
+- [x] Server release audit ran from a clean temporary copy of `038eb88` against `/app/noebs` without printing secret values.
 - [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
 - [ ] Generated Kubernetes release Secret/config bundle from those explicit inputs.
 - [ ] Live Noebs Kubernetes replacement deployment on `100.102.164.34`.
@@ -113,6 +115,8 @@ of the old Docker Compose deployment.
 - [x] Implementation commit `4e7ac90` passed local `docker compose config -q`, both Kubernetes kustomize renders, OpenTofu `fmt -check`, OpenTofu `validate`, and `git diff --check`.
 - [x] Implementation commit `4e7ac90` passed server non-Docker gates from a clean temporary archive: `golangci-lint`, `docker compose config -q`, both Kubernetes kustomize renders, OpenTofu `fmt -check`, OpenTofu `init -backend=false`, OpenTofu `validate`, and `git diff --check`.
 - [ ] Implementation commit `4e7ac90` did not pass server Docker-backed `go test -p 1 ./...`; the first testcontainer-backed Postgres startup failed through Docker API context deadlines even after Docker restart and host reboot.
+- [x] GitHub Actions run `26612719090` passed for `038eb88`.
+- [x] Server audit at `100.102.164.34` with `/tmp/noebs-head-audit/noebs audit-kubernetes-release-inputs /app/noebs` identified transformable current-secret fields without printing secret values.
 
 ## Current Server State
 
@@ -124,6 +128,7 @@ of the old Docker Compose deployment.
 - [x] Server package metadata refresh is clean after the Caddy apt key update.
 - [x] No unhealthy Docker containers or non-running k8s pods were reported after Docker recovery.
 - [x] No Noebs Kubernetes replacement resources are currently applied in the `noebs` namespace.
+- [x] Current-secret-aware Kubernetes release input template was rendered on the server at `/tmp/noebs-kubernetes-release.inputs.yaml.plain`.
 - [ ] Noebs Kubernetes replacement deployment has not been applied yet.
 - [ ] Argo CD does not yet manage the Noebs Kubernetes app.
 
@@ -140,9 +145,9 @@ of the old Docker Compose deployment.
 
 ## Server Release Blockers
 
-- [ ] The current server audit still reports missing explicit cutover inputs; only `noebs.db_url` and `noebs.jwt_secret` are transformable from the current encrypted root.
+- [ ] The current server audit still reports missing explicit cutover inputs; `noebs.db_url`, `noebs.jwt_secret`, `noebs.google_client_id`, and `noebs.google_client_secret` are transformable from the current encrypted root.
 - [ ] The current server audit reports empty current `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender`; these still need explicit cutover input.
-- [ ] The current server audit reports missing explicit values for tenant/admin, card-vault data key, all resolved EBS runtime fields, GHCR Docker config JSON, Google OAuth, Keycloak bootstrap/database, PSP, SMS message, and Temporal Postgres password.
+- [ ] The current server audit reports missing explicit values for tenant/admin, card-vault data key, all resolved EBS runtime fields, GHCR Docker config JSON, Google redirect URL, Keycloak bootstrap/database, PSP, SMS values, and Temporal Postgres password.
 - [ ] GHCR credentials have not been configured on the server; the required `ghcr-credentials` pull Secret remains an explicit cutover input.
 - [ ] The live server checkout at `~/src/noebs` has unrelated dirty files and must not be overwritten.
 - [ ] Deployment should continue from a clean temporary worktree or a fresh release checkout.
@@ -182,11 +187,13 @@ Latest blocker summary:
 
 ## Verification Record
 
+- Latest committed state: `038eb88`.
 - Latest implementation commit: `4e7ac90`.
-- Latest CI verification: GitHub Actions run `26603575493` passed for `b34ad53`.
+- Latest CI verification: GitHub Actions run `26612719090` passed for `038eb88`.
 - Latest implementation details: app service NetworkPolicies, NetworkPolicy invariants, Temporal SQL readiness, explicit server testcontainer startup budgets, and CLI route-test timeout normalization on base `b34ad53`.
 - Latest local implementation verification: `go test ./...`, `golangci-lint run --new-from-rev=HEAD ./...`, `docker compose config -q`, both Kubernetes kustomize renders, OpenTofu `fmt -check`, OpenTofu `validate`, and `git diff --check` passed.
 - Latest server implementation verification: non-Docker gates passed from a clean temporary archive after `tofu init -backend=false`; Docker-backed `go test -p 1 ./...` is blocked by server Docker testcontainer startup deadlines.
+- Latest server release-input audit: `/app/noebs` provides `noebs.db_url`, `noebs.jwt_secret`, `noebs.google_client_id`, and `noebs.google_client_secret`; `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender` exist but are empty; the remaining required cutover fields are still missing.
 - Latest server checked: `100.102.164.34`.
 - Latest server deployment state: Docker Compose Noebs is still active; Kubernetes replacement is not active yet.
 - Latest goal decision: `NOT COMPLETE`.
