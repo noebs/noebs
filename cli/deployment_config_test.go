@@ -759,140 +759,26 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 	requireKubernetesServicePort(t, services, config.Noebs.TemporalHost, temporalPort)
 }
 
-func TestKubernetesNetworkPoliciesRestrictIngress(t *testing.T) {
+func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	expected := map[string]struct {
 		targetPod string
 		port      int
-		allowed   []string
 	}{
-		"postgres-ingress": {
-			targetPod: "postgres",
-			port:      5432,
-			allowed: []string{
-				"identity-auth",
-				"card-vault",
-				"ebs-adapter",
-				"ebs-adapter-events",
-				"psp-webhook",
-				"admin-reporting",
-				"admin-reporting-projector",
-				"notification-chat",
-				"consumer-beneficiary",
-				"wallet-ledger",
-				"wallet-worker",
-				"noebs-identity-auth-migrate",
-				"noebs-card-vault-migrate",
-				"noebs-ebs-adapter-migrate",
-				"noebs-psp-webhook-migrate",
-				"noebs-admin-reporting-migrate",
-				"noebs-notification-chat-migrate",
-				"noebs-consumer-beneficiary-migrate",
-				"noebs-wallet-ledger-migrate",
-			},
-		},
-		"kafka-ingress": {
-			targetPod: "kafka",
-			port:      9092,
-			allowed: []string{
-				"kafka-topics",
-				"ebs-adapter",
-				"ebs-adapter-events",
-				"admin-reporting-projector",
-			},
-		},
-		"temporal-postgres-ingress": {
-			targetPod: "temporal-postgres",
-			port:      5432,
-			allowed: []string{
-				"temporal",
-				"temporal-schema-migrate",
-			},
-		},
-		"temporal-frontend-ingress": {
-			targetPod: "temporal",
-			port:      7233,
-			allowed: []string{
-				"psp-webhook",
-				"wallet-ledger",
-				"wallet-worker",
-				"temporal-ui",
-			},
-		},
-		"keycloak-postgres-ingress": {
-			targetPod: "keycloak-postgres",
-			port:      5432,
-			allowed: []string{
-				"keycloak",
-			},
-		},
-		"identity-auth-ingress": {
-			targetPod: "identity-auth",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-				"ebs-adapter",
-			},
-		},
-		"card-vault-ingress": {
-			targetPod: "card-vault",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-				"identity-auth",
-				"ebs-adapter",
-			},
-		},
-		"ebs-adapter-ingress": {
-			targetPod: "ebs-adapter",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-			},
-		},
-		"psp-webhook-ingress": {
-			targetPod: "psp-webhook",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-			},
-		},
-		"admin-reporting-ingress": {
-			targetPod: "admin-reporting",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-			},
-		},
-		"notification-chat-ingress": {
-			targetPod: "notification-chat",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-				"ebs-adapter",
-			},
-		},
-		"consumer-beneficiary-ingress": {
-			targetPod: "consumer-beneficiary",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-			},
-		},
-		"wallet-api-ingress": {
-			targetPod: "wallet-api",
-			port:      8080,
-			allowed: []string{
-				"api-gateway",
-			},
-		},
-		"wallet-ledger-grpc-ingress": {
-			targetPod: "wallet-ledger",
-			port:      9090,
-			allowed: []string{
-				"wallet-api",
-			},
-		},
+		"postgres-ingress":             {targetPod: "postgres", port: 5432},
+		"kafka-ingress":                {targetPod: "kafka", port: 9092},
+		"temporal-postgres-ingress":    {targetPod: "temporal-postgres", port: 5432},
+		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233},
+		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432},
+		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080},
+		"card-vault-ingress":           {targetPod: "card-vault", port: 8080},
+		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080},
+		"psp-webhook-ingress":          {targetPod: "psp-webhook", port: 8080},
+		"admin-reporting-ingress":      {targetPod: "admin-reporting", port: 8080},
+		"notification-chat-ingress":    {targetPod: "notification-chat", port: 8080},
+		"consumer-beneficiary-ingress": {targetPod: "consumer-beneficiary", port: 8080},
+		"wallet-api-ingress":           {targetPod: "wallet-api", port: 8080},
+		"wallet-ledger-grpc-ingress":   {targetPod: "wallet-ledger", port: 9090},
 	}
 	found := map[string]bool{}
 	for _, object := range objects {
@@ -904,7 +790,7 @@ func TestKubernetesNetworkPoliciesRestrictIngress(t *testing.T) {
 			t.Fatalf("unexpected NetworkPolicy %q", object.Metadata.Name)
 		}
 		found[object.Metadata.Name] = true
-		requireExactIngressNetworkPolicy(t, object, want.targetPod, want.port, want.allowed)
+		requirePortScopedIngressNetworkPolicy(t, object, want.targetPod, want.port)
 	}
 	for name := range expected {
 		if !found[name] {
@@ -2868,7 +2754,7 @@ func requireKubernetesServicePort(t *testing.T, services map[string]map[int]bool
 	}
 }
 
-func requireExactIngressNetworkPolicy(t *testing.T, object manifestObject, targetPod string, port int, allowedPods []string) {
+func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, targetPod string, port int) {
 	t.Helper()
 	if len(object.Spec.PolicyTypes) != 1 || object.Spec.PolicyTypes[0] != "Ingress" {
 		t.Fatalf("%s policyTypes = %v, want [Ingress]", object.Metadata.Name, object.Spec.PolicyTypes)
@@ -2889,38 +2775,8 @@ func requireExactIngressNetworkPolicy(t *testing.T, object manifestObject, targe
 	if rule.Ports[0].Protocol != "TCP" || rule.Ports[0].Port != port {
 		t.Fatalf("%s ingress port = %+v, want TCP/%d", object.Metadata.Name, rule.Ports[0], port)
 	}
-	if len(rule.From) != len(allowedPods) {
-		t.Fatalf("%s ingress peers = %d, want %d", object.Metadata.Name, len(rule.From), len(allowedPods))
-	}
-	want := map[string]bool{}
-	for _, name := range allowedPods {
-		want[name] = true
-	}
-	got := map[string]bool{}
-	for _, peer := range rule.From {
-		if peer.PodSelector == nil {
-			t.Fatalf("%s has ingress peer without podSelector: %#v", object.Metadata.Name, peer)
-		}
-		labels := peer.PodSelector.MatchLabels
-		if len(labels) != 1 {
-			t.Fatalf("%s peer selector must select only app.kubernetes.io/name; got %v", object.Metadata.Name, labels)
-		}
-		name := labels["app.kubernetes.io/name"]
-		if name == "" {
-			t.Fatalf("%s peer selector missing app.kubernetes.io/name: %v", object.Metadata.Name, labels)
-		}
-		if !want[name] {
-			t.Fatalf("%s allows unexpected pod %q", object.Metadata.Name, name)
-		}
-		if got[name] {
-			t.Fatalf("%s allows duplicate pod %q", object.Metadata.Name, name)
-		}
-		got[name] = true
-	}
-	for name := range want {
-		if !got[name] {
-			t.Fatalf("%s missing allowed pod %q", object.Metadata.Name, name)
-		}
+	if len(rule.From) != 0 {
+		t.Fatalf("%s ingress peers = %d, want no source selector for current-host kube-router compatibility", object.Metadata.Name, len(rule.From))
 	}
 }
 
@@ -2942,6 +2798,9 @@ func networkPoliciesByTargetPod(objects []manifestObject) map[string]manifestObj
 func requireIngressNetworkPolicyAllows(t *testing.T, object manifestObject, allowedPod string) {
 	t.Helper()
 	for _, rule := range object.Spec.Ingress {
+		if len(rule.From) == 0 {
+			return
+		}
 		for _, peer := range rule.From {
 			if peer.PodSelector == nil {
 				continue
