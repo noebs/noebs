@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/network"
@@ -33,7 +35,7 @@ func TestTemporalContainer(t *testing.T) {
 		postgres.WithPassword("temporal"),
 		network.WithNetwork([]string{"temporal-postgres"}, nw),
 		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(90*time.Second),
+			wait.ForSQL("5432/tcp", "pgx", temporalPostgresAdminURL).WithStartupTimeout(4*time.Minute),
 		),
 	)
 	if err != nil {
@@ -57,7 +59,7 @@ func TestTemporalContainer(t *testing.T) {
 		NetworkAliases: map[string][]string{
 			nw.Name: {"temporal"},
 		},
-		WaitingFor: wait.ForListeningPort("7233/tcp").WithStartupTimeout(2 * time.Minute),
+		WaitingFor: wait.ForListeningPort("7233/tcp").WithStartupTimeout(4 * time.Minute),
 	}
 	ctr, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
@@ -88,6 +90,11 @@ func TestTemporalContainer(t *testing.T) {
 		t.Fatalf("temporal dial failed: %v", err)
 	}
 	c.Close()
+}
+
+func temporalPostgresAdminURL(host string, port string) string {
+	port, _, _ = strings.Cut(port, "/")
+	return fmt.Sprintf("postgres://temporal:temporal@%s/temporal?sslmode=disable", net.JoinHostPort(host, port))
 }
 
 func dialTemporalWhenReady(ctx context.Context, options client.Options) (client.Client, error) {

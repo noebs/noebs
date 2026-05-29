@@ -81,7 +81,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		tables := tables
 		forbidden := forbiddenTables[role]
 		t.Run(string(role), func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 			defer cancel()
 
 			dbName := fmt.Sprintf("noebs_%s_%d", strings.ReplaceAll(string(role), "-", "_"), time.Now().UnixNano())

@@ -247,7 +247,7 @@ func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -264,7 +264,7 @@ func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/wallet/wallets", nil)
 		req.Header.Set("Authorization", authorization)
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("route.Test() error = %v", err)
 		}
@@ -294,7 +294,7 @@ func TestAdminServiceRolesRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.
 
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("X-Admin-Key", adminKey)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -311,7 +311,7 @@ func TestAdminServiceRolesRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.
 
 		req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
 		req.Header.Set("X-Admin-Key", adminKey)
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("route.Test() error = %v", err)
 		}
@@ -341,7 +341,7 @@ func TestServiceMetricsRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.T) 
 
 			req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 			req.Header.Set("X-Admin-Key", adminKey)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -358,7 +358,7 @@ func TestServiceMetricsRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.T) 
 
 		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 		req.Header.Set("X-Admin-Key", adminKey)
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("route.Test() error = %v", err)
 		}
@@ -376,7 +376,7 @@ func TestServiceMetricsAcceptGatewayAdminIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	setGatewayAdminIdentityHeader(req)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -394,7 +394,7 @@ func TestAPIGatewayMetricsAcceptsPublicAdminKey(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	req.Header.Set("X-Admin-Key", adminKey)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -438,7 +438,7 @@ func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 			route := GetMainEngine()
 
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -495,7 +495,7 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	req.Header.Set("X-Admin-Key", "public-admin")
 	req.Header.Set("X-Admin-Role", "admin")
 	req.Header.Set("X-Admin-Permissions", "config:manage")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -526,7 +526,7 @@ func TestAPIGatewayRejectsUserTenantQueryBeforeProxy(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/wallet/methods?tenant_id=test-tenant", nil)
 	req.Header.Set("Authorization", authorization)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -571,7 +571,7 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 	req.Header.Set("X-Admin-Key", "public-admin")
 	req.Header.Set("X-Admin-Role", "admin")
 	req.Header.Set("X-Admin-Permissions", "config:manage")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -610,7 +610,7 @@ func TestAPIGatewayPropagatesValidatedPublicTenant(t *testing.T) {
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
 	req.Header.Set("Authorization", "Bearer public-token")
 	req.Header.Set("X-Admin-Key", "public-admin")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -639,7 +639,7 @@ func TestAPIGatewayRejectsMissingPublicTenantBeforeProxy(t *testing.T) {
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -681,7 +681,7 @@ func TestAPIGatewayPropagatesValidatedWebhookQueryTenant(t *testing.T) {
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
 	req.Header.Set("Authorization", "Bearer public-token")
 	req.Header.Set("X-Admin-Key", "public-admin")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -712,7 +712,7 @@ func TestAPIGatewayRejectsWebhookTenantFallbacksBeforeProxy(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", strings.NewReader("tenant_id=test-tenant"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Tenant-ID", "test-tenant")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -753,7 +753,7 @@ func TestAPIGatewayEnforcesAdminAuthBeforeProxy(t *testing.T) {
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -802,7 +802,7 @@ func TestAPIGatewayPropagatesVerifiedAdminIdentity(t *testing.T) {
 	req.Header.Set(gateway.GatewayAdminPermissionsHeader, "wallet:view")
 	req.Header.Set("X-Admin-Role", "viewer")
 	req.Header.Set("X-Admin-Permissions", "wallet:view")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -854,7 +854,7 @@ func TestAPIGatewayPropagatesValidatedWalletAdminQueryTenant(t *testing.T) {
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
 	req.Header.Set(gateway.GatewayAdminIdentityHeader, "spoofed-admin")
 	req.Header.Set("Authorization", "Basic public")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -890,7 +890,7 @@ func TestAPIGatewayPropagatesValidatedWalletAdminFormTenant(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Admin-Key", adminKey)
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -943,7 +943,7 @@ func TestAPIGatewayRejectsWalletAdminTenantFallbacksBeforeProxy(t *testing.T) {
 			if tt.header != nil {
 				tt.header(req)
 			}
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -993,7 +993,7 @@ func TestAPIGatewayPropagatesValidatedAdminTenant(t *testing.T) {
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
 	req.Header.Set(gateway.GatewayAdminIdentityHeader, "spoofed-admin")
 	req.Header.Set("Authorization", "Basic public")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -1027,7 +1027,7 @@ func TestAPIGatewayRejectsMissingAdminTenantBeforeProxy(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	req.Header.Set("X-Admin-Key", adminKey)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}

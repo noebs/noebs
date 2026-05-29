@@ -21,7 +21,7 @@ func TestDashboardRouteIsProxiedByAPIGateway(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	req.Header.Set("X-Admin-Key", adminKey)
 	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -36,7 +36,7 @@ func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	setGatewayAdminIdentityHeader(req)
 	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -56,7 +56,7 @@ func TestAdminReportingDoesNotExposeInternalTransactionProjectionWrites(t *testi
 	req := httptest.NewRequest(http.MethodPost, "/internal/admin-reporting/transactions", nil)
 	setGatewayAdminIdentityHeader(req)
 	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -115,7 +115,7 @@ func TestAdminReportingServesEmbeddedDashboardAssets(t *testing.T) {
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/style.css", nil)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -141,7 +141,7 @@ func TestAdminReportingRequiresExplicitTenantAtHTTPBoundary(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	setGatewayAdminIdentityHeader(req)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -161,7 +161,7 @@ func TestAdminReportingAcceptsGatewayTenantHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	setGatewayAdminIdentityHeader(req)
 	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -181,7 +181,7 @@ func TestAdminReportingIgnoresPublicTenantHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
 	setGatewayAdminIdentityHeader(req)
 	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -215,7 +215,7 @@ func TestAdminReportingDoesNotOwnDashboardWriteRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setGatewayAdminIdentityHeader(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}

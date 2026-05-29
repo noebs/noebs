@@ -31,7 +31,7 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 
 	route := GetMainEngine()
 	req := httptest.NewRequest(http.MethodGet, "/app/config", nil)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}

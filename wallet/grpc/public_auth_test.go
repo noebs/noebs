@@ -20,7 +20,7 @@ import (
 func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Wallet, *walletstore.Wallet) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
 	container, err := testdb.StartPostgresContainer(ctx)

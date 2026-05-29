@@ -759,7 +759,7 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 	requireKubernetesServicePort(t, services, config.Noebs.TemporalHost, temporalPort)
 }
 
-func TestKubernetesPlatformNetworkPoliciesRestrictIngress(t *testing.T) {
+func TestKubernetesNetworkPoliciesRestrictIngress(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	expected := map[string]struct {
 		targetPod string
@@ -826,6 +826,73 @@ func TestKubernetesPlatformNetworkPoliciesRestrictIngress(t *testing.T) {
 				"keycloak",
 			},
 		},
+		"identity-auth-ingress": {
+			targetPod: "identity-auth",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+				"ebs-adapter",
+			},
+		},
+		"card-vault-ingress": {
+			targetPod: "card-vault",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+				"identity-auth",
+				"ebs-adapter",
+			},
+		},
+		"ebs-adapter-ingress": {
+			targetPod: "ebs-adapter",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+			},
+		},
+		"psp-webhook-ingress": {
+			targetPod: "psp-webhook",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+			},
+		},
+		"admin-reporting-ingress": {
+			targetPod: "admin-reporting",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+			},
+		},
+		"notification-chat-ingress": {
+			targetPod: "notification-chat",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+				"ebs-adapter",
+			},
+		},
+		"consumer-beneficiary-ingress": {
+			targetPod: "consumer-beneficiary",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+			},
+		},
+		"wallet-api-ingress": {
+			targetPod: "wallet-api",
+			port:      8080,
+			allowed: []string{
+				"api-gateway",
+			},
+		},
+		"wallet-ledger-grpc-ingress": {
+			targetPod: "wallet-ledger",
+			port:      9090,
+			allowed: []string{
+				"wallet-api",
+			},
+		},
 	}
 	found := map[string]bool{}
 	for _, object := range objects {
@@ -843,6 +910,23 @@ func TestKubernetesPlatformNetworkPoliciesRestrictIngress(t *testing.T) {
 		if !found[name] {
 			t.Fatalf("missing NetworkPolicy %q", name)
 		}
+	}
+}
+
+func TestKubernetesAPIGatewayTargetsHaveIngressPolicies(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	policiesByTarget := networkPoliciesByTargetPod(objects)
+
+	targetRoles := map[string]bool{}
+	for _, spec := range gatewayProxyRouteSpecs() {
+		targetRoles[string(spec.role)] = true
+	}
+	for role := range targetRoles {
+		policy, ok := policiesByTarget[role]
+		if !ok {
+			t.Fatalf("gateway target role %s has no NetworkPolicy", role)
+		}
+		requireIngressNetworkPolicyAllows(t, policy, "api-gateway")
 	}
 }
 
@@ -2738,6 +2822,36 @@ func requireExactIngressNetworkPolicy(t *testing.T, object manifestObject, targe
 			t.Fatalf("%s missing allowed pod %q", object.Metadata.Name, name)
 		}
 	}
+}
+
+func networkPoliciesByTargetPod(objects []manifestObject) map[string]manifestObject {
+	policies := map[string]manifestObject{}
+	for _, object := range objects {
+		if object.Kind != "NetworkPolicy" {
+			continue
+		}
+		target := object.Spec.PodSelector.MatchLabels["app.kubernetes.io/name"]
+		if target == "" {
+			continue
+		}
+		policies[target] = object
+	}
+	return policies
+}
+
+func requireIngressNetworkPolicyAllows(t *testing.T, object manifestObject, allowedPod string) {
+	t.Helper()
+	for _, rule := range object.Spec.Ingress {
+		for _, peer := range rule.From {
+			if peer.PodSelector == nil {
+				continue
+			}
+			if peer.PodSelector.MatchLabels["app.kubernetes.io/name"] == allowedPod {
+				return
+			}
+		}
+	}
+	t.Fatalf("%s does not allow ingress from %s", object.Metadata.Name, allowedPod)
 }
 
 func requireManifestServicePort(t *testing.T, object manifestObject, port int) {

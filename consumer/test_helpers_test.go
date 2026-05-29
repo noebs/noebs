@@ -35,7 +35,7 @@ var (
 func ensurePostgresContainer(t *testing.T) *testdb.PostgresContainer {
 	t.Helper()
 	postgresOnce.Do(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 		defer cancel()
 		postgresContainer, postgresErr = testdb.StartPostgresContainer(ctx)
 	})
@@ -59,7 +59,7 @@ func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
 func newTestDBWithScopes(t *testing.T, scopes []string) (*store.DB, *store.Store, string) {
 	t.Helper()
 	container := ensurePostgresContainer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
 	dbName := fmt.Sprintf("noebs_consumer_%d", time.Now().UnixNano())

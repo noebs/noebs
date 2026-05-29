@@ -44,7 +44,7 @@ func TestWorkingKey(t *testing.T) {
 	// Mock data BTW...
 	req := httptest.NewRequest(http.MethodGet, "/test", bytes.NewBuffer(payload))
 
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestPurchase(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/purchase", bytes.NewBuffer(buff))
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
@@ -93,7 +93,7 @@ func TestPurchase(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/purchase", bytes.NewBuffer(buff))
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
@@ -165,7 +165,7 @@ func TestCardTransfer(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/cardTransfer", bytes.NewBuffer(buff))
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
@@ -185,7 +185,7 @@ func TestCardTransfer(t *testing.T) {
 			t.Fatalf("Error in marshalling %v", err)
 		}
 		req, _ := http.NewRequest(http.MethodPost, "/cardTransfer", bytes.NewBuffer(buff))
-		resp, err := route.Test(req)
+		resp, err := route.Test(req, routeTestTimeout)
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}

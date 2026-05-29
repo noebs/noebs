@@ -128,7 +128,7 @@ func TestMappedPSPWebhookFieldsRequireConfiguredPaths(t *testing.T) {
 }
 
 func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
 	container, err := testdb.StartPostgresContainer(ctx)
@@ -349,7 +349,7 @@ type pspWebhookTestFixture struct {
 func newPSPWebhookTestFixture(t *testing.T, mapping string) *pspWebhookTestFixture {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
 	container, err := testdb.StartPostgresContainer(ctx)

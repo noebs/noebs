@@ -30,7 +30,7 @@ func TestIdentityRoutesAreProxiedByAPIGateway(t *testing.T) {
 			req.Header.Set("Authorization", authorization)
 			req.Header.Set("X-Tenant-ID", "test-tenant")
 			req.Header.Set("X-Admin-Key", adminKey)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -59,7 +59,7 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -129,7 +129,7 @@ func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
 			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -159,7 +159,7 @@ func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}

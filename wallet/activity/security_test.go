@@ -81,7 +81,7 @@ func TestVerifyUserTOTPValidatesTenantBeforeStore(t *testing.T) {
 
 func newWalletActivityStore(t *testing.T) (*walletstore.Store, string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	t.Cleanup(cancel)
 
 	container, err := testdb.StartPostgresContainer(ctx)

@@ -98,7 +98,7 @@ func TestEBSAdapterRoutesAreProxiedByAPIGateway(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
 			req.Header.Set("X-Tenant-ID", "test-tenant")
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -141,7 +141,7 @@ func TestEBSAdapterDoesNotOwnIdentityCardNotificationOrWalletRoutes(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -160,7 +160,7 @@ func TestEBSAdapterDoesNotOwnLegacyGuessBillerRoute(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/consumer/guess_biller", nil)
 	setTestGatewayUserIdentityHeaders(req)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -179,7 +179,7 @@ func TestEBSAdapterDoesNotExposePublicMobilePANLookup(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/consumer/pan_from_mobile", nil)
 	setTestGatewayUserIdentityHeaders(req)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -201,7 +201,7 @@ func TestEBSAdapterDoesNotExposeLegacyManualTestRoute(t *testing.T) {
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/wrk", nil)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}

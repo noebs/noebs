@@ -36,7 +36,7 @@ func StartPostgresContainer(ctx context.Context) (pc *PostgresContainer, err err
 		postgres.WithUsername("noebs"),
 		postgres.WithPassword("noebs"),
 		testcontainers.WithWaitStrategy(
-			wait.ForSQL("5432/tcp", "pgx", postgresAdminURL).WithStartupTimeout(90*time.Second),
+			wait.ForSQL("5432/tcp", "pgx", postgresAdminURL).WithStartupTimeout(4*time.Minute),
 		),
 	)
 	if err != nil {

@@ -177,3 +177,204 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: identity-auth-ingress
+  labels:
+    app.kubernetes.io/name: identity-auth
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: identity-auth
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ebs-adapter
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: card-vault-ingress
+  labels:
+    app.kubernetes.io/name: card-vault
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: card-vault
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: identity-auth
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ebs-adapter
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ebs-adapter-ingress
+  labels:
+    app.kubernetes.io/name: ebs-adapter
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ebs-adapter
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: psp-webhook-ingress
+  labels:
+    app.kubernetes.io/name: psp-webhook
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: psp-webhook
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: admin-reporting-ingress
+  labels:
+    app.kubernetes.io/name: admin-reporting
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: admin-reporting
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-chat-ingress
+  labels:
+    app.kubernetes.io/name: notification-chat
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: notification-chat
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ebs-adapter
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: consumer-beneficiary-ingress
+  labels:
+    app.kubernetes.io/name: consumer-beneficiary
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: consumer-beneficiary
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wallet-api-ingress
+  labels:
+    app.kubernetes.io/name: wallet-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wallet-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wallet-ledger-grpc-ingress
+  labels:
+    app.kubernetes.io/name: wallet-ledger
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wallet-ledger
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: wallet-api
+      ports:
+        - protocol: TCP
+          port: 9090

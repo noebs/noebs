@@ -42,7 +42,7 @@ func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -60,7 +60,7 @@ func TestCardVaultSteadyRoutesAreOwnedByCardVault(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -87,7 +87,7 @@ func TestCardVaultTransitionalRoutesStayVisibleUntilSplit(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -128,7 +128,7 @@ func TestCardVaultDoesNotExposePublicMobilePANLookup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -165,7 +165,7 @@ func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -191,7 +191,7 @@ func TestCardVaultOwnsQuickPayInternalCommands(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
@@ -216,7 +216,7 @@ func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
-			resp, err := route.Test(req)
+			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}

@@ -14,7 +14,7 @@ func TestPSPWebhookRouteIsProxiedByAPIGateway(t *testing.T) {
 	route := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop?tenant_id=test-tenant", nil)
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -28,7 +28,7 @@ func TestPSPWebhookRouteIsOwnedByPSPWebhookService(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/noop", nil)
 	req.Header.Set(gateway.GatewayTenantIDHeader, "test-tenant")
-	resp, err := route.Test(req)
+	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
