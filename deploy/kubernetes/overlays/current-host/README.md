@@ -64,7 +64,7 @@ When using the in-cluster `postgres` StatefulSet, service database URLs should p
 
 Noebs service roles and OTel service names are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
-Noebs workloads currently use the mutable `ghcr.io/noebs/noebs:master` image tag, so their Kubernetes `imagePullPolicy` is `Always`. Do not switch those workloads to `IfNotPresent` while the release tag is mutable; otherwise a k3s node can reuse a stale local image after Argo CD sync.
+Noebs workloads currently use the mutable `ghcr.io/noebs/noebs:master` image tag with `imagePullPolicy: IfNotPresent` so a k3s node can complete a cutover from its local image cache when GHCR is slow or unreachable. Bump the deployed image tag when the release process moves away from `master`.
 
 Noebs images are pulled through the explicit `ghcr-credentials` image pull Secret. The release input `noebs.ghcr_dockerconfigjson` must contain a Docker config JSON with `auths.ghcr.io.auth`; the renderer emits it as a `kubernetes.io/dockerconfigjson` Secret with the `.dockerconfigjson` key.
 

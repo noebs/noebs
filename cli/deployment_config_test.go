@@ -291,7 +291,7 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 	}
 }
 
-func TestNoebsKubernetesMutableImageTagIsAlwaysPulled(t *testing.T) {
+func TestNoebsKubernetesImagesUseNodeCache(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	checked := 0
 	for _, object := range objects {
@@ -303,8 +303,8 @@ func TestNoebsKubernetesMutableImageTagIsAlwaysPulled(t *testing.T) {
 			if !strings.HasSuffix(container.Image, ":master") {
 				t.Fatalf("%s/%s image = %q; update the image pull invariant for non-master tags", object.Metadata.Name, container.Name, container.Image)
 			}
-			if container.ImagePullPolicy != "Always" {
-				t.Fatalf("%s/%s imagePullPolicy = %q, want Always for mutable Noebs image tag %q", object.Metadata.Name, container.Name, container.ImagePullPolicy, container.Image)
+			if container.ImagePullPolicy != "IfNotPresent" {
+				t.Fatalf("%s/%s imagePullPolicy = %q, want IfNotPresent for cached Noebs image tag %q", object.Metadata.Name, container.Name, container.ImagePullPolicy, container.Image)
 			}
 		}
 	}
