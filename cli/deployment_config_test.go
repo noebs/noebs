@@ -1170,6 +1170,8 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 		requireMount(t, "postgres", container, "/opt/noebs-postgres/bin/start.sh", "start.sh")
 		requireMount(t, "postgres", container, "/opt/noebs-postgres/init/001-service-databases.sql", "001-service-databases.sql")
 		requireMount(t, "postgres", container, "/opt/noebs-postgres/secrets/password", "password")
+		requireExecProbeDatabase(t, "postgres", "readinessProbe", container.ReadinessProbe, "postgres")
+		requireExecProbeDatabase(t, "postgres", "livenessProbe", container.LivenessProbe, "postgres")
 	}
 	if !foundPostgres {
 		t.Fatalf("postgres StatefulSet not found")
@@ -1193,6 +1195,43 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 	}
 	if serviceDatabaseSQL != string(dockerSQL) {
 		t.Fatalf("Kubernetes and Docker Noebs Postgres service database SQL differ")
+	}
+}
+
+func TestNoebsDatabaseResetIsOfflineOnly(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	for _, object := range objects {
+		if object.Metadata.Name == "noebs-database-reset" || object.Metadata.Name == "database-reset" {
+			t.Fatalf("database reset must not be a Kubernetes object: %s/%s", object.Kind, object.Metadata.Name)
+		}
+		if object.Kind == "ConfigMap" && object.Metadata.Name == "postgres-bootstrap" {
+			if _, ok := object.Data["reset-databases.sh"]; ok {
+				t.Fatalf("postgres-bootstrap must not carry database reset script")
+			}
+		}
+	}
+
+	path := filepath.Join("..", "deploy", "offline", "reset-noebs-service-databases.sh")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read offline database reset script: %v", err)
+	}
+	text := string(data)
+	for _, required := range []string{
+		"<postgres-host> <postgres-port> <postgres-user> <password-file> <service-database-sql>",
+		"DROP DATABASE IF EXISTS noebs WITH (FORCE);",
+		"DROP DATABASE IF EXISTS identity_auth WITH (FORCE);",
+		"DROP DATABASE IF EXISTS wallet_ledger WITH (FORCE);",
+		"psql \"$connection\" --set=ON_ERROR_STOP=1 --file=\"$service_database_sql\"",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("offline database reset script missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"kubectl", "argocd.argoproj.io", "kind: Job", "CREATE DATABASE noebs"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("offline database reset script contains Kubernetes coupling %q", forbidden)
+		}
 	}
 }
 
@@ -2666,6 +2705,33 @@ func requireHTTPProbe(t *testing.T, workload, probeName string, probe map[string
 	if !ok || gotFailureThreshold != failureThreshold {
 		t.Fatalf("%s %s failureThreshold = %#v, want %d", workload, probeName, probe["failureThreshold"], failureThreshold)
 	}
+}
+
+func requireExecProbeDatabase(t *testing.T, workload, probeName string, probe map[string]any, database string) {
+	t.Helper()
+	execProbe, ok := probe["exec"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s %s missing exec: %#v", workload, probeName, probe)
+	}
+	rawCommand, ok := execProbe["command"].([]any)
+	if !ok {
+		t.Fatalf("%s %s exec.command = %#v, want list", workload, probeName, execProbe["command"])
+	}
+	for i := 0; i < len(rawCommand)-1; i++ {
+		flag, ok := rawCommand[i].(string)
+		if !ok || flag != "-d" {
+			continue
+		}
+		gotDatabase, ok := rawCommand[i+1].(string)
+		if !ok {
+			t.Fatalf("%s %s -d value = %#v, want %q", workload, probeName, rawCommand[i+1], database)
+		}
+		if gotDatabase != database {
+			t.Fatalf("%s %s database = %q, want %q", workload, probeName, gotDatabase, database)
+		}
+		return
+	}
+	t.Fatalf("%s %s command missing -d %q: %#v", workload, probeName, database, rawCommand)
 }
 
 func requireNoebsSecretVolume(t *testing.T, workload string, container manifestContainer, volumes []manifestVolume) {

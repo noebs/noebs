@@ -3,7 +3,6 @@ set -euo pipefail
 
 pgdata="/var/lib/postgresql/data"
 postgres_user="noebs"
-postgres_db="noebs"
 password_source="/opt/noebs-postgres/secrets/password"
 password_runtime="/tmp/noebs-postgres-password"
 service_database_sql="/opt/noebs-postgres/init/001-service-databases.sql"
@@ -58,10 +57,6 @@ if [ ! -s "$pgdata/PG_VERSION" ]; then
     -D "$pgdata" \
     -o "-c listen_addresses='' -c unix_socket_directories=/tmp" \
     -w start
-  gosu postgres psql \
-    "host=/tmp dbname=postgres user=$postgres_user passfile=$pgpass" \
-    --set=ON_ERROR_STOP=1 \
-    --command="CREATE DATABASE $postgres_db"
   gosu postgres psql \
     "host=/tmp dbname=postgres user=$postgres_user passfile=$pgpass" \
     --set=ON_ERROR_STOP=1 \

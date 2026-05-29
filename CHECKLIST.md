@@ -9,10 +9,12 @@ until every item in "Completion Checklist" is checked.
 
 Current answer: `NOT COMPLETE`. The architecture and deployment path are mostly
 defined, and release preparation/audit now rejects malformed current-secret
-values instead of treating them as missing cutover inputs. Server cutover is
-still blocked by explicit Kubernetes release inputs, generated release Secrets,
-the Noebs Argo CD application/microservice deployment, service health
-verification after cutover, and retirement of the old Docker Compose deployment.
+values instead of treating them as missing cutover inputs. Database dropping is
+now modeled as an explicit one-off offline operator task, not a Kubernetes or
+Argo CD hook. Server cutover is still blocked by explicit Kubernetes release
+inputs, generated release Secrets, the Noebs Argo CD application/microservice
+deployment, service health verification after cutover, and retirement of the old
+Docker Compose deployment.
 
 ## Status Key
 
@@ -36,6 +38,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] OpenTofu foundation validation and Argo CD preconditions for required Kubernetes Secrets.
 - [x] OpenTofu foundation phase controls that bind to the current host's existing Argo CD install and create the Noebs Argo CD application only after explicit release Secrets exist.
 - [x] Kubernetes release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of treating them as absent.
+- [x] A one-off offline database reset task exists for deliberate cutover downtime; Kubernetes/Argo CD manifests do not own database dropping.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
 - [x] Local verification passed for implementation commit `03e82ae`; server OpenTofu bootstrap plan passed from a clean temporary tree against `100.102.164.34`.
 - [x] Server OpenTofu foundation bootstrap applied from persistent checkout `/home/adonese/src/noebs-foundation`.
@@ -104,6 +107,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Replaced remaining CLI Fiber route-test default one-second timeouts with the explicit route test budget used by slow server runs.
 - [x] Added explicit OpenTofu phase inputs: `argocd_installation_mode` and `create_noebs_application`.
 - [x] Corrected the foundation current-host Argo CD repository URL to `https://github.com/noebs/noebs.git`.
+- [x] Added `deploy/offline/reset-noebs-service-databases.sh` as an explicit operator-run reset task for dropping the old `noebs` monolith database plus service databases, then recreating only service-owned databases from `001-service-databases.sql`; no Kubernetes reset Job or Argo hook is used.
 
 ## Verified Gates
 
@@ -135,6 +139,8 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] GitHub Actions run `26619301041` passed for `fd377a9`.
 - [x] GitHub Actions run `26619908642` passed for `b1769b7`.
 - [x] Release input type hardening passed local `go test -c ./cli`, local `golangci-lint run --new-from-rev=HEAD ./...`, local `git diff --check`, and server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"`.
+- [x] Offline database reset patch passed local shell syntax checks; local Kubernetes render passed; local Kubernetes manifest scan found no reset hook/object in `deploy/kubernetes/base`; server static checks passed from `/tmp/noebs-offline-reset-check`; server Docker-backed `timeout 30m go test ./cli -run "TestNoebs(PostgresKubernetesUsesMountedBootstrapFiles|DatabaseResetIsOfflineOnly)|TestMigrationJobsRunBeforeNoebsRuntimeWorkloads|TestKubernetesNetworkPoliciesRestrictIngress|TestKubernetesWorkloadsUseExplicitServiceAccounts"` passed on `100.102.164.34`.
+- [x] Noebs platform Postgres bootstrap no longer creates a `noebs` database; health probes use the built-in `postgres` database, and the offline reset drops `noebs` without recreating it.
 
 ## Current Server State
 
@@ -144,6 +150,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Existing Docker Compose Noebs service is still running and healthy; host port `8081` `/test` returned `{"message":true}` after the full server test suite.
 - [x] GitHub CLI is installed on the server; `gh auth status` reports no configured GitHub login.
 - [x] Helm is installed on the server; `helm version --short` reports `v3.20.0+gb2e4314`.
+- [x] PostgreSQL client tooling is installed on the server; `psql --version` reports `16.14`.
 - [x] Server package metadata refresh is clean after the Caddy apt key update.
 - [x] `/home/adonese/.testcontainers.properties` sets explicit Testcontainers Ryuk timeouts: `ryuk.connection.timeout=4m` and `ryuk.reconnection.timeout=2m`.
 - [x] No unhealthy Docker containers or non-running k8s pods were reported after the full server test suite.
@@ -160,6 +167,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 ## Open Completion Items
 
 - [ ] Complete the explicit Kubernetes release input set from the current server secrets and cutover-only inputs.
+- [ ] If old Noebs databases must be purged before cutover, run the offline reset task deliberately during downtime; do not add database dropping to Kubernetes/Argo CD.
 - [ ] Generate the Kubernetes release secret/config bundle from the complete explicit inputs.
 - [ ] Deploy the Kubernetes microservices replacement to the server.
 - [ ] Confirm every Noebs service is healthy after the replacement deployment.
@@ -211,11 +219,12 @@ Latest blocker summary:
 
 ## Verification Record
 
-- Latest implementation commit: `b1769b7`.
-- Latest recorded CI verification for implementation code: GitHub Actions run `26619908642` passed for `b1769b7`.
-- Latest implementation details: release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of allowing explicit cutover input to mask them.
+- Latest implementation commit: current `HEAD` (`Add offline service database reset`).
+- Latest recorded CI verification before the offline reset commit: GitHub Actions run `26619908642` passed for `b1769b7`.
+- Latest implementation details: release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of allowing explicit cutover input to mask them. The latest commit adds an offline-only database reset task, removes `noebs` database recreation from platform Postgres bootstrap, and adds invariant tests that reject Kubernetes-owned database reset hooks.
 - Latest local implementation verification: `go test -c ./cli`, `golangci-lint run --new-from-rev=HEAD ./...`, and `git diff --check` passed. Local `go test ./cli` could not run because local Docker is not reachable.
 - Latest server implementation verification: server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"` passed from a clean temporary tree on `100.102.164.34`; foundation remains applied; Docker Compose Noebs remains active; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.
+- Latest offline reset verification: server static checks and Docker-backed focused CLI manifest tests passed from `/tmp/noebs-offline-reset-check`; the reset script drops the old `noebs` database and recreates only service-owned databases; local CLI tests remain blocked by unreachable local Docker/testcontainers.
 - Latest server release-input audit: `/app/noebs` provides `noebs.db_url`, `noebs.jwt_secret`, `noebs.google_client_id`, and `noebs.google_client_secret`; `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender` exist but are empty; the remaining required cutover fields are still missing.
 - Latest server checked: `100.102.164.34`.
 - Latest server deployment state: Docker Compose Noebs is still active; foundation bootstrap is applied; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.
