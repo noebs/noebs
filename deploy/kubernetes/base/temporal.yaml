@@ -519,18 +519,18 @@ spec:
     - name: grpc
       port: 7233
       targetPort: grpc
-    - name: frontend-membership
+    - name: front-member
       port: 6933
-      targetPort: frontend-membership
-    - name: history-membership
+      targetPort: front-member
+    - name: history-member
       port: 6934
-      targetPort: history-membership
-    - name: matching-membership
+      targetPort: history-member
+    - name: matching-member
       port: 6935
-      targetPort: matching-membership
-    - name: worker-membership
+      targetPort: matching-member
+    - name: worker-member
       port: 6939
-      targetPort: worker-membership
+      targetPort: worker-member
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -562,13 +562,13 @@ spec:
           ports:
             - name: grpc
               containerPort: 7233
-            - name: frontend-membership
+            - name: front-member
               containerPort: 6933
-            - name: history-membership
+            - name: history-member
               containerPort: 6934
-            - name: matching-membership
+            - name: matching-member
               containerPort: 6935
-            - name: worker-membership
+            - name: worker-member
               containerPort: 6939
           readinessProbe:
             tcpSocket:
