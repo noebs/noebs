@@ -39,7 +39,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
 - [x] Local verification passed for implementation commit `03e82ae`; server OpenTofu bootstrap plan passed from a clean temporary tree against `100.102.164.34`.
 - [x] Server OpenTofu foundation bootstrap applied from persistent checkout `/home/adonese/src/noebs-foundation`.
-- [x] GitHub Actions run `26619301041` passed for committed state `fd377a9`.
+- [x] GitHub Actions run `26619908642` passed for implementation state `b1769b7`.
 - [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, Helm, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
 - [x] Server release audit ran from a clean temporary copy of `673e906` against `/app/noebs` without printing secret values.
 - [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
@@ -133,6 +133,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Server audit at `100.102.164.34` with `/tmp/noebs-head-audit/noebs audit-kubernetes-release-inputs /app/noebs` identified transformable current-secret fields without printing secret values.
 - [x] GitHub Actions run `26618688797` passed for `c1de584`.
 - [x] GitHub Actions run `26619301041` passed for `fd377a9`.
+- [x] GitHub Actions run `26619908642` passed for `b1769b7`.
 - [x] Release input type hardening passed local `go test -c ./cli`, local `golangci-lint run --new-from-rev=HEAD ./...`, local `git diff --check`, and server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"`.
 
 ## Current Server State
@@ -210,9 +211,8 @@ Latest blocker summary:
 
 ## Verification Record
 
-- Latest committed state with completed CI before this update: `fd377a9`.
-- Latest implementation commit before this update: `03e82ae`.
-- Latest recorded CI verification: GitHub Actions run `26619301041` passed for `fd377a9`.
+- Latest implementation commit: `b1769b7`.
+- Latest recorded CI verification for implementation code: GitHub Actions run `26619908642` passed for `b1769b7`.
 - Latest implementation details: release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of allowing explicit cutover input to mask them.
 - Latest local implementation verification: `go test -c ./cli`, `golangci-lint run --new-from-rev=HEAD ./...`, and `git diff --check` passed. Local `go test ./cli` could not run because local Docker is not reachable.
 - Latest server implementation verification: server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"` passed from a clean temporary tree on `100.102.164.34`; foundation remains applied; Docker Compose Noebs remains active; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.
