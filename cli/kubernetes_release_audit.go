@@ -122,19 +122,23 @@ func (r preparedKubernetesRelease) auditInputs() kubernetesReleaseInputAudit {
 }
 
 func (a *kubernetesReleaseInputAudit) auditCutoverField(r preparedKubernetesRelease, field cutoverStringField) (string, bool) {
-	legacyValue, legacyKey, legacyPresent := r.firstLegacyValue(field.legacyKeys...)
+	legacy, err := r.firstLegacyString(field.legacyKeys...)
+	if err != nil {
+		a.Invalid = append(a.Invalid, err.Error())
+		return "", false
+	}
 	input := strings.TrimSpace(field.input)
 	switch {
-	case legacyValue != "" && input != "":
-		a.Duplicate = append(a.Duplicate, fmt.Sprintf("%s duplicates current secret noebs.%s", field.label, legacyKey))
+	case legacy.value != "" && input != "":
+		a.Duplicate = append(a.Duplicate, fmt.Sprintf("%s duplicates current secret noebs.%s", field.label, legacy.key))
 		return "", false
-	case legacyValue != "":
-		if strings.Contains(legacyValue, "REPLACE_WITH_") {
-			a.Invalid = append(a.Invalid, fmt.Sprintf("current secret noebs.%s contains placeholder", legacyKey))
+	case legacy.value != "":
+		if strings.Contains(legacy.value, "REPLACE_WITH_") {
+			a.Invalid = append(a.Invalid, fmt.Sprintf("current secret noebs.%s contains placeholder", legacy.key))
 			return "", false
 		}
-		a.CurrentSecret = append(a.CurrentSecret, fmt.Sprintf("%s from current secret noebs.%s", field.label, legacyKey))
-		return legacyValue, true
+		a.CurrentSecret = append(a.CurrentSecret, fmt.Sprintf("%s from current secret noebs.%s", field.label, legacy.key))
+		return legacy.value, true
 	case input != "":
 		if strings.Contains(input, "REPLACE_WITH_") {
 			a.Invalid = append(a.Invalid, fmt.Sprintf("kubernetes release input %s contains placeholder", field.label))
@@ -143,8 +147,8 @@ func (a *kubernetesReleaseInputAudit) auditCutoverField(r preparedKubernetesRele
 		a.CutoverInput = append(a.CutoverInput, field.label)
 		return input, true
 	default:
-		if legacyPresent {
-			a.EmptyCurrentSecret = append(a.EmptyCurrentSecret, fmt.Sprintf("current secret noebs.%s is empty", legacyKey))
+		if legacy.present {
+			a.EmptyCurrentSecret = append(a.EmptyCurrentSecret, fmt.Sprintf("current secret noebs.%s is empty", legacy.key))
 		}
 		a.Missing = append(a.Missing, field.label)
 		return "", false
@@ -152,14 +156,18 @@ func (a *kubernetesReleaseInputAudit) auditCutoverField(r preparedKubernetesRele
 }
 
 func (a *kubernetesReleaseInputAudit) auditCurrentSecretOnly(r preparedKubernetesRelease, label, key string) {
-	value, _, present := r.firstLegacyValue(key)
+	legacy, err := r.firstLegacyString(key)
+	if err != nil {
+		a.Invalid = append(a.Invalid, err.Error())
+		return
+	}
 	switch {
-	case value == "":
-		if present {
+	case legacy.value == "":
+		if legacy.present {
 			a.EmptyCurrentSecret = append(a.EmptyCurrentSecret, "current secret "+label+" is empty")
 		}
 		a.Missing = append(a.Missing, label+" from current secret")
-	case strings.Contains(value, "REPLACE_WITH_"):
+	case strings.Contains(legacy.value, "REPLACE_WITH_"):
 		a.Invalid = append(a.Invalid, "current secret "+label+" contains placeholder")
 	default:
 		a.CurrentSecret = append(a.CurrentSecret, label+" from current secret")
@@ -182,8 +190,12 @@ func (a *kubernetesReleaseInputAudit) auditUnsupportedLegacyEBSConfig(r prepared
 		{key: "merchant_qa_id", target: "noebs.ebs.merchant_app_id"},
 		{key: "merchant_prod_id", target: "noebs.ebs.merchant_app_id"},
 	} {
-		value, _, present := r.firstLegacyValue(field.key)
-		if !present || value == "" {
+		legacy, err := r.firstLegacyString(field.key)
+		if err != nil {
+			a.Invalid = append(a.Invalid, err.Error())
+			continue
+		}
+		if !legacy.present || legacy.value == "" {
 			continue
 		}
 		a.UnsupportedCurrentSecret = append(a.UnsupportedCurrentSecret, fmt.Sprintf("current secret noebs.%s cannot be transformed; provide %s", field.key, field.target))
@@ -196,8 +208,16 @@ func (a *kubernetesReleaseInputAudit) auditUnsupportedLegacyEBSConfig(r prepared
 		{key: "is_consumer_prod", target: "noebs.ebs.consumer_endpoint and noebs.ebs.consumer_app_id"},
 		{key: "is_merchant_prod", target: "noebs.ebs.merchant_endpoint and noebs.ebs.merchant_app_id"},
 	} {
-		value, ok := r.legacy[field.key].(bool)
-		if !ok || !value {
+		raw, present := r.legacy[field.key]
+		if !present {
+			continue
+		}
+		value, ok := raw.(bool)
+		if !ok {
+			a.Invalid = append(a.Invalid, fmt.Sprintf("current secret noebs.%s must be a boolean", field.key))
+			continue
+		}
+		if !value {
 			continue
 		}
 		a.UnsupportedCurrentSecret = append(a.UnsupportedCurrentSecret, fmt.Sprintf("current secret noebs.%s cannot select an EBS runtime; provide %s", field.key, field.target))
@@ -205,9 +225,13 @@ func (a *kubernetesReleaseInputAudit) auditUnsupportedLegacyEBSConfig(r prepared
 }
 
 func (a *kubernetesReleaseInputAudit) auditPSPSecrets(r preparedKubernetesRelease, tenantID string, tenantReady bool) {
-	legacyPSP := getMap(r.legacy, "psp")
+	legacyPSP, legacyPresent, err := r.legacyMap("psp")
+	if err != nil {
+		a.Invalid = append(a.Invalid, err.Error())
+		return
+	}
 	inputPSP := pspInputsToMap(r.inputs.Noebs.PSP)
-	hasLegacy := len(legacyPSP) != 0
+	hasLegacy := legacyPresent && len(legacyPSP) != 0
 	hasInput := len(inputPSP) != 0
 	var psp map[string]interface{}
 	switch {
@@ -221,6 +245,9 @@ func (a *kubernetesReleaseInputAudit) auditPSPSecrets(r preparedKubernetesReleas
 		a.CutoverInput = append(a.CutoverInput, "noebs.psp")
 		psp = inputPSP
 	default:
+		if legacyPresent {
+			a.EmptyCurrentSecret = append(a.EmptyCurrentSecret, "current secret noebs.psp is empty")
+		}
 		a.Missing = append(a.Missing, "noebs.psp")
 		return
 	}

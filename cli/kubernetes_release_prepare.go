@@ -78,6 +78,12 @@ type cutoverStringField struct {
 	input      string
 }
 
+type legacyStringValue struct {
+	value   string
+	key     string
+	present bool
+}
+
 func prepareKubernetesReleaseCommand() error {
 	if len(os.Args) != 6 {
 		return errors.New("usage: noebs prepare-kubernetes-release <repo-root> <legacy-root> <inputs-yaml> <output-root>")
@@ -560,16 +566,19 @@ func (r preparedKubernetesRelease) cutoverField(field cutoverStringField) (strin
 }
 
 func (r preparedKubernetesRelease) cutoverString(label string, legacyKeys []string, input string) (string, error) {
-	legacyValue, legacyKey := r.firstLegacyString(legacyKeys...)
+	legacy, err := r.firstLegacyString(legacyKeys...)
+	if err != nil {
+		return "", err
+	}
 	input = strings.TrimSpace(input)
 	switch {
-	case legacyValue != "" && input != "":
-		return "", fmt.Errorf("kubernetes release input %s duplicates current secret noebs.%s", label, legacyKey)
-	case legacyValue != "":
-		if strings.Contains(legacyValue, "REPLACE_WITH_") {
-			return "", fmt.Errorf("current secret noebs.%s contains placeholder", legacyKey)
+	case legacy.value != "" && input != "":
+		return "", fmt.Errorf("kubernetes release input %s duplicates current secret noebs.%s", label, legacy.key)
+	case legacy.value != "":
+		if strings.Contains(legacy.value, "REPLACE_WITH_") {
+			return "", fmt.Errorf("current secret noebs.%s contains placeholder", legacy.key)
 		}
-		return legacyValue, nil
+		return legacy.value, nil
 	case input != "":
 		if strings.Contains(input, "REPLACE_WITH_") {
 			return "", fmt.Errorf("kubernetes release input %s contains placeholder", label)
@@ -580,29 +589,28 @@ func (r preparedKubernetesRelease) cutoverString(label string, legacyKeys []stri
 	}
 }
 
-func (r preparedKubernetesRelease) firstLegacyString(keys ...string) (string, string) {
-	value, key, _ := r.firstLegacyValue(keys...)
-	return value, key
-}
-
-func (r preparedKubernetesRelease) firstLegacyValue(keys ...string) (string, string, bool) {
+func (r preparedKubernetesRelease) firstLegacyString(keys ...string) (legacyStringValue, error) {
 	for _, key := range keys {
 		raw, ok := r.legacy[key]
 		if !ok {
 			continue
 		}
-		if text, ok := raw.(string); ok {
-			return strings.TrimSpace(text), key, true
+		text, ok := raw.(string)
+		if !ok {
+			return legacyStringValue{}, fmt.Errorf("current secret noebs.%s must be a string", key)
 		}
-		return "", key, true
+		return legacyStringValue{value: strings.TrimSpace(text), key: key, present: true}, nil
 	}
-	return "", "", false
+	return legacyStringValue{}, nil
 }
 
 func (r preparedKubernetesRelease) pspSecrets() (map[string]interface{}, error) {
-	legacyPSP := getMap(r.legacy, "psp")
+	legacyPSP, legacyPresent, err := r.legacyMap("psp")
+	if err != nil {
+		return nil, err
+	}
 	inputPSP := pspInputsToMap(r.inputs.Noebs.PSP)
-	hasLegacy := len(legacyPSP) != 0
+	hasLegacy := legacyPresent && len(legacyPSP) != 0
 	hasInput := len(inputPSP) != 0
 	switch {
 	case hasLegacy && hasInput:
@@ -616,15 +624,30 @@ func (r preparedKubernetesRelease) pspSecrets() (map[string]interface{}, error) 
 	}
 }
 
+func (r preparedKubernetesRelease) legacyMap(key string) (map[string]interface{}, bool, error) {
+	raw, present := r.legacy[key]
+	if !present || raw == nil {
+		return nil, false, nil
+	}
+	typed, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil, true, fmt.Errorf("current secret noebs.%s must be a map", key)
+	}
+	return typed, true, nil
+}
+
 func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, error) {
-	value := strings.TrimSpace(firstString(r.legacy, key))
-	if value == "" {
+	legacy, err := r.firstLegacyString(key)
+	if err != nil {
+		return "", err
+	}
+	if legacy.value == "" {
 		return "", fmt.Errorf("legacy noebs.%s is required to prepare Kubernetes release", key)
 	}
-	if strings.Contains(value, "REPLACE_WITH_") {
+	if strings.Contains(legacy.value, "REPLACE_WITH_") {
 		return "", fmt.Errorf("legacy noebs.%s contains placeholder", key)
 	}
-	return value, nil
+	return legacy.value, nil
 }
 
 func (r preparedKubernetesRelease) ghcrDockerConfigJSON() (string, error) {

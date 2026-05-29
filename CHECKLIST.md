@@ -8,10 +8,10 @@ microservices migration goal can be called complete. The task is not complete
 until every item in "Completion Checklist" is checked.
 
 Current answer: `NOT COMPLETE`. The architecture and deployment path are mostly
-defined, and the latest committed state is `c1de584` with implementation code in
-`03e82ae`. Server cutover
-is still blocked by explicit Kubernetes release inputs, generated release
-Secrets, the Noebs Argo CD application/microservice deployment, service health
+defined, and release preparation/audit now rejects malformed current-secret
+values instead of treating them as missing cutover inputs. Server cutover is
+still blocked by explicit Kubernetes release inputs, generated release Secrets,
+the Noebs Argo CD application/microservice deployment, service health
 verification after cutover, and retirement of the old Docker Compose deployment.
 
 ## Status Key
@@ -35,10 +35,11 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Runtime config/secret rendering paths that reject stale, extra, missing, or empty release inputs instead of guessing values.
 - [x] OpenTofu foundation validation and Argo CD preconditions for required Kubernetes Secrets.
 - [x] OpenTofu foundation phase controls that bind to the current host's existing Argo CD install and create the Noebs Argo CD application only after explicit release Secrets exist.
+- [x] Kubernetes release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of treating them as absent.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
 - [x] Local verification passed for implementation commit `03e82ae`; server OpenTofu bootstrap plan passed from a clean temporary tree against `100.102.164.34`.
 - [x] Server OpenTofu foundation bootstrap applied from persistent checkout `/home/adonese/src/noebs-foundation`.
-- [x] GitHub Actions run `26618688797` passed for committed state `c1de584`.
+- [x] GitHub Actions run `26619301041` passed for committed state `fd377a9`.
 - [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, Helm, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
 - [x] Server release audit ran from a clean temporary copy of `673e906` against `/app/noebs` without printing secret values.
 - [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
@@ -85,6 +86,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Scrubbed ambient environment inheritance from SOPS release-secret encryption.
 - [x] Replaced SOPS CLI decryption's `SOPS_AGE_KEY_FILE` interface with an in-process age decrypt path.
 - [x] Added a current-secret-aware Kubernetes release input template command that prints only missing field placeholders.
+- [x] Added Kubernetes release input type checks so malformed current-secret values fail instead of being masked by explicit cutover inputs.
 - [x] Added an API gateway invariant that every external HTTP route has exactly one service owner and is proxied to that owner.
 - [x] Added OpenTofu preconditions that block the Noebs Argo CD application unless required Kubernetes Secrets contain the expected data keys.
 - [x] Set Noebs Kubernetes workloads and migration/preflight jobs to always pull the mutable `master` image during Argo CD sync.
@@ -130,6 +132,8 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Server OpenTofu bootstrap apply from `/home/adonese/src/noebs-foundation/foundation/terraform` added the `noebs` namespace and `argocd/noebs` AppProject; follow-up `tofu plan` returned `No changes`.
 - [x] Server audit at `100.102.164.34` with `/tmp/noebs-head-audit/noebs audit-kubernetes-release-inputs /app/noebs` identified transformable current-secret fields without printing secret values.
 - [x] GitHub Actions run `26618688797` passed for `c1de584`.
+- [x] GitHub Actions run `26619301041` passed for `fd377a9`.
+- [x] Release input type hardening passed local `go test -c ./cli`, local `golangci-lint run --new-from-rev=HEAD ./...`, local `git diff --check`, and server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"`.
 
 ## Current Server State
 
@@ -206,12 +210,12 @@ Latest blocker summary:
 
 ## Verification Record
 
-- Latest committed state: `c1de584`.
-- Latest implementation commit: `03e82ae`.
-- Latest recorded CI verification: GitHub Actions run `26618688797` passed for `c1de584`.
-- Latest implementation details: explicit OpenTofu Argo CD installation mode, explicit Noebs application creation phase, and corrected current-host Argo CD repository URL.
-- Latest local implementation verification: `go test ./...`, `golangci-lint run --new-from-rev=HEAD ./...`, `tofu -chdir=foundation/terraform fmt -check`, `tofu -chdir=foundation/terraform validate`, and `git diff --check` passed.
-- Latest server implementation verification: OpenTofu initialized and applied from `/home/adonese/src/noebs-foundation/foundation/terraform` on `100.102.164.34` with `argocd_installation_mode=existing` and `create_noebs_application=false`; it created the `noebs` namespace and `argocd/noebs` AppProject. A follow-up `tofu plan` returned `No changes`; Noebs `/test` still returned `{"message":true}`; Helm is installed; no non-running k8s pods were reported.
+- Latest committed state with completed CI before this update: `fd377a9`.
+- Latest implementation commit before this update: `03e82ae`.
+- Latest recorded CI verification: GitHub Actions run `26619301041` passed for `fd377a9`.
+- Latest implementation details: release preparation/audit rejects malformed current-secret scalar, map, and boolean values instead of allowing explicit cutover input to mask them.
+- Latest local implementation verification: `go test -c ./cli`, `golangci-lint run --new-from-rev=HEAD ./...`, and `git diff --check` passed. Local `go test ./cli` could not run because local Docker is not reachable.
+- Latest server implementation verification: server Docker-backed `timeout 30m go test ./cli -run "Test(AuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes|PrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput|AuditKubernetesReleaseInputsReports|PrepareKubernetesRelease)"` passed from a clean temporary tree on `100.102.164.34`; foundation remains applied; Docker Compose Noebs remains active; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.
 - Latest server release-input audit: `/app/noebs` provides `noebs.db_url`, `noebs.jwt_secret`, `noebs.google_client_id`, and `noebs.google_client_secret`; `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender` exist but are empty; the remaining required cutover fields are still missing.
 - Latest server checked: `100.102.164.34`.
 - Latest server deployment state: Docker Compose Noebs is still active; foundation bootstrap is applied; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.

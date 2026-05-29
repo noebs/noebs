@@ -280,6 +280,25 @@ func TestAuditKubernetesReleaseInputsReportsEmptyCurrentSecretValues(t *testing.
 	requireStringEntry(t, audit.Missing, "noebs.google_client_id")
 }
 
+func TestAuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
+	payload = strings.Replace(payload, "  google_client_id: legacy-google-client-id\n", "  google_client_id:\n    nested: wrong\n", 1)
+	payload = strings.Replace(payload, "  google_client_secret: legacy-google-client-secret\n", "  is_consumer_prod: \"true\"\n  psp: invalid\n", 1)
+	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
+
+	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
+	if err != nil {
+		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+	}
+	if audit.Ready {
+		t.Fatalf("audit ready = true, want false")
+	}
+	requireStringEntry(t, audit.Invalid, "current secret noebs.google_client_id must be a string")
+	requireStringEntry(t, audit.Invalid, "current secret noebs.is_consumer_prod must be a boolean")
+	requireStringEntry(t, audit.Invalid, "current secret noebs.psp must be a map")
+}
+
 func TestAuditKubernetesReleaseInputsReportsUnsupportedLegacyEBSSelectors(t *testing.T) {
 	legacyRoot := writeLegacyReleaseRoot(t)
 	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
@@ -298,6 +317,24 @@ func TestAuditKubernetesReleaseInputsReportsUnsupportedLegacyEBSSelectors(t *tes
 	}
 	requireStringEntry(t, audit.UnsupportedCurrentSecret, "current secret noebs.consumer_qa cannot be transformed; provide noebs.ebs.consumer_endpoint")
 	requireStringEntry(t, audit.UnsupportedCurrentSecret, "current secret noebs.is_merchant_prod cannot select an EBS runtime; provide noebs.ebs.merchant_endpoint and noebs.ebs.merchant_app_id")
+}
+
+func TestPrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput(t *testing.T) {
+	legacyRoot := writeLegacyReleaseRoot(t)
+	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
+	payload = strings.Replace(payload, "  google_client_id: legacy-google-client-id\n", "  google_client_id:\n    nested: wrong\n", 1)
+	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
+	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	inputs := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
+	inputs = strings.Replace(inputs, "  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", "  google_client_id: explicit-google-client-id\n  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", 1)
+	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), inputs)
+	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
+
+	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "current secret noebs.google_client_id must be a string") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want malformed current secret rejection", err)
+	}
+	assertPathMissing(t, outputRoot)
 }
 
 func TestAuditKubernetesReleaseInputsReportsReadyCompleteCurrentSecret(t *testing.T) {
