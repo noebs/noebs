@@ -8,7 +8,8 @@ microservices migration goal can be called complete. The task is not complete
 until every item in "Completion Checklist" is checked.
 
 Current answer: `NOT COMPLETE`. The architecture and deployment path are mostly
-defined, and the latest implementation code commit is `03e82ae`. Server cutover
+defined, and the latest committed state is `c1de584` with implementation code in
+`03e82ae`. Server cutover
 is still blocked by explicit Kubernetes release inputs, generated release
 Secrets, the Noebs Argo CD application/microservice deployment, service health
 verification after cutover, and retirement of the old Docker Compose deployment.
@@ -37,8 +38,8 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] CI image publishing for the Kubernetes-consumed `ghcr.io/noebs/noebs:master` image.
 - [x] Local verification passed for implementation commit `03e82ae`; server OpenTofu bootstrap plan passed from a clean temporary tree against `100.102.164.34`.
 - [x] Server OpenTofu foundation bootstrap applied from persistent checkout `/home/adonese/src/noebs-foundation`.
-- [x] GitHub Actions run `26617505980` passed for committed state `195c8d7`.
-- [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
+- [x] GitHub Actions run `26618688797` passed for committed state `c1de584`.
+- [x] Server `100.102.164.34` has reachable SSH, k3s, Argo CD, Helm, GitHub CLI, clean apt metadata, and a healthy current Docker Compose Noebs deployment.
 - [x] Server release audit ran from a clean temporary copy of `673e906` against `/app/noebs` without printing secret values.
 - [ ] Complete explicit Kubernetes release inputs from current server secrets plus cutover-only values.
 - [ ] Generated Kubernetes release Secret/config bundle from those explicit inputs.
@@ -128,6 +129,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Implementation commit `03e82ae` passed server OpenTofu bootstrap planning from `/tmp/noebs-foundation-phase`: `argocd_installation_mode=existing`, `create_noebs_application=false`, and `noebs_repo_url=https://github.com/noebs/noebs.git`; the plan reads existing `argocd` and creates only the `noebs` namespace plus Noebs AppProject.
 - [x] Server OpenTofu bootstrap apply from `/home/adonese/src/noebs-foundation/foundation/terraform` added the `noebs` namespace and `argocd/noebs` AppProject; follow-up `tofu plan` returned `No changes`.
 - [x] Server audit at `100.102.164.34` with `/tmp/noebs-head-audit/noebs audit-kubernetes-release-inputs /app/noebs` identified transformable current-secret fields without printing secret values.
+- [x] GitHub Actions run `26618688797` passed for `c1de584`.
 
 ## Current Server State
 
@@ -136,6 +138,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] Argo CD is installed in namespace `argocd`; the current host install is not a Helm release, so foundation uses explicit `argocd_installation_mode = "existing"`.
 - [x] Existing Docker Compose Noebs service is still running and healthy; host port `8081` `/test` returned `{"message":true}` after the full server test suite.
 - [x] GitHub CLI is installed on the server; `gh auth status` reports no configured GitHub login.
+- [x] Helm is installed on the server; `helm version --short` reports `v3.20.0+gb2e4314`.
 - [x] Server package metadata refresh is clean after the Caddy apt key update.
 - [x] `/home/adonese/.testcontainers.properties` sets explicit Testcontainers Ryuk timeouts: `ryuk.connection.timeout=4m` and `ryuk.reconnection.timeout=2m`.
 - [x] No unhealthy Docker containers or non-running k8s pods were reported after the full server test suite.
@@ -145,6 +148,7 @@ verification after cutover, and retirement of the old Docker Compose deployment.
 - [x] No Noebs workload resources are currently applied in the `noebs` namespace.
 - [x] Server OpenTofu bootstrap plan with `create_noebs_application=false` succeeds without requiring Noebs release Secrets and plans only the Noebs namespace plus Noebs AppProject.
 - [x] Current-secret-aware Kubernetes release input template was rendered on the server at `/tmp/noebs-kubernetes-release.inputs.yaml.plain`.
+- [x] The current Docker Postgres container declares explicit non-secret connection identifiers: `POSTGRES_USER=noebs` and `POSTGRES_DB=noebs`.
 - [ ] Noebs Kubernetes replacement deployment has not been applied yet.
 - [ ] Argo CD does not yet manage the Noebs Kubernetes app.
 
@@ -202,11 +206,12 @@ Latest blocker summary:
 
 ## Verification Record
 
+- Latest committed state: `c1de584`.
 - Latest implementation commit: `03e82ae`.
-- Latest recorded CI verification: GitHub Actions run `26618328014` passed for `0a94a65`.
+- Latest recorded CI verification: GitHub Actions run `26618688797` passed for `c1de584`.
 - Latest implementation details: explicit OpenTofu Argo CD installation mode, explicit Noebs application creation phase, and corrected current-host Argo CD repository URL.
 - Latest local implementation verification: `go test ./...`, `golangci-lint run --new-from-rev=HEAD ./...`, `tofu -chdir=foundation/terraform fmt -check`, `tofu -chdir=foundation/terraform validate`, and `git diff --check` passed.
-- Latest server implementation verification: OpenTofu initialized and applied from `/home/adonese/src/noebs-foundation/foundation/terraform` on `100.102.164.34` with `argocd_installation_mode=existing` and `create_noebs_application=false`; it created the `noebs` namespace and `argocd/noebs` AppProject. A follow-up `tofu plan` returned `No changes`; Noebs `/test` still returned `{"message":true}`; no non-running k8s pods were reported.
+- Latest server implementation verification: OpenTofu initialized and applied from `/home/adonese/src/noebs-foundation/foundation/terraform` on `100.102.164.34` with `argocd_installation_mode=existing` and `create_noebs_application=false`; it created the `noebs` namespace and `argocd/noebs` AppProject. A follow-up `tofu plan` returned `No changes`; Noebs `/test` still returned `{"message":true}`; Helm is installed; no non-running k8s pods were reported.
 - Latest server release-input audit: `/app/noebs` provides `noebs.db_url`, `noebs.jwt_secret`, `noebs.google_client_id`, and `noebs.google_client_secret`; `noebs.sms_gateway`, `noebs.sms_key`, and `noebs.sms_sender` exist but are empty; the remaining required cutover fields are still missing.
 - Latest server checked: `100.102.164.34`.
 - Latest server deployment state: Docker Compose Noebs is still active; foundation bootstrap is applied; the Noebs Argo CD Application and Kubernetes replacement workloads are not active yet.
