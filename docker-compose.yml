@@ -266,12 +266,25 @@ services:
       retries: 12
       start_period: 20s
 
+  temporal-namespace-bootstrap:
+    <<: *service-defaults
+    image: temporalio/auto-setup:1.29.1
+    depends_on:
+      temporal:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/opt/temporal/bin/namespace-bootstrap.sh"]
+    volumes:
+      - ./deploy/docker/temporal/namespace-bootstrap.sh:/opt/temporal/bin/namespace-bootstrap.sh:ro
+    networks:
+      - backend
+    restart: "no"
+
   temporal-ui:
     <<: *service-defaults
     image: temporalio/ui:2.34.0
     depends_on:
-      temporal:
-        condition: service_started
+      temporal-namespace-bootstrap:
+        condition: service_completed_successfully
     entrypoint: ["/home/ui-server/ui-server", "--root", "/home/ui-server", "--config", "config", "start"]
     volumes:
       - ./deploy/docker/temporal/ui.yaml:/home/ui-server/config/development.yaml:ro
@@ -553,8 +566,8 @@ services:
     depends_on:
       psp-webhook-migrate:
         condition: service_completed_successfully
-      temporal:
-        condition: service_healthy
+      temporal-namespace-bootstrap:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/psp-webhook.yaml:/app/service.yaml:ro"
@@ -682,8 +695,8 @@ services:
     depends_on:
       wallet-ledger-migrate:
         condition: service_completed_successfully
-      temporal:
-        condition: service_healthy
+      temporal-namespace-bootstrap:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-ledger.yaml:/app/service.yaml:ro"
@@ -709,8 +722,8 @@ services:
     depends_on:
       wallet-ledger-migrate:
         condition: service_completed_successfully
-      temporal:
-        condition: service_healthy
+      temporal-namespace-bootstrap:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-worker.yaml:/app/service.yaml:ro"

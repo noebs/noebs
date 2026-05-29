@@ -1126,6 +1126,7 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 
 	var foundPostgres bool
 	var foundSchemaJob bool
+	var foundNamespaceJob bool
 	var foundTemporalFrontendService bool
 	var foundTemporal bool
 	var foundTemporalUI bool
@@ -1199,6 +1200,37 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 			}
 			requireMount(t, "temporal-schema-migrate", container, "/opt/temporal/bin/schema-migrate.sh", "schema-migrate.sh")
 			requireMount(t, "temporal-schema-migrate", container, "/opt/temporal/secrets/postgres-password", "password")
+		case object.Kind == "Job" && object.Metadata.Name == "temporal-namespace-bootstrap":
+			foundNamespaceJob = true
+			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "Sync" {
+				t.Fatalf("temporal-namespace-bootstrap hook = %q, want Sync", object.Metadata.Annotations["argocd.argoproj.io/hook"])
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "18" {
+				t.Fatalf("temporal-namespace-bootstrap sync-wave = %q, want 18", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
+			if object.Spec.Template.Spec.ServiceAccountName != "temporal-namespace-bootstrap" {
+				t.Fatalf("temporal-namespace-bootstrap serviceAccountName = %q", object.Spec.Template.Spec.ServiceAccountName)
+			}
+			if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+				t.Fatalf("temporal-namespace-bootstrap must disable service account token automount")
+			}
+			if object.Spec.Template.Spec.RestartPolicy != "Never" {
+				t.Fatalf("temporal-namespace-bootstrap restartPolicy = %q, want Never", object.Spec.Template.Spec.RestartPolicy)
+			}
+			if len(object.Spec.Template.Spec.Containers) != 1 {
+				t.Fatalf("temporal-namespace-bootstrap containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
+			}
+			container := object.Spec.Template.Spec.Containers[0]
+			if container.Image != "temporalio/auto-setup:1.29.1" {
+				t.Fatalf("temporal-namespace-bootstrap image = %q", container.Image)
+			}
+			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
+				t.Fatalf("temporal-namespace-bootstrap must use mounted config instead of env/envFrom")
+			}
+			if !containsString(container.Command, "/opt/temporal/bin/namespace-bootstrap.sh") {
+				t.Fatalf("temporal-namespace-bootstrap command = %v, want mounted namespace bootstrap script", container.Command)
+			}
+			requireMount(t, "temporal-namespace-bootstrap", container, "/opt/temporal/bin/namespace-bootstrap.sh", "namespace-bootstrap.sh")
 		case object.Kind == "Deployment" && object.Metadata.Name == "temporal":
 			foundTemporal = true
 			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "15" {
@@ -1249,6 +1281,9 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 	if !foundSchemaJob {
 		t.Fatalf("temporal-schema-migrate Job not found")
 	}
+	if !foundNamespaceJob {
+		t.Fatalf("temporal-namespace-bootstrap Job not found")
+	}
 	if !foundTemporalFrontendService {
 		t.Fatalf("temporal-frontend Service not found")
 	}
@@ -1266,6 +1301,7 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config temporal-start.sh", temporalConfig["temporal-start.sh"], filepath.Join("..", "deploy", "docker", "temporal", "temporal-start.sh"))
 	requireTemporalStartScriptExplicitInputs(t, temporalConfig["temporal-start.sh"])
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config schema-migrate.sh", temporalConfig["schema-migrate.sh"], filepath.Join("..", "deploy", "docker", "temporal", "schema-migrate.sh"))
+	requireKubernetesConfigMapDataMatchesFile(t, "temporal-config namespace-bootstrap.sh", temporalConfig["namespace-bootstrap.sh"], filepath.Join("..", "deploy", "docker", "temporal", "namespace-bootstrap.sh"))
 	if _, ok := temporalConfig["dynamicconfig.yaml"]; !ok {
 		t.Fatalf("temporal-config missing dynamicconfig.yaml")
 	}
@@ -1703,6 +1739,22 @@ func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 		t.Fatalf("read Temporal start script: %v", err)
 	}
 	requireTemporalStartScriptExplicitInputs(t, string(temporalStart))
+
+	temporalNamespaceBootstrap, ok := compose.Services["temporal-namespace-bootstrap"]
+	if !ok {
+		t.Fatalf("docker-compose.yml missing temporal-namespace-bootstrap service")
+	}
+	if temporalNamespaceBootstrap.Environment != nil {
+		t.Fatalf("temporal-namespace-bootstrap defines environment; Temporal namespace bootstrap must use mounted config")
+	}
+	if temporalNamespaceBootstrap.EnvFile != nil {
+		t.Fatalf("temporal-namespace-bootstrap defines env_file; Temporal namespace bootstrap must use mounted config")
+	}
+	if !containsString(temporalNamespaceBootstrap.Entrypoint, "/opt/temporal/bin/namespace-bootstrap.sh") {
+		t.Fatalf("temporal-namespace-bootstrap entrypoint = %v, want mounted namespace bootstrap script", temporalNamespaceBootstrap.Entrypoint)
+	}
+	requireComposeVolume(t, "temporal-namespace-bootstrap", temporalNamespaceBootstrap.Volumes, "./deploy/docker/temporal/namespace-bootstrap.sh", "/opt/temporal/bin/namespace-bootstrap.sh")
+	rejectComposePublishedPorts(t, "temporal-namespace-bootstrap", temporalNamespaceBootstrap.Ports)
 
 	temporalUI, ok := compose.Services["temporal-ui"]
 	if !ok {

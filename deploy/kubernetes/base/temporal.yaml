@@ -315,6 +315,44 @@ data:
       --password "$password" \
       --database "$visibility_db" \
       update-schema -d "$schema_root/visibility/versioned"
+  namespace-bootstrap.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    temporal_namespace="default"
+    temporal_address="temporal-frontend:7233"
+    temporal_retention="72h"
+    temporal_description="Noebs wallet workflow namespace"
+    temporal_host="${temporal_address%:*}"
+    temporal_port="${temporal_address##*:}"
+    describe_stderr="/tmp/temporal-namespace-describe.err"
+
+    until nc -z "$temporal_host" "$temporal_port"; do
+      echo "waiting for Temporal frontend at $temporal_address"
+      sleep 1
+    done
+
+    if temporal operator namespace describe \
+      --address "$temporal_address" \
+      --namespace "$temporal_namespace" \
+      --disable-config-env \
+      --disable-config-file \
+      >/dev/null 2>"$describe_stderr"; then
+      exit 0
+    fi
+
+    if ! grep -Fq "Namespace $temporal_namespace is not found." "$describe_stderr"; then
+      cat "$describe_stderr" >&2
+      exit 1
+    fi
+
+    temporal operator namespace create \
+      --address "$temporal_address" \
+      --namespace "$temporal_namespace" \
+      --retention "$temporal_retention" \
+      --description "$temporal_description" \
+      --disable-config-env \
+      --disable-config-file
   dynamicconfig.yaml: ""
 ---
 apiVersion: v1
@@ -613,6 +651,45 @@ spec:
         - name: temporal-postgres-credentials
           secret:
             secretName: temporal-postgres-credentials
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-namespace-bootstrap
+  labels:
+    app.kubernetes.io/name: temporal-namespace-bootstrap
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "18"
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temporal-namespace-bootstrap
+    spec:
+      serviceAccountName: temporal-namespace-bootstrap
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      containers:
+        - name: temporal-namespace-bootstrap
+          image: temporalio/auto-setup:1.29.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /opt/temporal/bin/namespace-bootstrap.sh
+          volumeMounts:
+            - name: temporal-config
+              mountPath: /opt/temporal/bin/namespace-bootstrap.sh
+              subPath: namespace-bootstrap.sh
+              readOnly: true
+      volumes:
+        - name: temporal-config
+          configMap:
+            name: temporal-config
+            defaultMode: 0555
 ---
 apiVersion: v1
 kind: Service
