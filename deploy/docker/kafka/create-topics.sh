@@ -24,6 +24,15 @@ if [ ! -s "$topics_file" ]; then
   exit 1
 fi
 
+deadline=$((SECONDS + 600))
+until /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$bootstrap_server" >/dev/null 2>&1; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "Kafka bootstrap server is not ready: $bootstrap_server" >&2
+    exit 1
+  fi
+  sleep 5
+done
+
 while read -r topic partitions replication_factor; do
   if [ "$topic" = "" ]; then
     continue
