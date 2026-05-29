@@ -34,7 +34,7 @@ func TestTemporalContainer(t *testing.T) {
 		postgres.WithUsername("temporal"),
 		postgres.WithPassword("temporal"),
 		network.WithNetwork([]string{"temporal-postgres"}, nw),
-		testcontainers.WithWaitStrategy(
+		testcontainers.WithWaitStrategyAndDeadline(4*time.Minute,
 			wait.ForSQL("5432/tcp", "pgx", temporalPostgresAdminURL).WithStartupTimeout(4*time.Minute),
 		),
 	)
