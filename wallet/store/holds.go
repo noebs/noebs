@@ -46,9 +46,6 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	if err != nil {
 		return nil, err
 	}
-	if walletRow.AvailableBalance < params.Amount {
-		return nil, ErrInsufficientFunds
-	}
 
 	now := time.Now().UTC()
 	insertStmt := db.Rebind(`INSERT INTO balance_holds(
@@ -74,9 +71,12 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			hold, err = s.loadExistingHold(ctx, tx, params.TenantID, params.WalletID, params.ReferenceType, params.ReferenceID)
+			hold, err = s.loadExistingHold(ctx, tx, params)
 			if err != nil {
 				return nil, err
+			}
+			if !existingHoldMatches(hold, params) {
+				return nil, ErrDuplicateHold
 			}
 			if err := tx.Commit(); err != nil {
 				return nil, err
@@ -84,6 +84,9 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 			return &hold, nil
 		}
 		return nil, err
+	}
+	if walletRow.AvailableBalance < params.Amount {
+		return nil, ErrInsufficientFunds
 	}
 
 	walletRow.AvailableBalance -= params.Amount
@@ -148,14 +151,26 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	return tx.Commit()
 }
 
-func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, tenantID string, walletID uuid.UUID, refType, refID string) (BalanceHold, error) {
+func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, params HoldParams) (BalanceHold, error) {
 	stmt := s.DB.Rebind(`SELECT * FROM balance_holds
 		WHERE tenant_id = ? AND wallet_id = ? AND reference_type = ? AND reference_id = ?`)
 	var hold BalanceHold
-	if err := tx.GetContext(ctx, &hold, stmt, tenantID, walletID, refType, refID); err != nil {
+	if err := tx.GetContext(ctx, &hold, stmt, params.TenantID, params.WalletID, params.ReferenceType, params.ReferenceID); err != nil {
 		return BalanceHold{}, err
 	}
 	return hold, nil
+}
+
+func existingHoldMatches(hold BalanceHold, params HoldParams) bool {
+	return hold.TenantID == params.TenantID &&
+		hold.WalletID == params.WalletID &&
+		hold.Amount == params.Amount &&
+		hold.AmountRemaining == params.Amount &&
+		hold.Reason == params.Reason &&
+		hold.ReferenceType == params.ReferenceType &&
+		hold.ReferenceID == params.ReferenceID &&
+		hold.IdempotencyKey == params.IdempotencyKey &&
+		hold.Status == HoldStatusActive
 }
 
 func (s *Store) lockHold(ctx context.Context, tx *sqlx.Tx, tenantID string, holdID int64) (*BalanceHold, error) {

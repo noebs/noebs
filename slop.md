@@ -153,6 +153,11 @@ Last updated: 2026-05-31
     - Fix: validate existing ledger transaction and debit/credit entries against the requested double-entry contract; exact replays return `Existing`, mismatched replays return `ErrDuplicateTransaction`.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestExistingDoubleEntryMatches|TestPostHeldDoubleEntryValidation'` (Postgres container case skipped locally because the container runtime is unavailable).
 
+31. Balance hold creation could fail exact replays and accept mismatched duplicate holds.
+    - Evidence: `CreateHold` checked current available balance before detecting an existing hold, so exact retries after funds were reserved could return `ErrInsufficientFunds`. When a reference conflict was found, it returned the existing hold without verifying amount, reason, idempotency key, or active/unconsumed status.
+    - Fix: handle existing hold conflicts before the new-hold funds check; exact active/unconsumed replays return the original hold, mismatched conflicts return `ErrDuplicateHold`.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestExistingHoldMatches|TestExistingDoubleEntryMatches|TestPostHeldDoubleEntryValidation'` (Postgres container case skipped locally because the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

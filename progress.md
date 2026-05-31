@@ -34,6 +34,7 @@
 - Fixed external credit ledger posting so deposits/manual credits use an explicit system-debit path instead of requiring treasury pre-funding.
 - Fixed manual-transfer type validation so unknown transfer types cannot bypass hold or system-debit semantics.
 - Fixed ledger idempotency replay validation so duplicate keys with different debit/credit/amount/currency/reference fail instead of returning the prior entry as success.
+- Fixed balance hold replay validation so exact retries do not re-check already reserved funds and mismatched duplicate holds fail explicitly.
 
 Verification:
 
@@ -56,6 +57,7 @@ Verification:
 - `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/workflow`
 - `go test -count=1 ./wallet/store`
 - `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestExistingDoubleEntryMatches|TestPostHeldDoubleEntryValidation'`
+- `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestExistingHoldMatches|TestExistingDoubleEntryMatches|TestPostHeldDoubleEntryValidation'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 

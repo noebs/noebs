@@ -87,7 +87,7 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	}
 	setWalletBalances(t, ctx, db, tenantID, userWallet.ID, 1000, 1000)
 
-	hold, err := store.CreateHold(ctx, HoldParams{
+	holdParams := HoldParams{
 		TenantID:       tenantID,
 		WalletID:       userWallet.ID,
 		Amount:         1000,
@@ -96,11 +96,28 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 		ReferenceID:    "withdrawal-ref",
 		IdempotencyKey: "withdrawal-ref:hold",
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
-	})
+	}
+	hold, err := store.CreateHold(ctx, holdParams)
 	if err != nil {
 		t.Fatalf("create hold: %v", err)
 	}
 	assertWalletBalances(t, ctx, store, tenantID, userWallet.ID, 1000, 0)
+
+	replayedHold, err := store.CreateHold(ctx, holdParams)
+	if err != nil {
+		t.Fatalf("idempotent create hold replay: %v", err)
+	}
+	if replayedHold.ID != hold.ID {
+		t.Fatalf("idempotent hold id = %d, want %d", replayedHold.ID, hold.ID)
+	}
+	assertWalletBalances(t, ctx, store, tenantID, userWallet.ID, 1000, 0)
+
+	amountMismatchHold := holdParams
+	amountMismatchHold.Amount = 900
+	_, err = store.CreateHold(ctx, amountMismatchHold)
+	if !errors.Is(err, ErrDuplicateHold) {
+		t.Fatalf("idempotent hold amount mismatch error = %v, want %v", err, ErrDuplicateHold)
+	}
 
 	_, err = store.PostDoubleEntry(ctx, DoubleEntryParams{
 		TenantID:       tenantID,
@@ -315,6 +332,80 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 			tc.mutate(&testTxn, testResult, &testParams)
 			if existingDoubleEntryMatches(testTxn, testResult, testParams) {
 				t.Fatal("existingDoubleEntryMatches() = true, want false")
+			}
+		})
+	}
+}
+
+func TestExistingHoldMatches(t *testing.T) {
+	walletID := uuid.New()
+	params := HoldParams{
+		TenantID:       "tenant",
+		WalletID:       walletID,
+		Amount:         500,
+		Reason:         "withdrawal",
+		ReferenceType:  "withdrawal",
+		ReferenceID:    "withdrawal-ref",
+		IdempotencyKey: "withdrawal-ref:hold",
+		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+	}
+	hold := BalanceHold{
+		TenantID:        params.TenantID,
+		WalletID:        params.WalletID,
+		Amount:          params.Amount,
+		AmountRemaining: params.Amount,
+		Reason:          params.Reason,
+		ReferenceType:   params.ReferenceType,
+		ReferenceID:     params.ReferenceID,
+		IdempotencyKey:  params.IdempotencyKey,
+		Status:          HoldStatusActive,
+	}
+	if !existingHoldMatches(hold, params) {
+		t.Fatal("existingHoldMatches() = false, want true")
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*BalanceHold, *HoldParams)
+	}{
+		{
+			name: "amount",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				params.Amount++
+			},
+		},
+		{
+			name: "wallet",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				params.WalletID = uuid.New()
+			},
+		},
+		{
+			name: "idempotency",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				params.IdempotencyKey = "other-key"
+			},
+		},
+		{
+			name: "partially-captured",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				hold.AmountRemaining--
+			},
+		},
+		{
+			name: "released",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				hold.Status = HoldStatusReleased
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testHold := hold
+			testParams := params
+			tc.mutate(&testHold, &testParams)
+			if existingHoldMatches(testHold, testParams) {
+				t.Fatal("existingHoldMatches() = true, want false")
 			}
 		})
 	}
