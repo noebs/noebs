@@ -563,6 +563,11 @@ Last updated: 2026-05-31
     - Fix: add a list-specific EBS call path that skips top-level transaction persistence for merchant-history status wrappers, convert each `lastTransactions` item into an explicit transaction tied to the requested merchant, persist those rows through the normal transaction/outbox path, and fail on missing item UUIDs or merchant mismatches instead of silently dropping data.
     - Tests: `go test -count=1 -v ./consumer -run 'TestQRPurchaseTransactionValidation|TestQRTransactionsRecordsLastTransactions'` (`TestQRTransactionsRecordsLastTransactions` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer/handler -run 'TestStatusForErrorMapsMerchantValidationToBadRequest'`; `go test -count=1 ./consumer ./consumer/handler ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+113. Check-user silently dropped blank phone entries.
+    - Evidence: `CheckUser` returned a generic `"empty phones"` error only for an empty slice, then trimmed and skipped blank entries inside the loop. Requests like `[" "]` or `["0912141660", " "]` therefore reported successful empty or shortened results, hiding malformed input and shifting response positions.
+    - Fix: normalize check-user phones once at the service boundary, require at least one non-blank phone, reject any blank entry with the existing typed `ErrMissingMobile`, and only touch card-vault after the request shape is valid.
+    - Tests: `go test -count=1 -v ./consumer -run 'TestCheckUserRejectsBlankPhonesBeforeCardVault|TestNormalizeCheckUserPhonesTrimsAndPreservesOrder|TestCheckUserRequiresCardVaultClient|TestCheckUserPropagatesIdentityLookupErrors'`; `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -104,6 +104,36 @@ func TestCheckUserRequiresCardVaultClient(t *testing.T) {
 	}
 }
 
+func TestCheckUserRejectsBlankPhonesBeforeCardVault(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	for _, phones := range [][]string{
+		nil,
+		{},
+		{" "},
+		{"0912141660", " "},
+	} {
+		if _, err := service.CheckUser(context.Background(), "tenant-a", phones); !errors.Is(err, ErrMissingMobile) {
+			t.Fatalf("CheckUser(%q) error = %v, want %v", phones, err, ErrMissingMobile)
+		}
+	}
+}
+
+func TestNormalizeCheckUserPhonesTrimsAndPreservesOrder(t *testing.T) {
+	got, err := normalizeCheckUserPhones([]string{" 0912141660 ", "0999999999"})
+	if err != nil {
+		t.Fatalf("normalizeCheckUserPhones() error = %v", err)
+	}
+	want := []string{"0912141660", "0999999999"}
+	if len(got) != len(want) {
+		t.Fatalf("normalized length = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("normalized[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestCheckUserPropagatesIdentityLookupErrors(t *testing.T) {
 	service := &Service{Store: &store.Store{}, HTTPClient: http.DefaultClient}
 	_, err := service.CheckUser(context.Background(), "tenant-a", []string{"0912141660"})

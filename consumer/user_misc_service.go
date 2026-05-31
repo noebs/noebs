@@ -19,23 +19,20 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	if s.HTTPClient == nil {
-		return nil, ErrMissingHTTPClient
-	}
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if len(phones) == 0 {
-		return nil, errors.New("empty phones")
+	phones, err = normalizeCheckUserPhones(phones)
+	if err != nil {
+		return nil, err
+	}
+	if s.HTTPClient == nil {
+		return nil, ErrMissingHTTPClient
 	}
 
 	out := make([]CheckUserResult, 0, len(phones))
 	for _, phone := range phones {
-		phone = strings.TrimSpace(phone)
-		if phone == "" {
-			continue
-		}
 		user, err := s.Store.GetUserByMobile(ctx, tenantID, phone)
 		if err != nil {
 			if !store.ErrNotFound(err) {
@@ -55,6 +52,21 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 		out = append(out, CheckUserResult{Phone: phone, IsUser: true, Pan: maskedCard.MaskedPAN})
 	}
 	return out, nil
+}
+
+func normalizeCheckUserPhones(phones []string) ([]string, error) {
+	if len(phones) == 0 {
+		return nil, ErrMissingMobile
+	}
+	normalized := make([]string, 0, len(phones))
+	for _, phone := range phones {
+		phone = strings.TrimSpace(phone)
+		if phone == "" {
+			return nil, ErrMissingMobile
+		}
+		normalized = append(normalized, phone)
+	}
+	return normalized, nil
 }
 
 func (s *Service) SetMainCardForUserID(ctx context.Context, tenantID string, userID int64, pan string) error {
