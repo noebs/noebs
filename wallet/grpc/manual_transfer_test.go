@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -109,6 +110,7 @@ func TestSignalManualTransferDecisionRequiresReason(t *testing.T) {
 		Config: ebs_fields.NoebsConfig{},
 	}
 	server := NewServer(svc)
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
 	req := &walletv1.ManualTransferDecisionRequest{
 		WorkflowId: "wf-1",
@@ -116,12 +118,32 @@ func TestSignalManualTransferDecisionRequiresReason(t *testing.T) {
 		ApproverId: 22,
 	}
 
-	_, err := server.SignalManualTransferDecision(context.Background(), req)
+	_, err := server.SignalManualTransferDecision(ctx, req)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected invalid argument, got %v", status.Code(err))
+	}
+}
+
+func TestSignalManualTransferDecisionRequiresAdminAuth(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{},
+	}
+	server := NewServer(svc)
+
+	req := &walletv1.ManualTransferDecisionRequest{
+		WorkflowId:     "wf-1",
+		Approved:       true,
+		ApproverId:     22,
+		ProofOfPayment: "proof",
+	}
+
+	_, err := server.SignalManualTransferDecision(context.Background(), req)
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
 	}
 }
 

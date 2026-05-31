@@ -598,6 +598,11 @@ Last updated: 2026-05-31
     - Fix: bind tenant and owner from gateway claims before required tenant/owner validation in deposit and withdrawal requests, while preserving the same missing-field failures for internal callers with no claims.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation|TestWorkflowRequestsValidateTenantBeforeTemporal|TestRequestWithdrawalRejectsGatewayIdentityMismatch'` (`TestRequestWithdrawalRejectsGatewayIdentityMismatch` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+120. Manual-transfer decision signals trusted interceptor-only admin auth.
+    - Evidence: withdrawal approval/verification signal handlers require admin metadata in the handler, but `SignalManualTransferDecision` did not. If the shared gRPC method was invoked without the CLI interceptor path, a caller could send an approval or rejection signal with only a workflow id and approver id.
+    - Fix: require gateway admin metadata inside `SignalManualTransferDecision` before request validation, store lookup, or Temporal signaling, matching withdrawal signal behavior.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestSignalManualTransferDecisionRequires(AdminAuth|Reason)|TestRequireAdmin|TestWithdrawalSignalsRequireAdminAuth|TestWithdrawalSignalsValidateAfterAdminAuth'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -552,6 +552,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestSignalManualTransferDecisionRequires(AdminAuth|Reason)|TestRequireAdmin|TestWithdrawalSignalsRequireAdminAuth|TestWithdrawalSignalsValidateAfterAdminAuth'`
+- `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
