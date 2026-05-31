@@ -493,6 +493,10 @@ func TestStore_CreateToken_RequiresExplicitFields(t *testing.T) {
 	if !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
 	}
+	err = s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", UserID: 1, Amount: -1})
+	if !errors.Is(err, ErrInvalidAmount) {
+		t.Fatalf("expected ErrInvalidAmount, got %v", err)
+	}
 }
 
 func TestStore_CreateTransaction_MissingUUID(t *testing.T) {
@@ -909,7 +913,7 @@ func TestStore_CacheBillerRequiresExplicitFields(t *testing.T) {
 
 func TestStore_CreateToken_RequiresDataKeyForDestinationPAN(t *testing.T) {
 	s := &Store{}
-	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", UserID: 1, ToCard: "9222081700000000"})
+	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", UserID: 1, Amount: 1, ToCard: "9222081700000000"})
 	if !errors.Is(err, ErrMissingDataKey) {
 		t.Fatalf("expected ErrMissingDataKey, got %v", err)
 	}

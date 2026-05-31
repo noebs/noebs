@@ -215,7 +215,8 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 //  1. UUID a unique UUID v4 per each operation, this is requested from ebs via [POST]/payment_token
 //  2. ID a unique ID per each payment token, this is an optional field left for the user to supply. In e-commerce cases, an ID represent
 //     the order ID.
-//  3. Amount the amount to be transferred. Amount is required. A zero amount denotes a free payment.
+//  3. Amount the amount to be transferred. A zero amount creates an open-amount token;
+//     the payer must supply a positive amount when paying.
 //  4. UserID the user ID of the user who is making the payment. UserID is required.
 //  5. Mobile: the receipient of the payment mobile. This is an optional field
 //  6. Note: an optional text note to be sent to the recipient.

@@ -528,6 +528,11 @@ Last updated: 2026-05-31
     - Fix: only map explicit not-found results to `is_user:false`; propagate all other identity lookup errors before calling card-vault.
     - Tests: `go test -count=1 -v ./consumer -run 'TestCheckUser'` (`TestCheckUserUsesIdentityAndCardVaultScopes` and `TestCheckUserSkipsUsersWithoutCardVaultCard` skipped locally when the container runtime is unavailable); `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+106. Open-amount payment tokens resolved into zero-amount EBS transfers.
+    - Evidence: `ResolveQuickPaymentTokenForUserID` intentionally skipped amount-mismatch checks when the stored token amount was zero, but it returned `storedToken.Amount` in the resolution. `NoebsQuickPayment` then overwrote the payer's requested transfer amount with that zero before calling EBS. Direct token creation also accepted negative amounts.
+    - Fix: keep zero as the explicit open-amount token contract, reject negative token amounts in the service and store, require a positive requested amount when resolving open-amount tokens, return that requested amount to quick-pay execution, and map invalid-amount errors across HTTP and internal service boundaries.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_CreateToken_RequiresExplicitFields|TestStore_CreateToken_RequiresDataKeyForDestinationPAN|TestStore_CreateToken_MissingTenantID'`; `go test -count=1 -v ./consumer -run 'TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore|TestResolveQuickPaymentAmount|TestServiceCommandErrorMapsInvalidAmount|TestCardVaultOwnedOperationsUseOnlyCardVaultSchema'` (`TestCardVaultOwnedOperationsUseOnlyCardVaultSchema` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer/handler -run 'TestStatusForErrorMapsInvalidAmountToBadRequest|TestStatusForErrorMapsDuplicateTransactionsToConflict'`; `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -95,14 +95,31 @@ func (s *Service) ResolveQuickPaymentTokenForUserID(ctx context.Context, tenantI
 	if storedToken.UserID != userID {
 		return QuickPaymentTokenResolution{}, store.ErrInvalidUserID
 	}
-	if storedToken.Amount != 0 && cmd.Amount != storedToken.Amount {
-		return QuickPaymentTokenResolution{}, ErrAmountMismatch
+	amount, err := resolveQuickPaymentAmount(storedToken.Amount, cmd.Amount)
+	if err != nil {
+		return QuickPaymentTokenResolution{}, err
 	}
 	return QuickPaymentTokenResolution{
 		UUID:   storedToken.UUID,
 		ToCard: storedToken.ToCard,
-		Amount: storedToken.Amount,
+		Amount: amount,
 	}, nil
+}
+
+func resolveQuickPaymentAmount(storedAmount, requestedAmount int) (int, error) {
+	if storedAmount < 0 {
+		return 0, store.ErrInvalidAmount
+	}
+	if storedAmount == 0 {
+		if requestedAmount <= 0 {
+			return 0, store.ErrInvalidAmount
+		}
+		return requestedAmount, nil
+	}
+	if requestedAmount != storedAmount {
+		return 0, ErrAmountMismatch
+	}
+	return storedAmount, nil
 }
 
 func (s *Service) MarkQuickPaymentTokenPaidForUserID(ctx context.Context, tenantID string, userID int64, cmd QuickPaymentTokenPaidCommand) error {
@@ -326,6 +343,8 @@ func errorForServiceCommandCode(code string) error {
 		return store.ErrInvalidTenantID
 	case store.ErrInvalidUserID.Error():
 		return store.ErrInvalidUserID
+	case store.ErrInvalidAmount.Error():
+		return store.ErrInvalidAmount
 	case store.ErrMissingPAN.Error():
 		return store.ErrMissingPAN
 	default:

@@ -135,6 +135,47 @@ func encodePaymentTokenForTest(t *testing.T, uuid string) string {
 	return encoded
 }
 
+func TestResolveQuickPaymentAmount(t *testing.T) {
+	tests := []struct {
+		name            string
+		storedAmount    int
+		requestedAmount int
+		want            int
+		wantErr         error
+	}{
+		{name: "fixed amount exact match", storedAmount: 25, requestedAmount: 25, want: 25},
+		{name: "fixed amount mismatch", storedAmount: 25, requestedAmount: 10, wantErr: ErrAmountMismatch},
+		{name: "open amount uses requested amount", storedAmount: 0, requestedAmount: 25, want: 25},
+		{name: "open amount rejects missing request amount", storedAmount: 0, requestedAmount: 0, wantErr: store.ErrInvalidAmount},
+		{name: "open amount rejects negative request amount", storedAmount: 0, requestedAmount: -1, wantErr: store.ErrInvalidAmount},
+		{name: "stored negative amount is invalid", storedAmount: -1, requestedAmount: 25, wantErr: store.ErrInvalidAmount},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveQuickPaymentAmount(tt.storedAmount, tt.requestedAmount)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("resolveQuickPaymentAmount() error = %v, want %v", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveQuickPaymentAmount() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolveQuickPaymentAmount() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceCommandErrorMapsInvalidAmount(t *testing.T) {
+	if err := errorForServiceCommandCode(store.ErrInvalidAmount.Error()); !errors.Is(err, store.ErrInvalidAmount) {
+		t.Fatalf("errorForServiceCommandCode(invalid amount) = %v, want %v", err, store.ErrInvalidAmount)
+	}
+}
+
 func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 	var sawResolve bool
 	var sawMarkPaid bool

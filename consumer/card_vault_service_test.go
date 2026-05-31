@@ -138,6 +138,24 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 		t.Fatalf("payment request must not return raw PAN")
 	}
 
+	openRequest, _, _, err := service.PaymentRequestForUserID(ctx, tenantID, userID, PaymentRequestData{})
+	if err != nil {
+		t.Fatalf("create open amount payment request with card-vault schema: %v", err)
+	}
+	openResolution, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
+		UUID:   openRequest.UUID,
+		Amount: 125,
+	})
+	if err != nil {
+		t.Fatalf("resolve open amount quick-pay token with card-vault schema: %v", err)
+	}
+	if openResolution.Amount != 125 || openResolution.ToCard != pan {
+		t.Fatalf("open amount resolution = %+v, want amount=125 raw PAN", openResolution)
+	}
+	if _, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{UUID: openRequest.UUID}); !errors.Is(err, store.ErrInvalidAmount) {
+		t.Fatalf("resolve open amount quick-pay token without amount error = %v, want %v", err, store.ErrInvalidAmount)
+	}
+
 	if err := service.RemoveCardForUserID(ctx, tenantID, userID, pan); err != nil {
 		t.Fatalf("remove card with card-vault schema: %v", err)
 	}

@@ -24,6 +24,9 @@ func (s *Service) GeneratePaymentTokenForUserID(ctx context.Context, tenantID st
 	if userID <= 0 {
 		return ebs_fields.Token{}, "", "", store.ErrInvalidUserID
 	}
+	if token.Amount < 0 {
+		return ebs_fields.Token{}, "", "", store.ErrInvalidAmount
+	}
 	cards, err := s.Store.ListCardsByUserID(ctx, tenantID, userID)
 	if err != nil {
 		return ebs_fields.Token{}, "", "", err

@@ -1058,6 +1058,9 @@ func (s *Store) CreateToken(ctx context.Context, tenantID string, token *ebs_fie
 	if token.UserID <= 0 {
 		return ErrInvalidUserID
 	}
+	if token.Amount < 0 {
+		return ErrInvalidAmount
+	}
 	if s == nil {
 		return fmt.Errorf("nil db")
 	}

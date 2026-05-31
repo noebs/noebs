@@ -476,6 +476,13 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_CreateToken_RequiresExplicitFields|TestStore_CreateToken_RequiresDataKeyForDestinationPAN|TestStore_CreateToken_MissingTenantID'`
+- `go test -count=1 -v ./consumer -run 'TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore|TestResolveQuickPaymentAmount|TestServiceCommandErrorMapsInvalidAmount|TestCardVaultOwnedOperationsUseOnlyCardVaultSchema'` (`TestCardVaultOwnedOperationsUseOnlyCardVaultSchema` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./consumer/handler -run 'TestStatusForErrorMapsInvalidAmountToBadRequest|TestStatusForErrorMapsDuplicateTransactionsToConflict'`
+- `go test -count=1 ./store ./consumer ./consumer/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

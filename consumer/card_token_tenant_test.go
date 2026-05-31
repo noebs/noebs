@@ -119,3 +119,12 @@ func TestCardTokenTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 		}
 	}
 }
+
+func TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+
+	_, _, _, err := service.GeneratePaymentTokenForUserID(context.Background(), "tenant-a", 1, ebs_fields.Token{Amount: -1})
+	if !errors.Is(err, store.ErrInvalidAmount) {
+		t.Fatalf("GeneratePaymentTokenForUserID() error = %v, want %v", err, store.ErrInvalidAmount)
+	}
+}

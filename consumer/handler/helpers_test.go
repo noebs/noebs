@@ -91,3 +91,9 @@ func TestStatusForErrorMapsDuplicateTransactionsToConflict(t *testing.T) {
 		t.Fatalf("statusForError(ErrDuplicateTransaction) = %d, want %d", got, http.StatusConflict)
 	}
 }
+
+func TestStatusForErrorMapsInvalidAmountToBadRequest(t *testing.T) {
+	if got := statusForError(store.ErrInvalidAmount); got != http.StatusBadRequest {
+		t.Fatalf("statusForError(ErrInvalidAmount) = %d, want %d", got, http.StatusBadRequest)
+	}
+}
