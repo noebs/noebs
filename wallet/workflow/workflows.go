@@ -558,7 +558,10 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			}
 			fundingSource = &linkedSource
 		}
-		if destination.OwnershipStatus != "verified" {
+		if err := walletstore.ValidateWithdrawalDestinationReadyForWithdrawal(&destination); err != nil {
+			if !errors.Is(err, walletstore.ErrDestinationNotVerified) {
+				return err
+			}
 			if !destination.OwnershipVerificationMethod.Valid {
 				return walletstore.ErrMissingVerificationType
 			}
@@ -597,6 +600,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 					return err
 				}
 				destination.OwnershipStatus = "verified"
+				destination.OwnershipVerifiedAt = sql.NullTime{Time: now, Valid: true}
 			} else {
 				if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateOwnershipVerificationStatus, params.TenantID, stored.ID, "failed", now).Get(ctx, nil); err != nil {
 					return err

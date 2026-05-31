@@ -1005,6 +1005,12 @@ func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
 
 	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{}, now)
 	assertErrorIs(t, err, ErrMissingVerificationTime)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{Valid: true}, now)
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "pending", sql.NullTime{Time: now, Valid: true}, now)
+	assertErrorIs(t, err, ErrInvalidVerificationTime)
 }
 
 func TestCreateOwnershipVerificationValidation(t *testing.T) {
@@ -1212,6 +1218,22 @@ func TestWithdrawalDestinationValidation(t *testing.T) {
 	bad.OwnershipStatus = "complete"
 	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = dest
+	bad.OwnershipStatus = DestinationOwnershipStatusVerified
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+
+	bad = dest
+	bad.OwnershipStatus = DestinationOwnershipStatusVerified
+	bad.OwnershipVerifiedAt = sql.NullTime{Valid: true}
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+
+	bad = dest
+	bad.OwnershipVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidVerificationTime)
 
 	bad = dest
 	bad.IsReturnToSource = true
@@ -1645,12 +1667,13 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 		Currency:  "AED",
 	}
 	destination := WithdrawalDestination{
-		ID:              20,
-		TenantID:        "tenant",
-		WalletID:        walletID,
-		Currency:        "AED",
-		OwnershipStatus: DestinationOwnershipStatusVerified,
-		IsActive:        true,
+		ID:                  20,
+		TenantID:            "tenant",
+		WalletID:            walletID,
+		Currency:            "AED",
+		OwnershipStatus:     DestinationOwnershipStatusVerified,
+		OwnershipVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+		IsActive:            true,
 	}
 	link := LedgerWithdrawalDestinationLink{
 		TenantID:      "tenant",
@@ -1689,10 +1712,16 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 
 	pending := destination
 	pending.OwnershipStatus = DestinationOwnershipStatusPending
+	pending.OwnershipVerifiedAt = sql.NullTime{}
 	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &pending, link), ErrDestinationNotVerified)
+
+	missingVerificationTime := destination
+	missingVerificationTime.OwnershipVerifiedAt = sql.NullTime{}
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &missingVerificationTime, link), ErrMissingVerificationTime)
 
 	rejected := destination
 	rejected.OwnershipStatus = DestinationOwnershipStatusRejected
+	rejected.OwnershipVerifiedAt = sql.NullTime{}
 	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &rejected, link), ErrDestinationNotVerified)
 
 	otherEntry := entry

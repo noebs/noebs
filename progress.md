@@ -66,6 +66,7 @@
 - Fixed API-key persistence and validation so empty emails/API keys fail before DB access and API key entropy failures are returned.
 - Fixed KYC profile reads so missing optional rows remain optional but real KYC/passport query errors are returned instead of swallowed.
 - Fixed funding-source verification so `verified` rows require `verified_at`, invalid status/timestamp combinations fail before persistence, and return-to-source withdrawals no longer trust status strings without verification evidence.
+- Fixed withdrawal-destination ownership so `verified` destinations require `ownership_verified_at`, invalid status/timestamp combinations fail before persistence, and withdrawals no longer trust ownership status strings without timestamped evidence.
 
 Verification:
 
@@ -358,6 +359,13 @@ Verification:
 - `go test -count=1 -v ./wallet/store -run 'TestFundingSourceValidation|TestValidateWithdrawalDestinationFundingSource'`
 - `go test -count=1 -v ./wallet/workflow -run 'TestSelectReturnToSourceSkipsIneligibleFundingSources|TestDepositFundingSource'`
 - `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`
+- `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestWithdrawalDestinationValidation|TestUpdateWithdrawalDestinationOwnershipValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (`TestFundingSourceTotalsFollowIdempotentLedgerLinks` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./wallet/workflow -run 'TestWithdrawalApprovalRejectionReturnsHoldReleaseError|TestSelectReturnToSourceSkipsIneligibleFundingSources'`
+- `go test -count=1 -v ./wallet/grpc -run 'TestCreateReturnToSourceDestinationRequiresLinkedFundingSource|TestMapErrorMapsPSPValidationFailures'`
 - `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/handler`
 - `go test -count=1 ./...`
 - `go vet ./...`

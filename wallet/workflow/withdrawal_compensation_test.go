@@ -53,15 +53,16 @@ func TestWithdrawalApprovalRejectionReturnsHoldReleaseError(t *testing.T) {
 		}, nil)
 	env.OnActivity(string(walletactivity.ActivityResolveWithdrawalDestination), mock.Anything, tenantID, int64(55)).
 		Return(&walletstore.WithdrawalDestination{
-			ID:                 55,
-			TenantID:           tenantID,
-			WalletID:           walletID,
-			DestinationType:    "bank_account",
-			PSPProvider:        sql.NullString{String: "pay", Valid: true},
-			DestinationDetails: []byte(`{"iban":"AE000000000000000000000"}`),
-			Currency:           "AED",
-			OwnershipStatus:    "verified",
-			IsActive:           true,
+			ID:                  55,
+			TenantID:            tenantID,
+			WalletID:            walletID,
+			DestinationType:     "bank_account",
+			PSPProvider:         sql.NullString{String: "pay", Valid: true},
+			DestinationDetails:  []byte(`{"iban":"AE000000000000000000000"}`),
+			Currency:            "AED",
+			OwnershipStatus:     "verified",
+			OwnershipVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+			IsActive:            true,
 		}, nil)
 	env.OnActivity(string(walletactivity.ActivityValidateHold), mock.Anything, mock.Anything).
 		Return(struct{}{}, nil)

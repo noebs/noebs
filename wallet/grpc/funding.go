@@ -201,9 +201,24 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	ownershipStatus := "pending"
-	if req.OwnershipVerificationMethod == "" {
-		ownershipStatus = "verified"
+	ownershipStatus := walletstore.DestinationOwnershipStatusPending
+	var ownershipVerifiedAt sql.NullTime
+	if req.IsReturnToSource {
+		source, err := s.Service.Store.GetFundingSourceByID(ctx, tenantID, req.LinkedFundingSourceId)
+		if err != nil {
+			return nil, mapError(err)
+		}
+		if source.WalletID != walletID {
+			return nil, mapError(walletstore.ErrFundingSourceNotFound)
+		}
+		if source.Currency != req.Currency {
+			return nil, mapError(walletstore.ErrCurrencyMismatch)
+		}
+		if err := walletstore.ValidateFundingSourceReadyForWithdrawal(source); err != nil {
+			return nil, mapError(err)
+		}
+		ownershipStatus = walletstore.DestinationOwnershipStatusVerified
+		ownershipVerifiedAt = source.VerifiedAt
 	}
 
 	dest := walletstore.WithdrawalDestination{
@@ -217,6 +232,7 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 		Country:                     sql.NullString{String: req.Country, Valid: req.Country != ""},
 		OwnershipStatus:             ownershipStatus,
 		OwnershipVerificationMethod: sql.NullString{String: req.OwnershipVerificationMethod, Valid: req.OwnershipVerificationMethod != ""},
+		OwnershipVerifiedAt:         ownershipVerifiedAt,
 		LinkedFundingSourceID:       sql.NullInt64{Int64: req.LinkedFundingSourceId, Valid: req.LinkedFundingSourceId > 0},
 		IsReturnToSource:            req.IsReturnToSource,
 		IsActive:                    true,

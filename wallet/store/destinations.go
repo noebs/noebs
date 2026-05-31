@@ -27,7 +27,7 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if len(dest.DestinationDetails) == 0 {
 		return nil, ErrMissingDestinationDetails
 	}
-	if err := ValidateDestinationOwnershipStatus(dest.OwnershipStatus); err != nil {
+	if err := ValidateWithdrawalDestinationOwnership(dest); err != nil {
 		return nil, err
 	}
 	if dest.IsReturnToSource && !dest.LinkedFundingSourceID.Valid {
@@ -311,8 +311,8 @@ func ValidateWithdrawalDestinationLinkLedgerEntry(entry *LedgerEntry, destinatio
 	if !destination.IsActive {
 		return ErrDestinationNotFound
 	}
-	if destination.OwnershipStatus != DestinationOwnershipStatusVerified {
-		return ErrDestinationNotVerified
+	if err := ValidateWithdrawalDestinationReadyForWithdrawal(destination); err != nil {
+		return err
 	}
 	if entry.EntryType != "debit" {
 		return ErrInvalidDirection
@@ -349,17 +349,15 @@ func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenant
 	if destinationID <= 0 {
 		return ErrMissingDestinationID
 	}
-	if err := ValidateDestinationOwnershipStatus(status); err != nil {
-		return err
-	}
 	if updatedAt.IsZero() {
 		return ErrMissingUpdatedAt
 	}
-	if status == DestinationOwnershipStatusVerified && !verifiedAt.Valid {
-		return ErrMissingVerificationTime
+	updated := WithdrawalDestination{
+		OwnershipStatus:     status,
+		OwnershipVerifiedAt: verifiedAt,
 	}
-	if status != DestinationOwnershipStatusVerified {
-		verifiedAt = sql.NullTime{}
+	if err := ValidateWithdrawalDestinationOwnership(updated); err != nil {
+		return err
 	}
 	db, err := s.ensureDB()
 	if err != nil {

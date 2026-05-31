@@ -31,6 +31,35 @@ func ValidateDestinationOwnershipStatus(status string) error {
 	}
 }
 
+func ValidateWithdrawalDestinationOwnership(dest WithdrawalDestination) error {
+	if err := ValidateDestinationOwnershipStatus(dest.OwnershipStatus); err != nil {
+		return err
+	}
+	if dest.OwnershipStatus == DestinationOwnershipStatusVerified {
+		if !dest.OwnershipVerifiedAt.Valid || dest.OwnershipVerifiedAt.Time.IsZero() {
+			return ErrMissingVerificationTime
+		}
+		return nil
+	}
+	if dest.OwnershipVerifiedAt.Valid {
+		return ErrInvalidVerificationTime
+	}
+	return nil
+}
+
+func ValidateWithdrawalDestinationReadyForWithdrawal(dest *WithdrawalDestination) error {
+	if dest == nil {
+		return ErrDestinationNotFound
+	}
+	if dest.OwnershipStatus != DestinationOwnershipStatusVerified {
+		return ErrDestinationNotVerified
+	}
+	if !dest.OwnershipVerifiedAt.Valid || dest.OwnershipVerifiedAt.Time.IsZero() {
+		return ErrMissingVerificationTime
+	}
+	return nil
+}
+
 func ValidateOwnershipVerificationStatus(status string) error {
 	switch status {
 	case "":

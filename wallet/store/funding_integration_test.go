@@ -210,13 +210,14 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 	}
 
 	destination, err := store.CreateWithdrawalDestination(ctx, WithdrawalDestination{
-		TenantID:           tenantID,
-		WalletID:           userWallet.ID,
-		DestinationType:    "bank_account",
-		DestinationDetails: []byte(`{"account_last4":"4321"}`),
-		Currency:           "AED",
-		OwnershipStatus:    "verified",
-		IsActive:           true,
+		TenantID:            tenantID,
+		WalletID:            userWallet.ID,
+		DestinationType:     "bank_account",
+		DestinationDetails:  []byte(`{"account_last4":"4321"}`),
+		Currency:            "AED",
+		OwnershipStatus:     "verified",
+		OwnershipVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+		IsActive:            true,
 	})
 	if err != nil {
 		t.Fatalf("create withdrawal destination: %v", err)
