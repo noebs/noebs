@@ -47,9 +47,6 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if req.Reason == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
-	if req.RequestedBy <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingRequesterID.Error())
-	}
 	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
 	if approvalTimeoutSeconds <= 0 {
 		approvalTimeoutSeconds = s.Service.Config.WalletManualTransferApprovalTimeoutSeconds
@@ -57,8 +54,29 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if approvalTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
 	}
-	if _, err := uuid.Parse(req.WalletId); err != nil {
+	walletID, err := uuid.Parse(req.WalletId)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	claims, err := s.claimsForRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, err = bindTenantToClaims(tenantID, claims)
+	if err != nil {
+		return nil, err
+	}
+	requestedBy, err := bindUserIDToClaims(req.RequestedBy, claims)
+	if err != nil {
+		return nil, err
+	}
+	req.TenantId = tenantID
+	req.RequestedBy = requestedBy
+	if req.RequestedBy <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingRequesterID.Error())
+	}
+	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
+		return nil, err
 	}
 
 	temporalClient, err := s.ensureTemporalClient()

@@ -97,7 +97,7 @@ func (s *Server) ListFundingSources(ctx context.Context, req *walletv1.ListFundi
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 	if !req.IsReturnToSource && req.OwnershipVerificationMethod == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationType.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (s *Server) ListWithdrawalDestinations(ctx context.Context, req *walletv1.L
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +298,7 @@ func (s *Server) DeactivateWithdrawalDestination(ctx context.Context, req *walle
 	if req.DestinationId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationID.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +333,7 @@ func (s *Server) RequestOwnershipVerification(ctx context.Context, req *walletv1
 	if req.VerificationTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationTimeout.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +382,7 @@ func (s *Server) CompleteOwnershipVerification(ctx context.Context, req *walletv
 	if !req.Verified && req.Reason == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -536,7 +536,7 @@ func (s *Server) SetWalletPIN(ctx context.Context, req *walletv1.SetWalletPINReq
 	if req.NewPin == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -579,7 +579,7 @@ func (s *Server) EnrollUser2FA(ctx context.Context, req *walletv1.EnrollUser2FAR
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -625,7 +625,7 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -670,7 +670,7 @@ func (s *Server) DisableUser2FA(ctx context.Context, req *walletv1.DisableUser2F
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}

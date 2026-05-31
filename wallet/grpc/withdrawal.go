@@ -60,7 +60,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}

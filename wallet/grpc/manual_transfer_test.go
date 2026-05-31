@@ -75,6 +75,34 @@ func TestRequestManualTransferRejectsInvalidTransferType(t *testing.T) {
 	}
 }
 
+func TestRequestManualTransferPublicIdentityMustMatchRequester(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{WalletManualTransferApprovalTimeoutSeconds: 60},
+	}
+	server := NewServer(svc)
+
+	ctx := walletServerMethodContext(
+		walletGatewayIdentityContext(42, "tenant"),
+		walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
+	)
+	req := &walletv1.ManualTransferRequest{
+		TenantId:       "tenant",
+		IdempotencyKey: "manual-1",
+		TransferType:   walletstore.ManualTransferTypeDebit,
+		WalletId:       uuid.NewString(),
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "test",
+		RequestedBy:    7,
+	}
+
+	_, err := server.RequestManualTransfer(ctx, req)
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
+	}
+}
+
 func TestSignalManualTransferDecisionRequiresReason(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},

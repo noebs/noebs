@@ -36,7 +36,7 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
-	claims, err := s.claimsFromContext(ctx)
+	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
 		return nil, err
 	}

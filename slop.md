@@ -553,6 +553,11 @@ Last updated: 2026-05-31
     - Fix: route wallet HTTP and HTTP-to-gRPC query parsing through the shared top-level `parsing` package with positive `limit`, non-negative `offset`, and non-negative `amount` contracts; add public gRPC boundary helpers that default omitted numeric pagination and reject invalid bounds before store access.
     - Tests: `go test -count=1 -v ./wallet/handler -run 'TestUserQueryParsersApplyBoundaryValidation'`; `go test -count=1 -v ./wallet/grpc -run 'TestPublicQuery'`; `go test -count=1 ./wallet/handler ./wallet/grpc ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+111. Shared wallet gRPC methods trusted public request identity when handler-level auth was bypassed.
+    - Evidence: several methods are registered on both `WalletInternalService` and `WalletPublicService`, but the shared Go implementations used optional gateway claims from metadata. If those handlers were called through the public service method without the CLI interceptor or HTTP wrapper, the code fell back to tenant/user/owner fields supplied in the request body. `RequestManualTransfer` did not bind requester identity or wallet ownership at all when gateway identity was present.
+    - Fix: detect public wallet user RPCs from the gRPC method name inside the handler, require gateway user claims for those public methods, route shared public/internal methods through that fail-closed helper, and bind manual-transfer requester and wallet ownership when user identity is present.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestClaimsForRPCRequiresGatewayIdentityOnPublicUserMethods|TestRequestP2PTransferPublicRequiresGatewayIdentity|TestRequestManualTransferPublicIdentityMustMatchRequester'`; `go test -count=1 -v ./wallet/grpc -run 'TestRequestManualTransfer|TestRequestP2PTransfer|TestRequestDeposit|TestRequestWithdrawal|TestFunding|TestWalletPIN|TestUser2FA'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

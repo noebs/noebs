@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -38,6 +40,39 @@ func TestClaimsFromContextValidatesGatewayTenant(t *testing.T) {
 	}
 }
 
+func TestClaimsForRPCRequiresGatewayIdentityOnPublicUserMethods(t *testing.T) {
+	server := NewServer(&wallet.Service{})
+
+	_, err := server.claimsForRPC(walletServerMethodContext(context.Background(), walletv1.WalletPublicService_RequestP2PTransfer_FullMethodName))
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("public user method status = %v, want %v", status.Code(err), codes.Unauthenticated)
+	}
+
+	claims, err := server.claimsForRPC(walletServerMethodContext(walletGatewayIdentityContext(42, "tenant-a"), walletv1.WalletPublicService_RequestP2PTransfer_FullMethodName))
+	if err != nil {
+		t.Fatalf("public user method with identity error = %v", err)
+	}
+	if claims == nil || claims.UserID != 42 || claims.TenantID != "tenant-a" {
+		t.Fatalf("claims = %+v, want gateway identity", claims)
+	}
+
+	claims, err = server.claimsForRPC(walletServerMethodContext(context.Background(), walletv1.WalletPublicService_RequestManualTransfer_FullMethodName))
+	if err != nil {
+		t.Fatalf("public admin method should be handled by admin auth, got %v", err)
+	}
+	if claims != nil {
+		t.Fatalf("public admin method claims = %+v, want nil without user identity", claims)
+	}
+
+	claims, err = server.claimsForRPC(walletServerMethodContext(context.Background(), walletv1.WalletInternalService_RequestP2PTransfer_FullMethodName))
+	if err != nil {
+		t.Fatalf("internal method error = %v", err)
+	}
+	if claims != nil {
+		t.Fatalf("internal method claims = %+v, want nil without gateway identity", claims)
+	}
+}
+
 func TestBindTenantToClaimsValidatesRequestAndGatewayTenant(t *testing.T) {
 	claims := &gateway.TokenClaims{TenantID: "tenant-a", UserID: 42}
 	tenantID, err := bindTenantToClaims("", claims)
@@ -57,4 +92,28 @@ func TestBindTenantToClaimsValidatesRequestAndGatewayTenant(t *testing.T) {
 	if _, err := bindTenantToClaims("tenant-a", &gateway.TokenClaims{TenantID: "default", UserID: 42}); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("reserved gateway tenant code = %v, want %v", status.Code(err), codes.Unauthenticated)
 	}
+}
+
+type walletTestServerTransportStream struct {
+	method string
+}
+
+func (s walletTestServerTransportStream) Method() string {
+	return s.method
+}
+
+func (s walletTestServerTransportStream) SetHeader(metadata.MD) error {
+	return nil
+}
+
+func (s walletTestServerTransportStream) SendHeader(metadata.MD) error {
+	return nil
+}
+
+func (s walletTestServerTransportStream) SetTrailer(metadata.MD) error {
+	return nil
+}
+
+func walletServerMethodContext(ctx context.Context, method string) context.Context {
+	return grpc.NewContextWithServerTransportStream(ctx, walletTestServerTransportStream{method: method})
 }

@@ -505,6 +505,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestClaimsForRPCRequiresGatewayIdentityOnPublicUserMethods|TestRequestP2PTransferPublicRequiresGatewayIdentity|TestRequestManualTransferPublicIdentityMustMatchRequester'`
+- `go test -count=1 -v ./wallet/grpc -run 'TestRequestManualTransfer|TestRequestP2PTransfer|TestRequestDeposit|TestRequestWithdrawal|TestFunding|TestWalletPIN|TestUser2FA'` (`TestRequestWithdrawalRejectsGatewayIdentityMismatch` and `TestRequestWithdrawalStartsWorkflow` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

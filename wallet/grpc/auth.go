@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -56,6 +58,36 @@ func (s *Server) requireGatewayClaims(ctx context.Context) (*gateway.TokenClaims
 		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
 	}
 	return claims, nil
+}
+
+func (s *Server) claimsForRPC(ctx context.Context) (*gateway.TokenClaims, error) {
+	claims, err := s.claimsFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if claims == nil && isPublicWalletUserRPC(ctx) {
+		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
+	}
+	return claims, nil
+}
+
+func isPublicWalletUserRPC(ctx context.Context) bool {
+	method, ok := grpc.Method(ctx)
+	if !ok {
+		return false
+	}
+	if !strings.HasPrefix(method, "/"+walletv1.WalletPublicService_ServiceDesc.ServiceName+"/") {
+		return false
+	}
+	switch method {
+	case walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
+		walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
+		walletv1.WalletPublicService_SignalWithdrawalApproval_FullMethodName,
+		walletv1.WalletPublicService_SignalWithdrawalVerification_FullMethodName:
+		return false
+	default:
+		return true
+	}
 }
 
 func singleGatewayMetadataValue(md metadata.MD, header string) (string, error) {
