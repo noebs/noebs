@@ -179,6 +179,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation|TestPSPTransactionPersistenceReplaysAndStatusUpdates'`
+- `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

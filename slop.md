@@ -283,6 +283,11 @@ Last updated: 2026-05-31
     - Fix: include semantic `raw_request` equality in PSP create replay validation and build deposit/withdrawal raw requests before the existing-transaction replay check.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionCreateReplay|TestPSPTransactionPersistenceReplaysAndStatusUpdates'`; `go test -count=1 -v ./wallet/grpc -run 'TestRequestDepositDoesNotGenerateProviderTransactionID|TestRequestWithdrawalRequiresPin|TestRequestWithdrawalStartsWorkflow'` (Postgres container cases skipped locally when the container runtime is unavailable).
 
+57. PSP status updates could overwrite the provider transaction ID.
+    - Evidence: `UpdatePSPTransactionStatus` used `psp_transaction_id = COALESCE(?, psp_transaction_id)`, so any later webhook/poller update with a different provider transaction ID replaced the stored ID. That hides provider contradictions and can split reconciliation/status matching.
+    - Fix: validate status updates against the existing row before writing, preserve valid terminal-transition behavior, allow filling an empty provider transaction ID once, and reject mismatched later IDs as `ErrDuplicateTransaction`.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -223,6 +223,13 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 	if err != nil {
 		return err
 	}
+	existing, err := s.GetPSPTransactionByReference(ctx, tenantID, clientReference)
+	if err != nil {
+		return err
+	}
+	if err := ValidatePSPStatusUpdate(existing, update); err != nil {
+		return err
+	}
 	stmt := db.Rebind(`UPDATE psp_transactions
 			SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
 				response_code = COALESCE(?, response_code),
@@ -272,6 +279,19 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 			return ValidatePSPStatusTransition(currentStatus, update.Status)
 		}
 		return ErrPSPTransactionNotFound
+	}
+	return nil
+}
+
+func ValidatePSPStatusUpdate(existing *PSPTransaction, update PSPStatusUpdate) error {
+	if existing == nil {
+		return ErrPSPTransactionNotFound
+	}
+	if err := ValidatePSPStatusTransition(existing.Status, update.Status); err != nil {
+		return err
+	}
+	if existing.PSPTransactionID.Valid && update.PSPTransactionID.Valid && existing.PSPTransactionID.String != update.PSPTransactionID.String {
+		return ErrDuplicateTransaction
 	}
 	return nil
 }

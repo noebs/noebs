@@ -168,11 +168,18 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	}
 
 	update := PSPStatusUpdate{
-		Status:          "success",
-		ResponseMessage: sql.NullString{String: "ok", Valid: true},
+		Status:           "success",
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		ResponseMessage:  sql.NullString{String: "ok", Valid: true},
 	}
 	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, update); err != nil {
 		t.Fatalf("update status: %v", err)
+	}
+	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{
+		Status:           "success",
+		PSPTransactionID: sql.NullString{String: "psp-2", Valid: true},
+	}); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("provider transaction id mismatch update error = %v, want %v", err, ErrDuplicateTransaction)
 	}
 
 	got, err := s.GetPSPTransactionByReference(ctx, txn.TenantID, txn.ClientReference)
@@ -187,6 +194,9 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	}
 	if !got.ConfirmedAt.Time.Equal(confirmedAt) {
 		t.Fatalf("expected confirmed_at %v, got %v", confirmedAt, got.ConfirmedAt.Time)
+	}
+	if !got.PSPTransactionID.Valid || got.PSPTransactionID.String != "psp-1" {
+		t.Fatalf("expected provider transaction id psp-1, got %+v", got.PSPTransactionID)
 	}
 
 	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{Status: "pending"}); !errors.Is(err, ErrInvalidStatusTransition) {

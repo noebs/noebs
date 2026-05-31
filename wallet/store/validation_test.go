@@ -657,6 +657,31 @@ func TestValidatePSPStatusTransition(t *testing.T) {
 	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusFailed, PSPStatusPending), ErrInvalidStatusTransition)
 }
 
+func TestValidatePSPStatusUpdate(t *testing.T) {
+	existing := &PSPTransaction{
+		Status:           PSPStatusPending,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+	}
+	if err := ValidatePSPStatusUpdate(existing, PSPStatusUpdate{
+		Status:           PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+	}); err != nil {
+		t.Fatalf("ValidatePSPStatusUpdate() error = %v", err)
+	}
+	if err := ValidatePSPStatusUpdate(&PSPTransaction{Status: PSPStatusPending}, PSPStatusUpdate{
+		Status:           PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+	}); err != nil {
+		t.Fatalf("ValidatePSPStatusUpdate() fill provider id error = %v", err)
+	}
+	assertErrorIs(t, ValidatePSPStatusUpdate(nil, PSPStatusUpdate{Status: PSPStatusSuccess}), ErrPSPTransactionNotFound)
+	assertErrorIs(t, ValidatePSPStatusUpdate(existing, PSPStatusUpdate{
+		Status:           PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-2", Valid: true},
+	}), ErrDuplicateTransaction)
+	assertErrorIs(t, ValidatePSPStatusUpdate(&PSPTransaction{Status: PSPStatusSuccess}, PSPStatusUpdate{Status: PSPStatusPending}), ErrInvalidStatusTransition)
+}
+
 func TestValidatePSPTransactionCreateReplay(t *testing.T) {
 	requested := PSPTransaction{
 		TenantID:         "tenant",
