@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,5 +49,26 @@ func TestSendSMSClosesResponseBody(t *testing.T) {
 	}
 	if !sawRequest {
 		t.Fatal("SMS server was not called")
+	}
+}
+
+func TestSendSMSReturnsGatewayError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("upstream failure"))
+	}))
+	t.Cleanup(server.Close)
+
+	err := SendSMS(&ebs_fields.NoebsConfig{
+		SMSGateway: server.URL + "?",
+		SMSAPIKey:  "test-key",
+		SMSSender:  "NOEBS",
+		SMSMessage: "footer",
+	}, SMS{
+		Mobile:  "0912141660",
+		Message: "body",
+	})
+	if !errors.Is(err, ErrSMSDeliveryFailed) {
+		t.Fatalf("SendSMS() error = %v, want %v", err, ErrSMSDeliveryFailed)
 	}
 }

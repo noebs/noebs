@@ -9,6 +9,7 @@ import (
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -244,7 +245,23 @@ func (h *Handler) generateSignInCode(c *fiber.Ctx) error {
 	}
 
 	if err := h.Service.GenerateSignInCode(c.UserContext(), tenantID, req.Mobile); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "user not found", "code": "not_found"})
+		status, body := generateSignInCodeErrorResponse(err)
+		return jsonResponse(c, status, body)
 	}
 	return jsonResponse(c, http.StatusCreated, fiber.Map{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
+}
+
+func generateSignInCodeErrorResponse(err error) (int, fiber.Map) {
+	switch {
+	case errors.Is(err, consumer.ErrMissingStore):
+		return http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable", "message": err.Error()}
+	case errors.Is(err, store.ErrMissingTenantID), errors.Is(err, store.ErrInvalidTenantID):
+		return http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()}
+	case store.ErrNotFound(err):
+		return http.StatusBadRequest, fiber.Map{"message": "user not found", "code": "not_found"}
+	case errors.Is(err, utils.ErrSMSDeliveryFailed):
+		return http.StatusBadGateway, fiber.Map{"message": "sms delivery failed", "code": "sms_delivery_failed"}
+	default:
+		return http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "service_error"}
+	}
 }

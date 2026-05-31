@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/utils"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -192,6 +194,25 @@ func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
 	}
 	if suspiciousCount != 0 {
 		t.Fatalf("suspicious count = %d, want 0", suspiciousCount)
+	}
+}
+
+func TestGenerateSignInCodeReturnsSMSError(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+
+	smsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(smsServer.Close)
+	env.Service.NoebsConfig.SMSGateway = smsServer.URL + "?"
+
+	err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000")
+	if !errors.Is(err, utils.ErrSMSDeliveryFailed) {
+		t.Fatalf("GenerateSignInCode() error = %v, want %v", err, utils.ErrSMSDeliveryFailed)
 	}
 }
 

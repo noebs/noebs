@@ -251,9 +251,11 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile strin
 	if err != nil {
 		return err
 	}
-	go utils.SendSMS(&s.NoebsConfig, utils.SMS{
+	if err := utils.SendSMS(&s.NoebsConfig, utils.SMS{
 		Mobile:  mobile,
 		Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key),
-	})
+	}); err != nil {
+		return err
+	}
 	return nil
 }

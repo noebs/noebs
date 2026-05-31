@@ -13,6 +13,7 @@
 - Fixed dashboard merchant transaction stats to return query failures as HTTP 500 instead of empty HTTP 200 results.
 - Removed the unused `SendPush` no-op placeholder; notification work now stays on persisted notification and notification-chat command paths.
 - Fixed utility helper bugs: SMS responses are closed, and `MaskPAN` no longer panics on short inputs.
+- Fixed OTP SMS delivery so gateway failures are returned synchronously, non-2xx SMS responses become typed delivery errors, and the HTTP handler reports delivery failures as HTTP 502 instead of `not_found`.
 
 Verification:
 
@@ -21,6 +22,7 @@ Verification:
 - `go test -count=1 . ./cli`
 - `go test -count=1 ./dashboard`
 - `go test -count=1 ./utils`
+- `go test -count=1 ./consumer ./consumer/handler`
 - `go test -count=1 ./...`
 - `go vet ./...`
 

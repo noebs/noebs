@@ -48,6 +48,11 @@ Last updated: 2026-05-31
    - Fix: close SMS response bodies and make `MaskPAN` return short values unchanged, matching the safer EBS response masker.
    - Tests: `go test -count=1 ./utils`.
 
+10. OTP SMS delivery failures were silently reported as success or as the wrong error.
+    - Evidence: `GenerateSignInCode` sent SMS in a goroutine and ignored errors, while `SendSMS` returned nil for non-2xx gateway responses. The HTTP handler also mapped every generation error to `not_found`.
+    - Fix: make SMS delivery synchronous for OTP generation, return a typed SMS delivery error on transport or non-2xx gateway failures, bound the SMS HTTP client with a timeout, and map delivery failures to HTTP 502.
+    - Tests: `go test -count=1 ./utils`, `go test -count=1 ./consumer ./consumer/handler`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
