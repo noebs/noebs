@@ -286,6 +286,9 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 		if !bytes.Contains(body, []byte(`"toCard":"9222081700000000"`)) {
 			t.Fatalf("EBS request missing card-vault destination PAN: %s", body)
 		}
+		if !bytes.Contains(body, []byte(`"dynamicFees":17`)) {
+			t.Fatalf("EBS request missing configured quick-pay dynamic fee: %s", body)
+		}
 		sawEBS = true
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
@@ -325,6 +328,9 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			KafkaTransactionTopic: testKafkaTransactionTopic,
+			EBSDynamicFees: ebs_fields.DynamicFeesFields{
+				CardTransferfees: 17,
+			},
 			ServiceDiscovery: map[string]string{
 				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
 				notificationServiceDiscoveryKey: notificationServer.URL,

@@ -618,6 +618,11 @@ Last updated: 2026-05-31
     - Fix: run the existing deposit/withdrawal validation service before PSP transaction creation while keeping workflow validation as the concurrency guard, map validation failures to typed gRPC statuses, and return a typed wallet-store error when the DB/store is absent.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRequest(Deposit|Withdrawal)ValidatesWalletBeforePersistingPSPTransaction|TestRequestWithdrawalStartsWorkflow|TestRequestDepositDoesNotGenerateProviderTransactionID'` (DB-backed tests skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/grpc ./wallet/validation ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+124. Quick-pay dropped configured card-transfer dynamic fees.
+    - Evidence: `NoebsQuickPayment` sends quick payments through the consumer card-transfer EBS endpoint, but only set app id, destination PAN, and amount from the token. `QuickPaymentFields.MarshallP2pFields` rebuilt the card-transfer payload without `DynamicFees`, so even caller-supplied or configured fees were omitted.
+    - Fix: apply the configured consumer card-transfer dynamic fee to quick-pay requests and carry `DynamicFees` into the EBS card-transfer payload while keeping the encoded payment token out of the EBS request.
+    - Tests: `go test -count=1 -v ./ebs_fields -run 'TestQuickPaymentMarshalsCardTransferPayload'`; `go test -count=1 -v ./consumer -run 'TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat|TestQuickPaymentTokenUUID|TestResolveQuickPaymentAmount'` (end-to-end quick-pay service test skipped locally when the container runtime is unavailable); `go test -count=1 ./ebs_fields ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

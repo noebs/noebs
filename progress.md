@@ -572,6 +572,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./ebs_fields -run 'TestQuickPaymentMarshalsCardTransferPayload'`
+- `go test -count=1 -v ./consumer -run 'TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat|TestQuickPaymentTokenUUID|TestResolveQuickPaymentAmount'` (`TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./ebs_fields ./consumer ./consumer/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

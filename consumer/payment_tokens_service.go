@@ -137,6 +137,7 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 	req.ApplicationId = s.NoebsConfig.ConsumerID
 	req.ToCard = resolution.ToCard
 	req.TranAmount = float32(resolution.Amount)
+	req.DynamicFees = s.NoebsConfig.EBSDynamicFees.CardTransferfees
 
 	senderPan := req.Pan
 	receiverPan := resolution.ToCard

@@ -1052,6 +1052,7 @@ func (q QuickPaymentFields) MarshallP2pFields() []byte {
 		AmountFields:             q.AmountFields,
 		ConsumerCardHolderFields: q.ConsumerCardHolderFields,
 		ToCard:                   q.ToCard, // must be acquired from the generated card.
+		DynamicFees:              q.DynamicFees,
 	}
 	data, _ := json.Marshal(&d)
 	return data
