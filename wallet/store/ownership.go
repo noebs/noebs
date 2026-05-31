@@ -14,9 +14,11 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	if err != nil {
 		return nil, err
 	}
+	verification.TenantID = tenantID
 	if verification.DestinationID <= 0 {
 		return nil, ErrMissingDestinationID
 	}
+	verification.VerificationType = strings.TrimSpace(verification.VerificationType)
 	if verification.VerificationType == "" {
 		return nil, ErrMissingVerificationType
 	}
@@ -34,6 +36,13 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	}
 	db, err := s.ensureDB()
 	if err != nil {
+		return nil, err
+	}
+	destination, err := s.GetWithdrawalDestination(ctx, tenantID, verification.DestinationID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateOwnershipVerificationDestination(destination, verification); err != nil {
 		return nil, err
 	}
 

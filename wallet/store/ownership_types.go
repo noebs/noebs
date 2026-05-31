@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -78,6 +79,28 @@ func ValidateWithdrawalDestinationOwnershipTransition(current *WithdrawalDestina
 			return ErrInvalidStatusTransition
 		}
 		return nil
+	}
+	return nil
+}
+
+func ValidateOwnershipVerificationDestination(destination *WithdrawalDestination, verification OwnershipVerification) error {
+	if destination == nil ||
+		destination.TenantID != verification.TenantID ||
+		destination.ID != verification.DestinationID {
+		return ErrDestinationNotFound
+	}
+	if !destination.IsActive {
+		return ErrDestinationNotFound
+	}
+	if destination.OwnershipStatus == DestinationOwnershipStatusVerified {
+		return ErrInvalidStatusTransition
+	}
+	method := strings.TrimSpace(destination.OwnershipVerificationMethod.String)
+	if !destination.OwnershipVerificationMethod.Valid || method == "" {
+		return ErrMissingVerificationType
+	}
+	if strings.TrimSpace(verification.VerificationType) != method {
+		return ErrInvalidVerificationType
 	}
 	return nil
 }

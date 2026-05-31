@@ -96,6 +96,7 @@ var (
 	ErrMissingDestinationDetails    = errors.New("missing destination details")
 	ErrDestinationNotFound          = errors.New("destination not found")
 	ErrMissingVerificationType      = errors.New("missing verification type")
+	ErrInvalidVerificationType      = errors.New("invalid verification type")
 	ErrMissingMaxAttempts           = errors.New("missing max_attempts")
 	ErrMissingVerificationExpiry    = errors.New("missing verification expiry")
 	ErrMissingVerificationTime      = errors.New("missing verification time")

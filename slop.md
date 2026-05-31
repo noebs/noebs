@@ -448,6 +448,11 @@ Last updated: 2026-05-31
     - Fix: validate destination ownership transitions against the current row, make verified ownership terminal except for exact timestamp replays, and guard the SQL update with the current status to reject racing transition rewrites.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateWithdrawalDestinationOwnershipTransition|TestUpdateWithdrawalDestinationOwnershipValidation|TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationLinkLedgerEntry'`; `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+90. Ownership verifications could target foreign or terminal destinations.
+    - Evidence: `CreateOwnershipVerification` validated only the verification row fields before inserting. The database FK is on `destination_id` only, while the verification row also stores `tenant_id`, so a direct store call could create a verification under one tenant for another tenant's destination, or create pending verification attempts for inactive/already-verified destinations and mismatched verification methods.
+    - Fix: normalize the verification type, load the withdrawal destination by the same tenant before insert, require the destination to be active and non-terminal, require a configured ownership verification method, and reject method mismatches with a typed error.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateOwnershipVerificationDestination|TestCreateOwnershipVerificationValidation|TestOwnershipVerificationCreateReplaysAreExact'` (`TestOwnershipVerificationCreateReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`; `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

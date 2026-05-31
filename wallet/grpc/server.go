@@ -286,6 +286,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidVerificationTime),
 		errors.Is(err, walletstore.ErrMissingVerificationID),
 		errors.Is(err, walletstore.ErrMissingVerificationType),
+		errors.Is(err, walletstore.ErrInvalidVerificationType),
 		errors.Is(err, walletstore.ErrMissingMaxAttempts),
 		errors.Is(err, walletstore.ErrMissingHoldExpiry),
 		errors.Is(err, walletstore.ErrMissingTransferType),

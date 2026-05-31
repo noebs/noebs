@@ -1098,6 +1098,51 @@ func TestCreateOwnershipVerificationValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingVerificationExpiry)
 }
 
+func TestValidateOwnershipVerificationDestination(t *testing.T) {
+	destination := &WithdrawalDestination{
+		ID:                          7,
+		TenantID:                    "tenant",
+		OwnershipStatus:             DestinationOwnershipStatusPending,
+		OwnershipVerificationMethod: sql.NullString{String: "micro_deposit", Valid: true},
+		IsActive:                    true,
+	}
+	verification := OwnershipVerification{
+		TenantID:         "tenant",
+		DestinationID:    7,
+		VerificationType: "micro_deposit",
+	}
+	if err := ValidateOwnershipVerificationDestination(destination, verification); err != nil {
+		t.Fatalf("ValidateOwnershipVerificationDestination() error = %v", err)
+	}
+
+	foreignTenant := *destination
+	foreignTenant.TenantID = "other"
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(&foreignTenant, verification), ErrDestinationNotFound)
+
+	foreignDestination := *destination
+	foreignDestination.ID = 8
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(&foreignDestination, verification), ErrDestinationNotFound)
+
+	inactive := *destination
+	inactive.IsActive = false
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(&inactive, verification), ErrDestinationNotFound)
+
+	verified := *destination
+	verified.OwnershipStatus = DestinationOwnershipStatusVerified
+	verified.OwnershipVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(&verified, verification), ErrInvalidStatusTransition)
+
+	missingMethod := *destination
+	missingMethod.OwnershipVerificationMethod = sql.NullString{}
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(&missingMethod, verification), ErrMissingVerificationType)
+
+	mismatchedMethod := *destination
+	mismatchedMethod.OwnershipVerificationMethod = sql.NullString{String: "document", Valid: true}
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(&mismatchedMethod, verification), ErrInvalidVerificationType)
+
+	assertErrorIs(t, ValidateOwnershipVerificationDestination(nil, verification), ErrDestinationNotFound)
+}
+
 func TestGetOwnershipVerificationValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetOwnershipVerification(t.Context(), "", 1)

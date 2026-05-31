@@ -132,4 +132,47 @@ func TestOwnershipVerificationCreateReplaysAreExact(t *testing.T) {
 	if _, err := store.CreateOwnershipVerification(ctx, referenceMismatch); !errors.Is(err, ErrDuplicateVerification) {
 		t.Fatalf("reference duplicate verification error = %v, want %v", err, ErrDuplicateVerification)
 	}
+
+	verifiedDestination, err := store.CreateWithdrawalDestination(ctx, WithdrawalDestination{
+		TenantID:                    tenantID,
+		WalletID:                    wallet.ID,
+		DestinationType:             "bank_account",
+		DestinationDetails:          []byte(`{"account_last4":"9876"}`),
+		Currency:                    "AED",
+		OwnershipStatus:             DestinationOwnershipStatusVerified,
+		OwnershipVerificationMethod: sql.NullString{String: "micro_deposit", Valid: true},
+		OwnershipVerifiedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},
+		IsActive:                    true,
+	})
+	if err != nil {
+		t.Fatalf("create verified destination: %v", err)
+	}
+	verifiedRequest := request
+	verifiedRequest.DestinationID = verifiedDestination.ID
+	verifiedRequest.WorkflowID = sql.NullString{String: "workflow-verified", Valid: true}
+	verifiedRequest.ReferenceID = sql.NullString{String: "reference-verified", Valid: true}
+	if _, err := store.CreateOwnershipVerification(ctx, verifiedRequest); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("verified destination verification error = %v, want %v", err, ErrInvalidStatusTransition)
+	}
+
+	documentDestination, err := store.CreateWithdrawalDestination(ctx, WithdrawalDestination{
+		TenantID:                    tenantID,
+		WalletID:                    wallet.ID,
+		DestinationType:             "bank_account",
+		DestinationDetails:          []byte(`{"account_last4":"5678"}`),
+		Currency:                    "AED",
+		OwnershipStatus:             DestinationOwnershipStatusPending,
+		OwnershipVerificationMethod: sql.NullString{String: "document", Valid: true},
+		IsActive:                    true,
+	})
+	if err != nil {
+		t.Fatalf("create document destination: %v", err)
+	}
+	methodMismatch := request
+	methodMismatch.DestinationID = documentDestination.ID
+	methodMismatch.WorkflowID = sql.NullString{String: "workflow-method", Valid: true}
+	methodMismatch.ReferenceID = sql.NullString{String: "reference-method", Valid: true}
+	if _, err := store.CreateOwnershipVerification(ctx, methodMismatch); !errors.Is(err, ErrInvalidVerificationType) {
+		t.Fatalf("verification method mismatch error = %v, want %v", err, ErrInvalidVerificationType)
+	}
 }
