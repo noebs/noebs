@@ -447,7 +447,7 @@ func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 		FROM transactions
 		WHERE tenant_id = ? AND terminal_id = ?`
 	if err := db.GetContext(c.UserContext(), &stats, db.Rebind(stmt), tenantID, tid); err != nil {
-		jsonResponse(c, http.StatusOK, fiber.Map{"result": MerchantTransactions{}})
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
 	jsonResponse(c, http.StatusOK, fiber.Map{"result": stats})

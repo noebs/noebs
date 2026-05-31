@@ -10,6 +10,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
+	"github.com/jmoiron/sqlx"
 )
 
 func TestService_calculateOffset(t *testing.T) {
@@ -114,4 +115,27 @@ func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
 		t.Fatalf("app.Test() error = %v", err)
 	}
 	_ = resp.Body.Close()
+}
+
+func TestMerchantTransactionsEndpointReturnsQueryErrors(t *testing.T) {
+	db := sqlx.MustOpen(store.DriverPostgres, "postgres://noebs:noebs@127.0.0.1:1/noebs?sslmode=disable")
+	t.Cleanup(func() { _ = db.Close() })
+	service := Service{Store: store.New(&store.DB{DB: db, Driver: store.DriverPostgres})}
+	app := fiber.New()
+	app.Get("/merchant-transactions", gateway.InternalTenantIdentityMiddleware(), func(c *fiber.Ctx) error {
+		service.MerchantTransactionsEndpoint(c)
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/merchant-transactions?terminal=terminal-a", nil)
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
+	resp, err := app.Test(req, 1000)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
 }
