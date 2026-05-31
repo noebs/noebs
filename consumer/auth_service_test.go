@@ -220,6 +220,21 @@ func TestServiceRefreshJWTRequiresTenantClaim(t *testing.T) {
 	}
 }
 
+func TestServiceRefreshJWTRequiresUserIDClaimBeforeStore(t *testing.T) {
+	auth := &refreshAuthStub{
+		claims: &gateway.TokenClaims{Mobile: "0990000000", TenantID: "tenant-a"},
+	}
+	service := &Service{Store: &store.Store{}, Auth: auth}
+
+	_, err := service.RefreshJWT(context.Background(), gateway.Token{JWT: "old-token"})
+	if !errors.Is(err, store.ErrInvalidUserID) {
+		t.Fatalf("RefreshJWT() error = %v, want %v", err, store.ErrInvalidUserID)
+	}
+	if auth.generated {
+		t.Fatalf("RefreshJWT() generated a token with tenant %q", auth.generatedTenant)
+	}
+}
+
 func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 	service := &Service{
 		Store: &store.Store{},

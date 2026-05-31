@@ -643,6 +643,11 @@ Last updated: 2026-05-31
     - Fix: add `EBSHttpClientWithClient`, keep `EBSHttpClient` as the shared default wrapper, require configured service clients before EBS calls, and route consumer/merchant EBS calls through the injected client without weakening tenant validation ordering or IPIN UUID failure propagation.
     - Tests: `go test -count=1 -v ./ebs_fields ./consumer ./merchant -run 'Test(EBSHTTPClientWithClientUsesProvidedClient|CallEBSUsesConfiguredHTTPClient|CallEBSRequiresConfiguredHTTPClient|CallEBSRejectsReservedTenantBeforeHTTP|Service_isValidCard|EBSAdapterTenantValidationFailsBeforeDBOrHTTP)'` (`TestService_isValidCard` skipped locally when the container runtime is unavailable); `go test -count=1 ./ebs_fields ./consumer ./consumer/handler ./merchant ./merchant/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+129. JWT refresh accepted tokens without a concrete user identity.
+    - Evidence: `GenerateJWT` signed claims with any `userID`, `VerifyJWT` accepted signed tokens whose `uid` was zero or missing, and `RefreshJWT` fell back to `claims.Mobile` when `claims.UserID == 0`. That let a malformed signed token continue through identity-auth using mobile lookup instead of the canonical user identifier.
+    - Fix: require positive user IDs before JWT issuance and after successful JWT verification, normalize tenant claims during verification, and make refresh fail with `store.ErrInvalidUserID` before store access when the user claim is absent.
+    - Tests: `go test -count=1 -v ./apigateway -run 'TestJWTAuth_(GenerateJWT|VerifyJWT)'`; `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTRequires(UserIDClaimBeforeStore|TenantClaim|SignatureProofForValidToken|UsesClaimTenant)'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTUsesClaimTenant'` (skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

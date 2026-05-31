@@ -84,6 +84,7 @@
 - Fixed PSP request validation so provider min/max amount bounds are enforced for deposits and withdrawals, not only shown in method discovery.
 - Fixed admin pending-approval rendering so malformed withdrawal raw-request JSON fails visibly instead of rendering empty approval context.
 - Fixed check-user lookups so identity-store failures propagate instead of being reported as `is_user=false`.
+- Fixed JWT identity handling so tokens require a positive user id at issuance/verification and refresh fails closed instead of falling back to mobile lookup for missing user claims.
 
 Verification:
 
@@ -598,6 +599,9 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./apigateway -run 'TestJWTAuth_(GenerateJWT|VerifyJWT)'`
+- `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTRequires(UserIDClaimBeforeStore|TenantClaim|SignatureProofForValidToken|UsesClaimTenant)'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTUsesClaimTenant'` (skipped locally when the container runtime is unavailable)
 
 Next candidates:
 

@@ -33,6 +33,9 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 	expiresAt := time.Now().Add(10 * time.Hour).UTC()
+	if userID <= 0 {
+		return "", ErrInvalidUserIdentity
+	}
 	tenantID, err := validateTenantID(tenantID)
 	if err != nil {
 		return "", err
@@ -97,7 +100,22 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 	if !token.Valid {
 		return claims, jwt.ErrTokenInvalidClaims
 	}
+	if err := validateTokenClaims(claims); err != nil {
+		return claims, err
+	}
 	return claims, nil
+}
+
+func validateTokenClaims(claims *TokenClaims) error {
+	if claims == nil || claims.UserID <= 0 {
+		return ErrInvalidUserIdentity
+	}
+	tenantID, err := validateTenantID(claims.TenantID)
+	if err != nil {
+		return err
+	}
+	claims.TenantID = tenantID
+	return nil
 }
 
 // TokenClaims noebs standard claim

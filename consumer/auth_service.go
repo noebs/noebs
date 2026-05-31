@@ -120,17 +120,15 @@ func (s *Service) RefreshJWT(ctx context.Context, req gateway.Token) (string, er
 			return "", err
 		}
 	}
+	if claims == nil || claims.UserID <= 0 {
+		return "", store.ErrInvalidUserID
+	}
 	tenantID, err := store.ValidateTenantID(claims.TenantID)
 	if err != nil {
 		return "", err
 	}
 
-	var user *ebs_fields.User
-	if claims.UserID != 0 {
-		user, err = s.Store.FindUserByID(ctx, tenantID, claims.UserID)
-	} else {
-		user, err = s.Store.GetUserByMobile(ctx, tenantID, claims.Mobile)
-	}
+	user, err := s.Store.FindUserByID(ctx, tenantID, claims.UserID)
 	if err != nil {
 		return "", err
 	}

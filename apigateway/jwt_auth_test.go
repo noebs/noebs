@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -45,6 +46,30 @@ func TestJWTAuth_GenerateJWT_RejectsDefaultTenantID(t *testing.T) {
 	_, err := j.GenerateJWT(42, "0990000000", "default")
 	if !errors.Is(err, ErrInvalidTenantID) {
 		t.Fatalf("expected ErrInvalidTenantID, got %v", err)
+	}
+}
+
+func TestJWTAuth_GenerateJWT_RejectsInvalidUserID(t *testing.T) {
+	j := &JWTAuth{Key: []byte("test-key")}
+	for _, userID := range []int64{0, -1} {
+		_, err := j.GenerateJWT(userID, "0990000000", "tenant")
+		if !errors.Is(err, ErrInvalidUserIdentity) {
+			t.Fatalf("GenerateJWT(%d) error = %v, want %v", userID, err, ErrInvalidUserIdentity)
+		}
+	}
+}
+
+func TestJWTAuth_VerifyJWTRejectsInvalidUserIdentity(t *testing.T) {
+	j := &JWTAuth{Key: []byte("test-key")}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, TokenClaims{TenantID: "tenant"})
+	signed, err := token.SignedString(j.Key)
+	if err != nil {
+		t.Fatalf("SignedString() error = %v", err)
+	}
+
+	_, err = j.VerifyJWT(signed)
+	if !errors.Is(err, ErrInvalidUserIdentity) {
+		t.Fatalf("VerifyJWT() error = %v, want %v", err, ErrInvalidUserIdentity)
 	}
 }
 
