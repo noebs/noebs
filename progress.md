@@ -163,6 +163,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'`
+- `go test -count=1 ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

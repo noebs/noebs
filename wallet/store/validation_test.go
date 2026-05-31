@@ -1514,7 +1514,7 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 		ID:              20,
 		TenantID:        "tenant",
 		WalletID:        walletID,
-		Currency:        "USD",
+		Currency:        "AED",
 		OwnershipStatus: DestinationOwnershipStatusVerified,
 		IsActive:        true,
 	}
@@ -1522,8 +1522,8 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 		TenantID:      "tenant",
 		LedgerEntryID: 10,
 		DestinationID: 20,
-		Amount:        25,
-		Currency:      "USD",
+		Amount:        1000,
+		Currency:      "AED",
 	}
 	if err := ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &destination, link); err != nil {
 		t.Fatalf("ValidateWithdrawalDestinationLinkLedgerEntry() error = %v", err)
@@ -1536,6 +1536,14 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 	otherDestination := destination
 	otherDestination.Currency = "EUR"
 	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &otherDestination, link), ErrCurrencyMismatch)
+
+	amountMismatch := link
+	amountMismatch.Amount = link.Amount + 1
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &destination, amountMismatch), ErrInvalidAmount)
+
+	currencyMismatch := link
+	currencyMismatch.Currency = "EUR"
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &destination, currencyMismatch), ErrCurrencyMismatch)
 
 	walletMismatch := destination
 	walletMismatch.WalletID = uuid.New()

@@ -268,6 +268,11 @@ Last updated: 2026-05-31
     - Fix: extend double-entry replay validation to require completed transaction/entry statuses, debit/credit entry types, matching descriptions, and semantically equal transaction and entry metadata.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestExistingDoubleEntryMatches|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+54. Withdrawal destination usage links could count an amount or currency different from the ledger debit.
+    - Evidence: `ValidateWithdrawalDestinationLinkLedgerEntry` required a debit entry and matching destination wallet, but did not compare `entry.Amount` or `entry.Currency` against the requested `LedgerWithdrawalDestinationLink`. A direct store/activity call could create a usage link that increments `withdrawal_destinations.total_withdrawn` by a different amount or currency than the actual ledger debit.
+    - Fix: require withdrawal destination links to match the ledger debit amount and currency before insert/replay.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

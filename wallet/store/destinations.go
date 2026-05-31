@@ -320,6 +320,12 @@ func ValidateWithdrawalDestinationLinkLedgerEntry(entry *LedgerEntry, destinatio
 	if entry.EntryType != "debit" {
 		return ErrInvalidDirection
 	}
+	if entry.Amount != link.Amount {
+		return ErrInvalidAmount
+	}
+	if entry.Currency != link.Currency {
+		return ErrCurrencyMismatch
+	}
 	if destination.Currency != link.Currency {
 		return ErrCurrencyMismatch
 	}

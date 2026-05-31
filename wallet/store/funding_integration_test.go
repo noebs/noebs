@@ -218,6 +218,16 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 		Amount:        400,
 		Currency:      "AED",
 	}
+	amountMismatchDestinationLink := destinationLink
+	amountMismatchDestinationLink.Amount = 300
+	if _, err := store.CreateWithdrawalDestinationLink(ctx, amountMismatchDestinationLink); !errors.Is(err, ErrInvalidAmount) {
+		t.Fatalf("ledger amount mismatch destination link error = %v, want %v", err, ErrInvalidAmount)
+	}
+	currencyMismatchDestinationLink := destinationLink
+	currencyMismatchDestinationLink.Currency = "USD"
+	if _, err := store.CreateWithdrawalDestinationLink(ctx, currencyMismatchDestinationLink); !errors.Is(err, ErrCurrencyMismatch) {
+		t.Fatalf("ledger currency mismatch destination link error = %v, want %v", err, ErrCurrencyMismatch)
+	}
 	createdDestinationLink, err := store.CreateWithdrawalDestinationLink(ctx, destinationLink)
 	if err != nil {
 		t.Fatalf("create withdrawal destination link: %v", err)
