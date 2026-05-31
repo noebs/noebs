@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -62,6 +63,22 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 	if err != nil {
 		return nil, err
 	}
+	if existing, err := s.GetPSPTransactionByReference(ctx, tenantID, txn.ClientReference); err == nil {
+		if err := ValidatePSPTransactionCreateReplay(existing, txn); err != nil {
+			return nil, err
+		}
+		return existing, nil
+	} else if !errors.Is(err, ErrPSPTransactionNotFound) {
+		return nil, err
+	}
+	if existing, err := s.getPSPTransactionByProviderIdempotency(ctx, tenantID, txn.PSPProvider, txn.IdempotencyKey); err == nil {
+		if err := ValidatePSPTransactionCreateReplay(existing, txn); err != nil {
+			return nil, err
+		}
+		return existing, nil
+	} else if !errors.Is(err, ErrPSPTransactionNotFound) {
+		return nil, err
+	}
 
 	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO psp_transactions(
@@ -102,9 +119,53 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 		txn.LastErrorType,
 		txn.LastErrorAt,
 	); err != nil {
+		if existing, getErr := s.GetPSPTransactionByReference(ctx, tenantID, txn.ClientReference); getErr == nil {
+			if err := ValidatePSPTransactionCreateReplay(existing, txn); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
+		if existing, getErr := s.getPSPTransactionByProviderIdempotency(ctx, tenantID, txn.PSPProvider, txn.IdempotencyKey); getErr == nil {
+			if err := ValidatePSPTransactionCreateReplay(existing, txn); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
 		return nil, err
 	}
 	return &stored, nil
+}
+
+func ValidatePSPTransactionCreateReplay(existing *PSPTransaction, requested PSPTransaction) error {
+	if existing == nil || !pspTransactionCreateReplayMatches(*existing, requested) {
+		return ErrDuplicateTransaction
+	}
+	return nil
+}
+
+func pspTransactionCreateReplayMatches(existing PSPTransaction, requested PSPTransaction) bool {
+	return existing.TenantID == requested.TenantID &&
+		existing.PSPProvider == requested.PSPProvider &&
+		existing.IdempotencyKey == requested.IdempotencyKey &&
+		existing.ClientReference == requested.ClientReference &&
+		existing.Direction == requested.Direction &&
+		existing.Amount == requested.Amount &&
+		existing.Currency == requested.Currency &&
+		nullInt64Equal(existing.FeeAmount, requested.FeeAmount) &&
+		nullInt64Equal(existing.NetAmount, requested.NetAmount) &&
+		requestedNullStringMatches(existing.PSPTransactionID, requested.PSPTransactionID) &&
+		requestedNullStringMatches(existing.WorkflowID, requested.WorkflowID)
+}
+
+func nullInt64Equal(left, right sql.NullInt64) bool {
+	return left.Valid == right.Valid && (!left.Valid || left.Int64 == right.Int64)
+}
+
+func requestedNullStringMatches(existing, requested sql.NullString) bool {
+	if !requested.Valid {
+		return true
+	}
+	return existing.Valid && existing.String == requested.String
 }
 
 func (s *Store) GetPSPTransactionByReference(ctx context.Context, tenantID, clientReference string) (*PSPTransaction, error) {
@@ -123,6 +184,22 @@ func (s *Store) GetPSPTransactionByReference(ctx context.Context, tenantID, clie
 	var txn PSPTransaction
 	if err := db.GetContext(ctx, &txn, stmt, tenantID, clientReference); err != nil {
 		if err == sql.ErrNoRows {
+			return nil, ErrPSPTransactionNotFound
+		}
+		return nil, err
+	}
+	return &txn, nil
+}
+
+func (s *Store) getPSPTransactionByProviderIdempotency(ctx context.Context, tenantID, providerCode, idempotencyKey string) (*PSPTransaction, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM psp_transactions WHERE tenant_id = ? AND psp_provider = ? AND idempotency_key = ?")
+	var txn PSPTransaction
+	if err := db.GetContext(ctx, &txn, stmt, tenantID, providerCode, idempotencyKey); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPSPTransactionNotFound
 		}
 		return nil, err

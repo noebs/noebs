@@ -134,7 +134,25 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	}
 
 	workflowID := withdrawalWorkflowID(req.TenantId, req.ClientReference)
+	idempotencyKey := req.IdempotencyKey
+	if idempotencyKey == "" {
+		idempotencyKey = req.ClientReference
+	}
+	requestedTxn := walletstore.PSPTransaction{
+		TenantID:        req.TenantId,
+		PSPProvider:     req.ProviderCode,
+		IdempotencyKey:  idempotencyKey,
+		ClientReference: req.ClientReference,
+		Direction:       "outbound",
+		Amount:          req.Amount,
+		Currency:        req.Currency,
+		Status:          "initiated",
+		WorkflowID:      sql.NullString{String: workflowID, Valid: workflowID != ""},
+	}
 	if existing, err := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); err == nil {
+		if err := walletstore.ValidatePSPTransactionCreateReplay(existing, requestedTxn); err != nil {
+			return nil, mapError(err)
+		}
 		existingID := existing.WorkflowID.String
 		if !existing.WorkflowID.Valid {
 			existingID = workflowID
@@ -151,27 +169,9 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	idempotencyKey := req.IdempotencyKey
-	if idempotencyKey == "" {
-		idempotencyKey = req.ClientReference
-	}
-
-	txn := walletstore.PSPTransaction{
-		TenantID:        req.TenantId,
-		PSPProvider:     req.ProviderCode,
-		IdempotencyKey:  idempotencyKey,
-		ClientReference: req.ClientReference,
-		Direction:       "outbound",
-		Amount:          req.Amount,
-		Currency:        req.Currency,
-		Status:          "initiated",
-		WorkflowID:      sql.NullString{String: workflowID, Valid: workflowID != ""},
-		RawRequest:      walletstore.RawJSON(rawRequest),
-	}
+	txn := requestedTxn
+	txn.RawRequest = walletstore.RawJSON(rawRequest)
 	if _, err := s.Service.Store.CreatePSPTransaction(ctx, txn); err != nil {
-		if existing, getErr := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); getErr == nil {
-			return &walletv1.WorkflowRun{WorkflowId: existing.WorkflowID.String, RunId: ""}, nil
-		}
 		return nil, mapError(err)
 	}
 

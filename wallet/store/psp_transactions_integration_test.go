@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -64,6 +65,18 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 	}
 	if _, err := s.CreatePSPTransaction(ctx, txn); err != nil {
 		t.Fatalf("create transaction: %v", err)
+	}
+	replayed, err := s.CreatePSPTransaction(ctx, txn)
+	if err != nil {
+		t.Fatalf("idempotent create transaction replay: %v", err)
+	}
+	if replayed.ClientReference != txn.ClientReference {
+		t.Fatalf("replayed transaction ref = %q, want %q", replayed.ClientReference, txn.ClientReference)
+	}
+	mismatch := txn
+	mismatch.Amount++
+	if _, err := s.CreatePSPTransaction(ctx, mismatch); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("mismatched create transaction replay error = %v, want %v", err, ErrDuplicateTransaction)
 	}
 
 	interaction, err := s.RecordPSPInteraction(ctx, PSPInteraction{

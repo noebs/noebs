@@ -81,7 +81,36 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	}
 
 	workflowID := depositWorkflowID(req.TenantId, req.ClientReference)
+	idempotencyKey := req.IdempotencyKey
+	if idempotencyKey == "" {
+		idempotencyKey = req.ClientReference
+	}
+	feeAmount := sql.NullInt64{}
+	if req.FeeAmount != nil {
+		feeAmount = sql.NullInt64{Int64: req.GetFeeAmount(), Valid: true}
+	}
+	netAmount := sql.NullInt64{}
+	if req.NetAmount != nil {
+		netAmount = sql.NullInt64{Int64: req.GetNetAmount(), Valid: true}
+	}
+	requestedTxn := walletstore.PSPTransaction{
+		TenantID:         req.TenantId,
+		PSPProvider:      req.ProviderCode,
+		PSPTransactionID: sql.NullString{String: req.PspTransactionId, Valid: req.PspTransactionId != ""},
+		IdempotencyKey:   idempotencyKey,
+		ClientReference:  req.ClientReference,
+		Direction:        "inbound",
+		Amount:           req.Amount,
+		FeeAmount:        feeAmount,
+		NetAmount:        netAmount,
+		Currency:         req.Currency,
+		Status:           "initiated",
+		WorkflowID:       sql.NullString{String: workflowID, Valid: workflowID != ""},
+	}
 	if existing, err := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); err == nil {
+		if err := walletstore.ValidatePSPTransactionCreateReplay(existing, requestedTxn); err != nil {
+			return nil, mapError(err)
+		}
 		existingID := existing.WorkflowID.String
 		if !existing.WorkflowID.Valid {
 			existingID = workflowID
@@ -97,39 +126,9 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	idempotencyKey := req.IdempotencyKey
-	if idempotencyKey == "" {
-		idempotencyKey = req.ClientReference
-	}
-
-	feeAmount := sql.NullInt64{}
-	if req.FeeAmount != nil {
-		feeAmount = sql.NullInt64{Int64: req.GetFeeAmount(), Valid: true}
-	}
-	netAmount := sql.NullInt64{}
-	if req.NetAmount != nil {
-		netAmount = sql.NullInt64{Int64: req.GetNetAmount(), Valid: true}
-	}
-
-	txn := walletstore.PSPTransaction{
-		TenantID:         req.TenantId,
-		PSPProvider:      req.ProviderCode,
-		PSPTransactionID: sql.NullString{String: req.PspTransactionId, Valid: req.PspTransactionId != ""},
-		IdempotencyKey:   idempotencyKey,
-		ClientReference:  req.ClientReference,
-		Direction:        "inbound",
-		Amount:           req.Amount,
-		FeeAmount:        feeAmount,
-		NetAmount:        netAmount,
-		Currency:         req.Currency,
-		Status:           "initiated",
-		WorkflowID:       sql.NullString{String: workflowID, Valid: workflowID != ""},
-		RawRequest:       walletstore.RawJSON(rawRequest),
-	}
+	txn := requestedTxn
+	txn.RawRequest = walletstore.RawJSON(rawRequest)
 	if _, err := s.Service.Store.CreatePSPTransaction(ctx, txn); err != nil {
-		if existing, getErr := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); getErr == nil {
-			return &walletv1.WorkflowRun{WorkflowId: existing.WorkflowID.String, RunId: ""}, nil
-		}
 		return nil, mapError(err)
 	}
 

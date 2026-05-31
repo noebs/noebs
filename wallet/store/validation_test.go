@@ -464,6 +464,57 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 	}
 }
 
+func TestValidatePSPTransactionCreateReplay(t *testing.T) {
+	requested := PSPTransaction{
+		TenantID:         "tenant",
+		PSPProvider:      "coinsbuy",
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		IdempotencyKey:   "idem-1",
+		ClientReference:  "ref-1",
+		Direction:        "inbound",
+		Amount:           100,
+		FeeAmount:        sql.NullInt64{Int64: 5, Valid: true},
+		NetAmount:        sql.NullInt64{Int64: 95, Valid: true},
+		Currency:         "USD",
+		Status:           "initiated",
+		WorkflowID:       sql.NullString{String: "workflow-1", Valid: true},
+	}
+	existing := requested
+	existing.Status = "success"
+	if err := ValidatePSPTransactionCreateReplay(&existing, requested); err != nil {
+		t.Fatalf("ValidatePSPTransactionCreateReplay() error = %v, want nil", err)
+	}
+
+	requestWithoutProviderTxn := requested
+	requestWithoutProviderTxn.PSPTransactionID = sql.NullString{}
+	existingWithProviderTxn := existing
+	existingWithProviderTxn.PSPTransactionID = sql.NullString{String: "provider-confirmed", Valid: true}
+	if err := ValidatePSPTransactionCreateReplay(&existingWithProviderTxn, requestWithoutProviderTxn); err != nil {
+		t.Fatalf("ValidatePSPTransactionCreateReplay() with later provider id error = %v, want nil", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*PSPTransaction)
+	}{
+		{"provider", func(txn *PSPTransaction) { txn.PSPProvider = "other" }},
+		{"idempotency", func(txn *PSPTransaction) { txn.IdempotencyKey = "other" }},
+		{"direction", func(txn *PSPTransaction) { txn.Direction = "outbound" }},
+		{"amount", func(txn *PSPTransaction) { txn.Amount++ }},
+		{"fee", func(txn *PSPTransaction) { txn.FeeAmount = sql.NullInt64{} }},
+		{"currency", func(txn *PSPTransaction) { txn.Currency = "AED" }},
+		{"workflow", func(txn *PSPTransaction) { txn.WorkflowID = sql.NullString{String: "other", Valid: true} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			replay := requested
+			tc.mutate(&replay)
+			err := ValidatePSPTransactionCreateReplay(&existing, replay)
+			assertErrorIs(t, err, ErrDuplicateTransaction)
+		})
+	}
+}
+
 func TestRecordPSPInteractionValidation(t *testing.T) {
 	s := &Store{}
 	base := PSPInteraction{
