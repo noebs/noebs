@@ -53,6 +53,10 @@ func mapWalletError(err error) error {
 		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
 	case errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
+	case errors.Is(err, walletstore.ErrDuplicateWallet),
+		errors.Is(err, walletstore.ErrDuplicateManualTransfer),
+		errors.Is(err, walletstore.ErrDuplicateManualApproval):
+		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrWalletNotFound),
 		errors.Is(err, walletstore.ErrHoldNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),
@@ -65,6 +69,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidTenantID),
 		errors.Is(err, walletstore.ErrMissingCurrency),
 		errors.Is(err, walletstore.ErrMissingOwnerType),
+		errors.Is(err, walletstore.ErrInvalidOwnerType),
 		errors.Is(err, walletstore.ErrMissingOwnerID),
 		errors.Is(err, walletstore.ErrMissingWalletID),
 		errors.Is(err, walletstore.ErrInvalidUserID),
@@ -96,9 +101,11 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingTwoFASecret),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingDecision),
+		errors.Is(err, walletstore.ErrInvalidDecision),
 		errors.Is(err, walletstore.ErrMissingReason),
 		errors.Is(err, walletstore.ErrMissingProofOfPayment),
 		errors.Is(err, walletstore.ErrMissingStatus),
+		errors.Is(err, walletstore.ErrInvalidStatus),
 		errors.Is(err, walletstore.ErrMissingInteractionType),
 		errors.Is(err, walletstore.ErrMissingSetBy),
 		errors.Is(err, walletstore.ErrFundingSourceNotVerified),

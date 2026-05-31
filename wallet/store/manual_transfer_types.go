@@ -11,6 +11,13 @@ const (
 	ManualTransferTypeWithdrawal = "manual_withdrawal"
 )
 
+const (
+	ManualTransferStatusPending   = "pending"
+	ManualTransferStatusApproved  = "approved"
+	ManualTransferStatusRejected  = "rejected"
+	ManualTransferStatusCompleted = "completed"
+)
+
 func ValidateManualTransferType(transferType string) error {
 	switch transferType {
 	case "":
@@ -19,6 +26,28 @@ func ValidateManualTransferType(transferType string) error {
 		return nil
 	default:
 		return ErrInvalidTransferType
+	}
+}
+
+func ValidateManualTransferStatus(status string) error {
+	switch status {
+	case "":
+		return ErrMissingStatus
+	case ManualTransferStatusPending, ManualTransferStatusApproved, ManualTransferStatusRejected, ManualTransferStatusCompleted:
+		return nil
+	default:
+		return ErrInvalidStatus
+	}
+}
+
+func ValidateManualTransferDecision(decision string) error {
+	switch decision {
+	case "":
+		return ErrMissingDecision
+	case ManualTransferStatusApproved, ManualTransferStatusRejected:
+		return nil
+	default:
+		return ErrInvalidDecision
 	}
 }
 

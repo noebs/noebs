@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -29,8 +30,18 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if transfer.Reason == "" {
 		return nil, ErrMissingReason
 	}
-	if transfer.Status == "" {
-		return nil, ErrMissingStatus
+	if err := ValidateManualTransferStatus(transfer.Status); err != nil {
+		return nil, err
+	}
+	if transfer.Status != ManualTransferStatusPending {
+		return nil, ErrInvalidStatus
+	}
+	if transfer.ApprovedBy.Valid ||
+		transfer.ApprovedAt.Valid ||
+		transfer.CompletedAt.Valid ||
+		transfer.ProofOfPayment.Valid ||
+		transfer.RejectionReason.Valid {
+		return nil, ErrInvalidStatus
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -43,6 +54,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		reason, status, requested_by, approved_by, proof_of_payment, psp_provider, psp_reference,
 		rejection_reason, requested_at, approved_at, completed_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT DO NOTHING
 	RETURNING *`)
 	var stored ManualTransfer
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -65,6 +77,17 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		transfer.ApprovedAt,
 		transfer.CompletedAt,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			existing, getErr := s.getManualTransferByWorkflowOrIdempotency(ctx, tenantID, transfer.WorkflowID, transfer.IdempotencyKey)
+			if getErr != nil {
+				return nil, getErr
+			}
+			transfer.TenantID = tenantID
+			if err := ValidateManualTransferCreateReplay(existing, transfer); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
 		return nil, err
 	}
 	return &stored, nil
@@ -81,8 +104,8 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	if approval.ApproverID <= 0 {
 		return nil, ErrMissingApproverID
 	}
-	if approval.Decision == "" {
-		return nil, ErrMissingDecision
+	if err := ValidateManualTransferDecision(approval.Decision); err != nil {
+		return nil, err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -93,6 +116,7 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	stmt := db.Rebind(`INSERT INTO manual_transfer_approvals(
 		tenant_id, manual_transfer_id, approver_id, decision, reason, decided_at
 	) VALUES(?, ?, ?, ?, ?, ?)
+	ON CONFLICT DO NOTHING
 	RETURNING *`)
 	var stored ManualTransferApproval
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -103,6 +127,17 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 		approval.Reason,
 		now,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			existing, getErr := s.getManualTransferApproval(ctx, tenantID, approval.ManualTransferID, approval.ApproverID)
+			if getErr != nil {
+				return nil, getErr
+			}
+			approval.TenantID = tenantID
+			if err := ValidateManualTransferApprovalReplay(existing, approval); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
 		return nil, err
 	}
 	return &stored, nil
@@ -150,6 +185,80 @@ func (s *Store) GetManualTransferByWorkflowID(ctx context.Context, workflowID st
 	return &transfer, nil
 }
 
+func (s *Store) getManualTransferByIdempotency(ctx context.Context, tenantID, idempotencyKey string) (*ManualTransfer, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM manual_transfers WHERE tenant_id = ? AND idempotency_key = ?")
+	var transfer ManualTransfer
+	if err := db.GetContext(ctx, &transfer, stmt, tenantID, idempotencyKey); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrManualTransferNotFound
+		}
+		return nil, err
+	}
+	return &transfer, nil
+}
+
+func (s *Store) getManualTransferByWorkflowOrIdempotency(ctx context.Context, tenantID, workflowID, idempotencyKey string) (*ManualTransfer, error) {
+	existing, err := s.GetManualTransferByWorkflow(ctx, tenantID, workflowID)
+	if err == nil {
+		return existing, nil
+	}
+	if !errors.Is(err, ErrManualTransferNotFound) {
+		return nil, err
+	}
+	return s.getManualTransferByIdempotency(ctx, tenantID, idempotencyKey)
+}
+
+func (s *Store) getManualTransferApproval(ctx context.Context, tenantID string, manualTransferID, approverID int64) (*ManualTransferApproval, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind(`SELECT * FROM manual_transfer_approvals
+		WHERE tenant_id = ? AND manual_transfer_id = ? AND approver_id = ?`)
+	var approval ManualTransferApproval
+	if err := db.GetContext(ctx, &approval, stmt, tenantID, manualTransferID, approverID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrManualTransferNotFound
+		}
+		return nil, err
+	}
+	return &approval, nil
+}
+
+func ValidateManualTransferCreateReplay(existing *ManualTransfer, requested ManualTransfer) error {
+	if existing == nil ||
+		existing.TenantID != requested.TenantID ||
+		existing.WorkflowID != requested.WorkflowID ||
+		existing.IdempotencyKey != requested.IdempotencyKey ||
+		existing.TransferType != requested.TransferType ||
+		!nullStringEqual(existing.WalletID, requested.WalletID) ||
+		existing.Amount != requested.Amount ||
+		existing.Currency != requested.Currency ||
+		existing.Reason != requested.Reason ||
+		!nullInt64Equal(existing.RequestedBy, requested.RequestedBy) ||
+		!nullStringEqual(existing.PSPProvider, requested.PSPProvider) ||
+		!nullStringEqual(existing.PSPReference, requested.PSPReference) {
+		return ErrDuplicateManualTransfer
+	}
+	return nil
+}
+
+func ValidateManualTransferApprovalReplay(existing *ManualTransferApproval, requested ManualTransferApproval) error {
+	if existing == nil ||
+		existing.TenantID != requested.TenantID ||
+		existing.ManualTransferID != requested.ManualTransferID ||
+		existing.ApproverID != requested.ApproverID ||
+		existing.Decision != requested.Decision ||
+		!nullStringEqual(existing.Reason, requested.Reason) {
+		return ErrDuplicateManualApproval
+	}
+	return nil
+}
+
 func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workflowID string, update ManualTransferStatusUpdate) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
@@ -158,8 +267,8 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 	if workflowID == "" {
 		return ErrMissingWorkflowID
 	}
-	if update.Status == "" {
-		return ErrMissingStatus
+	if err := ValidateManualTransferStatus(update.Status); err != nil {
+		return err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -275,8 +384,8 @@ func (s *Store) ListManualTransfersByStatus(ctx context.Context, tenantID, statu
 	if err != nil {
 		return nil, err
 	}
-	if status == "" {
-		return nil, ErrMissingStatus
+	if err := ValidateManualTransferStatus(status); err != nil {
+		return nil, err
 	}
 	if limit <= 0 {
 		return nil, ErrInvalidLimit

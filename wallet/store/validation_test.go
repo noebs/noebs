@@ -337,6 +337,10 @@ func TestUpdateManualTransferStatusValidation(t *testing.T) {
 	update.Status = ""
 	err = s.UpdateManualTransferStatus(t.Context(), "tenant", "wf-1", update)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	update.Status = "bogus"
+	err = s.UpdateManualTransferStatus(t.Context(), "tenant", "wf-1", update)
+	assertErrorIs(t, err, ErrInvalidStatus)
 }
 
 func TestGetManualTransferByWorkflowIDValidation(t *testing.T) {
@@ -405,6 +409,73 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	bad.Status = ""
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	bad = transfer
+	bad.Status = "bogus"
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = transfer
+	bad.Status = ManualTransferStatusApproved
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = transfer
+	bad.ApprovedBy = sql.NullInt64{Int64: 2, Valid: true}
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = transfer
+	bad.ProofOfPayment = sql.NullString{String: "proof", Valid: true}
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+}
+
+func TestValidateManualTransferCreateReplay(t *testing.T) {
+	requested := ManualTransfer{
+		TenantID:       "tenant",
+		WorkflowID:     "wf-1",
+		IdempotencyKey: "idem-1",
+		TransferType:   ManualTransferTypeDebit,
+		WalletID:       sql.NullString{String: uuid.NewString(), Valid: true},
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "withdrawal",
+		Status:         ManualTransferStatusPending,
+		RequestedBy:    sql.NullInt64{Int64: 42, Valid: true},
+		PSPProvider:    sql.NullString{String: "bank", Valid: true},
+		PSPReference:   sql.NullString{String: "ref-1", Valid: true},
+	}
+	existing := requested
+	existing.Status = ManualTransferStatusCompleted
+	if err := ValidateManualTransferCreateReplay(&existing, requested); err != nil {
+		t.Fatalf("ValidateManualTransferCreateReplay() error = %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*ManualTransfer)
+	}{
+		{"tenant", func(t *ManualTransfer) { t.TenantID = "other" }},
+		{"workflow", func(t *ManualTransfer) { t.WorkflowID = "other" }},
+		{"idempotency", func(t *ManualTransfer) { t.IdempotencyKey = "other" }},
+		{"type", func(t *ManualTransfer) { t.TransferType = ManualTransferTypeCredit }},
+		{"wallet", func(t *ManualTransfer) { t.WalletID = sql.NullString{String: uuid.NewString(), Valid: true} }},
+		{"amount", func(t *ManualTransfer) { t.Amount++ }},
+		{"currency", func(t *ManualTransfer) { t.Currency = "AED" }},
+		{"reason", func(t *ManualTransfer) { t.Reason = "other" }},
+		{"requested-by", func(t *ManualTransfer) { t.RequestedBy = sql.NullInt64{Int64: 99, Valid: true} }},
+		{"psp-provider", func(t *ManualTransfer) { t.PSPProvider = sql.NullString{String: "other", Valid: true} }},
+		{"psp-reference", func(t *ManualTransfer) { t.PSPReference = sql.NullString{String: "other", Valid: true} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			replay := requested
+			tc.mutate(&replay)
+			assertErrorIs(t, ValidateManualTransferCreateReplay(&existing, replay), ErrDuplicateManualTransfer)
+		})
+	}
+	assertErrorIs(t, ValidateManualTransferCreateReplay(nil, requested), ErrDuplicateManualTransfer)
 }
 
 func TestAddManualTransferApprovalValidation(t *testing.T) {
@@ -438,6 +509,43 @@ func TestAddManualTransferApprovalValidation(t *testing.T) {
 	bad.Decision = ""
 	_, err = s.AddManualTransferApproval(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingDecision)
+
+	bad = approval
+	bad.Decision = "bogus"
+	_, err = s.AddManualTransferApproval(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidDecision)
+}
+
+func TestValidateManualTransferApprovalReplay(t *testing.T) {
+	requested := ManualTransferApproval{
+		TenantID:         "tenant",
+		ManualTransferID: 1,
+		ApproverID:       42,
+		Decision:         ManualTransferStatusApproved,
+		Reason:           sql.NullString{String: "ok", Valid: true},
+	}
+	if err := ValidateManualTransferApprovalReplay(&requested, requested); err != nil {
+		t.Fatalf("ValidateManualTransferApprovalReplay() error = %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*ManualTransferApproval)
+	}{
+		{"tenant", func(a *ManualTransferApproval) { a.TenantID = "other" }},
+		{"transfer", func(a *ManualTransferApproval) { a.ManualTransferID = 2 }},
+		{"approver", func(a *ManualTransferApproval) { a.ApproverID = 99 }},
+		{"decision", func(a *ManualTransferApproval) { a.Decision = ManualTransferStatusRejected }},
+		{"reason", func(a *ManualTransferApproval) { a.Reason = sql.NullString{String: "other", Valid: true} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			replay := requested
+			tc.mutate(&replay)
+			assertErrorIs(t, ValidateManualTransferApprovalReplay(&requested, replay), ErrDuplicateManualApproval)
+		})
+	}
+	assertErrorIs(t, ValidateManualTransferApprovalReplay(nil, requested), ErrDuplicateManualApproval)
 }
 
 func TestGetManualTransferByWorkflowValidation(t *testing.T) {
@@ -1941,6 +2049,9 @@ func TestListManualTransfersByStatusValidation(t *testing.T) {
 
 	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "", 10, 0)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "bogus", 10, 0)
+	assertErrorIs(t, err, ErrInvalidStatus)
 
 	_, err = s.ListManualTransfersByStatus(t.Context(), "tenant", "pending", 0, 0)
 	assertErrorIs(t, err, ErrInvalidLimit)

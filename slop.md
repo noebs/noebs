@@ -203,6 +203,11 @@ Last updated: 2026-05-31
     - Fix: allow secret regeneration only while the record is pending/disabled, clear stale timestamps for that reset path, preserve enabled records unchanged, and return `ErrUserTwoFAAlreadyEnabled` when enrollment is attempted against active 2FA.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestCreateOrResetUserTwoFA|TestUserTwoFAValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+41. Manual transfer activity retries were not exact-replay idempotent.
+    - Evidence: `CreateManualTransfer` and `AddManualTransferApproval` inserted into tables with unique workflow/idempotency/approver keys but did not handle conflicts, so a retry after a successful DB write could fail the workflow with a raw unique violation. Creation also accepted approved/completed metadata even though manual transfers must start pending.
+    - Fix: make manual transfer creation and approval insertion return existing rows only on exact replay, reject mismatched duplicates with typed errors, validate transfer status/approval decisions before the DB, and reject pre-seeded approval/completion fields at creation.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestCreateManualTransfer|TestAddManualTransferApproval|TestValidateManualTransfer|TestListManualTransfersByStatus|TestManualTransferAndApprovalReplaysAreExact'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

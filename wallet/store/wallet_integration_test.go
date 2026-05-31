@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -102,6 +103,69 @@ func TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret(t *testing.T) {
 	}
 }
 
+func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
+	ctx, store, tenantID := newWalletStoreIntegration(t)
+	requesterID := insertWalletAdmin(t, ctx, store, tenantID, "requester@example.test")
+	approverID := insertWalletAdmin(t, ctx, store, tenantID, "approver@example.test")
+
+	transfer := ManualTransfer{
+		TenantID:       tenantID,
+		WorkflowID:     "wf-1",
+		IdempotencyKey: "idem-1",
+		TransferType:   ManualTransferTypeDebit,
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "manual adjustment",
+		Status:         ManualTransferStatusPending,
+		RequestedBy:    sqlNullInt64(requesterID),
+	}
+	created, err := store.CreateManualTransfer(ctx, transfer)
+	if err != nil {
+		t.Fatalf("create manual transfer: %v", err)
+	}
+	replayed, err := store.CreateManualTransfer(ctx, transfer)
+	if err != nil {
+		t.Fatalf("replay manual transfer: %v", err)
+	}
+	if replayed.ID != created.ID {
+		t.Fatalf("replayed transfer id = %d, want %d", replayed.ID, created.ID)
+	}
+
+	amountMismatch := transfer
+	amountMismatch.Amount++
+	if _, err := store.CreateManualTransfer(ctx, amountMismatch); !errors.Is(err, ErrDuplicateManualTransfer) {
+		t.Fatalf("manual transfer amount mismatch error = %v, want %v", err, ErrDuplicateManualTransfer)
+	}
+	workflowMismatch := transfer
+	workflowMismatch.WorkflowID = "wf-2"
+	if _, err := store.CreateManualTransfer(ctx, workflowMismatch); !errors.Is(err, ErrDuplicateManualTransfer) {
+		t.Fatalf("manual transfer workflow mismatch error = %v, want %v", err, ErrDuplicateManualTransfer)
+	}
+
+	approval := ManualTransferApproval{
+		TenantID:         tenantID,
+		ManualTransferID: created.ID,
+		ApproverID:       approverID,
+		Decision:         ManualTransferStatusApproved,
+	}
+	storedApproval, err := store.AddManualTransferApproval(ctx, approval)
+	if err != nil {
+		t.Fatalf("add manual transfer approval: %v", err)
+	}
+	replayedApproval, err := store.AddManualTransferApproval(ctx, approval)
+	if err != nil {
+		t.Fatalf("replay manual transfer approval: %v", err)
+	}
+	if replayedApproval.ID != storedApproval.ID {
+		t.Fatalf("replayed approval id = %d, want %d", replayedApproval.ID, storedApproval.ID)
+	}
+	decisionMismatch := approval
+	decisionMismatch.Decision = ManualTransferStatusRejected
+	if _, err := store.AddManualTransferApproval(ctx, decisionMismatch); !errors.Is(err, ErrDuplicateManualApproval) {
+		t.Fatalf("manual approval decision mismatch error = %v, want %v", err, ErrDuplicateManualApproval)
+	}
+}
+
 func newWalletStoreIntegration(t *testing.T) (context.Context, *Store, string) {
 	t.Helper()
 
@@ -141,4 +205,30 @@ func newWalletStoreIntegration(t *testing.T) (context.Context, *Store, string) {
 		t.Fatalf("migrate db: %v", err)
 	}
 	return ctx, New(db), tenantID
+}
+
+func insertWalletAdmin(t *testing.T, ctx context.Context, store *Store, tenantID, email string) int64 {
+	t.Helper()
+
+	db, err := store.ensureDB()
+	if err != nil {
+		t.Fatalf("ensure db: %v", err)
+	}
+	var roleID int64
+	roleStmt := db.Rebind(`INSERT INTO admin_roles(tenant_id, role_name, role_level, permissions)
+		VALUES(?, ?, 1, '[]') RETURNING id`)
+	if err := db.GetContext(ctx, &roleID, roleStmt, tenantID, email+"-role"); err != nil {
+		t.Fatalf("insert admin role: %v", err)
+	}
+	var adminID int64
+	adminStmt := db.Rebind(`INSERT INTO admin_users(tenant_id, email, password_hash, role_id)
+		VALUES(?, ?, 'hash', ?) RETURNING id`)
+	if err := db.GetContext(ctx, &adminID, adminStmt, tenantID, email, roleID); err != nil {
+		t.Fatalf("insert admin user: %v", err)
+	}
+	return adminID
+}
+
+func sqlNullInt64(value int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: value, Valid: true}
 }

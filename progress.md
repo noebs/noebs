@@ -44,6 +44,7 @@
 - Fixed PSP amount replay handling so duplicate amount keys cannot rewrite money or FX fields; exact replays return the original row and mismatches return `ErrDuplicateAmount`.
 - Fixed wallet ensure replay handling so existing wallets must match the requested owner/user/currency/KYC contract instead of silently returning mismatched rows or raw unique-index errors.
 - Fixed 2FA enrollment so active TOTP secrets cannot be silently overwritten and disabled; enabled users now get a typed already-enabled error.
+- Fixed manual transfer creation and approval retries so unique-key conflicts must be exact replays and creation cannot seed approved/completed state.
 
 Verification:
 
@@ -90,6 +91,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`
 - `go test -count=1 -v ./wallet/store -run 'TestCreateOrResetUserTwoFA|TestUserTwoFAValidation'`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`
+- `go test -count=1 -v ./wallet/store -run 'TestCreateManualTransfer|TestAddManualTransferApproval|TestValidateManualTransfer|TestListManualTransfersByStatus|TestManualTransferAndApprovalReplaysAreExact'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

@@ -242,7 +242,9 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrDuplicateFundingSource),
 		errors.Is(err, walletstore.ErrDuplicateFundingLink),
 		errors.Is(err, walletstore.ErrDuplicateDestinationLink),
-		errors.Is(err, walletstore.ErrDuplicateAmount):
+		errors.Is(err, walletstore.ErrDuplicateAmount),
+		errors.Is(err, walletstore.ErrDuplicateManualTransfer),
+		errors.Is(err, walletstore.ErrDuplicateManualApproval):
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),
@@ -285,10 +287,13 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingHoldExpiry),
 		errors.Is(err, walletstore.ErrMissingTransferType),
 		errors.Is(err, walletstore.ErrInvalidTransferType),
+		errors.Is(err, walletstore.ErrInvalidStatus),
+		errors.Is(err, walletstore.ErrInvalidDecision),
 		errors.Is(err, walletstore.ErrMissingSourceDetails),
 		errors.Is(err, walletstore.ErrMissingTransactionType),
 		errors.Is(err, walletstore.ErrMissingBaseCurrency),
 		errors.Is(err, walletstore.ErrMissingQuoteCurrency),
+		errors.Is(err, walletstore.ErrMissingDecision),
 		errors.Is(err, walletstore.ErrMissingReason),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingWorkflowID),
