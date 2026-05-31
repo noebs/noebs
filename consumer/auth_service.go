@@ -194,7 +194,11 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (
 		}
 		return ebs_fields.User{}, ErrInvalidOTP
 	}
-	_ = s.Store.UpdateUserColumns(ctx, tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true})
+	if err := s.Store.UpdateUserColumns(ctx, tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true}); err != nil {
+		return ebs_fields.User{}, err
+	}
+	u.IsPasswordOTP = true
+	u.IsVerified = true
 	return sanitizeUser(*u), nil
 }
 

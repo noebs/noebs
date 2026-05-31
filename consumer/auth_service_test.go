@@ -216,6 +216,40 @@ func TestGenerateSignInCodeReturnsSMSError(t *testing.T) {
 	}
 }
 
+func TestVerifyOTPMarksUserVerified(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+	stored, err := env.Store.GetUserByMobile(context.Background(), env.Tenant, "0990000000")
+	if err != nil {
+		t.Fatalf("get user: %v", err)
+	}
+	code, err := stored.GenerateOtp()
+	if err != nil {
+		t.Fatalf("generate otp: %v", err)
+	}
+
+	verified, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", code)
+	if err != nil {
+		t.Fatalf("VerifyOTP(): %v", err)
+	}
+	if !verified.IsVerified || !verified.IsPasswordOTP {
+		t.Fatalf("verified user flags = verified:%v password_otp:%v", verified.IsVerified, verified.IsPasswordOTP)
+	}
+
+	var isVerified bool
+	var isPasswordOTP bool
+	stmt := env.DB.Rebind("SELECT is_verified, is_password_otp FROM users WHERE tenant_id = ? AND id = ?")
+	if err := env.DB.QueryRowContext(context.Background(), stmt, env.Tenant, user.ID).Scan(&isVerified, &isPasswordOTP); err != nil {
+		t.Fatalf("read user flags: %v", err)
+	}
+	if !isVerified || !isPasswordOTP {
+		t.Fatalf("stored flags = verified:%v password_otp:%v", isVerified, isPasswordOTP)
+	}
+}
+
 func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
