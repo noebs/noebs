@@ -163,6 +163,11 @@ Last updated: 2026-05-31
     - Fix: add PSP transaction create-replay validation, use it in the store and gRPC request boundaries, and return `ErrDuplicateTransaction` for mismatched duplicates.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionCreateReplay|TestUpdatePSPTransactionStatus'` (Postgres container case skipped locally because the container runtime is unavailable).
 
+33. Deposit/withdrawal workflow start failures could strand PSP transactions in `initiated`.
+    - Evidence: after creating the PSP transaction, `RequestDeposit` and `RequestWithdrawal` discarded `UpdatePSPTransactionStatus` errors when Temporal workflow start failed, hiding the local state repair failure from callers and leaving pollable initiated rows behind.
+    - Fix: centralize PSP workflow-start failure recording, mark the row `failed`, return joined errors when the repair write fails, and map that joined error as an internal gRPC failure instead of hiding it.
+    - Tests: `go test -count=1 ./wallet/grpc`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

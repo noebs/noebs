@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
@@ -154,13 +153,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		if already, ok := err.(*serviceerror.WorkflowExecutionAlreadyStarted); ok {
 			return &walletv1.WorkflowRun{WorkflowId: workflowID, RunId: already.RunId}, nil
 		}
-		_ = s.Service.Store.UpdatePSPTransactionStatus(ctx, req.TenantId, req.ClientReference, walletstore.PSPStatusUpdate{
-			Status:          "failed",
-			ResponseMessage: sql.NullString{String: err.Error(), Valid: true},
-			LastErrorType:   sql.NullString{String: "workflow_start_failed", Valid: true},
-			LastErrorAt:     sql.NullTime{Time: time.Now().UTC(), Valid: true},
-		})
-		return nil, mapTemporalError(err)
+		return nil, mapPSPWorkflowStartFailure(markPSPTransactionWorkflowStartFailed(ctx, s.Service.Store, req.TenantId, req.ClientReference, err))
 	}
 
 	return &walletv1.WorkflowRun{

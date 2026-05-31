@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	walletworker "github.com/adonese/noebs/wallet/worker"
+	"go.temporal.io/api/serviceerror"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestTemporalTaskQueueRequiresConfiguredQueue(t *testing.T) {
@@ -26,5 +29,15 @@ func TestTemporalTaskQueueUsesConfiguredQueue(t *testing.T) {
 	}
 	if got != walletworker.TaskQueueMain {
 		t.Fatalf("temporalTaskQueue() = %q, want %q", got, walletworker.TaskQueueMain)
+	}
+}
+
+func TestMapTemporalErrorLooksThroughJoinedErrors(t *testing.T) {
+	temporalErr := serviceerror.NewInvalidArgument("bad workflow input")
+	err := errors.Join(temporalErr, errors.New("status write failed"))
+
+	mapped := mapTemporalError(err)
+	if status.Code(mapped) != codes.InvalidArgument {
+		t.Fatalf("status.Code(mapped) = %v, want %v", status.Code(mapped), codes.InvalidArgument)
 	}
 }

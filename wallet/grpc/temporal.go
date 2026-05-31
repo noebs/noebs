@@ -4,6 +4,7 @@ package walletgrpc
 
 import (
 	"context"
+	"errors"
 
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	"go.temporal.io/api/serviceerror"
@@ -56,12 +57,15 @@ func mapTemporalError(err error) error {
 	if err == nil {
 		return nil
 	}
-	switch err.(type) {
-	case *serviceerror.NotFound:
+	var notFound *serviceerror.NotFound
+	var invalidArgument *serviceerror.InvalidArgument
+	var alreadyStarted *serviceerror.WorkflowExecutionAlreadyStarted
+	switch {
+	case errors.As(err, &notFound):
 		return status.Error(codes.NotFound, err.Error())
-	case *serviceerror.InvalidArgument:
+	case errors.As(err, &invalidArgument):
 		return status.Error(codes.InvalidArgument, err.Error())
-	case *serviceerror.WorkflowExecutionAlreadyStarted:
+	case errors.As(err, &alreadyStarted):
 		return status.Error(codes.AlreadyExists, err.Error())
 	default:
 		return status.Error(codes.Internal, err.Error())
