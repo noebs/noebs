@@ -241,13 +241,21 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		return
 	}
 
+	tenantID, ok := s.requireTenantID(c)
+	if !ok {
+		return
+	}
+	var search SearchModel
+	if len(c.Body()) > 0 {
+		if err := parseJSON(c, &search); err != nil {
+			jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
+			return
+		}
+	}
+
 	db, err := s.ensureDB()
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
-	}
-	tenantID, ok := s.requireTenantID(c)
-	if !ok {
 		return
 	}
 
@@ -255,7 +263,6 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	offset := (page - 1) * pageSize
 	log.Printf("The offset is: %v", offset)
 
-	var search SearchModel
 	var tran []ebs_fields.EBSResponse
 	var count int64
 	var totAmount dashboardStats
@@ -272,7 +279,7 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		return
 	}
 
-	if err := parseJSON(c, &search); err == nil && search.TerminalID != "" {
+	if search.TerminalID != "" {
 		tran, err = fetchTransactions(
 			c.UserContext(),
 			db,

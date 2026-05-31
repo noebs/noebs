@@ -508,6 +508,11 @@ Last updated: 2026-05-31
     - Fix: route projection persistence through the shared transaction insert/replay validator so exact duplicate events are idempotent and mismatched duplicates return `ErrDuplicateTransaction` without mutating the projection.
     - Tests: `go test -count=1 -v ./store -run 'TestStoreUpsertTransactionProjection|TestUpsertTransactionProjectionRejectsUnmarshalablePayloadBeforeDB|TestStoreCreateTransactionWithEventOutboxLifecycle'` (`TestStoreUpsertTransactionProjection` and `TestStoreCreateTransactionWithEventOutboxLifecycle` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./adminreporting -run 'TestStoreTransactionProjectionUsesAdminReportingScope|TestStoreTransactionProjectionRejectsMissingInputs'` (`TestStoreTransactionProjectionUsesAdminReportingScope` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./internal/eventing -run 'TestAdminReportingProjector|TestTransactionRecorded'`; `go test -count=1 ./store ./adminreporting ./internal/eventing`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+102. Dashboard browser search swallowed malformed JSON and returned unfiltered data.
+    - Evidence: `BrowserDashboard` ignored `parseJSON` failures when parsing the optional search body. A malformed non-empty body therefore skipped the intended terminal filter and fell back to the full tenant transaction list after DB work had already started.
+    - Fix: parse any non-empty search body at the handler boundary before DB access, reject malformed JSON as HTTP 400, and keep empty bodies as the explicit unfiltered request shape.
+    - Tests: `go test -count=1 -v ./dashboard -run 'TestBrowserDashboardRejectsMalformedSearchBeforeDB|TestDashboardPaginationRejectsInvalidInputsBeforeDB|TestDashboardHandlersDoNotIgnoreRuntimeErrors'`; `go test -count=1 ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
