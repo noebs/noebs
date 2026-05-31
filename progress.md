@@ -22,6 +22,7 @@
 - Fixed store transaction and notification readers so malformed persisted JSON returns contextual decode errors instead of zero-value payloads.
 - Fixed OTP verification so verified-user flag updates are required to succeed and the returned user reflects the persisted verified state.
 - Fixed bill due-amount parsing so malformed gateway payment-info maps return typed validation errors instead of panics or empty amounts.
+- Fixed merchant NEC bill parsing so malformed receipt maps return typed errors instead of panics or silently zeroed amounts.
 
 Verification:
 

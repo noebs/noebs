@@ -2,7 +2,10 @@ package merchant
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/go-playground/validator/v10"
@@ -43,6 +46,8 @@ const (
 	e15BillPayment       = "0010050001"
 )
 
+var ErrInvalidBillInfo = errors.New("invalid bill info")
+
 type necBill struct {
 	SalesAmount  float64 `json:"SalesAmount"`
 	FixedFee     float64 `json:"FixedFee"`
@@ -60,7 +65,7 @@ func (n *necBill) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, n)
 }
 
-func (n *necBill) NewFromMap(f map[string]interface{}) {
+func (n *necBill) NewFromMap(f map[string]interface{}) error {
 	/*
 	   "accountNo": "AM042111907231",
 	   "customerName": "ALSAFIE BAKHIEYT HEMYDAN",
@@ -72,9 +77,68 @@ func (n *necBill) NewFromMap(f map[string]interface{}) {
 	   "unitsInKWh": "66.7",
 	   "waterFees": "0.00"
 	*/
-	n.SalesAmount, _ = strconv.ParseFloat(f["netAmount"].(string), 32)
-	n.CustomerName = f["customerName"].(string)
-	n.FixedFee, _ = strconv.ParseFloat(f["meterFees"].(string), 32)
-	n.MeterNumber = f["meterNumber"].(string)
-	n.Token = f["token"].(string)
+	salesAmount, err := requiredBillFloat(f, "netAmount")
+	if err != nil {
+		return err
+	}
+	customerName, err := requiredBillString(f, "customerName")
+	if err != nil {
+		return err
+	}
+	fixedFee, err := requiredBillFloat(f, "meterFees")
+	if err != nil {
+		return err
+	}
+	meterNumber, err := requiredBillString(f, "meterNumber")
+	if err != nil {
+		return err
+	}
+	token, err := requiredBillString(f, "token")
+	if err != nil {
+		return err
+	}
+
+	n.SalesAmount = salesAmount
+	n.CustomerName = customerName
+	n.FixedFee = fixedFee
+	n.MeterNumber = meterNumber
+	n.Token = token
+	return nil
+}
+
+func requiredBillString(fields map[string]interface{}, key string) (string, error) {
+	value, ok := fields[key]
+	if !ok {
+		return "", fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
+	}
+	text, ok := value.(string)
+	if !ok || strings.TrimSpace(text) == "" {
+		return "", fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
+	}
+	return text, nil
+}
+
+func requiredBillFloat(fields map[string]interface{}, key string) (float64, error) {
+	value, ok := fields[key]
+	if !ok {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
+	}
+	switch typed := value.(type) {
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		if err != nil {
+			return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
+		}
+		return parsed, nil
+	case json.Number:
+		parsed, err := typed.Float64()
+		if err != nil {
+			return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
+		}
+		return parsed, nil
+	case float64:
+		return typed, nil
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
+	}
 }
