@@ -114,6 +114,26 @@ func TestStore_CreateUser_MissingTenantID(t *testing.T) {
 	}
 }
 
+func TestStore_APIKeyRequiresExplicitFields(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	if err := s.CreateAPIKey(ctx, "tenant", " ", "api-key"); !errors.Is(err, ErrMissingEmail) {
+		t.Fatalf("CreateAPIKey(missing email) error = %v, want %v", err, ErrMissingEmail)
+	}
+	if err := s.CreateAPIKey(ctx, "tenant", "user@example.test", " "); !errors.Is(err, ErrMissingAPIKey) {
+		t.Fatalf("CreateAPIKey(missing api key) error = %v, want %v", err, ErrMissingAPIKey)
+	}
+	if _, err := s.ValidateAPIKey(ctx, "tenant", " ", "api-key"); !errors.Is(err, ErrMissingEmail) {
+		t.Fatalf("ValidateAPIKey(missing email) error = %v, want %v", err, ErrMissingEmail)
+	}
+	if _, err := s.ValidateAPIKey(ctx, "tenant", "user@example.test", " "); !errors.Is(err, ErrMissingAPIKey) {
+		t.Fatalf("ValidateAPIKey(missing api key) error = %v, want %v", err, ErrMissingAPIKey)
+	}
+	if _, err := s.ValidateAPIKeyValue(ctx, "tenant", " "); !errors.Is(err, ErrMissingAPIKey) {
+		t.Fatalf("ValidateAPIKeyValue(missing api key) error = %v, want %v", err, ErrMissingAPIKey)
+	}
+}
+
 func TestStore_UserWritesDoNotPersistMainExpDate(t *testing.T) {
 	ctx := context.Background()
 	s := newIdentityAuthTestStore(t, ctx)

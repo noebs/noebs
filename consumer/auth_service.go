@@ -34,7 +34,10 @@ func (s *Service) GenerateAPIKey(ctx context.Context, tenantID, email string) (s
 	if email == "" {
 		return "", errors.New("missing email")
 	}
-	k, _ := gateway.GenerateAPIKey()
+	k, err := gateway.GenerateAPIKey()
+	if err != nil {
+		return "", err
+	}
 	if err := s.Store.CreateAPIKey(ctx, tenantID, email, k); err != nil {
 		return "", err
 	}

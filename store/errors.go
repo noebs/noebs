@@ -18,6 +18,8 @@ var (
 	ErrMissingBillerID       = errors.New("missing biller_id")
 	ErrMissingData           = errors.New("missing data")
 	ErrMissingBillType       = errors.New("missing bill_type")
+	ErrMissingEmail          = errors.New("missing email")
+	ErrMissingAPIKey         = errors.New("missing api_key")
 	ErrMissingEventID        = errors.New("missing event id")
 	ErrMissingEventKey       = errors.New("missing event key")
 	ErrMissingEventTopic     = errors.New("missing event topic")

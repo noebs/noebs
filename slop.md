@@ -353,6 +353,11 @@ Last updated: 2026-05-31
     - Fix: switch hold transaction cleanup to an explicit committed flag so every non-committed exit rolls back regardless of how the error is returned.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestCreateHoldInsufficientFundsRollsBack|TestReleaseHoldValidation|TestHoldValidation|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+71. API key persistence accepted empty auth material.
+    - Evidence: `CreateAPIKey`, `ValidateAPIKey`, and `ValidateAPIKeyValue` validated only tenant ID. Direct store calls could create rows with empty emails or empty API keys, and validation calls could query empty credentials instead of failing at the auth store boundary. The consumer service also ignored `GenerateAPIKey` entropy failures.
+    - Fix: add typed store errors for missing email/API key, trim/lowercase email at the store boundary, reject empty API key values before DB access, and propagate API key generation errors.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_APIKeyRequiresExplicitFields|TestStore_IdentityTenantValidationFailsBeforeDB'`; `go test -count=1 -v ./consumer -run 'TestAuthServiceTenantValidationFailsBeforeDB|TestGenerateAPIKey'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

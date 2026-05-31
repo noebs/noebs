@@ -97,12 +97,20 @@ func (s *Store) CreateAPIKey(ctx context.Context, tenantID, email, apiKey string
 	if err != nil {
 		return err
 	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return ErrMissingEmail
+	}
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return ErrMissingAPIKey
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("INSERT INTO api_keys(tenant_id, email, api_key, created_at) VALUES(?, ?, ?, ?) ON CONFLICT(tenant_id, email) DO UPDATE SET api_key = excluded.api_key")
-	_, err = db.ExecContext(ctx, stmt, tenantID, strings.ToLower(email), apiKey, time.Now().UTC())
+	_, err = db.ExecContext(ctx, stmt, tenantID, email, apiKey, time.Now().UTC())
 	return err
 }
 
@@ -111,13 +119,21 @@ func (s *Store) ValidateAPIKey(ctx context.Context, tenantID, email, apiKey stri
 	if err != nil {
 		return false, err
 	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return false, ErrMissingEmail
+	}
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return false, ErrMissingAPIKey
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return false, err
 	}
 	stmt := s.DB.Rebind("SELECT api_key FROM api_keys WHERE tenant_id = ? AND email = ?")
 	var stored string
-	if err := db.GetContext(ctx, &stored, stmt, tenantID, strings.ToLower(email)); err != nil {
+	if err := db.GetContext(ctx, &stored, stmt, tenantID, email); err != nil {
 		return false, err
 	}
 	return stored == apiKey, nil
@@ -127,6 +143,10 @@ func (s *Store) ValidateAPIKeyValue(ctx context.Context, tenantID, apiKey string
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return false, err
+	}
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return false, ErrMissingAPIKey
 	}
 	db, err := s.ensureDB()
 	if err != nil {
