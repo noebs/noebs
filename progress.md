@@ -56,6 +56,7 @@
 - Fixed withdrawal validation so cross-currency payouts can reach the existing FX conversion path instead of failing on wallet currency before rate lookup.
 - Fixed terminal PSP status replays so existing response evidence and confirmation timestamps cannot be silently rewritten by same-status updates.
 - Fixed device-token writes so the store no longer creates partial users when updating a missing mobile; missing targets now return `sql.ErrNoRows`.
+- Fixed targeted user/card writes so missing users/cards return `sql.ErrNoRows`, card targets are required before DB access, and `SetMainCard` rolls back when the requested card is absent.
 
 Verification:
 
@@ -222,6 +223,11 @@ Verification:
 - `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod|TestListAvailablePSPMethodsValidation'`
 - `go test -count=1 -v ./wallet/store -run 'TestListAvailablePSPMethodsPaginatesAfterScopedEligibility|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container cases skipped locally when the container runtime is unavailable)
 - `go test -count=1 ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_UserWritesDoNotPersistMainExpDate|TestStore_UpdateUserRequiresExplicitTarget|TestStore_CardTargetedWritesRequirePAN|TestStore_SetMainCard_RequiresPAN|TestStoreTargetedUpdatesReportMissingRows|TestStore_SetMainCardMissingTargetRollsBackReset'` (Postgres container cases skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./store`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

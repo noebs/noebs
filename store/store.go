@@ -326,15 +326,14 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 	if err != nil {
 		return err
 	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
 	if user == nil {
 		return ErrMissingUser
 	}
 	if user.ID <= 0 {
 		return ErrInvalidUserID
+	}
+	if s == nil {
+		return fmt.Errorf("nil db")
 	}
 	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
 		return err
@@ -342,12 +341,16 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 	if err := s.encryptUserFields(user); err != nil {
 		return err
 	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
 	user.UpdatedAt = time.Now().UTC()
 	stmt := s.DB.Rebind(`UPDATE users SET
 		password = ?, fullname = ?, username = ?, gender = ?, birthday = ?, email = ?, is_merchant = ?, public_key = ?, device_id = ?,
 		otp = ?, signed_otp = ?, device_token = ?, is_password_otp = ?, main_card = ?, main_card_enc = ?, main_expdate = ?, language = ?, is_verified = ?, mobile = ?, updated_at = ?
 		WHERE tenant_id = ? AND id = ?`)
-	_, err = db.ExecContext(ctx, stmt,
+	return execContextRequireRowsAffected(ctx, db, stmt,
 		user.Password,
 		user.Fullname,
 		user.Username,
@@ -371,7 +374,6 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 		tenantID,
 		user.ID,
 	)
-	return err
 }
 
 func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID int64, updates map[string]any) error {
@@ -575,6 +577,13 @@ func (s *Store) UpdateCard(ctx context.Context, tenantID string, userID int64, c
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
+	card.CardIdx = strings.TrimSpace(card.CardIdx)
+	if card.CardIdx == "" {
+		return ErrMissingPAN
+	}
+	if s == nil {
+		return fmt.Errorf("nil db")
+	}
 	if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
 		return err
 	}
@@ -604,8 +613,7 @@ func (s *Store) UpdateCard(ctx context.Context, tenantID string, userID int64, c
 		userID,
 	}
 	args = append(args, panArgs...)
-	_, err = db.ExecContext(ctx, stmt, args...)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, args...)
 }
 
 func (s *Store) DeleteCard(ctx context.Context, tenantID string, userID int64, cardIdx string) error {
@@ -616,6 +624,10 @@ func (s *Store) DeleteCard(ctx context.Context, tenantID string, userID int64, c
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
+	cardIdx = strings.TrimSpace(cardIdx)
+	if cardIdx == "" {
+		return ErrMissingPAN
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
@@ -624,8 +636,7 @@ func (s *Store) DeleteCard(ctx context.Context, tenantID string, userID int64, c
 	stmt := s.DB.Rebind("UPDATE cards SET deleted_at = ? WHERE tenant_id = ? AND user_id = ? AND " + panClause + " AND deleted_at IS NULL")
 	args := []any{time.Now().UTC(), tenantID, userID}
 	args = append(args, s.panLookupArgs(cardIdx)...)
-	_, err = db.ExecContext(ctx, stmt, args...)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, args...)
 }
 
 func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, cardIdx string) error {
@@ -636,7 +647,8 @@ func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, 
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
-	if strings.TrimSpace(cardIdx) == "" {
+	cardIdx = strings.TrimSpace(cardIdx)
+	if cardIdx == "" {
 		return ErrMissingPAN
 	}
 	db, err := s.ensureDB()
@@ -656,9 +668,19 @@ func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, 
 	setStmt := db.Rebind("UPDATE cards SET is_main = TRUE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND " + panClause + " AND deleted_at IS NULL")
 	args := []any{time.Now().UTC(), tenantID, userID}
 	args = append(args, s.panLookupArgs(cardIdx)...)
-	if _, err := tx.ExecContext(ctx, setStmt, args...); err != nil {
+	result, err := tx.ExecContext(ctx, setStmt, args...)
+	if err != nil {
 		_ = tx.Rollback()
 		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if affected == 0 {
+		_ = tx.Rollback()
+		return sql.ErrNoRows
 	}
 	return tx.Commit()
 }

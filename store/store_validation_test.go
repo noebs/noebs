@@ -477,6 +477,18 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 		{"UpdateUserColumns", func() error {
 			return s.UpdateUserColumns(ctx, tenantID, 999, map[string]any{"fullname": "Missing User"})
 		}},
+		{"UpdateUser", func() error {
+			return s.UpdateUser(ctx, tenantID, &ebs_fields.User{Model: ebs_fields.Model{ID: 999}, Mobile: "0990000000"})
+		}},
+		{"UpdateCard", func() error {
+			return s.UpdateCard(ctx, tenantID, 999, ebs_fields.Card{CardIdx: "9222081700000000"})
+		}},
+		{"DeleteCard", func() error {
+			return s.DeleteCard(ctx, tenantID, 999, "9222081700000000")
+		}},
+		{"SetMainCard", func() error {
+			return s.SetMainCard(ctx, tenantID, 999, "9222081700000000")
+		}},
 		{"MarkTokenPaid", func() error {
 			return s.MarkTokenPaid(ctx, tenantID, "missing-token")
 		}},
@@ -496,6 +508,71 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 				t.Fatalf("%s error = %v, want %v", tt.name, err, sql.ErrNoRows)
 			}
 		})
+	}
+}
+
+func TestStore_UpdateUserRequiresExplicitTarget(t *testing.T) {
+	s := &Store{}
+	if err := s.UpdateUser(context.Background(), "tenant", nil); !errors.Is(err, ErrMissingUser) {
+		t.Fatalf("UpdateUser(nil) error = %v, want %v", err, ErrMissingUser)
+	}
+	if err := s.UpdateUser(context.Background(), "tenant", &ebs_fields.User{}); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("UpdateUser(invalid id) error = %v, want %v", err, ErrInvalidUserID)
+	}
+}
+
+func TestStore_CardTargetedWritesRequirePAN(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	if err := s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{CardIdx: " "}); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("UpdateCard(missing card index) error = %v, want %v", err, ErrMissingPAN)
+	}
+	if err := s.DeleteCard(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("DeleteCard(missing card index) error = %v, want %v", err, ErrMissingPAN)
+	}
+}
+
+func TestStore_SetMainCardMissingTargetRollsBackReset(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	tenantID := "tenant-main-card-rollback"
+	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeCardVault} {
+		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
+			t.Fatalf("migrate %s: %v", scope, err)
+		}
+	}
+	s := New(db, WithDataKey("test-data-key"))
+	if err := s.EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	user := &ebs_fields.User{Mobile: "0990000000", Username: "0990000000"}
+	if err := s.CreateUser(ctx, tenantID, user); err != nil {
+		t.Fatalf("CreateUser(): %v", err)
+	}
+	valid := true
+	if err := s.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{{
+		Mobile:  "0990000000",
+		Pan:     "9222081700000000",
+		Expiry:  "3001",
+		IsMain:  true,
+		IsValid: &valid,
+	}}); err != nil {
+		t.Fatalf("AddCards(): %v", err)
+	}
+
+	if err := s.SetMainCard(ctx, tenantID, user.ID, "9222081700009999"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("SetMainCard(missing target) error = %v, want %v", err, sql.ErrNoRows)
+	}
+
+	cards, err := s.ListCardsByUserID(ctx, tenantID, user.ID)
+	if err != nil {
+		t.Fatalf("ListCardsByUserID(): %v", err)
+	}
+	if len(cards) != 1 {
+		t.Fatalf("cards length = %d, want 1", len(cards))
+	}
+	if !cards[0].IsMain {
+		t.Fatal("existing main card was reset after missing-target SetMainCard")
 	}
 }
 
@@ -563,7 +640,7 @@ func TestStore_CardExists_RequiresPAN(t *testing.T) {
 }
 
 func TestStore_SetMainCard_RequiresPAN(t *testing.T) {
-	s := newTestStore(t)
+	s := &Store{}
 	if err := s.SetMainCard(context.Background(), "t1", 42, " "); !errors.Is(err, ErrMissingPAN) {
 		t.Fatalf("expected ErrMissingPAN, got %v", err)
 	}

@@ -318,6 +318,11 @@ Last updated: 2026-05-31
     - Fix: require explicit mobile and token values in the store and return `sql.ErrNoRows` when the target user does not already exist.
     - Tests: `go test -count=1 ./store ./consumer`; `go test -count=1 -v ./store -run 'TestStore_UpsertDeviceTokenRequiresExplicitFields|TestStoreTargetedUpdatesReportMissingRows|TestStoreTenantValidation'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestAddDeviceTokenRequiresExplicitInputs|TestUserServiceTenantValidationFailsBeforeDB'`.
 
+64. Targeted user/card writes silently succeeded when rows were missing.
+    - Evidence: `UpdateUser`, `UpdateCard`, `DeleteCard`, and the target update in `SetMainCard` ignored `RowsAffected`. A lower-layer write could report success after mutating nothing, and `SetMainCard` could clear main-card flags before discovering that the requested card never existed.
+    - Fix: require explicit card identifiers before DB access, use rows-affected checks for targeted user/card updates, and roll back `SetMainCard` when the requested target row is absent.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_UserWritesDoNotPersistMainExpDate|TestStore_UpdateUserRequiresExplicitTarget|TestStore_CardTargetedWritesRequirePAN|TestStore_SetMainCard_RequiresPAN|TestStoreTargetedUpdatesReportMissingRows|TestStore_SetMainCardMissingTargetRollsBackReset'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 ./store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
