@@ -136,7 +136,12 @@ Last updated: 2026-05-31
 27. Withdrawal and manual-debit workflows spent reserved funds through the normal double-entry path.
     - Evidence: `CreateHold` already subtracts wallet available balance, but successful withdrawal/manual-debit posting then called `PostDoubleEntry`, which requires available balance again and subtracts it again. The workflow then released the hold after ledger posting, which could restore captured funds to available balance.
     - Fix: add a held double-entry store/activity contract that consumes active hold balance without a second available-balance debit, mark fully consumed holds as `captured`, and route withdrawal/manual-debit ledger posting through that contract.
-    - Tests: `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow`; `go test -count=1 -v ./wallet/store -run TestPostHeldDoubleEntry` (Postgres container case skipped locally because the container runtime is unavailable).
+    - Tests: `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow`; `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestPostHeldDoubleEntryValidation'` (Postgres container case skipped locally because the container runtime is unavailable).
+
+28. Deposit and manual-credit workflows required treasury pre-funding before external credits could post.
+    - Evidence: deposits and manual credits debit a system treasury wallet with `PostDoubleEntry`. `EnsureSystemWallet` creates treasury at zero balance, so the first real deposit/manual credit can fail with `ErrInsufficientFunds` before crediting the target wallet.
+    - Fix: add an explicit system-debit double-entry store/activity contract that only permits system debit wallets to overdraft, and route deposit/manual-credit ledger posting through it while leaving ordinary transfers on the available-balance path.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow`; `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestPostHeldDoubleEntryValidation'` (Postgres container case skipped locally because the container runtime is unavailable).
 
 ## Open Candidates
 

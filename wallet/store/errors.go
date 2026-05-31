@@ -107,5 +107,6 @@ var (
 	ErrHoldNotActive                = errors.New("hold not active")
 	ErrHoldWalletMismatch           = errors.New("hold wallet mismatch")
 	ErrHoldAmountExceeded           = errors.New("hold amount exceeded")
+	ErrSystemDebitWalletRequired    = errors.New("system debit wallet required")
 	ErrPSPTransactionNotFound       = errors.New("psp transaction not found")
 )

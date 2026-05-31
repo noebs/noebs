@@ -31,6 +31,7 @@
 - Fixed Google OAuth user creation/linking so provider lookup errors are not treated as misses and new users plus auth accounts are persisted atomically.
 - Fixed wallet workflow activity-name scheduling and compensation handling so hold release, usage, ownership, and manual-transfer status failures are not hidden.
 - Fixed held wallet debit accounting so withdrawal/manual-debit workflows consume reserved holds instead of requiring available balance twice or releasing captured funds.
+- Fixed external credit ledger posting so deposits/manual credits use an explicit system-debit path instead of requiring treasury pre-funding.
 
 Verification:
 
@@ -49,7 +50,7 @@ Verification:
 - `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./wallet/activity ./wallet/workflow`
 - `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow`
-- `go test -count=1 -v ./wallet/store -run TestPostHeldDoubleEntry`
+- `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestPostHeldDoubleEntryValidation'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 

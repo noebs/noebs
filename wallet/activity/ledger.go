@@ -31,6 +31,13 @@ func (a *LedgerActivities) ExecuteHeldDoubleEntry(ctx context.Context, params wa
 	return a.Store.PostHeldDoubleEntry(ctx, params)
 }
 
+func (a *LedgerActivities) ExecuteSystemDebitDoubleEntry(ctx context.Context, params walletstore.DoubleEntryParams) (*walletstore.DoubleEntryResult, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Store.PostSystemDebitDoubleEntry(ctx, params)
+}
+
 func (a *LedgerActivities) ValidateDoubleEntry(ctx context.Context, params walletstore.DoubleEntryParams) (struct{}, error) {
 	_ = ctx
 	if a == nil {
@@ -45,6 +52,14 @@ func (a *LedgerActivities) ValidateHeldDoubleEntry(ctx context.Context, params w
 		return struct{}{}, ErrMissingStore
 	}
 	return struct{}{}, walletstore.ValidateHeldDoubleEntryParams(params)
+}
+
+func (a *LedgerActivities) ValidateSystemDebitDoubleEntry(ctx context.Context, params walletstore.DoubleEntryParams) (struct{}, error) {
+	_ = ctx
+	if a == nil {
+		return struct{}{}, ErrMissingStore
+	}
+	return struct{}{}, walletstore.ValidateDoubleEntryParams(params)
 }
 
 func (a *LedgerActivities) CreateHold(ctx context.Context, params walletstore.HoldParams) (*walletstore.BalanceHold, error) {

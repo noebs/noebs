@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPostHeldDoubleEntryConsumesReservedBalance(t *testing.T) {
+func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
@@ -164,6 +164,59 @@ func TestPostHeldDoubleEntryConsumesReservedBalance(t *testing.T) {
 	}
 	assertWalletBalances(t, ctx, store, tenantID, userWallet.ID, 0, 0)
 	assertHold(t, ctx, db, tenantID, hold.ID, HoldStatusCaptured, 0, true)
+
+	clearingWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeSystem,
+		OwnerID:   SystemPSPClearing,
+		Currency:  "AED",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure psp clearing wallet: %v", err)
+	}
+	receiverWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "user-2",
+		UserID:    2,
+		Currency:  "AED",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure receiver wallet: %v", err)
+	}
+
+	systemCreditEntry := DoubleEntryParams{
+		TenantID:       tenantID,
+		IdempotencyKey: "deposit-ref:deposit",
+		Currency:       "AED",
+		ReferenceType:  "deposit",
+		ReferenceID:    "deposit-ref",
+		DebitWalletID:  clearingWallet.ID,
+		CreditWalletID: receiverWallet.ID,
+		Amount:         500,
+		Description:    "deposit",
+	}
+	_, err = store.PostDoubleEntry(ctx, systemCreditEntry)
+	if !errors.Is(err, ErrInsufficientFunds) {
+		t.Fatalf("normal system debit error = %v, want %v", err, ErrInsufficientFunds)
+	}
+	if _, err := store.PostSystemDebitDoubleEntry(ctx, systemCreditEntry); err != nil {
+		t.Fatalf("post system debit entry: %v", err)
+	}
+	assertWalletBalances(t, ctx, store, tenantID, clearingWallet.ID, -500, -500)
+	assertWalletBalances(t, ctx, store, tenantID, receiverWallet.ID, 500, 500)
+
+	userDebitEntry := systemCreditEntry
+	userDebitEntry.IdempotencyKey = "not-system-debit"
+	userDebitEntry.DebitWalletID = receiverWallet.ID
+	userDebitEntry.CreditWalletID = feesWallet.ID
+	userDebitEntry.ReferenceID = "not-system-debit"
+	_, err = store.PostSystemDebitDoubleEntry(ctx, userDebitEntry)
+	if !errors.Is(err, ErrSystemDebitWalletRequired) {
+		t.Fatalf("user system-debit error = %v, want %v", err, ErrSystemDebitWalletRequired)
+	}
 }
 
 func TestPostHeldDoubleEntryValidation(t *testing.T) {
@@ -193,6 +246,11 @@ func TestPostHeldDoubleEntryValidation(t *testing.T) {
 	_, err = (&Store{}).PostHeldDoubleEntry(context.Background(), bad)
 	if !errors.Is(err, ErrMissingTenantID) {
 		t.Fatalf("missing tenant error = %v, want %v", err, ErrMissingTenantID)
+	}
+
+	_, err = (&Store{}).PostSystemDebitDoubleEntry(context.Background(), bad.Entry)
+	if !errors.Is(err, ErrMissingTenantID) {
+		t.Fatalf("system debit missing tenant error = %v, want %v", err, ErrMissingTenantID)
 	}
 }
 

@@ -300,11 +300,11 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		Amount:         resolved.WalletCreditAmount,
 		Description:    "deposit",
 	}
-	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, depositEntry).Get(ctx, nil); err != nil {
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateSystemDebitDoubleEntry, depositEntry).Get(ctx, nil); err != nil {
 		return err
 	}
 	var posted walletstore.DoubleEntryResult
-	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, depositEntry).Get(ctx, &posted); err != nil {
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteSystemDebitDoubleEntry, depositEntry).Get(ctx, &posted); err != nil {
 		return err
 	}
 
@@ -1305,6 +1305,13 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			}
 			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteHeldDoubleEntry, heldEntry).Get(ctx, &posted); err != nil {
 				return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
+			}
+		} else if params.TransferType == "manual_credit" {
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateSystemDebitDoubleEntry, entry).Get(ctx, nil); err != nil {
+				return err
+			}
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteSystemDebitDoubleEntry, entry).Get(ctx, &posted); err != nil {
+				return err
 			}
 		} else {
 			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, entry).Get(ctx, nil); err != nil {

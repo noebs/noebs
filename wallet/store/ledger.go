@@ -38,21 +38,33 @@ type HeldDoubleEntryParams struct {
 	Entry  DoubleEntryParams
 }
 
+type doubleEntryMode struct {
+	DebitHoldID               int64
+	AllowSystemDebitOverdraft bool
+}
+
 func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (*DoubleEntryResult, error) {
 	if err := ValidateDoubleEntryParams(params); err != nil {
 		return nil, err
 	}
-	return s.postDoubleEntry(ctx, params, 0)
+	return s.postDoubleEntry(ctx, params, doubleEntryMode{})
 }
 
 func (s *Store) PostHeldDoubleEntry(ctx context.Context, params HeldDoubleEntryParams) (*DoubleEntryResult, error) {
 	if err := ValidateHeldDoubleEntryParams(params); err != nil {
 		return nil, err
 	}
-	return s.postDoubleEntry(ctx, params.Entry, params.HoldID)
+	return s.postDoubleEntry(ctx, params.Entry, doubleEntryMode{DebitHoldID: params.HoldID})
 }
 
-func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, debitHoldID int64) (result *DoubleEntryResult, err error) {
+func (s *Store) PostSystemDebitDoubleEntry(ctx context.Context, params DoubleEntryParams) (*DoubleEntryResult, error) {
+	if err := ValidateDoubleEntryParams(params); err != nil {
+		return nil, err
+	}
+	return s.postDoubleEntry(ctx, params, doubleEntryMode{AllowSystemDebitOverdraft: true})
+}
+
+func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, mode doubleEntryMode) (result *DoubleEntryResult, err error) {
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -101,8 +113,8 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, d
 	}
 
 	var debitHold *BalanceHold
-	if debitHoldID > 0 {
-		debitHold, err = s.lockHold(ctx, tx, params.TenantID, debitHoldID)
+	if mode.DebitHoldID > 0 {
+		debitHold, err = s.lockHold(ctx, tx, params.TenantID, mode.DebitHoldID)
 		if err != nil {
 			return nil, err
 		}
@@ -120,7 +132,10 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, d
 	if debitWallet.Currency != params.Currency || creditWallet.Currency != params.Currency {
 		return nil, ErrCurrencyMismatch
 	}
-	if debitHold == nil && debitWallet.AvailableBalance < params.Amount {
+	if mode.AllowSystemDebitOverdraft && debitWallet.OwnerType != OwnerTypeSystem {
+		return nil, ErrSystemDebitWalletRequired
+	}
+	if debitHold == nil && !mode.AllowSystemDebitOverdraft && debitWallet.AvailableBalance < params.Amount {
 		return nil, ErrInsufficientFunds
 	}
 	if debitHold != nil && debitWallet.Balance < params.Amount {
