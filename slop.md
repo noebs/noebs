@@ -583,6 +583,11 @@ Last updated: 2026-05-31
     - Fix: keep nil selection as the explicit fallback signal, but when no fallback destination exists return `ErrFundingSourceNotFound` so callers see that no eligible funding source was available.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestWithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound|TestWithdrawalApprovalRejectionReturnsHoldReleaseError'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+117. Payment-token card selection could panic or silently choose the wrong card.
+    - Evidence: `ExpandCard` built a regular expression from request-supplied card text and compiled it with `regexp.MustCompile`, so malformed selectors like `****0000` could panic the service. The same helper returned the first matching PAN when multiple user cards shared the same first and last 4 digits, creating a token for an arbitrary card.
+    - Fix: replace regex matching with explicit first/last-4 digit matching, reject malformed selectors with typed errors, and fail ambiguous selectors instead of choosing the first card.
+    - Tests: `go test -count=1 -v ./ebs_fields ./consumer -run 'TestExpandCard|TestGeneratePaymentTokenRejectsMalformedCardSelectorBeforeStore|TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore'`; `go test -count=1 ./ebs_fields ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

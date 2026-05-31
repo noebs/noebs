@@ -128,3 +128,13 @@ func TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore(t *testing.T) {
 		t.Fatalf("GeneratePaymentTokenForUserID() error = %v, want %v", err, store.ErrInvalidAmount)
 	}
 }
+
+func TestGeneratePaymentTokenRejectsMalformedCardSelectorBeforeStore(t *testing.T) {
+	service := Service{}
+	_, _, _, err := service.generatePaymentTokenForCards(context.Background(), "tenant-a", 1, []ebs_fields.Card{
+		{Pan: "9222081700000000"},
+	}, ebs_fields.Token{ToCard: "****0000", Amount: 100})
+	if !errors.Is(err, ebs_fields.ErrInvalidCardQuery) {
+		t.Fatalf("generatePaymentTokenForCards() error = %v, want %v", err, ebs_fields.ErrInvalidCardQuery)
+	}
+}

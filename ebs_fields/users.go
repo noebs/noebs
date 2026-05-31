@@ -4,7 +4,6 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
-	"regexp"
 	"strings"
 	"time"
 
@@ -297,6 +296,13 @@ type Card struct {
 	IsValid  *bool  `json:"is_valid"`
 }
 
+var (
+	ErrInvalidCardQuery   = errors.New("invalid card query")
+	ErrEmptyCards         = errors.New("empty_cards")
+	ErrCardQueryNotFound  = errors.New("card query not found")
+	ErrAmbiguousCardQuery = errors.New("ambiguous card query")
+)
+
 type CacheCards struct {
 	Model
 	TenantID  string `json:"-"`
@@ -327,30 +333,46 @@ func (c CacheCards) NewCardFromCached(id int) Card {
 	}
 }
 
-// ExpandCard performs a regex search for the first and last 4 digits of a pan
-// and retrieves the matching pan number
+// ExpandCard resolves a masked or full PAN selector by matching the first and last 4 digits.
 func ExpandCard(card string, userCards []Card) (string, error) {
+	card = strings.TrimSpace(card)
 	if len(card) < 8 {
-		return "", errors.New("short query")
+		return "", ErrInvalidCardQuery
 	}
-	if userCards == nil {
-		return "", errors.New("empty_cards")
+	if len(userCards) == 0 {
+		return "", ErrEmptyCards
 	}
 
-	// Create a list of strings
-	var cards []string
-	for _, v := range userCards {
-		cards = append(cards, v.Pan)
+	prefix := card[:4]
+	suffix := card[len(card)-4:]
+	if !digitsOnly(prefix) || !digitsOnly(suffix) {
+		return "", ErrInvalidCardQuery
 	}
-	search := card[:4] + ".*" + card[len(card)-4:] + "$"
-	// Compile the regular expression pattern that matches the search string
-	pattern := regexp.MustCompile(search)
-	// Iterate through the list of strings
-	for _, item := range cards {
-		// Check if the list item matches the search string using the regular expression
-		if pattern.MatchString(item) {
-			return item, nil
+
+	var match string
+	for _, userCard := range userCards {
+		pan := strings.TrimSpace(userCard.Pan)
+		if strings.HasPrefix(pan, prefix) && strings.HasSuffix(pan, suffix) {
+			if match != "" && pan != match {
+				return "", ErrAmbiguousCardQuery
+			}
+			match = pan
 		}
 	}
-	return "", errors.New("not able to find a match")
+	if match == "" {
+		return "", ErrCardQueryNotFound
+	}
+	return match, nil
+}
+
+func digitsOnly(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
