@@ -573,6 +573,11 @@ Last updated: 2026-05-31
     - Fix: make query appending return errors, propagate malformed configured query strings as `ErrPSPConfigInvalid`, preserve valid existing query values, and verify status checks fail before making an HTTP call when the configured query is invalid.
     - Tests: `go test -count=1 -v ./wallet/psp/httpjson -run 'TestAppendQueryForMethod|TestGetTransactionStatusRejectsMalformedConfiguredQueryBeforeHTTP'`; `go test -count=1 ./wallet/psp/httpjson ./wallet/psp ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+115. Dashboard transaction query parsing silently rewrote malformed filters and missed multi-word fields.
+    - Evidence: `sortTable` normalized unsupported search fields to an empty value, then defaulted non-empty searches to `terminal_id`; unsupported sort fields became `id`, unsupported sort orders became `ASC`, and `mapSearchField` only inserted the first camelCase separator. A request for `systemTraceAuditNumber` could therefore miss `system_trace_audit_number` and malformed query controls could run a different query than requested.
+    - Fix: validate dashboard search/sort fields and sort order before store work, return a typed bad-request error for invalid provided controls, keep defaults only for absent controls, and replace the one-transition camelCase mapper with deterministic snake_case conversion that preserves acronym cases.
+    - Tests: `go test -count=1 -v ./dashboard -run 'Test_mapSearchField|TestSortTable|TestDashboardTransactionQueryRejectsInvalidFieldsBeforeDB|TestDashboardPaginationRejectsInvalidInputsBeforeDB'`; `go test -count=1 ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

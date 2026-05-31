@@ -19,7 +19,10 @@ import (
 
 var log = logrus.New()
 
-var ErrInvalidPagination = errors.New("invalid pagination")
+var (
+	ErrInvalidPagination     = errors.New("invalid pagination")
+	ErrInvalidDashboardQuery = errors.New("invalid dashboard query")
+)
 
 type Service struct {
 	Store       *store.Store
@@ -47,6 +50,10 @@ func parsePositiveQueryInt(raw string, defaultValue int) (int, error) {
 
 func rejectInvalidPagination(c *fiber.Ctx, err error) {
 	jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "invalid_pagination", "message": err.Error()})
+}
+
+func rejectInvalidDashboardQuery(c *fiber.Ctx, err error) {
+	jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "invalid_query", "message": err.Error()})
 }
 
 // MerchantViews deprecated in favor of using the react-based dashboard features.
@@ -162,7 +169,7 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 
 	search := c.Query("search", "")
 	searchField := c.Query("field", "")
-	sortField := c.Query("sort_field", "id")
+	sortField := c.Query("sort_field", "")
 	sortCase := c.Query("order", "")
 
 	if perPage != "" {
@@ -176,6 +183,10 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 	page, err := parsePositiveQueryInt(p, 1)
 	if err != nil {
 		rejectInvalidPagination(c, err)
+		return
+	}
+	if err := validateDashboardTransactionQuery(searchField, search, sortField, sortCase); err != nil {
+		rejectInvalidDashboardQuery(c, err)
 		return
 	}
 
@@ -192,6 +203,10 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 	}
 	tran, count, err := sortTable(db, tenantID, searchField, search, sortField, sortCase, int(offset), pageSize)
 	if err != nil {
+		if errors.Is(err, ErrInvalidDashboardQuery) {
+			rejectInvalidDashboardQuery(c, err)
+			return
+		}
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}

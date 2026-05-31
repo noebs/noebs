@@ -108,14 +108,24 @@ func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
 }
 
 func sortTable(db *sqlx.DB, tenantID, searchField, search, sortField, sortCase string, offset, pageSize int) ([]ebs_fields.EBSResponse, int, error) {
+	var err error
+	searchField, err = normalizeSearchField(searchField, search != "")
+	if err != nil {
+		return nil, 0, err
+	}
+	sortField, err = normalizeSortField(sortField)
+	if err != nil {
+		return nil, 0, err
+	}
+	sortCase, err = normalizeSortCase(sortCase)
+	if err != nil {
+		return nil, 0, err
+	}
+	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
+
 	if db == nil {
 		return nil, 0, fmt.Errorf("nil db")
 	}
-
-	searchField = normalizeSearchField(searchField)
-	sortField = normalizeSortField(sortField)
-	sortCase = normalizeSortCase(sortCase)
-	log.Printf("the search field and sort fields are: %s, %s", searchField, sortField)
 
 	where := "tenant_id = ?"
 	args := []any{tenantID}
@@ -157,54 +167,89 @@ func sortTable(db *sqlx.DB, tenantID, searchField, search, sortField, sortCase s
 	return transactions, count, nil
 }
 
-func normalizeSearchField(f string) string {
+func validateDashboardTransactionQuery(searchField, search, sortField, sortCase string) error {
+	if _, err := normalizeSearchField(searchField, search != ""); err != nil {
+		return err
+	}
+	if _, err := normalizeSortField(sortField); err != nil {
+		return err
+	}
+	if _, err := normalizeSortCase(sortCase); err != nil {
+		return err
+	}
+	return nil
+}
+
+func normalizeSearchField(f string, searchProvided bool) (string, error) {
 	f = mapSearchField(f)
+	if f == "" {
+		if searchProvided {
+			return "terminal_id", nil
+		}
+		return "", nil
+	}
 	switch f {
 	case "id", "terminal_id", "system_trace_audit_number", "approval_code", "created_at", "tran_date_time", "response_status", "uuid":
-		return f
+		return f, nil
 	default:
-		return ""
+		return "", fmt.Errorf("%w: invalid search field", ErrInvalidDashboardQuery)
 	}
 }
 
-func normalizeSortField(f string) string {
+func normalizeSortField(f string) (string, error) {
 	f = mapSearchField(f)
+	if f == "" {
+		return "id", nil
+	}
 	switch f {
 	case "id", "terminal_id", "system_trace_audit_number", "approval_code", "created_at", "tran_date_time", "tran_amount", "response_status", "response_code":
-		return f
+		return f, nil
 	default:
-		return "id"
+		return "", fmt.Errorf("%w: invalid sort field", ErrInvalidDashboardQuery)
 	}
 }
 
-func normalizeSortCase(sortCase string) string {
+func normalizeSortCase(sortCase string) (string, error) {
+	sortCase = strings.TrimSpace(sortCase)
 	switch strings.ToUpper(sortCase) {
+	case "":
+		return "ASC", nil
+	case "ASC":
+		return "ASC", nil
 	case "DESC":
-		return "DESC"
+		return "DESC", nil
 	default:
-		return "ASC"
+		return "", fmt.Errorf("%w: invalid sort order", ErrInvalidDashboardQuery)
 	}
 }
 
 func mapSearchField(f string) string {
-	/*
-		terminalId: terminal_id
-		tranDateTime: tran_date_time
-		approvalCode: approval_code
-	*/
-	var result = f
-	for i, v := range []rune(f) {
-		if i == 0 {
+	f = strings.TrimSpace(f)
+	if f == "" {
+		return ""
+	}
+	var result strings.Builder
+	runes := []rune(f)
+	for i, r := range runes {
+		if unicode.IsUpper(r) {
+			if i > 0 && shouldSplitWord(runes, i) {
+				result.WriteByte('_')
+			}
+			result.WriteRune(unicode.ToLower(r))
 			continue
 		}
-		if unicode.IsUpper(v) {
-			if !unicode.IsUpper(rune(f[i-1])) {
-				result = result[:i] + "_" + strings.ToLower(string(v)) + f[i+1:]
-				break
-			}
-
-		}
+		result.WriteRune(r)
 	}
-	return strings.ToLower(result)
+	return strings.ToLower(result.String())
+}
 
+func shouldSplitWord(runes []rune, index int) bool {
+	previous := runes[index-1]
+	if unicode.IsLower(previous) || unicode.IsDigit(previous) {
+		return true
+	}
+	if !unicode.IsUpper(previous) || index+1 >= len(runes) {
+		return false
+	}
+	return unicode.IsLower(runes[index+1])
 }

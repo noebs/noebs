@@ -111,6 +111,34 @@ func TestDashboardPaginationRejectsInvalidInputsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestDashboardTransactionQueryRejectsInvalidFieldsBeforeDB(t *testing.T) {
+	service := Service{}
+	app := fiber.New()
+	app.Get("/transactions", func(c *fiber.Ctx) error {
+		service.GetAll(c)
+		return nil
+	})
+
+	tests := []string{
+		"/transactions?search=value&field=unknownField",
+		"/transactions?sort_field=unknownField",
+		"/transactions?order=SIDEWAYS",
+	}
+	for _, path := range tests {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
 func TestBrowserDashboardRejectsMalformedSearchBeforeDB(t *testing.T) {
 	service := Service{}
 	app := fiber.New()
