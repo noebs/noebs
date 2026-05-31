@@ -61,6 +61,16 @@ func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("store transaction projection: %v", err)
 	}
+	if err := service.StoreTransactionProjection(ctx, tenantID, TransactionProjectionCommand{
+		Transaction: &ebs_fields.EBSResponse{
+			UUID:            "projection-uuid",
+			ResponseCode:    0,
+			ResponseMessage: "Approved",
+			TerminalID:      "terminal-a",
+		},
+	}); err != nil {
+		t.Fatalf("exact projection replay: %v", err)
+	}
 	err = service.StoreTransactionProjection(ctx, tenantID, TransactionProjectionCommand{
 		Transaction: &ebs_fields.EBSResponse{
 			UUID:            "projection-uuid",
@@ -69,16 +79,16 @@ func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
 			TerminalID:      "terminal-b",
 		},
 	})
-	if err != nil {
-		t.Fatalf("update transaction projection: %v", err)
+	if !errors.Is(err, store.ErrDuplicateTransaction) {
+		t.Fatalf("mismatched projection replay error = %v, want %v", err, store.ErrDuplicateTransaction)
 	}
 
 	got, err := storeSvc.GetTransactionByUUID(ctx, tenantID, "projection-uuid")
 	if err != nil {
 		t.Fatalf("get projection: %v", err)
 	}
-	if got.TerminalID != "terminal-b" {
-		t.Fatalf("projection terminal = %q, want terminal-b", got.TerminalID)
+	if got.TerminalID != "terminal-a" {
+		t.Fatalf("projection terminal = %q, want terminal-a", got.TerminalID)
 	}
 }
 

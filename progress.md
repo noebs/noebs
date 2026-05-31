@@ -79,6 +79,7 @@
 - Fixed wallet 2FA last-used updates so disabled records cannot receive fresh usage evidence through direct store calls.
 - Fixed EBS transaction recording so repeated gateway UUIDs become exact replays instead of duplicate transaction rows and duplicate outbox events.
 - Fixed user mutation validation so empty profile/update payloads, blank language, and blank password hashes fail as typed boundary/store errors instead of silent success or late DB failures.
+- Fixed admin-reporting transaction projections so duplicate EBS UUID events must be exact replays instead of rewriting reporting rows.
 
 Verification:
 
@@ -441,6 +442,13 @@ Verification:
 - `go test -count=1 -v ./store -run 'TestStore_UserIdentityRequiresExplicitFields|TestStore_UpdateUserColumnsRejectsUnsafeColumns'`
 - `go test -count=1 -v ./consumer -run 'TestUserServiceIdentityInputsFailBeforeStore|TestChangePasswordRequiresExplicitInputsBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB'`
 - `go test -count=1 ./store ./consumer ./consumer/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStoreUpsertTransactionProjection|TestUpsertTransactionProjectionRejectsUnmarshalablePayloadBeforeDB|TestStoreCreateTransactionWithEventOutboxLifecycle'` (`TestStoreUpsertTransactionProjection` and `TestStoreCreateTransactionWithEventOutboxLifecycle` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./adminreporting -run 'TestStoreTransactionProjectionUsesAdminReportingScope|TestStoreTransactionProjectionRejectsMissingInputs'` (`TestStoreTransactionProjectionUsesAdminReportingScope` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./internal/eventing -run 'TestAdminReportingProjector|TestTransactionRecorded'`
+- `go test -count=1 ./store ./adminreporting ./internal/eventing`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

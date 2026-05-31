@@ -104,18 +104,22 @@ func TestStoreUpsertTransactionProjection(t *testing.T) {
 		t.Fatalf("ensure tenant: %v", err)
 	}
 
-	if err := storeSvc.UpsertTransactionProjection(ctx, tenantID, ebs_fields.EBSResponse{UUID: "projection-1", TerminalID: "terminal-a", PAN: "9222081700009999"}); err != nil {
+	first := ebs_fields.EBSResponse{UUID: "projection-1", TerminalID: "terminal-a", PAN: "9222081700009999"}
+	if err := storeSvc.UpsertTransactionProjection(ctx, tenantID, first); err != nil {
 		t.Fatalf("upsert projection: %v", err)
 	}
-	if err := storeSvc.UpsertTransactionProjection(ctx, tenantID, ebs_fields.EBSResponse{UUID: "projection-1", TerminalID: "terminal-b"}); err != nil {
-		t.Fatalf("update projection: %v", err)
+	if err := storeSvc.UpsertTransactionProjection(ctx, tenantID, first); err != nil {
+		t.Fatalf("exact projection replay: %v", err)
+	}
+	if err := storeSvc.UpsertTransactionProjection(ctx, tenantID, ebs_fields.EBSResponse{UUID: "projection-1", TerminalID: "terminal-b"}); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("mismatched projection replay error = %v, want %v", err, ErrDuplicateTransaction)
 	}
 	got, err := storeSvc.GetTransactionByUUID(ctx, tenantID, "projection-1")
 	if err != nil {
 		t.Fatalf("get projection: %v", err)
 	}
-	if got.TerminalID != "terminal-b" {
-		t.Fatalf("terminal = %q, want terminal-b", got.TerminalID)
+	if got.TerminalID != "terminal-a" {
+		t.Fatalf("terminal = %q, want terminal-a", got.TerminalID)
 	}
 }
 
