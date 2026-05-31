@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"strings"
 
 	walletfees "github.com/adonese/noebs/wallet/fees"
 	walletlimits "github.com/adonese/noebs/wallet/limits"
@@ -98,8 +99,8 @@ type Service struct {
 }
 
 func ValidateP2PRequest(req P2PValidationRequest) error {
-	if req.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
+		return err
 	}
 	if req.TransactionType == "" {
 		return walletstore.ErrMissingTransactionType
@@ -120,8 +121,8 @@ func ValidateP2PRequest(req P2PValidationRequest) error {
 }
 
 func ValidateDepositRequest(req DepositValidationRequest) error {
-	if req.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
+		return err
 	}
 	if req.TransactionType == "" {
 		return walletstore.ErrMissingTransactionType
@@ -142,8 +143,8 @@ func ValidateDepositRequest(req DepositValidationRequest) error {
 }
 
 func ValidateWithdrawalRequest(req WithdrawalValidationRequest) error {
-	if req.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
+		return err
 	}
 	if req.TransactionType == "" {
 		return walletstore.ErrMissingTransactionType
@@ -435,42 +436,17 @@ func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) e
 			return ErrPSPDirectionInvalid
 		}
 	}
+	currency = strings.TrimSpace(currency)
 	if currency == "" {
-		return nil
+		return walletstore.ErrMissingCurrency
 	}
 	if len(cfg.EnabledCurrencies) == 0 {
 		return nil
 	}
 	for _, allowed := range cfg.EnabledCurrencies {
-		if equalFold(currency, allowed) {
+		if strings.EqualFold(currency, strings.TrimSpace(allowed)) {
 			return nil
 		}
 	}
 	return ErrPSPCurrencyInvalid
-}
-
-func equalFold(a, b string) bool {
-	if a == b {
-		return true
-	}
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		ra := a[i]
-		rb := b[i]
-		if ra == rb {
-			continue
-		}
-		if ra >= 'A' && ra <= 'Z' {
-			ra = ra - 'A' + 'a'
-		}
-		if rb >= 'A' && rb <= 'Z' {
-			rb = rb - 'A' + 'a'
-		}
-		if ra != rb {
-			return false
-		}
-	}
-	return true
 }

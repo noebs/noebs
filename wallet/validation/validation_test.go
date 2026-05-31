@@ -25,6 +25,7 @@ func TestValidateP2PRequest(t *testing.T) {
 		wantErr error
 	}{
 		{"missing-tenant", func(req *P2PValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
+		{"reserved-tenant", func(req *P2PValidationRequest) { req.TenantID = "default" }, walletstore.ErrInvalidTenantID},
 		{"missing-tx-type", func(req *P2PValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
 		{"missing-currency", func(req *P2PValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
 		{"missing-wallet", func(req *P2PValidationRequest) { req.FromWalletID = uuid.Nil }, walletstore.ErrMissingWalletID},
@@ -61,6 +62,7 @@ func TestValidateDepositRequest(t *testing.T) {
 		wantErr error
 	}{
 		{"missing-tenant", func(req *DepositValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
+		{"reserved-tenant", func(req *DepositValidationRequest) { req.TenantID = "default" }, walletstore.ErrInvalidTenantID},
 		{"missing-tx-type", func(req *DepositValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
 		{"missing-provider", func(req *DepositValidationRequest) { req.ProviderCode = "" }, walletstore.ErrMissingProviderCode},
 		{"missing-currency", func(req *DepositValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
@@ -111,6 +113,7 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 		wantErr error
 	}{
 		{"missing-tenant", func(req *WithdrawalValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
+		{"reserved-tenant", func(req *WithdrawalValidationRequest) { req.TenantID = "default" }, walletstore.ErrInvalidTenantID},
 		{"missing-tx-type", func(req *WithdrawalValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
 		{"missing-provider", func(req *WithdrawalValidationRequest) { req.ProviderCode = "" }, walletstore.ErrMissingProviderCode},
 		{"missing-currency", func(req *WithdrawalValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
@@ -127,6 +130,30 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 				t.Fatalf("expected %v, got %v", tc.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestValidatePSPConfigRequiresExplicitCurrency(t *testing.T) {
+	cfg := &walletstore.PSPConfig{
+		IsActive:          true,
+		SupportsDeposit:   true,
+		EnabledCurrencies: walletstore.StringArray{"USD"},
+	}
+
+	if err := ValidatePSPConfig(cfg, " ", "deposit"); err != walletstore.ErrMissingCurrency {
+		t.Fatalf("ValidatePSPConfig() error = %v, want %v", err, walletstore.ErrMissingCurrency)
+	}
+}
+
+func TestValidatePSPConfigMatchesTrimmedCurrency(t *testing.T) {
+	cfg := &walletstore.PSPConfig{
+		IsActive:          true,
+		SupportsDeposit:   true,
+		EnabledCurrencies: walletstore.StringArray{" USD "},
+	}
+
+	if err := ValidatePSPConfig(cfg, "usd", "deposit"); err != nil {
+		t.Fatalf("ValidatePSPConfig() error = %v, want nil", err)
 	}
 }
 
@@ -253,5 +280,21 @@ func TestResolvePSPDepositAmountsRateLookup(t *testing.T) {
 	}
 	if result.AppliedFXSource != "rates" {
 		t.Fatalf("expected fx source rates, got %s", result.AppliedFXSource)
+	}
+}
+
+func TestResolvePSPDepositAmountsRejectsReservedTenant(t *testing.T) {
+	service := &Service{Store: &walletstore.Store{}}
+
+	_, err := service.ResolvePSPDepositAmounts(t.Context(), PSPAmountResolutionRequest{
+		TenantID:           "default",
+		RequestedAmount:    100,
+		RequestedCurrency:  "USD",
+		SettlementAmount:   100,
+		SettlementCurrency: "USD",
+		WalletCurrency:     "USD",
+	})
+	if err != walletstore.ErrInvalidTenantID {
+		t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, walletstore.ErrInvalidTenantID)
 	}
 }

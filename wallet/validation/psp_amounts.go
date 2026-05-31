@@ -36,8 +36,8 @@ func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountRes
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
-	if req.TenantID == "" {
-		return nil, walletstore.ErrMissingTenantID
+	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
+		return nil, err
 	}
 	if req.RequestedAmount <= 0 {
 		return nil, walletstore.ErrInvalidAmount
