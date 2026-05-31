@@ -67,6 +67,7 @@
 - Fixed KYC profile reads so missing optional rows remain optional but real KYC/passport query errors are returned instead of swallowed.
 - Fixed funding-source verification so `verified` rows require `verified_at`, invalid status/timestamp combinations fail before persistence, and return-to-source withdrawals no longer trust status strings without verification evidence.
 - Fixed withdrawal-destination ownership so `verified` destinations require `ownership_verified_at`, invalid status/timestamp combinations fail before persistence, and withdrawals no longer trust ownership status strings without timestamped evidence.
+- Fixed withdrawal-destination ownership transitions so already verified destinations cannot be downgraded or have their verification timestamp rewritten.
 
 Verification:
 
@@ -367,6 +368,11 @@ Verification:
 - `go test -count=1 -v ./wallet/workflow -run 'TestWithdrawalApprovalRejectionReturnsHoldReleaseError|TestSelectReturnToSourceSkipsIneligibleFundingSources'`
 - `go test -count=1 -v ./wallet/grpc -run 'TestCreateReturnToSourceDestinationRequiresLinkedFundingSource|TestMapErrorMapsPSPValidationFailures'`
 - `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidateWithdrawalDestinationOwnershipTransition|TestUpdateWithdrawalDestinationOwnershipValidation|TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationLinkLedgerEntry'`
+- `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

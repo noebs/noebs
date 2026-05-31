@@ -363,10 +363,20 @@ func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenant
 	if err != nil {
 		return err
 	}
+	existing, err := s.GetWithdrawalDestination(ctx, tenantID, destinationID)
+	if err != nil {
+		return err
+	}
+	if err := ValidateWithdrawalDestinationOwnershipTransition(existing, updated); err != nil {
+		return err
+	}
+	if existing.OwnershipStatus == updated.OwnershipStatus && nullTimeEqual(existing.OwnershipVerifiedAt, updated.OwnershipVerifiedAt) {
+		return nil
+	}
 	stmt := db.Rebind(`UPDATE withdrawal_destinations
 		SET ownership_status = ?, ownership_verified_at = ?, updated_at = ?
-		WHERE tenant_id = ? AND id = ?`)
-	result, err := db.ExecContext(ctx, stmt, status, verifiedAt, updatedAt, tenantID, destinationID)
+		WHERE tenant_id = ? AND id = ? AND ownership_status = ?`)
+	result, err := db.ExecContext(ctx, stmt, status, verifiedAt, updatedAt, tenantID, destinationID, existing.OwnershipStatus)
 	if err != nil {
 		return err
 	}
@@ -375,7 +385,7 @@ func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenant
 		return err
 	}
 	if affected == 0 {
-		return ErrDestinationNotFound
+		return ErrInvalidStatusTransition
 	}
 	return nil
 }

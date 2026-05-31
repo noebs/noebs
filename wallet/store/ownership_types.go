@@ -60,6 +60,28 @@ func ValidateWithdrawalDestinationReadyForWithdrawal(dest *WithdrawalDestination
 	return nil
 }
 
+func ValidateWithdrawalDestinationOwnershipTransition(current *WithdrawalDestination, next WithdrawalDestination) error {
+	if current == nil {
+		return ErrDestinationNotFound
+	}
+	if err := ValidateWithdrawalDestinationOwnership(*current); err != nil {
+		return err
+	}
+	if err := ValidateWithdrawalDestinationOwnership(next); err != nil {
+		return err
+	}
+	if current.OwnershipStatus == DestinationOwnershipStatusVerified {
+		if next.OwnershipStatus != DestinationOwnershipStatusVerified {
+			return ErrInvalidStatusTransition
+		}
+		if !nullTimeEqual(current.OwnershipVerifiedAt, next.OwnershipVerifiedAt) {
+			return ErrInvalidStatusTransition
+		}
+		return nil
+	}
+	return nil
+}
+
 func ValidateOwnershipVerificationStatus(status string) error {
 	switch status {
 	case "":

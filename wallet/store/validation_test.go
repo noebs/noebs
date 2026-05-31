@@ -1013,6 +1013,34 @@ func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidVerificationTime)
 }
 
+func TestValidateWithdrawalDestinationOwnershipTransition(t *testing.T) {
+	now := time.Now().UTC()
+	verified := &WithdrawalDestination{
+		OwnershipStatus:     DestinationOwnershipStatusVerified,
+		OwnershipVerifiedAt: sql.NullTime{Time: now, Valid: true},
+	}
+	if err := ValidateWithdrawalDestinationOwnershipTransition(verified, *verified); err != nil {
+		t.Fatalf("verified ownership replay error = %v", err)
+	}
+
+	downgrade := *verified
+	downgrade.OwnershipStatus = DestinationOwnershipStatusPending
+	downgrade.OwnershipVerifiedAt = sql.NullTime{}
+	assertErrorIs(t, ValidateWithdrawalDestinationOwnershipTransition(verified, downgrade), ErrInvalidStatusTransition)
+
+	rewrite := *verified
+	rewrite.OwnershipVerifiedAt = sql.NullTime{Time: now.Add(time.Second), Valid: true}
+	assertErrorIs(t, ValidateWithdrawalDestinationOwnershipTransition(verified, rewrite), ErrInvalidStatusTransition)
+
+	pending := &WithdrawalDestination{OwnershipStatus: DestinationOwnershipStatusPending}
+	verifiedNext := *verified
+	if err := ValidateWithdrawalDestinationOwnershipTransition(pending, verifiedNext); err != nil {
+		t.Fatalf("pending to verified ownership transition error = %v", err)
+	}
+
+	assertErrorIs(t, ValidateWithdrawalDestinationOwnershipTransition(nil, verifiedNext), ErrDestinationNotFound)
+}
+
 func TestCreateOwnershipVerificationValidation(t *testing.T) {
 	s := &Store{}
 	now := time.Now().UTC()
