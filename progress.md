@@ -349,6 +349,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./consumer/handler -run 'TestAuthRecoveryHandlersRejectMalformedJSONBeforeService|TestGenerateSignInCodeErrorResponse'`
+- `go test -count=1 ./consumer/handler ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

@@ -428,6 +428,11 @@ Last updated: 2026-05-31
     - Fix: require the PSP activity audit store before provider resolution or provider calls, and assert that the constructor carries the loader store into the activity.
     - Tests: `go test -count=1 -v ./wallet/activity -run 'TestRecordInteractionRequiresExplicitProvider|TestNewPSPActivitiesUsesLoaderStoreForAuditing|TestResolveProviderRequiresAuditStoreBeforeProviderWork'`; `go test -count=1 ./wallet/activity`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+86. Auth recovery handlers swallowed malformed JSON bodies.
+    - Evidence: `BalanceStep` and `GenerateSignInCode` ignored `parseJSON` errors, so malformed request bodies became zero-value domain requests and were reclassified as missing mobile/PAN or other downstream failures instead of being rejected at the HTTP boundary.
+    - Fix: return HTTP 400 `bad_request` on malformed JSON before tenant resolution or service calls.
+    - Tests: `go test -count=1 -v ./consumer/handler -run 'TestAuthRecoveryHandlersRejectMalformedJSONBeforeService|TestGenerateSignInCodeErrorResponse'`; `go test -count=1 ./consumer/handler ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -154,7 +154,9 @@ func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 
 func (h *Handler) BalanceStep(c *fiber.Ctx) error {
 	var req consumer.BalanceStepRequest
-	_ = parseJSON(c, &req)
+	if err := parseJSON(c, &req); err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
 
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -207,7 +209,9 @@ func (h *Handler) GenerateSignInCode(c *fiber.Ctx) error {
 
 func (h *Handler) generateSignInCode(c *fiber.Ctx) error {
 	var req gateway.Token
-	_ = parseJSON(c, &req)
+	if err := parseJSON(c, &req); err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
 	if strings.TrimSpace(req.Mobile) == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Mobile number was not sent", "code": "bad_request"})
 	}
