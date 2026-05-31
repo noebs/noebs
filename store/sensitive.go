@@ -42,29 +42,35 @@ func (s *Store) encryptUserFields(user *ebs_fields.User) error {
 	return nil
 }
 
-func (s *Store) hydrateUserFields(ctx context.Context, tenantID string, user *ebs_fields.User) {
+func (s *Store) hydrateUserFields(ctx context.Context, tenantID string, user *ebs_fields.User) error {
 	if s.crypto == nil || user == nil {
-		return
+		return nil
 	}
 	if user.MainCardEnc != "" {
-		if pan, err := s.crypto.Decrypt(user.MainCardEnc); err == nil {
-			user.MainCard = pan
+		pan, err := s.crypto.Decrypt(user.MainCardEnc)
+		if err != nil {
+			return err
 		}
-		return
+		user.MainCard = pan
+		return nil
 	}
 	if looksLikePAN(user.MainCard) {
 		enc, err := s.crypto.Encrypt(user.MainCard)
 		if err != nil || user.ID == 0 {
-			return
+			return err
 		}
 		hash := s.crypto.Hash(user.MainCard)
-		user.MainCardEnc = enc
-		user.MainCard = hash
-		_ = s.updateUserMainCard(ctx, tenantID, user.ID, hash, enc)
-		if pan, err := s.crypto.Decrypt(enc); err == nil {
-			user.MainCard = pan
+		if err := s.updateUserMainCard(ctx, tenantID, user.ID, hash, enc); err != nil {
+			return err
 		}
+		pan, err := s.crypto.Decrypt(enc)
+		if err != nil {
+			return err
+		}
+		user.MainCardEnc = enc
+		user.MainCard = pan
 	}
+	return nil
 }
 
 func (s *Store) updateUserMainCard(ctx context.Context, tenantID string, userID int64, hash, enc string) error {
@@ -108,41 +114,56 @@ func (s *Store) encryptCardFields(card *ebs_fields.Card) error {
 	return nil
 }
 
-func (s *Store) hydrateCardFields(ctx context.Context, tenantID string, card *ebs_fields.Card) {
+func (s *Store) hydrateCardFields(ctx context.Context, tenantID string, card *ebs_fields.Card) error {
 	if s.crypto == nil || card == nil {
-		return
+		return nil
 	}
 	if card.PanEnc != "" {
-		if pan, err := s.crypto.Decrypt(card.PanEnc); err == nil {
-			card.Pan = pan
+		pan, err := s.crypto.Decrypt(card.PanEnc)
+		if err != nil {
+			return err
 		}
+		card.Pan = pan
 	} else if looksLikePAN(card.Pan) {
 		enc, err := s.crypto.Encrypt(card.Pan)
 		if err == nil && card.ID != 0 {
 			hash := s.crypto.Hash(card.Pan)
-			card.PanEnc = enc
-			card.Pan = hash
-			_ = s.updateCardPan(ctx, tenantID, card.ID, hash, enc)
-			if pan, err := s.crypto.Decrypt(enc); err == nil {
-				card.Pan = pan
+			if err := s.updateCardPan(ctx, tenantID, card.ID, hash, enc); err != nil {
+				return err
 			}
+			pan, err := s.crypto.Decrypt(enc)
+			if err != nil {
+				return err
+			}
+			card.PanEnc = enc
+			card.Pan = pan
+		} else if err != nil {
+			return err
 		}
 	}
 	if card.IPINEnc != "" {
-		if pin, err := s.crypto.Decrypt(card.IPINEnc); err == nil {
-			card.IPIN = pin
+		pin, err := s.crypto.Decrypt(card.IPINEnc)
+		if err != nil {
+			return err
 		}
+		card.IPIN = pin
 	} else if card.IPIN != "" {
 		enc, err := s.crypto.Encrypt(card.IPIN)
 		if err == nil && card.ID != 0 {
-			card.IPINEnc = enc
-			card.IPIN = ""
-			_ = s.updateCardIPIN(ctx, tenantID, card.ID, enc)
-			if pin, err := s.crypto.Decrypt(enc); err == nil {
-				card.IPIN = pin
+			if err := s.updateCardIPIN(ctx, tenantID, card.ID, enc); err != nil {
+				return err
 			}
+			pin, err := s.crypto.Decrypt(enc)
+			if err != nil {
+				return err
+			}
+			card.IPINEnc = enc
+			card.IPIN = pin
+		} else if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (s *Store) updateCardPan(ctx context.Context, tenantID string, cardID int64, hash, enc string) error {
@@ -180,26 +201,34 @@ func (s *Store) encryptCacheCardFields(card *ebs_fields.CacheCards) error {
 	return nil
 }
 
-func (s *Store) hydrateCacheCardFields(ctx context.Context, tenantID string, card *ebs_fields.CacheCards) {
+func (s *Store) hydrateCacheCardFields(ctx context.Context, tenantID string, card *ebs_fields.CacheCards) error {
 	if s.crypto == nil || card == nil {
-		return
+		return nil
 	}
 	if card.PanEnc != "" {
-		if pan, err := s.crypto.Decrypt(card.PanEnc); err == nil {
-			card.Pan = pan
+		pan, err := s.crypto.Decrypt(card.PanEnc)
+		if err != nil {
+			return err
 		}
+		card.Pan = pan
 	} else if looksLikePAN(card.Pan) {
 		enc, err := s.crypto.Encrypt(card.Pan)
 		if err == nil && card.ID != 0 {
 			hash := s.crypto.Hash(card.Pan)
-			card.PanEnc = enc
-			card.Pan = hash
-			_ = s.updateCacheCardPan(ctx, tenantID, card.ID, hash, enc)
-			if pan, err := s.crypto.Decrypt(enc); err == nil {
-				card.Pan = pan
+			if err := s.updateCacheCardPan(ctx, tenantID, card.ID, hash, enc); err != nil {
+				return err
 			}
+			pan, err := s.crypto.Decrypt(enc)
+			if err != nil {
+				return err
+			}
+			card.PanEnc = enc
+			card.Pan = pan
+		} else if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (s *Store) updateCacheCardPan(ctx context.Context, tenantID string, cardID int64, hash, enc string) error {
@@ -223,28 +252,36 @@ func (s *Store) encryptTokenFields(token *ebs_fields.Token) (string, string, err
 	return s.crypto.Hash(token.ToCard), enc, nil
 }
 
-func (s *Store) hydrateTokenFields(ctx context.Context, tenantID string, token *ebs_fields.Token) {
+func (s *Store) hydrateTokenFields(ctx context.Context, tenantID string, token *ebs_fields.Token) error {
 	if s.crypto == nil || token == nil {
-		return
+		return nil
 	}
 	if token.ToCardEnc != "" {
-		if pan, err := s.crypto.Decrypt(token.ToCardEnc); err == nil {
-			token.ToCard = pan
+		pan, err := s.crypto.Decrypt(token.ToCardEnc)
+		if err != nil {
+			return err
 		}
-		return
+		token.ToCard = pan
+		return nil
 	}
 	if looksLikePAN(token.ToCard) {
 		enc, err := s.crypto.Encrypt(token.ToCard)
 		if err == nil && token.ID != 0 {
 			hash := s.crypto.Hash(token.ToCard)
-			token.ToCardEnc = enc
-			token.ToCard = hash
-			_ = s.updateTokenCard(ctx, tenantID, token.UUID, hash, enc)
-			if pan, err := s.crypto.Decrypt(enc); err == nil {
-				token.ToCard = pan
+			if err := s.updateTokenCard(ctx, tenantID, token.UUID, hash, enc); err != nil {
+				return err
 			}
+			pan, err := s.crypto.Decrypt(enc)
+			if err != nil {
+				return err
+			}
+			token.ToCardEnc = enc
+			token.ToCard = pan
+		} else if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (s *Store) updateTokenCard(ctx context.Context, tenantID, uuid, hash, enc string) error {

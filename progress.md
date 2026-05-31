@@ -18,6 +18,7 @@
 - Stopped user create/update paths from persisting main-card expiry and constrained generic user-column updates to a known safe set.
 - Fixed dashboard transaction decoding so malformed stored payloads fail loudly and fetch/decode errors return HTTP 500 instead of being swallowed or treated as missing rows.
 - Fixed sensitive-field encryption helpers so crypto failures are returned and failed encryption does not partially mutate user/card/cache-card structs.
+- Fixed sensitive-field hydration so corrupt ciphertext and failed legacy plaintext backfills surface as store read errors.
 
 Verification:
 

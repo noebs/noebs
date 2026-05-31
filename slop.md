@@ -73,6 +73,11 @@ Last updated: 2026-05-31
     - Fix: make sensitive-field encryption helpers return errors, avoid partial mutation on failure, and propagate main-card encryption failures through create/update paths.
     - Tests: `go test -count=1 ./store`.
 
+15. Sensitive-field hydration hid corrupt ciphertext and failed legacy backfills.
+    - Evidence: read-side hydration ignored decrypt errors and dropped errors from best-effort backfill updates for legacy plaintext PAN/IPIN/token fields.
+    - Fix: make hydration helpers return decrypt, encryption, and backfill update errors; propagate those errors from user, card, cache-card, and token read methods.
+    - Tests: `go test -count=1 ./store`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

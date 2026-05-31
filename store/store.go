@@ -212,7 +212,9 @@ func (s *Store) GetUserByMobile(ctx context.Context, tenantID, mobile string) (*
 	if err := db.GetContext(ctx, &user, stmt, tenantID, mobile); err != nil {
 		return nil, err
 	}
-	s.hydrateUserFields(ctx, tenantID, &user)
+	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
@@ -231,7 +233,9 @@ func (s *Store) GetUserByEmailOrMobile(ctx context.Context, tenantID, query stri
 	if err := db.GetContext(ctx, &user, stmt, tenantID, q, q); err != nil {
 		return nil, err
 	}
-	s.hydrateUserFields(ctx, tenantID, &user)
+	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
@@ -254,7 +258,9 @@ func (s *Store) GetUserByCard(ctx context.Context, tenantID, pan string) (*ebs_f
 	if err := db.GetContext(ctx, &user, stmt, args...); err != nil {
 		return nil, err
 	}
-	s.hydrateUserFields(ctx, tenantID, &user)
+	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
@@ -272,7 +278,9 @@ func (s *Store) FindUserByUsername(ctx context.Context, tenantID, username strin
 	if err := db.GetContext(ctx, &user, stmt, tenantID, strings.ToLower(username)); err != nil {
 		return nil, err
 	}
-	s.hydrateUserFields(ctx, tenantID, &user)
+	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
@@ -291,7 +299,9 @@ func (s *Store) GetUserByUsernameEmailOrMobile(ctx context.Context, tenantID, qu
 	if err := db.GetContext(ctx, &user, stmt, tenantID, q, q, q); err != nil {
 		return nil, err
 	}
-	s.hydrateUserFields(ctx, tenantID, &user)
+	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
@@ -462,7 +472,9 @@ func (s *Store) ListCardsByUserID(ctx context.Context, tenantID string, userID i
 		return nil, err
 	}
 	for i := range cards {
-		s.hydrateCardFields(ctx, tenantID, &cards[i])
+		if err := s.hydrateCardFields(ctx, tenantID, &cards[i]); err != nil {
+			return nil, err
+		}
 	}
 	return cards, nil
 }
@@ -486,7 +498,9 @@ func (s *Store) ListCardsByMobile(ctx context.Context, tenantID, mobile string) 
 		return nil, err
 	}
 	for i := range cards {
-		s.hydrateCardFields(ctx, tenantID, &cards[i])
+		if err := s.hydrateCardFields(ctx, tenantID, &cards[i]); err != nil {
+			return nil, err
+		}
 	}
 	return cards, nil
 }
@@ -753,7 +767,9 @@ func (s *Store) GetCacheCard(ctx context.Context, tenantID, pan string) (*ebs_fi
 	if err := db.GetContext(ctx, &card, stmt, args...); err != nil {
 		return nil, err
 	}
-	s.hydrateCacheCardFields(ctx, tenantID, &card)
+	if err := s.hydrateCacheCardFields(ctx, tenantID, &card); err != nil {
+		return nil, err
+	}
 	return &card, nil
 }
 
@@ -951,7 +967,9 @@ func (s *Store) GetTokenByUUID(ctx context.Context, tenantID, uuid string) (*ebs
 	if err := db.GetContext(ctx, &token, stmt, tenantID, uuid); err != nil {
 		return nil, err
 	}
-	s.hydrateTokenFields(ctx, tenantID, &token)
+	if err := s.hydrateTokenFields(ctx, tenantID, &token); err != nil {
+		return nil, err
+	}
 	return &token, nil
 }
 
@@ -1398,7 +1416,9 @@ func (s *Store) FindUserByID(ctx context.Context, tenantID string, id int64) (*e
 	if err := db.GetContext(ctx, &user, stmt, tenantID, id); err != nil {
 		return nil, err
 	}
-	s.hydrateUserFields(ctx, tenantID, &user)
+	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
+		return nil, err
+	}
 	return &user, nil
 }
 
@@ -1449,7 +1469,9 @@ func (s *Store) GetAllTokensByUserID(ctx context.Context, tenantID string, userI
 		return nil, err
 	}
 	for i := range tokens {
-		s.hydrateTokenFields(ctx, tenantID, &tokens[i])
+		if err := s.hydrateTokenFields(ctx, tenantID, &tokens[i]); err != nil {
+			return nil, err
+		}
 	}
 	return tokens, nil
 }
@@ -1472,7 +1494,9 @@ func (s *Store) GetAllTokensByUserIDAndCartID(ctx context.Context, tenantID stri
 		return nil, err
 	}
 	for i := range tokens {
-		s.hydrateTokenFields(ctx, tenantID, &tokens[i])
+		if err := s.hydrateTokenFields(ctx, tenantID, &tokens[i]); err != nil {
+			return nil, err
+		}
 	}
 	return tokens, nil
 }

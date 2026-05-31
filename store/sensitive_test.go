@@ -64,3 +64,52 @@ func TestUpdateUserColumnsReturnsMainCardEncryptionErrors(t *testing.T) {
 		t.Fatal("UpdateUserColumns() error = nil, want encryption error")
 	}
 }
+
+func TestHydrateSensitiveFieldsReturnsDecryptErrors(t *testing.T) {
+	s := New(nil, WithDataKey("test-data-key"))
+
+	user := &ebs_fields.User{MainCardEnc: "enc:invalid"}
+	if err := s.hydrateUserFields(context.Background(), "tenant", user); err == nil {
+		t.Fatal("hydrateUserFields() error = nil, want decrypt error")
+	}
+
+	card := &ebs_fields.Card{PanEnc: "enc:invalid"}
+	if err := s.hydrateCardFields(context.Background(), "tenant", card); err == nil {
+		t.Fatal("hydrateCardFields() error = nil, want decrypt error")
+	}
+
+	cacheCard := &ebs_fields.CacheCards{PanEnc: "enc:invalid"}
+	if err := s.hydrateCacheCardFields(context.Background(), "tenant", cacheCard); err == nil {
+		t.Fatal("hydrateCacheCardFields() error = nil, want decrypt error")
+	}
+
+	token := &ebs_fields.Token{ToCardEnc: "enc:invalid"}
+	if err := s.hydrateTokenFields(context.Background(), "tenant", token); err == nil {
+		t.Fatal("hydrateTokenFields() error = nil, want decrypt error")
+	}
+}
+
+func TestHydrateSensitiveFieldsReturnsBackfillEncryptionErrors(t *testing.T) {
+	withFailingRandomReader(t)
+	s := New(nil, WithDataKey("test-data-key"))
+
+	user := &ebs_fields.User{Model: ebs_fields.Model{ID: 1}, MainCard: "4242424242424242"}
+	if err := s.hydrateUserFields(context.Background(), "tenant", user); err == nil {
+		t.Fatal("hydrateUserFields() error = nil, want backfill encryption error")
+	}
+
+	card := &ebs_fields.Card{Model: ebs_fields.Model{ID: 1}, Pan: "4242424242424242"}
+	if err := s.hydrateCardFields(context.Background(), "tenant", card); err == nil {
+		t.Fatal("hydrateCardFields() error = nil, want backfill encryption error")
+	}
+
+	cacheCard := &ebs_fields.CacheCards{Model: ebs_fields.Model{ID: 1}, Pan: "4242424242424242"}
+	if err := s.hydrateCacheCardFields(context.Background(), "tenant", cacheCard); err == nil {
+		t.Fatal("hydrateCacheCardFields() error = nil, want backfill encryption error")
+	}
+
+	token := &ebs_fields.Token{Model: ebs_fields.Model{ID: 1}, ToCard: "4242424242424242"}
+	if err := s.hydrateTokenFields(context.Background(), "tenant", token); err == nil {
+		t.Fatal("hydrateTokenFields() error = nil, want backfill encryption error")
+	}
+}
