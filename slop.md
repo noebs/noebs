@@ -188,6 +188,11 @@ Last updated: 2026-05-31
     - Fix: require linked funding sources for return-to-source destinations at the gRPC boundary and store layer, validate linked source ownership/currency/withdrawability in the store, and reject pre-seeded destination usage fields.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationFundingSource'`.
 
+38. PSP amount replays could silently rewrite money and FX facts.
+    - Evidence: `AddPSPTransactionAmount` and `AddPSPTransactionAmounts` used `ON CONFLICT ... DO UPDATE` for `(tenant_id, psp_transaction_id, amount_kind, currency)`, so workflow retries with a changed requested/reported/settlement/fee/net amount or FX payload mutated the existing row instead of rejecting a mismatched idempotency replay.
+    - Fix: make PSP amount inserts exact-replay idempotent: conflicts fetch the existing amount row, validate tenant/transaction/kind/amount/currency/FX fields, return the existing row on exact replay, and return `ErrDuplicateAmount` on mismatches.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionAmountReplay|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

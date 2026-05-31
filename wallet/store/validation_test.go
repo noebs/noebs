@@ -1672,6 +1672,131 @@ func TestAddPSPTransactionAmountsValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidAmountKind)
 }
 
+func TestValidatePSPTransactionAmountReplay(t *testing.T) {
+	existing := PSPTransactionAmount{
+		TenantID:         "tenant",
+		PSPTransactionID: 1,
+		AmountKind:       PSPAmountReported,
+		Amount:           100,
+		Currency:         "USD",
+		FxRate:           decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true},
+		FxBaseCurrency:   sql.NullString{String: "USD", Valid: true},
+		FxQuoteCurrency:  sql.NullString{String: "AED", Valid: true},
+		FxSource:         sql.NullString{String: "provider", Valid: true},
+	}
+	if err := ValidatePSPTransactionAmountReplay(&existing, existing); err != nil {
+		t.Fatalf("ValidatePSPTransactionAmountReplay() error = %v", err)
+	}
+
+	cases := map[string]PSPTransactionAmount{
+		"tenant": {
+			TenantID:         "other",
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"psp transaction": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: 2,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"kind": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       PSPAmountSettlement,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"amount": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           101,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"currency": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         "EUR",
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"fx rate": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           decimal.NullDecimal{Decimal: decimal.RequireFromString("3.76000000"), Valid: true},
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"fx base": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   sql.NullString{String: "EUR", Valid: true},
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         existing.FxSource,
+		},
+		"fx quote": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  sql.NullString{String: "EUR", Valid: true},
+			FxSource:         existing.FxSource,
+		},
+		"fx source": {
+			TenantID:         existing.TenantID,
+			PSPTransactionID: existing.PSPTransactionID,
+			AmountKind:       existing.AmountKind,
+			Amount:           existing.Amount,
+			Currency:         existing.Currency,
+			FxRate:           existing.FxRate,
+			FxBaseCurrency:   existing.FxBaseCurrency,
+			FxQuoteCurrency:  existing.FxQuoteCurrency,
+			FxSource:         sql.NullString{String: "manual", Valid: true},
+		},
+	}
+	for name, requested := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := ValidatePSPTransactionAmountReplay(&existing, requested)
+			assertErrorIs(t, err, ErrDuplicateAmount)
+		})
+	}
+}
+
 func TestListPSPTransactionAmountsValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.ListPSPTransactionAmounts(t.Context(), "", 1)

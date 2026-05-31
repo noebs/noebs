@@ -3,6 +3,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+
+	"github.com/shopspring/decimal"
 )
 
 func validatePSPTransactionAmount(amount PSPTransactionAmount) (string, error) {
@@ -62,6 +65,7 @@ func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransacti
 	if err != nil {
 		return nil, err
 	}
+	amount.TenantID = tenantID
 
 	db, err := s.ensureDB()
 	if err != nil {
@@ -72,12 +76,7 @@ func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransacti
 		tenant_id, psp_transaction_id, amount_kind, amount, currency,
 		fx_rate, fx_base_currency, fx_quote_currency, fx_source
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON CONFLICT(tenant_id, psp_transaction_id, amount_kind, currency) DO UPDATE
-		SET amount = EXCLUDED.amount,
-			fx_rate = EXCLUDED.fx_rate,
-			fx_base_currency = EXCLUDED.fx_base_currency,
-			fx_quote_currency = EXCLUDED.fx_quote_currency,
-			fx_source = EXCLUDED.fx_source
+	ON CONFLICT(tenant_id, psp_transaction_id, amount_kind, currency) DO NOTHING
 	RETURNING *`)
 	var stored PSPTransactionAmount
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -91,6 +90,16 @@ func (s *Store) AddPSPTransactionAmount(ctx context.Context, amount PSPTransacti
 		amount.FxQuoteCurrency,
 		amount.FxSource,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			existing, getErr := getPSPTransactionAmount(ctx, db, amount.TenantID, amount.PSPTransactionID, amount.AmountKind, amount.Currency)
+			if getErr != nil {
+				return nil, getErr
+			}
+			if err := ValidatePSPTransactionAmountReplay(existing, amount); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
 		return nil, err
 	}
 	return &stored, nil
@@ -125,16 +134,11 @@ func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, p
 		return nil, err
 	}
 
-	stmt := db.Rebind(`INSERT INTO psp_transaction_amounts(
+	stmt := tx.Rebind(`INSERT INTO psp_transaction_amounts(
 		tenant_id, psp_transaction_id, amount_kind, amount, currency,
 		fx_rate, fx_base_currency, fx_quote_currency, fx_source
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON CONFLICT(tenant_id, psp_transaction_id, amount_kind, currency) DO UPDATE
-		SET amount = EXCLUDED.amount,
-			fx_rate = EXCLUDED.fx_rate,
-			fx_base_currency = EXCLUDED.fx_base_currency,
-			fx_quote_currency = EXCLUDED.fx_quote_currency,
-			fx_source = EXCLUDED.fx_source
+	ON CONFLICT(tenant_id, psp_transaction_id, amount_kind, currency) DO NOTHING
 	RETURNING *`)
 	stored := make([]PSPTransactionAmount, 0, len(prepared))
 	for _, amount := range prepared {
@@ -150,8 +154,20 @@ func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, p
 			amount.FxQuoteCurrency,
 			amount.FxSource,
 		); err != nil {
-			_ = tx.Rollback()
-			return nil, err
+			if !errors.Is(err, sql.ErrNoRows) {
+				_ = tx.Rollback()
+				return nil, err
+			}
+			existing, getErr := getPSPTransactionAmount(ctx, tx, amount.TenantID, amount.PSPTransactionID, amount.AmountKind, amount.Currency)
+			if getErr != nil {
+				_ = tx.Rollback()
+				return nil, getErr
+			}
+			if err := ValidatePSPTransactionAmountReplay(existing, amount); err != nil {
+				_ = tx.Rollback()
+				return nil, err
+			}
+			row = *existing
 		}
 		stored = append(stored, row)
 	}
@@ -159,6 +175,39 @@ func (s *Store) AddPSPTransactionAmounts(ctx context.Context, tenantID string, p
 		return nil, err
 	}
 	return stored, nil
+}
+
+func getPSPTransactionAmount(ctx context.Context, q interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}, tenantID string, pspTransactionID int64, amountKind PSPAmountKind, currency string) (*PSPTransactionAmount, error) {
+	stmt := q.Rebind(`SELECT * FROM psp_transaction_amounts
+		WHERE tenant_id = ? AND psp_transaction_id = ? AND amount_kind = ? AND currency = ?`)
+	var amount PSPTransactionAmount
+	if err := q.GetContext(ctx, &amount, stmt, tenantID, pspTransactionID, amountKind, currency); err != nil {
+		return nil, err
+	}
+	return &amount, nil
+}
+
+func ValidatePSPTransactionAmountReplay(existing *PSPTransactionAmount, requested PSPTransactionAmount) error {
+	if existing == nil ||
+		existing.TenantID != requested.TenantID ||
+		existing.PSPTransactionID != requested.PSPTransactionID ||
+		existing.AmountKind != requested.AmountKind ||
+		existing.Amount != requested.Amount ||
+		existing.Currency != requested.Currency ||
+		!nullDecimalEqual(existing.FxRate, requested.FxRate) ||
+		!nullStringEqual(existing.FxBaseCurrency, requested.FxBaseCurrency) ||
+		!nullStringEqual(existing.FxQuoteCurrency, requested.FxQuoteCurrency) ||
+		!nullStringEqual(existing.FxSource, requested.FxSource) {
+		return ErrDuplicateAmount
+	}
+	return nil
+}
+
+func nullDecimalEqual(left, right decimal.NullDecimal) bool {
+	return left.Valid == right.Valid && (!left.Valid || left.Decimal.Equal(right.Decimal))
 }
 
 func (s *Store) ListPSPTransactionAmounts(ctx context.Context, tenantID string, pspTransactionID int64) ([]PSPTransactionAmount, error) {

@@ -11,9 +11,10 @@ import (
 
 	"github.com/adonese/noebs/internal/testdb"
 	basestore "github.com/adonese/noebs/store"
+	"github.com/shopspring/decimal"
 )
 
-func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing.T) {
+func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
@@ -63,7 +64,8 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 		ConfirmedAt:     sql.NullTime{Time: confirmedAt, Valid: true},
 		RetryCount:      7,
 	}
-	if _, err := s.CreatePSPTransaction(ctx, txn); err != nil {
+	created, err := s.CreatePSPTransaction(ctx, txn)
+	if err != nil {
 		t.Fatalf("create transaction: %v", err)
 	}
 	replayed, err := s.CreatePSPTransaction(ctx, txn)
@@ -77,6 +79,62 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 	mismatch.Amount++
 	if _, err := s.CreatePSPTransaction(ctx, mismatch); !errors.Is(err, ErrDuplicateTransaction) {
 		t.Fatalf("mismatched create transaction replay error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+
+	amount := PSPTransactionAmount{
+		TenantID:         txn.TenantID,
+		PSPTransactionID: created.ID,
+		AmountKind:       PSPAmountReported,
+		Amount:           100,
+		Currency:         "USD",
+		FxRate:           decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true},
+		FxBaseCurrency:   sql.NullString{String: "USD", Valid: true},
+		FxQuoteCurrency:  sql.NullString{String: "AED", Valid: true},
+		FxSource:         sql.NullString{String: "provider", Valid: true},
+	}
+	storedAmount, err := s.AddPSPTransactionAmount(ctx, amount)
+	if err != nil {
+		t.Fatalf("add psp amount: %v", err)
+	}
+	replayedAmount, err := s.AddPSPTransactionAmount(ctx, amount)
+	if err != nil {
+		t.Fatalf("replay psp amount: %v", err)
+	}
+	if replayedAmount.ID != storedAmount.ID {
+		t.Fatalf("replayed amount id = %d, want %d", replayedAmount.ID, storedAmount.ID)
+	}
+	mismatchedAmount := amount
+	mismatchedAmount.Amount++
+	if _, err := s.AddPSPTransactionAmount(ctx, mismatchedAmount); !errors.Is(err, ErrDuplicateAmount) {
+		t.Fatalf("mismatched psp amount replay error = %v, want %v", err, ErrDuplicateAmount)
+	}
+
+	batch := []PSPTransactionAmountInput{{
+		AmountKind: PSPAmountFee,
+		Amount:     5,
+		Currency:   "USD",
+	}}
+	storedBatch, err := s.AddPSPTransactionAmounts(ctx, txn.TenantID, created.ID, batch)
+	if err != nil {
+		t.Fatalf("add psp amount batch: %v", err)
+	}
+	if len(storedBatch) != 1 {
+		t.Fatalf("stored amount batch length = %d, want 1", len(storedBatch))
+	}
+	replayedBatch, err := s.AddPSPTransactionAmounts(ctx, txn.TenantID, created.ID, batch)
+	if err != nil {
+		t.Fatalf("replay psp amount batch: %v", err)
+	}
+	if len(replayedBatch) != 1 || replayedBatch[0].ID != storedBatch[0].ID {
+		t.Fatalf("replayed amount batch = %+v, want id %d", replayedBatch, storedBatch[0].ID)
+	}
+	mismatchedBatch := []PSPTransactionAmountInput{{
+		AmountKind: PSPAmountFee,
+		Amount:     6,
+		Currency:   "USD",
+	}}
+	if _, err := s.AddPSPTransactionAmounts(ctx, txn.TenantID, created.ID, mismatchedBatch); !errors.Is(err, ErrDuplicateAmount) {
+		t.Fatalf("mismatched psp amount batch replay error = %v, want %v", err, ErrDuplicateAmount)
 	}
 
 	interaction, err := s.RecordPSPInteraction(ctx, PSPInteraction{
