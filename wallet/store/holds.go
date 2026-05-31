@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"time"
 
 	"github.com/google/uuid"
@@ -170,7 +171,31 @@ func existingHoldMatches(hold BalanceHold, params HoldParams) bool {
 		hold.ReferenceType == params.ReferenceType &&
 		hold.ReferenceID == params.ReferenceID &&
 		hold.IdempotencyKey == params.IdempotencyKey &&
-		hold.Status == HoldStatusActive
+		hold.Status == HoldStatusActive &&
+		sameHoldExpiry(hold.ExpiresAt, params.ExpiresAt) &&
+		rawJSONMatches(hold.Metadata, params.Metadata)
+}
+
+func sameHoldExpiry(stored, requested time.Time) bool {
+	if stored.Equal(requested) {
+		return true
+	}
+	return stored.Sub(requested).Abs() <= time.Microsecond
+}
+
+func rawJSONMatches(stored, requested json.RawMessage) bool {
+	if len(stored) == 0 && len(requested) == 0 {
+		return true
+	}
+	var storedValue any
+	var requestedValue any
+	if err := json.Unmarshal(stored, &storedValue); err != nil {
+		return string(stored) == string(requested)
+	}
+	if err := json.Unmarshal(requested, &requestedValue); err != nil {
+		return string(stored) == string(requested)
+	}
+	return reflect.DeepEqual(storedValue, requestedValue)
 }
 
 func (s *Store) lockHold(ctx context.Context, tx *sqlx.Tx, tenantID string, holdID int64) (*BalanceHold, error) {

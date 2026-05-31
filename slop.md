@@ -258,6 +258,11 @@ Last updated: 2026-05-31
     - Fix: preserve integral numeric strings, format non-integral strings without trimming significant digits, and ignore NaN/Inf/fractional raw amounts instead of truncating them into minor units.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestStatusFromPSPTransaction'`.
 
+52. Balance-hold replay ignored expiry and metadata mismatches.
+    - Evidence: `CreateHold` treats duplicate `(tenant_id, wallet_id, reference_type, reference_id)` inserts as idempotent replays, but `existingHoldMatches` only compared amount, reason, reference, idempotency key, and active status. A retry or direct store call with a different `expires_at` or hold metadata returned the existing hold as success, hiding mismatched lock lifetime or audit/context data.
+    - Fix: include hold expiry and metadata in the replay contract, compare metadata semantically as JSON, and allow only microsecond timestamp tolerance for database precision.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestExistingHoldMatches|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

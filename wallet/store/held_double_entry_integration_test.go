@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -96,6 +97,7 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 		ReferenceID:    "withdrawal-ref",
 		IdempotencyKey: "withdrawal-ref:hold",
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+		Metadata:       json.RawMessage(`{"purpose":"withdrawal","sequence":1}`),
 	}
 	hold, err := store.CreateHold(ctx, holdParams)
 	if err != nil {
@@ -117,6 +119,18 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	_, err = store.CreateHold(ctx, amountMismatchHold)
 	if !errors.Is(err, ErrDuplicateHold) {
 		t.Fatalf("idempotent hold amount mismatch error = %v, want %v", err, ErrDuplicateHold)
+	}
+	expiryMismatchHold := holdParams
+	expiryMismatchHold.ExpiresAt = holdParams.ExpiresAt.Add(time.Minute)
+	_, err = store.CreateHold(ctx, expiryMismatchHold)
+	if !errors.Is(err, ErrDuplicateHold) {
+		t.Fatalf("idempotent hold expiry mismatch error = %v, want %v", err, ErrDuplicateHold)
+	}
+	metadataMismatchHold := holdParams
+	metadataMismatchHold.Metadata = json.RawMessage(`{"purpose":"withdrawal","sequence":2}`)
+	_, err = store.CreateHold(ctx, metadataMismatchHold)
+	if !errors.Is(err, ErrDuplicateHold) {
+		t.Fatalf("idempotent hold metadata mismatch error = %v, want %v", err, ErrDuplicateHold)
 	}
 
 	_, err = store.PostDoubleEntry(ctx, DoubleEntryParams{
@@ -348,6 +362,7 @@ func TestExistingHoldMatches(t *testing.T) {
 		ReferenceID:    "withdrawal-ref",
 		IdempotencyKey: "withdrawal-ref:hold",
 		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+		Metadata:       json.RawMessage(`{"purpose":"withdrawal","sequence":1}`),
 	}
 	hold := BalanceHold{
 		TenantID:        params.TenantID,
@@ -359,6 +374,8 @@ func TestExistingHoldMatches(t *testing.T) {
 		ReferenceID:     params.ReferenceID,
 		IdempotencyKey:  params.IdempotencyKey,
 		Status:          HoldStatusActive,
+		ExpiresAt:       params.ExpiresAt,
+		Metadata:        json.RawMessage(`{"sequence":1,"purpose":"withdrawal"}`),
 	}
 	if !existingHoldMatches(hold, params) {
 		t.Fatal("existingHoldMatches() = false, want true")
@@ -396,6 +413,18 @@ func TestExistingHoldMatches(t *testing.T) {
 			name: "released",
 			mutate: func(hold *BalanceHold, params *HoldParams) {
 				hold.Status = HoldStatusReleased
+			},
+		},
+		{
+			name: "expires-at",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				params.ExpiresAt = params.ExpiresAt.Add(time.Minute)
+			},
+		},
+		{
+			name: "metadata",
+			mutate: func(hold *BalanceHold, params *HoldParams) {
+				params.Metadata = json.RawMessage(`{"purpose":"withdrawal","sequence":2}`)
 			},
 		},
 	}
