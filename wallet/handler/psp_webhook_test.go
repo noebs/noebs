@@ -145,6 +145,53 @@ func TestMappedPSPWebhookFieldsRejectsInvalidAmount(t *testing.T) {
 	}
 }
 
+func TestAuthoritativeWebhookPayloadPreservesIdentityAndUsesStatusCheckFields(t *testing.T) {
+	mapping := walletpsp.ResponseMapping{
+		ClientReference: []string{"ref"},
+		TransactionID:   []string{"psp_tx"},
+		Status:          []string{"state"},
+		Amount:          []string{"money.amount"},
+		Currency:        []string{"money.currency"},
+		Direction:       []string{"direction"},
+	}
+	original := map[string]any{
+		"ref":       "client-ref",
+		"psp_tx":    "psp-original",
+		"state":     "claimed-success",
+		"direction": "inbound",
+		"money": map[string]any{
+			"amount":   "999",
+			"currency": "BAD",
+		},
+	}
+
+	merged := authoritativeWebhookPayload(original, mapping, "client-ref", "psp-original", "deposit", &walletpsp.TxStatus{
+		ProviderTxID: "psp-checked",
+		Status:       "failed",
+		Amount:       1250,
+		Currency:     "SDG",
+		RawResponse:  map[string]any{"provider_status": "failed"},
+	})
+	fields, err := mappedPSPWebhookFields(merged, mapping)
+	if err != nil {
+		t.Fatalf("mappedPSPWebhookFields() error = %v", err)
+	}
+	if fields.ClientReference != "client-ref" ||
+		fields.PSPTransactionID != "psp-checked" ||
+		fields.Status != "failed" ||
+		fields.Amount != 1250 ||
+		fields.Currency != "SDG" ||
+		fields.Direction != "deposit" {
+		t.Fatalf("fields = %+v, want original identity and authoritative status-check values", fields)
+	}
+	if merged["provider_status"] != "failed" {
+		t.Fatalf("merged payload dropped provider raw response: %+v", merged)
+	}
+	if original["psp_tx"] != "psp-original" {
+		t.Fatalf("original payload was mutated: %+v", original)
+	}
+}
+
 func TestPSPWebhookStatusUpdateDoesNotRewriteConfirmedAtOnTerminalReplay(t *testing.T) {
 	confirmedAt := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
 	payload := []byte(`{"status":"success","psp_tx":"psp-1","message":"ok"}`)

@@ -494,6 +494,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/handler -run 'TestAuthoritativeWebhookPayloadPreservesIdentityAndUsesStatusCheckFields|TestMappedPSPWebhookFields|TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID'`
+- `go test -count=1 ./wallet/handler ./wallet/psp ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

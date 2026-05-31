@@ -543,6 +543,11 @@ Last updated: 2026-05-31
     - Fix: detect `tranDateTime` string decode errors by field/type content, return fallback decode errors instead of zero-value success, and use the fallback response/message for non-success gateway responses.
     - Tests: `go test -count=1 -v ./ebs_fields -run 'TestEBSHTTPClientIPINFallback|TestConfigureEBSHTTPClient'`; `go test -count=1 ./ebs_fields ./consumer ./merchant`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+109. PSP status-check webhooks could lose the transaction identity they just verified.
+    - Evidence: unsigned PSP webhooks configured with `status_check_unauthenticated_webhook` mapped the original payload first, called the provider status API, then replaced the original webhook payload with only the status-check response. Providers often do not echo the merchant `client_reference` in a status response, so a verified status check could be rejected later as `missing client reference` or remapped through stale provider-specific paths.
+    - Fix: merge status-check results over the original webhook payload instead of replacing it, write normalized provider status fields back through the configured webhook mapping paths, preserve the original client reference, and keep the raw provider status response attached.
+    - Tests: `go test -count=1 -v ./wallet/handler -run 'TestAuthoritativeWebhookPayloadPreservesIdentityAndUsesStatusCheckFields|TestMappedPSPWebhookFields|TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID'`; `go test -count=1 ./wallet/handler ./wallet/psp ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

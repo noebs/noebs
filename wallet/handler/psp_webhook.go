@@ -290,32 +290,108 @@ func (h *PSPWebhookHandler) authorizeUnsignedWebhook(c *fiber.Ctx, cfg *walletps
 	if callErr != nil {
 		return nil, nil, callErr
 	}
-	authoritative := map[string]any{}
-	if status != nil && status.RawResponse != nil {
-		for key, value := range status.RawResponse {
-			authoritative[key] = value
-		}
-	}
-	if status != nil {
-		if status.Status != "" {
-			authoritative["status"] = status.Status
-		}
-		if status.ProviderTxID != "" {
-			authoritative["transaction_id"] = status.ProviderTxID
-			authoritative["psp_transaction_id"] = status.ProviderTxID
-		}
-		if status.Amount > 0 {
-			authoritative["amount"] = status.Amount
-		}
-		if status.Currency != "" {
-			authoritative["currency"] = status.Currency
-		}
-	}
+	authoritative := authoritativeWebhookPayload(payloadMap, cfg.WebhookResponseMapping, clientReference, pspTransactionID, direction, status)
 	raw, err := json.Marshal(authoritative)
 	if err != nil {
 		return nil, nil, err
 	}
 	return authoritative, raw, nil
+}
+
+func authoritativeWebhookPayload(original map[string]any, mapping walletpsp.ResponseMapping, clientReference, pspTransactionID, direction string, status *walletpsp.TxStatus) map[string]any {
+	authoritative := cloneWebhookPayload(original)
+	if status != nil && status.RawResponse != nil {
+		for key, value := range status.RawResponse {
+			authoritative[key] = value
+		}
+	}
+
+	setWebhookMappedValue(authoritative, mapping.ClientReference, clientReference)
+	if clientReference != "" {
+		authoritative["client_reference"] = clientReference
+	}
+
+	transactionID := pspTransactionID
+	if status != nil && status.ProviderTxID != "" {
+		transactionID = status.ProviderTxID
+	}
+	setWebhookMappedValue(authoritative, mapping.TransactionID, transactionID)
+	if transactionID != "" {
+		authoritative["transaction_id"] = transactionID
+		authoritative["psp_transaction_id"] = transactionID
+	}
+
+	if direction != "" {
+		setWebhookMappedValue(authoritative, mapping.Direction, direction)
+		authoritative["direction"] = direction
+	}
+
+	if status == nil {
+		return authoritative
+	}
+	if status.Status != "" {
+		setWebhookMappedValue(authoritative, mapping.Status, status.Status)
+		authoritative["status"] = status.Status
+	}
+	if status.Amount > 0 {
+		setWebhookMappedValue(authoritative, mapping.Amount, status.Amount)
+		authoritative["amount"] = status.Amount
+	}
+	if status.Currency != "" {
+		setWebhookMappedValue(authoritative, mapping.Currency, status.Currency)
+		authoritative["currency"] = status.Currency
+	}
+	return authoritative
+}
+
+func cloneWebhookPayload(input map[string]any) map[string]any {
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		if nested, ok := value.(map[string]any); ok {
+			out[key] = cloneWebhookPayload(nested)
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func setWebhookMappedValue(payload map[string]any, paths []string, value any) {
+	if payload == nil || value == nil {
+		return
+	}
+	for _, path := range paths {
+		setWebhookValueAtPath(payload, path, value)
+	}
+}
+
+func setWebhookValueAtPath(payload map[string]any, path string, value any) {
+	parts := splitWebhookPath(path)
+	if len(parts) == 0 {
+		return
+	}
+	current := payload
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := current[part].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			current[part] = next
+		}
+		current = next
+	}
+	current[parts[len(parts)-1]] = value
+}
+
+func splitWebhookPath(path string) []string {
+	raw := strings.Split(path, ".")
+	parts := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
 }
 
 func (h *PSPWebhookHandler) recordWebhookStatusCheck(c *fiber.Ctx, cfg *walletpsp.Config, tenantID, providerCode, clientReference, pspTransactionID, direction string, status *walletpsp.TxStatus, callErr error) error {
