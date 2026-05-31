@@ -1,8 +1,12 @@
 package consumer
 
 import (
+	"context"
 	"errors"
 	"testing"
+
+	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 )
 
 func TestTelecomPaymentPhoneRequiresExplicitPaymentInfoFormat(t *testing.T) {
@@ -30,6 +34,44 @@ func TestMoheArabicPaymentPhoneRequiresExplicitPaymentInfoFormat(t *testing.T) {
 
 	if _, err := moheArabicPaymentPhone("ignored"); !errors.Is(err, ErrInvalidPaymentInfo) {
 		t.Fatalf("moheArabicPaymentPhone(invalid) error = %v, want %v", err, ErrInvalidPaymentInfo)
+	}
+}
+
+func TestUpdatePaymentInfoBuildsCustomsPaymentInfoFromRequestFields(t *testing.T) {
+	var fields ebs_fields.ConsumerBillInquiryFields
+	err := updatePaymentInfo(&fields, Bills{
+		PayeeID:       "0010030003",
+		Bank:          " 016 ",
+		DeclarantCode: " DEC-42 ",
+	})
+	if err != nil {
+		t.Fatalf("updatePaymentInfo() error = %v", err)
+	}
+	if fields.PaymentInfo != "BANKCODE=016/DECLARANTCODE=DEC-42" {
+		t.Fatalf("PaymentInfo = %q, want customs bank/declarant fields", fields.PaymentInfo)
+	}
+}
+
+func TestGetBillsRejectsMissingCustomsPaymentInfoBeforeEBS(t *testing.T) {
+	service := &Service{
+		Store:      &store.Store{},
+		HTTPClient: testHTTPClient(),
+	}
+
+	_, _, err := service.GetBills(context.Background(), "tenant-a", Bills{
+		PayeeID:       "0010030003",
+		DeclarantCode: "DEC-42",
+	})
+	if !errors.Is(err, ErrInvalidPaymentInfo) {
+		t.Fatalf("GetBills(missing bank) error = %v, want %v", err, ErrInvalidPaymentInfo)
+	}
+
+	_, _, err = service.GetBills(context.Background(), "tenant-a", Bills{
+		PayeeID: "0010030003",
+		Bank:    "016",
+	})
+	if !errors.Is(err, ErrInvalidPaymentInfo) {
+		t.Fatalf("GetBills(missing declarant) error = %v, want %v", err, ErrInvalidPaymentInfo)
 	}
 }
 

@@ -169,15 +169,18 @@ func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_f
 		return ebs_fields.EBSParserFields{}, due, ErrMissingBillerID
 	}
 
+	var fields ebs_fields.ConsumerBillInquiryFields
+	if err := updatePaymentInfo(&fields, b); err != nil {
+		return ebs_fields.EBSParserFields{}, due, err
+	}
+
 	uid, err := uuid.NewRandom()
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, due, err
 	}
 
-	var fields ebs_fields.ConsumerBillInquiryFields
 	fields.ApplicationId = s.NoebsConfig.ConsumerID
 	fields.UUID = uid.String()
-	updatePaymentInfo(&fields, b)
 	fields.PayeeId = b.PayeeID
 
 	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())

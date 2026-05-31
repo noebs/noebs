@@ -588,6 +588,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./consumer -run 'Test(UpdatePaymentInfoBuildsCustomsPaymentInfoFromRequestFields|GetBillsRejectsMissingCustomsPaymentInfoBeforeEBS|GetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError|GetBillsRequiresExplicitPayeeID|EBSAdapterTenantValidationFailsBeforeDBOrHTTP|ParseDueAmounts)'` (`TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./consumer ./consumer/handler ./parsing`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

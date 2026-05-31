@@ -633,6 +633,11 @@ Last updated: 2026-05-31
     - Fix: use the shared top-level `parsing` package for positive query integers and pass an empty raw page value so defaults are applied only for absent/blank input while explicit `page=0` remains invalid.
     - Tests: `go test -count=1 -v ./dashboard ./parsing -run 'Test(ParsePositiveQueryInt|DashboardPaginationRejectsInvalidInputsBeforeDB|DashboardTransactionsDefaultOmittedPageAtBoundary|IntParams)'`; `go test -count=1 ./dashboard ./parsing ./consumer/handler ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+127. Customs bill inquiries sent placeholder payment info.
+    - Evidence: `updatePaymentInfo` built Customs bill inquiries as `BANKCODE=$bank/DECLARANTCODE=` by using a literal `$bank` placeholder and appending the empty destination field instead of request `bank` and `declarant_code`. Other biller formats also concatenated required pieces without checking whether those pieces were present.
+    - Fix: construct bill inquiry payment info from explicit request fields, trim required values, and reject missing biller-specific fields with `ErrInvalidPaymentInfo` before UUID/IPIN/EBS work.
+    - Tests: `go test -count=1 -v ./consumer -run 'Test(UpdatePaymentInfoBuildsCustomsPaymentInfoFromRequestFields|GetBillsRejectsMissingCustomsPaymentInfoBeforeEBS|GetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError|GetBillsRequiresExplicitPayeeID|EBSAdapterTenantValidationFailsBeforeDBOrHTTP|ParseDueAmounts)'` (`TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError` skipped locally when the container runtime is unavailable); `go test -count=1 ./consumer ./consumer/handler ./parsing`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -36,25 +36,111 @@ type BillAmounts struct {
 	PaidAmount string `json:"paid_amount"`
 }
 
-func updatePaymentInfo(ebsBills *ebs_fields.ConsumerBillInquiryFields, b Bills) {
-	switch b.PayeeID {
-	case "0010010002": // zain
-		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
-	case "0010010004": // mtn
-		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
-	case "0010010006": // sudani
-		ebsBills.PaymentInfo = "MPHONE=" + b.Phone
-	case "0055555555": // e-invoice
-		ebsBills.PaymentInfo = "customerBillerRef=" + b.Ref
-	case "0010030002": // mohe
-		ebsBills.PaymentInfo = "SETNUMBER=" + b.SeatNumber + "/STUDCOURSEID=" + b.CourseID + "/STUDFORMKIND=" + b.FormKind
-	case "0010030004": // mohe-arab
-		ebsBills.PaymentInfo = "STUCNAME=" + b.Name + "/STUCPHONE=" + b.Phone + "/STUDCOURSEID=" + b.CourseID + "/STUDFORMKIND=" + b.FormKind
-	case "0010030003": // Customs
-		ebsBills.PaymentInfo = "BANKCODE=$bank/DECLARANTCODE=" + ebsBills.PaymentInfo
-	case "0010050001": // e-15
-		ebsBills.PaymentInfo = "SERVICEID=" + b.ServiceID + "/INVOICENUMBER=" + b.InvoiceNumber + "/PHONENUMBER=" + b.Phone
+func updatePaymentInfo(ebsBills *ebs_fields.ConsumerBillInquiryFields, b Bills) error {
+	if ebsBills == nil {
+		return fmt.Errorf("%w: paymentInfo", ErrInvalidPaymentInfo)
 	}
+	paymentInfo, err := billInquiryPaymentInfo(b)
+	if err != nil {
+		return err
+	}
+	ebsBills.PaymentInfo = paymentInfo
+	return nil
+}
+
+func billInquiryPaymentInfo(b Bills) (string, error) {
+	switch strings.TrimSpace(b.PayeeID) {
+	case "0010010002": // zain
+		phone, err := requiredBillField(b.Phone, "phone")
+		if err != nil {
+			return "", err
+		}
+		return "MPHONE=" + phone, nil
+	case "0010010004": // mtn
+		phone, err := requiredBillField(b.Phone, "phone")
+		if err != nil {
+			return "", err
+		}
+		return "MPHONE=" + phone, nil
+	case "0010010006": // sudani
+		phone, err := requiredBillField(b.Phone, "phone")
+		if err != nil {
+			return "", err
+		}
+		return "MPHONE=" + phone, nil
+	case "0055555555": // e-invoice
+		ref, err := requiredBillField(b.Ref, "ref")
+		if err != nil {
+			return "", err
+		}
+		return "customerBillerRef=" + ref, nil
+	case "0010030002": // mohe
+		seatNumber, err := requiredBillField(b.SeatNumber, "seat_number")
+		if err != nil {
+			return "", err
+		}
+		courseID, err := requiredBillField(b.CourseID, "course_id")
+		if err != nil {
+			return "", err
+		}
+		formKind, err := requiredBillField(b.FormKind, "form_kind")
+		if err != nil {
+			return "", err
+		}
+		return "SETNUMBER=" + seatNumber + "/STUDCOURSEID=" + courseID + "/STUDFORMKIND=" + formKind, nil
+	case "0010030004": // mohe-arab
+		name, err := requiredBillField(b.Name, "name")
+		if err != nil {
+			return "", err
+		}
+		phone, err := requiredBillField(b.Phone, "phone")
+		if err != nil {
+			return "", err
+		}
+		courseID, err := requiredBillField(b.CourseID, "course_id")
+		if err != nil {
+			return "", err
+		}
+		formKind, err := requiredBillField(b.FormKind, "form_kind")
+		if err != nil {
+			return "", err
+		}
+		return "STUCNAME=" + name + "/STUCPHONE=" + phone + "/STUDCOURSEID=" + courseID + "/STUDFORMKIND=" + formKind, nil
+	case "0010030003": // Customs
+		bank, err := requiredBillField(b.Bank, "bank")
+		if err != nil {
+			return "", err
+		}
+		declarantCode, err := requiredBillField(b.DeclarantCode, "declarant_code")
+		if err != nil {
+			return "", err
+		}
+		return "BANKCODE=" + bank + "/DECLARANTCODE=" + declarantCode, nil
+	case "0010050001": // e-15
+		serviceID, err := requiredBillField(b.ServiceID, "service_id")
+		if err != nil {
+			return "", err
+		}
+		invoiceNumber, err := requiredBillField(b.InvoiceNumber, "invoice")
+		if err != nil {
+			return "", err
+		}
+		phone, err := requiredBillField(b.Phone, "phone")
+		if err != nil {
+			return "", err
+		}
+		return "SERVICEID=" + serviceID + "/INVOICENUMBER=" + invoiceNumber + "/PHONENUMBER=" + phone, nil
+	default:
+		return "", nil
+	}
+}
+
+func requiredBillField(value, field string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", fmt.Errorf("%w: bill.%s", ErrInvalidPaymentInfo, field)
+	}
+	return value, nil
 }
 
 func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, error) {
