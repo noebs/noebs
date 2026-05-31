@@ -1158,7 +1158,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		return walletstore.ErrMissingReason
 	}
 	if params.RequestedBy <= 0 {
-		return walletstore.ErrMissingApproverID
+		return walletstore.ErrMissingRequesterID
 	}
 
 	walletID, err := uuid.Parse(params.WalletID)

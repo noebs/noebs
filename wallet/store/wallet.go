@@ -57,9 +57,9 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	stmt := s.DB.Rebind(`INSERT INTO wallets(
 		tenant_id, owner_type, owner_id, user_id, currency,
 		kyc_tier, balance, available_balance, status, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, 0, 0, 'active', ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
 	ON CONFLICT DO NOTHING`)
-	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, params.KYCTier, now, now); err != nil {
+	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, params.KYCTier, WalletStatusActive, now, now); err != nil {
 		return nil, err
 	}
 	params.TenantID = tenantID

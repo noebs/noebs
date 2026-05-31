@@ -105,6 +105,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingTwoFACode),
 		errors.Is(err, walletstore.ErrInvalidTwoFACode),
 		errors.Is(err, walletstore.ErrMissingTwoFASecret),
+		errors.Is(err, walletstore.ErrMissingRequesterID),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingDecision),
 		errors.Is(err, walletstore.ErrInvalidDecision),
@@ -125,6 +126,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidLimit),
 		errors.Is(err, walletstore.ErrInvalidOffset),
 		errors.Is(err, walletstore.ErrInsufficientFunds),
+		errors.Is(err, walletstore.ErrWalletInactive),
 		errors.Is(err, walletstore.ErrCurrencyMismatch):
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	default:

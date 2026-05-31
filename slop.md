@@ -458,6 +458,11 @@ Last updated: 2026-05-31
     - Fix: load the manual transfer and approver by tenant before insert, require the approver to be active, require the transfer to still be pending, and enforce the maker-checker self-approval rule at the store boundary.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferApprovalTarget|TestAddManualTransferApprovalValidation|TestValidateManualTransferApprovalReplay|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+92. Manual transfer creation trusted nullable foreign keys.
+    - Evidence: `CreateManualTransfer` accepted `wallet_id` and `requested_by` as nullable values and inserted them without loading the wallet or requester under the transfer tenant. Since the database foreign keys reference only row IDs, a direct store call could create a tenant-scoped manual transfer against another tenant's wallet or admin user, a frozen/closed wallet, or a currency-mismatched wallet.
+    - Fix: require explicit wallet and requester IDs at the store boundary, parse the wallet ID before DB access, load the wallet and requester by tenant, require an active wallet/requester, enforce wallet currency equality, and map `requested_by` failures through a dedicated typed error instead of reusing the approver error.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferCreateTarget|TestCreateManualTransferValidation|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

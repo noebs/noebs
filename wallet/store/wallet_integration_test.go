@@ -105,6 +105,17 @@ func TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret(t *testing.T) {
 
 func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
+	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "manual-user",
+		UserID:    101,
+		Currency:  "USD",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure manual transfer wallet: %v", err)
+	}
 	requesterID := insertWalletAdmin(t, ctx, store, tenantID, "requester@example.test")
 	approverID := insertWalletAdmin(t, ctx, store, tenantID, "approver@example.test")
 
@@ -113,6 +124,7 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 		WorkflowID:     "wf-1",
 		IdempotencyKey: "idem-1",
 		TransferType:   ManualTransferTypeDebit,
+		WalletID:       sql.NullString{String: wallet.ID.String(), Valid: true},
 		Amount:         100,
 		Currency:       "USD",
 		Reason:         "manual adjustment",
@@ -140,6 +152,34 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	workflowMismatch.WorkflowID = "wf-2"
 	if _, err := store.CreateManualTransfer(ctx, workflowMismatch); !errors.Is(err, ErrDuplicateManualTransfer) {
 		t.Fatalf("manual transfer workflow mismatch error = %v, want %v", err, ErrDuplicateManualTransfer)
+	}
+
+	foreignWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  "other-tenant",
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "foreign-manual-user",
+		UserID:    201,
+		Currency:  "USD",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure foreign manual transfer wallet: %v", err)
+	}
+	foreignWalletTransfer := transfer
+	foreignWalletTransfer.WorkflowID = "wf-foreign-wallet"
+	foreignWalletTransfer.IdempotencyKey = "idem-foreign-wallet"
+	foreignWalletTransfer.WalletID = sql.NullString{String: foreignWallet.ID.String(), Valid: true}
+	if _, err := store.CreateManualTransfer(ctx, foreignWalletTransfer); !errors.Is(err, ErrWalletNotFound) {
+		t.Fatalf("foreign wallet manual transfer error = %v, want %v", err, ErrWalletNotFound)
+	}
+
+	foreignRequesterID := insertWalletAdmin(t, ctx, store, "other-tenant", "foreign-requester@example.test")
+	foreignRequesterTransfer := transfer
+	foreignRequesterTransfer.WorkflowID = "wf-foreign-requester"
+	foreignRequesterTransfer.IdempotencyKey = "idem-foreign-requester"
+	foreignRequesterTransfer.RequestedBy = sqlNullInt64(foreignRequesterID)
+	if _, err := store.CreateManualTransfer(ctx, foreignRequesterTransfer); !errors.Is(err, ErrAdminUserNotFound) {
+		t.Fatalf("foreign requester manual transfer error = %v, want %v", err, ErrAdminUserNotFound)
 	}
 
 	approval := ManualTransferApproval{

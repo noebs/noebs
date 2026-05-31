@@ -299,6 +299,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingQuoteCurrency),
 		errors.Is(err, walletstore.ErrMissingDecision),
 		errors.Is(err, walletstore.ErrMissingReason),
+		errors.Is(err, walletstore.ErrMissingRequesterID),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingWorkflowID),
 		errors.Is(err, walletstore.ErrMissingInteractionType),
@@ -317,6 +318,7 @@ func mapError(err error) error {
 		errors.Is(err, walletvalidation.ErrPSPConfigDisabled),
 		errors.Is(err, walletvalidation.ErrPSPConfigMissingCurrencies),
 		errors.Is(err, walletvalidation.ErrPSPDirectionInvalid),
+		errors.Is(err, walletstore.ErrWalletInactive),
 		errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled),
 		errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return status.Error(codes.FailedPrecondition, err.Error())
@@ -327,6 +329,7 @@ func mapError(err error) error {
 
 func isP2PRejection(err error) bool {
 	return errors.Is(err, walletvalidation.ErrLimitExceeded) ||
+		errors.Is(err, walletstore.ErrWalletInactive) ||
 		errors.Is(err, walletvalidation.ErrWalletInactive) ||
 		errors.Is(err, walletvalidation.ErrWalletOwnerMismatch) ||
 		errors.Is(err, walletstore.ErrInsufficientFunds) ||

@@ -16,6 +16,12 @@ const (
 	HoldStatusCaptured = "captured"
 )
 
+const (
+	WalletStatusActive = "active"
+	WalletStatusFrozen = "frozen"
+	WalletStatusClosed = "closed"
+)
+
 type Wallet struct {
 	ID               uuid.UUID      `db:"id"`
 	TenantID         string         `db:"tenant_id"`

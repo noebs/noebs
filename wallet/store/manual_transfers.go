@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfer) (*ManualTransfer, error) {
@@ -43,8 +45,27 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		transfer.RejectionReason.Valid {
 		return nil, ErrInvalidStatus
 	}
+	walletID, err := manualTransferWalletID(transfer.WalletID)
+	if err != nil {
+		return nil, err
+	}
+	if !transfer.RequestedBy.Valid || transfer.RequestedBy.Int64 <= 0 {
+		return nil, ErrMissingRequesterID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
+		return nil, err
+	}
+	wallet, err := s.GetWallet(ctx, tenantID, walletID)
+	if err != nil {
+		return nil, err
+	}
+	requester, err := s.getAdminUserByID(ctx, tenantID, transfer.RequestedBy.Int64)
+	if err != nil {
+		return nil, err
+	}
+	transfer.TenantID = tenantID
+	if err := ValidateManualTransferCreateTarget(wallet, requester, transfer); err != nil {
 		return nil, err
 	}
 
@@ -299,6 +320,45 @@ func ValidateManualTransferApprovalReplay(existing *ManualTransferApproval, requ
 		existing.Decision != requested.Decision ||
 		!nullStringEqual(existing.Reason, requested.Reason) {
 		return ErrDuplicateManualApproval
+	}
+	return nil
+}
+
+func manualTransferWalletID(walletID sql.NullString) (uuid.UUID, error) {
+	if !walletID.Valid || walletID.String == "" {
+		return uuid.Nil, ErrMissingWalletID
+	}
+	parsed, err := uuid.Parse(walletID.String)
+	if err != nil || parsed == uuid.Nil {
+		return uuid.Nil, ErrMissingWalletID
+	}
+	return parsed, nil
+}
+
+func ValidateManualTransferCreateTarget(wallet *Wallet, requester *AdminUser, transfer ManualTransfer) error {
+	walletID, err := manualTransferWalletID(transfer.WalletID)
+	if err != nil {
+		return err
+	}
+	if wallet == nil ||
+		wallet.TenantID != transfer.TenantID ||
+		wallet.ID != walletID {
+		return ErrWalletNotFound
+	}
+	if wallet.Status != WalletStatusActive {
+		return ErrWalletInactive
+	}
+	if wallet.Currency != transfer.Currency {
+		return ErrCurrencyMismatch
+	}
+	if !transfer.RequestedBy.Valid || transfer.RequestedBy.Int64 <= 0 {
+		return ErrMissingRequesterID
+	}
+	if requester == nil ||
+		requester.TenantID != transfer.TenantID ||
+		requester.ID != transfer.RequestedBy.Int64 ||
+		!requester.IsActive {
+		return ErrAdminUserNotFound
 	}
 	return nil
 }

@@ -404,7 +404,7 @@ func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, 
 }
 
 func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID string) error {
-	if wallet.Status != "active" {
+	if wallet.Status != walletstore.WalletStatusActive {
 		return ErrWalletInactive
 	}
 	if currency != "" && wallet.Currency != currency {

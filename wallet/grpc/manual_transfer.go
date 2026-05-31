@@ -48,7 +48,7 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
 	if req.RequestedBy <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingRequesterID.Error())
 	}
 	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
 	if approvalTimeoutSeconds <= 0 {

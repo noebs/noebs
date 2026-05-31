@@ -356,10 +356,12 @@ func TestCreateManualTransferValidation(t *testing.T) {
 		WorkflowID:     "wf-1",
 		IdempotencyKey: "idem-1",
 		TransferType:   ManualTransferTypeDebit,
+		WalletID:       sql.NullString{String: uuid.NewString(), Valid: true},
 		Amount:         100,
 		Currency:       "USD",
 		Reason:         "withdrawal",
 		Status:         "pending",
+		RequestedBy:    sql.NullInt64{Int64: 42, Valid: true},
 	}
 
 	_, err := s.CreateManualTransfer(t.Context(), ManualTransfer{})
@@ -429,6 +431,21 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	bad.ProofOfPayment = sql.NullString{String: "proof", Valid: true}
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = transfer
+	bad.WalletID = sql.NullString{}
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	bad = transfer
+	bad.WalletID = sql.NullString{String: "not-a-uuid", Valid: true}
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingWalletID)
+
+	bad = transfer
+	bad.RequestedBy = sql.NullInt64{}
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingRequesterID)
 }
 
 func TestValidateManualTransferCreateReplay(t *testing.T) {
@@ -476,6 +493,65 @@ func TestValidateManualTransferCreateReplay(t *testing.T) {
 		})
 	}
 	assertErrorIs(t, ValidateManualTransferCreateReplay(nil, requested), ErrDuplicateManualTransfer)
+}
+
+func TestValidateManualTransferCreateTarget(t *testing.T) {
+	walletID := uuid.New()
+	wallet := &Wallet{
+		ID:       walletID,
+		TenantID: "tenant",
+		Currency: "USD",
+		Status:   WalletStatusActive,
+	}
+	requester := &AdminUser{
+		ID:       42,
+		TenantID: "tenant",
+		IsActive: true,
+	}
+	transfer := ManualTransfer{
+		TenantID:    "tenant",
+		WalletID:    sql.NullString{String: walletID.String(), Valid: true},
+		Currency:    "USD",
+		RequestedBy: sql.NullInt64{Int64: requester.ID, Valid: true},
+	}
+	if err := ValidateManualTransferCreateTarget(wallet, requester, transfer); err != nil {
+		t.Fatalf("ValidateManualTransferCreateTarget() error = %v", err)
+	}
+
+	foreignWallet := *wallet
+	foreignWallet.TenantID = "other"
+	assertErrorIs(t, ValidateManualTransferCreateTarget(&foreignWallet, requester, transfer), ErrWalletNotFound)
+
+	otherWallet := *wallet
+	otherWallet.ID = uuid.New()
+	assertErrorIs(t, ValidateManualTransferCreateTarget(&otherWallet, requester, transfer), ErrWalletNotFound)
+
+	inactiveWallet := *wallet
+	inactiveWallet.Status = WalletStatusFrozen
+	assertErrorIs(t, ValidateManualTransferCreateTarget(&inactiveWallet, requester, transfer), ErrWalletInactive)
+
+	otherCurrency := *wallet
+	otherCurrency.Currency = "AED"
+	assertErrorIs(t, ValidateManualTransferCreateTarget(&otherCurrency, requester, transfer), ErrCurrencyMismatch)
+
+	foreignRequester := *requester
+	foreignRequester.TenantID = "other"
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &foreignRequester, transfer), ErrAdminUserNotFound)
+
+	otherRequester := *requester
+	otherRequester.ID = 99
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &otherRequester, transfer), ErrAdminUserNotFound)
+
+	inactiveRequester := *requester
+	inactiveRequester.IsActive = false
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &inactiveRequester, transfer), ErrAdminUserNotFound)
+
+	missingRequester := transfer
+	missingRequester.RequestedBy = sql.NullInt64{}
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, requester, missingRequester), ErrMissingRequesterID)
+
+	assertErrorIs(t, ValidateManualTransferCreateTarget(nil, requester, transfer), ErrWalletNotFound)
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, nil, transfer), ErrAdminUserNotFound)
 }
 
 func TestAddManualTransferApprovalValidation(t *testing.T) {

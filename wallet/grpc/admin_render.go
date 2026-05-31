@@ -327,7 +327,7 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Ad
 	if err != nil {
 		return nil, err
 	}
-	requestedBy, err := adminPositiveInt64(form, "requested_by", walletstore.ErrMissingApproverID)
+	requestedBy, err := adminPositiveInt64(form, "requested_by", walletstore.ErrMissingRequesterID)
 	if err != nil {
 		return nil, err
 	}
