@@ -47,6 +47,70 @@ func TestService_calculateOffset(t *testing.T) {
 	}
 }
 
+func TestParsePositiveQueryInt(t *testing.T) {
+	got, err := parsePositiveQueryInt("", 50)
+	if err != nil {
+		t.Fatalf("parsePositiveQueryInt(default) error = %v", err)
+	}
+	if got != 50 {
+		t.Fatalf("parsePositiveQueryInt(default) = %d, want 50", got)
+	}
+
+	got, err = parsePositiveQueryInt(" 2 ", 50)
+	if err != nil {
+		t.Fatalf("parsePositiveQueryInt(valid) error = %v", err)
+	}
+	if got != 2 {
+		t.Fatalf("parsePositiveQueryInt(valid) = %d, want 2", got)
+	}
+
+	for _, raw := range []string{"0", "-1", "abc"} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := parsePositiveQueryInt(raw, 50); !errors.Is(err, ErrInvalidPagination) {
+				t.Fatalf("parsePositiveQueryInt(%q) error = %v, want %v", raw, err, ErrInvalidPagination)
+			}
+		})
+	}
+}
+
+func TestDashboardPaginationRejectsInvalidInputsBeforeDB(t *testing.T) {
+	service := Service{}
+	app := fiber.New()
+	app.Get("/merchant/:id", func(c *fiber.Ctx) error {
+		service.MerchantViews(c)
+		return nil
+	})
+	app.Get("/transactions", func(c *fiber.Ctx) error {
+		service.GetAll(c)
+		return nil
+	})
+	app.Get("/browser", func(c *fiber.Ctx) error {
+		service.BrowserDashboard(c)
+		return nil
+	})
+
+	tests := []string{
+		"/merchant/terminal?page=abc",
+		"/transactions?page=0",
+		"/transactions?size=-1",
+		"/transactions?perPage=-1",
+		"/browser?page=-1",
+	}
+	for _, path := range tests {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			resp, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+			}
+		})
+	}
+}
+
 func TestResolveTenantIDDoesNotDefaultFromServiceConfig(t *testing.T) {
 	s := Service{
 		NoebsConfig: ebs_fields.NoebsConfig{DefaultTenantID: "test-tenant"},

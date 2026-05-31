@@ -324,6 +324,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./dashboard -run 'TestParsePositiveQueryInt|TestDashboardPaginationRejectsInvalidInputsBeforeDB|TestService_calculateOffset'`
+- `go test -count=1 ./dashboard`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

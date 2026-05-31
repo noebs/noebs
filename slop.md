@@ -403,6 +403,11 @@ Last updated: 2026-05-31
     - Fix: require every refresh path to resolve the persisted user and verify the signed message before minting a replacement JWT. Replace the process-exiting crypto verifier with a local RSA verifier that returns `ErrInvalidSignature` for missing or malformed proof.
     - Tests: `go test -count=1 -v ./consumer -run 'TestVerifyUserSignatureRequiresValidProof|TestServiceRefreshJWTRequiresTenantClaim|TestServiceRefreshJWTRequiresSignatureProofForValidToken|TestServiceRefreshJWTUsesClaimTenant'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` and `TestServiceRefreshJWTUsesClaimTenant` skipped locally when the container runtime is unavailable); `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+81. Dashboard pagination accepted invalid limits and pages.
+    - Evidence: dashboard list handlers ignored `strconv.Atoi` errors for `page`, `size`, and `perPage`. Invalid page values were silently treated as page 1, while zero or negative sizes flowed into `LIMIT ? OFFSET ?`; in Postgres, `LIMIT -1` can remove the limit entirely.
+    - Fix: parse dashboard pagination through one boundary helper, reject malformed, zero, and negative values with HTTP 400 before any DB work, and keep explicit defaults for omitted page/size values.
+    - Tests: `go test -count=1 -v ./dashboard -run 'TestParsePositiveQueryInt|TestDashboardPaginationRejectsInvalidInputsBeforeDB|TestService_calculateOffset'`; `go test -count=1 ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

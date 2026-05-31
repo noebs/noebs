@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -16,6 +18,8 @@ import (
 )
 
 var log = logrus.New()
+
+var ErrInvalidPagination = errors.New("invalid pagination")
 
 type Service struct {
 	Store       *store.Store
@@ -29,8 +33,32 @@ func (s Service) calculateOffset(page, pageSize int) uint {
 	return uint((page - 1) * pageSize)
 }
 
+func parsePositiveQueryInt(raw string, defaultValue int) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed <= 0 {
+		return 0, ErrInvalidPagination
+	}
+	return parsed, nil
+}
+
+func rejectInvalidPagination(c *fiber.Ctx, err error) {
+	jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "invalid_pagination", "message": err.Error()})
+}
+
 // MerchantViews deprecated in favor of using the react-based dashboard features.
 func (s *Service) MerchantViews(c *fiber.Ctx) {
+	pageSize := 50
+	page, err := parsePositiveQueryInt(c.Query("page", ""), 1)
+	if err != nil {
+		rejectInvalidPagination(c, err)
+		return
+	}
+	offset := (page - 1) * pageSize
+
 	db, err := s.ensureDB()
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
@@ -41,14 +69,6 @@ func (s *Service) MerchantViews(c *fiber.Ctx) {
 	if !ok {
 		return
 	}
-
-	pageSize := 50
-	page := c.Query("page", "0")
-	p, _ := strconv.Atoi(page)
-	if p < 1 {
-		p = 1
-	}
-	offset := (p - 1) * pageSize
 
 	tran, err := fetchTransactions(
 		c.UserContext(),
@@ -148,8 +168,16 @@ func (s *Service) GetAll(c *fiber.Ctx) {
 	if perPage != "" {
 		size = perPage
 	}
-	pageSize, _ := strconv.Atoi(size)
-	page, _ := strconv.Atoi(p)
+	pageSize, err := parsePositiveQueryInt(size, 50)
+	if err != nil {
+		rejectInvalidPagination(c, err)
+		return
+	}
+	page, err := parsePositiveQueryInt(p, 1)
+	if err != nil {
+		rejectInvalidPagination(c, err)
+		return
+	}
 
 	offset := s.calculateOffset(page, pageSize)
 
@@ -207,6 +235,12 @@ func (s *Service) GetID(c *fiber.Ctx) {
 }
 
 func (s *Service) BrowserDashboard(c *fiber.Ctx) {
+	page, err := parsePositiveQueryInt(c.Query("page", ""), 1)
+	if err != nil {
+		rejectInvalidPagination(c, err)
+		return
+	}
+
 	db, err := s.ensureDB()
 	if err != nil {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
@@ -215,13 +249,6 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	tenantID, ok := s.requireTenantID(c)
 	if !ok {
 		return
-	}
-
-	page := 1
-	if q := c.Query("page", "1"); q != "" {
-		if parsed, err := strconv.Atoi(q); err == nil && parsed > 0 {
-			page = parsed
-		}
 	}
 
 	pageSize := 50
