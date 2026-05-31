@@ -64,6 +64,7 @@
 - Fixed card-vault writes so card inserts and full-card updates require explicit PAN identities instead of allowing empty-PAN rows or overwrites.
 - Fixed wallet hold transaction cleanup so `CreateHold`/`ReleaseHold` roll back on every non-committed exit, including insufficient funds and shadowed update errors.
 - Fixed API-key persistence and validation so empty emails/API keys fail before DB access and API key entropy failures are returned.
+- Fixed KYC profile reads so missing optional rows remain optional but real KYC/passport query errors are returned instead of swallowed.
 
 Verification:
 
@@ -273,6 +274,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./store -run 'TestStore_APIKeyRequiresExplicitFields|TestStore_IdentityTenantValidationFailsBeforeDB'`
 - `go test -count=1 -v ./consumer -run 'TestAuthServiceTenantValidationFailsBeforeDB|TestGenerateAPIKey'`
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_GetUserWithKYCReturnsKYCQueryErrors|TestStore_GetUserWithKYCReturnsPassportQueryErrors|TestStore_UpdateKYCValidationFailsBeforeDB'` (Postgres container cases skipped locally when the container runtime is unavailable)
 - `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`

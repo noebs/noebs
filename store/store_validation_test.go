@@ -1000,6 +1000,40 @@ func TestStore_UpdateKYCRequiresExistingUser(t *testing.T) {
 	}
 }
 
+func TestStore_GetUserWithKYCReturnsKYCQueryErrors(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	user := &ebs_fields.User{Mobile: "0990000000", Username: "0990000000"}
+	if err := s.CreateUser(ctx, "tenant", user); err != nil {
+		t.Fatalf("CreateUser(): %v", err)
+	}
+	if _, err := s.DB.ExecContext(ctx, "DROP TABLE kyc"); err != nil {
+		t.Fatalf("drop kyc table: %v", err)
+	}
+	if _, _, _, err := s.GetUserWithKYC(ctx, "tenant", "0990000000"); err == nil {
+		t.Fatal("GetUserWithKYC() error = nil, want KYC query error")
+	}
+}
+
+func TestStore_GetUserWithKYCReturnsPassportQueryErrors(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	mobile := "0990000000"
+	user := &ebs_fields.User{Mobile: mobile, Username: mobile}
+	if err := s.CreateUser(ctx, "tenant", user); err != nil {
+		t.Fatalf("CreateUser(): %v", err)
+	}
+	if err := s.UpdateKYC(ctx, "tenant", &ebs_fields.KYC{UserMobile: mobile, Mobile: mobile}, nil); err != nil {
+		t.Fatalf("UpdateKYC(): %v", err)
+	}
+	if _, err := s.DB.ExecContext(ctx, "DROP TABLE passports"); err != nil {
+		t.Fatalf("drop passports table: %v", err)
+	}
+	if _, _, _, err := s.GetUserWithKYC(ctx, "tenant", mobile); err == nil {
+		t.Fatal("GetUserWithKYC() error = nil, want passport query error")
+	}
+}
+
 func TestStore_CreateUserWithAuthAccountPersistsUserAndAccount(t *testing.T) {
 	ctx := context.Background()
 	s := newIdentityAuthTestStore(t, ctx)

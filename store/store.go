@@ -1478,12 +1478,18 @@ func (s *Store) GetUserWithKYC(ctx context.Context, tenantID, mobile string) (*e
 	stmt := s.DB.Rebind("SELECT * FROM kyc WHERE tenant_id = ? AND mobile = ?")
 	var kyc ebs_fields.KYC
 	if err := db.GetContext(ctx, &kyc, stmt, tenantID, mobile); err != nil {
-		return user, nil, nil, nil
+		if ErrNotFound(err) {
+			return user, nil, nil, nil
+		}
+		return nil, nil, nil, err
 	}
 	passStmt := s.DB.Rebind("SELECT * FROM passports WHERE tenant_id = ? AND mobile = ?")
 	var passport ebs_fields.Passport
 	if err := db.GetContext(ctx, &passport, passStmt, tenantID, mobile); err != nil {
-		return user, &kyc, nil, nil
+		if ErrNotFound(err) {
+			return user, &kyc, nil, nil
+		}
+		return nil, nil, nil, err
 	}
 	return user, &kyc, &passport, nil
 }

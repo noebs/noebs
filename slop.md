@@ -358,6 +358,11 @@ Last updated: 2026-05-31
     - Fix: add typed store errors for missing email/API key, trim/lowercase email at the store boundary, reject empty API key values before DB access, and propagate API key generation errors.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_APIKeyRequiresExplicitFields|TestStore_IdentityTenantValidationFailsBeforeDB'`; `go test -count=1 -v ./consumer -run 'TestAuthServiceTenantValidationFailsBeforeDB|TestGenerateAPIKey'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+72. KYC profile reads swallowed real DB errors as absent data.
+    - Evidence: `GetUserWithKYC` returned `(user, nil, nil, nil)` for any KYC query error and `(user, &kyc, nil, nil)` for any passport query error. Missing tables, malformed schema, or connection/query failures were therefore reported as a successful user profile with no KYC/passport data.
+    - Fix: treat only not-found KYC/passport rows as absent optional data and return all other query errors.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_GetUserWithKYCReturnsKYCQueryErrors|TestStore_GetUserWithKYCReturnsPassportQueryErrors|TestStore_UpdateKYCValidationFailsBeforeDB'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
