@@ -562,6 +562,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestRenderWalletAdmin|TestRequireAdmin|TestSignalManualTransferDecisionRequires|TestWithdrawalSignals'`
+- `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

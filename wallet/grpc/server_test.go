@@ -32,8 +32,9 @@ func TestEnsureWalletRequiresExplicitCurrency(t *testing.T) {
 
 func TestRenderWalletAdminRequiresExplicitTenant(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
-	_, err := server.RenderWalletAdmin(context.Background(), &walletv1.AdminWalletRequest{
+	_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{
 		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
 	})
 	if status.Code(err) != codes.InvalidArgument {
@@ -41,6 +42,17 @@ func TestRenderWalletAdminRequiresExplicitTenant(t *testing.T) {
 	}
 	if status.Convert(err).Message() != walletstore.ErrMissingTenantID.Error() {
 		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingTenantID.Error())
+	}
+}
+
+func TestRenderWalletAdminRequiresAdminAuth(t *testing.T) {
+	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+
+	_, err := server.RenderWalletAdmin(context.Background(), &walletv1.AdminWalletRequest{
+		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
 	}
 }
 
@@ -66,8 +78,9 @@ func TestRenderWalletAdminUsesGatewayTenantMetadata(t *testing.T) {
 
 func TestRenderWalletAdminDecisionRequiresExplicitTenant(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
-	_, err := server.RenderWalletAdmin(context.Background(), &walletv1.AdminWalletRequest{
+	_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{
 		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER,
 		Path: map[string]string{
 			"workflow_id": "manual-transfer-workflow",
@@ -153,5 +166,6 @@ func TestAdminWithdrawalApprovalRejectsMalformedRawRequest(t *testing.T) {
 func walletAdminTenantContext(tenantID string) context.Context {
 	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
 		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,
+		strings.ToLower(gateway.GatewayAdminIdentityHeader), gateway.GatewayAdminIdentityValue,
 	))
 }

@@ -32,6 +32,13 @@ import (
 const adminHTMLContentType = "text/html; charset=utf-8"
 
 func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	if err := s.requireAdmin(md); err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing request")
+	}
 	switch req.Action {
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD:
 		return s.renderAdminDashboard(ctx, req)

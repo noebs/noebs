@@ -608,6 +608,11 @@ Last updated: 2026-05-31
     - Fix: require gateway admin metadata inside `RequestManualTransfer` before request validation or workflow start, keep tenant validation covered with an authenticated admin context, and preserve the explicit requester/user mismatch check when user identity metadata is also present.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRequestManualTransfer(RequiresAdminAuth|PublicIdentityMustMatchRequester|RequiresTimeout|RejectsInvalidTransferType|UsesDefaultTimeout)|TestWorkflowRequestsValidateTenantBeforeTemporal|TestSignalManualTransferDecisionRequires(AdminAuth|Reason)'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+122. Wallet admin rendering trusted admin-service interceptor auth.
+    - Evidence: `RenderWalletAdmin` dispatches every wallet admin view and form action, including approval/rejection actions, but did not require admin metadata in the handler. Direct invocation without the outer gRPC interceptor could render admin pages when only tenant metadata was present.
+    - Fix: require gateway admin metadata at the start of `RenderWalletAdmin`, then validate the admin request and tenant context.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRenderWalletAdmin|TestRequireAdmin|TestSignalManualTransferDecisionRequires|TestWithdrawalSignals'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
