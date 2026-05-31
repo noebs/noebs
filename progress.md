@@ -511,6 +511,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./consumer -run 'TestQRPurchaseTransactionValidation|TestQRTransactionsRecordsLastTransactions'` (`TestQRTransactionsRecordsLastTransactions` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./consumer/handler -run 'TestStatusForErrorMapsMerchantValidationToBadRequest'`
+- `go test -count=1 ./consumer ./consumer/handler ./dashboard`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

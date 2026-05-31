@@ -126,6 +126,8 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrAmbiguousPaymentToken),
 		errors.Is(err, consumer.ErrReceiverHasNoCard),
 		errors.Is(err, consumer.ErrMissingBillerID),
+		errors.Is(err, consumer.ErrMissingMerchantID),
+		errors.Is(err, consumer.ErrInvalidMerchantID),
 		errors.Is(err, consumer.ErrMissingPublicKey),
 		errors.Is(err, consumer.ErrInvalidCard),
 		errors.Is(err, consumer.ErrUserAlreadyExists):

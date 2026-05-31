@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 )
@@ -95,5 +96,13 @@ func TestStatusForErrorMapsDuplicateTransactionsToConflict(t *testing.T) {
 func TestStatusForErrorMapsInvalidAmountToBadRequest(t *testing.T) {
 	if got := statusForError(store.ErrInvalidAmount); got != http.StatusBadRequest {
 		t.Fatalf("statusForError(ErrInvalidAmount) = %d, want %d", got, http.StatusBadRequest)
+	}
+}
+
+func TestStatusForErrorMapsMerchantValidationToBadRequest(t *testing.T) {
+	for _, err := range []error{consumer.ErrMissingMerchantID, consumer.ErrInvalidMerchantID} {
+		if got := statusForError(err); got != http.StatusBadRequest {
+			t.Fatalf("statusForError(%v) = %d, want %d", err, got, http.StatusBadRequest)
+		}
 	}
 }

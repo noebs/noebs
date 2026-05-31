@@ -16,7 +16,15 @@ func (s *Service) callEBSJSON(ctx context.Context, tenantID, baseURL, endpoint s
 	return s.callEBSJSONWithMutate(ctx, tenantID, baseURL, endpoint, req, nil)
 }
 
+func (s *Service) callEBSJSONWithoutTransactionRecord(ctx context.Context, tenantID, baseURL, endpoint string, req any) (ebs_fields.EBSParserFields, error) {
+	return s.callEBSJSONWithOptions(ctx, tenantID, baseURL, endpoint, req, nil, false)
+}
+
 func (s *Service) callEBSJSONWithMutate(ctx context.Context, tenantID, baseURL, endpoint string, req any, mutate func(*ebs_fields.EBSParserFields)) (ebs_fields.EBSParserFields, error) {
+	return s.callEBSJSONWithOptions(ctx, tenantID, baseURL, endpoint, req, mutate, true)
+}
+
+func (s *Service) callEBSJSONWithOptions(ctx context.Context, tenantID, baseURL, endpoint string, req any, mutate func(*ebs_fields.EBSParserFields), recordTransaction bool) (ebs_fields.EBSParserFields, error) {
 	if s == nil {
 		return ebs_fields.EBSParserFields{}, ErrMissingService
 	}
@@ -30,7 +38,7 @@ func (s *Service) callEBSJSONWithMutate(ctx context.Context, tenantID, baseURL, 
 		return ebs_fields.EBSParserFields{}, err
 	}
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)
-	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate)
+	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate, recordTransaction)
 }
 
 func (s *Service) callEBSRaw(ctx context.Context, tenantID, baseURL, endpoint string, payload []byte) (ebs_fields.EBSParserFields, error) {
@@ -47,10 +55,10 @@ func (s *Service) callEBSRawWithMutate(ctx context.Context, tenantID, baseURL, e
 	}
 	url := baseURL + endpoint
 	code, res, ebsErr := ebs_fields.EBSHttpClient(url, payload)
-	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate)
+	return s.finalizeEBSCall(ctx, tenantID, url, endpoint, code, res, ebsErr, mutate, true)
 }
 
-func (s *Service) finalizeEBSCall(ctx context.Context, tenantID, url, endpoint string, code int, res ebs_fields.EBSParserFields, ebsErr error, mutate func(*ebs_fields.EBSParserFields)) (ebs_fields.EBSParserFields, error) {
+func (s *Service) finalizeEBSCall(ctx context.Context, tenantID, url, endpoint string, code int, res ebs_fields.EBSParserFields, ebsErr error, mutate func(*ebs_fields.EBSParserFields), recordTransaction bool) (ebs_fields.EBSParserFields, error) {
 	res.Name = s.ToDatabasename(url)
 
 	if mutate != nil {
@@ -61,7 +69,10 @@ func (s *Service) finalizeEBSCall(ctx context.Context, tenantID, url, endpoint s
 	// Always mask before returning (store also masks before persisting).
 	res.MaskPAN()
 
-	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
+	var recordErr error
+	if recordTransaction {
+		recordErr = s.recordTransaction(ctx, tenantID, res.EBSResponse)
+	}
 	if recordErr != nil {
 		if s.Logger != nil {
 			s.Logger.WithFields(logrus.Fields{

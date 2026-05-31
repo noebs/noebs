@@ -37,6 +37,8 @@ var (
 	ErrNotificationCommand       = errors.New("notification_chat_command_failed")
 	ErrInvalidBillerHookEndpoint = errors.New("invalid_biller_hook_endpoint")
 	ErrBillerHookPost            = errors.New("biller_hook_post_failed")
+	ErrMissingMerchantID         = errors.New("missing merchant_id")
+	ErrInvalidMerchantID         = errors.New("invalid merchant_id")
 
 	// Registration
 	ErrMissingMobile     = errors.New("missing mobile")
