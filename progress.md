@@ -583,6 +583,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./dashboard ./parsing -run 'Test(ParsePositiveQueryInt|DashboardPaginationRejectsInvalidInputsBeforeDB|DashboardTransactionsDefaultOmittedPageAtBoundary|IntParams)'`
+- `go test -count=1 ./dashboard ./parsing ./consumer/handler ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

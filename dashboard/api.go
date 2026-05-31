@@ -6,11 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jmoiron/sqlx"
@@ -37,15 +36,11 @@ func (s Service) calculateOffset(page, pageSize int) uint {
 }
 
 func parsePositiveQueryInt(raw string, defaultValue int) (int, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultValue, nil
-	}
-	parsed, err := strconv.Atoi(raw)
-	if err != nil || parsed <= 0 {
+	value, err := parsing.PositiveIntOrDefaultParam(map[string]string{"value": raw}, "value", defaultValue)
+	if err != nil {
 		return 0, ErrInvalidPagination
 	}
-	return parsed, nil
+	return value, nil
 }
 
 func rejectInvalidPagination(c *fiber.Ctx, err error) {
@@ -163,7 +158,7 @@ func (s *Service) TransactionByTid(c *fiber.Ctx) {
 }
 
 func (s *Service) GetAll(c *fiber.Ctx) {
-	p := c.Query("page", "0")
+	p := c.Query("page", "")
 	size := c.Query("size", "50")
 	perPage := c.Query("perPage", "")
 

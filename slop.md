@@ -628,6 +628,11 @@ Last updated: 2026-05-31
     - Fix: run the existing `walletvalidation.Service.ValidateP2P` in the gRPC boundary before resolving Temporal, while keeping workflow validation as the concurrency guard.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRequestP2PTransfer(ValidatesWalletsBeforeTemporal|RejectsInsufficientFundsBeforeTemporal|StartsWorkflowAfterValidation|RequiresIdempotency|RequiresPIN|PublicRequiresGatewayIdentity)'` (DB-backed P2P admission tests skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/grpc ./wallet/validation ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+126. Dashboard transactions treated an omitted page as invalid pagination.
+    - Evidence: `GetAll` read `page` with a Fiber default of `"0"` and then passed it through positive integer validation. A request that omitted `page` therefore failed before reaching tenant/DB handling instead of applying the intended page-1 boundary default.
+    - Fix: use the shared top-level `parsing` package for positive query integers and pass an empty raw page value so defaults are applied only for absent/blank input while explicit `page=0` remains invalid.
+    - Tests: `go test -count=1 -v ./dashboard ./parsing -run 'Test(ParsePositiveQueryInt|DashboardPaginationRejectsInvalidInputsBeforeDB|DashboardTransactionsDefaultOmittedPageAtBoundary|IntParams)'`; `go test -count=1 ./dashboard ./parsing ./consumer/handler ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

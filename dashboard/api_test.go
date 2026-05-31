@@ -111,6 +111,26 @@ func TestDashboardPaginationRejectsInvalidInputsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestDashboardTransactionsDefaultOmittedPageAtBoundary(t *testing.T) {
+	service := Service{}
+	app := fiber.New()
+	app.Get("/transactions", func(c *fiber.Ctx) error {
+		service.GetAll(c)
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/transactions", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+}
+
 func TestDashboardTransactionQueryRejectsInvalidFieldsBeforeDB(t *testing.T) {
 	service := Service{}
 	app := fiber.New()
