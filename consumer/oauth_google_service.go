@@ -108,8 +108,12 @@ func (s *Service) CompleteProfile(ctx context.Context, tenantID string, userID i
 		return "", empty, errors.New("mobile_required")
 	}
 
-	if existing, err := s.Store.GetUserByMobile(ctx, tenantID, mobile); err == nil && existing.ID != userID {
-		return "", empty, errors.New("mobile_taken")
+	if existing, err := s.Store.GetUserByMobile(ctx, tenantID, mobile); err == nil {
+		if existing.ID != userID {
+			return "", empty, errors.New("mobile_taken")
+		}
+	} else if !store.ErrNotFound(err) {
+		return "", empty, err
 	}
 	if err := s.Store.UpdateUserMobile(ctx, tenantID, userID, mobile, fullname); err != nil {
 		return "", empty, err

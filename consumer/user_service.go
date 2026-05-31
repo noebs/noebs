@@ -239,8 +239,12 @@ func (s *Service) UpdateUserProfile(ctx context.Context, tenantID, mobile string
 		return err
 	}
 	if profile.Username != "" {
-		if other, err := s.Store.FindUserByUsername(ctx, tenantID, profile.Username); err == nil && other.ID != user.ID {
-			return errors.New("username already exists")
+		if other, err := s.Store.FindUserByUsername(ctx, tenantID, profile.Username); err == nil {
+			if other.ID != user.ID {
+				return errors.New("username already exists")
+			}
+		} else if !store.ErrNotFound(err) {
+			return err
 		}
 	}
 	return s.Store.UpdateUserProfile(ctx, tenantID, user.ID, profile)

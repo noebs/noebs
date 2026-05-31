@@ -413,6 +413,11 @@ Last updated: 2026-05-31
     - Fix: validate backfill target identifiers before DB access and route every sensitive backfill update through `execContextRequireRowsAffected`, so missing rows return `sql.ErrNoRows` like the rest of the store's targeted writes.
     - Tests: `go test -count=1 -v ./store -run 'TestSensitiveBackfillUpdatesValidateTargetsBeforeDB|TestStoreTargetedUpdatesReportMissingRows|TestExecContextRequireRowsAffected|TestHydrateSensitiveFieldsReturnsBackfillEncryptionErrors'` (`TestStoreTargetedUpdatesReportMissingRows` skipped locally when the container runtime is unavailable); `go test -count=1 ./store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+83. Consumer identity uniqueness checks treated store failures as absence.
+    - Evidence: `CreateUser`, `CompleteProfile`, and `UpdateUserProfile` only handled the successful lookup branch for mobile/username uniqueness checks. Any non-not-found store error, including a failed DB lookup, was treated the same as "no conflicting user" and the flow continued into password validation or profile mutation.
+    - Fix: propagate every uniqueness lookup error except explicit not-found results, while keeping the duplicate mobile/username checks unchanged.
+    - Tests: `go test -count=1 -v ./consumer -run 'TestCreateUserPropagatesUniquenessLookupErrors|TestCreateUserRequiresMobileBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB|TestUserServiceIdentityInputsFailBeforeStore'`; `go test -count=1 ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

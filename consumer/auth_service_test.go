@@ -285,6 +285,23 @@ func TestCreateUserRequiresMobileBeforeStore(t *testing.T) {
 	}
 }
 
+func TestCreateUserPropagatesUniquenessLookupErrors(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{
+		Mobile:   "0990000000",
+		Password: "short",
+	})
+	if err == nil {
+		t.Fatal("CreateUser() error = nil, want store lookup error")
+	}
+	if errors.Is(err, ErrPasswordInvalid) {
+		t.Fatalf("CreateUser() error = %v, want uniqueness lookup error before password validation", err)
+	}
+	if !strings.Contains(err.Error(), "nil db") {
+		t.Fatalf("CreateUser() error = %v, want nil db lookup error", err)
+	}
+}
+
 func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")

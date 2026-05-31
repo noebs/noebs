@@ -334,6 +334,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./consumer -run 'TestCreateUserPropagatesUniquenessLookupErrors|TestCreateUserRequiresMobileBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB|TestUserServiceIdentityInputsFailBeforeStore'`
+- `go test -count=1 ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

@@ -187,11 +187,15 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	// Make sure user is unique
 	if _, err := s.Store.GetUserByMobile(ctx, tenantID, u.Mobile); err == nil {
 		return ebs_fields.User{}, errors.New("mobile already exists")
+	} else if !store.ErrNotFound(err) {
+		return ebs_fields.User{}, err
 	}
 	// Make sure username is unique
 	if u.Username != "" {
 		if _, err := s.Store.FindUserByUsername(ctx, tenantID, u.Username); err == nil {
 			return ebs_fields.User{}, errors.New("username already exists")
+		} else if !store.ErrNotFound(err) {
+			return ebs_fields.User{}, err
 		}
 	} else {
 		u.Username = u.Mobile
