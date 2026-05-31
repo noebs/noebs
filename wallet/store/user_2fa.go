@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -30,10 +31,15 @@ func (s *Store) CreateOrResetUserTwoFA(ctx context.Context, tenantID string, use
 			enabled = FALSE,
 			updated_at = EXCLUDED.updated_at,
 			enabled_at = NULL,
-			disabled_at = NULL
+			disabled_at = NULL,
+			last_used_at = NULL
+		WHERE wallet_user_2fa.enabled = FALSE
 	RETURNING *`)
 	var stored UserTwoFA
 	if err := db.GetContext(ctx, &stored, stmt, tenantID, userID, secret, now, now); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrUserTwoFAAlreadyEnabled
+		}
 		return nil, err
 	}
 	return &stored, nil

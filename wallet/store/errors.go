@@ -43,6 +43,7 @@ var (
 	ErrMissingTwoFACode             = errors.New("missing 2fa code")
 	ErrMissingTwoFASecret           = errors.New("missing 2fa secret")
 	ErrInvalidTwoFACode             = errors.New("invalid 2fa code")
+	ErrUserTwoFAAlreadyEnabled      = errors.New("user 2fa already enabled")
 	ErrMissingApprovalDecision      = errors.New("missing approval decision")
 	ErrMissingApprovalReason        = errors.New("missing approval reason")
 	ErrMissingApprovalTimeout       = errors.New("missing approval timeout")

@@ -43,6 +43,7 @@
 - Fixed withdrawal destination creation so return-to-source destinations must link a valid withdrawable funding source and cannot seed usage counters.
 - Fixed PSP amount replay handling so duplicate amount keys cannot rewrite money or FX fields; exact replays return the original row and mismatches return `ErrDuplicateAmount`.
 - Fixed wallet ensure replay handling so existing wallets must match the requested owner/user/currency/KYC contract instead of silently returning mismatched rows or raw unique-index errors.
+- Fixed 2FA enrollment so active TOTP secrets cannot be silently overwritten and disabled; enabled users now get a typed already-enabled error.
 
 Verification:
 
@@ -84,6 +85,11 @@ Verification:
 - `go vet ./...`
 - `go test -count=1 ./wallet/store ./wallet/grpc`
 - `go test -count=1 -v ./wallet/store -run 'TestEnsureWallet|TestValidateEnsureWalletReplay|TestGetWalletByOwnerValidation'`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`
+- `go test -count=1 -v ./wallet/store -run 'TestCreateOrResetUserTwoFA|TestUserTwoFAValidation'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

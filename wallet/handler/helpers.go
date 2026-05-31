@@ -51,6 +51,8 @@ func mapWalletError(err error) error {
 		return nil
 	case errors.Is(err, wallet.ErrMissingStore):
 		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
+	case errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled):
+		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrWalletNotFound),
 		errors.Is(err, walletstore.ErrHoldNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),

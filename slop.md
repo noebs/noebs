@@ -198,6 +198,11 @@ Last updated: 2026-05-31
     - Fix: validate owner types before hitting the DB, make wallet uniqueness conflicts exact-replay idempotent across both owner and user keys, return existing wallets only when tenant/owner/user/currency/KYC match, and return `ErrDuplicateWallet` for mismatches.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestEnsureWallet|TestValidateEnsureWalletReplay|TestGetWalletByOwnerValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+40. 2FA enrollment could silently disable an enabled TOTP secret.
+    - Evidence: `CreateOrResetUserTwoFA` used an upsert that overwrote `wallet_user_2fa.secret`, set `enabled = FALSE`, and cleared enable/disable timestamps for any existing user record. Calling enrollment against an already-enabled user could therefore disable 2FA without verifying the current TOTP code.
+    - Fix: allow secret regeneration only while the record is pending/disabled, clear stale timestamps for that reset path, preserve enabled records unchanged, and return `ErrUserTwoFAAlreadyEnabled` when enrollment is attempted against active 2FA.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestCreateOrResetUserTwoFA|TestUserTwoFAValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -302,7 +302,8 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrApproverIsRequester):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, wallet.ErrMissingStore),
-		errors.Is(err, walletvalidation.ErrMissingStore):
+		errors.Is(err, walletvalidation.ErrMissingStore),
+		errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	default:
 		return status.Error(codes.Internal, err.Error())
