@@ -32,8 +32,8 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if req.IdempotencyKey == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingIdempotencyKey.Error())
 	}
-	if req.TransferType == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTransferType.Error())
+	if err := walletstore.ValidateManualTransferType(req.TransferType); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())

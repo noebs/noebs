@@ -17,8 +17,8 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if transfer.IdempotencyKey == "" {
 		return nil, ErrMissingIdempotencyKey
 	}
-	if transfer.TransferType == "" {
-		return nil, ErrMissingTransferType
+	if err := ValidateManualTransferType(transfer.TransferType); err != nil {
+		return nil, err
 	}
 	if transfer.Amount <= 0 {
 		return nil, ErrInvalidAmount

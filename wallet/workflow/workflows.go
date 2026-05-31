@@ -1123,8 +1123,8 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	if params.IdempotencyKey == "" {
 		return walletstore.ErrMissingIdempotencyKey
 	}
-	if params.TransferType == "" {
-		return walletstore.ErrMissingTransferType
+	if err := walletstore.ValidateManualTransferType(params.TransferType); err != nil {
+		return err
 	}
 	if params.WalletID == "" {
 		return walletstore.ErrMissingWalletID
@@ -1204,7 +1204,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	}
 
 	var holdID int64
-	if isManualTransferDebit(params.TransferType) {
+	if walletstore.IsManualTransferDebit(params.TransferType) {
 		holdParams := walletstore.HoldParams{
 			TenantID:       params.TenantID,
 			WalletID:       walletID,
@@ -1282,7 +1282,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 
 		debitID := walletID
 		creditID := treasury.ID
-		if params.TransferType == "manual_credit" {
+		if params.TransferType == walletstore.ManualTransferTypeCredit {
 			debitID = treasury.ID
 			creditID = walletID
 		}
@@ -1306,7 +1306,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteHeldDoubleEntry, heldEntry).Get(ctx, &posted); err != nil {
 				return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 			}
-		} else if params.TransferType == "manual_credit" {
+		} else if params.TransferType == walletstore.ManualTransferTypeCredit {
 			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateSystemDebitDoubleEntry, entry).Get(ctx, nil); err != nil {
 				return err
 			}
@@ -2204,15 +2204,6 @@ func fundingSourceID(source *walletstore.FundingSource) int64 {
 		return 0
 	}
 	return source.ID
-}
-
-func isManualTransferDebit(transferType string) bool {
-	switch transferType {
-	case "manual_debit", "manual_withdrawal":
-		return true
-	default:
-		return false
-	}
 }
 
 func newLockToken(ctx workflow.Context) string {

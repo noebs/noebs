@@ -359,6 +359,9 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Ad
 	case reason == "":
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
+	if err := walletstore.ValidateManualTransferType(transferType); err != nil {
+		return nil, mapError(err)
+	}
 	if _, err := adminUUID(walletID); err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}

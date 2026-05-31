@@ -68,6 +68,7 @@ var (
 	ErrMissingInteractionType       = errors.New("missing interaction type")
 	ErrMissingWorkflowID            = errors.New("missing workflow id")
 	ErrMissingTransferType          = errors.New("missing transfer type")
+	ErrInvalidTransferType          = errors.New("invalid transfer type")
 	ErrMissingReason                = errors.New("missing reason")
 	ErrMissingProofOfPayment        = errors.New("missing proof of payment")
 	ErrMissingDecision              = errors.New("missing decision")

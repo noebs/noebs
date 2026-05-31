@@ -143,6 +143,11 @@ Last updated: 2026-05-31
     - Fix: add an explicit system-debit double-entry store/activity contract that only permits system debit wallets to overdraft, and route deposit/manual-credit ledger posting through it while leaving ordinary transfers on the available-balance path.
     - Tests: `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow`; `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestPostHeldDoubleEntryValidation'` (Postgres container case skipped locally because the container runtime is unavailable).
 
+29. Manual transfers accepted arbitrary transfer types and unknown types bypassed hold semantics.
+    - Evidence: request/admin/workflow/store validation only rejected an empty `transfer_type`. In the workflow, only `manual_debit` and `manual_withdrawal` created holds, while unknown non-empty types could fall through to the ordinary ledger path.
+    - Fix: add typed manual-transfer type validation for `manual_credit`, `manual_debit`, and `manual_withdrawal`; enforce it at gRPC/admin boundaries, workflow startup, and store create.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/workflow`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

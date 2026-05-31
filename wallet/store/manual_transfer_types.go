@@ -5,6 +5,32 @@ import (
 	"time"
 )
 
+const (
+	ManualTransferTypeCredit     = "manual_credit"
+	ManualTransferTypeDebit      = "manual_debit"
+	ManualTransferTypeWithdrawal = "manual_withdrawal"
+)
+
+func ValidateManualTransferType(transferType string) error {
+	switch transferType {
+	case "":
+		return ErrMissingTransferType
+	case ManualTransferTypeCredit, ManualTransferTypeDebit, ManualTransferTypeWithdrawal:
+		return nil
+	default:
+		return ErrInvalidTransferType
+	}
+}
+
+func IsManualTransferDebit(transferType string) bool {
+	switch transferType {
+	case ManualTransferTypeDebit, ManualTransferTypeWithdrawal:
+		return true
+	default:
+		return false
+	}
+}
+
 type ManualTransfer struct {
 	ID              int64          `db:"id"`
 	TenantID        string         `db:"tenant_id"`

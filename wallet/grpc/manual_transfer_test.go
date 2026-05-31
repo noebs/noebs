@@ -45,6 +45,36 @@ func TestRequestManualTransferRequiresTimeout(t *testing.T) {
 	}
 }
 
+func TestRequestManualTransferRejectsInvalidTransferType(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{WalletManualTransferApprovalTimeoutSeconds: 60},
+	}
+	server := NewServer(svc)
+
+	req := &walletv1.ManualTransferRequest{
+		TenantId:       "tenant",
+		IdempotencyKey: "manual-1",
+		TransferType:   "bank_transfer",
+		WalletId:       uuid.NewString(),
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "test",
+		RequestedBy:    10,
+	}
+
+	_, err := server.RequestManualTransfer(context.Background(), req)
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected invalid argument, got %v", status.Code(err))
+	}
+	if status.Convert(err).Message() != walletstore.ErrInvalidTransferType.Error() {
+		t.Fatalf("error = %v, want %v", err, walletstore.ErrInvalidTransferType)
+	}
+}
+
 func TestSignalManualTransferDecisionRequiresReason(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},

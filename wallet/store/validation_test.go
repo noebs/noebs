@@ -280,7 +280,7 @@ func TestCreateManualTransferValidation(t *testing.T) {
 		TenantID:       "tenant",
 		WorkflowID:     "wf-1",
 		IdempotencyKey: "idem-1",
-		TransferType:   "bank_transfer",
+		TransferType:   ManualTransferTypeDebit,
 		Amount:         100,
 		Currency:       "USD",
 		Reason:         "withdrawal",
@@ -309,6 +309,11 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	bad.TransferType = ""
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingTransferType)
+
+	bad = transfer
+	bad.TransferType = "bank_transfer"
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTransferType)
 
 	bad = transfer
 	bad.Amount = 0
