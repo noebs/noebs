@@ -30,6 +30,7 @@ var (
 	ErrMissingProvider       = errors.New("missing provider")
 	ErrMissingProviderUserID = errors.New("missing provider_user_id")
 	ErrInvalidUserID         = errors.New("invalid user_id")
+	ErrDuplicateAuthAccount  = errors.New("duplicate auth account")
 	ErrInvalidCardID         = errors.New("invalid card_id")
 	ErrInvalidUserColumn     = errors.New("invalid user column")
 	ErrMissingDataKey        = errors.New("missing data_key")

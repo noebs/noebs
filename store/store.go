@@ -1609,11 +1609,31 @@ func validateAuthAccount(account *ebs_fields.AuthAccount) error {
 }
 
 func (s *Store) linkAuthAccount(ctx context.Context, exec dbExecutor, tenantID string, account *ebs_fields.AuthAccount, now time.Time) error {
+	if err := s.requireAuthAccountUser(ctx, exec, tenantID, account.UserID); err != nil {
+		return err
+	}
+	provider := strings.TrimSpace(account.Provider)
+	providerUserID := strings.TrimSpace(account.ProviderUserID)
+	email := strings.ToLower(account.Email)
 	stmt := s.DB.Rebind(`INSERT INTO auth_accounts(tenant_id, user_id, provider, provider_user_id, email, email_verified, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(tenant_id, provider, provider_user_id) DO UPDATE SET email = excluded.email, email_verified = excluded.email_verified, updated_at = excluded.updated_at`)
-	_, err := exec.ExecContext(ctx, stmt, tenantID, account.UserID, strings.TrimSpace(account.Provider), strings.TrimSpace(account.ProviderUserID), strings.ToLower(account.Email), account.EmailVerified, now, now)
-	return err
+		ON CONFLICT(tenant_id, provider, provider_user_id) DO NOTHING
+		RETURNING id`)
+	var id int64
+	if err := exec.QueryRowContext(ctx, stmt, tenantID, account.UserID, provider, providerUserID, email, account.EmailVerified, now, now).Scan(&id); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		existing, err := s.getAuthAccountByProvider(ctx, exec, tenantID, provider, providerUserID)
+		if err != nil {
+			return err
+		}
+		if !authAccountReplayMatches(existing, tenantID, account.UserID, provider, providerUserID, email, account.EmailVerified) {
+			return ErrDuplicateAuthAccount
+		}
+		return nil
+	}
+	return nil
 }
 
 func (s *Store) FindAuthAccount(ctx context.Context, tenantID, provider, providerUserID string) (*ebs_fields.AuthAccount, error) {
@@ -1639,6 +1659,44 @@ func (s *Store) FindAuthAccount(ctx context.Context, tenantID, provider, provide
 		return nil, err
 	}
 	return &account, nil
+}
+
+func (s *Store) requireAuthAccountUser(ctx context.Context, exec dbExecutor, tenantID string, userID int64) error {
+	stmt := s.DB.Rebind("SELECT id FROM users WHERE tenant_id = ? AND id = ? AND deleted_at IS NULL")
+	var id int64
+	return exec.QueryRowContext(ctx, stmt, tenantID, userID).Scan(&id)
+}
+
+func (s *Store) getAuthAccountByProvider(ctx context.Context, exec dbExecutor, tenantID, provider, providerUserID string) (*ebs_fields.AuthAccount, error) {
+	stmt := s.DB.Rebind(`SELECT id, tenant_id, user_id, provider, provider_user_id, email, email_verified, created_at, updated_at
+		FROM auth_accounts WHERE tenant_id = ? AND provider = ? AND provider_user_id = ?`)
+	var account ebs_fields.AuthAccount
+	if err := exec.QueryRowContext(ctx, stmt, tenantID, provider, providerUserID).Scan(
+		&account.ID,
+		&account.TenantID,
+		&account.UserID,
+		&account.Provider,
+		&account.ProviderUserID,
+		&account.Email,
+		&account.EmailVerified,
+		&account.CreatedAt,
+		&account.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &account, nil
+}
+
+func authAccountReplayMatches(account *ebs_fields.AuthAccount, tenantID string, userID int64, provider, providerUserID, email string, emailVerified bool) bool {
+	if account == nil {
+		return false
+	}
+	return account.TenantID == tenantID &&
+		account.UserID == userID &&
+		account.Provider == provider &&
+		account.ProviderUserID == providerUserID &&
+		account.Email == email &&
+		account.EmailVerified == emailVerified
 }
 
 func (s *Store) FindUserByEmail(ctx context.Context, tenantID, email string) (*ebs_fields.User, error) {

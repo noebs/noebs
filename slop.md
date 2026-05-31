@@ -468,6 +468,11 @@ Last updated: 2026-05-31
     - Fix: validate balance-mutation wallet targets after idempotent replay checks but before new mutations commit, require active debit and credit wallets for ledger posts, require active wallets for new holds, and keep exact replays read-only even if wallet status later changes.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateDoubleEntryWalletTargets|TestValidateHoldWalletTarget|TestBalanceMutationsRejectInactiveWallets|TestCreateHoldInsufficientFundsRollsBack'` (`TestBalanceMutationsRejectInactiveWallets` and `TestCreateHoldInsufficientFundsRollsBack` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+94. Auth account links could point at users from another tenant.
+    - Evidence: `auth_accounts` stores `tenant_id` and `user_id`, but the database FK references `users(id)` only. `LinkAuthAccount` validated only that `user_id` was positive, then inserted or updated the provider link under the requested tenant, so a direct store call could link tenant A's provider identity to tenant B's user row. Provider-link conflicts also updated email metadata without proving the retry matched the original user.
+    - Fix: require the target user to exist under the same tenant before linking, make provider-link conflicts exact replays, and return `ErrDuplicateAuthAccount` for mismatched user/email/verification retries instead of silently updating the existing link.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_LinkAuthAccountRequiresTenantUserAndExactReplay|TestStore_CreateUserWithAuthAccountPersistsUserAndAccount|TestStore_AuthAccountValidationFailsBeforeDB'` (`TestStore_LinkAuthAccountRequiresTenantUserAndExactReplay` and `TestStore_CreateUserWithAuthAccountPersistsUserAndAccount` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

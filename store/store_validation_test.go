@@ -1144,6 +1144,75 @@ func TestStore_CreateUserWithAuthAccountPersistsUserAndAccount(t *testing.T) {
 	}
 }
 
+func TestStore_LinkAuthAccountRequiresTenantUserAndExactReplay(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	user := &ebs_fields.User{
+		Mobile:   "google:tenant-user",
+		Username: "google:tenant-user",
+		Email:    "tenant-user@example.test",
+		Password: "hashed-password",
+	}
+	if err := s.CreateUser(ctx, "tenant", user); err != nil {
+		t.Fatalf("create tenant user: %v", err)
+	}
+	foreignUser := &ebs_fields.User{
+		Mobile:   "google:foreign-user",
+		Username: "google:foreign-user",
+		Email:    "foreign-user@example.test",
+		Password: "hashed-password",
+	}
+	if err := s.CreateUser(ctx, "other-tenant", foreignUser); err != nil {
+		t.Fatalf("create foreign user: %v", err)
+	}
+
+	foreignAccount := &ebs_fields.AuthAccount{
+		UserID:         foreignUser.ID,
+		Provider:       "google",
+		ProviderUserID: "foreign-sub",
+		Email:          "foreign-user@example.test",
+	}
+	if err := s.LinkAuthAccount(ctx, "tenant", foreignAccount); !ErrNotFound(err) {
+		t.Fatalf("foreign auth account link error = %v, want not found", err)
+	}
+
+	account := &ebs_fields.AuthAccount{
+		UserID:         user.ID,
+		Provider:       "google",
+		ProviderUserID: "sub-1",
+		Email:          "Tenant-User@Example.Test",
+		EmailVerified:  true,
+	}
+	if err := s.LinkAuthAccount(ctx, "tenant", account); err != nil {
+		t.Fatalf("link auth account: %v", err)
+	}
+	replay := *account
+	if err := s.LinkAuthAccount(ctx, "tenant", &replay); err != nil {
+		t.Fatalf("replay auth account: %v", err)
+	}
+
+	emailMismatch := *account
+	emailMismatch.Email = "changed@example.test"
+	if err := s.LinkAuthAccount(ctx, "tenant", &emailMismatch); !errors.Is(err, ErrDuplicateAuthAccount) {
+		t.Fatalf("auth account email mismatch error = %v, want %v", err, ErrDuplicateAuthAccount)
+	}
+
+	otherUser := &ebs_fields.User{
+		Mobile:   "google:other-user",
+		Username: "google:other-user",
+		Email:    "other-user@example.test",
+		Password: "hashed-password",
+	}
+	if err := s.CreateUser(ctx, "tenant", otherUser); err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+	userMismatch := *account
+	userMismatch.UserID = otherUser.ID
+	if err := s.LinkAuthAccount(ctx, "tenant", &userMismatch); !errors.Is(err, ErrDuplicateAuthAccount) {
+		t.Fatalf("auth account user mismatch error = %v, want %v", err, ErrDuplicateAuthAccount)
+	}
+}
+
 func TestStore_CreateUserWithAuthAccountRollsBackWhenLinkFails(t *testing.T) {
 	ctx := context.Background()
 	s := newIdentityAuthTestStore(t, ctx)
