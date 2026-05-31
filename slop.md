@@ -463,6 +463,11 @@ Last updated: 2026-05-31
     - Fix: require explicit wallet and requester IDs at the store boundary, parse the wallet ID before DB access, load the wallet and requester by tenant, require an active wallet/requester, enforce wallet currency equality, and map `requested_by` failures through a dedicated typed error instead of reusing the approver error.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferCreateTarget|TestCreateManualTransferValidation|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+93. Balance mutations ignored frozen and closed wallets.
+    - Evidence: `CreateHold`, `PostDoubleEntry`, `PostHeldDoubleEntry`, and `PostSystemDebitDoubleEntry` locked wallet rows and checked funds/currency, but never required wallet `status = active`. Direct store callers could reserve funds or post debits/credits on frozen or closed wallets, bypassing the validation service's active-wallet rule.
+    - Fix: validate balance-mutation wallet targets after idempotent replay checks but before new mutations commit, require active debit and credit wallets for ledger posts, require active wallets for new holds, and keep exact replays read-only even if wallet status later changes.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateDoubleEntryWalletTargets|TestValidateHoldWalletTarget|TestBalanceMutationsRejectInactiveWallets|TestCreateHoldInsufficientFundsRollsBack'` (`TestBalanceMutationsRejectInactiveWallets` and `TestCreateHoldInsufficientFundsRollsBack` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

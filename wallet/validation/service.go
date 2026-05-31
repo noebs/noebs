@@ -180,7 +180,7 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 	if err != nil {
 		return nil, err
 	}
-	if fromWallet.Status != "active" || toWallet.Status != "active" {
+	if fromWallet.Status != walletstore.WalletStatusActive || toWallet.Status != walletstore.WalletStatusActive {
 		return nil, ErrWalletInactive
 	}
 	if fromWallet.Currency != req.Currency || toWallet.Currency != req.Currency {

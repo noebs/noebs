@@ -274,6 +274,65 @@ func TestPostDoubleEntryValidation(t *testing.T) {
 	}
 }
 
+func TestValidateDoubleEntryWalletTargets(t *testing.T) {
+	debitID := uuid.New()
+	creditID := uuid.New()
+	params := DoubleEntryParams{
+		TenantID:       "tenant",
+		IdempotencyKey: "entry-1",
+		Currency:       "USD",
+		ReferenceType:  "p2p",
+		DebitWalletID:  debitID,
+		CreditWalletID: creditID,
+		Amount:         100,
+	}
+	debitWallet := &Wallet{
+		ID:        debitID,
+		TenantID:  "tenant",
+		OwnerType: OwnerTypeUser,
+		Currency:  "USD",
+		Status:    WalletStatusActive,
+	}
+	creditWallet := &Wallet{
+		ID:        creditID,
+		TenantID:  "tenant",
+		OwnerType: OwnerTypeUser,
+		Currency:  "USD",
+		Status:    WalletStatusActive,
+	}
+	if err := validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, doubleEntryMode{}); err != nil {
+		t.Fatalf("validateDoubleEntryWalletTargets() error = %v", err)
+	}
+
+	foreignDebit := *debitWallet
+	foreignDebit.TenantID = "other"
+	assertErrorIs(t, validateDoubleEntryWalletTargets(&foreignDebit, creditWallet, params, doubleEntryMode{}), ErrWalletNotFound)
+
+	otherCredit := *creditWallet
+	otherCredit.ID = uuid.New()
+	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, &otherCredit, params, doubleEntryMode{}), ErrWalletNotFound)
+
+	frozenDebit := *debitWallet
+	frozenDebit.Status = WalletStatusFrozen
+	assertErrorIs(t, validateDoubleEntryWalletTargets(&frozenDebit, creditWallet, params, doubleEntryMode{}), ErrWalletInactive)
+
+	closedCredit := *creditWallet
+	closedCredit.Status = WalletStatusClosed
+	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, &closedCredit, params, doubleEntryMode{}), ErrWalletInactive)
+
+	otherCurrency := *creditWallet
+	otherCurrency.Currency = "AED"
+	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, &otherCurrency, params, doubleEntryMode{}), ErrCurrencyMismatch)
+
+	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, doubleEntryMode{AllowSystemDebitOverdraft: true}), ErrSystemDebitWalletRequired)
+
+	systemDebit := *debitWallet
+	systemDebit.OwnerType = OwnerTypeSystem
+	if err := validateDoubleEntryWalletTargets(&systemDebit, creditWallet, params, doubleEntryMode{AllowSystemDebitOverdraft: true}); err != nil {
+		t.Fatalf("validateDoubleEntryWalletTargets(system debit) error = %v", err)
+	}
+}
+
 func TestHoldValidation(t *testing.T) {
 	s := &Store{}
 	params := HoldParams{
@@ -310,6 +369,36 @@ func TestHoldValidation(t *testing.T) {
 			assertErrorIs(t, err, tc.wantErr)
 		})
 	}
+}
+
+func TestValidateHoldWalletTarget(t *testing.T) {
+	walletID := uuid.New()
+	params := HoldParams{
+		TenantID: "tenant",
+		WalletID: walletID,
+	}
+	wallet := &Wallet{
+		ID:       walletID,
+		TenantID: "tenant",
+		Status:   WalletStatusActive,
+	}
+	if err := validateHoldWalletTarget(wallet, params); err != nil {
+		t.Fatalf("validateHoldWalletTarget() error = %v", err)
+	}
+
+	foreignWallet := *wallet
+	foreignWallet.TenantID = "other"
+	assertErrorIs(t, validateHoldWalletTarget(&foreignWallet, params), ErrWalletNotFound)
+
+	otherWallet := *wallet
+	otherWallet.ID = uuid.New()
+	assertErrorIs(t, validateHoldWalletTarget(&otherWallet, params), ErrWalletNotFound)
+
+	closedWallet := *wallet
+	closedWallet.Status = WalletStatusClosed
+	assertErrorIs(t, validateHoldWalletTarget(&closedWallet, params), ErrWalletInactive)
+
+	assertErrorIs(t, validateHoldWalletTarget(nil, params), ErrWalletNotFound)
 }
 
 func TestReleaseHoldValidation(t *testing.T) {

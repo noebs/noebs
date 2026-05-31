@@ -323,6 +323,109 @@ func TestCreateHoldInsufficientFundsRollsBack(t *testing.T) {
 	}
 }
 
+func TestBalanceMutationsRejectInactiveWallets(t *testing.T) {
+	ctx, store, tenantID := newWalletStoreIntegration(t)
+
+	sourceWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "inactive-source",
+		UserID:    51,
+		Currency:  "AED",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure source wallet: %v", err)
+	}
+	receiverWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "inactive-receiver",
+		UserID:    52,
+		Currency:  "AED",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure receiver wallet: %v", err)
+	}
+	clearingWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeSystem,
+		OwnerID:   SystemPSPClearing,
+		Currency:  "AED",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure clearing wallet: %v", err)
+	}
+	setWalletBalances(t, ctx, store.DB, tenantID, sourceWallet.ID, 1000, 1000)
+	setWalletStatus(t, ctx, store.DB, tenantID, sourceWallet.ID, WalletStatusFrozen)
+
+	_, err = store.CreateHold(ctx, HoldParams{
+		TenantID:       tenantID,
+		WalletID:       sourceWallet.ID,
+		Amount:         100,
+		Reason:         "inactive",
+		ReferenceType:  "withdrawal",
+		ReferenceID:    "inactive-hold",
+		IdempotencyKey: "inactive-hold",
+		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+	})
+	if !errors.Is(err, ErrWalletInactive) {
+		t.Fatalf("CreateHold(inactive wallet) error = %v, want %v", err, ErrWalletInactive)
+	}
+	assertWalletBalances(t, ctx, store, tenantID, sourceWallet.ID, 1000, 1000)
+	assertHoldReferenceCount(t, ctx, store.DB, tenantID, "inactive-hold", 0)
+
+	_, err = store.PostDoubleEntry(ctx, DoubleEntryParams{
+		TenantID:       tenantID,
+		IdempotencyKey: "inactive-debit",
+		Currency:       "AED",
+		ReferenceType:  "p2p",
+		ReferenceID:    "inactive-debit",
+		DebitWalletID:  sourceWallet.ID,
+		CreditWalletID: receiverWallet.ID,
+		Amount:         100,
+	})
+	if !errors.Is(err, ErrWalletInactive) {
+		t.Fatalf("PostDoubleEntry(inactive debit) error = %v, want %v", err, ErrWalletInactive)
+	}
+	exists, err := store.LedgerTransactionExists(ctx, tenantID, "inactive-debit")
+	if err != nil {
+		t.Fatalf("check inactive debit ledger transaction: %v", err)
+	}
+	if exists {
+		t.Fatal("inactive debit ledger transaction persisted")
+	}
+	assertWalletBalances(t, ctx, store, tenantID, sourceWallet.ID, 1000, 1000)
+	assertWalletBalances(t, ctx, store, tenantID, receiverWallet.ID, 0, 0)
+
+	setWalletStatus(t, ctx, store.DB, tenantID, sourceWallet.ID, WalletStatusActive)
+	setWalletStatus(t, ctx, store.DB, tenantID, receiverWallet.ID, WalletStatusClosed)
+	_, err = store.PostSystemDebitDoubleEntry(ctx, DoubleEntryParams{
+		TenantID:       tenantID,
+		IdempotencyKey: "inactive-credit",
+		Currency:       "AED",
+		ReferenceType:  "deposit",
+		ReferenceID:    "inactive-credit",
+		DebitWalletID:  clearingWallet.ID,
+		CreditWalletID: receiverWallet.ID,
+		Amount:         100,
+	})
+	if !errors.Is(err, ErrWalletInactive) {
+		t.Fatalf("PostSystemDebitDoubleEntry(inactive credit) error = %v, want %v", err, ErrWalletInactive)
+	}
+	exists, err = store.LedgerTransactionExists(ctx, tenantID, "inactive-credit")
+	if err != nil {
+		t.Fatalf("check inactive credit ledger transaction: %v", err)
+	}
+	if exists {
+		t.Fatal("inactive credit ledger transaction persisted")
+	}
+	assertWalletBalances(t, ctx, store, tenantID, clearingWallet.ID, 0, 0)
+	assertWalletBalances(t, ctx, store, tenantID, receiverWallet.ID, 0, 0)
+}
+
 func TestExistingDoubleEntryMatches(t *testing.T) {
 	debitID := uuid.New()
 	creditID := uuid.New()
@@ -578,6 +681,28 @@ func setWalletBalances(t *testing.T, ctx context.Context, db *basestore.DB, tena
 		WHERE tenant_id = ? AND id = ?`)
 	if _, err := db.ExecContext(ctx, stmt, balance, available, time.Now().UTC(), tenantID, walletID); err != nil {
 		t.Fatalf("set wallet balances: %v", err)
+	}
+}
+
+func setWalletStatus(t *testing.T, ctx context.Context, db *basestore.DB, tenantID string, walletID uuid.UUID, status string) {
+	t.Helper()
+	stmt := db.Rebind(`UPDATE wallets
+		SET status = ?, updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	if _, err := db.ExecContext(ctx, stmt, status, time.Now().UTC(), tenantID, walletID); err != nil {
+		t.Fatalf("set wallet status: %v", err)
+	}
+}
+
+func assertHoldReferenceCount(t *testing.T, ctx context.Context, db *basestore.DB, tenantID, referenceID string, want int) {
+	t.Helper()
+	var count int
+	stmt := db.Rebind("SELECT COUNT(*) FROM balance_holds WHERE tenant_id = ? AND reference_id = ?")
+	if err := db.GetContext(ctx, &count, stmt, tenantID, referenceID); err != nil {
+		t.Fatalf("count holds: %v", err)
+	}
+	if count != want {
+		t.Fatalf("hold rows for %s = %d, want %d", referenceID, count, want)
 	}
 }
 

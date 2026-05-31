@@ -87,6 +87,9 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 		}
 		return nil, err
 	}
+	if err := validateHoldWalletTarget(walletRow, params); err != nil {
+		return nil, err
+	}
 	if walletRow.AvailableBalance < params.Amount {
 		return nil, ErrInsufficientFunds
 	}
@@ -204,6 +207,18 @@ func rawJSONMatches(stored, requested json.RawMessage) bool {
 		return string(stored) == string(requested)
 	}
 	return reflect.DeepEqual(storedValue, requestedValue)
+}
+
+func validateHoldWalletTarget(wallet *Wallet, params HoldParams) error {
+	if wallet == nil ||
+		wallet.TenantID != params.TenantID ||
+		wallet.ID != params.WalletID {
+		return ErrWalletNotFound
+	}
+	if wallet.Status != WalletStatusActive {
+		return ErrWalletInactive
+	}
+	return nil
 }
 
 func (s *Store) lockHold(ctx context.Context, tx *sqlx.Tx, tenantID string, holdID int64) (*BalanceHold, error) {

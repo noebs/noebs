@@ -129,11 +129,8 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 	}
 	debitWallet := wallets[params.DebitWalletID]
 	creditWallet := wallets[params.CreditWalletID]
-	if debitWallet.Currency != params.Currency || creditWallet.Currency != params.Currency {
-		return nil, ErrCurrencyMismatch
-	}
-	if mode.AllowSystemDebitOverdraft && debitWallet.OwnerType != OwnerTypeSystem {
-		return nil, ErrSystemDebitWalletRequired
+	if err := validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, mode); err != nil {
+		return nil, err
 	}
 	if debitHold == nil && !mode.AllowSystemDebitOverdraft && debitWallet.AvailableBalance < params.Amount {
 		return nil, ErrInsufficientFunds
@@ -237,6 +234,27 @@ func validateDebitHold(hold *BalanceHold, params DoubleEntryParams) error {
 	}
 	if hold.AmountRemaining < params.Amount {
 		return ErrHoldAmountExceeded
+	}
+	return nil
+}
+
+func validateDoubleEntryWalletTargets(debitWallet, creditWallet *Wallet, params DoubleEntryParams, mode doubleEntryMode) error {
+	if debitWallet == nil ||
+		debitWallet.TenantID != params.TenantID ||
+		debitWallet.ID != params.DebitWalletID ||
+		creditWallet == nil ||
+		creditWallet.TenantID != params.TenantID ||
+		creditWallet.ID != params.CreditWalletID {
+		return ErrWalletNotFound
+	}
+	if debitWallet.Status != WalletStatusActive || creditWallet.Status != WalletStatusActive {
+		return ErrWalletInactive
+	}
+	if debitWallet.Currency != params.Currency || creditWallet.Currency != params.Currency {
+		return ErrCurrencyMismatch
+	}
+	if mode.AllowSystemDebitOverdraft && debitWallet.OwnerType != OwnerTypeSystem {
+		return ErrSystemDebitWalletRequired
 	}
 	return nil
 }
