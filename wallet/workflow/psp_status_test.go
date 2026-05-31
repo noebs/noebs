@@ -118,3 +118,42 @@ func TestAwaitTerminalPSPStatusReceivesSignal(t *testing.T) {
 func waitForPSPStatusTestWorkflow(ctx workflow.Context) (walletpsp.TxStatus, error) {
 	return awaitTerminalPSPStatus(ctx, walletpsp.TxStatus{Status: "pending"})
 }
+
+func TestAwaitDestinationVerificationDecisionIgnoresUnrelatedSignals(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(waitForDestinationVerificationDecisionTestWorkflow)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(WithdrawalVerificationSignal, DestinationVerificationDecision{
+			VerificationID: 41,
+			Verified:       false,
+			Reason:         "wrong verification",
+		})
+	}, time.Second)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(WithdrawalVerificationSignal, DestinationVerificationDecision{
+			VerificationID: 42,
+			Verified:       true,
+		})
+	}, 2*time.Second)
+
+	env.ExecuteWorkflow(waitForDestinationVerificationDecisionTestWorkflow)
+
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("expected workflow to complete")
+	}
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("expected no workflow error, got %v", err)
+	}
+	var decision DestinationVerificationDecision
+	if err := env.GetWorkflowResult(&decision); err != nil {
+		t.Fatalf("workflow result: %v", err)
+	}
+	if decision.VerificationID != 42 || !decision.Verified {
+		t.Fatalf("unexpected verification decision: %+v", decision)
+	}
+}
+
+func waitForDestinationVerificationDecisionTestWorkflow(ctx workflow.Context) (DestinationVerificationDecision, error) {
+	return awaitDestinationVerificationDecision(ctx, 42, 30)
+}

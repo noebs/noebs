@@ -304,6 +304,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/workflow -run 'TestAwaitDestinationVerificationDecisionIgnoresUnrelatedSignals|TestAwaitTerminalPSPStatusReceivesSignal'`
+- `go test -count=1 ./wallet/workflow ./wallet/worker`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

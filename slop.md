@@ -383,6 +383,11 @@ Last updated: 2026-05-31
     - Fix: pass the withdrawal wallet ID into return-to-source selection and validate every candidate funding source against that requested wallet instead of the source's own wallet ID.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestSelectReturnToSourceSkipsIneligibleFundingSources|TestDepositFundingSource'`; `go test -count=1 ./wallet/workflow ./wallet/activity ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+77. Destination verification workflows failed on unrelated signals.
+    - Evidence: `awaitDestinationVerificationDecision` listened on the shared withdrawal-verification signal and returned `ErrMissingVerificationID` as soon as the first received signal had a different verification ID. A stale or unrelated signal could therefore fail the workflow before the intended verification decision arrived.
+    - Fix: keep waiting on the original timer and ignore verification-decision signals whose verification ID does not match the expected verification.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestAwaitDestinationVerificationDecisionIgnoresUnrelatedSignals|TestAwaitTerminalPSPStatusReceivesSignal'`; `go test -count=1 ./wallet/workflow ./wallet/worker`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

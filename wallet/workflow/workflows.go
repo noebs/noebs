@@ -1861,23 +1861,26 @@ func awaitDestinationVerificationDecision(ctx workflow.Context, verificationID i
 	decisionCh := workflow.GetSignalChannel(ctx, WithdrawalVerificationSignal)
 	timer := workflow.NewTimer(ctx, timeout)
 
-	var decision DestinationVerificationDecision
-	timedOut := false
-	selector := workflow.NewSelector(ctx)
-	selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
-		c.Receive(ctx, &decision)
-	})
-	selector.AddFuture(timer, func(f workflow.Future) {
-		timedOut = true
-	})
-	selector.Select(ctx)
-	if timedOut {
-		return DestinationVerificationDecision{}, ErrWithdrawalVerificationTimedOut
+	for {
+		var decision DestinationVerificationDecision
+		timedOut := false
+		received := false
+		selector := workflow.NewSelector(ctx)
+		selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
+			c.Receive(ctx, &decision)
+			received = true
+		})
+		selector.AddFuture(timer, func(f workflow.Future) {
+			timedOut = true
+		})
+		selector.Select(ctx)
+		if timedOut {
+			return DestinationVerificationDecision{}, ErrWithdrawalVerificationTimedOut
+		}
+		if received && decision.VerificationID == verificationID {
+			return decision, nil
+		}
 	}
-	if decision.VerificationID != verificationID {
-		return DestinationVerificationDecision{}, walletstore.ErrMissingVerificationID
-	}
-	return decision, nil
 }
 
 type fundingSourceSpec struct {
