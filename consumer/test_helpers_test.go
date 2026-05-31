@@ -40,6 +40,9 @@ func ensurePostgresContainer(t *testing.T) *testdb.PostgresContainer {
 		postgresContainer, postgresErr = testdb.StartPostgresContainer(ctx)
 	})
 	if postgresErr != nil {
+		if testdb.IsContainerRuntimeUnavailable(postgresErr) {
+			t.Skipf("container runtime unavailable: %v", postgresErr)
+		}
 		t.Fatalf("start postgres container: %v", postgresErr)
 	}
 	return postgresContainer

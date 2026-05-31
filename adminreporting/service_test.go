@@ -16,6 +16,9 @@ func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
 	defer startCancel()
 	container, err := testdb.StartPostgresContainer(startCtx)
 	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
 		t.Fatalf("start postgres container: %v", err)
 	}
 	t.Cleanup(func() {

@@ -86,6 +86,9 @@ func newWalletActivityStore(t *testing.T) (*walletstore.Store, string) {
 
 	container, err := testdb.StartPostgresContainer(ctx)
 	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
 		t.Fatalf("start postgres container: %v", err)
 	}
 	t.Cleanup(func() {

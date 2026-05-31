@@ -84,10 +84,12 @@ func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWal
 	if err != nil {
 		return nil, err
 	}
-	reqCopy := *req
-	reqCopy.TenantId = tenantID
-	reqCopy.UserId = userID
-	return s.ensureWallet(ctx, &reqCopy)
+	boundReq := &walletv1.EnsureWalletRequest{
+		TenantId: tenantID,
+		UserId:   userID,
+		Currency: req.Currency,
+	}
+	return s.ensureWallet(ctx, boundReq)
 }
 
 func (s *Server) ValidateP2P(ctx context.Context, req *walletv1.ValidateP2PRequest) (*walletv1.ValidateP2PResponse, error) {

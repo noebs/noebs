@@ -3,6 +3,7 @@ package testdb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -14,6 +15,8 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+var ErrContainerRuntimeUnavailable = errors.New("container runtime unavailable")
 
 // PostgresContainer wraps a testcontainers postgres instance.
 type PostgresContainer struct {
@@ -40,7 +43,7 @@ func StartPostgresContainer(ctx context.Context) (pc *PostgresContainer, err err
 		),
 	)
 	if err != nil {
-		return nil, err
+		return nil, WrapContainerRuntimeError(err)
 	}
 	adminURL, err := container.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
@@ -48,6 +51,31 @@ func StartPostgresContainer(ctx context.Context) (pc *PostgresContainer, err err
 		return nil, err
 	}
 	return &PostgresContainer{container: container, adminURL: adminURL}, nil
+}
+
+func WrapContainerRuntimeError(err error) error {
+	if err == nil || errors.Is(err, ErrContainerRuntimeUnavailable) {
+		return err
+	}
+	if IsContainerRuntimeUnavailable(err) {
+		return fmt.Errorf("%w: %v", ErrContainerRuntimeUnavailable, err)
+	}
+	return err
+}
+
+func IsContainerRuntimeUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrContainerRuntimeUnavailable) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "get provider") ||
+		strings.Contains(message, "docker provider") ||
+		strings.Contains(message, "docker daemon") ||
+		strings.Contains(message, "cannot connect to docker") ||
+		strings.Contains(message, "podman socket")
 }
 
 // Terminate stops and removes the container.

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adonese/noebs/internal/testdb"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -22,6 +23,9 @@ func TestTemporalContainer(t *testing.T) {
 
 	nw, err := network.New(ctx, network.WithAttachable())
 	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
 		t.Fatalf("create docker network: %v", err)
 	}
 	defer func() {
@@ -39,6 +43,9 @@ func TestTemporalContainer(t *testing.T) {
 		),
 	)
 	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
 		t.Fatalf("start postgres container: %v", err)
 	}
 	defer func() {
@@ -66,6 +73,9 @@ func TestTemporalContainer(t *testing.T) {
 		Started:          true,
 	})
 	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
 		t.Fatalf("start temporal container: %v", err)
 	}
 	defer func() {

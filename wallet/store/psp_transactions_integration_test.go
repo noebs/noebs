@@ -18,6 +18,9 @@ func TestUpdatePSPTransactionStatus_PreservesConfirmedAtAndRetryCount(t *testing
 
 	container, err := testdb.StartPostgresContainer(ctx)
 	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
 		t.Fatalf("start postgres container: %v", err)
 	}
 	defer func() {

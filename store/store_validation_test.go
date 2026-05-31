@@ -47,6 +47,9 @@ func newValidationDB(t *testing.T) *DB {
 		validationPostgres, validationPostgresErr = testdb.StartPostgresContainer(ctx)
 	})
 	if validationPostgresErr != nil {
+		if testdb.IsContainerRuntimeUnavailable(validationPostgresErr) {
+			t.Skipf("container runtime unavailable: %v", validationPostgresErr)
+		}
 		t.Fatalf("start postgres: %v", validationPostgresErr)
 	}
 	databaseName := fmt.Sprintf("store_validation_%d", validationDatabaseSeq.Add(1))
