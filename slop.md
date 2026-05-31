@@ -228,6 +228,11 @@ Last updated: 2026-05-31
     - Fix: centralize transaction payload marshaling, propagate encoding failures with context, and use the helper in both direct transaction inserts and projection upserts.
     - Tests: `go test -count=1 ./store`; `go test -count=1 -v ./store -run 'TestMarshalTransactionPayloadRejectsUnsupportedValues|TestUpsertTransactionProjectionRejectsUnmarshalablePayloadBeforeDB|TestDecodeStoredTransactionPayload|TestStoreUpsertTransactionProjection|TestStoreCreateTransactionWithEvent'` (Postgres container cases skipped locally when the container runtime is unavailable).
 
+46. Targeted root-store updates silently succeeded when the row was missing.
+    - Evidence: `UpdateUserColumns`, `MarkTokenPaid`, `UpdateTokenCard`, and `UpdatePaymentRequest` executed keyed updates and returned nil even when `RowsAffected()` was zero. That let OTP verification, quick-pay token completion, token card binding, and payment-request updates report success while mutating nothing.
+    - Fix: add a shared rows-affected contract for keyed updates and return `sql.ErrNoRows` when a targeted update touches no rows.
+    - Tests: `go test -count=1 ./store`; `go test -count=1 -v ./store -run 'TestExecContextRequireRowsAffected|TestStoreTargetedUpdatesReportMissingRows|TestStoreTenantValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

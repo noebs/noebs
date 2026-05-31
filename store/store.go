@@ -24,6 +24,10 @@ type dbExecutor interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
+type sqlExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
 const loginAttemptWindow = 15 * time.Minute
 
 var allowedUserUpdateColumns = map[string]struct{}{
@@ -418,8 +422,7 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 	args = append(args, time.Now().UTC())
 	args = append(args, tenantID, userID)
 	stmt := s.DB.Rebind(fmt.Sprintf("UPDATE users SET %s WHERE tenant_id = ? AND id = ?", strings.Join(setParts, ", ")))
-	_, err = db.ExecContext(ctx, stmt, args...)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, args...)
 }
 
 func validateUserUpdateColumns(updates map[string]any) error {
@@ -998,8 +1001,7 @@ func (s *Store) MarkTokenPaid(ctx context.Context, tenantID, uuid string) error 
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE tokens SET is_paid = TRUE, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	_, err = db.ExecContext(ctx, stmt, time.Now().UTC(), tenantID, uuid)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, time.Now().UTC(), tenantID, uuid)
 }
 
 func (s *Store) CreateTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {
@@ -1657,8 +1659,7 @@ func (s *Store) UpdateTokenCard(ctx context.Context, tenantID string, uuid, toCa
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE tokens SET to_card = ?, to_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	_, err = db.ExecContext(ctx, stmt, toCardValue, toCardEnc, time.Now().UTC(), tenantID, uuid)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, toCardValue, toCardEnc, time.Now().UTC(), tenantID, uuid)
 }
 
 func (s *Store) SaveEBSUUID(ctx context.Context, tenantID string, originalUUID string, res ebs_fields.EBSResponse) error {
@@ -1679,8 +1680,7 @@ func (s *Store) UpdatePaymentRequest(ctx context.Context, tenantID string, uuid 
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE push_data SET payment_request = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	_, err = db.ExecContext(ctx, stmt, string(payload), time.Now().UTC(), tenantID, uuid)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, string(payload), time.Now().UTC(), tenantID, uuid)
 }
 
 // ErrNotFound returns true if the provided error is a not found error.
@@ -1692,4 +1692,19 @@ func ErrNotFound(err error) bool {
 		return true
 	}
 	return strings.Contains(err.Error(), "no rows") || strings.Contains(err.Error(), "not found")
+}
+
+func execContextRequireRowsAffected(ctx context.Context, db sqlExecer, stmt string, args ...any) error {
+	result, err := db.ExecContext(ctx, stmt, args...)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

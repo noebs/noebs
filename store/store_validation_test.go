@@ -424,6 +424,78 @@ func TestStore_CreateTransaction_MissingUUID(t *testing.T) {
 	}
 }
 
+type rowsAffectedResult int64
+
+func (r rowsAffectedResult) LastInsertId() (int64, error) {
+	return 0, nil
+}
+
+func (r rowsAffectedResult) RowsAffected() (int64, error) {
+	return int64(r), nil
+}
+
+type execFunc func(context.Context, string, ...any) (sql.Result, error)
+
+func (fn execFunc) ExecContext(ctx context.Context, stmt string, args ...any) (sql.Result, error) {
+	return fn(ctx, stmt, args...)
+}
+
+func TestExecContextRequireRowsAffected(t *testing.T) {
+	err := execContextRequireRowsAffected(context.Background(), execFunc(func(context.Context, string, ...any) (sql.Result, error) {
+		return rowsAffectedResult(1), nil
+	}), "UPDATE tokens SET is_paid = TRUE")
+	if err != nil {
+		t.Fatalf("execContextRequireRowsAffected() error = %v", err)
+	}
+
+	err = execContextRequireRowsAffected(context.Background(), execFunc(func(context.Context, string, ...any) (sql.Result, error) {
+		return rowsAffectedResult(0), nil
+	}), "UPDATE tokens SET is_paid = TRUE")
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("zero rows error = %v, want %v", err, sql.ErrNoRows)
+	}
+}
+
+func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	tenantID := "tenant-targeted-updates"
+	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeCardVault, MigrationScopeNotificationChat} {
+		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
+			t.Fatalf("migrate %s: %v", scope, err)
+		}
+	}
+	s := New(db)
+	if err := s.EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{"UpdateUserColumns", func() error {
+			return s.UpdateUserColumns(ctx, tenantID, 999, map[string]any{"fullname": "Missing User"})
+		}},
+		{"MarkTokenPaid", func() error {
+			return s.MarkTokenPaid(ctx, tenantID, "missing-token")
+		}},
+		{"UpdateTokenCard", func() error {
+			return s.UpdateTokenCard(ctx, tenantID, "missing-token", "")
+		}},
+		{"UpdatePaymentRequest", func() error {
+			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("%s error = %v, want %v", tt.name, err, sql.ErrNoRows)
+			}
+		})
+	}
+}
+
 func TestStore_AddCards_RequiresDataKey(t *testing.T) {
 	s := newTestStoreWithoutDataKey(t)
 	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000", IPIN: "1234", Mobile: "0912141660"}})
