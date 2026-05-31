@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,15 +27,10 @@ func requireIntegration(t *testing.T) {
 }
 
 func TestWorkingKey(t *testing.T) {
-	var workingKeyFields ebs_fields.WorkingKeyFields
-	workingKeyFields.ClientID = "noebs"
-	workingKeyFields.TerminalID = "12345678"
-	workingKeyFields.TranDateTime = time.Now().UTC().String()
-	workingKeyFields.SystemTraceAuditNumber = rand.Intn(99999)
-
+	workingKeyFields := populateWorkingKeyFields()
 	payload, err := json.Marshal(workingKeyFields)
 	if err != nil {
-		t.Fatal()
+		t.Fatalf("marshal working key payload: %v", err)
 	}
 	route := GetMainEngine()
 
@@ -116,7 +110,7 @@ func TestEBSHttpClient(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		payload := getSuccessfulPurchasePayload(ebs_fields.PurchaseFields{})
+		payload := getSuccessfulPurchasePayload(t)
 		_, _, err := ebs_fields.EBSHttpClient(server.URL, payload)
 
 		if err != ebs_fields.ContentTypeErr {
@@ -132,7 +126,7 @@ func TestEBSHttpClient(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		payload := getFailedPurchasePayload(t, ebs_fields.PurchaseFields{})
+		payload := getFailedPurchasePayload(t)
 		status, res, err := ebs_fields.EBSHttpClient(server.URL, payload)
 
 		if err == nil {
