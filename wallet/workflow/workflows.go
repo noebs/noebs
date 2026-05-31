@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -2119,7 +2121,13 @@ func stringFromAnyMap(payload map[string]any, keys ...string) string {
 		case json.Number:
 			return typed.String()
 		case float64:
-			return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.0f", typed), "0"), ".")
+			if math.IsNaN(typed) || math.IsInf(typed, 0) {
+				continue
+			}
+			if math.Trunc(typed) == typed {
+				return strconv.FormatInt(int64(typed), 10)
+			}
+			return strconv.FormatFloat(typed, 'f', -1, 64)
 		}
 	}
 	return ""
@@ -2196,6 +2204,9 @@ func int64FromAnyMap(payload map[string]any, keys ...string) int64 {
 		case int:
 			return int64(typed)
 		case float64:
+			if math.IsNaN(typed) || math.IsInf(typed, 0) || math.Trunc(typed) != typed {
+				continue
+			}
 			return int64(typed)
 		case json.Number:
 			if parsed, err := typed.Int64(); err == nil {

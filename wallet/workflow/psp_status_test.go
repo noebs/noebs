@@ -33,6 +33,33 @@ func TestStatusFromPSPTransactionParsesRawResponse(t *testing.T) {
 	}
 }
 
+func TestStatusFromPSPTransactionPreservesNumericTransactionID(t *testing.T) {
+	txn := &walletstore.PSPTransaction{
+		Status:      "processing",
+		RawResponse: walletstore.RawJSON(`{"status":"SUCCESS","amount":2500,"currency":"AED","transaction_id":2500}`),
+	}
+
+	status := statusFromPSPTransaction(txn)
+	if status.ProviderTxID != "2500" {
+		t.Fatalf("provider transaction id = %q, want 2500", status.ProviderTxID)
+	}
+	if status.Amount != 2500 {
+		t.Fatalf("amount = %d, want 2500", status.Amount)
+	}
+}
+
+func TestStatusFromPSPTransactionIgnoresFractionalRawAmount(t *testing.T) {
+	txn := &walletstore.PSPTransaction{
+		Status:      "processing",
+		RawResponse: walletstore.RawJSON(`{"status":"SUCCESS","amount":12.5,"currency":"AED","transaction_id":"provider-psp-id"}`),
+	}
+
+	status := statusFromPSPTransaction(txn)
+	if status.Amount != 0 {
+		t.Fatalf("amount = %d, want 0 for invalid fractional minor-unit amount", status.Amount)
+	}
+}
+
 func TestProviderStatusConversionsDoNotFallBackToStoredStatus(t *testing.T) {
 	deposit := statusFromDepositVerification(walletpsp.DepositVerification{
 		ProviderTxID: "provider-deposit-id",

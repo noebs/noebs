@@ -253,6 +253,11 @@ Last updated: 2026-05-31
     - Fix: preserve integral numeric strings with `strconv.FormatInt`, use `strconv.FormatFloat` for non-integral values, and reject NaN/Inf string values as empty.
     - Tests: `go test -count=1 -v ./wallet/psp -run 'TestMapResponsePreservesNumericStringFields|TestMapResponseUsesConfiguredPaths|TestMapResponseRejectsInvalidConfiguredAmount'`.
 
+51. Workflow PSP raw-response fallback corrupted numeric IDs and truncated fractional amounts.
+    - Evidence: `statusFromPSPTransaction` reconstructs provider status from stored raw PSP payloads using workflow-local map helpers. Those helpers had the same trailing-zero string bug for numeric transaction IDs and directly cast `float64` amounts to `int64`, so raw fallback payloads could turn `2500` into `"25"` or `12.5` into `12`.
+    - Fix: preserve integral numeric strings, format non-integral strings without trimming significant digits, and ignore NaN/Inf/fractional raw amounts instead of truncating them into minor units.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestStatusFromPSPTransaction'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
