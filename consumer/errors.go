@@ -11,6 +11,7 @@ var (
 	ErrInvalidOTP         = errors.New("invalid_otp")
 	ErrMissingAuth        = errors.New("missing_auth")
 	ErrInvalidRecoveryJWT = errors.New("invalid_recovery_jwt")
+	ErrInvalidSignature   = errors.New("invalid_signature")
 
 	// Account recovery / balance step
 	ErrCardNotMatched    = errors.New("card_not_matched")

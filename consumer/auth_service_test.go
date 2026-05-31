@@ -40,11 +40,44 @@ func (f oauthRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error)
 	return f(req)
 }
 
+const (
+	refreshProofPublicKey = `MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAteM6IQBAUK4Lsb42zgr13YRHoBWyiQHuifjHvxxI7QHnOlQGRYU0xqgplV+Gumers6c3vH5xtlPsy6lHFJ7VQnTPHlZIcRefy7rKsVC+D1cjA6H3W6jWAdKDslxEb8sMfnatWI1PO0MNDz4Nh7KHS3V51nDqlx7I+TggtKZU8zq/epeVb+pqCKQphGd36J9KqZzaobDKxY6ObrLQDncKtF74UerJjmQxFd52VM/XDwOjmWS7shpQZx2HaLzFq6IOpTnKE+nySZqoXZVDB5j6llctinSs9E+HAOmN2r32B6zthYvMIO8gQjSZNyRp0E/GKhlPgfF8r55upszm7qIUZQIDAQAB`
+	refreshProofSignature = "Xq4J7E2b7QK7mqn7YFnbnd+g1IHCTlvn8d154/CDs0rO+idvJ/e4gEpjOOpfr69EaDILnAgBudZRnAMHhGRIPEm2vCLUREinWwl5pDE0Gbee9h2OjSS26cEPE1fC626PwvizcwTHGPmguw1jYSNy74B128jsdG/RX1xAbbDBYKbJIjG3yXxzZZG/N6rGIQksJdDhgzzsgIESTrXh2JfX6iyEeArWoFJTsDm6T8tXd5/phQRlocQ18OGcnCBMM66CWC0DJhdUQfB7q/tenPYk3SMld7MS7pcWGZ92bMHXPYMzXhVgJnvUZZjkMr16Dn1YFoKvv4irUcy4Fol5z3Rhaw=="
+	refreshProofMessage   = "RAMI"
+)
+
 func oauthHTTPResponse(status int, body string) *http.Response {
 	return &http.Response{
 		StatusCode: status,
 		Header:     make(http.Header),
 		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func TestVerifyUserSignatureRequiresValidProof(t *testing.T) {
+	if err := verifyUserSignature(refreshProofPublicKey, refreshProofSignature, refreshProofMessage); err != nil {
+		t.Fatalf("verifyUserSignature(valid) error = %v", err)
+	}
+
+	cases := []struct {
+		name      string
+		publicKey string
+		signature string
+		message   string
+	}{
+		{name: "missing signature", publicKey: refreshProofPublicKey, message: refreshProofMessage},
+		{name: "missing message", publicKey: refreshProofPublicKey, signature: refreshProofSignature},
+		{name: "malformed public key", publicKey: "not-a-key", signature: refreshProofSignature, message: refreshProofMessage},
+		{name: "invalid signature", publicKey: refreshProofPublicKey, signature: "invalid", message: refreshProofMessage},
+		{name: "message mismatch", publicKey: refreshProofPublicKey, signature: refreshProofSignature, message: "DIFFERENT"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := verifyUserSignature(tc.publicKey, tc.signature, tc.message)
+			if !errors.Is(err, ErrInvalidSignature) {
+				t.Fatalf("verifyUserSignature() error = %v, want %v", err, ErrInvalidSignature)
+			}
+		})
 	}
 }
 
@@ -357,20 +390,53 @@ func readLoginMetric(t *testing.T, env *testEnv, mobile string) (int, int) {
 	return loginCount, suspiciousCount
 }
 
-func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
-	auth := &refreshAuthStub{
-		claims: &gateway.TokenClaims{UserID: 42, Mobile: "0990000000", TenantID: "tenant-a"},
+func TestServiceRefreshJWTRequiresSignatureProofForValidToken(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
+		t.Fatalf("set public key: %v", err)
 	}
-	service := &Service{Store: &store.Store{}, Auth: auth}
+	token, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
+	if err != nil {
+		t.Fatalf("generate jwt: %v", err)
+	}
 
-	token, err := service.RefreshJWT(context.Background(), gateway.Token{JWT: "old-token"})
+	_, err = env.Service.RefreshJWT(context.Background(), gateway.Token{JWT: token})
+	if !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("RefreshJWT() error = %v, want %v", err, ErrInvalidSignature)
+	}
+}
+
+func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+	oldToken, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
+	if err != nil {
+		t.Fatalf("generate jwt: %v", err)
+	}
+
+	token, err := env.Service.RefreshJWT(context.Background(), gateway.Token{
+		JWT:       oldToken,
+		Signature: refreshProofSignature,
+		Message:   refreshProofMessage,
+	})
 	if err != nil {
 		t.Fatalf("RefreshJWT() error = %v", err)
 	}
-	if token != "new-token" {
-		t.Fatalf("RefreshJWT() token = %q, want %q", token, "new-token")
+	if token == "" {
+		t.Fatal("RefreshJWT() token is empty")
 	}
-	if auth.generatedTenant != "tenant-a" {
-		t.Fatalf("RefreshJWT() generated tenant = %q, want %q", auth.generatedTenant, "tenant-a")
+	claims, err := env.Auth.VerifyJWT(token)
+	if err != nil {
+		t.Fatalf("VerifyJWT(refreshed): %v", err)
+	}
+	if claims.TenantID != env.Tenant {
+		t.Fatalf("RefreshJWT() generated tenant = %q, want %q", claims.TenantID, env.Tenant)
+	}
+	if claims.UserID != user.ID || claims.Mobile != user.Mobile {
+		t.Fatalf("RefreshJWT() claims = %+v, want user id %d mobile %q", claims, user.ID, user.Mobile)
 	}
 }

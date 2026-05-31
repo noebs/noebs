@@ -398,6 +398,11 @@ Last updated: 2026-05-31
     - Fix: ignore malformed or requester-owned manual-transfer decisions inside the workflow while keeping the original approval timer.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestAwaitManualTransferDecisionIgnoresRequesterSignals|TestValidateManualTransferDecision'`; `go test -count=1 ./wallet/workflow ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+80. Valid JWT refreshes bypassed possession proof.
+    - Evidence: `RefreshJWT` verified the request signature only when `VerifyJWT` returned `jwt.ErrTokenExpired`. A still-valid token was reissued directly from its claims, so possession of the bearer token alone was enough to mint a new token despite the refresh request contract carrying `signature` and `message`.
+    - Fix: require every refresh path to resolve the persisted user and verify the signed message before minting a replacement JWT. Replace the process-exiting crypto verifier with a local RSA verifier that returns `ErrInvalidSignature` for missing or malformed proof.
+    - Tests: `go test -count=1 -v ./consumer -run 'TestVerifyUserSignatureRequiresValidProof|TestServiceRefreshJWTRequiresTenantClaim|TestServiceRefreshJWTRequiresSignatureProofForValidToken|TestServiceRefreshJWTUsesClaimTenant'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` and `TestServiceRefreshJWTUsesClaimTenant` skipped locally when the container runtime is unavailable); `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

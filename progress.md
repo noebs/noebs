@@ -319,6 +319,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./consumer -run 'TestVerifyUserSignatureRequiresValidProof|TestServiceRefreshJWTRequiresTenantClaim|TestServiceRefreshJWTRequiresSignatureProofForValidToken|TestServiceRefreshJWTUsesClaimTenant'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` and `TestServiceRefreshJWTUsesClaimTenant` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./consumer ./consumer/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

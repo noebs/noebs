@@ -2,11 +2,16 @@ package consumer
 
 import (
 	"context"
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
 
-	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -90,8 +95,8 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 		return "", empty, err
 	}
 
-	if _, encErr := noebsCrypto.VerifyWithHeaders(u.PublicKey, req.Signature, req.Message); encErr != nil {
-		return "", empty, encErr
+	if err := verifyUserSignature(u.PublicKey, req.Signature, req.Message); err != nil {
+		return "", empty, err
 	}
 	if !totp.Validate(req.Message, u.EncodePublickey32()) {
 		return "", empty, ErrWrongOTP
@@ -111,34 +116,57 @@ func (s *Service) RefreshJWT(ctx context.Context, req gateway.Token) (string, er
 	}
 	claims, err := s.Auth.VerifyJWT(req.JWT)
 	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) && claims != nil {
-			tenantID, tenantErr := store.ValidateTenantID(claims.TenantID)
-			if tenantErr != nil {
-				return "", tenantErr
-			}
-
-			var user *ebs_fields.User
-			if claims.UserID != 0 {
-				user, err = s.Store.FindUserByID(ctx, tenantID, claims.UserID)
-			} else {
-				user, err = s.Store.GetUserByMobile(ctx, tenantID, claims.Mobile)
-			}
-			if err != nil {
-				return "", err
-			}
-			if _, encErr := noebsCrypto.VerifyWithHeaders(user.PublicKey, req.Signature, req.Message); encErr != nil {
-				return "", encErr
-			}
-			return s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+		if !errors.Is(err, jwt.ErrTokenExpired) || claims == nil {
+			return "", err
 		}
-		return "", err
 	}
-
 	tenantID, err := store.ValidateTenantID(claims.TenantID)
 	if err != nil {
 		return "", err
 	}
-	return s.Auth.GenerateJWT(claims.UserID, claims.Mobile, tenantID)
+
+	var user *ebs_fields.User
+	if claims.UserID != 0 {
+		user, err = s.Store.FindUserByID(ctx, tenantID, claims.UserID)
+	} else {
+		user, err = s.Store.GetUserByMobile(ctx, tenantID, claims.Mobile)
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := verifyUserSignature(user.PublicKey, req.Signature, req.Message); err != nil {
+		return "", err
+	}
+	return s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+}
+
+func verifyUserSignature(publicKey, signature, message string) error {
+	publicKey = strings.TrimSpace(publicKey)
+	signature = strings.TrimSpace(signature)
+	if publicKey == "" || signature == "" || strings.TrimSpace(message) == "" {
+		return ErrInvalidSignature
+	}
+	block, _ := pem.Decode([]byte("-----BEGIN PUBLIC KEY-----\n" + publicKey + "\n-----END PUBLIC KEY-----"))
+	if block == nil || block.Type != "PUBLIC KEY" {
+		return ErrInvalidSignature
+	}
+	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
+	}
+	rsaPublicKey, ok := parsed.(*rsa.PublicKey)
+	if !ok {
+		return ErrInvalidSignature
+	}
+	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
+	}
+	digest := sha256.Sum256([]byte(message))
+	if err := rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, digest[:], signatureBytes); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
+	}
+	return nil
 }
 
 func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.User) (ebs_fields.User, error) {
