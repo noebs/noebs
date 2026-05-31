@@ -531,6 +531,18 @@ func TestExecContextRequireRowsAffected(t *testing.T) {
 	}
 }
 
+func TestErrNotFoundOnlyMatchesNoRows(t *testing.T) {
+	if !ErrNotFound(sql.ErrNoRows) {
+		t.Fatalf("ErrNotFound(sql.ErrNoRows) = false, want true")
+	}
+	if ErrNotFound(nil) {
+		t.Fatalf("ErrNotFound(nil) = true, want false")
+	}
+	if ErrNotFound(errors.New("database file not found")) {
+		t.Fatalf("ErrNotFound(non-store error) = true, want false")
+	}
+}
+
 func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)

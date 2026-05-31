@@ -418,6 +418,11 @@ Last updated: 2026-05-31
     - Fix: propagate every uniqueness lookup error except explicit not-found results, while keeping the duplicate mobile/username checks unchanged.
     - Tests: `go test -count=1 -v ./consumer -run 'TestCreateUserPropagatesUniquenessLookupErrors|TestCreateUserRequiresMobileBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB|TestUserServiceIdentityInputsFailBeforeStore'`; `go test -count=1 ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+84. Store not-found detection matched arbitrary error text.
+    - Evidence: `store.ErrNotFound` returned true for any error string containing `no rows` or `not found`. Callers use this helper to decide whether to create users, suppress optional KYC/passport records, or map service failures to 404s, so operational errors like `database file not found` could be treated as ordinary absence.
+    - Fix: restrict the shared store not-found contract to `errors.Is(err, sql.ErrNoRows)`, which is what the manual-SQL store returns for missing rows.
+    - Tests: `go test -count=1 -v ./store ./consumer/handler -run 'TestErrNotFoundOnlyMatchesNoRows|TestGenerateSignInCodeErrorResponse|TestStore_UpdateKYCRequiresExistingUser'` (`TestStore_UpdateKYCRequiresExistingUser` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer/handler ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

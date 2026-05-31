@@ -339,6 +339,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./store ./consumer/handler -run 'TestErrNotFoundOnlyMatchesNoRows|TestGenerateSignInCodeErrorResponse|TestStore_UpdateKYCRequiresExistingUser'` (`TestStore_UpdateKYCRequiresExistingUser` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./store ./consumer/handler ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

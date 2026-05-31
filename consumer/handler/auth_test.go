@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -25,7 +26,7 @@ func TestGenerateSignInCodeErrorResponse(t *testing.T) {
 		},
 		{
 			name:       "not found",
-			err:        errors.New("user not found"),
+			err:        sql.ErrNoRows,
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "not_found",
 		},

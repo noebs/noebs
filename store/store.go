@@ -1901,10 +1901,7 @@ func ErrNotFound(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return true
-	}
-	return strings.Contains(err.Error(), "no rows") || strings.Contains(err.Error(), "not found")
+	return errors.Is(err, sql.ErrNoRows)
 }
 
 func execContextRequireRowsAffected(ctx context.Context, db sqlExecer, stmt string, args ...any) error {
