@@ -237,10 +237,12 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	var terminalFees []merchantStats
 
 	if err := db.GetContext(c.UserContext(), &count, db.Rebind("SELECT COUNT(*) FROM transactions WHERE tenant_id = ?"), tenantID); err != nil {
-		log.WithFields(logrus.Fields{"code": err.Error()}).Info("error counting transactions")
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
 	}
 	if err := db.GetContext(c.UserContext(), &totAmount, db.Rebind("SELECT COALESCE(SUM(tran_amount), 0) AS amount FROM transactions WHERE tenant_id = ?"), tenantID); err != nil {
-		log.WithFields(logrus.Fields{"code": err.Error()}).Info("error summing transactions")
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
 	}
 
 	if err := parseJSON(c, &search); err == nil && search.TerminalID != "" {
@@ -274,7 +276,7 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 	start := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 1, 0)
 
-	_ = db.SelectContext(
+	if err := db.SelectContext(
 		c.UserContext(),
 		&mStats,
 		db.Rebind(`SELECT terminal_id, COALESCE(SUM(tran_amount), 0) AS amount
@@ -285,8 +287,11 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		tenantID,
 		start,
 		end,
-	)
-	_ = db.SelectContext(
+	); err != nil {
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
+	}
+	if err := db.SelectContext(
 		c.UserContext(),
 		&leastMerchants,
 		db.Rebind(`SELECT terminal_id, COUNT(*) AS amount
@@ -299,8 +304,11 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		"Successful",
 		start,
 		end,
-	)
-	_ = db.SelectContext(
+	); err != nil {
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
+	}
+	if err := db.SelectContext(
 		c.UserContext(),
 		&terminalFees,
 		db.Rebind(`SELECT terminal_id, COUNT(tran_fee) AS amount
@@ -313,7 +321,10 @@ func (s *Service) BrowserDashboard(c *fiber.Ctx) {
 		"Successful",
 		start,
 		end,
-	)
+	); err != nil {
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
+	}
 
 	log.Printf("the least merchats are: %v", leastMerchants)
 
@@ -406,11 +417,17 @@ func (s *Service) Stream(c *fiber.Ctx) {
 		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
-	_ = json.NewEncoder(&stream).Encode(trans)
+	if err := json.NewEncoder(&stream).Encode(trans); err != nil {
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
+	}
 
 	c.Set("Content-Disposition", `attachment; filename="transactions.json"`)
 	c.Set("Content-Type", "application/octet-stream")
-	_ = c.SendStream(&stream)
+	if err := c.SendStream(&stream); err != nil {
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
+	}
 
 }
 

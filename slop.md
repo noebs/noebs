@@ -98,6 +98,11 @@ Last updated: 2026-05-31
     - Fix: parse all required fields into locals first, accept numeric amount values explicitly, and return typed `ErrInvalidBillInfo` errors without partial mutation.
     - Tests: `go test -count=1 ./merchant`.
 
+20. Dashboard browser/export paths ignored runtime query and stream errors.
+    - Evidence: `BrowserDashboard` logged count/sum query failures and discarded merchant stats query errors; `Stream` discarded JSON encode and `SendStream` errors.
+    - Fix: return HTTP 500 on those failures and add a source guard against reintroducing the ignored-error patterns.
+    - Tests: `go test -count=1 ./dashboard`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

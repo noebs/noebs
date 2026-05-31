@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -137,5 +139,23 @@ func TestMerchantTransactionsEndpointReturnsQueryErrors(t *testing.T) {
 
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+}
+
+func TestDashboardHandlersDoNotIgnoreRuntimeErrors(t *testing.T) {
+	source, err := os.ReadFile("api.go")
+	if err != nil {
+		t.Fatalf("read api.go: %v", err)
+	}
+	for _, token := range []string{
+		"_ = db.SelectContext",
+		"_ = json.NewEncoder",
+		"_ = c.SendStream",
+		"error counting transactions",
+		"error summing transactions",
+	} {
+		if strings.Contains(string(source), token) {
+			t.Fatalf("dashboard api must return runtime errors, found ignored-error pattern %q", token)
+		}
 	}
 }
