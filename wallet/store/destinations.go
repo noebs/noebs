@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -118,37 +119,169 @@ func (s *Store) ListWithdrawalDestinations(ctx context.Context, tenantID string,
 	return dests, nil
 }
 
-func (s *Store) UpdateWithdrawalDestinationUsage(ctx context.Context, tenantID string, destinationID int64, amount int64, usedAt time.Time) error {
-	tenantID, err := ValidateTenantID(tenantID)
+func (s *Store) CreateWithdrawalDestinationLink(ctx context.Context, link LedgerWithdrawalDestinationLink) (*LedgerWithdrawalDestinationLink, error) {
+	tenantID, err := ValidateTenantID(link.TenantID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if destinationID <= 0 {
-		return ErrMissingDestinationID
+	link.TenantID = tenantID
+	if link.LedgerEntryID <= 0 {
+		return nil, ErrMissingLedgerEntryID
 	}
-	if amount <= 0 {
-		return ErrInvalidAmount
+	if link.DestinationID <= 0 {
+		return nil, ErrMissingDestinationID
 	}
-	if usedAt.IsZero() {
-		return ErrMissingUsageTime
+	if link.Amount <= 0 {
+		return nil, ErrInvalidAmount
+	}
+	if link.Currency == "" {
+		return nil, ErrMissingCurrency
 	}
 	db, err := s.ensureDB()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	stmt := db.Rebind(`UPDATE withdrawal_destinations
-		SET last_used_at = ?, total_withdrawn = total_withdrawn + ?, updated_at = ?
-		WHERE tenant_id = ? AND id = ?`)
-	result, err := db.ExecContext(ctx, stmt, usedAt, amount, usedAt, tenantID, destinationID)
+	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	ledgerEntry, err := getLedgerEntryForUsageLinkTx(ctx, tx, tenantID, link.LedgerEntryID)
+	if err != nil {
+		return nil, err
+	}
+	destination, err := getWithdrawalDestinationForLinkTx(ctx, tx, tenantID, link.DestinationID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateWithdrawalDestinationLinkLedgerEntry(ledgerEntry, destination, link); err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	stmt := tx.Rebind(`INSERT INTO ledger_withdrawal_destination_links(
+		tenant_id, ledger_entry_id, destination_id, amount, currency, created_at
+	) VALUES(?, ?, ?, ?, ?, ?)
+	ON CONFLICT(tenant_id, ledger_entry_id, destination_id) DO NOTHING
+	RETURNING *`)
+	var stored LedgerWithdrawalDestinationLink
+	if err := tx.GetContext(ctx, &stored, stmt,
+		tenantID,
+		link.LedgerEntryID,
+		link.DestinationID,
+		link.Amount,
+		link.Currency,
+		now,
+	); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		existing, err := getWithdrawalDestinationLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.DestinationID)
+		if err != nil {
+			return nil, err
+		}
+		if err := ValidateWithdrawalDestinationLinkReplay(existing, link); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
+		return existing, nil
+	}
+
+	updateStmt := tx.Rebind(`UPDATE withdrawal_destinations
+		SET last_used_at = GREATEST(COALESCE(last_used_at, ?), ?),
+			total_withdrawn = total_withdrawn + ?,
+			updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := tx.ExecContext(ctx, updateStmt, now, now, link.Amount, now, tenantID, link.DestinationID)
+	if err != nil {
+		return nil, err
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if affected == 0 {
+		return nil, ErrDestinationNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
+	return &stored, nil
+}
+
+func getWithdrawalDestinationForLinkTx(ctx context.Context, tx interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}, tenantID string, destinationID int64) (*WithdrawalDestination, error) {
+	stmt := tx.Rebind(`SELECT * FROM withdrawal_destinations
+		WHERE tenant_id = ? AND id = ?`)
+	var destination WithdrawalDestination
+	if err := tx.GetContext(ctx, &destination, stmt, tenantID, destinationID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDestinationNotFound
+		}
+		return nil, err
+	}
+	return &destination, nil
+}
+
+func getWithdrawalDestinationLinkTx(ctx context.Context, tx interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}, tenantID string, ledgerEntryID, destinationID int64) (*LedgerWithdrawalDestinationLink, error) {
+	stmt := tx.Rebind(`SELECT * FROM ledger_withdrawal_destination_links
+		WHERE tenant_id = ? AND ledger_entry_id = ? AND destination_id = ?`)
+	var link LedgerWithdrawalDestinationLink
+	if err := tx.GetContext(ctx, &link, stmt, tenantID, ledgerEntryID, destinationID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDuplicateDestinationLink
+		}
+		return nil, err
+	}
+	return &link, nil
+}
+
+func ValidateWithdrawalDestinationLinkLedgerEntry(entry *LedgerEntry, destination *WithdrawalDestination, link LedgerWithdrawalDestinationLink) error {
+	if entry == nil {
+		return ErrLedgerEntryNotFound
+	}
+	if destination == nil {
 		return ErrDestinationNotFound
+	}
+	if entry.TenantID != link.TenantID || entry.ID != link.LedgerEntryID ||
+		destination.TenantID != link.TenantID || destination.ID != link.DestinationID {
+		return ErrDuplicateDestinationLink
+	}
+	if destination.WalletID != entry.WalletID {
+		return ErrDestinationNotFound
+	}
+	if entry.EntryType != "debit" {
+		return ErrInvalidDirection
+	}
+	if destination.Currency != link.Currency {
+		return ErrCurrencyMismatch
+	}
+	return nil
+}
+
+func ValidateWithdrawalDestinationLinkReplay(existing *LedgerWithdrawalDestinationLink, requested LedgerWithdrawalDestinationLink) error {
+	if existing == nil ||
+		existing.TenantID != requested.TenantID ||
+		existing.LedgerEntryID != requested.LedgerEntryID ||
+		existing.DestinationID != requested.DestinationID ||
+		existing.Amount != requested.Amount ||
+		existing.Currency != requested.Currency {
+		return ErrDuplicateDestinationLink
 	}
 	return nil
 }

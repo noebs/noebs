@@ -178,6 +178,11 @@ Last updated: 2026-05-31
     - Fix: use `ledger_funding_links` for debit entries too, validate each link against the ledger entry amount/currency/type, and update `total_funded` for credit links or `total_withdrawn` for debit links only when a new link is inserted.
     - Tests: `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingLinkLedgerEntry|TestValidateFundingLinkReplay'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+36. Withdrawal destination usage could overcount destination totals on workflow retry.
+    - Evidence: after withdrawal ledger posting, the workflow called `UpdateWithdrawalDestinationUsage`, which incremented `withdrawal_destinations.total_withdrawn` without a ledger-entry idempotency key. The same retry shape as funding-source usage could double count one withdrawal, and the old unkeyed usage activity/store APIs were still registered.
+    - Fix: add `ledger_withdrawal_destination_links`, route destination usage through exact-replay ledger links, validate the link against the debit ledger entry, destination wallet/currency, and funding-source wallet/currency, and remove the unkeyed funding/destination usage activities.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestCreateWithdrawalDestinationLinkValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestValidateWithdrawalDestinationLinkReplay'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

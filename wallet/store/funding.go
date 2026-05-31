@@ -254,11 +254,15 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		}
 	}()
 
-	ledgerEntry, err := getLedgerEntryForFundingLinkTx(ctx, tx, tenantID, link.LedgerEntryID)
+	ledgerEntry, err := getLedgerEntryForUsageLinkTx(ctx, tx, tenantID, link.LedgerEntryID)
 	if err != nil {
 		return nil, err
 	}
-	if err := ValidateFundingLinkLedgerEntry(ledgerEntry, link); err != nil {
+	source, err := getFundingSourceForLinkTx(ctx, tx, tenantID, link.FundingSourceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateFundingLinkLedgerEntry(ledgerEntry, source, link); err != nil {
 		return nil, err
 	}
 
@@ -312,7 +316,7 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	return &stored, nil
 }
 
-func getLedgerEntryForFundingLinkTx(ctx context.Context, tx interface {
+func getLedgerEntryForUsageLinkTx(ctx context.Context, tx interface {
 	Rebind(string) string
 	GetContext(context.Context, any, string, ...any) error
 }, tenantID string, ledgerEntryID int64) (*LedgerEntry, error) {
@@ -326,6 +330,22 @@ func getLedgerEntryForFundingLinkTx(ctx context.Context, tx interface {
 		return nil, err
 	}
 	return &entry, nil
+}
+
+func getFundingSourceForLinkTx(ctx context.Context, tx interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}, tenantID string, sourceID int64) (*FundingSource, error) {
+	stmt := tx.Rebind(`SELECT * FROM funding_sources
+		WHERE tenant_id = ? AND id = ?`)
+	var source FundingSource
+	if err := tx.GetContext(ctx, &source, stmt, tenantID, sourceID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrFundingSourceNotFound
+		}
+		return nil, err
+	}
+	return &source, nil
 }
 
 func getFundingLinkTx(ctx context.Context, tx interface {
@@ -344,17 +364,27 @@ func getFundingLinkTx(ctx context.Context, tx interface {
 	return &link, nil
 }
 
-func ValidateFundingLinkLedgerEntry(entry *LedgerEntry, link LedgerFundingLink) error {
+func ValidateFundingLinkLedgerEntry(entry *LedgerEntry, source *FundingSource, link LedgerFundingLink) error {
 	if entry == nil {
 		return ErrLedgerEntryNotFound
 	}
-	if entry.TenantID != link.TenantID || entry.ID != link.LedgerEntryID {
+	if source == nil {
+		return ErrFundingSourceNotFound
+	}
+	if entry.TenantID != link.TenantID || entry.ID != link.LedgerEntryID ||
+		source.TenantID != link.TenantID || source.ID != link.FundingSourceID {
 		return ErrDuplicateFundingLink
+	}
+	if source.WalletID != entry.WalletID {
+		return ErrFundingSourceNotFound
 	}
 	if entry.Amount != link.Amount {
 		return ErrInvalidAmount
 	}
 	if entry.Currency != link.Currency {
+		return ErrCurrencyMismatch
+	}
+	if source.Currency != link.Currency {
 		return ErrCurrencyMismatch
 	}
 	switch entry.EntryType {
@@ -394,41 +424,6 @@ func fundingSourceUsageUpdateSQL(entryType string) string {
 	default:
 		return ""
 	}
-}
-
-func (s *Store) UpdateFundingSourceUsage(ctx context.Context, tenantID string, sourceID int64, amount int64, usedAt time.Time) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if sourceID <= 0 {
-		return ErrMissingFundingSourceID
-	}
-	if amount <= 0 {
-		return ErrInvalidAmount
-	}
-	if usedAt.IsZero() {
-		return ErrMissingUsageTime
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	stmt := db.Rebind(`UPDATE funding_sources
-		SET total_withdrawn = total_withdrawn + ?, last_withdrawn_at = ?, updated_at = ?
-		WHERE tenant_id = ? AND id = ?`)
-	result, err := db.ExecContext(ctx, stmt, amount, usedAt, usedAt, tenantID, sourceID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrFundingSourceNotFound
-	}
-	return nil
 }
 
 func (s *Store) GetFundingSourceByPSPRef(ctx context.Context, tenantID, provider string, externalRef string) (*FundingSource, error) {

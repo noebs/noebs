@@ -31,3 +31,13 @@ type WithdrawalDestination struct {
 	CreatedAt                   time.Time       `db:"created_at"`
 	UpdatedAt                   time.Time       `db:"updated_at"`
 }
+
+type LedgerWithdrawalDestinationLink struct {
+	ID            int64     `db:"id"`
+	TenantID      string    `db:"tenant_id"`
+	LedgerEntryID int64     `db:"ledger_entry_id"`
+	DestinationID int64     `db:"destination_id"`
+	Amount        int64     `db:"amount"`
+	Currency      string    `db:"currency"`
+	CreatedAt     time.Time `db:"created_at"`
+}

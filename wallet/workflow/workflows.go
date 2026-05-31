@@ -922,9 +922,15 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		_ = feePosted
 	}
 
-	now := workflow.Now(ctx)
 	if destinationID > 0 {
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateWithdrawalDestinationUsage, params.TenantID, destinationID, params.Request.Amount, now).Get(ctx, nil); err != nil {
+		link := walletstore.LedgerWithdrawalDestinationLink{
+			TenantID:      params.TenantID,
+			LedgerEntryID: posted.DebitEntry.ID,
+			DestinationID: destinationID,
+			Amount:        params.Request.Amount,
+			Currency:      params.Request.Currency,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityLinkLedgerToWithdrawalDestination, link).Get(ctx, nil); err != nil {
 			return err
 		}
 	}

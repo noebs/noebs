@@ -239,7 +239,8 @@ func mapError(err error) error {
 	case errors.Is(err, walletstore.ErrDuplicateTransaction),
 		errors.Is(err, walletstore.ErrDuplicateHold),
 		errors.Is(err, walletstore.ErrDuplicateFundingSource),
-		errors.Is(err, walletstore.ErrDuplicateFundingLink):
+		errors.Is(err, walletstore.ErrDuplicateFundingLink),
+		errors.Is(err, walletstore.ErrDuplicateDestinationLink):
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),

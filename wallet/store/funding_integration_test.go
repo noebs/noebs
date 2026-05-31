@@ -198,4 +198,54 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 	if got.TotalWithdrawn != 400 {
 		t.Fatalf("source total_withdrawn after usage replay = %d, want 400", got.TotalWithdrawn)
 	}
+
+	destination, err := store.CreateWithdrawalDestination(ctx, WithdrawalDestination{
+		TenantID:           tenantID,
+		WalletID:           userWallet.ID,
+		DestinationType:    "bank_account",
+		DestinationDetails: []byte(`{"account_last4":"4321"}`),
+		Currency:           "AED",
+		OwnershipStatus:    "verified",
+		IsActive:           true,
+	})
+	if err != nil {
+		t.Fatalf("create withdrawal destination: %v", err)
+	}
+	destinationLink := LedgerWithdrawalDestinationLink{
+		TenantID:      tenantID,
+		LedgerEntryID: withdrawal.DebitEntry.ID,
+		DestinationID: destination.ID,
+		Amount:        400,
+		Currency:      "AED",
+	}
+	createdDestinationLink, err := store.CreateWithdrawalDestinationLink(ctx, destinationLink)
+	if err != nil {
+		t.Fatalf("create withdrawal destination link: %v", err)
+	}
+	gotDestination, err := store.GetWithdrawalDestination(ctx, tenantID, destination.ID)
+	if err != nil {
+		t.Fatalf("get withdrawal destination: %v", err)
+	}
+	if gotDestination.TotalWithdrawn != 400 {
+		t.Fatalf("destination total_withdrawn after usage = %d, want 400", gotDestination.TotalWithdrawn)
+	}
+	replayedDestinationLink, err := store.CreateWithdrawalDestinationLink(ctx, destinationLink)
+	if err != nil {
+		t.Fatalf("replay withdrawal destination link: %v", err)
+	}
+	if replayedDestinationLink.ID != createdDestinationLink.ID {
+		t.Fatalf("replayed destination link id = %d, want %d", replayedDestinationLink.ID, createdDestinationLink.ID)
+	}
+	gotDestination, err = store.GetWithdrawalDestination(ctx, tenantID, destination.ID)
+	if err != nil {
+		t.Fatalf("get withdrawal destination after replay: %v", err)
+	}
+	if gotDestination.TotalWithdrawn != 400 {
+		t.Fatalf("destination total_withdrawn after replay = %d, want 400", gotDestination.TotalWithdrawn)
+	}
+	mismatchedDestinationLink := destinationLink
+	mismatchedDestinationLink.Amount = 300
+	if _, err := store.CreateWithdrawalDestinationLink(ctx, mismatchedDestinationLink); !errors.Is(err, ErrDuplicateDestinationLink) {
+		t.Fatalf("mismatched withdrawal destination link error = %v, want %v", err, ErrDuplicateDestinationLink)
+	}
 }

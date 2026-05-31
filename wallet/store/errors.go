@@ -108,6 +108,7 @@ var (
 	ErrDuplicateHold                = errors.New("duplicate hold")
 	ErrDuplicateFundingSource       = errors.New("duplicate funding source")
 	ErrDuplicateFundingLink         = errors.New("duplicate funding link")
+	ErrDuplicateDestinationLink     = errors.New("duplicate destination link")
 	ErrHoldNotFound                 = errors.New("hold not found")
 	ErrHoldNotActive                = errors.New("hold not active")
 	ErrHoldWalletMismatch           = errors.New("hold wallet mismatch")

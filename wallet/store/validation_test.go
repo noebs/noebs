@@ -660,44 +660,43 @@ func TestLedgerTransactionExistsByReferenceValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingReferenceID)
 }
 
-func TestUpdateWithdrawalDestinationUsageValidation(t *testing.T) {
+func TestCreateWithdrawalDestinationLinkValidation(t *testing.T) {
 	s := &Store{}
-	now := time.Now().UTC()
+	link := LedgerWithdrawalDestinationLink{
+		TenantID:      "tenant",
+		LedgerEntryID: 1,
+		DestinationID: 2,
+		Amount:        100,
+		Currency:      "USD",
+	}
 
-	err := s.UpdateWithdrawalDestinationUsage(t.Context(), "", 1, 100, now)
+	_, err := s.CreateWithdrawalDestinationLink(t.Context(), LedgerWithdrawalDestinationLink{})
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "default", 1, 100, now)
+	bad := link
+	bad.TenantID = "default"
+	_, err = s.CreateWithdrawalDestinationLink(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 0, 100, now)
+	bad = link
+	bad.LedgerEntryID = 0
+	_, err = s.CreateWithdrawalDestinationLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingLedgerEntryID)
+
+	bad = link
+	bad.DestinationID = 0
+	_, err = s.CreateWithdrawalDestinationLink(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingDestinationID)
 
-	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 1, 0, now)
+	bad = link
+	bad.Amount = 0
+	_, err = s.CreateWithdrawalDestinationLink(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidAmount)
 
-	err = s.UpdateWithdrawalDestinationUsage(t.Context(), "tenant", 1, 100, time.Time{})
-	assertErrorIs(t, err, ErrMissingUsageTime)
-}
-
-func TestUpdateFundingSourceUsageValidation(t *testing.T) {
-	s := &Store{}
-	now := time.Now().UTC()
-
-	err := s.UpdateFundingSourceUsage(t.Context(), "", 1, 100, now)
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	err = s.UpdateFundingSourceUsage(t.Context(), "default", 1, 100, now)
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 0, 100, now)
-	assertErrorIs(t, err, ErrMissingFundingSourceID)
-
-	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 1, 0, now)
-	assertErrorIs(t, err, ErrInvalidAmount)
-
-	err = s.UpdateFundingSourceUsage(t.Context(), "tenant", 1, 100, time.Time{})
-	assertErrorIs(t, err, ErrMissingUsageTime)
+	bad = link
+	bad.Currency = ""
+	_, err = s.CreateWithdrawalDestinationLink(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrency)
 }
 
 func TestGetFundingSourceByIDValidation(t *testing.T) {
@@ -1110,40 +1109,157 @@ func TestValidateFundingLinkReplay(t *testing.T) {
 }
 
 func TestValidateFundingLinkLedgerEntry(t *testing.T) {
+	walletID := uuid.New()
 	entry := LedgerEntry{
 		ID:        10,
 		TenantID:  "tenant",
+		WalletID:  walletID,
 		EntryType: "credit",
 		Amount:    100,
 		Currency:  "USD",
 	}
-	link := LedgerFundingLink{
-		TenantID:      "tenant",
-		LedgerEntryID: 10,
-		Amount:        100,
-		Currency:      "USD",
+	source := FundingSource{
+		ID:       20,
+		TenantID: "tenant",
+		WalletID: walletID,
+		Currency: "USD",
 	}
-	if err := ValidateFundingLinkLedgerEntry(&entry, link); err != nil {
+	link := LedgerFundingLink{
+		TenantID:        "tenant",
+		LedgerEntryID:   10,
+		FundingSourceID: 20,
+		Amount:          100,
+		Currency:        "USD",
+	}
+	if err := ValidateFundingLinkLedgerEntry(&entry, &source, link); err != nil {
 		t.Fatalf("ValidateFundingLinkLedgerEntry() error = %v", err)
 	}
 
 	debit := entry
 	debit.EntryType = "debit"
-	if err := ValidateFundingLinkLedgerEntry(&debit, link); err != nil {
+	if err := ValidateFundingLinkLedgerEntry(&debit, &source, link); err != nil {
 		t.Fatalf("ValidateFundingLinkLedgerEntry() debit error = %v", err)
 	}
 
 	amountMismatch := entry
 	amountMismatch.Amount = 99
-	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&amountMismatch, link), ErrInvalidAmount)
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&amountMismatch, &source, link), ErrInvalidAmount)
 
 	currencyMismatch := entry
 	currencyMismatch.Currency = "EUR"
-	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&currencyMismatch, link), ErrCurrencyMismatch)
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&currencyMismatch, &source, link), ErrCurrencyMismatch)
+
+	sourceCurrencyMismatch := source
+	sourceCurrencyMismatch.Currency = "EUR"
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&entry, &sourceCurrencyMismatch, link), ErrCurrencyMismatch)
+
+	sourceWalletMismatch := source
+	sourceWalletMismatch.WalletID = uuid.New()
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&entry, &sourceWalletMismatch, link), ErrFundingSourceNotFound)
 
 	invalidType := entry
 	invalidType.EntryType = "pending"
-	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&invalidType, link), ErrInvalidDirection)
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&invalidType, &source, link), ErrInvalidDirection)
+
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(nil, &source, link), ErrLedgerEntryNotFound)
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&entry, nil, link), ErrFundingSourceNotFound)
+}
+
+func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
+	walletID := uuid.New()
+	entry := LedgerEntry{
+		ID:        10,
+		TenantID:  "tenant",
+		WalletID:  walletID,
+		EntryType: "debit",
+		Amount:    1000,
+		Currency:  "AED",
+	}
+	destination := WithdrawalDestination{
+		ID:       20,
+		TenantID: "tenant",
+		WalletID: walletID,
+		Currency: "USD",
+	}
+	link := LedgerWithdrawalDestinationLink{
+		TenantID:      "tenant",
+		LedgerEntryID: 10,
+		DestinationID: 20,
+		Amount:        25,
+		Currency:      "USD",
+	}
+	if err := ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &destination, link); err != nil {
+		t.Fatalf("ValidateWithdrawalDestinationLinkLedgerEntry() error = %v", err)
+	}
+
+	credit := entry
+	credit.EntryType = "credit"
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&credit, &destination, link), ErrInvalidDirection)
+
+	otherDestination := destination
+	otherDestination.Currency = "EUR"
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &otherDestination, link), ErrCurrencyMismatch)
+
+	walletMismatch := destination
+	walletMismatch.WalletID = uuid.New()
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &walletMismatch, link), ErrDestinationNotFound)
+
+	otherEntry := entry
+	otherEntry.ID = 11
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&otherEntry, &destination, link), ErrDuplicateDestinationLink)
+
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(nil, &destination, link), ErrLedgerEntryNotFound)
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, nil, link), ErrDestinationNotFound)
+}
+
+func TestValidateWithdrawalDestinationLinkReplay(t *testing.T) {
+	existing := LedgerWithdrawalDestinationLink{
+		TenantID:      "tenant",
+		LedgerEntryID: 1,
+		DestinationID: 2,
+		Amount:        100,
+		Currency:      "USD",
+	}
+	if err := ValidateWithdrawalDestinationLinkReplay(&existing, existing); err != nil {
+		t.Fatalf("ValidateWithdrawalDestinationLinkReplay() error = %v", err)
+	}
+
+	cases := map[string]LedgerWithdrawalDestinationLink{
+		"ledger entry": {
+			TenantID:      existing.TenantID,
+			LedgerEntryID: 3,
+			DestinationID: existing.DestinationID,
+			Amount:        existing.Amount,
+			Currency:      existing.Currency,
+		},
+		"destination": {
+			TenantID:      existing.TenantID,
+			LedgerEntryID: existing.LedgerEntryID,
+			DestinationID: 4,
+			Amount:        existing.Amount,
+			Currency:      existing.Currency,
+		},
+		"amount": {
+			TenantID:      existing.TenantID,
+			LedgerEntryID: existing.LedgerEntryID,
+			DestinationID: existing.DestinationID,
+			Amount:        101,
+			Currency:      existing.Currency,
+		},
+		"currency": {
+			TenantID:      existing.TenantID,
+			LedgerEntryID: existing.LedgerEntryID,
+			DestinationID: existing.DestinationID,
+			Amount:        existing.Amount,
+			Currency:      "EUR",
+		},
+	}
+	for name, requested := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateWithdrawalDestinationLinkReplay(&existing, requested)
+			assertErrorIs(t, err, ErrDuplicateDestinationLink)
+		})
+	}
 }
 
 func TestGetFundingSourceByPSPRefValidation(t *testing.T) {

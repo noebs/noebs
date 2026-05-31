@@ -39,6 +39,7 @@
 - Fixed PSP workflow-start failure handling so failed Temporal starts must also record PSP transaction failure, and status-repair failures surface as joined internal errors.
 - Fixed funding-source accounting so source totals are incremented by idempotent ledger-link creation rather than source upsert, with mismatched source/link replays rejected.
 - Fixed return-to-source withdrawal usage so funding source `total_withdrawn` is tied to idempotent debit ledger links instead of an unkeyed counter update.
+- Fixed withdrawal destination usage so `total_withdrawn` is tied to idempotent debit ledger links, link wallet ownership is validated, and the old unkeyed usage activities are gone.
 
 Verification:
 
@@ -70,6 +71,8 @@ Verification:
 - `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`
 - `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingSourceMerge|TestValidateFundingLinkReplay|TestFundingSourceValidation|TestCreateFundingLinkValidation'`
 - `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingLinkLedgerEntry|TestValidateFundingLinkReplay'`
+- `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow ./wallet/grpc`
+- `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestCreateWithdrawalDestinationLinkValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestValidateWithdrawalDestinationLinkReplay'`
 
 Next candidates:
 
