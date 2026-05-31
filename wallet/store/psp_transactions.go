@@ -56,8 +56,8 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 	if txn.Currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	if txn.Status == "" {
-		return nil, ErrMissingStatus
+	if err := ValidatePSPTransactionStatus(txn.Status); err != nil {
+		return nil, err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -215,8 +215,8 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 	if clientReference == "" {
 		return ErrMissingClientReference
 	}
-	if update.Status == "" {
-		return ErrMissingStatus
+	if err := ValidatePSPTransactionStatus(update.Status); err != nil {
+		return err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -267,21 +267,12 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 			}
 			return err
 		}
-		if isTerminalPSPTransactionStatus(currentStatus) {
-			return nil
+		if PSPTransactionStatusTerminal(currentStatus) {
+			return ValidatePSPStatusTransition(currentStatus, update.Status)
 		}
 		return ErrPSPTransactionNotFound
 	}
 	return nil
-}
-
-func isTerminalPSPTransactionStatus(status string) bool {
-	switch status {
-	case "success", "failed", "cancelled":
-		return true
-	default:
-		return false
-	}
 }
 
 func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID string, limit int) ([]PSPTransaction, error) {
@@ -330,6 +321,11 @@ func (s *Store) ListPSPTransactions(ctx context.Context, filter PSPTransactionFi
 	}
 	if !filter.Start.IsZero() && filter.Start.After(filter.End) {
 		return nil, ErrInvalidTimeRange
+	}
+	if filter.Status != "" {
+		if err := ValidatePSPTransactionStatus(filter.Status); err != nil {
+			return nil, err
+		}
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -401,8 +397,8 @@ func (s *Store) ListPSPTransactionsByStatus(ctx context.Context, tenantID, statu
 	if err != nil {
 		return nil, err
 	}
-	if status == "" {
-		return nil, ErrMissingStatus
+	if err := ValidatePSPTransactionStatus(status); err != nil {
+		return nil, err
 	}
 	if start.IsZero() {
 		return nil, ErrMissingStartTime

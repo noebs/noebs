@@ -208,6 +208,11 @@ Last updated: 2026-05-31
     - Fix: make manual transfer creation and approval insertion return existing rows only on exact replay, reject mismatched duplicates with typed errors, validate transfer status/approval decisions before the DB, and reject pre-seeded approval/completion fields at creation.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestCreateManualTransfer|TestAddManualTransferApproval|TestValidateManualTransfer|TestListManualTransfersByStatus|TestManualTransferAndApprovalReplaysAreExact'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+42. PSP status updates accepted invalid states and hid terminal-state contradictions.
+    - Evidence: `CreatePSPTransaction`, `UpdatePSPTransactionStatus`, and PSP status list filters only checked for empty status strings, relying on DB check constraints or empty query results for invalid values. `UpdatePSPTransactionStatus` also returned nil when a terminal transaction received a different later status, hiding provider/webhook/poller contradictions.
+    - Fix: add explicit PSP status validation, apply it before DB work on create/update/list paths, and return `ErrInvalidStatusTransition` when a terminal status would be changed to a different state while preserving exact terminal replays.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestCreatePSPTransactionValidation|TestValidatePSPStatusTransition|TestUpdatePSPTransactionStatusValidation|TestListPSPTransactions|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

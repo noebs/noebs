@@ -183,8 +183,8 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		t.Fatalf("expected confirmed_at %v, got %v", confirmedAt, got.ConfirmedAt.Time)
 	}
 
-	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{Status: "pending"}); err != nil {
-		t.Fatalf("downgrade terminal status: %v", err)
+	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{Status: "pending"}); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("downgrade terminal status error = %v, want %v", err, ErrInvalidStatusTransition)
 	}
 	got, err = s.GetPSPTransactionByReference(ctx, txn.TenantID, txn.ClientReference)
 	if err != nil {

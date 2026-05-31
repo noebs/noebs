@@ -631,6 +631,7 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 		{"invalid-amount", func(txn *PSPTransaction) { txn.Amount = 0 }, ErrInvalidAmount},
 		{"missing-currency", func(txn *PSPTransaction) { txn.Currency = "" }, ErrMissingCurrency},
 		{"missing-status", func(txn *PSPTransaction) { txn.Status = "" }, ErrMissingStatus},
+		{"invalid-status", func(txn *PSPTransaction) { txn.Status = "complete" }, ErrInvalidStatus},
 	}
 
 	for _, tc := range cases {
@@ -641,6 +642,19 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 			assertErrorIs(t, err, tc.wantErr)
 		})
 	}
+}
+
+func TestValidatePSPStatusTransition(t *testing.T) {
+	if err := ValidatePSPStatusTransition(PSPStatusPending, PSPStatusSuccess); err != nil {
+		t.Fatalf("ValidatePSPStatusTransition(nonterminal) error = %v", err)
+	}
+	if err := ValidatePSPStatusTransition(PSPStatusSuccess, PSPStatusSuccess); err != nil {
+		t.Fatalf("ValidatePSPStatusTransition(replay) error = %v", err)
+	}
+	assertErrorIs(t, ValidatePSPStatusTransition("", PSPStatusSuccess), ErrMissingStatus)
+	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusSuccess, "complete"), ErrInvalidStatus)
+	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusSuccess, PSPStatusFailed), ErrInvalidStatusTransition)
+	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusFailed, PSPStatusPending), ErrInvalidStatusTransition)
 }
 
 func TestValidatePSPTransactionCreateReplay(t *testing.T) {
@@ -751,6 +765,10 @@ func TestUpdatePSPTransactionStatusValidation(t *testing.T) {
 	update.Status = ""
 	err = s.UpdatePSPTransactionStatus(t.Context(), "tenant", "ref-1", update)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	update.Status = "complete"
+	err = s.UpdatePSPTransactionStatus(t.Context(), "tenant", "ref-1", update)
+	assertErrorIs(t, err, ErrInvalidStatus)
 }
 
 func TestListPSPTransactionsForPollingValidation(t *testing.T) {
@@ -778,6 +796,9 @@ func TestListPSPTransactionsByStatusValidation(t *testing.T) {
 
 	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "", start, end, 1)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "complete", start, end, 1)
+	assertErrorIs(t, err, ErrInvalidStatus)
 
 	_, err = s.ListPSPTransactionsByStatus(t.Context(), "tenant", "success", time.Time{}, end, 1)
 	assertErrorIs(t, err, ErrMissingStartTime)
@@ -1546,6 +1567,9 @@ func TestListPSPTransactionsValidation(t *testing.T) {
 
 	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 10, Offset: -1})
 	assertErrorIs(t, err, ErrInvalidOffset)
+
+	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Status: "complete", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidStatus)
 
 	now := time.Now().UTC()
 	_, err = s.ListPSPTransactions(t.Context(), PSPTransactionFilter{TenantID: "tenant", Limit: 10, Offset: 0, Start: now})

@@ -68,6 +68,7 @@ var (
 	ErrMissingAction                = errors.New("missing action")
 	ErrMissingStatus                = errors.New("missing status")
 	ErrInvalidStatus                = errors.New("invalid status")
+	ErrInvalidStatusTransition      = errors.New("invalid status transition")
 	ErrMissingInteractionType       = errors.New("missing interaction type")
 	ErrMissingWorkflowID            = errors.New("missing workflow id")
 	ErrMissingTransferType          = errors.New("missing transfer type")

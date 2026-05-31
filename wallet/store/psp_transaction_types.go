@@ -58,6 +58,49 @@ func (r *RawJSON) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+const (
+	PSPStatusInitiated  = "initiated"
+	PSPStatusProcessing = "processing"
+	PSPStatusPending    = "pending"
+	PSPStatusHeld       = "held"
+	PSPStatusFailed     = "failed"
+	PSPStatusCancelled  = "cancelled"
+	PSPStatusSuccess    = "success"
+)
+
+func ValidatePSPTransactionStatus(status string) error {
+	switch status {
+	case "":
+		return ErrMissingStatus
+	case PSPStatusInitiated, PSPStatusProcessing, PSPStatusPending, PSPStatusHeld, PSPStatusFailed, PSPStatusCancelled, PSPStatusSuccess:
+		return nil
+	default:
+		return ErrInvalidStatus
+	}
+}
+
+func ValidatePSPStatusTransition(current, next string) error {
+	if err := ValidatePSPTransactionStatus(current); err != nil {
+		return err
+	}
+	if err := ValidatePSPTransactionStatus(next); err != nil {
+		return err
+	}
+	if PSPTransactionStatusTerminal(current) && current != next {
+		return ErrInvalidStatusTransition
+	}
+	return nil
+}
+
+func PSPTransactionStatusTerminal(status string) bool {
+	switch status {
+	case PSPStatusSuccess, PSPStatusFailed, PSPStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 type PSPTransaction struct {
 	ID               int64          `db:"id"`
 	TenantID         string         `db:"tenant_id"`
