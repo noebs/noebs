@@ -103,3 +103,14 @@ func TestCheckUserRequiresCardVaultClient(t *testing.T) {
 		t.Fatalf("missing http client error = %v", err)
 	}
 }
+
+func TestCheckUserPropagatesIdentityLookupErrors(t *testing.T) {
+	service := &Service{Store: &store.Store{}, HTTPClient: http.DefaultClient}
+	_, err := service.CheckUser(context.Background(), "tenant-a", []string{"0912141660"})
+	if err == nil {
+		t.Fatal("CheckUser() error = nil, want identity lookup error")
+	}
+	if !strings.Contains(err.Error(), "nil db") {
+		t.Fatalf("CheckUser() error = %v, want identity lookup error", err)
+	}
+}

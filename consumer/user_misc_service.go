@@ -38,6 +38,9 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 		}
 		user, err := s.Store.GetUserByMobile(ctx, tenantID, phone)
 		if err != nil {
+			if !store.ErrNotFound(err) {
+				return nil, err
+			}
 			out = append(out, CheckUserResult{Phone: phone, IsUser: false})
 			continue
 		}

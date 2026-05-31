@@ -523,6 +523,11 @@ Last updated: 2026-05-31
     - Fix: make admin withdrawal approval rendering return a contextual decode error and fail the admin render path with an internal error when the stored raw request is malformed.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestAdminWithdrawalApproval|TestRenderWalletAdmin'`; `go test -count=1 ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+105. Check-user identity lookup failures were reported as non-users.
+    - Evidence: `CheckUser` treated every `GetUserByMobile` error as absence and appended `{is_user:false}`. Identity-auth DB failures, missing tables, or connection errors could therefore be returned to clients as "not a user" instead of surfacing an operational failure.
+    - Fix: only map explicit not-found results to `is_user:false`; propagate all other identity lookup errors before calling card-vault.
+    - Tests: `go test -count=1 -v ./consumer -run 'TestCheckUser'` (`TestCheckUserUsesIdentityAndCardVaultScopes` and `TestCheckUserSkipsUsersWithoutCardVaultCard` skipped locally when the container runtime is unavailable); `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
