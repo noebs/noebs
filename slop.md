@@ -433,6 +433,11 @@ Last updated: 2026-05-31
     - Fix: return HTTP 400 `bad_request` on malformed JSON before tenant resolution or service calls.
     - Tests: `go test -count=1 -v ./consumer/handler -run 'TestAuthRecoveryHandlersRejectMalformedJSONBeforeService|TestGenerateSignInCodeErrorResponse'`; `go test -count=1 ./consumer/handler ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+87. Verified funding sources did not require verification evidence.
+    - Evidence: `UpsertFundingSource` accepted any non-empty `VerificationStatus`, including `verified` with a NULL `verified_at`. Return-to-source withdrawal selection and withdrawal-destination validation then trusted only the status string plus withdrawal metadata, so a manually persisted or bad legacy row could become withdrawable without proof of when it was verified.
+    - Fix: add an explicit funding-source verification contract, reject invalid statuses, require `verified_at` for `verified` sources, reject verification timestamps on non-verified sources, and centralize withdrawal-readiness checks so activity, workflow, and destination validation all require `verified_at`.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestFundingSourceValidation|TestValidateWithdrawalDestinationFundingSource'`; `go test -count=1 -v ./wallet/workflow -run 'TestSelectReturnToSourceSkipsIneligibleFundingSources|TestDepositFundingSource'`; `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`; `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

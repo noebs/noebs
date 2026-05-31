@@ -126,6 +126,7 @@ func TestDepositFundingSourcePreservesLegacyVerifiedPSPSource(t *testing.T) {
 func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 	walletID := uuid.New()
 	withdrawalMethod := json.RawMessage(`{"account_number":"1234567890","bank_code":"044"}`)
+	verifiedAt := sql.NullTime{Time: time.Now().UTC(), Valid: true}
 	sources := []walletstore.FundingSource{
 		{
 			ID:                 1,
@@ -133,6 +134,7 @@ func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
 			Currency:           "AED",
 			VerificationStatus: "verified",
+			VerifiedAt:         verifiedAt,
 			SupportsWithdrawal: true,
 			WithdrawalMethod:   withdrawalMethod,
 			TotalFunded:        10000,
@@ -153,6 +155,7 @@ func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
 			Currency:           "AED",
 			VerificationStatus: "verified",
+			VerifiedAt:         verifiedAt,
 			SupportsWithdrawal: true,
 			WithdrawalMethod:   withdrawalMethod,
 			TotalFunded:        100,
@@ -167,14 +170,25 @@ func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 			WithdrawalMethod:   withdrawalMethod,
 			TotalFunded:        10000,
 		},
+		{
+			ID:                 5,
+			WalletID:           walletID,
+			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
+			Currency:           "AED",
+			VerificationStatus: "verified",
+			VerifiedAt:         verifiedAt,
+			SupportsWithdrawal: true,
+			WithdrawalMethod:   withdrawalMethod,
+			TotalFunded:        10000,
+		},
 	}
 
 	selected, details, err := selectReturnToSource(sources, walletID, "AED", 500, "bankpay")
 	if err != nil {
 		t.Fatalf("select return-to-source: %v", err)
 	}
-	if selected == nil || selected.ID != 4 {
-		t.Fatalf("expected fourth source, got %+v", selected)
+	if selected == nil || selected.ID != 5 {
+		t.Fatalf("expected fifth source, got %+v", selected)
 	}
 	if details["account_number"] != "1234567890" {
 		t.Fatalf("unexpected details: %+v", details)

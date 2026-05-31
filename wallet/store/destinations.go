@@ -107,11 +107,8 @@ func ValidateWithdrawalDestinationFundingSource(dest WithdrawalDestination, sour
 	if source.Currency != dest.Currency {
 		return ErrCurrencyMismatch
 	}
-	if source.VerificationStatus != "verified" {
-		return ErrFundingSourceNotVerified
-	}
-	if !source.SupportsWithdrawal || len(source.WithdrawalMethod) == 0 {
-		return ErrFundingSourceNotWithdrawable
+	if err := ValidateFundingSourceReadyForWithdrawal(source); err != nil {
+		return err
 	}
 	return nil
 }

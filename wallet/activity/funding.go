@@ -60,7 +60,7 @@ func (a *FundingActivities) GetReturnToSourceOptions(ctx context.Context, tenant
 	}
 	options := make([]walletstore.FundingSource, 0, len(sources))
 	for _, source := range sources {
-		if source.SupportsWithdrawal && source.VerificationStatus == "verified" && len(source.WithdrawalMethod) > 0 {
+		if walletstore.ValidateFundingSourceReadyForWithdrawal(&source) == nil {
 			options = append(options, source)
 		}
 	}

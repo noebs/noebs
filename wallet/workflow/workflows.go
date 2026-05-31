@@ -2074,11 +2074,8 @@ func validateWithdrawalFundingSource(source walletstore.FundingSource, walletID 
 	if providerCode != "" && source.PSPProvider.Valid && source.PSPProvider.String != providerCode {
 		return walletstore.ErrMissingProviderCode
 	}
-	if source.VerificationStatus != "verified" {
-		return walletstore.ErrFundingSourceNotVerified
-	}
-	if !source.SupportsWithdrawal || len(source.WithdrawalMethod) == 0 {
-		return walletstore.ErrFundingSourceNotWithdrawable
+	if err := walletstore.ValidateFundingSourceReadyForWithdrawal(&source); err != nil {
+		return err
 	}
 	if amount > 0 && source.TotalFunded-source.TotalWithdrawn < amount {
 		return walletstore.ErrFundingSourceLimitExceeded

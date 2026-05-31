@@ -8,6 +8,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	FundingSourceStatusUnverified = "unverified"
+	FundingSourceStatusPending    = "pending"
+	FundingSourceStatusVerified   = "verified"
+)
+
 type FundingSource struct {
 	ID                 int64           `db:"id"`
 	TenantID           string          `db:"tenant_id"`
@@ -28,6 +34,51 @@ type FundingSource struct {
 	WithdrawalMethod   json.RawMessage `db:"withdrawal_method"`
 	CreatedAt          time.Time       `db:"created_at"`
 	UpdatedAt          time.Time       `db:"updated_at"`
+}
+
+func ValidateFundingSourceVerificationStatus(status string) error {
+	switch status {
+	case "":
+		return ErrMissingStatus
+	case FundingSourceStatusUnverified,
+		FundingSourceStatusPending,
+		FundingSourceStatusVerified:
+		return nil
+	default:
+		return ErrInvalidStatus
+	}
+}
+
+func ValidateFundingSourceVerification(source FundingSource) error {
+	if err := ValidateFundingSourceVerificationStatus(source.VerificationStatus); err != nil {
+		return err
+	}
+	if source.VerificationStatus == FundingSourceStatusVerified {
+		if !source.VerifiedAt.Valid || source.VerifiedAt.Time.IsZero() {
+			return ErrMissingVerificationTime
+		}
+		return nil
+	}
+	if source.VerifiedAt.Valid {
+		return ErrInvalidVerificationTime
+	}
+	return nil
+}
+
+func ValidateFundingSourceReadyForWithdrawal(source *FundingSource) error {
+	if source == nil {
+		return ErrFundingSourceNotFound
+	}
+	if source.VerificationStatus != FundingSourceStatusVerified {
+		return ErrFundingSourceNotVerified
+	}
+	if !source.VerifiedAt.Valid || source.VerifiedAt.Time.IsZero() {
+		return ErrMissingVerificationTime
+	}
+	if !source.SupportsWithdrawal || len(source.WithdrawalMethod) == 0 {
+		return ErrFundingSourceNotWithdrawable
+	}
+	return nil
 }
 
 type LedgerFundingLink struct {

@@ -1262,6 +1262,7 @@ func TestValidateWithdrawalDestinationFundingSource(t *testing.T) {
 		WalletID:           walletID,
 		Currency:           "AED",
 		VerificationStatus: "verified",
+		VerifiedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},
 		SupportsWithdrawal: true,
 		WithdrawalMethod:   []byte(`{"account_number":"1234567890"}`),
 	}
@@ -1283,7 +1284,12 @@ func TestValidateWithdrawalDestinationFundingSource(t *testing.T) {
 
 	pending := source
 	pending.VerificationStatus = "pending"
+	pending.VerifiedAt = sql.NullTime{}
 	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &pending), ErrFundingSourceNotVerified)
+
+	missingVerificationTime := source
+	missingVerificationTime.VerifiedAt = sql.NullTime{}
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &missingVerificationTime), ErrMissingVerificationTime)
 
 	notWithdrawable := source
 	notWithdrawable.SupportsWithdrawal = false
@@ -1301,6 +1307,7 @@ func TestFundingSourceValidation(t *testing.T) {
 		WalletID:           uuid.New(),
 		SourceType:         "card",
 		VerificationStatus: "verified",
+		VerifiedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},
 		Currency:           "USD",
 		SourceDetails:      []byte(`{}`),
 	}
@@ -1327,6 +1334,26 @@ func TestFundingSourceValidation(t *testing.T) {
 	bad.VerificationStatus = ""
 	_, err = s.UpsertFundingSource(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	bad = source
+	bad.VerificationStatus = "complete"
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = source
+	bad.VerifiedAt = sql.NullTime{}
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+
+	bad = source
+	bad.VerifiedAt = sql.NullTime{Valid: true}
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingVerificationTime)
+
+	bad = source
+	bad.VerificationStatus = "pending"
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidVerificationTime)
 
 	bad = source
 	bad.Currency = ""

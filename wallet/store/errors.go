@@ -99,6 +99,7 @@ var (
 	ErrMissingMaxAttempts           = errors.New("missing max_attempts")
 	ErrMissingVerificationExpiry    = errors.New("missing verification expiry")
 	ErrMissingVerificationTime      = errors.New("missing verification time")
+	ErrInvalidVerificationTime      = errors.New("invalid verification time")
 	ErrMissingUsageTime             = errors.New("missing usage time")
 	ErrInvalidUsageTime             = errors.New("invalid usage time")
 	ErrMissingUpdatedAt             = errors.New("missing updated_at")

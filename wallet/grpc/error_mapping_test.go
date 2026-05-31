@@ -3,6 +3,7 @@ package walletgrpc
 import (
 	"testing"
 
+	walletstore "github.com/adonese/noebs/wallet/store"
 	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,6 +19,8 @@ func TestMapErrorMapsPSPValidationFailures(t *testing.T) {
 		{"disabled-config", walletvalidation.ErrPSPConfigDisabled, codes.FailedPrecondition},
 		{"missing-currencies", walletvalidation.ErrPSPConfigMissingCurrencies, codes.FailedPrecondition},
 		{"unsupported-direction", walletvalidation.ErrPSPDirectionInvalid, codes.FailedPrecondition},
+		{"missing-verification-time", walletstore.ErrMissingVerificationTime, codes.InvalidArgument},
+		{"invalid-verification-time", walletstore.ErrInvalidVerificationTime, codes.InvalidArgument},
 	}
 
 	for _, tc := range cases {

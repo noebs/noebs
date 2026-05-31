@@ -22,8 +22,8 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 	if source.SourceType == "" {
 		return nil, ErrMissingSourceType
 	}
-	if source.VerificationStatus == "" {
-		return nil, ErrMissingStatus
+	if err := ValidateFundingSourceVerification(source); err != nil {
+		return nil, err
 	}
 	if source.Currency == "" {
 		return nil, ErrMissingCurrency
