@@ -408,6 +408,11 @@ Last updated: 2026-05-31
     - Fix: parse dashboard pagination through one boundary helper, reject malformed, zero, and negative values with HTTP 400 before any DB work, and keep explicit defaults for omitted page/size values.
     - Tests: `go test -count=1 -v ./dashboard -run 'TestParsePositiveQueryInt|TestDashboardPaginationRejectsInvalidInputsBeforeDB|TestService_calculateOffset'`; `go test -count=1 ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+82. Sensitive-field backfills reported success without updating a row.
+    - Evidence: legacy plaintext backfill helpers for `users.main_card`, `cards.pan`, `cards.ipin`, `cache_cards.pan`, and `tokens.to_card` executed targeted `UPDATE ... WHERE tenant_id = ...` statements but returned nil whenever the SQL statement succeeded, even if zero rows matched. A stale row identifier, wrong tenant, or missing token UUID could make hydration report that encryption backfill succeeded while the database still held plaintext.
+    - Fix: validate backfill target identifiers before DB access and route every sensitive backfill update through `execContextRequireRowsAffected`, so missing rows return `sql.ErrNoRows` like the rest of the store's targeted writes.
+    - Tests: `go test -count=1 -v ./store -run 'TestSensitiveBackfillUpdatesValidateTargetsBeforeDB|TestStoreTargetedUpdatesReportMissingRows|TestExecContextRequireRowsAffected|TestHydrateSensitiveFieldsReturnsBackfillEncryptionErrors'` (`TestStoreTargetedUpdatesReportMissingRows` skipped locally when the container runtime is unavailable); `go test -count=1 ./store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

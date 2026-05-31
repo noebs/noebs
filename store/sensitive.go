@@ -74,13 +74,19 @@ func (s *Store) hydrateUserFields(ctx context.Context, tenantID string, user *eb
 }
 
 func (s *Store) updateUserMainCard(ctx context.Context, tenantID string, userID int64, hash, enc string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE users SET main_card = ?, main_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND id = ?")
-	_, err = db.ExecContext(ctx, stmt, hash, enc, time.Now().UTC(), tenantID, userID)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, hash, enc, time.Now().UTC(), tenantID, userID)
 }
 
 func (s *Store) encryptCardFields(card *ebs_fields.Card) error {
@@ -167,23 +173,35 @@ func (s *Store) hydrateCardFields(ctx context.Context, tenantID string, card *eb
 }
 
 func (s *Store) updateCardPan(ctx context.Context, tenantID string, cardID int64, hash, enc string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if cardID <= 0 {
+		return ErrInvalidCardID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE cards SET pan = ?, pan_enc = ?, updated_at = ? WHERE tenant_id = ? AND id = ?")
-	_, err = db.ExecContext(ctx, stmt, hash, enc, time.Now().UTC(), tenantID, cardID)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, hash, enc, time.Now().UTC(), tenantID, cardID)
 }
 
 func (s *Store) updateCardIPIN(ctx context.Context, tenantID string, cardID int64, enc string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if cardID <= 0 {
+		return ErrInvalidCardID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE cards SET ipin = '', ipin_enc = ?, updated_at = ? WHERE tenant_id = ? AND id = ?")
-	_, err = db.ExecContext(ctx, stmt, enc, time.Now().UTC(), tenantID, cardID)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, enc, time.Now().UTC(), tenantID, cardID)
 }
 
 func (s *Store) encryptCacheCardFields(card *ebs_fields.CacheCards) error {
@@ -232,13 +250,19 @@ func (s *Store) hydrateCacheCardFields(ctx context.Context, tenantID string, car
 }
 
 func (s *Store) updateCacheCardPan(ctx context.Context, tenantID string, cardID int64, hash, enc string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if cardID <= 0 {
+		return ErrInvalidCardID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE cache_cards SET pan = ?, pan_enc = ?, updated_at = ? WHERE tenant_id = ? AND id = ?")
-	_, err = db.ExecContext(ctx, stmt, hash, enc, time.Now().UTC(), tenantID, cardID)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, hash, enc, time.Now().UTC(), tenantID, cardID)
 }
 
 func (s *Store) encryptTokenFields(token *ebs_fields.Token) (string, string, error) {
@@ -285,13 +309,20 @@ func (s *Store) hydrateTokenFields(ctx context.Context, tenantID string, token *
 }
 
 func (s *Store) updateTokenCard(ctx context.Context, tenantID, uuid, hash, enc string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	uuid = strings.TrimSpace(uuid)
+	if uuid == "" {
+		return ErrMissingUUID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE tokens SET to_card = ?, to_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	_, err = db.ExecContext(ctx, stmt, hash, enc, time.Now().UTC(), tenantID, uuid)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, hash, enc, time.Now().UTC(), tenantID, uuid)
 }
 
 func (s *Store) panLookupArgs(pan string) []any {

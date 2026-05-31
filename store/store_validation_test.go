@@ -576,6 +576,21 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 		{"UpdatePaymentRequest", func() error {
 			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
 		}},
+		{"updateUserMainCard", func() error {
+			return s.updateUserMainCard(ctx, tenantID, 999, "hash:missing-user-card", "enc:missing-user-card")
+		}},
+		{"updateCardPan", func() error {
+			return s.updateCardPan(ctx, tenantID, 999, "hash:missing-card-pan", "enc:missing-card-pan")
+		}},
+		{"updateCardIPIN", func() error {
+			return s.updateCardIPIN(ctx, tenantID, 999, "enc:missing-card-ipin")
+		}},
+		{"updateCacheCardPan", func() error {
+			return s.updateCacheCardPan(ctx, tenantID, 999, "hash:missing-cache-card-pan", "enc:missing-cache-card-pan")
+		}},
+		{"updateTokenCard", func() error {
+			return s.updateTokenCard(ctx, tenantID, "missing-token", "hash:missing-token-card", "enc:missing-token-card")
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

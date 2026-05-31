@@ -113,3 +113,53 @@ func TestHydrateSensitiveFieldsReturnsBackfillEncryptionErrors(t *testing.T) {
 		t.Fatal("hydrateTokenFields() error = nil, want backfill encryption error")
 	}
 }
+
+func TestSensitiveBackfillUpdatesValidateTargetsBeforeDB(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		run  func() error
+		want error
+	}{
+		{
+			name: "missing tenant",
+			run:  func() error { return s.updateUserMainCard(ctx, " ", 1, "hash", "enc") },
+			want: ErrMissingTenantID,
+		},
+		{
+			name: "invalid user id",
+			run:  func() error { return s.updateUserMainCard(ctx, "tenant", 0, "hash", "enc") },
+			want: ErrInvalidUserID,
+		},
+		{
+			name: "invalid card pan id",
+			run:  func() error { return s.updateCardPan(ctx, "tenant", 0, "hash", "enc") },
+			want: ErrInvalidCardID,
+		},
+		{
+			name: "invalid card ipin id",
+			run:  func() error { return s.updateCardIPIN(ctx, "tenant", 0, "enc") },
+			want: ErrInvalidCardID,
+		},
+		{
+			name: "invalid cache card id",
+			run:  func() error { return s.updateCacheCardPan(ctx, "tenant", 0, "hash", "enc") },
+			want: ErrInvalidCardID,
+		},
+		{
+			name: "missing token uuid",
+			run:  func() error { return s.updateTokenCard(ctx, "tenant", " ", "hash", "enc") },
+			want: ErrMissingUUID,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(); !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
