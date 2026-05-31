@@ -27,6 +27,22 @@ func (e *Enforcer) Check(ctx context.Context, tenantID string, walletID uuid.UUI
 	if e == nil || e.Store == nil {
 		return nil, ErrMissingStore
 	}
+	tenantID, err := walletstore.ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if walletID == uuid.Nil {
+		return nil, walletstore.ErrMissingWalletID
+	}
+	if txType == "" {
+		return nil, walletstore.ErrMissingTransactionType
+	}
+	if currency == "" {
+		return nil, walletstore.ErrMissingCurrency
+	}
+	if amount <= 0 {
+		return nil, walletstore.ErrInvalidAmount
+	}
 	wallet, err := e.Store.GetWallet(ctx, tenantID, walletID)
 	if err != nil {
 		return nil, err

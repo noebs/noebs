@@ -2455,6 +2455,9 @@ func TestGetFeeConfigForAmountValidation(t *testing.T) {
 	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "", 100)
 	assertErrorIs(t, err, ErrMissingCurrency)
 
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", 0)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
 	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", -1)
 	assertErrorIs(t, err, ErrInvalidAmount)
 }

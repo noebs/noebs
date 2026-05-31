@@ -17,7 +17,7 @@ func (s *Store) GetFeeConfigForAmount(ctx context.Context, tenantID, txType, cur
 	if currency == "" {
 		return nil, ErrMissingCurrency
 	}
-	if amount < 0 {
+	if amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
 	db, err := s.ensureDB()

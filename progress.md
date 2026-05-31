@@ -620,6 +620,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Fee config lookup and limit checks now reject invalid lower-layer money inputs before DB work.
+- `go test -count=1 -v ./wallet/limits ./wallet/store -run 'TestCheckRejectsInvalidInputsBeforeStoreLookup|TestGetFeeConfigForAmountValidation'`
+- `go test -count=1 ./wallet/limits ./wallet/fees ./wallet/store ./wallet/validation ./wallet/workflow ./wallet/activity`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

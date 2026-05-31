@@ -663,6 +663,11 @@ Last updated: 2026-05-31
     - Fix: centralize positive FX conversion validation, reject nonpositive rates with `ErrInvalidRate`, and reject nonpositive converted wallet amounts with `ErrInvalidAmount` for both withdrawal debit conversion and PSP deposit credit/variance conversion.
     - Tests: `go test -count=1 -v ./wallet/validation -run 'Test(ConvertWithdrawalAmount|ResolvePSPDepositAmounts)'`; `go test -count=1 ./wallet/validation ./wallet/workflow ./wallet/activity ./wallet/store ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+133. Fee and limit lower layers accepted zero amounts or reached DB before input validation.
+    - Evidence: `GetFeeConfigForAmount` rejected negative amounts but accepted zero, and `limits.Enforcer.Check` queried wallet/limit usage before validating transaction type, currency, and nonpositive amounts. Direct activity/service calls could therefore turn malformed money inputs into missing-row/DB errors instead of the typed validation contract.
+    - Fix: require positive amounts in fee config lookup and validate tenant, wallet id, transaction type, currency, and amount at the limit-enforcer boundary before store reads.
+    - Tests: `go test -count=1 -v ./wallet/limits ./wallet/store -run 'TestCheckRejectsInvalidInputsBeforeStoreLookup|TestGetFeeConfigForAmountValidation'`; `go test -count=1 ./wallet/limits ./wallet/fees ./wallet/store ./wallet/validation ./wallet/workflow ./wallet/activity`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
