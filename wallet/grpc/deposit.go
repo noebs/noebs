@@ -10,6 +10,7 @@ import (
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -68,6 +69,9 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	req.OwnerId = ownerID
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
+	}
+	if err := s.validateDepositRequest(ctx, req, walletID); err != nil {
+		return nil, mapError(err)
 	}
 
 	temporalClient, err := s.ensureTemporalClient()
@@ -155,6 +159,23 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		WorkflowId: run.GetID(),
 		RunId:      run.GetRunID(),
 	}, nil
+}
+
+func (s *Server) validateDepositRequest(ctx context.Context, req *walletv1.DepositRequest, walletID uuid.UUID) error {
+	validator := walletvalidation.Service{Store: s.Service.Store}
+	_, err := validator.ValidateDeposit(ctx, walletvalidation.DepositValidationRequest{
+		TenantID:        req.TenantId,
+		TransactionType: "deposit",
+		ProviderCode:    req.ProviderCode,
+		TransactionID:   req.PspTransactionId,
+		WalletID:        walletID,
+		Currency:        req.Currency,
+		Amount:          req.Amount,
+		OwnerType:       req.OwnerType,
+		OwnerID:         req.OwnerId,
+		Region:          req.Region,
+	})
+	return err
 }
 
 func depositWorkflowID(tenantID, clientReference string) string {

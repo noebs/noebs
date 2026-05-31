@@ -12,6 +12,7 @@ import (
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -122,6 +123,9 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if approvalRequired && approvalTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
 	}
+	if err := s.validateWithdrawalRequest(ctx, req, walletID); err != nil {
+		return nil, mapError(err)
+	}
 
 	temporalClient, err := s.ensureTemporalClient()
 	if err != nil {
@@ -213,6 +217,22 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		WorkflowId: run.GetID(),
 		RunId:      run.GetRunID(),
 	}, nil
+}
+
+func (s *Server) validateWithdrawalRequest(ctx context.Context, req *walletv1.WithdrawalRequest, walletID uuid.UUID) error {
+	validator := walletvalidation.Service{Store: s.Service.Store}
+	_, err := validator.ValidateWithdrawal(ctx, walletvalidation.WithdrawalValidationRequest{
+		TenantID:        req.TenantId,
+		TransactionType: "withdrawal",
+		ProviderCode:    req.ProviderCode,
+		WalletID:        walletID,
+		Currency:        req.Currency,
+		Amount:          req.Amount,
+		OwnerType:       req.OwnerType,
+		OwnerID:         req.OwnerId,
+		Region:          req.Region,
+	})
+	return err
 }
 
 func (s *Server) SignalWithdrawalApproval(ctx context.Context, req *walletv1.WithdrawalApprovalRequest) (*emptypb.Empty, error) {

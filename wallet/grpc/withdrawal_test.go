@@ -161,6 +161,15 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}
 	svc := wallet.NewService(db, cfg)
 	server := NewServer(svc)
+	if err := store.New(db).EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	walletRow, err := svc.EnsureUserWallet(ctx, tenantID, 42, "USD")
+	if err != nil {
+		t.Fatalf("ensure user wallet: %v", err)
+	}
+	setWalletBalances(t, ctx, db, tenantID, walletRow.ID, 10_000, 10_000)
+	seedWalletValidationRules(t, ctx, db, tenantID, "noop", "USD", true, true)
 
 	ctrl := gomock.NewController(t)
 	mockTemporal := walletgrpcmock.NewMocktemporalClient(ctrl)
@@ -201,7 +210,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		TenantId:                   "tenant",
 		ClientReference:            "ref-2",
 		ProviderCode:               "noop",
-		WalletId:                   uuid.NewString(),
+		WalletId:                   walletRow.ID.String(),
 		Amount:                     500,
 		Currency:                   "USD",
 		UserId:                     42,

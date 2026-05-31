@@ -225,6 +225,7 @@ func mapError(err error) error {
 	case errors.Is(err, walletstore.ErrWalletNotFound),
 		errors.Is(err, walletstore.ErrPSPConfigNotFound),
 		errors.Is(err, walletstore.ErrPSPConfigOverrideNotFound),
+		errors.Is(err, walletstore.ErrTransactionLimitNotFound),
 		errors.Is(err, walletstore.ErrAdminUserNotFound),
 		errors.Is(err, walletstore.ErrAdminRoleNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),
@@ -308,6 +309,9 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidPercentage),
 		errors.Is(err, walletstore.ErrInvalidRate),
 		errors.Is(err, walletstore.ErrInvalidUsageTime),
+		errors.Is(err, walletstore.ErrCurrencyMismatch),
+		errors.Is(err, walletvalidation.ErrWalletOwnerMismatch),
+		errors.Is(err, walletvalidation.ErrFeeExceedsAmount),
 		errors.Is(err, walletstore.ErrFundingSourceNotVerified),
 		errors.Is(err, walletstore.ErrDestinationNotVerified),
 		errors.Is(err, walletstore.ErrFundingSourceNotWithdrawable),
@@ -316,11 +320,15 @@ func mapError(err error) error {
 		errors.Is(err, walletvalidation.ErrPSPCurrencyInvalid):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, wallet.ErrMissingStore),
+		errors.Is(err, walletstore.ErrMissingStore),
 		errors.Is(err, walletvalidation.ErrMissingStore),
 		errors.Is(err, walletvalidation.ErrPSPConfigDisabled),
 		errors.Is(err, walletvalidation.ErrPSPConfigMissingCurrencies),
 		errors.Is(err, walletvalidation.ErrPSPDirectionInvalid),
 		errors.Is(err, walletstore.ErrWalletInactive),
+		errors.Is(err, walletvalidation.ErrWalletInactive),
+		errors.Is(err, walletstore.ErrInsufficientFunds),
+		errors.Is(err, walletvalidation.ErrLimitExceeded),
 		errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled),
 		errors.Is(err, walletstore.ErrUserTwoFANotEnabled),
 		errors.Is(err, walletstore.ErrInvalidStatusTransition):

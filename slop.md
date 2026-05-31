@@ -613,6 +613,11 @@ Last updated: 2026-05-31
     - Fix: require gateway admin metadata at the start of `RenderWalletAdmin`, then validate the admin request and tenant context.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRenderWalletAdmin|TestRequireAdmin|TestSignalManualTransferDecisionRequires|TestWithdrawalSignals'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+123. PSP deposit and withdrawal requests persisted initiated transactions before business validation.
+    - Evidence: `RequestDeposit` and `RequestWithdrawal` inserted `psp_transactions` rows before wallet, PSP config, fee, limit, currency, owner, and balance validation ran in the Temporal workflow. A request for a missing wallet could therefore be accepted as an initiated PSP transaction and only fail asynchronously, leaving polluted financial state.
+    - Fix: run the existing deposit/withdrawal validation service before PSP transaction creation while keeping workflow validation as the concurrency guard, map validation failures to typed gRPC statuses, and return a typed wallet-store error when the DB/store is absent.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRequest(Deposit|Withdrawal)ValidatesWalletBeforePersistingPSPTransaction|TestRequestWithdrawalStartsWorkflow|TestRequestDepositDoesNotGenerateProviderTransactionID'` (DB-backed tests skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/grpc ./wallet/validation ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

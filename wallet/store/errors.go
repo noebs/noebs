@@ -3,6 +3,7 @@ package store
 import "errors"
 
 var (
+	ErrMissingStore                 = errors.New("missing wallet store")
 	ErrMissingTenantID              = errors.New("missing tenant_id")
 	ErrInvalidTenantID              = errors.New("invalid tenant_id")
 	ErrMissingCurrency              = errors.New("missing currency")

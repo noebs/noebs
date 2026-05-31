@@ -1,8 +1,6 @@
 package store
 
 import (
-	"fmt"
-
 	basestore "github.com/adonese/noebs/store"
 	"github.com/jmoiron/sqlx"
 )
@@ -18,7 +16,7 @@ func New(db *basestore.DB) *Store {
 
 func (s *Store) ensureDB() (*sqlx.DB, error) {
 	if s == nil || s.DB == nil || s.DB.DB == nil {
-		return nil, fmt.Errorf("nil db")
+		return nil, ErrMissingStore
 	}
 	return s.DB.DB, nil
 }
