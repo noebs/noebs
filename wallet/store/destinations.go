@@ -14,6 +14,7 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if err != nil {
 		return nil, err
 	}
+	dest.TenantID = tenantID
 	if dest.WalletID == uuid.Nil {
 		return nil, ErrMissingWalletID
 	}
@@ -29,9 +30,27 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if dest.OwnershipStatus == "" {
 		return nil, ErrMissingStatus
 	}
+	if dest.IsReturnToSource && !dest.LinkedFundingSourceID.Valid {
+		return nil, ErrMissingFundingSourceID
+	}
+	if dest.TotalWithdrawn != 0 {
+		return nil, ErrInvalidAmount
+	}
+	if dest.LastUsedAt.Valid {
+		return nil, ErrInvalidUsageTime
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
+	}
+	if dest.LinkedFundingSourceID.Valid {
+		source, err := s.GetFundingSourceByID(ctx, tenantID, dest.LinkedFundingSourceID.Int64)
+		if err != nil {
+			return nil, err
+		}
+		if err := ValidateWithdrawalDestinationFundingSource(dest, source); err != nil {
+			return nil, err
+		}
 	}
 
 	now := time.Now().UTC()
@@ -68,6 +87,33 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 		return nil, err
 	}
 	return &stored, nil
+}
+
+func ValidateWithdrawalDestinationFundingSource(dest WithdrawalDestination, source *FundingSource) error {
+	if !dest.LinkedFundingSourceID.Valid {
+		if dest.IsReturnToSource {
+			return ErrMissingFundingSourceID
+		}
+		return nil
+	}
+	if source == nil ||
+		source.TenantID != dest.TenantID ||
+		source.ID != dest.LinkedFundingSourceID.Int64 {
+		return ErrFundingSourceNotFound
+	}
+	if source.WalletID != dest.WalletID {
+		return ErrFundingSourceNotFound
+	}
+	if source.Currency != dest.Currency {
+		return ErrCurrencyMismatch
+	}
+	if source.VerificationStatus != "verified" {
+		return ErrFundingSourceNotVerified
+	}
+	if !source.SupportsWithdrawal || len(source.WithdrawalMethod) == 0 {
+		return ErrFundingSourceNotWithdrawable
+	}
+	return nil
 }
 
 func (s *Store) GetWithdrawalDestination(ctx context.Context, tenantID string, destinationID int64) (*WithdrawalDestination, error) {

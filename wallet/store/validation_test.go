@@ -857,6 +857,21 @@ func TestWithdrawalDestinationValidation(t *testing.T) {
 	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingStatus)
 
+	bad = dest
+	bad.IsReturnToSource = true
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingFundingSourceID)
+
+	bad = dest
+	bad.TotalWithdrawn = 100
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidAmount)
+
+	bad = dest
+	bad.LastUsedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidUsageTime)
+
 	_, err = s.GetWithdrawalDestination(t.Context(), "", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
@@ -874,6 +889,53 @@ func TestWithdrawalDestinationValidation(t *testing.T) {
 
 	_, err = s.ListWithdrawalDestinations(t.Context(), "tenant", uuid.Nil, true)
 	assertErrorIs(t, err, ErrMissingWalletID)
+}
+
+func TestValidateWithdrawalDestinationFundingSource(t *testing.T) {
+	walletID := uuid.New()
+	dest := WithdrawalDestination{
+		TenantID:              "tenant",
+		WalletID:              walletID,
+		Currency:              "AED",
+		LinkedFundingSourceID: sql.NullInt64{Int64: 10, Valid: true},
+		IsReturnToSource:      true,
+	}
+	source := FundingSource{
+		ID:                 10,
+		TenantID:           "tenant",
+		WalletID:           walletID,
+		Currency:           "AED",
+		VerificationStatus: "verified",
+		SupportsWithdrawal: true,
+		WithdrawalMethod:   []byte(`{"account_number":"1234567890"}`),
+	}
+	if err := ValidateWithdrawalDestinationFundingSource(dest, &source); err != nil {
+		t.Fatalf("ValidateWithdrawalDestinationFundingSource() error = %v", err)
+	}
+
+	missingLink := dest
+	missingLink.LinkedFundingSourceID = sql.NullInt64{}
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(missingLink, nil), ErrMissingFundingSourceID)
+
+	otherWallet := source
+	otherWallet.WalletID = uuid.New()
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &otherWallet), ErrFundingSourceNotFound)
+
+	otherCurrency := source
+	otherCurrency.Currency = "USD"
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &otherCurrency), ErrCurrencyMismatch)
+
+	pending := source
+	pending.VerificationStatus = "pending"
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &pending), ErrFundingSourceNotVerified)
+
+	notWithdrawable := source
+	notWithdrawable.SupportsWithdrawal = false
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &notWithdrawable), ErrFundingSourceNotWithdrawable)
+
+	missingMethod := source
+	missingMethod.WithdrawalMethod = nil
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &missingMethod), ErrFundingSourceNotWithdrawable)
 }
 
 func TestFundingSourceValidation(t *testing.T) {

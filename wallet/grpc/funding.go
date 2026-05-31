@@ -177,6 +177,9 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 	if req.DestinationDetails == nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationDetails.Error())
 	}
+	if req.IsReturnToSource && req.LinkedFundingSourceId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingFundingSourceID.Error())
+	}
 	if !req.IsReturnToSource && req.OwnershipVerificationMethod == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationType.Error())
 	}

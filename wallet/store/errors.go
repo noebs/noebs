@@ -95,6 +95,7 @@ var (
 	ErrMissingVerificationExpiry    = errors.New("missing verification expiry")
 	ErrMissingVerificationTime      = errors.New("missing verification time")
 	ErrMissingUsageTime             = errors.New("missing usage time")
+	ErrInvalidUsageTime             = errors.New("invalid usage time")
 	ErrMissingUpdatedAt             = errors.New("missing updated_at")
 	ErrVerificationNotFound         = errors.New("verification not found")
 	ErrUserTwoFANotFound            = errors.New("user 2fa not found")

@@ -183,6 +183,11 @@ Last updated: 2026-05-31
     - Fix: add `ledger_withdrawal_destination_links`, route destination usage through exact-replay ledger links, validate the link against the debit ledger entry, destination wallet/currency, and funding-source wallet/currency, and remove the unkeyed funding/destination usage activities.
     - Tests: `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestCreateWithdrawalDestinationLinkValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestValidateWithdrawalDestinationLinkReplay'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+37. Withdrawal destination creation allowed invalid return-to-source links and seeded usage totals.
+    - Evidence: `CreateWithdrawalDestination` accepted `is_return_to_source` without `linked_funding_source_id`, accepted linked funding sources for another wallet/currency/status, and persisted caller-provided `total_withdrawn`/`last_used_at` even though usage is now derived from ledger links.
+    - Fix: require linked funding sources for return-to-source destinations at the gRPC boundary and store layer, validate linked source ownership/currency/withdrawability in the store, and reject pre-seeded destination usage fields.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationFundingSource'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

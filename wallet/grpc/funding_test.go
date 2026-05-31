@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestCreateFundingSourceRequiresSourceDetails(t *testing.T) {
@@ -31,5 +32,32 @@ func TestCreateFundingSourceRequiresSourceDetails(t *testing.T) {
 	}
 	if status.Convert(err).Message() != walletstore.ErrMissingSourceDetails.Error() {
 		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingSourceDetails.Error())
+	}
+}
+
+func TestCreateReturnToSourceDestinationRequiresLinkedFundingSource(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{},
+	}
+	server := NewServer(svc)
+	details, err := structpb.NewStruct(map[string]any{"account_last4": "4321"})
+	if err != nil {
+		t.Fatalf("new struct: %v", err)
+	}
+
+	_, err = server.CreateWithdrawalDestination(context.Background(), &walletv1.CreateWithdrawalDestinationRequest{
+		TenantId:           "tenant",
+		WalletId:           uuid.NewString(),
+		DestinationType:    "bank_account",
+		Currency:           "AED",
+		DestinationDetails: details,
+		IsReturnToSource:   true,
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+	}
+	if status.Convert(err).Message() != walletstore.ErrMissingFundingSourceID.Error() {
+		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingFundingSourceID.Error())
 	}
 }
