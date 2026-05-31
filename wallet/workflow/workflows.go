@@ -1797,23 +1797,28 @@ func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferPara
 	decisionCh := workflow.GetSignalChannel(ctx, ManualTransferDecisionSignal)
 	timer := workflow.NewTimer(ctx, timeout)
 
-	var decision ManualTransferDecision
-	timedOut := false
-	selector := workflow.NewSelector(ctx)
-	selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
-		c.Receive(ctx, &decision)
-	})
-	selector.AddFuture(timer, func(f workflow.Future) {
-		timedOut = true
-	})
-	selector.Select(ctx)
-	if timedOut {
-		return ManualTransferDecision{}, ErrManualTransferTimedOut
+	for {
+		var decision ManualTransferDecision
+		timedOut := false
+		selector := workflow.NewSelector(ctx)
+		selector.AddReceive(decisionCh, func(c workflow.ReceiveChannel, more bool) {
+			c.Receive(ctx, &decision)
+		})
+		selector.AddFuture(timer, func(f workflow.Future) {
+			timedOut = true
+		})
+		selector.Select(ctx)
+		if timedOut {
+			return ManualTransferDecision{}, ErrManualTransferTimedOut
+		}
+		if decision.ApproverID <= 0 {
+			continue
+		}
+		if err := validateManualTransferDecision(params.RequestedBy, decision); err != nil {
+			continue
+		}
+		return decision, nil
 	}
-	if decision.ApproverID <= 0 {
-		return ManualTransferDecision{}, walletstore.ErrMissingApproverID
-	}
-	return decision, nil
 }
 
 func validateManualTransferDecision(requestedBy int64, decision ManualTransferDecision) error {

@@ -314,6 +314,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/workflow -run 'TestAwaitManualTransferDecisionIgnoresRequesterSignals|TestValidateManualTransferDecision'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
