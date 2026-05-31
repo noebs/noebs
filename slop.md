@@ -513,6 +513,11 @@ Last updated: 2026-05-31
     - Fix: parse any non-empty search body at the handler boundary before DB access, reject malformed JSON as HTTP 400, and keep empty bodies as the explicit unfiltered request shape.
     - Tests: `go test -count=1 -v ./dashboard -run 'TestBrowserDashboardRejectsMalformedSearchBeforeDB|TestDashboardPaginationRejectsInvalidInputsBeforeDB|TestDashboardHandlersDoNotIgnoreRuntimeErrors'`; `go test -count=1 ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+103. PSP amount bounds were advisory in the catalog but not enforced on requests.
+    - Evidence: PSP configs and overrides expose `min_amount`/`max_amount`, and method discovery filters methods by those bounds, but `ValidateDeposit` and `ValidateWithdrawal` only checked provider activity, direction, and currency. A direct request naming a provider could therefore submit an amount outside the provider's configured contract.
+    - Fix: add PSP config amount-bound validation and apply it in both deposit and withdrawal validation before fee, limit, FX, or workflow work.
+    - Tests: `go test -count=1 -v ./wallet/validation -run 'TestValidatePSPConfig|TestValidateDepositRequest|TestValidateWithdrawalRequest'`; `go test -count=1 ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

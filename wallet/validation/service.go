@@ -265,6 +265,9 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	if err := ValidatePSPConfig(cfg, req.Currency, "deposit"); err != nil {
 		return nil, err
 	}
+	if err := ValidatePSPConfigAmount(cfg, req.Amount); err != nil {
+		return nil, err
+	}
 
 	feeEngine := walletfees.FeeEngine{Store: s.Store}
 	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, req.Amount)
@@ -330,6 +333,9 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 		return nil, err
 	}
 	if err := ValidatePSPConfig(cfg, req.Currency, "withdrawal"); err != nil {
+		return nil, err
+	}
+	if err := ValidatePSPConfigAmount(cfg, req.Amount); err != nil {
 		return nil, err
 	}
 
@@ -457,4 +463,20 @@ func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) e
 		}
 	}
 	return ErrPSPCurrencyInvalid
+}
+
+func ValidatePSPConfigAmount(cfg *walletstore.PSPConfig, amount int64) error {
+	if cfg == nil {
+		return walletstore.ErrPSPConfigNotFound
+	}
+	if amount <= 0 {
+		return walletstore.ErrInvalidAmount
+	}
+	if cfg.MinAmount.Valid && amount < cfg.MinAmount.Int64 {
+		return walletstore.ErrInvalidAmount
+	}
+	if cfg.MaxAmount.Valid && amount > cfg.MaxAmount.Int64 {
+		return walletstore.ErrInvalidAmount
+	}
+	return nil
 }

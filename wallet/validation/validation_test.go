@@ -2,6 +2,7 @@ package validation
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -216,6 +217,36 @@ func TestValidatePSPConfigMatchesTrimmedCurrency(t *testing.T) {
 
 	if err := ValidatePSPConfig(cfg, "usd", "deposit"); err != nil {
 		t.Fatalf("ValidatePSPConfig() error = %v, want nil", err)
+	}
+}
+
+func TestValidatePSPConfigAmountBounds(t *testing.T) {
+	cfg := &walletstore.PSPConfig{
+		MinAmount: sql.NullInt64{Int64: 100, Valid: true},
+		MaxAmount: sql.NullInt64{Int64: 1000, Valid: true},
+	}
+
+	cases := []struct {
+		name    string
+		cfg     *walletstore.PSPConfig
+		amount  int64
+		wantErr error
+	}{
+		{"missing-config", nil, 100, walletstore.ErrPSPConfigNotFound},
+		{"zero", cfg, 0, walletstore.ErrInvalidAmount},
+		{"below-min", cfg, 99, walletstore.ErrInvalidAmount},
+		{"at-min", cfg, 100, nil},
+		{"within-bounds", cfg, 500, nil},
+		{"at-max", cfg, 1000, nil},
+		{"above-max", cfg, 1001, walletstore.ErrInvalidAmount},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := ValidatePSPConfigAmount(tc.cfg, tc.amount); err != tc.wantErr {
+				t.Fatalf("ValidatePSPConfigAmount() error = %v, want %v", err, tc.wantErr)
+			}
+		})
 	}
 }
 
