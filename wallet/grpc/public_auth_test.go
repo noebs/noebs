@@ -131,3 +131,98 @@ func TestRequestWithdrawalRejectsGatewayIdentityMismatch(t *testing.T) {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
 	}
 }
+
+func TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation(t *testing.T) {
+	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+	ctx := walletGatewayIdentityContext(42, "tenant-a")
+
+	cases := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "deposit missing tenant",
+			run: func() error {
+				_, err := server.RequestDeposit(
+					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestDeposit_FullMethodName),
+					&walletv1.DepositRequest{
+						ClientReference: "deposit-ref-tenant",
+						ProviderCode:    "noop",
+						WalletId:        "not-a-uuid",
+						OwnerType:       walletstore.OwnerTypeUser,
+						OwnerId:         "42",
+						Amount:          100,
+						Currency:        "USD",
+					},
+				)
+				return err
+			},
+		},
+		{
+			name: "deposit missing owner",
+			run: func() error {
+				_, err := server.RequestDeposit(
+					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestDeposit_FullMethodName),
+					&walletv1.DepositRequest{
+						TenantId:        "tenant-a",
+						ClientReference: "deposit-ref-owner",
+						ProviderCode:    "noop",
+						WalletId:        "not-a-uuid",
+						Amount:          100,
+						Currency:        "USD",
+					},
+				)
+				return err
+			},
+		},
+		{
+			name: "withdrawal missing tenant",
+			run: func() error {
+				_, err := server.RequestWithdrawal(
+					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestWithdrawal_FullMethodName),
+					&walletv1.WithdrawalRequest{
+						ClientReference:   "withdrawal-ref-tenant",
+						ProviderCode:      "noop",
+						WalletId:          "not-a-uuid",
+						OwnerType:         walletstore.OwnerTypeUser,
+						OwnerId:           "42",
+						Amount:            100,
+						Currency:          "USD",
+						HoldExpirySeconds: 60,
+					},
+				)
+				return err
+			},
+		},
+		{
+			name: "withdrawal missing owner",
+			run: func() error {
+				_, err := server.RequestWithdrawal(
+					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestWithdrawal_FullMethodName),
+					&walletv1.WithdrawalRequest{
+						TenantId:          "tenant-a",
+						ClientReference:   "withdrawal-ref-owner",
+						ProviderCode:      "noop",
+						WalletId:          "not-a-uuid",
+						Amount:            100,
+						Currency:          "USD",
+						HoldExpirySeconds: 60,
+					},
+				)
+				return err
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+			}
+			if status.Convert(err).Message() != walletstore.ErrMissingWalletID.Error() {
+				t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingWalletID.Error())
+			}
+		})
+	}
+}

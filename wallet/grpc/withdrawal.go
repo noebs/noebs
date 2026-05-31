@@ -31,10 +31,6 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	tenantID, err := validateGRPCTenantID(req.TenantId)
-	if err != nil {
-		return nil, err
-	}
 	if req.ClientReference == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingClientReference.Error())
 	}
@@ -43,12 +39,6 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	}
 	if req.WalletId == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
-	}
-	if req.OwnerType == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerType.Error())
-	}
-	if req.OwnerId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
 	if req.Currency == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
@@ -64,7 +54,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if err != nil {
 		return nil, err
 	}
-	tenantID, err = bindTenantToClaims(tenantID, claims)
+	tenantID, err := bindTenantToClaims(req.TenantId, claims)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +65,12 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	ownerType, ownerID, err := bindOwnerToClaims(req.OwnerType, req.OwnerId, claims)
 	if err != nil {
 		return nil, err
+	}
+	if ownerType == "" {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerType.Error())
+	}
+	if ownerID == "" {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
 	req.TenantId = tenantID
 	req.UserId = userID

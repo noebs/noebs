@@ -547,6 +547,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation|TestWorkflowRequestsValidateTenantBeforeTemporal|TestRequestWithdrawalRejectsGatewayIdentityMismatch'` (`TestRequestWithdrawalRejectsGatewayIdentityMismatch` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

@@ -593,6 +593,11 @@ Last updated: 2026-05-31
     - Fix: centralize consumer UUID-string generation, return UUID generation errors before encryption/EBS/store work, and preserve caller-supplied UUIDs for public-key requests.
     - Tests: `go test -count=1 -v ./consumer -run 'TestIPINFlowsPropagateUUIDGenerationErrors'`; `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+119. Public wallet PSP requests rejected authenticated identity defaults before binding claims.
+    - Evidence: `RequestDeposit` and `RequestWithdrawal` are shared by internal and public wallet gRPC services. They validated `tenant_id`, `owner_type`, and `owner_id` before calling `claimsForRPC`, so public callers with valid gateway identity but omitted body identity fields were rejected even though `bindTenantToClaims`/`bindOwnerToClaims` are the boundary that should derive those values from claims.
+    - Fix: bind tenant and owner from gateway claims before required tenant/owner validation in deposit and withdrawal requests, while preserving the same missing-field failures for internal callers with no claims.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation|TestWorkflowRequestsValidateTenantBeforeTemporal|TestRequestWithdrawalRejectsGatewayIdentityMismatch'` (`TestRequestWithdrawalRejectsGatewayIdentityMismatch` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
