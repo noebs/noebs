@@ -19,6 +19,7 @@
 - Fixed dashboard transaction decoding so malformed stored payloads fail loudly and fetch/decode errors return HTTP 500 instead of being swallowed or treated as missing rows.
 - Fixed sensitive-field encryption helpers so crypto failures are returned and failed encryption does not partially mutate user/card/cache-card structs.
 - Fixed sensitive-field hydration so corrupt ciphertext and failed legacy plaintext backfills surface as store read errors.
+- Fixed store transaction and notification readers so malformed persisted JSON returns contextual decode errors instead of zero-value payloads.
 
 Verification:
 

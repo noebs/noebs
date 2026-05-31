@@ -1073,9 +1073,9 @@ func (s *Store) GetTransactionsByMaskedPan(ctx context.Context, tenantID string,
 		if err := rows.Scan(&payload); err != nil {
 			return nil, err
 		}
-		var item ebs_fields.EBSResponse
-		if payload != "" {
-			_ = json.Unmarshal([]byte(payload), &item)
+		item, err := decodeStoredTransactionPayload(payload, fmt.Sprintf("masked pan %q", maskedPan))
+		if err != nil {
+			return nil, err
 		}
 		res = append(res, item)
 	}
@@ -1099,11 +1099,22 @@ func (s *Store) GetTransactionByUUID(ctx context.Context, tenantID, uuid string)
 	if err := db.GetContext(ctx, &payload, stmt, tenantID, uuid); err != nil {
 		return nil, err
 	}
-	var res ebs_fields.EBSResponse
-	if payload != "" {
-		_ = json.Unmarshal([]byte(payload), &res)
+	res, err := decodeStoredTransactionPayload(payload, fmt.Sprintf("uuid %q", uuid))
+	if err != nil {
+		return nil, err
 	}
 	return &res, nil
+}
+
+func decodeStoredTransactionPayload(payload, label string) (ebs_fields.EBSResponse, error) {
+	var res ebs_fields.EBSResponse
+	if payload == "" {
+		return res, nil
+	}
+	if err := json.Unmarshal([]byte(payload), &res); err != nil {
+		return ebs_fields.EBSResponse{}, fmt.Errorf("decode transaction payload %s: %w", label, err)
+	}
+	return res, nil
 }
 
 func (s *Store) CreatePushData(ctx context.Context, tenantID string, data *ebs_fields.PushDataRecord) error {
@@ -1192,11 +1203,26 @@ func (s *Store) GetNotifications(ctx context.Context, tenantID, userMobile strin
 			return nil, err
 		}
 		if paymentReq != "" {
-			_ = json.Unmarshal([]byte(paymentReq), &record.PaymentRequest)
+			paymentRequest, err := decodePaymentRequestPayload(paymentReq, record.UUID)
+			if err != nil {
+				return nil, err
+			}
+			record.PaymentRequest = paymentRequest
 		}
 		records = append(records, record)
 	}
 	return records, rows.Err()
+}
+
+func decodePaymentRequestPayload(payload, uuid string) (ebs_fields.QrData, error) {
+	var paymentRequest ebs_fields.QrData
+	if payload == "" {
+		return paymentRequest, nil
+	}
+	if err := json.Unmarshal([]byte(payload), &paymentRequest); err != nil {
+		return ebs_fields.QrData{}, fmt.Errorf("decode payment request payload %q: %w", uuid, err)
+	}
+	return paymentRequest, nil
 }
 
 func (s *Store) MarkNotificationsRead(ctx context.Context, tenantID, phone string) error {

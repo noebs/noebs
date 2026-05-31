@@ -78,6 +78,11 @@ Last updated: 2026-05-31
     - Fix: make hydration helpers return decrypt, encryption, and backfill update errors; propagate those errors from user, card, cache-card, and token read methods.
     - Tests: `go test -count=1 ./store`.
 
+16. Store transaction and notification readers swallowed malformed JSON payloads.
+    - Evidence: `GetTransactionsByMaskedPan`, `GetTransactionByUUID`, and notification payment-request hydration ignored `json.Unmarshal` errors and returned zero-value payloads.
+    - Fix: decode persisted JSON through helpers that return context-rich errors and propagate failures from store readers.
+    - Tests: `go test -count=1 ./store`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
