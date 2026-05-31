@@ -64,6 +64,8 @@ func statusForError(err error) int {
 		return callErr.Status
 	}
 	switch {
+	case errors.Is(err, store.ErrDuplicateTransaction):
+		return http.StatusConflict
 	case errors.Is(err, store.ErrMissingTenantID),
 		errors.Is(err, store.ErrInvalidTenantID):
 		return http.StatusBadRequest

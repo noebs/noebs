@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -1151,24 +1152,27 @@ func (s *Store) CreateTransaction(ctx context.Context, tenantID string, res ebs_
 		return err
 	}
 	now := time.Now().UTC()
-	_, err = s.insertTransaction(ctx, db, tenantID, res, now)
+	_, _, err = s.insertTransaction(ctx, db, tenantID, res, now)
 	return err
 }
 
 type transactionQueryer interface {
+	GetContext(ctx context.Context, dest any, query string, args ...any) error
 	QueryRowxContext(ctx context.Context, query string, args ...any) *sqlx.Row
 }
 
-func (s *Store) insertTransaction(ctx context.Context, q transactionQueryer, tenantID string, res ebs_fields.EBSResponse, now time.Time) (int64, error) {
+func (s *Store) insertTransaction(ctx context.Context, q transactionQueryer, tenantID string, res ebs_fields.EBSResponse, now time.Time) (int64, bool, error) {
 	payload, err := marshalTransactionPayload(res)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	stmt := s.DB.Rebind(`INSERT INTO transactions(
 		tenant_id, token_id, uuid, response_code, response_message, response_status, tran_date_time, tran_amount, tran_fee,
 		pan, sender_pan, receiver_pan, terminal_id, system_trace_audit_number, approval_code, service_id, merchant_id,
 		bill_type, bill_to, bill_info2, payload, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT (tenant_id, uuid) WHERE uuid IS NOT NULL AND btrim(uuid) <> '' DO NOTHING
+	RETURNING id`)
 	var id int64
 	err = q.QueryRowxContext(ctx, stmt,
 		tenantID,
@@ -1195,7 +1199,27 @@ func (s *Store) insertTransaction(ctx context.Context, q transactionQueryer, ten
 		now,
 		now,
 	).Scan(&id)
-	return id, err
+	if errors.Is(err, sql.ErrNoRows) {
+		id, replayErr := s.validateExistingTransactionReplay(ctx, q, tenantID, res.UUID, payload)
+		return id, true, replayErr
+	}
+	return id, false, err
+}
+
+func (s *Store) validateExistingTransactionReplay(ctx context.Context, q transactionQueryer, tenantID, uuid, payload string) (int64, error) {
+	stmt := s.DB.Rebind(`SELECT id, payload FROM transactions
+		WHERE tenant_id = ? AND uuid = ?`)
+	var existing struct {
+		ID      int64           `db:"id"`
+		Payload json.RawMessage `db:"payload"`
+	}
+	if err := q.GetContext(ctx, &existing, stmt, tenantID, strings.TrimSpace(uuid)); err != nil {
+		return 0, err
+	}
+	if !transactionPayloadMatches(existing.Payload, []byte(payload)) {
+		return 0, ErrDuplicateTransaction
+	}
+	return existing.ID, nil
 }
 
 func marshalTransactionPayload(res ebs_fields.EBSResponse) (string, error) {
@@ -1204,6 +1228,18 @@ func marshalTransactionPayload(res ebs_fields.EBSResponse) (string, error) {
 		return "", fmt.Errorf("marshal transaction payload: %w", err)
 	}
 	return string(payload), nil
+}
+
+func transactionPayloadMatches(stored, requested json.RawMessage) bool {
+	var storedValue any
+	var requestedValue any
+	if err := json.Unmarshal(stored, &storedValue); err != nil {
+		return string(stored) == string(requested)
+	}
+	if err := json.Unmarshal(requested, &requestedValue); err != nil {
+		return string(stored) == string(requested)
+	}
+	return reflect.DeepEqual(storedValue, requestedValue)
 }
 
 func (s *Store) GetTransactionsByMaskedPan(ctx context.Context, tenantID string, maskedPan string) ([]ebs_fields.EBSResponse, error) {

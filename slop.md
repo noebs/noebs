@@ -493,6 +493,11 @@ Last updated: 2026-05-31
     - Fix: require `enabled = TRUE` in the last-used update, distinguish missing rows from disabled rows with `ErrUserTwoFANotEnabled`, and map that typed error through wallet gRPC/HTTP boundaries.
     - Tests: `go test -count=1 -v ./wallet/store ./wallet/grpc -run 'TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret|TestUserTwoFAValidation|TestMapErrorMapsPSPValidationFailures'` (`TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/activity ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+99. EBS transaction retries could duplicate rows and outbox events.
+    - Evidence: the EBS adapter `transactions` table had only a non-unique `(tenant_id, uuid)` index, while `CreateTransactionWithEvent` always inserted a new transaction and outbox event. A retry for the same gateway UUID could persist duplicate transaction rows and publish duplicate events.
+    - Fix: add a tenant/UUID partial unique index with a deduping migration, make transaction inserts exact replays on UUID conflicts, reject mismatched duplicate payloads with `ErrDuplicateTransaction`, validate existing outbox events on exact transaction replays, and map duplicate transaction errors to HTTP 409 at consumer/merchant boundaries.
+    - Tests: `go test -count=1 -v ./store ./consumer/handler ./merchant/handler -run 'TestStoreCreateTransactionWithEventOutboxLifecycle|TestStoreCreateTransactionWithEventRejectsMissingInputs|TestStoreUpsertTransactionProjection|TestStatusForErrorMapsDuplicateTransactionsToConflict'` (`TestStoreCreateTransactionWithEventOutboxLifecycle` and `TestStoreUpsertTransactionProjection` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer ./consumer/handler ./merchant ./merchant/handler ./adminreporting`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

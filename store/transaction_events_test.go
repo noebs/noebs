@@ -30,6 +30,12 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event); err != nil {
 		t.Fatalf("create transaction with event: %v", err)
 	}
+	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event); err != nil {
+		t.Fatalf("replay transaction with event: %v", err)
+	}
+	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", TerminalID: "terminal-mismatch"}, event); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("mismatched transaction replay error = %v, want %v", err, ErrDuplicateTransaction)
+	}
 
 	events, err := storeSvc.ClaimPendingTransactionEvents(ctx, 10)
 	if err != nil {
@@ -40,6 +46,13 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	}
 	if events[0].Topic != event.Topic || events[0].EventKey != event.EventKey || events[0].EventType != event.EventType {
 		t.Fatalf("event = %+v, want topic/key/type from create request", events[0])
+	}
+	var transactions int
+	if err := db.DB.GetContext(ctx, &transactions, db.DB.Rebind(`SELECT COUNT(*) FROM transactions WHERE tenant_id = ? AND uuid = ?`), tenantID, "tx-1"); err != nil {
+		t.Fatalf("count transactions: %v", err)
+	}
+	if transactions != 1 {
+		t.Fatalf("transactions = %d, want 1", transactions)
 	}
 	if err := storeSvc.MarkTransactionEventPublished(ctx, events[0].ID); err != nil {
 		t.Fatalf("mark published: %v", err)

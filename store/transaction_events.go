@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -57,9 +58,12 @@ func (s *Store) CreateTransactionWithEvent(ctx context.Context, tenantID string,
 	}()
 
 	now := time.Now().UTC()
-	transactionID, err := s.insertTransaction(ctx, tx, tenantID, res, now)
+	transactionID, existingTransaction, err := s.insertTransaction(ctx, tx, tenantID, res, now)
 	if err != nil {
 		return err
+	}
+	if existingTransaction {
+		return s.validateExistingTransactionEvent(ctx, tx, transactionID, tenantID, event)
 	}
 	stmt := s.DB.Rebind(`INSERT INTO transaction_events(
 		transaction_id, tenant_id, topic, event_key, event_type, payload, publish_attempts, created_at, updated_at
@@ -80,6 +84,33 @@ func (s *Store) CreateTransactionWithEvent(ctx context.Context, tenantID string,
 		return err
 	}
 	committed = true
+	return nil
+}
+
+func (s *Store) validateExistingTransactionEvent(ctx context.Context, q interface {
+	GetContext(context.Context, any, string, ...any) error
+}, transactionID int64, tenantID string, event TransactionEventCreate) error {
+	stmt := s.DB.Rebind(`SELECT id, payload FROM transaction_events
+		WHERE transaction_id = ? AND tenant_id = ? AND topic = ? AND event_key = ? AND event_type = ?`)
+	var existing struct {
+		ID      int64           `db:"id"`
+		Payload json.RawMessage `db:"payload"`
+	}
+	if err := q.GetContext(ctx, &existing, stmt,
+		transactionID,
+		tenantID,
+		strings.TrimSpace(event.Topic),
+		strings.TrimSpace(event.EventKey),
+		strings.TrimSpace(event.EventType),
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDuplicateTransaction
+		}
+		return err
+	}
+	if existing.ID <= 0 || !transactionPayloadMatches(existing.Payload, event.Payload) {
+		return ErrDuplicateTransaction
+	}
 	return nil
 }
 

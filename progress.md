@@ -77,6 +77,7 @@
 - Fixed manual-transfer status updates so approval/rejection/completion transitions require the correct stored and incoming evidence, exact replays preserve evidence, and stale status races fail as transition errors.
 - Fixed PSP webhook success retries so terminal confirmation timestamps are preserved and Temporal signal failures return a retryable response with an interaction record.
 - Fixed wallet 2FA last-used updates so disabled records cannot receive fresh usage evidence through direct store calls.
+- Fixed EBS transaction recording so repeated gateway UUIDs become exact replays instead of duplicate transaction rows and duplicate outbox events.
 
 Verification:
 
@@ -428,6 +429,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./wallet/store ./wallet/grpc -run 'TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret|TestUserTwoFAValidation|TestMapErrorMapsPSPValidationFailures'` (`TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret` skipped locally when the container runtime is unavailable)
 - `go test -count=1 ./wallet/store ./wallet/activity ./wallet/grpc ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store ./consumer/handler ./merchant/handler -run 'TestStoreCreateTransactionWithEventOutboxLifecycle|TestStoreCreateTransactionWithEventRejectsMissingInputs|TestStoreUpsertTransactionProjection|TestStatusForErrorMapsDuplicateTransactionsToConflict'` (`TestStoreCreateTransactionWithEventOutboxLifecycle` and `TestStoreUpsertTransactionProjection` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./store ./consumer ./consumer/handler ./merchant ./merchant/handler ./adminreporting`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

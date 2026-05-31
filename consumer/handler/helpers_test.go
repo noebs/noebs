@@ -85,3 +85,9 @@ func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 }
+
+func TestStatusForErrorMapsDuplicateTransactionsToConflict(t *testing.T) {
+	if got := statusForError(store.ErrDuplicateTransaction); got != http.StatusConflict {
+		t.Fatalf("statusForError(ErrDuplicateTransaction) = %d, want %d", got, http.StatusConflict)
+	}
+}
