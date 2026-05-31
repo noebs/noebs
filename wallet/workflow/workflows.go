@@ -519,7 +519,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityGetReturnToSourceOptions, params.TenantID, walletID).Get(ctx, &sources); err != nil {
 			return err
 		}
-		selected, details, err := selectReturnToSource(sources, params.Request.Currency, params.Request.Amount, providerCode)
+		selected, details, err := selectReturnToSource(sources, walletID, params.Request.Currency, params.Request.Amount, providerCode)
 		if err != nil {
 			return err
 		}
@@ -2038,9 +2038,9 @@ func fundingSourceVerificationStatus(requestSpec, providerSpec, merged fundingSo
 	return "pending"
 }
 
-func selectReturnToSource(sources []walletstore.FundingSource, currency string, amount int64, providerCode string) (*walletstore.FundingSource, map[string]any, error) {
+func selectReturnToSource(sources []walletstore.FundingSource, walletID uuid.UUID, currency string, amount int64, providerCode string) (*walletstore.FundingSource, map[string]any, error) {
 	for _, source := range sources {
-		if err := validateWithdrawalFundingSource(source, source.WalletID, currency, amount, providerCode); err != nil {
+		if err := validateWithdrawalFundingSource(source, walletID, currency, amount, providerCode); err != nil {
 			continue
 		}
 		var details map[string]any

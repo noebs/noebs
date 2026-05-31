@@ -378,6 +378,11 @@ Last updated: 2026-05-31
     - Fix: validate ownership verification status transitions, allow only pending-to-terminal updates plus exact terminal replays, and reject terminal rewrites/reopens without mutating the row.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateOwnershipVerificationStatusTransition|TestUpdateOwnershipVerificationStatusValidation|TestOwnershipVerificationCreateReplaysAreExact'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/handler ./wallet/grpc ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+76. Return-to-source funding selection trusted each source's own wallet ID.
+    - Evidence: `selectReturnToSource` called `validateWithdrawalFundingSource(source, source.WalletID, ...)`, which made the wallet ownership check tautological. If an activity returned a foreign funding source, the workflow selection logic could accept it as long as the source was otherwise verified and withdrawable.
+    - Fix: pass the withdrawal wallet ID into return-to-source selection and validate every candidate funding source against that requested wallet instead of the source's own wallet ID.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestSelectReturnToSourceSkipsIneligibleFundingSources|TestDepositFundingSource'`; `go test -count=1 ./wallet/workflow ./wallet/activity ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

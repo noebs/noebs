@@ -129,10 +129,10 @@ func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 	sources := []walletstore.FundingSource{
 		{
 			ID:                 1,
-			WalletID:           walletID,
+			WalletID:           uuid.New(),
 			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
 			Currency:           "AED",
-			VerificationStatus: "pending",
+			VerificationStatus: "verified",
 			SupportsWithdrawal: true,
 			WithdrawalMethod:   withdrawalMethod,
 			TotalFunded:        10000,
@@ -142,13 +142,23 @@ func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 			WalletID:           walletID,
 			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
 			Currency:           "AED",
+			VerificationStatus: "pending",
+			SupportsWithdrawal: true,
+			WithdrawalMethod:   withdrawalMethod,
+			TotalFunded:        10000,
+		},
+		{
+			ID:                 3,
+			WalletID:           walletID,
+			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
+			Currency:           "AED",
 			VerificationStatus: "verified",
 			SupportsWithdrawal: true,
 			WithdrawalMethod:   withdrawalMethod,
 			TotalFunded:        100,
 		},
 		{
-			ID:                 3,
+			ID:                 4,
 			WalletID:           walletID,
 			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
 			Currency:           "AED",
@@ -159,12 +169,12 @@ func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
 		},
 	}
 
-	selected, details, err := selectReturnToSource(sources, "AED", 500, "bankpay")
+	selected, details, err := selectReturnToSource(sources, walletID, "AED", 500, "bankpay")
 	if err != nil {
 		t.Fatalf("select return-to-source: %v", err)
 	}
-	if selected == nil || selected.ID != 3 {
-		t.Fatalf("expected third source, got %+v", selected)
+	if selected == nil || selected.ID != 4 {
+		t.Fatalf("expected fourth source, got %+v", selected)
 	}
 	if details["account_number"] != "1234567890" {
 		t.Fatalf("unexpected details: %+v", details)
