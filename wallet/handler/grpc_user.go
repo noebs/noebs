@@ -146,11 +146,11 @@ func (h *GRPCUserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	limit, err := optionalIntQuery(c, "limit", 100)
+	limit, err := positiveIntQuery(c, "limit", 100)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidLimit))
 	}
-	offset, err := optionalIntQuery(c, "offset", 0)
+	offset, err := nonNegativeIntQuery(c, "offset", 0)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
@@ -191,15 +191,15 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	amount, err := optionalInt64Query(c, "amount")
+	amount, err := optionalNonNegativeInt64Query(c, "amount")
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
 	}
-	limit, err := optionalIntQuery(c, "limit", 100)
+	limit, err := positiveIntQuery(c, "limit", 100)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidLimit))
 	}
-	offset, err := optionalIntQuery(c, "offset", 0)
+	offset, err := nonNegativeIntQuery(c, "offset", 0)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}

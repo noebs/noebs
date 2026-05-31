@@ -5,10 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/adonese/noebs/apperr"
+	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/gofiber/fiber/v2"
@@ -196,11 +196,11 @@ func (h *UserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrWalletNotFound))
 	}
 
-	limit, err := optionalIntQuery(c, "limit", 100)
+	limit, err := positiveIntQuery(c, "limit", 100)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidLimit))
 	}
-	offset, err := optionalIntQuery(c, "offset", 0)
+	offset, err := nonNegativeIntQuery(c, "offset", 0)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
@@ -235,15 +235,15 @@ func (h *UserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	if err := rejectTenantIDQuery(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	amount, err := optionalInt64Query(c, "amount")
+	amount, err := optionalNonNegativeInt64Query(c, "amount")
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidAmount))
 	}
-	limit, err := optionalIntQuery(c, "limit", 100)
+	limit, err := positiveIntQuery(c, "limit", 100)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidLimit))
 	}
-	offset, err := optionalIntQuery(c, "offset", 0)
+	offset, err := nonNegativeIntQuery(c, "offset", 0)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
@@ -336,24 +336,23 @@ func rejectTenantIDQuery(c *fiber.Ctx) error {
 	return nil
 }
 
-func optionalIntQuery(c *fiber.Ctx, key string, defaultValue int) (int, error) {
-	raw := strings.TrimSpace(c.Query(key))
-	if raw == "" {
-		return defaultValue, nil
-	}
-	value, err := strconv.Atoi(raw)
+func positiveIntQuery(c *fiber.Ctx, key string, defaultValue int) (int, error) {
+	return parsing.PositiveIntOrDefaultParam(map[string]string{key: c.Query(key)}, key, defaultValue)
+}
+
+func nonNegativeIntQuery(c *fiber.Ctx, key string, defaultValue int) (int, error) {
+	return parsing.NonNegativeIntOrDefaultParam(map[string]string{key: c.Query(key)}, key, defaultValue)
+}
+
+func optionalNonNegativeInt64Query(c *fiber.Ctx, key string) (int64, error) {
+	value, ok, err := parsing.NonNegativeInt64Param(map[string]string{key: c.Query(key)}, key)
 	if err != nil {
 		return 0, err
 	}
-	return value, nil
-}
-
-func optionalInt64Query(c *fiber.Ctx, key string) (int64, error) {
-	raw := strings.TrimSpace(c.Query(key))
-	if raw == "" {
+	if !ok {
 		return 0, nil
 	}
-	return strconv.ParseInt(raw, 10, 64)
+	return value, nil
 }
 
 func walletOwnedByUser(w *walletstore.Wallet, tenantID string, userID int64) bool {

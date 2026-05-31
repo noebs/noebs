@@ -548,6 +548,11 @@ Last updated: 2026-05-31
     - Fix: merge status-check results over the original webhook payload instead of replacing it, write normalized provider status fields back through the configured webhook mapping paths, preserve the original client reference, and keep the raw provider status response attached.
     - Tests: `go test -count=1 -v ./wallet/handler -run 'TestAuthoritativeWebhookPayloadPreservesIdentityAndUsesStatusCheckFields|TestMappedPSPWebhookFields|TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID'`; `go test -count=1 ./wallet/handler ./wallet/psp ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+110. Wallet public query defaults lived in the HTTP/store gap.
+    - Evidence: user-facing wallet HTTP handlers parsed `limit`, `offset`, and `amount` with ad hoc helpers that accepted zero or negative values and let the store reject them later. The public gRPC API was worse: direct gRPC callers with an omitted proto3 `limit` sent `0` straight to `ListAvailablePSPMethods`/`ListWalletLedgerEntries`, so the store returned `ErrInvalidLimit` instead of the API boundary applying the same default that HTTP clients got.
+    - Fix: route wallet HTTP and HTTP-to-gRPC query parsing through the shared top-level `parsing` package with positive `limit`, non-negative `offset`, and non-negative `amount` contracts; add public gRPC boundary helpers that default omitted numeric pagination and reject invalid bounds before store access.
+    - Tests: `go test -count=1 -v ./wallet/handler -run 'TestUserQueryParsersApplyBoundaryValidation'`; `go test -count=1 -v ./wallet/grpc -run 'TestPublicQuery'`; `go test -count=1 ./wallet/handler ./wallet/grpc ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

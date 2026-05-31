@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const publicQueryDefaultLimit = 100
+
 func (s *Server) ListPaymentMethodsPublic(ctx context.Context, req *walletv1.ListPaymentMethodsRequest) (*walletv1.PaymentMethodList, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
@@ -28,14 +30,22 @@ func (s *Server) ListPaymentMethodsPublic(ctx context.Context, req *walletv1.Lis
 	if err != nil {
 		return nil, err
 	}
+	amount, err := publicNonNegativeAmount(req.Amount)
+	if err != nil {
+		return nil, err
+	}
+	limit, offset, err := publicLimitOffset(req.Limit, req.Offset, publicQueryDefaultLimit)
+	if err != nil {
+		return nil, err
+	}
 	methods, err := s.Service.Store.ListAvailablePSPMethods(ctx, walletstore.PSPMethodFilter{
 		TenantID:  tenantID,
 		Direction: req.Direction,
 		Currency:  req.Currency,
 		Region:    req.Region,
-		Amount:    req.Amount,
-		Limit:     int(req.Limit),
-		Offset:    int(req.Offset),
+		Amount:    amount,
+		Limit:     limit,
+		Offset:    offset,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -69,6 +79,10 @@ func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
+	limit, offset, err := publicLimitOffset(req.Limit, req.Offset, publicQueryDefaultLimit)
+	if err != nil {
+		return nil, err
+	}
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
 	}
@@ -76,8 +90,8 @@ func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1
 		TenantID:  tenantID,
 		WalletID:  walletID,
 		EntryType: req.EntryType,
-		Limit:     int(req.Limit),
-		Offset:    int(req.Offset),
+		Limit:     limit,
+		Offset:    offset,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -87,6 +101,30 @@ func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1
 		resp = append(resp, walletLedgerEntryProto(entry))
 	}
 	return &walletv1.WalletLedgerEntryList{Transactions: resp}, nil
+}
+
+func publicLimitOffset(reqLimit, reqOffset int32, defaultLimit int) (int, int, error) {
+	if defaultLimit <= 0 {
+		return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidLimit.Error())
+	}
+	if reqLimit < 0 {
+		return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidLimit.Error())
+	}
+	if reqOffset < 0 {
+		return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidOffset.Error())
+	}
+	limit := int(reqLimit)
+	if limit == 0 {
+		limit = defaultLimit
+	}
+	return limit, int(reqOffset), nil
+}
+
+func publicNonNegativeAmount(amount int64) (int64, error) {
+	if amount < 0 {
+		return 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
+	}
+	return amount, nil
 }
 
 func paymentMethodProto(method walletstore.PSPPaymentMethod) *walletv1.PaymentMethod {

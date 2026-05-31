@@ -499,6 +499,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/handler -run 'TestUserQueryParsersApplyBoundaryValidation'`
+- `go test -count=1 -v ./wallet/grpc -run 'TestPublicQuery'`
+- `go test -count=1 ./wallet/handler ./wallet/grpc ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
