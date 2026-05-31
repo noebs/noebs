@@ -126,7 +126,7 @@ func (s *Store) TouchUserTwoFALastUsed(ctx context.Context, tenantID string, use
 	}
 	stmt := db.Rebind(`UPDATE wallet_user_2fa
 		SET last_used_at = ?, updated_at = ?
-		WHERE tenant_id = ? AND user_id = ?`)
+		WHERE tenant_id = ? AND user_id = ? AND enabled = TRUE`)
 	result, err := db.ExecContext(ctx, stmt, usedAt, usedAt, tenantID, userID)
 	if err != nil {
 		return err
@@ -136,6 +136,13 @@ func (s *Store) TouchUserTwoFALastUsed(ctx context.Context, tenantID string, use
 		return err
 	}
 	if affected == 0 {
+		record, err := s.GetUserTwoFA(ctx, tenantID, userID)
+		if err != nil {
+			return err
+		}
+		if !record.Enabled {
+			return ErrUserTwoFANotEnabled
+		}
 		return ErrUserTwoFANotFound
 	}
 	return nil

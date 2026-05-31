@@ -322,6 +322,7 @@ func mapError(err error) error {
 		errors.Is(err, walletvalidation.ErrPSPDirectionInvalid),
 		errors.Is(err, walletstore.ErrWalletInactive),
 		errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled),
+		errors.Is(err, walletstore.ErrUserTwoFANotEnabled),
 		errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	default:

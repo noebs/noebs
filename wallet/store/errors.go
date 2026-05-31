@@ -45,6 +45,7 @@ var (
 	ErrMissingTwoFASecret           = errors.New("missing 2fa secret")
 	ErrInvalidTwoFACode             = errors.New("invalid 2fa code")
 	ErrUserTwoFAAlreadyEnabled      = errors.New("user 2fa already enabled")
+	ErrUserTwoFANotEnabled          = errors.New("user 2fa not enabled")
 	ErrMissingApprovalDecision      = errors.New("missing approval decision")
 	ErrMissingApprovalReason        = errors.New("missing approval reason")
 	ErrMissingApprovalTime          = errors.New("missing approved_at")

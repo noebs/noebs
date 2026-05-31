@@ -488,6 +488,11 @@ Last updated: 2026-05-31
     - Fix: construct webhook status updates from the stored transaction, set `confirmed_at` only when it is missing, record Temporal signal failures as webhook interactions, and return HTTP 503 so providers have a retryable response.
     - Tests: `go test -count=1 -v ./wallet/handler -run 'TestPSPWebhookStatusUpdateDoesNotRewriteConfirmedAtOnTerminalReplay|TestPSPWebhookSignalFailureIsRetriable|TestPSPWebhookSignalsMappedCurrencyWithoutStoredCurrencyFallback|TestPSPWebhookRejectsWorkflowWebhookWithoutMappedCurrency|TestPSPWebhookRejectsWorkflowWebhookWithoutTemporalSignaler'` (`TestPSPWebhookSignalFailureIsRetriable` and the other DB-backed webhook cases skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+98. Disabled 2FA records could still be marked as used.
+    - Evidence: `TouchUserTwoFALastUsed` updated `last_used_at` by tenant/user only. Direct store callers could stamp usage evidence onto a disabled 2FA record, making audit/security state disagree with the `enabled` flag.
+    - Fix: require `enabled = TRUE` in the last-used update, distinguish missing rows from disabled rows with `ErrUserTwoFANotEnabled`, and map that typed error through wallet gRPC/HTTP boundaries.
+    - Tests: `go test -count=1 -v ./wallet/store ./wallet/grpc -run 'TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret|TestUserTwoFAValidation|TestMapErrorMapsPSPValidationFailures'` (`TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/activity ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

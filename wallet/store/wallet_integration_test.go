@@ -91,6 +91,16 @@ func TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret(t *testing.T) {
 	if err := store.SetUserTwoFAEnabled(ctx, tenantID, userID, false, disabledAt); err != nil {
 		t.Fatalf("disable 2fa: %v", err)
 	}
+	if err := store.TouchUserTwoFALastUsed(ctx, tenantID, userID, disabledAt.Add(time.Second)); !errors.Is(err, ErrUserTwoFANotEnabled) {
+		t.Fatalf("touch disabled 2fa error = %v, want %v", err, ErrUserTwoFANotEnabled)
+	}
+	disabledRecord, err := store.GetUserTwoFA(ctx, tenantID, userID)
+	if err != nil {
+		t.Fatalf("get disabled 2fa: %v", err)
+	}
+	if !disabledRecord.LastUsedAt.Valid || !timeEqualAtDBPrecision(disabledRecord.LastUsedAt.Time, enabledAt.Add(time.Second)) {
+		t.Fatalf("disabled 2fa last_used_at = %+v, want previous successful use", disabledRecord.LastUsedAt)
+	}
 	reset, err := store.CreateOrResetUserTwoFA(ctx, tenantID, userID, "secret-2")
 	if err != nil {
 		t.Fatalf("reset disabled 2fa: %v", err)

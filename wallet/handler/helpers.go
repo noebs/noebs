@@ -53,6 +53,8 @@ func mapWalletError(err error) error {
 		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
 	case errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
+	case errors.Is(err, walletstore.ErrUserTwoFANotEnabled):
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	case errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrDuplicateWallet),
