@@ -29,6 +29,9 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}

@@ -653,6 +653,11 @@ Last updated: 2026-05-31
     - Fix: require gateway admin metadata inside `ResetWalletPIN` before request validation or store access, matching the other wallet admin signal/manual-transfer handlers.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestResetWalletPIN(RequiresAdminAuth|ValidatesAfterAdminAuth)|TestRequireAdmin'`; `go test -count=1 ./wallet/grpc ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+131. Shared wallet internal RPCs could run as unscoped internal callers without handler admin auth.
+    - Evidence: `WalletInternalService` methods are classified as admin-only by the CLI gRPC interceptor, but the shared handlers for P2P/deposit/withdrawal/funding/destination/PIN/2FA operations did not verify admin metadata themselves. If an internal gRPC registration path missed the interceptor, the handler method context still identified the request as `WalletInternalService`, yet the handler proceeded with nil user claims and broad internal authority.
+    - Fix: add a handler-level internal-RPC admin guard keyed from the gRPC method context and apply it before request validation across the internal/public shared handlers and internal-only wallet lookup/ensure/validation/funding paths. Public wallet RPCs still require user identity through the existing claims path.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestWalletInternalRPCs|TestClaimsForRPCRequiresGatewayIdentityOnPublicUserMethods|TestRequestP2PTransferPublicRequiresGatewayIdentity|TestResetWalletPIN'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

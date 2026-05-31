@@ -32,6 +32,9 @@ func NewServer(service *wallet.Service) *Server {
 }
 
 func (s *Server) GetWallet(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	return s.getWallet(ctx, req)
 }
 
@@ -65,6 +68,9 @@ func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletReq
 }
 
 func (s *Server) EnsureWallet(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	return s.ensureWallet(ctx, req)
 }
 
@@ -95,6 +101,9 @@ func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWal
 func (s *Server) ValidateP2P(ctx context.Context, req *walletv1.ValidateP2PRequest) (*walletv1.ValidateP2PResponse, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")

@@ -23,6 +23,9 @@ func (s *Server) CreateFundingSource(ctx context.Context, req *walletv1.CreateFu
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -87,6 +90,9 @@ func (s *Server) CreateFundingSource(ctx context.Context, req *walletv1.CreateFu
 func (s *Server) ListFundingSources(ctx context.Context, req *walletv1.ListFundingSourcesRequest) (*walletv1.FundingSourceList, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
@@ -158,6 +164,9 @@ func toFundingSourceProto(source *walletstore.FundingSource) (*walletv1.FundingS
 func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.CreateWithdrawalDestinationRequest) (*walletv1.WithdrawalDestination, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
@@ -251,6 +260,9 @@ func (s *Server) ListWithdrawalDestinations(ctx context.Context, req *walletv1.L
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -293,6 +305,9 @@ func (s *Server) DeactivateWithdrawalDestination(ctx context.Context, req *walle
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -321,6 +336,9 @@ func (s *Server) DeactivateWithdrawalDestination(ctx context.Context, req *walle
 func (s *Server) RequestOwnershipVerification(ctx context.Context, req *walletv1.RequestOwnershipVerificationRequest) (*walletv1.OwnershipVerification, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
@@ -373,6 +391,9 @@ func (s *Server) RequestOwnershipVerification(ctx context.Context, req *walletv1
 func (s *Server) CompleteOwnershipVerification(ctx context.Context, req *walletv1.CompleteOwnershipVerificationRequest) (*emptypb.Empty, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
@@ -528,6 +549,9 @@ func (s *Server) SetWalletPIN(ctx context.Context, req *walletv1.SetWalletPINReq
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -581,6 +605,9 @@ func (s *Server) EnrollUser2FA(ctx context.Context, req *walletv1.EnrollUser2FAR
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -627,6 +654,9 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -671,6 +701,9 @@ func (s *Server) ConfirmUser2FA(ctx context.Context, req *walletv1.ConfirmUser2F
 func (s *Server) DisableUser2FA(ctx context.Context, req *walletv1.DisableUser2FARequest) (*emptypb.Empty, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	if err := s.requireAdminForInternalRPC(ctx); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")

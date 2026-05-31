@@ -608,6 +608,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Shared wallet internal/public handlers now require gateway admin metadata when invoked through `WalletInternalService`, while public wallet methods keep the user-claims path.
+- `go test -count=1 -v ./wallet/grpc -run 'TestWalletInternalRPCs|TestClaimsForRPCRequiresGatewayIdentityOnPublicUserMethods|TestRequestP2PTransferPublicRequiresGatewayIdentity|TestResetWalletPIN'`
+- `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow ./cli`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

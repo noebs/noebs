@@ -71,6 +71,18 @@ func (s *Server) claimsForRPC(ctx context.Context) (*gateway.TokenClaims, error)
 	return claims, nil
 }
 
+func (s *Server) requireAdminForInternalRPC(ctx context.Context) error {
+	method, ok := grpc.Method(ctx)
+	if !ok {
+		return nil
+	}
+	if !strings.HasPrefix(method, "/"+walletv1.WalletInternalService_ServiceDesc.ServiceName+"/") {
+		return nil
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	return s.requireAdmin(md)
+}
+
 func isPublicWalletUserRPC(ctx context.Context) bool {
 	method, ok := grpc.Method(ctx)
 	if !ok {
