@@ -309,6 +309,9 @@ func existingDoubleEntryMatches(txn LedgerTransaction, result *DoubleEntryResult
 	if txn.Currency != params.Currency || txn.ReferenceType != params.ReferenceType {
 		return false
 	}
+	if txn.IdempotencyKey != params.IdempotencyKey || txn.Status != "completed" || !rawJSONMatches(txn.Metadata, params.Metadata) {
+		return false
+	}
 	if txn.ReferenceID.Valid != (params.ReferenceID != "") {
 		return false
 	}
@@ -323,7 +326,25 @@ func existingDoubleEntryMatches(txn LedgerTransaction, result *DoubleEntryResult
 		result.DebitEntry.Amount == params.Amount &&
 		result.CreditEntry.Amount == params.Amount &&
 		result.DebitEntry.Currency == params.Currency &&
-		result.CreditEntry.Currency == params.Currency
+		result.CreditEntry.Currency == params.Currency &&
+		result.DebitEntry.EntryType == "debit" &&
+		result.CreditEntry.EntryType == "credit" &&
+		result.DebitEntry.Status == "completed" &&
+		result.CreditEntry.Status == "completed" &&
+		ledgerEntryDescriptionMatches(result.DebitEntry, params.Description) &&
+		ledgerEntryDescriptionMatches(result.CreditEntry, params.Description) &&
+		rawJSONMatches(result.DebitEntry.Metadata, params.Metadata) &&
+		rawJSONMatches(result.CreditEntry.Metadata, params.Metadata)
+}
+
+func ledgerEntryDescriptionMatches(entry *LedgerEntry, description string) bool {
+	if entry == nil {
+		return false
+	}
+	if description == "" {
+		return !entry.Description.Valid || entry.Description.String == ""
+	}
+	return entry.Description.Valid && entry.Description.String == description
 }
 
 func (s *Store) listEntriesByTransaction(ctx context.Context, tx *sqlx.Tx, tenantID string, txID int64) ([]*LedgerEntry, error) {

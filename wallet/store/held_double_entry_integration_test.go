@@ -158,6 +158,7 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 		CreditWalletID: treasuryWallet.ID,
 		Amount:         900,
 		Description:    "withdrawal",
+		Metadata:       json.RawMessage(`{"purpose":"withdrawal","sequence":1}`),
 	}
 	if _, err := store.PostHeldDoubleEntry(ctx, HeldDoubleEntryParams{HoldID: hold.ID, Entry: withdrawalEntry}); err != nil {
 		t.Fatalf("post held withdrawal entry: %v", err)
@@ -165,6 +166,19 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	assertWalletBalances(t, ctx, store, tenantID, userWallet.ID, 100, 0)
 	assertWalletBalances(t, ctx, store, tenantID, treasuryWallet.ID, 900, 900)
 	assertHold(t, ctx, db, tenantID, hold.ID, HoldStatusActive, 100, false)
+
+	descriptionMismatchEntry := withdrawalEntry
+	descriptionMismatchEntry.Description = "other withdrawal"
+	_, err = store.PostHeldDoubleEntry(ctx, HeldDoubleEntryParams{HoldID: hold.ID, Entry: descriptionMismatchEntry})
+	if !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("idempotent entry description mismatch error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	metadataMismatchEntry := withdrawalEntry
+	metadataMismatchEntry.Metadata = json.RawMessage(`{"purpose":"withdrawal","sequence":2}`)
+	_, err = store.PostHeldDoubleEntry(ctx, HeldDoubleEntryParams{HoldID: hold.ID, Entry: metadataMismatchEntry})
+	if !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("idempotent entry metadata mismatch error = %v, want %v", err, ErrDuplicateTransaction)
+	}
 
 	feeEntry := DoubleEntryParams{
 		TenantID:       tenantID,
@@ -280,15 +294,20 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 		DebitWalletID:  debitID,
 		CreditWalletID: creditID,
 		Amount:         500,
+		Description:    "deposit",
+		Metadata:       json.RawMessage(`{"purpose":"deposit","sequence":1}`),
 	}
 	txn := LedgerTransaction{
-		Currency:      params.Currency,
-		ReferenceType: params.ReferenceType,
-		ReferenceID:   sql.NullString{String: params.ReferenceID, Valid: true},
+		IdempotencyKey: params.IdempotencyKey,
+		Currency:       params.Currency,
+		ReferenceType:  params.ReferenceType,
+		ReferenceID:    sql.NullString{String: params.ReferenceID, Valid: true},
+		Status:         "completed",
+		Metadata:       json.RawMessage(`{"sequence":1,"purpose":"deposit"}`),
 	}
 	result := &DoubleEntryResult{
-		DebitEntry:  &LedgerEntry{WalletID: debitID, Amount: params.Amount, Currency: params.Currency},
-		CreditEntry: &LedgerEntry{WalletID: creditID, Amount: params.Amount, Currency: params.Currency},
+		DebitEntry:  matchingTestLedgerEntry(debitID, "debit", params),
+		CreditEntry: matchingTestLedgerEntry(creditID, "credit", params),
 	}
 	if !existingDoubleEntryMatches(txn, result, params) {
 		t.Fatal("existingDoubleEntryMatches() = false, want true")
@@ -334,13 +353,37 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 				result.CreditEntry = nil
 			},
 		},
+		{
+			name: "transaction-status",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				txn.Status = "pending"
+			},
+		},
+		{
+			name: "description",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.Description = "other"
+			},
+		},
+		{
+			name: "metadata",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.Metadata = json.RawMessage(`{"purpose":"deposit","sequence":2}`)
+			},
+		},
+		{
+			name: "entry-status",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				result.DebitEntry.Status = "pending"
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			testTxn := txn
 			testResult := &DoubleEntryResult{
-				DebitEntry:  &LedgerEntry{WalletID: debitID, Amount: params.Amount, Currency: params.Currency},
-				CreditEntry: &LedgerEntry{WalletID: creditID, Amount: params.Amount, Currency: params.Currency},
+				DebitEntry:  matchingTestLedgerEntry(debitID, "debit", params),
+				CreditEntry: matchingTestLedgerEntry(creditID, "credit", params),
 			}
 			testParams := params
 			tc.mutate(&testTxn, testResult, &testParams)
@@ -348,6 +391,18 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 				t.Fatal("existingDoubleEntryMatches() = true, want false")
 			}
 		})
+	}
+}
+
+func matchingTestLedgerEntry(walletID uuid.UUID, entryType string, params DoubleEntryParams) *LedgerEntry {
+	return &LedgerEntry{
+		WalletID:    walletID,
+		EntryType:   entryType,
+		Amount:      params.Amount,
+		Currency:    params.Currency,
+		Status:      "completed",
+		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
+		Metadata:    json.RawMessage(`{"sequence":1,"purpose":"deposit"}`),
 	}
 }
 

@@ -263,6 +263,11 @@ Last updated: 2026-05-31
     - Fix: include hold expiry and metadata in the replay contract, compare metadata semantically as JSON, and allow only microsecond timestamp tolerance for database precision.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestExistingHoldMatches|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+53. Double-entry replay ignored description, metadata, and completion-state mismatches.
+    - Evidence: `PostDoubleEntry` and `PostHeldDoubleEntry` treat duplicate `(tenant_id, idempotency_key)` ledger transactions as idempotent replays, but `existingDoubleEntryMatches` only compared currency, reference, wallets, and amounts. A replay with different transaction metadata, entry metadata, descriptions, or non-completed stored statuses could return success under the same idempotency key.
+    - Fix: extend double-entry replay validation to require completed transaction/entry statuses, debit/credit entry types, matching descriptions, and semantically equal transaction and entry metadata.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestExistingDoubleEntryMatches|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
