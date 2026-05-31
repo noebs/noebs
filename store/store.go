@@ -772,6 +772,13 @@ func (s *Store) UpsertCacheCard(ctx context.Context, tenantID string, card ebs_f
 	if err != nil {
 		return err
 	}
+	card.Pan = strings.TrimSpace(card.Pan)
+	if card.Pan == "" {
+		return ErrMissingPAN
+	}
+	if s == nil {
+		return fmt.Errorf("nil db")
+	}
 	if err := s.requireDataKeyForSensitiveValue(card.Pan); err != nil {
 		return err
 	}
@@ -794,6 +801,10 @@ func (s *Store) GetCacheCard(ctx context.Context, tenantID, pan string) (*ebs_fi
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	pan = strings.TrimSpace(pan)
+	if pan == "" {
+		return nil, ErrMissingPAN
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -842,6 +853,14 @@ func (s *Store) UpsertCacheBiller(ctx context.Context, tenantID, mobile, billerI
 	if err != nil {
 		return err
 	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
+	billerID = strings.TrimSpace(billerID)
+	if billerID == "" {
+		return ErrMissingBillerID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
@@ -858,6 +877,10 @@ func (s *Store) GetCacheBiller(ctx context.Context, tenantID, mobile string) (*e
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return nil, ErrMissingMobile
 	}
 	db, err := s.ensureDB()
 	if err != nil {

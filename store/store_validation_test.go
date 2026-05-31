@@ -704,10 +704,33 @@ func TestStore_SetMainCard_RequiresPAN(t *testing.T) {
 }
 
 func TestStore_UpsertCacheCard_RequiresDataKey(t *testing.T) {
-	s := newTestStoreWithoutDataKey(t)
+	s := &Store{}
 	err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: "9222081700000000"})
 	if !errors.Is(err, ErrMissingDataKey) {
 		t.Fatalf("expected ErrMissingDataKey, got %v", err)
+	}
+}
+
+func TestStore_CacheCardRequiresPAN(t *testing.T) {
+	s := &Store{}
+	if err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: " "}); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("UpsertCacheCard(missing pan) error = %v, want %v", err, ErrMissingPAN)
+	}
+	if _, err := s.GetCacheCard(context.Background(), "t1", " "); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("GetCacheCard(missing pan) error = %v, want %v", err, ErrMissingPAN)
+	}
+}
+
+func TestStore_CacheBillerRequiresExplicitFields(t *testing.T) {
+	s := &Store{}
+	if err := s.UpsertCacheBiller(context.Background(), "t1", " ", "0010010001"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("UpsertCacheBiller(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := s.UpsertCacheBiller(context.Background(), "t1", "0912141660", " "); !errors.Is(err, ErrMissingBillerID) {
+		t.Fatalf("UpsertCacheBiller(missing biller id) error = %v, want %v", err, ErrMissingBillerID)
+	}
+	if _, err := s.GetCacheBiller(context.Background(), "t1", " "); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("GetCacheBiller(missing mobile) error = %v, want %v", err, ErrMissingMobile)
 	}
 }
 

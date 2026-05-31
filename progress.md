@@ -59,6 +59,7 @@
 - Fixed targeted user/card writes so missing users/cards return `sql.ErrNoRows`, card targets are required before DB access, and `SetMainCard` rolls back when the requested card is absent.
 - Fixed beneficiary persistence so repeated saves update the existing beneficiary identity, legacy duplicates are deduplicated by migration, and missing deletes return `sql.ErrNoRows`.
 - Fixed payment token creation so tokens require an explicit positive user ID before persistence instead of allowing orphan UUID-only records.
+- Fixed cache persistence so cache-card and cache-biller operations require explicit PAN/mobile/biller lookup keys before touching the DB.
 
 Verification:
 
@@ -240,6 +241,11 @@ Verification:
 - `go vet ./...`
 - `git diff --check`
 - `go test -count=1 -v ./store -run 'TestStore_CreateToken_MissingTenantID|TestStore_CreateToken_RequiresExplicitFields|TestStore_CreateToken_RequiresDataKeyForDestinationPAN|TestStore_CoreTenantValidationFailsBeforeDB'`
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_UpsertCacheCard_RequiresDataKey|TestStore_CacheCardRequiresPAN|TestStore_CacheBillerRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`
 - `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`

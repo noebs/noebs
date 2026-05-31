@@ -14,6 +14,7 @@ var (
 	ErrMissingMobile         = errors.New("missing mobile")
 	ErrInvalidMobile         = errors.New("invalid mobile")
 	ErrMissingPAN            = errors.New("missing pan")
+	ErrMissingBillerID       = errors.New("missing biller_id")
 	ErrMissingData           = errors.New("missing data")
 	ErrMissingBillType       = errors.New("missing bill_type")
 	ErrMissingEventID        = errors.New("missing event id")
