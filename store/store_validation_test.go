@@ -169,6 +169,24 @@ func TestStore_UserIdentityRequiresExplicitFields(t *testing.T) {
 	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Email: " "}); !errors.Is(err, ErrMissingEmail) {
 		t.Fatalf("UpdateUserProfile(missing email) error = %v, want %v", err, ErrMissingEmail)
 	}
+	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{}); !errors.Is(err, ErrMissingData) {
+		t.Fatalf("UpdateUserProfile(empty profile) error = %v, want %v", err, ErrMissingData)
+	}
+	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Fullname: " "}); !errors.Is(err, ErrMissingData) {
+		t.Fatalf("UpdateUserProfile(blank profile) error = %v, want %v", err, ErrMissingData)
+	}
+	if err := s.UpdateUserColumns(ctx, "tenant", 1, nil); !errors.Is(err, ErrMissingData) {
+		t.Fatalf("UpdateUserColumns(nil updates) error = %v, want %v", err, ErrMissingData)
+	}
+	if err := s.UpdateUserColumns(ctx, "tenant", 1, map[string]any{}); !errors.Is(err, ErrMissingData) {
+		t.Fatalf("UpdateUserColumns(empty updates) error = %v, want %v", err, ErrMissingData)
+	}
+	if err := s.UpdateUserLanguage(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingLanguage) {
+		t.Fatalf("UpdateUserLanguage(missing language) error = %v, want %v", err, ErrMissingLanguage)
+	}
+	if err := s.UpdateUserPassword(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingPassword) {
+		t.Fatalf("UpdateUserPassword(missing hash) error = %v, want %v", err, ErrMissingPassword)
+	}
 }
 
 func TestStore_UserWritesDoNotPersistMainExpDate(t *testing.T) {

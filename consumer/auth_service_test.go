@@ -285,6 +285,18 @@ func TestCreateUserRequiresMobileBeforeStore(t *testing.T) {
 	}
 }
 
+func TestChangePasswordRequiresExplicitInputsBeforeStore(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	ctx := context.Background()
+
+	if _, err := service.ChangePassword(ctx, "tenant", " ", "new-password"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("ChangePassword(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if _, err := service.ChangePassword(ctx, "tenant", "0990000000", " "); !errors.Is(err, ErrMissingPassword) {
+		t.Fatalf("ChangePassword(missing password) error = %v, want %v", err, ErrMissingPassword)
+	}
+}
+
 func TestCreateUserPropagatesUniquenessLookupErrors(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
 	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{

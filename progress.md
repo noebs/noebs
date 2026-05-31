@@ -78,6 +78,7 @@
 - Fixed PSP webhook success retries so terminal confirmation timestamps are preserved and Temporal signal failures return a retryable response with an interaction record.
 - Fixed wallet 2FA last-used updates so disabled records cannot receive fresh usage evidence through direct store calls.
 - Fixed EBS transaction recording so repeated gateway UUIDs become exact replays instead of duplicate transaction rows and duplicate outbox events.
+- Fixed user mutation validation so empty profile/update payloads, blank language, and blank password hashes fail as typed boundary/store errors instead of silent success or late DB failures.
 
 Verification:
 
@@ -434,6 +435,12 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./store ./consumer/handler ./merchant/handler -run 'TestStoreCreateTransactionWithEventOutboxLifecycle|TestStoreCreateTransactionWithEventRejectsMissingInputs|TestStoreUpsertTransactionProjection|TestStatusForErrorMapsDuplicateTransactionsToConflict'` (`TestStoreCreateTransactionWithEventOutboxLifecycle` and `TestStoreUpsertTransactionProjection` skipped locally when the container runtime is unavailable)
 - `go test -count=1 ./store ./consumer ./consumer/handler ./merchant ./merchant/handler ./adminreporting`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_UserIdentityRequiresExplicitFields|TestStore_UpdateUserColumnsRejectsUnsafeColumns'`
+- `go test -count=1 -v ./consumer -run 'TestUserServiceIdentityInputsFailBeforeStore|TestChangePasswordRequiresExplicitInputsBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB'`
+- `go test -count=1 ./store ./consumer ./consumer/handler`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

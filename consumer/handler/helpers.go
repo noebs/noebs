@@ -111,6 +111,8 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrMissingUserIdentifier),
 		errors.Is(err, store.ErrMissingPAN),
 		errors.Is(err, store.ErrMissingData),
+		errors.Is(err, store.ErrMissingLanguage),
+		errors.Is(err, store.ErrMissingPassword),
 		errors.Is(err, store.ErrMissingBillType),
 		errors.Is(err, store.ErrDuplicateAuthAccount),
 		errors.Is(err, consumer.ErrMissingMobile),

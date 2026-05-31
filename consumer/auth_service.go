@@ -257,7 +257,7 @@ func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassw
 		return ebs_fields.User{}, ErrMissingMobile
 	}
 	if strings.TrimSpace(newPassword) == "" {
-		return ebs_fields.User{}, errors.New("missing new password")
+		return ebs_fields.User{}, ErrMissingPassword
 	}
 
 	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)

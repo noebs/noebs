@@ -124,8 +124,17 @@ func TestUserServiceIdentityInputsFailBeforeStore(t *testing.T) {
 	if err := service.SetUserLanguage(ctx, "tenant", " ", "en"); !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("SetUserLanguage(missing mobile) error = %v, want %v", err, ErrMissingMobile)
 	}
+	if err := service.SetUserLanguage(ctx, "tenant", "0990000000", " "); !errors.Is(err, store.ErrMissingLanguage) {
+		t.Fatalf("SetUserLanguage(missing language) error = %v, want %v", err, store.ErrMissingLanguage)
+	}
 	if err := service.UpdateUserProfile(ctx, "tenant", " ", ebs_fields.UserProfile{Fullname: "User"}); !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("UpdateUserProfile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{}); !errors.Is(err, store.ErrMissingData) {
+		t.Fatalf("UpdateUserProfile(empty profile) error = %v, want %v", err, store.ErrMissingData)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Fullname: " "}); !errors.Is(err, store.ErrMissingData) {
+		t.Fatalf("UpdateUserProfile(blank profile) error = %v, want %v", err, store.ErrMissingData)
 	}
 	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Username: " "}); !errors.Is(err, store.ErrMissingUsername) {
 		t.Fatalf("UpdateUserProfile(missing username) error = %v, want %v", err, store.ErrMissingUsername)

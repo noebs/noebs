@@ -281,13 +281,13 @@ func (s *Service) SetUserLanguage(ctx context.Context, tenantID, mobile, languag
 	if mobile == "" {
 		return ErrMissingMobile
 	}
+	language = strings.TrimSpace(language)
+	if language == "" {
+		return store.ErrMissingLanguage
+	}
 	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return err
-	}
-	language = strings.TrimSpace(language)
-	if language == "" {
-		return errors.New("missing language")
 	}
 	return s.Store.UpdateUserLanguage(ctx, tenantID, user.ID, language)
 }
@@ -307,6 +307,15 @@ func normalizeUserProfileInput(profile ebs_fields.UserProfile) (ebs_fields.UserP
 		if profile.Email == "" {
 			return profile, store.ErrMissingEmail
 		}
+	}
+	if profile.Birthday != "" {
+		profile.Birthday = strings.TrimSpace(profile.Birthday)
+	}
+	if profile.Gender != "" {
+		profile.Gender = strings.TrimSpace(profile.Gender)
+	}
+	if profile.Fullname == "" && profile.Username == "" && profile.Email == "" && profile.Birthday == "" && profile.Gender == "" {
+		return profile, store.ErrMissingData
 	}
 	return profile, nil
 }

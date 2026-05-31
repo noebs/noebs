@@ -498,6 +498,11 @@ Last updated: 2026-05-31
     - Fix: add a tenant/UUID partial unique index with a deduping migration, make transaction inserts exact replays on UUID conflicts, reject mismatched duplicate payloads with `ErrDuplicateTransaction`, validate existing outbox events on exact transaction replays, and map duplicate transaction errors to HTTP 409 at consumer/merchant boundaries.
     - Tests: `go test -count=1 -v ./store ./consumer/handler ./merchant/handler -run 'TestStoreCreateTransactionWithEventOutboxLifecycle|TestStoreCreateTransactionWithEventRejectsMissingInputs|TestStoreUpsertTransactionProjection|TestStatusForErrorMapsDuplicateTransactionsToConflict'` (`TestStoreCreateTransactionWithEventOutboxLifecycle` and `TestStoreUpsertTransactionProjection` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer ./consumer/handler ./merchant ./merchant/handler ./adminreporting`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+100. Empty user mutation requests reported success without changing state.
+    - Evidence: `UpdateUserColumns` returned nil for an empty update map, so `UpdateUserProfile` could accept an empty or all-blank profile and tell callers the profile changed even though no SQL was executed. `SetUserLanguage` also looked up the user before rejecting a blank language, and direct store calls could attempt blank language/password updates.
+    - Fix: make empty user-column/profile mutations return typed validation errors, normalize and reject empty profile/language/password inputs at the boundary before DB lookups, and map the new store validation errors as bad requests.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_UserIdentityRequiresExplicitFields|TestStore_UpdateUserColumnsRejectsUnsafeColumns'`; `go test -count=1 -v ./consumer -run 'TestUserServiceIdentityInputsFailBeforeStore|TestChangePasswordRequiresExplicitInputsBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

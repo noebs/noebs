@@ -17,6 +17,8 @@ var (
 	ErrMissingPAN            = errors.New("missing pan")
 	ErrMissingBillerID       = errors.New("missing biller_id")
 	ErrMissingData           = errors.New("missing data")
+	ErrMissingLanguage       = errors.New("missing language")
+	ErrMissingPassword       = errors.New("missing password")
 	ErrMissingBillType       = errors.New("missing bill_type")
 	ErrMissingEmail          = errors.New("missing email")
 	ErrMissingUsername       = errors.New("missing username")

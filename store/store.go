@@ -436,7 +436,7 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 		return ErrInvalidUserID
 	}
 	if len(updates) == 0 {
-		return nil
+		return ErrMissingData
 	}
 	if err := validateUserUpdateColumns(updates); err != nil {
 		return err
@@ -1799,7 +1799,10 @@ func (s *Store) UpdateUserProfile(ctx context.Context, tenantID string, userID i
 	}
 	updates := map[string]any{}
 	if profile.Fullname != "" {
-		updates["fullname"] = strings.TrimSpace(profile.Fullname)
+		fullname := strings.TrimSpace(profile.Fullname)
+		if fullname != "" {
+			updates["fullname"] = fullname
+		}
 	}
 	if profile.Username != "" {
 		username := strings.TrimSpace(profile.Username)
@@ -1816,15 +1819,35 @@ func (s *Store) UpdateUserProfile(ctx context.Context, tenantID string, userID i
 		updates["email"] = strings.ToLower(email)
 	}
 	if profile.Birthday != "" {
-		updates["birthday"] = profile.Birthday
+		birthday := strings.TrimSpace(profile.Birthday)
+		if birthday != "" {
+			updates["birthday"] = birthday
+		}
 	}
 	if profile.Gender != "" {
-		updates["gender"] = profile.Gender
+		gender := strings.TrimSpace(profile.Gender)
+		if gender != "" {
+			updates["gender"] = gender
+		}
+	}
+	if len(updates) == 0 {
+		return ErrMissingData
 	}
 	return s.UpdateUserColumns(ctx, tenantID, userID, updates)
 }
 
 func (s *Store) UpdateUserLanguage(ctx context.Context, tenantID string, userID int64, language string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+	language = strings.TrimSpace(language)
+	if language == "" {
+		return ErrMissingLanguage
+	}
 	return s.UpdateUserColumns(ctx, tenantID, userID, map[string]any{"language": language})
 }
 
@@ -1833,6 +1856,16 @@ func (s *Store) SetUserVerified(ctx context.Context, tenantID string, userID int
 }
 
 func (s *Store) UpdateUserPassword(ctx context.Context, tenantID string, userID int64, hash string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+	if strings.TrimSpace(hash) == "" {
+		return ErrMissingPassword
+	}
 	return s.UpdateUserColumns(ctx, tenantID, userID, map[string]any{"password": hash})
 }
 
