@@ -63,6 +63,11 @@ Last updated: 2026-05-31
     - Fix: stop persisting main-card expiry on user create/update, and reject unknown or unsafe user update columns before building SQL.
     - Tests: `go test -count=1 ./store`, `go test -count=1 ./consumer ./consumer/handler`.
 
+13. Dashboard transaction decoding swallowed malformed stored payloads.
+    - Evidence: `decodeTransactionRows` ignored `json.Unmarshal` errors, producing zero-value transactions from corrupt payload rows. Some dashboard handlers also mapped fetch/decode failures to 404.
+    - Fix: return decode errors with row context, propagate them through transaction fetch/sort helpers, and return 500 for dashboard fetch/decode failures.
+    - Tests: `go test -count=1 ./dashboard`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

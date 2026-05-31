@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -53,12 +54,14 @@ func (s *Service) requireTenantID(c *fiber.Ctx) (string, bool) {
 	return "", false
 }
 
-func decodeTransactionRows(rows []transactionRow) []ebs_fields.EBSResponse {
+func decodeTransactionRows(rows []transactionRow) ([]ebs_fields.EBSResponse, error) {
 	out := make([]ebs_fields.EBSResponse, 0, len(rows))
 	for _, row := range rows {
 		var item ebs_fields.EBSResponse
 		if row.Payload != "" {
-			_ = json.Unmarshal([]byte(row.Payload), &item)
+			if err := json.Unmarshal([]byte(row.Payload), &item); err != nil {
+				return nil, fmt.Errorf("decode transaction payload %d: %w", row.ID, err)
+			}
 		}
 		item.ID = row.ID
 		if row.CreatedAt.Valid {
@@ -69,7 +72,7 @@ func decodeTransactionRows(rows []transactionRow) []ebs_fields.EBSResponse {
 		}
 		out = append(out, item)
 	}
-	return out
+	return out, nil
 }
 
 func fetchTransactions(ctx context.Context, db *sqlx.DB, query string, args ...any) ([]ebs_fields.EBSResponse, error) {
@@ -77,7 +80,7 @@ func fetchTransactions(ctx context.Context, db *sqlx.DB, query string, args ...a
 	if err := db.SelectContext(ctx, &rows, db.Rebind(query), args...); err != nil {
 		return nil, err
 	}
-	return decodeTransactionRows(rows), nil
+	return decodeTransactionRows(rows)
 }
 
 func normalizeTime(t time.Time) time.Time {

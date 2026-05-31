@@ -150,7 +150,11 @@ func sortTable(db *sqlx.DB, tenantID, searchField, search, sortField, sortCase s
 	if err := db.Select(&rows, db.Rebind(query), args...); err != nil {
 		return nil, 0, err
 	}
-	return decodeTransactionRows(rows), count, nil
+	transactions, err := decodeTransactionRows(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return transactions, count, nil
 }
 
 func normalizeSearchField(f string) string {

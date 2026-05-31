@@ -128,8 +128,7 @@ func (s *Service) TransactionByTid(c *fiber.Ctx) {
 		tid+"%",
 	)
 	if err != nil {
-		log.WithFields(logrus.Fields{"code": err.Error()}).Info("no transaction with this ID")
-		c.SendStatus(404)
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
 		return
 	}
 
@@ -196,7 +195,11 @@ func (s *Service) GetID(c *fiber.Ctx) {
 		tenantID,
 		id,
 	)
-	if err != nil || len(tran) == 0 {
+	if err != nil {
+		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return
+	}
+	if len(tran) == 0 {
 		c.SendStatus(404)
 		return
 	}

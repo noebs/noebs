@@ -16,6 +16,7 @@
 - Fixed OTP SMS delivery so gateway failures are returned synchronously, non-2xx SMS responses become typed delivery errors, and the HTTP handler reports delivery failures as HTTP 502 instead of `not_found`.
 - Fixed shared validator initialization so setup errors are returned through `ValidateStruct` instead of terminating the process from `ebs_fields`.
 - Stopped user create/update paths from persisting main-card expiry and constrained generic user-column updates to a known safe set.
+- Fixed dashboard transaction decoding so malformed stored payloads fail loudly and fetch/decode errors return HTTP 500 instead of being swallowed or treated as missing rows.
 
 Verification:
 
@@ -27,6 +28,7 @@ Verification:
 - `go test -count=1 ./consumer ./consumer/handler`
 - `go test -count=1 ./ebs_fields`
 - `go test -count=1 ./store`
+- `go test -count=1 ./dashboard`
 - `go test -count=1 ./...`
 - `go vet ./...`
 
