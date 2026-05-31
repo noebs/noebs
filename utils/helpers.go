@@ -31,6 +31,7 @@ func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
 		log.Printf("The error is: %+v", err)
 		return err
 	}
+	defer res.Body.Close()
 	log.Printf("sms response status=%s", res.Status)
 	return nil
 }
@@ -38,6 +39,9 @@ func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
 // MaskPAN returns a masked string of the PAN
 func MaskPAN(PAN string) string {
 	length := len(PAN)
+	if length < 10 {
+		return PAN
+	}
 	PAN = PAN[:6] + "*****" + PAN[length-4:]
 	return PAN
 }
