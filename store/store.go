@@ -529,22 +529,34 @@ func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, car
 	if userID <= 0 {
 		return ErrInvalidUserID
 	}
+	now := time.Now().UTC()
+	prepared := make([]ebs_fields.Card, 0, len(cards))
+	for i := range cards {
+		cards[i].Mobile = strings.TrimSpace(cards[i].Mobile)
+		if cards[i].Mobile == "" {
+			return ErrMissingMobile
+		}
+		cards[i].Pan = strings.TrimSpace(cards[i].Pan)
+		if cards[i].Pan == "" {
+			return ErrMissingPAN
+		}
+		if s == nil {
+			return fmt.Errorf("nil db")
+		}
+		if err := s.requireDataKeyForSensitiveValue(cards[i].Pan, cards[i].IPIN); err != nil {
+			return err
+		}
+		card := cards[i]
+		if err := s.encryptCardFields(&card); err != nil {
+			return err
+		}
+		prepared = append(prepared, card)
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	for _, card := range cards {
-		card.Mobile = strings.TrimSpace(card.Mobile)
-		if card.Mobile == "" {
-			return ErrMissingMobile
-		}
-		if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
-			return err
-		}
-		if err := s.encryptCardFields(&card); err != nil {
-			return err
-		}
+	for _, card := range prepared {
 		stmt := s.DB.Rebind(`INSERT INTO cards(
 			tenant_id, user_id, mobile, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
 		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -579,6 +591,10 @@ func (s *Store) UpdateCard(ctx context.Context, tenantID string, userID int64, c
 	}
 	card.CardIdx = strings.TrimSpace(card.CardIdx)
 	if card.CardIdx == "" {
+		return ErrMissingPAN
+	}
+	card.Pan = strings.TrimSpace(card.Pan)
+	if card.Pan == "" {
 		return ErrMissingPAN
 	}
 	if s == nil {

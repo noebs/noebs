@@ -61,6 +61,7 @@
 - Fixed payment token creation so tokens require an explicit positive user ID before persistence instead of allowing orphan UUID-only records.
 - Fixed cache persistence so cache-card and cache-biller operations require explicit PAN/mobile/biller lookup keys before touching the DB.
 - Fixed push-notification persistence so records require an addressable target before storage and payment-request JSON encoding errors are no longer ignored.
+- Fixed card-vault writes so card inserts and full-card updates require explicit PAN identities instead of allowing empty-PAN rows or overwrites.
 
 Verification:
 
@@ -253,6 +254,12 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./store -run 'TestStore_CreatePushDataRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`
 - `go test -count=1 -v ./consumer -run 'TestStoreNotificationPushDataUsesNotificationScope|TestStoreNotificationPushDataRejectsMissingInputs|TestNotificationRecordForEventRequiresTransactionUUID'` (Postgres container case skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_AddCards_RequiresDataKey|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresPAN|TestStore_CardTargetedWritesRequirePAN|TestStoreTargetedUpdatesReportMissingRows'` (Postgres container case skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./consumer -run 'TestUserServiceCardWritesRequirePAN|TestUserServiceTenantValidationFailsBeforeDB'`
 - `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`

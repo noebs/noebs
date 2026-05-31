@@ -499,7 +499,7 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 			return s.UpdateUser(ctx, tenantID, &ebs_fields.User{Model: ebs_fields.Model{ID: 999}, Mobile: "0990000000"})
 		}},
 		{"UpdateCard", func() error {
-			return s.UpdateCard(ctx, tenantID, 999, ebs_fields.Card{CardIdx: "9222081700000000"})
+			return s.UpdateCard(ctx, tenantID, 999, ebs_fields.Card{CardIdx: "9222081700000000", Pan: "9222081700000000"})
 		}},
 		{"DeleteCard", func() error {
 			return s.DeleteCard(ctx, tenantID, 999, "9222081700000000")
@@ -544,6 +544,9 @@ func TestStore_CardTargetedWritesRequirePAN(t *testing.T) {
 	ctx := context.Background()
 	if err := s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{CardIdx: " "}); !errors.Is(err, ErrMissingPAN) {
 		t.Fatalf("UpdateCard(missing card index) error = %v, want %v", err, ErrMissingPAN)
+	}
+	if err := s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{CardIdx: "9222081700000000", Pan: " "}); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("UpdateCard(missing replacement pan) error = %v, want %v", err, ErrMissingPAN)
 	}
 	if err := s.DeleteCard(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingPAN) {
 		t.Fatalf("DeleteCard(missing card index) error = %v, want %v", err, ErrMissingPAN)
@@ -605,7 +608,7 @@ func TestStore_UpsertDeviceTokenRequiresExplicitFields(t *testing.T) {
 }
 
 func TestStore_AddCards_RequiresDataKey(t *testing.T) {
-	s := newTestStoreWithoutDataKey(t)
+	s := &Store{}
 	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000", IPIN: "1234", Mobile: "0912141660"}})
 	if !errors.Is(err, ErrMissingDataKey) {
 		t.Fatalf("expected ErrMissingDataKey, got %v", err)
@@ -613,10 +616,18 @@ func TestStore_AddCards_RequiresDataKey(t *testing.T) {
 }
 
 func TestStore_AddCards_RequiresMobile(t *testing.T) {
-	s := newTestStore(t)
+	s := &Store{}
 	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000"}})
 	if !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("expected ErrMissingMobile, got %v", err)
+	}
+}
+
+func TestStore_AddCards_RequiresPAN(t *testing.T) {
+	s := &Store{}
+	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Mobile: "0912141660", Pan: " "}})
+	if !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("expected ErrMissingPAN, got %v", err)
 	}
 }
 

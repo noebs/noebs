@@ -343,6 +343,11 @@ Last updated: 2026-05-31
     - Fix: trim notification identity/target fields, require at least one explicit target before DB access, and surface JSON encoding errors instead of ignoring them.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_CreatePushDataRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`; `go test -count=1 -v ./consumer -run 'TestStoreNotificationPushDataUsesNotificationScope|TestStoreNotificationPushDataRejectsMissingInputs|TestNotificationRecordForEventRequiresTransactionUUID'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+69. Card writes could persist empty PAN identities.
+    - Evidence: `AddCards` required mobile but not card PAN, and `UpdateCard` required a target `CardIdx` but not the replacement PAN. A lower-layer card write could create a card keyed by an empty PAN or overwrite an existing card into an unusable identity.
+    - Fix: require explicit PAN values before card insert/update DB access while preserving data-key checks for non-empty sensitive values.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_AddCards_RequiresDataKey|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresPAN|TestStore_CardTargetedWritesRequirePAN|TestStoreTargetedUpdatesReportMissingRows'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestUserServiceCardWritesRequirePAN|TestUserServiceTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
