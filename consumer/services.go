@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -58,61 +59,96 @@ func updatePaymentInfo(ebsBills *ebs_fields.ConsumerBillInquiryFields, b Bills) 
 func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, error) {
 	var b BillAmounts
 	if paymentInfo == nil {
-		return b, errors.New("not a biller")
+		return b, fmt.Errorf("%w: paymentInfo", ErrInvalidPaymentInfo)
 	}
 	switch payeeId {
 	case "0010010002": // zain
-		b.Amount, _ = paymentInfo["totalAmount"].(string)
-		b.DueAmount, _ = paymentInfo["unbilledAmount"].(string)
-		b.PaidAmount, _ = paymentInfo["billedAmount"].(string)
+		var err error
+		if b.Amount, err = requiredPaymentInfoString(paymentInfo, "totalAmount"); err != nil {
+			return b, err
+		}
+		if b.DueAmount, err = requiredPaymentInfoString(paymentInfo, "unbilledAmount"); err != nil {
+			return b, err
+		}
+		if b.PaidAmount, err = requiredPaymentInfoString(paymentInfo, "billedAmount"); err != nil {
+			return b, err
+		}
 		return b, nil
 	case "0010010004": // mtn
-		if t, ok := paymentInfo["total"].(string); ok {
-			b.Amount = t
-			b.DueAmount = t
-			return b, nil
+		total, err := requiredPaymentInfoString(paymentInfo, "total")
+		if err != nil {
+			return b, err
 		}
-		return b, errors.New("not a biller")
+		b.Amount = total
+		b.DueAmount = total
+		return b, nil
 	case "0010010006": // sudani
-		if t, ok := paymentInfo["billAmount"].(string); ok {
-			b.Amount = t
-			b.DueAmount = t
+		billAmount, err := requiredPaymentInfoString(paymentInfo, "billAmount")
+		if err != nil {
+			return b, err
 		}
+		b.Amount = billAmount
+		b.DueAmount = billAmount
 		return b, nil
 	case "0055555555": // e-invoice
-		if t, ok := paymentInfo["amount_due"].(string); ok {
-			b.Amount = t
-			b.DueAmount = t
+		amountDue, err := requiredPaymentInfoString(paymentInfo, "amount_due")
+		if err != nil {
+			return b, err
 		}
+		b.Amount = amountDue
+		b.DueAmount = amountDue
 		if t, ok := paymentInfo["minAmount"].(string); ok {
 			b.MinAmount = t
 		}
 		return b, nil
 	case "0010030002": // mohe
-		if t, ok := paymentInfo["dueAmount"].(string); ok {
-			b.Amount = t
-			b.DueAmount = t
+		dueAmount, err := requiredPaymentInfoString(paymentInfo, "dueAmount")
+		if err != nil {
+			return b, err
 		}
+		b.Amount = dueAmount
+		b.DueAmount = dueAmount
 		return b, nil
 	case "0010030004": // mohe-arab
-		if t, ok := paymentInfo["dueAmount"].(string); ok {
-			b.Amount = t
-			b.DueAmount = t
+		dueAmount, err := requiredPaymentInfoString(paymentInfo, "dueAmount")
+		if err != nil {
+			return b, err
 		}
+		b.Amount = dueAmount
+		b.DueAmount = dueAmount
 		return b, nil
 	case "0010030003": // Customs
-		if t, ok := paymentInfo["AmountToBePaid"].(string); ok {
-			b.Amount = t
-			b.DueAmount = t
+		amountToBePaid, err := requiredPaymentInfoString(paymentInfo, "AmountToBePaid")
+		if err != nil {
+			return b, err
 		}
+		b.Amount = amountToBePaid
+		b.DueAmount = amountToBePaid
 		return b, nil
 	case "0010050001": // e-15
-		b.Amount, _ = paymentInfo["TotalAmount"].(string)
-		b.DueAmount, _ = paymentInfo["DueAmount"].(string)
+		var err error
+		if b.Amount, err = requiredPaymentInfoString(paymentInfo, "TotalAmount"); err != nil {
+			return b, err
+		}
+		if b.DueAmount, err = requiredPaymentInfoString(paymentInfo, "DueAmount"); err != nil {
+			return b, err
+		}
 		return b, nil
 	default:
 		return b, nil
 	}
+}
+
+func requiredPaymentInfoString(paymentInfo map[string]any, key string) (string, error) {
+	value, ok := paymentInfo[key]
+	if !ok {
+		return "", fmt.Errorf("%w: paymentInfo.%s", ErrInvalidPaymentInfo, key)
+	}
+	text, ok := value.(string)
+	if !ok || strings.TrimSpace(text) == "" {
+		return "", fmt.Errorf("%w: paymentInfo.%s", ErrInvalidPaymentInfo, key)
+	}
+	return text, nil
 }
 
 // isValidCard verifies card credentials with EBS.

@@ -88,6 +88,11 @@ Last updated: 2026-05-31
     - Fix: propagate the update error and update the returned user flags after the write succeeds.
     - Tests: `go test -count=1 ./consumer`.
 
+18. Bill due-amount parsing used unchecked gateway payload assertions.
+    - Evidence: `parseDueAmounts` used direct `. (string)` assertions for some billers and returned empty amounts for missing required payment-info fields.
+    - Fix: validate required payment-info fields with typed `ErrInvalidPaymentInfo` errors instead of panicking or silently returning empty amounts.
+    - Tests: `go test -count=1 ./consumer`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
