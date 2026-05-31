@@ -74,6 +74,7 @@
 - Fixed wallet balance mutations so new holds and ledger posts require active wallets at the store boundary instead of relying only on upstream validation.
 - Fixed auth-account linking so provider identities must target users in the same tenant and duplicate links must be exact replays.
 - Fixed batched card insertion so a failed card in the batch rolls back the whole request instead of leaving a partially persisted prefix.
+- Fixed manual-transfer status updates so approval/rejection/completion transitions require the correct stored and incoming evidence, exact replays preserve evidence, and stale status races fail as transition errors.
 
 Verification:
 
@@ -410,6 +411,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./store -run 'TestStore_AddCardsRollsBackPartialBatch|TestStore_AddCards_RequiresPAN|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresDataKey'` (`TestStore_AddCardsRollsBackPartialBatch` skipped locally when the container runtime is unavailable)
 - `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferStatusTransition|TestMergeManualTransferStatusUpdatePreservesApprovalEvidence|TestUpdateManualTransferStatusValidation|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

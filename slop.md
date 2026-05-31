@@ -478,6 +478,11 @@ Last updated: 2026-05-31
     - Fix: execute the prepared card batch inside a single transaction and roll it back on any failed insert or commit failure, making the batch all-or-nothing.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_AddCardsRollsBackPartialBatch|TestStore_AddCards_RequiresPAN|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresDataKey'` (`TestStore_AddCardsRollsBackPartialBatch` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+96. Manual transfer status updates could erase or invent lifecycle evidence.
+    - Evidence: `UpdateManualTransferStatus` validated only tenant/workflow/status and overwrote every nullable evidence column with the incoming update. Completing an approved transfer with only `completed_at` cleared `approved_by`, `approved_at`, and `proof_of_payment`; direct store callers could also skip approval evidence, rewrite terminal rows, or downgrade lifecycle state.
+    - Fix: load the current transfer before status mutation, validate the stored row shape and requested transition as a state machine, require approval/completion timestamps and proof where applicable, require an approval row before marking approved, preserve prior evidence during completion/replay updates, and guard the SQL update with the current status.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferStatusTransition|TestMergeManualTransferStatusUpdatePreservesApprovalEvidence|TestUpdateManualTransferStatusValidation|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

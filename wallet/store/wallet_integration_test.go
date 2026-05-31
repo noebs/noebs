@@ -219,10 +219,13 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	}
 
 	terminalApproverID := insertWalletAdmin(t, ctx, store, tenantID, "terminal-approver@example.test")
+	approvedAt := time.Now().UTC()
+	proofOfPayment := "receipt-1"
 	if err := store.UpdateManualTransferStatus(ctx, tenantID, transfer.WorkflowID, ManualTransferStatusUpdate{
-		Status:     ManualTransferStatusApproved,
-		ApprovedBy: sql.NullInt64{Int64: approverID, Valid: true},
-		ApprovedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+		Status:         ManualTransferStatusApproved,
+		ApprovedBy:     sql.NullInt64{Int64: approverID, Valid: true},
+		ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+		ProofOfPayment: sql.NullString{String: proofOfPayment, Valid: true},
 	}); err != nil {
 		t.Fatalf("approve manual transfer: %v", err)
 	}
@@ -230,6 +233,33 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	terminalApproval.ApproverID = terminalApproverID
 	if _, err := store.AddManualTransferApproval(ctx, terminalApproval); !errors.Is(err, ErrInvalidStatusTransition) {
 		t.Fatalf("terminal transfer approval error = %v, want %v", err, ErrInvalidStatusTransition)
+	}
+
+	completedAt := approvedAt.Add(time.Hour)
+	if err := store.UpdateManualTransferStatus(ctx, tenantID, transfer.WorkflowID, ManualTransferStatusUpdate{
+		Status:      ManualTransferStatusCompleted,
+		CompletedAt: sql.NullTime{Time: completedAt, Valid: true},
+	}); err != nil {
+		t.Fatalf("complete manual transfer: %v", err)
+	}
+	completed, err := store.GetManualTransferByWorkflow(ctx, tenantID, transfer.WorkflowID)
+	if err != nil {
+		t.Fatalf("get completed manual transfer: %v", err)
+	}
+	if completed.Status != ManualTransferStatusCompleted {
+		t.Fatalf("completed transfer status = %s, want %s", completed.Status, ManualTransferStatusCompleted)
+	}
+	if !completed.ApprovedBy.Valid || completed.ApprovedBy.Int64 != approverID {
+		t.Fatalf("completed transfer approved_by = %+v, want %d", completed.ApprovedBy, approverID)
+	}
+	if !sameManualTransferNullTime(completed.ApprovedAt, sql.NullTime{Time: approvedAt, Valid: true}) {
+		t.Fatalf("completed transfer approved_at = %+v, want %s", completed.ApprovedAt, approvedAt)
+	}
+	if !completed.ProofOfPayment.Valid || completed.ProofOfPayment.String != proofOfPayment {
+		t.Fatalf("completed transfer proof_of_payment = %+v, want %q", completed.ProofOfPayment, proofOfPayment)
+	}
+	if !sameManualTransferNullTime(completed.CompletedAt, sql.NullTime{Time: completedAt, Valid: true}) {
+		t.Fatalf("completed transfer completed_at = %+v, want %s", completed.CompletedAt, completedAt)
 	}
 }
 

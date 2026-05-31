@@ -280,6 +280,8 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingTwoFASecret),
 		errors.Is(err, walletstore.ErrMissingApprovalTimeout),
 		errors.Is(err, walletstore.ErrMissingApprovalReason),
+		errors.Is(err, walletstore.ErrMissingApprovalTime),
+		errors.Is(err, walletstore.ErrMissingCompletionTime),
 		errors.Is(err, walletstore.ErrMissingProofOfPayment),
 		errors.Is(err, walletstore.ErrMissingVerificationTimeout),
 		errors.Is(err, walletstore.ErrMissingVerificationTime),

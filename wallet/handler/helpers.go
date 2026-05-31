@@ -88,6 +88,8 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingVerificationTime),
 		errors.Is(err, walletstore.ErrInvalidVerificationTime),
 		errors.Is(err, walletstore.ErrMissingApprovalTimeout),
+		errors.Is(err, walletstore.ErrMissingApprovalTime),
+		errors.Is(err, walletstore.ErrMissingCompletionTime),
 		errors.Is(err, walletstore.ErrMissingVerificationID),
 		errors.Is(err, walletstore.ErrInvalidVerificationType),
 		errors.Is(err, walletstore.ErrMissingIdempotencyKey),

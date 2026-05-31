@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -399,10 +400,27 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 	if err != nil {
 		return err
 	}
+	current, err := s.GetManualTransferByWorkflow(ctx, tenantID, workflowID)
+	if err != nil {
+		return err
+	}
+	if err := ValidateManualTransferStatusTransition(current, update); err != nil {
+		return err
+	}
+	if update.Status == ManualTransferStatusApproved {
+		approval, err := s.getManualTransferApproval(ctx, tenantID, current.ID, update.ApprovedBy.Int64)
+		if err != nil {
+			return err
+		}
+		if approval.Decision != ManualTransferStatusApproved {
+			return ErrInvalidDecision
+		}
+	}
+	update = mergeManualTransferStatusUpdate(current, update)
 	stmt := db.Rebind(`UPDATE manual_transfers
 		SET status = ?, approved_by = ?, approved_at = ?, completed_at = ?,
 			proof_of_payment = ?, rejection_reason = ?
-		WHERE tenant_id = ? AND workflow_id = ?`)
+		WHERE tenant_id = ? AND workflow_id = ? AND status = ?`)
 	result, err := db.ExecContext(ctx, stmt,
 		update.Status,
 		update.ApprovedBy,
@@ -412,6 +430,7 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 		update.RejectionReason,
 		tenantID,
 		workflowID,
+		current.Status,
 	)
 	if err != nil {
 		return err
@@ -421,9 +440,233 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 		return err
 	}
 	if affected == 0 {
-		return ErrManualTransferNotFound
+		return ErrInvalidStatusTransition
 	}
 	return nil
+}
+
+func ValidateManualTransferStatusTransition(current *ManualTransfer, update ManualTransferStatusUpdate) error {
+	if current == nil {
+		return ErrManualTransferNotFound
+	}
+	if err := validateManualTransferStoredStatusShape(current); err != nil {
+		return err
+	}
+	if err := ValidateManualTransferStatus(update.Status); err != nil {
+		return err
+	}
+	switch update.Status {
+	case ManualTransferStatusPending:
+		return ErrInvalidStatusTransition
+	case ManualTransferStatusApproved:
+		return validateManualTransferApprovalStatusUpdate(current, update)
+	case ManualTransferStatusRejected:
+		return validateManualTransferRejectionStatusUpdate(current, update)
+	case ManualTransferStatusCompleted:
+		return validateManualTransferCompletionStatusUpdate(current, update)
+	default:
+		return ErrInvalidStatus
+	}
+}
+
+func validateManualTransferStoredStatusShape(current *ManualTransfer) error {
+	if !current.RequestedBy.Valid || current.RequestedBy.Int64 <= 0 {
+		return ErrMissingRequesterID
+	}
+	if err := ValidateManualTransferStatus(current.Status); err != nil {
+		return err
+	}
+	switch current.Status {
+	case ManualTransferStatusPending:
+		if current.ApprovedBy.Valid ||
+			current.ApprovedAt.Valid ||
+			current.CompletedAt.Valid ||
+			current.ProofOfPayment.Valid ||
+			current.RejectionReason.Valid {
+			return ErrInvalidStatus
+		}
+	case ManualTransferStatusApproved:
+		if err := validateManualTransferStoredApprovalEvidence(current); err != nil {
+			return err
+		}
+		if current.CompletedAt.Valid || current.RejectionReason.Valid {
+			return ErrInvalidStatus
+		}
+	case ManualTransferStatusRejected:
+		if !validManualTransferText(current.RejectionReason) {
+			return ErrMissingReason
+		}
+		if current.ApprovedBy.Valid ||
+			current.ApprovedAt.Valid ||
+			current.CompletedAt.Valid ||
+			current.ProofOfPayment.Valid {
+			return ErrInvalidStatus
+		}
+	case ManualTransferStatusCompleted:
+		if err := validateManualTransferStoredApprovalEvidence(current); err != nil {
+			return err
+		}
+		if !validManualTransferTime(current.CompletedAt) {
+			return ErrMissingCompletionTime
+		}
+		if current.RejectionReason.Valid {
+			return ErrInvalidStatus
+		}
+	}
+	return nil
+}
+
+func validateManualTransferStoredApprovalEvidence(current *ManualTransfer) error {
+	if !current.ApprovedBy.Valid || current.ApprovedBy.Int64 <= 0 {
+		return ErrMissingApproverID
+	}
+	if current.RequestedBy.Int64 == current.ApprovedBy.Int64 {
+		return ErrApproverIsRequester
+	}
+	if !validManualTransferTime(current.ApprovedAt) {
+		return ErrMissingApprovalTime
+	}
+	if !validManualTransferText(current.ProofOfPayment) {
+		return ErrMissingProofOfPayment
+	}
+	return nil
+}
+
+func validateManualTransferApprovalStatusUpdate(current *ManualTransfer, update ManualTransferStatusUpdate) error {
+	if current.Status != ManualTransferStatusPending && current.Status != ManualTransferStatusApproved {
+		return ErrInvalidStatusTransition
+	}
+	if !update.ApprovedBy.Valid || update.ApprovedBy.Int64 <= 0 {
+		return ErrMissingApproverID
+	}
+	if current.RequestedBy.Valid && current.RequestedBy.Int64 == update.ApprovedBy.Int64 {
+		return ErrApproverIsRequester
+	}
+	if !validManualTransferTime(update.ApprovedAt) {
+		return ErrMissingApprovalTime
+	}
+	if !validManualTransferText(update.ProofOfPayment) {
+		return ErrMissingProofOfPayment
+	}
+	if update.CompletedAt.Valid || update.RejectionReason.Valid {
+		return ErrInvalidStatus
+	}
+	if current.Status == ManualTransferStatusApproved && !manualTransferApprovalReplayMatches(current, update) {
+		return ErrInvalidStatusTransition
+	}
+	return nil
+}
+
+func validateManualTransferRejectionStatusUpdate(current *ManualTransfer, update ManualTransferStatusUpdate) error {
+	if current.Status != ManualTransferStatusPending && current.Status != ManualTransferStatusRejected {
+		return ErrInvalidStatusTransition
+	}
+	if !validManualTransferText(update.RejectionReason) {
+		return ErrMissingReason
+	}
+	if update.ApprovedBy.Valid || update.ApprovedAt.Valid || update.CompletedAt.Valid || update.ProofOfPayment.Valid {
+		return ErrInvalidStatus
+	}
+	if current.Status == ManualTransferStatusRejected && !manualTransferRejectionReplayMatches(current, update) {
+		return ErrInvalidStatusTransition
+	}
+	return nil
+}
+
+func validateManualTransferCompletionStatusUpdate(current *ManualTransfer, update ManualTransferStatusUpdate) error {
+	if current.Status != ManualTransferStatusApproved && current.Status != ManualTransferStatusCompleted {
+		return ErrInvalidStatusTransition
+	}
+	if !validManualTransferTime(update.CompletedAt) {
+		return ErrMissingCompletionTime
+	}
+	if update.RejectionReason.Valid {
+		return ErrInvalidStatus
+	}
+	if !current.ApprovedBy.Valid || current.ApprovedBy.Int64 <= 0 {
+		return ErrMissingApproverID
+	}
+	if !validManualTransferTime(current.ApprovedAt) {
+		return ErrMissingApprovalTime
+	}
+	if !validManualTransferText(current.ProofOfPayment) {
+		return ErrMissingProofOfPayment
+	}
+	if update.ApprovedBy.Valid && update.ApprovedBy.Int64 != current.ApprovedBy.Int64 {
+		return ErrInvalidStatus
+	}
+	if update.ApprovedAt.Valid && !sameManualTransferTime(update.ApprovedAt.Time, current.ApprovedAt.Time) {
+		return ErrInvalidStatus
+	}
+	if update.ProofOfPayment.Valid && update.ProofOfPayment.String != current.ProofOfPayment.String {
+		return ErrInvalidStatus
+	}
+	if current.Status == ManualTransferStatusCompleted && !manualTransferCompletionReplayMatches(current, update) {
+		return ErrInvalidStatusTransition
+	}
+	return nil
+}
+
+func mergeManualTransferStatusUpdate(current *ManualTransfer, update ManualTransferStatusUpdate) ManualTransferStatusUpdate {
+	if current == nil {
+		return update
+	}
+	if !update.ApprovedBy.Valid {
+		update.ApprovedBy = current.ApprovedBy
+	}
+	if !update.ApprovedAt.Valid {
+		update.ApprovedAt = current.ApprovedAt
+	}
+	if !update.ProofOfPayment.Valid {
+		update.ProofOfPayment = current.ProofOfPayment
+	}
+	if !update.RejectionReason.Valid {
+		update.RejectionReason = current.RejectionReason
+	}
+	if !update.CompletedAt.Valid {
+		update.CompletedAt = current.CompletedAt
+	}
+	return update
+}
+
+func manualTransferApprovalReplayMatches(current *ManualTransfer, update ManualTransferStatusUpdate) bool {
+	return current.ApprovedBy.Valid &&
+		current.ApprovedBy.Int64 == update.ApprovedBy.Int64 &&
+		sameManualTransferNullTime(current.ApprovedAt, update.ApprovedAt) &&
+		nullStringEqual(current.ProofOfPayment, update.ProofOfPayment)
+}
+
+func manualTransferRejectionReplayMatches(current *ManualTransfer, update ManualTransferStatusUpdate) bool {
+	return nullStringEqual(current.RejectionReason, update.RejectionReason)
+}
+
+func manualTransferCompletionReplayMatches(current *ManualTransfer, update ManualTransferStatusUpdate) bool {
+	return sameManualTransferNullTime(current.CompletedAt, update.CompletedAt)
+}
+
+func validManualTransferText(value sql.NullString) bool {
+	return value.Valid && strings.TrimSpace(value.String) != ""
+}
+
+func validManualTransferTime(value sql.NullTime) bool {
+	return value.Valid && !value.Time.IsZero()
+}
+
+func sameManualTransferNullTime(a, b sql.NullTime) bool {
+	if a.Valid != b.Valid {
+		return false
+	}
+	if !a.Valid {
+		return true
+	}
+	return sameManualTransferTime(a.Time, b.Time)
+}
+
+func sameManualTransferTime(a, b time.Time) bool {
+	if a.Equal(b) {
+		return true
+	}
+	return a.Sub(b).Abs() <= time.Microsecond
 }
 
 func (s *Store) ListManualTransfers(ctx context.Context, filter ManualTransferFilter) ([]ManualTransfer, error) {

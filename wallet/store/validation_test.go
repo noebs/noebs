@@ -432,6 +432,302 @@ func TestUpdateManualTransferStatusValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidStatus)
 }
 
+func TestValidateManualTransferStatusTransition(t *testing.T) {
+	approvedAt := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
+	completedAt := approvedAt.Add(time.Hour)
+	pending := &ManualTransfer{
+		ID:          11,
+		Status:      ManualTransferStatusPending,
+		RequestedBy: sql.NullInt64{Int64: 7, Valid: true},
+	}
+	approved := *pending
+	approved.Status = ManualTransferStatusApproved
+	approved.ApprovedBy = sql.NullInt64{Int64: 42, Valid: true}
+	approved.ApprovedAt = sql.NullTime{Time: approvedAt, Valid: true}
+	approved.ProofOfPayment = sql.NullString{String: "receipt", Valid: true}
+	rejected := *pending
+	rejected.Status = ManualTransferStatusRejected
+	rejected.RejectionReason = sql.NullString{String: "missing documents", Valid: true}
+	completed := approved
+	completed.Status = ManualTransferStatusCompleted
+	completed.CompletedAt = sql.NullTime{Time: completedAt, Valid: true}
+
+	approvalUpdate := ManualTransferStatusUpdate{
+		Status:         ManualTransferStatusApproved,
+		ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
+		ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+		ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+	}
+	rejectionUpdate := ManualTransferStatusUpdate{
+		Status:          ManualTransferStatusRejected,
+		RejectionReason: sql.NullString{String: "missing documents", Valid: true},
+	}
+	completionUpdate := ManualTransferStatusUpdate{
+		Status:      ManualTransferStatusCompleted,
+		CompletedAt: sql.NullTime{Time: completedAt, Valid: true},
+	}
+
+	cases := []struct {
+		name    string
+		current *ManualTransfer
+		update  ManualTransferStatusUpdate
+		wantErr error
+	}{
+		{
+			name:    "approve pending",
+			current: pending,
+			update:  approvalUpdate,
+		},
+		{
+			name:    "approve replay",
+			current: &approved,
+			update:  approvalUpdate,
+		},
+		{
+			name:    "approve missing approver",
+			current: pending,
+			update: ManualTransferStatusUpdate{
+				Status:         ManualTransferStatusApproved,
+				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+			},
+			wantErr: ErrMissingApproverID,
+		},
+		{
+			name:    "approve self approval",
+			current: pending,
+			update: ManualTransferStatusUpdate{
+				Status:         ManualTransferStatusApproved,
+				ApprovedBy:     sql.NullInt64{Int64: 7, Valid: true},
+				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+			},
+			wantErr: ErrApproverIsRequester,
+		},
+		{
+			name:    "approve missing approved at",
+			current: pending,
+			update: ManualTransferStatusUpdate{
+				Status:         ManualTransferStatusApproved,
+				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
+				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+			},
+			wantErr: ErrMissingApprovalTime,
+		},
+		{
+			name:    "approve missing proof",
+			current: pending,
+			update: ManualTransferStatusUpdate{
+				Status:     ManualTransferStatusApproved,
+				ApprovedBy: sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt: sql.NullTime{Time: approvedAt, Valid: true},
+			},
+			wantErr: ErrMissingProofOfPayment,
+		},
+		{
+			name:    "approve cannot complete",
+			current: pending,
+			update: ManualTransferStatusUpdate{
+				Status:         ManualTransferStatusApproved,
+				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+				CompletedAt:    sql.NullTime{Time: completedAt, Valid: true},
+				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+			},
+			wantErr: ErrInvalidStatus,
+		},
+		{
+			name:    "approve replay mismatch",
+			current: &approved,
+			update: ManualTransferStatusUpdate{
+				Status:         ManualTransferStatusApproved,
+				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment: sql.NullString{String: "other receipt", Valid: true},
+			},
+			wantErr: ErrInvalidStatusTransition,
+		},
+		{
+			name:    "reject pending",
+			current: pending,
+			update:  rejectionUpdate,
+		},
+		{
+			name:    "reject replay",
+			current: &rejected,
+			update:  rejectionUpdate,
+		},
+		{
+			name:    "reject missing reason",
+			current: pending,
+			update:  ManualTransferStatusUpdate{Status: ManualTransferStatusRejected},
+			wantErr: ErrMissingReason,
+		},
+		{
+			name:    "reject cannot approve",
+			current: pending,
+			update: ManualTransferStatusUpdate{
+				Status:          ManualTransferStatusRejected,
+				ApprovedBy:      sql.NullInt64{Int64: 42, Valid: true},
+				RejectionReason: sql.NullString{String: "missing documents", Valid: true},
+			},
+			wantErr: ErrInvalidStatus,
+		},
+		{
+			name:    "reject replay mismatch",
+			current: &rejected,
+			update: ManualTransferStatusUpdate{
+				Status:          ManualTransferStatusRejected,
+				RejectionReason: sql.NullString{String: "different reason", Valid: true},
+			},
+			wantErr: ErrInvalidStatusTransition,
+		},
+		{
+			name:    "complete approved",
+			current: &approved,
+			update:  completionUpdate,
+		},
+		{
+			name:    "complete replay",
+			current: &completed,
+			update:  completionUpdate,
+		},
+		{
+			name:    "complete pending",
+			current: pending,
+			update:  completionUpdate,
+			wantErr: ErrInvalidStatusTransition,
+		},
+		{
+			name:    "complete missing completed at",
+			current: &approved,
+			update:  ManualTransferStatusUpdate{Status: ManualTransferStatusCompleted},
+			wantErr: ErrMissingCompletionTime,
+		},
+		{
+			name: "complete without approval evidence",
+			current: &ManualTransfer{
+				Status:      ManualTransferStatusApproved,
+				RequestedBy: sql.NullInt64{Int64: 7, Valid: true},
+			},
+			update:  completionUpdate,
+			wantErr: ErrMissingApproverID,
+		},
+		{
+			name: "current missing requester",
+			current: &ManualTransfer{
+				Status: ManualTransferStatusPending,
+			},
+			update:  rejectionUpdate,
+			wantErr: ErrMissingRequesterID,
+		},
+		{
+			name: "current pending has approval evidence",
+			current: &ManualTransfer{
+				Status:         ManualTransferStatusPending,
+				RequestedBy:    sql.NullInt64{Int64: 7, Valid: true},
+				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+			},
+			update:  approvalUpdate,
+			wantErr: ErrInvalidStatus,
+		},
+		{
+			name: "current rejected has approval evidence",
+			current: &ManualTransfer{
+				Status:          ManualTransferStatusRejected,
+				RequestedBy:     sql.NullInt64{Int64: 7, Valid: true},
+				ApprovedBy:      sql.NullInt64{Int64: 42, Valid: true},
+				RejectionReason: sql.NullString{String: "missing documents", Valid: true},
+			},
+			update:  rejectionUpdate,
+			wantErr: ErrInvalidStatus,
+		},
+		{
+			name: "current completed missing completed at",
+			current: &ManualTransfer{
+				Status:         ManualTransferStatusCompleted,
+				RequestedBy:    sql.NullInt64{Int64: 7, Valid: true},
+				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+			},
+			update:  completionUpdate,
+			wantErr: ErrMissingCompletionTime,
+		},
+		{
+			name:    "complete with approval rewrite",
+			current: &approved,
+			update: ManualTransferStatusUpdate{
+				Status:      ManualTransferStatusCompleted,
+				ApprovedBy:  sql.NullInt64{Int64: 99, Valid: true},
+				CompletedAt: sql.NullTime{Time: completedAt, Valid: true},
+			},
+			wantErr: ErrInvalidStatus,
+		},
+		{
+			name:    "complete replay mismatch",
+			current: &completed,
+			update: ManualTransferStatusUpdate{
+				Status:      ManualTransferStatusCompleted,
+				CompletedAt: sql.NullTime{Time: completedAt.Add(time.Second), Valid: true},
+			},
+			wantErr: ErrInvalidStatusTransition,
+		},
+		{
+			name:    "pending update rejected",
+			current: pending,
+			update:  ManualTransferStatusUpdate{Status: ManualTransferStatusPending},
+			wantErr: ErrInvalidStatusTransition,
+		},
+		{
+			name:    "nil current",
+			current: nil,
+			update:  approvalUpdate,
+			wantErr: ErrManualTransferNotFound,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateManualTransferStatusTransition(tc.current, tc.update)
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Fatalf("ValidateManualTransferStatusTransition() error = %v", err)
+				}
+				return
+			}
+			assertErrorIs(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestMergeManualTransferStatusUpdatePreservesApprovalEvidence(t *testing.T) {
+	approvedAt := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
+	completedAt := approvedAt.Add(time.Hour)
+	current := &ManualTransfer{
+		Status:         ManualTransferStatusApproved,
+		ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
+		ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
+		ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+	}
+	merged := mergeManualTransferStatusUpdate(current, ManualTransferStatusUpdate{
+		Status:      ManualTransferStatusCompleted,
+		CompletedAt: sql.NullTime{Time: completedAt, Valid: true},
+	})
+
+	if merged.ApprovedBy != current.ApprovedBy {
+		t.Fatalf("approved_by = %+v, want %+v", merged.ApprovedBy, current.ApprovedBy)
+	}
+	if !sameManualTransferNullTime(merged.ApprovedAt, current.ApprovedAt) {
+		t.Fatalf("approved_at = %+v, want %+v", merged.ApprovedAt, current.ApprovedAt)
+	}
+	if merged.ProofOfPayment != current.ProofOfPayment {
+		t.Fatalf("proof_of_payment = %+v, want %+v", merged.ProofOfPayment, current.ProofOfPayment)
+	}
+	if !sameManualTransferNullTime(merged.CompletedAt, sql.NullTime{Time: completedAt, Valid: true}) {
+		t.Fatalf("completed_at = %+v, want %s", merged.CompletedAt, completedAt)
+	}
+}
+
 func TestGetManualTransferByWorkflowIDValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetManualTransferByWorkflowID(t.Context(), "")
