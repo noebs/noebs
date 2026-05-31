@@ -223,6 +223,11 @@ Last updated: 2026-05-31
     - Fix: add partial unique indexes for non-empty `(tenant_id, destination_id, workflow_id)` and `(tenant_id, destination_id, reference_id)`, make creation `ON CONFLICT DO NOTHING`, return existing rows only when the creation contract matches, and return `ErrDuplicateVerification` on mismatched duplicates.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestOwnershipVerificationCreateReplaysAreExact|TestValidateOwnershipVerificationCreateReplay|TestCreateOwnershipVerificationValidation|TestUpdateOwnershipVerificationStatusValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+45. EBS transaction writes silently stored empty payloads when response JSON encoding failed.
+    - Evidence: `insertTransaction` and `UpsertTransactionProjection` ignored `json.Marshal` errors for `EBSResponse`. That response includes float fields and free-form mini-statement maps, so NaN/Inf or unsupported map values could produce a marshal error; the code then stored `""` as `transactions.payload`, and read paths decoded that as a zero-value transaction.
+    - Fix: centralize transaction payload marshaling, propagate encoding failures with context, and use the helper in both direct transaction inserts and projection upserts.
+    - Tests: `go test -count=1 ./store`; `go test -count=1 -v ./store -run 'TestMarshalTransactionPayloadRejectsUnsupportedValues|TestUpsertTransactionProjectionRejectsUnmarshalablePayloadBeforeDB|TestDecodeStoredTransactionPayload|TestStoreUpsertTransactionProjection|TestStoreCreateTransactionWithEvent'` (Postgres container cases skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

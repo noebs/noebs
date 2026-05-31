@@ -1025,14 +1025,17 @@ type transactionQueryer interface {
 }
 
 func (s *Store) insertTransaction(ctx context.Context, q transactionQueryer, tenantID string, res ebs_fields.EBSResponse, now time.Time) (int64, error) {
-	payload, _ := json.Marshal(res)
+	payload, err := marshalTransactionPayload(res)
+	if err != nil {
+		return 0, err
+	}
 	stmt := s.DB.Rebind(`INSERT INTO transactions(
 		tenant_id, token_id, uuid, response_code, response_message, response_status, tran_date_time, tran_amount, tran_fee,
 		pan, sender_pan, receiver_pan, terminal_id, system_trace_audit_number, approval_code, service_id, merchant_id,
 		bill_type, bill_to, bill_info2, payload, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`)
 	var id int64
-	err := q.QueryRowxContext(ctx, stmt,
+	err = q.QueryRowxContext(ctx, stmt,
 		tenantID,
 		res.TokenID,
 		res.UUID,
@@ -1053,11 +1056,19 @@ func (s *Store) insertTransaction(ctx context.Context, q transactionQueryer, ten
 		res.BillType,
 		res.BillTo,
 		res.BillInfo2,
-		string(payload),
+		payload,
 		now,
 		now,
 	).Scan(&id)
 	return id, err
+}
+
+func marshalTransactionPayload(res ebs_fields.EBSResponse) (string, error) {
+	payload, err := json.Marshal(res)
+	if err != nil {
+		return "", fmt.Errorf("marshal transaction payload: %w", err)
+	}
+	return string(payload), nil
 }
 
 func (s *Store) GetTransactionsByMaskedPan(ctx context.Context, tenantID string, maskedPan string) ([]ebs_fields.EBSResponse, error) {

@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"time"
 
@@ -18,7 +17,10 @@ func (s *Store) UpsertTransactionProjection(ctx context.Context, tenantID string
 		return ErrMissingUUID
 	}
 	res.MaskPAN()
-	payload, _ := json.Marshal(res)
+	payload, err := marshalTransactionPayload(res)
+	if err != nil {
+		return err
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
@@ -71,7 +73,7 @@ func (s *Store) UpsertTransactionProjection(ctx context.Context, tenantID string
 		res.BillType,
 		res.BillTo,
 		res.BillInfo2,
-		string(payload),
+		payload,
 		now,
 		now,
 	)
