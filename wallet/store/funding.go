@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,17 +14,37 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 	if err != nil {
 		return nil, err
 	}
+	source.TenantID = tenantID
 	if source.WalletID == uuid.Nil {
 		return nil, ErrMissingWalletID
 	}
 	if source.SourceType == "" {
 		return nil, ErrMissingSourceType
 	}
+	if source.VerificationStatus == "" {
+		return nil, ErrMissingStatus
+	}
 	if source.Currency == "" {
 		return nil, ErrMissingCurrency
 	}
+	if len(source.SourceDetails) == 0 {
+		return nil, ErrMissingSourceDetails
+	}
+	if source.TotalFunded != 0 || source.TotalWithdrawn != 0 {
+		return nil, ErrInvalidAmount
+	}
 	db, err := s.ensureDB()
 	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+
+	if existing, err := s.GetFundingSource(ctx, tenantID, source.WalletID, source.SourceType, source.ExternalReference); err == nil {
+		if err := ValidateFundingSourceMerge(existing, source); err != nil {
+			return nil, err
+		}
+		return s.updateFundingSourceMetadata(ctx, existing.ID, source, now)
+	} else if !errors.Is(err, ErrFundingSourceNotFound) {
 		return nil, err
 	}
 
@@ -32,20 +53,7 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 		verified_at, verified_by, currency, source_details, total_funded, last_funded_at,
 		total_withdrawn, last_withdrawn_at, supports_withdrawal, withdrawal_method, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	ON CONFLICT(tenant_id, wallet_id, source_type, external_reference) DO UPDATE
-		SET total_funded = funding_sources.total_funded + EXCLUDED.total_funded,
-			last_funded_at = GREATEST(funding_sources.last_funded_at, EXCLUDED.last_funded_at),
-			supports_withdrawal = funding_sources.supports_withdrawal OR EXCLUDED.supports_withdrawal,
-			verification_status = CASE
-				WHEN funding_sources.verification_status = 'verified' THEN funding_sources.verification_status
-				WHEN EXCLUDED.verification_status = 'verified' THEN EXCLUDED.verification_status
-				ELSE funding_sources.verification_status
-			END,
-			verified_at = COALESCE(funding_sources.verified_at, EXCLUDED.verified_at),
-			verified_by = COALESCE(funding_sources.verified_by, EXCLUDED.verified_by),
-			updated_at = EXCLUDED.updated_at
 	RETURNING *`)
-	now := time.Now().UTC()
 	var stored FundingSource
 	if err := db.GetContext(ctx, &stored, stmt,
 		tenantID,
@@ -58,17 +66,75 @@ func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (
 		source.VerifiedBy,
 		source.Currency,
 		source.SourceDetails,
-		source.TotalFunded,
-		source.LastFundedAt,
-		source.TotalWithdrawn,
-		source.LastWithdrawnAt,
+		int64(0),
+		sql.NullTime{},
+		int64(0),
+		sql.NullTime{},
 		source.SupportsWithdrawal,
 		source.WithdrawalMethod,
 		now,
 		now,
 	); err != nil {
-		if err == sql.ErrNoRows {
-			return s.GetFundingSource(ctx, tenantID, source.WalletID, source.SourceType, source.ExternalReference)
+		if existing, getErr := s.GetFundingSource(ctx, tenantID, source.WalletID, source.SourceType, source.ExternalReference); getErr == nil {
+			if err := ValidateFundingSourceMerge(existing, source); err != nil {
+				return nil, err
+			}
+			return s.updateFundingSourceMetadata(ctx, existing.ID, source, now)
+		}
+		return nil, err
+	}
+	return &stored, nil
+}
+
+func ValidateFundingSourceMerge(existing *FundingSource, incoming FundingSource) error {
+	if existing == nil ||
+		existing.TenantID != incoming.TenantID ||
+		existing.WalletID != incoming.WalletID ||
+		existing.SourceType != incoming.SourceType ||
+		existing.Currency != incoming.Currency ||
+		!nullStringEqual(existing.PSPProvider, incoming.PSPProvider) ||
+		!nullStringEqual(existing.ExternalReference, incoming.ExternalReference) {
+		return ErrDuplicateFundingSource
+	}
+	return nil
+}
+
+func nullStringEqual(left, right sql.NullString) bool {
+	return left.Valid == right.Valid && (!left.Valid || left.String == right.String)
+}
+
+func (s *Store) updateFundingSourceMetadata(ctx context.Context, sourceID int64, source FundingSource, updatedAt time.Time) (*FundingSource, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind(`UPDATE funding_sources
+		SET supports_withdrawal = funding_sources.supports_withdrawal OR ?,
+			verification_status = CASE
+				WHEN funding_sources.verification_status = 'verified' THEN funding_sources.verification_status
+				WHEN ? = 'verified' THEN ?
+				ELSE funding_sources.verification_status
+			END,
+			verified_at = COALESCE(funding_sources.verified_at, ?),
+			verified_by = COALESCE(funding_sources.verified_by, ?),
+			withdrawal_method = COALESCE(funding_sources.withdrawal_method, ?),
+			updated_at = ?
+		WHERE tenant_id = ? AND id = ?
+		RETURNING *`)
+	var stored FundingSource
+	if err := db.GetContext(ctx, &stored, stmt,
+		source.SupportsWithdrawal,
+		source.VerificationStatus,
+		source.VerificationStatus,
+		source.VerifiedAt,
+		source.VerifiedBy,
+		source.WithdrawalMethod,
+		updatedAt,
+		source.TenantID,
+		sourceID,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrFundingSourceNotFound
 		}
 		return nil, err
 	}
@@ -102,6 +168,9 @@ func (s *Store) GetFundingSource(ctx context.Context, tenantID string, walletID 
 	stmt := db.Rebind(query)
 	var source FundingSource
 	if err := db.GetContext(ctx, &source, stmt, args...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrFundingSourceNotFound
+		}
 		return nil, err
 	}
 	return &source, nil
@@ -157,6 +226,7 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	if err != nil {
 		return nil, err
 	}
+	link.TenantID = tenantID
 	if link.LedgerEntryID <= 0 {
 		return nil, ErrMissingLedgerEntryID
 	}
@@ -173,21 +243,97 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	if err != nil {
 		return nil, err
 	}
-	stmt := db.Rebind(`INSERT INTO ledger_funding_links(
-		tenant_id, ledger_entry_id, funding_source_id, amount, currency
-	) VALUES(?, ?, ?, ?, ?)
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	now := time.Now().UTC()
+	stmt := tx.Rebind(`INSERT INTO ledger_funding_links(
+		tenant_id, ledger_entry_id, funding_source_id, amount, currency, created_at
+	) VALUES(?, ?, ?, ?, ?, ?)
+	ON CONFLICT(tenant_id, ledger_entry_id, funding_source_id) DO NOTHING
 	RETURNING *`)
 	var stored LedgerFundingLink
-	if err := db.GetContext(ctx, &stored, stmt,
+	if err := tx.GetContext(ctx, &stored, stmt,
 		tenantID,
 		link.LedgerEntryID,
 		link.FundingSourceID,
 		link.Amount,
 		link.Currency,
+		now,
 	); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		existing, err := getFundingLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.FundingSourceID)
+		if err != nil {
+			return nil, err
+		}
+		if err := ValidateFundingLinkReplay(existing, link); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
+		return existing, nil
+	}
+	updateStmt := tx.Rebind(`UPDATE funding_sources
+		SET total_funded = total_funded + ?,
+			last_funded_at = GREATEST(COALESCE(last_funded_at, ?), ?),
+			updated_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	result, err := tx.ExecContext(ctx, updateStmt, link.Amount, now, now, now, tenantID, link.FundingSourceID)
+	if err != nil {
 		return nil, err
 	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if affected == 0 {
+		return nil, ErrFundingSourceNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	committed = true
 	return &stored, nil
+}
+
+func getFundingLinkTx(ctx context.Context, tx interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}, tenantID string, ledgerEntryID, fundingSourceID int64) (*LedgerFundingLink, error) {
+	stmt := tx.Rebind(`SELECT * FROM ledger_funding_links
+		WHERE tenant_id = ? AND ledger_entry_id = ? AND funding_source_id = ?`)
+	var link LedgerFundingLink
+	if err := tx.GetContext(ctx, &link, stmt, tenantID, ledgerEntryID, fundingSourceID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDuplicateFundingLink
+		}
+		return nil, err
+	}
+	return &link, nil
+}
+
+func ValidateFundingLinkReplay(existing *LedgerFundingLink, requested LedgerFundingLink) error {
+	if existing == nil ||
+		existing.TenantID != requested.TenantID ||
+		existing.LedgerEntryID != requested.LedgerEntryID ||
+		existing.FundingSourceID != requested.FundingSourceID ||
+		existing.Amount != requested.Amount ||
+		existing.Currency != requested.Currency {
+		return ErrDuplicateFundingLink
+	}
+	return nil
 }
 
 func (s *Store) UpdateFundingSourceUsage(ctx context.Context, tenantID string, sourceID int64, amount int64, usedAt time.Time) error {

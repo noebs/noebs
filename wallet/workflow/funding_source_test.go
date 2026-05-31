@@ -36,7 +36,7 @@ func TestDepositFundingSourceCapturesMethodMetadata(t *testing.T) {
 		},
 	}
 
-	source, err := depositFundingSource(txn, walletID, "AED", 5000, sql.NullString{String: "provider-tx", Valid: true}, false, now, providerPayload)
+	source, err := depositFundingSource(txn, walletID, "AED", sql.NullString{String: "provider-tx", Valid: true}, false, now, providerPayload)
 	if err != nil {
 		t.Fatalf("deposit funding source: %v", err)
 	}
@@ -51,6 +51,9 @@ func TestDepositFundingSourceCapturesMethodMetadata(t *testing.T) {
 	}
 	if !source.SupportsWithdrawal {
 		t.Fatal("expected withdrawal support from method metadata")
+	}
+	if source.TotalFunded != 0 || source.LastFundedAt.Valid {
+		t.Fatalf("funding source should not carry ledger totals before linking, got total=%d last=%+v", source.TotalFunded, source.LastFundedAt)
 	}
 
 	var details map[string]any
@@ -85,7 +88,7 @@ func TestDepositFundingSourceRequiresVerificationWhenProviderIdentifierMissing(t
 		}`),
 	}
 
-	source, err := depositFundingSource(txn, walletID, "NGN", 2000, sql.NullString{String: "provider-tx", Valid: true}, true, time.Now().UTC())
+	source, err := depositFundingSource(txn, walletID, "NGN", sql.NullString{String: "provider-tx", Valid: true}, true, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("deposit funding source: %v", err)
 	}
@@ -105,7 +108,7 @@ func TestDepositFundingSourcePreservesLegacyVerifiedPSPSource(t *testing.T) {
 		RawRequest:  walletstore.RawJSON(`{"metadata": {"note": "legacy request"}}`),
 	}
 
-	source, err := depositFundingSource(txn, walletID, "USD", 3000, sql.NullString{String: "provider-tx", Valid: true}, false, time.Now().UTC())
+	source, err := depositFundingSource(txn, walletID, "USD", sql.NullString{String: "provider-tx", Valid: true}, false, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("deposit funding source: %v", err)
 	}

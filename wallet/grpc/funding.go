@@ -42,6 +42,9 @@ func (s *Server) CreateFundingSource(ctx context.Context, req *walletv1.CreateFu
 	if req.Currency == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
+	if req.SourceDetails == nil {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingSourceDetails.Error())
+	}
 	verificationStatus := req.VerificationStatus
 	if verificationStatus == "" {
 		verificationStatus = "unverified"

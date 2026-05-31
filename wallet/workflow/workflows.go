@@ -316,7 +316,7 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if !externalRef.Valid {
 		externalRef = sql.NullString{String: params.ClientReference, Valid: true}
 	}
-	source, err := depositFundingSource(pspTxn, walletID, resolved.WalletCurrency, resolved.WalletCreditAmount, externalRef, validation.SupportsWithdrawal, now, finalStatus.RawResponse)
+	source, err := depositFundingSource(pspTxn, walletID, resolved.WalletCurrency, externalRef, validation.SupportsWithdrawal, now, finalStatus.RawResponse)
 	if err != nil {
 		return err
 	}
@@ -1876,7 +1876,7 @@ type fundingSourceSpec struct {
 	hasData               bool
 }
 
-func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, currency string, amount int64, transactionExternalRef sql.NullString, supportsWithdrawalFromValidation bool, fundedAt time.Time, providerPayloads ...map[string]any) (walletstore.FundingSource, error) {
+func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, currency string, transactionExternalRef sql.NullString, supportsWithdrawalFromValidation bool, fundedAt time.Time, providerPayloads ...map[string]any) (walletstore.FundingSource, error) {
 	if txn == nil {
 		return walletstore.FundingSource{}, walletstore.ErrPSPTransactionNotFound
 	}
@@ -1938,8 +1938,6 @@ func depositFundingSource(txn *walletstore.PSPTransaction, walletID uuid.UUID, c
 		VerifiedAt:         verifiedAt,
 		Currency:           currency,
 		SourceDetails:      sourceDetailsRaw,
-		TotalFunded:        amount,
-		LastFundedAt:       sql.NullTime{Time: fundedAt, Valid: true},
 		SupportsWithdrawal: supportsWithdrawal,
 		WithdrawalMethod:   withdrawalMethodRaw,
 	}, nil

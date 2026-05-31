@@ -168,6 +168,11 @@ Last updated: 2026-05-31
     - Fix: centralize PSP workflow-start failure recording, mark the row `failed`, return joined errors when the repair write fails, and map that joined error as an internal gRPC failure instead of hiding it.
     - Tests: `go test -count=1 ./wallet/grpc`.
 
+34. Funding source totals were updated before the idempotent ledger link existed.
+    - Evidence: deposit workflow passed the deposit amount into `UpsertFundingSource`, which incremented `funding_sources.total_funded` independently from `ledger_funding_links`. A retry after the source write but before/during link recording could overcount return-to-source capacity, duplicate source identities with different provider/currency were silently merged, and the nullable `external_reference` uniqueness did not protect sources without an external reference.
+    - Fix: make funding-source upsert validate immutable source identity and metadata only, move `total_funded` increments into `CreateFundingLink`, make ledger funding links exact-replay idempotent with mismatches returning typed duplicate errors, and add a partial unique index for null external references.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingSourceMerge|TestValidateFundingLinkReplay|TestFundingSourceValidation|TestCreateFundingLinkValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

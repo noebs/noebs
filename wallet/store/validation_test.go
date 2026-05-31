@@ -880,10 +880,12 @@ func TestWithdrawalDestinationValidation(t *testing.T) {
 func TestFundingSourceValidation(t *testing.T) {
 	s := &Store{}
 	source := FundingSource{
-		TenantID:   "tenant",
-		WalletID:   uuid.New(),
-		SourceType: "card",
-		Currency:   "USD",
+		TenantID:           "tenant",
+		WalletID:           uuid.New(),
+		SourceType:         "card",
+		VerificationStatus: "verified",
+		Currency:           "USD",
+		SourceDetails:      []byte(`{}`),
 	}
 
 	_, err := s.UpsertFundingSource(t.Context(), FundingSource{})
@@ -905,9 +907,24 @@ func TestFundingSourceValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingSourceType)
 
 	bad = source
+	bad.VerificationStatus = ""
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingStatus)
+
+	bad = source
 	bad.Currency = ""
 	_, err = s.UpsertFundingSource(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingCurrency)
+
+	bad = source
+	bad.SourceDetails = nil
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingSourceDetails)
+
+	bad = source
+	bad.TotalFunded = 100
+	_, err = s.UpsertFundingSource(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidAmount)
 
 	_, err = s.GetFundingSource(t.Context(), "", uuid.New(), "card", sql.NullString{})
 	assertErrorIs(t, err, ErrMissingTenantID)
@@ -929,6 +946,78 @@ func TestFundingSourceValidation(t *testing.T) {
 
 	_, err = s.ListFundingSources(t.Context(), "tenant", uuid.Nil)
 	assertErrorIs(t, err, ErrMissingWalletID)
+}
+
+func TestValidateFundingSourceMerge(t *testing.T) {
+	walletID := uuid.New()
+	existing := FundingSource{
+		TenantID:          "tenant",
+		WalletID:          walletID,
+		SourceType:        "card",
+		PSPProvider:       sql.NullString{String: "provider-a", Valid: true},
+		ExternalReference: sql.NullString{String: "source-ref", Valid: true},
+		Currency:          "USD",
+	}
+	if err := ValidateFundingSourceMerge(&existing, existing); err != nil {
+		t.Fatalf("ValidateFundingSourceMerge() error = %v", err)
+	}
+
+	cases := map[string]FundingSource{
+		"tenant": {
+			TenantID:          "tenant-b",
+			WalletID:          walletID,
+			SourceType:        existing.SourceType,
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: existing.ExternalReference,
+			Currency:          existing.Currency,
+		},
+		"wallet": {
+			TenantID:          existing.TenantID,
+			WalletID:          uuid.New(),
+			SourceType:        existing.SourceType,
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: existing.ExternalReference,
+			Currency:          existing.Currency,
+		},
+		"source type": {
+			TenantID:          existing.TenantID,
+			WalletID:          walletID,
+			SourceType:        "bank_account",
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: existing.ExternalReference,
+			Currency:          existing.Currency,
+		},
+		"provider": {
+			TenantID:          existing.TenantID,
+			WalletID:          walletID,
+			SourceType:        existing.SourceType,
+			PSPProvider:       sql.NullString{String: "provider-b", Valid: true},
+			ExternalReference: existing.ExternalReference,
+			Currency:          existing.Currency,
+		},
+		"external reference": {
+			TenantID:          existing.TenantID,
+			WalletID:          walletID,
+			SourceType:        existing.SourceType,
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: sql.NullString{String: "other-ref", Valid: true},
+			Currency:          existing.Currency,
+		},
+		"currency": {
+			TenantID:          existing.TenantID,
+			WalletID:          walletID,
+			SourceType:        existing.SourceType,
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: existing.ExternalReference,
+			Currency:          "EUR",
+		},
+	}
+	for name, requested := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateFundingSourceMerge(&existing, requested)
+			assertErrorIs(t, err, ErrDuplicateFundingSource)
+		})
+	}
 }
 
 func TestCreateFundingLinkValidation(t *testing.T) {
@@ -968,6 +1057,56 @@ func TestCreateFundingLinkValidation(t *testing.T) {
 	bad.Currency = ""
 	_, err = s.CreateFundingLink(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingCurrency)
+}
+
+func TestValidateFundingLinkReplay(t *testing.T) {
+	existing := LedgerFundingLink{
+		TenantID:        "tenant",
+		LedgerEntryID:   1,
+		FundingSourceID: 2,
+		Amount:          100,
+		Currency:        "USD",
+	}
+	if err := ValidateFundingLinkReplay(&existing, existing); err != nil {
+		t.Fatalf("ValidateFundingLinkReplay() error = %v", err)
+	}
+
+	cases := map[string]LedgerFundingLink{
+		"ledger entry": {
+			TenantID:        existing.TenantID,
+			LedgerEntryID:   3,
+			FundingSourceID: existing.FundingSourceID,
+			Amount:          existing.Amount,
+			Currency:        existing.Currency,
+		},
+		"funding source": {
+			TenantID:        existing.TenantID,
+			LedgerEntryID:   existing.LedgerEntryID,
+			FundingSourceID: 4,
+			Amount:          existing.Amount,
+			Currency:        existing.Currency,
+		},
+		"amount": {
+			TenantID:        existing.TenantID,
+			LedgerEntryID:   existing.LedgerEntryID,
+			FundingSourceID: existing.FundingSourceID,
+			Amount:          101,
+			Currency:        existing.Currency,
+		},
+		"currency": {
+			TenantID:        existing.TenantID,
+			LedgerEntryID:   existing.LedgerEntryID,
+			FundingSourceID: existing.FundingSourceID,
+			Amount:          existing.Amount,
+			Currency:        "EUR",
+		},
+	}
+	for name, requested := range cases {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateFundingLinkReplay(&existing, requested)
+			assertErrorIs(t, err, ErrDuplicateFundingLink)
+		})
+	}
 }
 
 func TestGetFundingSourceByPSPRefValidation(t *testing.T) {

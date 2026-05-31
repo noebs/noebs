@@ -37,6 +37,7 @@
 - Fixed balance hold replay validation so exact retries do not re-check already reserved funds and mismatched duplicate holds fail explicitly.
 - Fixed PSP transaction replay validation so duplicate deposit/withdrawal client references must match the original request contract before reusing a workflow.
 - Fixed PSP workflow-start failure handling so failed Temporal starts must also record PSP transaction failure, and status-repair failures surface as joined internal errors.
+- Fixed funding-source accounting so source totals are incremented by idempotent ledger-link creation rather than source upsert, with mismatched source/link replays rejected.
 
 Verification:
 
@@ -65,6 +66,8 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `go test -count=1 ./wallet/grpc`
+- `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`
+- `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingSourceMerge|TestValidateFundingLinkReplay|TestFundingSourceValidation|TestCreateFundingLinkValidation'`
 
 Next candidates:
 
