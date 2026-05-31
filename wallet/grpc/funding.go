@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pquerna/otp/totp"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -487,6 +488,10 @@ func toOwnershipVerificationProto(verification *walletstore.OwnershipVerificatio
 func (s *Server) ResetWalletPIN(ctx context.Context, req *walletv1.ResetWalletPINRequest) (*emptypb.Empty, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	if err := s.requireAdmin(md); err != nil {
+		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")

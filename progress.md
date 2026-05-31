@@ -602,6 +602,12 @@ Verification:
 - `go test -count=1 -v ./apigateway -run 'TestJWTAuth_(GenerateJWT|VerifyJWT)'`
 - `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTRequires(UserIDClaimBeforeStore|TenantClaim|SignatureProofForValidToken|UsesClaimTenant)'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` skipped locally when the container runtime is unavailable)
 - `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTUsesClaimTenant'` (skipped locally when the container runtime is unavailable)
+- `ResetWalletPIN` now requires gateway admin metadata inside the handler before request validation or store access.
+- `go test -count=1 -v ./wallet/grpc -run 'TestResetWalletPIN(RequiresAdminAuth|ValidatesAfterAdminAuth)|TestRequireAdmin'`
+- `go test -count=1 ./wallet/grpc ./cli`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

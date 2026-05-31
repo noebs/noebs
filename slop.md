@@ -648,6 +648,11 @@ Last updated: 2026-05-31
     - Fix: require positive user IDs before JWT issuance and after successful JWT verification, normalize tenant claims during verification, and make refresh fail with `store.ErrInvalidUserID` before store access when the user claim is absent.
     - Tests: `go test -count=1 -v ./apigateway -run 'TestJWTAuth_(GenerateJWT|VerifyJWT)'`; `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTRequires(UserIDClaimBeforeStore|TenantClaim|SignatureProofForValidToken|UsesClaimTenant)'` (`TestServiceRefreshJWTRequiresSignatureProofForValidToken` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestServiceRefreshJWTUsesClaimTenant'` (skipped locally when the container runtime is unavailable).
 
+130. Wallet PIN resets trusted internal-service interceptor auth.
+    - Evidence: `ResetWalletPIN` is a high-risk admin mutation, but the handler validated the request and updated the wallet PIN without checking gateway admin metadata. A direct handler call, or a registration path missing the wallet admin interceptor, could reset a wallet PIN with only valid request fields.
+    - Fix: require gateway admin metadata inside `ResetWalletPIN` before request validation or store access, matching the other wallet admin signal/manual-transfer handlers.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestResetWalletPIN(RequiresAdminAuth|ValidatesAfterAdminAuth)|TestRequireAdmin'`; `go test -count=1 ./wallet/grpc ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -10,6 +10,7 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -59,5 +60,40 @@ func TestCreateReturnToSourceDestinationRequiresLinkedFundingSource(t *testing.T
 	}
 	if status.Convert(err).Message() != walletstore.ErrMissingFundingSourceID.Error() {
 		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingFundingSourceID.Error())
+	}
+}
+
+func TestResetWalletPINRequiresAdminAuth(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{},
+	}
+	server := NewServer(svc)
+
+	_, err := server.ResetWalletPIN(context.Background(), &walletv1.ResetWalletPINRequest{
+		TenantId: "tenant",
+		WalletId: uuid.NewString(),
+		AdminId:  42,
+		NewPin:   "1234",
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
+	}
+}
+
+func TestResetWalletPINValidatesAfterAdminAuth(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{},
+	}
+	server := NewServer(svc)
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
+
+	_, err := server.ResetWalletPIN(ctx, &walletv1.ResetWalletPINRequest{})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+	}
+	if status.Convert(err).Message() != walletstore.ErrMissingTenantID.Error() {
+		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingTenantID.Error())
 	}
 }
