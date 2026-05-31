@@ -927,6 +927,9 @@ func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
 	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "", sql.NullTime{Time: now, Valid: true}, now)
 	assertErrorIs(t, err, ErrMissingStatus)
 
+	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "complete", sql.NullTime{Time: now, Valid: true}, now)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
 	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{Time: now, Valid: true}, time.Time{})
 	assertErrorIs(t, err, ErrMissingUpdatedAt)
 
@@ -971,6 +974,11 @@ func TestCreateOwnershipVerificationValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingStatus)
 
 	bad = base
+	bad.Status = "complete"
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = base
 	bad.MaxAttempts = 0
 	_, err = s.CreateOwnershipVerification(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingMaxAttempts)
@@ -997,19 +1005,22 @@ func TestUpdateOwnershipVerificationStatusValidation(t *testing.T) {
 	s := &Store{}
 	now := time.Now().UTC()
 
-	err := s.UpdateOwnershipVerificationStatus(t.Context(), "", 1, "completed", now)
+	err := s.UpdateOwnershipVerificationStatus(t.Context(), "", 1, "verified", now)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "default", 1, "completed", now)
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "default", 1, "verified", now)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 0, "completed", now)
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 0, "verified", now)
 	assertErrorIs(t, err, ErrMissingVerificationID)
 
 	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "", now)
 	assertErrorIs(t, err, ErrMissingStatus)
 
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "completed", time.Time{})
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "completed", now)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "verified", time.Time{})
 	assertErrorIs(t, err, ErrMissingVerificationTime)
 }
 
@@ -1056,6 +1067,11 @@ func TestWithdrawalDestinationValidation(t *testing.T) {
 	bad.OwnershipStatus = ""
 	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingStatus)
+
+	bad = dest
+	bad.OwnershipStatus = "complete"
+	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
 
 	bad = dest
 	bad.IsReturnToSource = true
@@ -1438,10 +1454,12 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 		Currency:  "AED",
 	}
 	destination := WithdrawalDestination{
-		ID:       20,
-		TenantID: "tenant",
-		WalletID: walletID,
-		Currency: "USD",
+		ID:              20,
+		TenantID:        "tenant",
+		WalletID:        walletID,
+		Currency:        "USD",
+		OwnershipStatus: DestinationOwnershipStatusVerified,
+		IsActive:        true,
 	}
 	link := LedgerWithdrawalDestinationLink{
 		TenantID:      "tenant",
@@ -1465,6 +1483,18 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 	walletMismatch := destination
 	walletMismatch.WalletID = uuid.New()
 	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &walletMismatch, link), ErrDestinationNotFound)
+
+	inactive := destination
+	inactive.IsActive = false
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &inactive, link), ErrDestinationNotFound)
+
+	pending := destination
+	pending.OwnershipStatus = DestinationOwnershipStatusPending
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &pending, link), ErrDestinationNotVerified)
+
+	rejected := destination
+	rejected.OwnershipStatus = DestinationOwnershipStatusRejected
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &rejected, link), ErrDestinationNotVerified)
 
 	otherEntry := entry
 	otherEntry.ID = 11

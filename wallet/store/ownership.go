@@ -17,8 +17,8 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	if verification.VerificationType == "" {
 		return nil, ErrMissingVerificationType
 	}
-	if verification.Status == "" {
-		return nil, ErrMissingStatus
+	if err := ValidateOwnershipVerificationStatus(verification.Status); err != nil {
+		return nil, err
 	}
 	if verification.MaxAttempts <= 0 {
 		return nil, ErrMissingMaxAttempts
@@ -94,8 +94,8 @@ func (s *Store) UpdateOwnershipVerificationStatus(ctx context.Context, tenantID 
 	if verificationID <= 0 {
 		return ErrMissingVerificationID
 	}
-	if status == "" {
-		return ErrMissingStatus
+	if err := ValidateOwnershipVerificationStatus(status); err != nil {
+		return err
 	}
 	if completedAt.IsZero() {
 		return ErrMissingVerificationTime

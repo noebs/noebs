@@ -27,8 +27,8 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if len(dest.DestinationDetails) == 0 {
 		return nil, ErrMissingDestinationDetails
 	}
-	if dest.OwnershipStatus == "" {
-		return nil, ErrMissingStatus
+	if err := ValidateDestinationOwnershipStatus(dest.OwnershipStatus); err != nil {
+		return nil, err
 	}
 	if dest.IsReturnToSource && !dest.LinkedFundingSourceID.Valid {
 		return nil, ErrMissingFundingSourceID
@@ -311,6 +311,12 @@ func ValidateWithdrawalDestinationLinkLedgerEntry(entry *LedgerEntry, destinatio
 	if destination.WalletID != entry.WalletID {
 		return ErrDestinationNotFound
 	}
+	if !destination.IsActive {
+		return ErrDestinationNotFound
+	}
+	if destination.OwnershipStatus != DestinationOwnershipStatusVerified {
+		return ErrDestinationNotVerified
+	}
 	if entry.EntryType != "debit" {
 		return ErrInvalidDirection
 	}
@@ -340,16 +346,16 @@ func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenant
 	if destinationID <= 0 {
 		return ErrMissingDestinationID
 	}
-	if status == "" {
-		return ErrMissingStatus
+	if err := ValidateDestinationOwnershipStatus(status); err != nil {
+		return err
 	}
 	if updatedAt.IsZero() {
 		return ErrMissingUpdatedAt
 	}
-	if status == "verified" && !verifiedAt.Valid {
+	if status == DestinationOwnershipStatusVerified && !verifiedAt.Valid {
 		return ErrMissingVerificationTime
 	}
-	if status != "verified" {
+	if status != DestinationOwnershipStatusVerified {
 		verifiedAt = sql.NullTime{}
 	}
 	db, err := s.ensureDB()

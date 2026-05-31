@@ -5,6 +5,46 @@ import (
 	"time"
 )
 
+const (
+	DestinationOwnershipStatusUnverified = "unverified"
+	DestinationOwnershipStatusPending    = "pending"
+	DestinationOwnershipStatusVerified   = "verified"
+	DestinationOwnershipStatusRejected   = "rejected"
+
+	OwnershipVerificationStatusPending  = "pending"
+	OwnershipVerificationStatusVerified = "verified"
+	OwnershipVerificationStatusFailed   = "failed"
+	OwnershipVerificationStatusExpired  = "expired"
+)
+
+func ValidateDestinationOwnershipStatus(status string) error {
+	switch status {
+	case "":
+		return ErrMissingStatus
+	case DestinationOwnershipStatusUnverified,
+		DestinationOwnershipStatusPending,
+		DestinationOwnershipStatusVerified,
+		DestinationOwnershipStatusRejected:
+		return nil
+	default:
+		return ErrInvalidStatus
+	}
+}
+
+func ValidateOwnershipVerificationStatus(status string) error {
+	switch status {
+	case "":
+		return ErrMissingStatus
+	case OwnershipVerificationStatusPending,
+		OwnershipVerificationStatusVerified,
+		OwnershipVerificationStatusFailed,
+		OwnershipVerificationStatusExpired:
+		return nil
+	default:
+		return ErrInvalidStatus
+	}
+}
+
 type OwnershipVerification struct {
 	ID                      int64          `db:"id"`
 	TenantID                string         `db:"tenant_id"`

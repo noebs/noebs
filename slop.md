@@ -213,6 +213,11 @@ Last updated: 2026-05-31
     - Fix: add explicit PSP status validation, apply it before DB work on create/update/list paths, and return `ErrInvalidStatusTransition` when a terminal status would be changed to a different state while preserving exact terminal replays.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestCreatePSPTransactionValidation|TestValidatePSPStatusTransition|TestUpdatePSPTransactionStatusValidation|TestListPSPTransactions|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+43. Withdrawal ownership state could be bypassed below the workflow boundary.
+    - Evidence: destination ownership and ownership-verification status writes accepted any non-empty string at the store API, even though migrations/workflows only understand specific states. `CreateWithdrawalDestinationLink` also attached usage totals to inactive or unverified destinations if called directly through the store/activity layer.
+    - Fix: add explicit destination ownership and ownership-verification status validators, enforce them on create/update paths, require destination usage links to target active verified destinations, and map the typed destination-not-verified error at API boundaries.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestUpdateWithdrawalDestinationOwnershipValidation|TestCreateOwnershipVerificationValidation|TestUpdateOwnershipVerificationStatusValidation|TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

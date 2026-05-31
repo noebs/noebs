@@ -111,6 +111,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingInteractionType),
 		errors.Is(err, walletstore.ErrMissingSetBy),
 		errors.Is(err, walletstore.ErrFundingSourceNotVerified),
+		errors.Is(err, walletstore.ErrDestinationNotVerified),
 		errors.Is(err, walletstore.ErrFundingSourceNotWithdrawable),
 		errors.Is(err, walletstore.ErrFundingSourceLimitExceeded),
 		errors.Is(err, walletstore.ErrApproverIsRequester),
