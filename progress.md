@@ -532,6 +532,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/workflow -run 'TestWithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound|TestWithdrawalApprovalRejectionReturnsHoldReleaseError'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

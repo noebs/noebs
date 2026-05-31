@@ -114,6 +114,66 @@ func TestWithdrawalApprovalRejectionReturnsHoldReleaseError(t *testing.T) {
 	env.AssertExpectations(t)
 }
 
+func TestWithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(Withdrawal)
+	registerWithdrawalCompensationTestActivities(env)
+
+	tenantID := "tenant"
+	walletID := uuid.New()
+	clientReference := "withdrawal-rts-ref"
+
+	env.OnActivity(string(walletactivity.ActivityGetPSPTransactionByReference), mock.Anything, tenantID, clientReference).
+		Return(&walletstore.PSPTransaction{
+			ID:              10,
+			TenantID:        tenantID,
+			PSPProvider:     "pay",
+			ClientReference: clientReference,
+			Direction:       "outbound",
+			Amount:          100,
+			Currency:        "AED",
+			Status:          "pending",
+		}, nil)
+	env.OnActivity(string(walletactivity.ActivityValidateWithdrawal), mock.Anything, mock.Anything).
+		Return(&walletvalidation.WithdrawalValidationResult{
+			WalletID:          walletID,
+			Currency:          "AED",
+			Amount:            100,
+			TotalDebit:        100,
+			PayoutAmount:      100,
+			PayoutCurrency:    "AED",
+			WalletDebitAmount: 100,
+			WalletCurrency:    "AED",
+		}, nil)
+	env.OnActivity(string(walletactivity.ActivityGetReturnToSourceOptions), mock.Anything, tenantID, walletID).
+		Return([]walletstore.FundingSource{}, nil)
+
+	env.ExecuteWorkflow(Withdrawal, WithdrawalParams{
+		TenantID:            tenantID,
+		ProviderCode:        "pay",
+		WalletID:            walletID.String(),
+		OwnerType:           "consumer",
+		OwnerID:             "user-1",
+		AllowReturnToSource: true,
+		HoldExpirySeconds:   3600,
+		Request: walletpsp.PayoutRequest{
+			ClientReference: clientReference,
+			Amount:          100,
+			Currency:        "AED",
+		},
+	})
+
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("expected workflow to complete")
+	}
+	err := env.GetWorkflowError()
+	if err == nil || !strings.Contains(err.Error(), walletstore.ErrFundingSourceNotFound.Error()) {
+		t.Fatalf("workflow error = %v, want %v", err, walletstore.ErrFundingSourceNotFound)
+	}
+	env.AssertExpectations(t)
+}
+
 func registerWithdrawalCompensationTestActivities(env *testsuite.TestWorkflowEnvironment) {
 	env.RegisterActivityWithOptions(
 		func(context.Context, string, string) (*walletstore.PSPTransaction, error) { return nil, nil },
@@ -128,6 +188,10 @@ func registerWithdrawalCompensationTestActivities(env *testsuite.TestWorkflowEnv
 	env.RegisterActivityWithOptions(
 		func(context.Context, string, int64) (*walletstore.WithdrawalDestination, error) { return nil, nil },
 		activity.RegisterOptions{Name: string(walletactivity.ActivityResolveWithdrawalDestination)},
+	)
+	env.RegisterActivityWithOptions(
+		func(context.Context, string, uuid.UUID) ([]walletstore.FundingSource, error) { return nil, nil },
+		activity.RegisterOptions{Name: string(walletactivity.ActivityGetReturnToSourceOptions)},
 	)
 	env.RegisterActivityWithOptions(
 		func(context.Context, walletstore.HoldParams) (struct{}, error) { return struct{}{}, nil },

@@ -578,6 +578,11 @@ Last updated: 2026-05-31
     - Fix: validate dashboard search/sort fields and sort order before store work, return a typed bad-request error for invalid provided controls, keep defaults only for absent controls, and replace the one-transition camelCase mapper with deterministic snake_case conversion that preserves acronym cases.
     - Tests: `go test -count=1 -v ./dashboard -run 'Test_mapSearchField|TestSortTable|TestDashboardTransactionQueryRejectsInvalidFieldsBeforeDB|TestDashboardPaginationRejectsInvalidInputsBeforeDB'`; `go test -count=1 ./dashboard`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+116. Return-to-source withdrawals reported the wrong missing input when no eligible source existed.
+    - Evidence: `selectReturnToSource` correctly returns nil when no funding source is eligible so the workflow can fall back to an explicit destination. But if `AllowReturnToSource` was true and no `DestinationID` was supplied, the workflow reacted to that nil by returning `ErrMissingDestinationID`, hiding the real return-to-source failure.
+    - Fix: keep nil selection as the explicit fallback signal, but when no fallback destination exists return `ErrFundingSourceNotFound` so callers see that no eligible funding source was available.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestWithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound|TestWithdrawalApprovalRejectionReturnsHoldReleaseError'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

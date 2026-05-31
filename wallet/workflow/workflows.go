@@ -531,6 +531,9 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 
 	if fundingSource == nil {
 		if params.DestinationID <= 0 {
+			if params.AllowReturnToSource {
+				return walletstore.ErrFundingSourceNotFound
+			}
 			return walletstore.ErrMissingDestinationID
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityResolveWithdrawalDestination, params.TenantID, params.DestinationID).Get(ctx, &destination); err != nil {
