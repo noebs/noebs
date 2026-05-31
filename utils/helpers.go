@@ -18,14 +18,6 @@ var (
 	defaultSMSHTTPClient = &http.Client{Timeout: 10 * time.Second}
 )
 
-func GetOrDefault(keys map[string]interface{}, key, def string) (string, bool) {
-	value, ok := keys[key]
-	if !ok {
-		return def, ok
-	}
-	return value.(string), ok
-}
-
 // SendSMS a generic function to send sms to any user
 func SendSMS(noebsConfig *ebs_fields.NoebsConfig, sms SMS) error {
 	if noebsConfig == nil {

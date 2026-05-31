@@ -103,6 +103,11 @@ Last updated: 2026-05-31
     - Fix: return HTTP 500 on those failures and add a source guard against reintroducing the ignored-error patterns.
     - Tests: `go test -count=1 ./dashboard`.
 
+21. Parsing helpers were scattered across service packages and `utils` carried an unsafe map lookup.
+    - Evidence: bill/receipt parsing duplicated string and float extraction logic, and `utils.GetOrDefault` directly asserted `value.(string)` for a `map[string]interface{}` helper.
+    - Fix: add a top-level `parsing` package with typed missing/invalid field errors, required string/float helpers, and safe optional string defaults; remove the unused `utils.GetOrDefault` surface and route bill/receipt parsing through the shared package.
+    - Tests: `go test -count=1 ./parsing ./utils ./consumer ./merchant`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

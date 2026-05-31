@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/parsing"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
@@ -107,38 +106,17 @@ func (n *necBill) NewFromMap(f map[string]interface{}) error {
 }
 
 func requiredBillString(fields map[string]interface{}, key string) (string, error) {
-	value, ok := fields[key]
-	if !ok {
-		return "", fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
-	}
-	text, ok := value.(string)
-	if !ok || strings.TrimSpace(text) == "" {
+	text, err := parsing.RequiredString(fields, key)
+	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
 	}
 	return text, nil
 }
 
 func requiredBillFloat(fields map[string]interface{}, key string) (float64, error) {
-	value, ok := fields[key]
-	if !ok {
+	parsed, err := parsing.RequiredFloat64(fields, key)
+	if err != nil {
 		return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
 	}
-	switch typed := value.(type) {
-	case string:
-		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-		if err != nil {
-			return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
-		}
-		return parsed, nil
-	case json.Number:
-		parsed, err := typed.Float64()
-		if err != nil {
-			return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
-		}
-		return parsed, nil
-	case float64:
-		return typed, nil
-	default:
-		return 0, fmt.Errorf("%w: %s", ErrInvalidBillInfo, key)
-	}
+	return parsed, nil
 }

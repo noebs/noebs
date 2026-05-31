@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/store"
 	"github.com/google/uuid"
 	"github.com/noebs/ipin"
@@ -140,12 +141,8 @@ func parseDueAmounts(payeeId string, paymentInfo map[string]any) (BillAmounts, e
 }
 
 func requiredPaymentInfoString(paymentInfo map[string]any, key string) (string, error) {
-	value, ok := paymentInfo[key]
-	if !ok {
-		return "", fmt.Errorf("%w: paymentInfo.%s", ErrInvalidPaymentInfo, key)
-	}
-	text, ok := value.(string)
-	if !ok || strings.TrimSpace(text) == "" {
+	text, err := parsing.RequiredString(paymentInfo, key)
+	if err != nil {
 		return "", fmt.Errorf("%w: paymentInfo.%s", ErrInvalidPaymentInfo, key)
 	}
 	return text, nil

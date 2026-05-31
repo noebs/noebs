@@ -24,6 +24,7 @@
 - Fixed bill due-amount parsing so malformed gateway payment-info maps return typed validation errors instead of panics or empty amounts.
 - Fixed merchant NEC bill parsing so malformed receipt maps return typed errors instead of panics or silently zeroed amounts.
 - Fixed dashboard browser/export handlers so stats query, JSON encode, and stream errors return HTTP 500 instead of being ignored.
+- Added a top-level `parsing` package for shared map-field parsing and moved bill/receipt extraction onto it; removed the unused `utils.GetOrDefault` helper.
 
 Verification:
 
@@ -36,6 +37,7 @@ Verification:
 - `go test -count=1 ./ebs_fields`
 - `go test -count=1 ./store`
 - `go test -count=1 ./dashboard`
+- `go test -count=1 ./parsing ./utils ./consumer ./merchant`
 - `go test -count=1 ./...`
 - `go vet ./...`
 
