@@ -19,6 +19,11 @@ type Store struct {
 	crypto *dataCrypto
 }
 
+type dbExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 const loginAttemptWindow = 15 * time.Minute
 
 var allowedUserUpdateColumns = map[string]struct{}{
@@ -136,12 +141,12 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 	if err != nil {
 		return err
 	}
+	if user == nil {
+		return ErrMissingUser
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
-	}
-	if user == nil {
-		return ErrMissingUser
 	}
 	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
 		return err
@@ -150,6 +155,15 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 		return err
 	}
 	now := time.Now().UTC()
+	if err := s.insertUser(ctx, db, tenantID, user, now); err != nil {
+		return err
+	}
+	user.CreatedAt = now
+	user.UpdatedAt = now
+	return nil
+}
+
+func (s *Store) insertUser(ctx context.Context, exec dbExecutor, tenantID string, user *ebs_fields.User, now time.Time) error {
 	stmt := `INSERT INTO users(
 		tenant_id, password, fullname, username, gender, birthday, email, is_merchant, public_key, device_id, otp, signed_otp,
 		device_token, is_password_otp, main_card, main_card_enc, main_expdate, language, is_verified, mobile, created_at, updated_at
@@ -181,20 +195,18 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 	if s.DB.Driver == DriverPostgres {
 		stmt = stmt + " RETURNING id"
 		stmt = s.DB.Rebind(stmt)
-		if err := db.QueryRowContext(ctx, stmt, args...).Scan(&user.ID); err != nil {
+		if err := exec.QueryRowContext(ctx, stmt, args...).Scan(&user.ID); err != nil {
 			return err
 		}
 	} else {
 		stmt = s.DB.Rebind(stmt)
-		res, err := db.ExecContext(ctx, stmt, args...)
+		res, err := exec.ExecContext(ctx, stmt, args...)
 		if err != nil {
 			return err
 		}
 		id, _ := res.LastInsertId()
 		user.ID = id
 	}
-	user.CreatedAt = now
-	user.UpdatedAt = now
 	return nil
 }
 
@@ -1328,18 +1340,87 @@ func (s *Store) LinkAuthAccount(ctx context.Context, tenantID string, account *e
 	if err != nil {
 		return err
 	}
-	if account == nil {
-		return ErrMissingAccount
+	if err := validateAuthAccount(account); err != nil {
+		return err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
+	return s.linkAuthAccount(ctx, db, tenantID, account, time.Now().UTC())
+}
+
+func (s *Store) CreateUserWithAuthAccount(ctx context.Context, tenantID string, user *ebs_fields.User, account *ebs_fields.AuthAccount) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return ErrMissingUser
+	}
+	if err := validateAuthAccountForNewUser(account); err != nil {
+		return err
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
+		return err
+	}
+	if err := s.encryptUserFields(user); err != nil {
+		return err
+	}
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
 	now := time.Now().UTC()
+	if err := s.insertUser(ctx, tx, tenantID, user, now); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	account.UserID = user.ID
+	if err := s.linkAuthAccount(ctx, tx, tenantID, account, now); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	user.CreatedAt = now
+	user.UpdatedAt = now
+	return nil
+}
+
+func validateAuthAccountForNewUser(account *ebs_fields.AuthAccount) error {
+	if account == nil {
+		return ErrMissingAccount
+	}
+	if strings.TrimSpace(account.Provider) == "" {
+		return ErrMissingProvider
+	}
+	if strings.TrimSpace(account.ProviderUserID) == "" {
+		return ErrMissingProviderUserID
+	}
+	return nil
+}
+
+func validateAuthAccount(account *ebs_fields.AuthAccount) error {
+	if err := validateAuthAccountForNewUser(account); err != nil {
+		return err
+	}
+	if account.UserID <= 0 {
+		return ErrInvalidUserID
+	}
+	return nil
+}
+
+func (s *Store) linkAuthAccount(ctx context.Context, exec dbExecutor, tenantID string, account *ebs_fields.AuthAccount, now time.Time) error {
 	stmt := s.DB.Rebind(`INSERT INTO auth_accounts(tenant_id, user_id, provider, provider_user_id, email, email_verified, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(tenant_id, provider, provider_user_id) DO UPDATE SET email = excluded.email, email_verified = excluded.email_verified, updated_at = excluded.updated_at`)
-	_, err = db.ExecContext(ctx, stmt, tenantID, account.UserID, account.Provider, account.ProviderUserID, strings.ToLower(account.Email), account.EmailVerified, now, now)
+	_, err := exec.ExecContext(ctx, stmt, tenantID, account.UserID, strings.TrimSpace(account.Provider), strings.TrimSpace(account.ProviderUserID), strings.ToLower(account.Email), account.EmailVerified, now, now)
 	return err
 }
 
@@ -1347,6 +1428,14 @@ func (s *Store) FindAuthAccount(ctx context.Context, tenantID, provider, provide
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		return nil, ErrMissingProvider
+	}
+	providerUserID = strings.TrimSpace(providerUserID)
+	if providerUserID == "" {
+		return nil, ErrMissingProviderUserID
 	}
 	db, err := s.ensureDB()
 	if err != nil {

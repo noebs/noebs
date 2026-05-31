@@ -339,6 +339,9 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		{"LinkAuthAccount", func(tenantID string) error {
 			return s.LinkAuthAccount(ctx, tenantID, &ebs_fields.AuthAccount{})
 		}},
+		{"CreateUserWithAuthAccount", func(tenantID string) error {
+			return s.CreateUserWithAuthAccount(ctx, tenantID, &ebs_fields.User{}, &ebs_fields.AuthAccount{})
+		}},
 		{"FindAuthAccount", func(tenantID string) error {
 			_, err := s.FindAuthAccount(ctx, tenantID, "provider", "provider-user")
 			return err
@@ -584,6 +587,120 @@ func TestStore_IncrementSuspiciousCreatesAndUpdatesMetric(t *testing.T) {
 	}
 	if !updatedAt.Valid {
 		t.Fatal("updated_at is NULL, want timestamp")
+	}
+}
+
+func TestStore_AuthAccountValidationFailsBeforeDB(t *testing.T) {
+	ctx := context.Background()
+	s := &Store{}
+	tests := []struct {
+		name string
+		run  func() error
+		want error
+	}{
+		{
+			name: "link missing account",
+			run: func() error {
+				return s.LinkAuthAccount(ctx, "tenant", nil)
+			},
+			want: ErrMissingAccount,
+		},
+		{
+			name: "link missing user",
+			run: func() error {
+				return s.LinkAuthAccount(ctx, "tenant", &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "sub"})
+			},
+			want: ErrInvalidUserID,
+		},
+		{
+			name: "link missing provider",
+			run: func() error {
+				return s.LinkAuthAccount(ctx, "tenant", &ebs_fields.AuthAccount{UserID: 1, ProviderUserID: "sub"})
+			},
+			want: ErrMissingProvider,
+		},
+		{
+			name: "find missing provider user",
+			run: func() error {
+				_, err := s.FindAuthAccount(ctx, "tenant", "google", "")
+				return err
+			},
+			want: ErrMissingProviderUserID,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(); !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestStore_CreateUserWithAuthAccountPersistsUserAndAccount(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	user := &ebs_fields.User{
+		Mobile:     "google:sub-1",
+		Username:   "google:sub-1",
+		Email:      "google-user@example.test",
+		Password:   "hashed-password",
+		IsVerified: true,
+	}
+	account := &ebs_fields.AuthAccount{
+		Provider:       "google",
+		ProviderUserID: "sub-1",
+		Email:          "google-user@example.test",
+		EmailVerified:  true,
+	}
+
+	if err := s.CreateUserWithAuthAccount(ctx, "tenant", user, account); err != nil {
+		t.Fatalf("CreateUserWithAuthAccount(): %v", err)
+	}
+	if user.ID <= 0 {
+		t.Fatalf("user id = %d, want persisted id", user.ID)
+	}
+	if account.UserID != user.ID {
+		t.Fatalf("account user id = %d, want %d", account.UserID, user.ID)
+	}
+	storedAccount, err := s.FindAuthAccount(ctx, "tenant", "google", "sub-1")
+	if err != nil {
+		t.Fatalf("FindAuthAccount(): %v", err)
+	}
+	if storedAccount.UserID != user.ID {
+		t.Fatalf("stored account user id = %d, want %d", storedAccount.UserID, user.ID)
+	}
+}
+
+func TestStore_CreateUserWithAuthAccountRollsBackWhenLinkFails(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	existingUser := &ebs_fields.User{
+		Mobile:   "google:existing",
+		Username: "google:existing",
+		Email:    "existing-google@example.test",
+		Password: "hashed-password",
+	}
+	existingAccount := &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "existing-sub"}
+	if err := s.CreateUserWithAuthAccount(ctx, "tenant", existingUser, existingAccount); err != nil {
+		t.Fatalf("seed auth account: %v", err)
+	}
+	if _, err := s.DB.ExecContext(ctx, "CREATE UNIQUE INDEX auth_accounts_single_row_test_idx ON auth_accounts((true))"); err != nil {
+		t.Fatalf("create failing auth_accounts index: %v", err)
+	}
+
+	newUser := &ebs_fields.User{
+		Mobile:   "google:new-sub",
+		Username: "google:new-sub",
+		Email:    "new-google@example.test",
+		Password: "hashed-password",
+	}
+	newAccount := &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "new-sub"}
+	if err := s.CreateUserWithAuthAccount(ctx, "tenant", newUser, newAccount); err == nil {
+		t.Fatal("CreateUserWithAuthAccount() error = nil, want auth link failure")
+	}
+	if _, err := s.FindUserByEmail(ctx, "tenant", "new-google@example.test"); !ErrNotFound(err) {
+		t.Fatalf("FindUserByEmail() error = %v, want not found after rollback", err)
 	}
 }
 

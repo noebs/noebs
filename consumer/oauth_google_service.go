@@ -177,7 +177,10 @@ func (s *Service) exchangeGoogleCode(ctx context.Context, req googleAuthRequest)
 		return token, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return token, err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return token, fmt.Errorf("google token exchange failed: %s", string(body))
 	}
@@ -205,7 +208,10 @@ func (s *Service) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 		return info, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return info, err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return info, fmt.Errorf("google userinfo failed: %s", string(body))
 	}
@@ -223,17 +229,22 @@ func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID strin
 		return user, false, err
 	}
 
-	if account, err := s.Store.FindAuthAccount(ctx, tenantID, googleProvider, info.Sub); err == nil {
+	account, err := s.Store.FindAuthAccount(ctx, tenantID, googleProvider, info.Sub)
+	if err == nil {
 		found, err := s.Store.FindUserByID(ctx, tenantID, account.UserID)
 		if err != nil {
 			return user, false, err
 		}
 		return *found, false, nil
 	}
+	if !store.ErrNotFound(err) {
+		return user, false, err
+	}
 
-	email := strings.ToLower(info.Email)
+	email := strings.ToLower(strings.TrimSpace(info.Email))
 	if email != "" {
-		if existing, err := s.Store.FindUserByEmail(ctx, tenantID, email); err == nil {
+		existing, err := s.Store.FindUserByEmail(ctx, tenantID, email)
+		if err == nil {
 			account := ebs_fields.AuthAccount{
 				UserID:         existing.ID,
 				Provider:       googleProvider,
@@ -241,8 +252,13 @@ func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID strin
 				Email:          email,
 				EmailVerified:  info.EmailVerified,
 			}
-			_ = s.Store.LinkAuthAccount(ctx, tenantID, &account)
+			if err := s.Store.LinkAuthAccount(ctx, tenantID, &account); err != nil {
+				return user, false, err
+			}
 			return *existing, false, nil
+		}
+		if !store.ErrNotFound(err) {
+			return user, false, err
 		}
 	}
 
@@ -256,18 +272,18 @@ func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID strin
 		IsVerified: true,
 	}
 	user.Password = uuid.New().String()
-	_ = user.HashPassword()
-	if err := s.Store.CreateUser(ctx, tenantID, &user); err != nil {
+	if err := user.HashPassword(); err != nil {
 		return ebs_fields.User{}, false, err
 	}
-	account := ebs_fields.AuthAccount{
-		UserID:         user.ID,
+	newAccount := ebs_fields.AuthAccount{
 		Provider:       googleProvider,
 		ProviderUserID: info.Sub,
 		Email:          email,
 		EmailVerified:  info.EmailVerified,
 	}
-	_ = s.Store.LinkAuthAccount(ctx, tenantID, &account)
+	if err := s.Store.CreateUserWithAuthAccount(ctx, tenantID, &user, &newAccount); err != nil {
+		return ebs_fields.User{}, false, err
+	}
 	isNew = true
 	return user, isNew, nil
 }

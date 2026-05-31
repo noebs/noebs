@@ -89,6 +89,73 @@ func TestServiceGoogleAuthUsesConfiguredHTTPClient(t *testing.T) {
 	}
 }
 
+func TestFindOrCreateUserFromGoogleCreatesUserAndAuthAccount(t *testing.T) {
+	ctx := context.Background()
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	service := &Service{Store: storeSvc}
+
+	user, isNew, err := service.findOrCreateUserFromGoogle(ctx, tenantID, googleUserInfo{
+		Sub:           "google-sub-1",
+		Email:         "google-user@example.test",
+		EmailVerified: true,
+		Name:          "Google User",
+	})
+	if err != nil {
+		t.Fatalf("findOrCreateUserFromGoogle(): %v", err)
+	}
+	if !isNew {
+		t.Fatal("isNew = false, want true")
+	}
+	if user.ID <= 0 {
+		t.Fatalf("user id = %d, want persisted id", user.ID)
+	}
+	account, err := storeSvc.FindAuthAccount(ctx, tenantID, googleProvider, "google-sub-1")
+	if err != nil {
+		t.Fatalf("FindAuthAccount(): %v", err)
+	}
+	if account.UserID != user.ID {
+		t.Fatalf("account user id = %d, want %d", account.UserID, user.ID)
+	}
+}
+
+func TestFindOrCreateUserFromGoogleLinksExistingEmail(t *testing.T) {
+	ctx := context.Background()
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	service := &Service{Store: storeSvc}
+	existing := ebs_fields.User{
+		Mobile:   "0990000000",
+		Username: "0990000000",
+		Email:    "existing-google@example.test",
+		Password: "hashed-password",
+	}
+	if err := storeSvc.CreateUser(ctx, tenantID, &existing); err != nil {
+		t.Fatalf("CreateUser(): %v", err)
+	}
+
+	user, isNew, err := service.findOrCreateUserFromGoogle(ctx, tenantID, googleUserInfo{
+		Sub:           "google-sub-existing",
+		Email:         " EXISTING-GOOGLE@example.test ",
+		EmailVerified: true,
+		Name:          "Existing User",
+	})
+	if err != nil {
+		t.Fatalf("findOrCreateUserFromGoogle(): %v", err)
+	}
+	if isNew {
+		t.Fatal("isNew = true, want false")
+	}
+	if user.ID != existing.ID {
+		t.Fatalf("user id = %d, want existing id %d", user.ID, existing.ID)
+	}
+	account, err := storeSvc.FindAuthAccount(ctx, tenantID, googleProvider, "google-sub-existing")
+	if err != nil {
+		t.Fatalf("FindAuthAccount(): %v", err)
+	}
+	if account.UserID != existing.ID {
+		t.Fatalf("account user id = %d, want %d", account.UserID, existing.ID)
+	}
+}
+
 func TestServiceRefreshJWTRequiresTenantClaim(t *testing.T) {
 	tests := []struct {
 		name      string

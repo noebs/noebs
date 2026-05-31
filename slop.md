@@ -123,6 +123,11 @@ Last updated: 2026-05-31
     - Fix: return read failures as temporary PSP errors and malformed response JSON as a typed `ErrPSPResponseInvalid`.
     - Tests: `go test -count=1 ./wallet/psp ./wallet/psp/httpjson`.
 
+25. Google OAuth could authenticate users without durably linking the provider account.
+    - Evidence: `findOrCreateUserFromGoogle` treated auth-account lookup failures like misses, ignored `LinkAuthAccount` failures, and created a user before linking the Google account in a separate write.
+    - Fix: distinguish not-found from real lookup errors, require link success for existing email matches, add typed auth-account validation, and create new Google users plus auth accounts in one store transaction.
+    - Tests: `go test -count=1 ./store ./consumer`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

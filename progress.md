@@ -28,6 +28,7 @@
 - Moved consumer/merchant handler dependency validation to construction so nil services or missing stores fail during HTTP startup.
 - Removed redundant consumer/merchant per-request handler nil checks now covered by startup construction invariants.
 - Fixed HTTP JSON PSP response handling so body read failures and malformed 2xx JSON do not map to empty successful responses.
+- Fixed Google OAuth user creation/linking so provider lookup errors are not treated as misses and new users plus auth accounts are persisted atomically.
 
 Verification:
 
@@ -43,6 +44,7 @@ Verification:
 - `go test -count=1 ./parsing ./utils ./consumer ./merchant`
 - `go test -count=1 ./consumer/handler ./merchant/handler ./cli`
 - `go test -count=1 ./wallet/psp ./wallet/psp/httpjson`
+- `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`
 
