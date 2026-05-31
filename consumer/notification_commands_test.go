@@ -55,6 +55,9 @@ func TestStoreNotificationPushDataRejectsMissingInputs(t *testing.T) {
 	if err := service.StoreNotificationPushData(context.Background(), "tenant-a", StorePushDataCommand{}); !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("missing uuid error = %v, want %v", err, ErrMissingUUID)
 	}
+	if err := service.StoreNotificationPushData(context.Background(), "tenant-a", StorePushDataCommand{Data: PushData{UUID: "uuid"}}); !errors.Is(err, store.ErrMissingPushTarget) {
+		t.Fatalf("missing push target error = %v, want %v", err, store.ErrMissingPushTarget)
+	}
 }
 
 func TestNotificationRecordForEventRequiresTransactionUUID(t *testing.T) {

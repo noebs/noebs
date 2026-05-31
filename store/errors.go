@@ -8,6 +8,7 @@ var (
 	ErrMissingUser           = errors.New("missing user")
 	ErrMissingToken          = errors.New("missing token")
 	ErrMissingPushData       = errors.New("missing push data")
+	ErrMissingPushTarget     = errors.New("missing push target")
 	ErrMissingKYC            = errors.New("missing kyc")
 	ErrMissingAccount        = errors.New("missing auth account")
 	ErrMissingUUID           = errors.New("missing uuid")

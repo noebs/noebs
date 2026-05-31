@@ -428,6 +428,20 @@ func TestStore_CreateTransaction_MissingUUID(t *testing.T) {
 	}
 }
 
+func TestStore_CreatePushDataRequiresExplicitFields(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	if err := s.CreatePushData(ctx, "t1", nil); !errors.Is(err, ErrMissingPushData) {
+		t.Fatalf("CreatePushData(nil) error = %v, want %v", err, ErrMissingPushData)
+	}
+	if err := s.CreatePushData(ctx, "t1", &ebs_fields.PushDataRecord{UUID: " "}); !errors.Is(err, ErrMissingUUID) {
+		t.Fatalf("CreatePushData(missing uuid) error = %v, want %v", err, ErrMissingUUID)
+	}
+	if err := s.CreatePushData(ctx, "t1", &ebs_fields.PushDataRecord{UUID: "push-uuid"}); !errors.Is(err, ErrMissingPushTarget) {
+		t.Fatalf("CreatePushData(missing target) error = %v, want %v", err, ErrMissingPushTarget)
+	}
+}
+
 type rowsAffectedResult int64
 
 func (r rowsAffectedResult) LastInsertId() (int64, error) {

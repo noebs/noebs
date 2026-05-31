@@ -60,6 +60,7 @@
 - Fixed beneficiary persistence so repeated saves update the existing beneficiary identity, legacy duplicates are deduplicated by migration, and missing deletes return `sql.ErrNoRows`.
 - Fixed payment token creation so tokens require an explicit positive user ID before persistence instead of allowing orphan UUID-only records.
 - Fixed cache persistence so cache-card and cache-biller operations require explicit PAN/mobile/biller lookup keys before touching the DB.
+- Fixed push-notification persistence so records require an addressable target before storage and payment-request JSON encoding errors are no longer ignored.
 
 Verification:
 
@@ -246,6 +247,12 @@ Verification:
 - `go vet ./...`
 - `git diff --check`
 - `go test -count=1 -v ./store -run 'TestStore_UpsertCacheCard_RequiresDataKey|TestStore_CacheCardRequiresPAN|TestStore_CacheBillerRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_CreatePushDataRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`
+- `go test -count=1 -v ./consumer -run 'TestStoreNotificationPushDataUsesNotificationScope|TestStoreNotificationPushDataRejectsMissingInputs|TestNotificationRecordForEventRequiresTransactionUUID'` (Postgres container case skipped locally when the container runtime is unavailable)
 - `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`

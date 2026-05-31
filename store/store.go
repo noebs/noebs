@@ -1203,15 +1203,26 @@ func (s *Store) CreatePushData(ctx context.Context, tenantID string, data *ebs_f
 	if data == nil {
 		return ErrMissingPushData
 	}
+	data.UUID = strings.TrimSpace(data.UUID)
 	if data.UUID == "" {
 		return ErrMissingUUID
+	}
+	data.To = strings.TrimSpace(data.To)
+	data.Phone = strings.TrimSpace(data.Phone)
+	data.DeviceID = strings.TrimSpace(data.DeviceID)
+	data.UserMobile = strings.TrimSpace(data.UserMobile)
+	if data.To == "" && data.Phone == "" && data.DeviceID == "" && data.UserMobile == "" {
+		return ErrMissingPushTarget
 	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	now := time.Now().UTC()
-	paymentReq, _ := json.Marshal(data.PaymentRequest)
+	paymentReq, err := json.Marshal(data.PaymentRequest)
+	if err != nil {
+		return err
+	}
 	stmt := s.DB.Rebind(`INSERT INTO push_data(
 		uuid, tenant_id, type, date, to_device, title, body, call_to_action, phone, is_read, device_id, user_mobile, ebs_uuid, payment_request, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)

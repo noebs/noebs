@@ -338,6 +338,11 @@ Last updated: 2026-05-31
     - Fix: require explicit PAN, mobile, and biller ID values before cache DB access, and add a typed store error for missing biller IDs.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_UpsertCacheCard_RequiresDataKey|TestStore_CacheCardRequiresPAN|TestStore_CacheBillerRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+68. Push notifications could be persisted without an addressable target.
+    - Evidence: `CreatePushData` only checked tenant, record pointer, and UUID. A direct store call or internal notification command could persist a notification with no `user_mobile`, `phone`, `device_id`, or `to`, making the record unreachable by user notification reads and meaningless for delivery.
+    - Fix: trim notification identity/target fields, require at least one explicit target before DB access, and surface JSON encoding errors instead of ignoring them.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_CreatePushDataRequiresExplicitFields|TestStore_CoreTenantValidationFailsBeforeDB'`; `go test -count=1 -v ./consumer -run 'TestStoreNotificationPushDataUsesNotificationScope|TestStoreNotificationPushDataRejectsMissingInputs|TestNotificationRecordForEventRequiresTransactionUUID'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
