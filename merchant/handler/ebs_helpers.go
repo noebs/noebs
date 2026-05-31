@@ -21,14 +21,10 @@ func ebsErrorDetails(res ebs_fields.EBSParserFields) ebs_fields.ErrorDetails {
 }
 
 func handleEBS[Req any](
-	h *Handler,
 	c *fiber.Ctx,
 	req *Req,
 	call ebsCall[Req],
 ) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	if err := bindJSON(c, req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}

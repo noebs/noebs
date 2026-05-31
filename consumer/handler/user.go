@@ -9,9 +9,6 @@ import (
 )
 
 func (h *Handler) GetCards(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -25,9 +22,6 @@ func (h *Handler) GetCards(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	username := getMobile(c)
 	type data struct {
 		Token string `json:"token"`
@@ -47,9 +41,6 @@ func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateBeneficiary(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -67,9 +58,6 @@ func (h *Handler) CreateBeneficiary(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ListBeneficiaries(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -84,9 +72,6 @@ func (h *Handler) ListBeneficiaries(c *fiber.Ctx) error {
 }
 
 func (h *Handler) DeleteBeneficiary(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -104,9 +89,6 @@ func (h *Handler) DeleteBeneficiary(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AddCards(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	var list []ebs_fields.Card
 	if err := parseJSON(c, &list); err != nil {
@@ -124,9 +106,6 @@ func (h *Handler) AddCards(c *fiber.Ctx) error {
 }
 
 func (h *Handler) EditCard(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req ebs_fields.Card
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
@@ -143,9 +122,6 @@ func (h *Handler) EditCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RemoveCard(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	var card ebs_fields.Card
 	if err := bindJSON(c, &card); err != nil {
@@ -162,9 +138,6 @@ func (h *Handler) RemoveCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) NecToName(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	nec := strings.TrimSpace(c.Query("nec"))
 	if nec == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "missing nec", "code": "bad_request"})
@@ -181,9 +154,6 @@ func (h *Handler) NecToName(c *fiber.Ctx) error {
 }
 
 func (h *Handler) Notifications(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	mobile := getMobile(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -197,9 +167,6 @@ func (h *Handler) Notifications(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetUser(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	mobile := getMobile(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -213,9 +180,6 @@ func (h *Handler) GetUser(c *fiber.Ctx) error {
 }
 
 func (h *Handler) UpdateUser(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var profile ebs_fields.UserProfile
 	if err := bindJSON(c, &profile); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "binding_error"})
@@ -235,9 +199,6 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	mobile := getMobile(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -251,9 +212,6 @@ func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	mobile := getMobile(c)
 	language := strings.TrimSpace(c.Query("language"))
 	tenantID, err := resolveTenantID(c)
@@ -270,9 +228,6 @@ func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) KYC(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req ebs_fields.KYCPassport
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
@@ -288,9 +243,6 @@ func (h *Handler) KYC(c *fiber.Ctx) error {
 }
 
 func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	id := strings.TrimSpace(c.Query("uuid"))
 	tenantID, err := resolveTenantID(c)
 	if err != nil {

@@ -14,9 +14,6 @@ type googleAuthRequest struct {
 
 // GoogleAuth exchanges an OAuth code for tokens, then logs in or creates the user.
 func (h *Handler) GoogleAuth(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req googleAuthRequest
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
@@ -40,9 +37,6 @@ type completeProfileRequest struct {
 }
 
 func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	if userID == 0 {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing user id"})
@@ -66,9 +60,6 @@ func (h *Handler) CompleteProfile(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AuthMe(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	if userID == 0 {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing user id"})

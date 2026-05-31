@@ -8,9 +8,6 @@ import (
 )
 
 func (h *Handler) ResolveQuickPaymentToken(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -29,9 +26,6 @@ func (h *Handler) ResolveQuickPaymentToken(c *fiber.Ctx) error {
 }
 
 func (h *Handler) MarkQuickPaymentTokenPaid(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {

@@ -26,6 +26,7 @@
 - Fixed dashboard browser/export handlers so stats query, JSON encode, and stream errors return HTTP 500 instead of being ignored.
 - Added a top-level `parsing` package for shared map-field parsing and moved bill/receipt extraction onto it; removed the unused `utils.GetOrDefault` helper.
 - Moved consumer/merchant handler dependency validation to construction so nil services or missing stores fail during HTTP startup.
+- Removed redundant consumer/merchant per-request handler nil checks now covered by startup construction invariants.
 
 Verification:
 

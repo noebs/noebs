@@ -15,9 +15,6 @@ import (
 )
 
 func (h *Handler) GenerateAPIKey(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req map[string]string
 	if err := parseJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "bad_request"})
@@ -40,9 +37,6 @@ func (h *Handler) GenerateAPIKey(c *fiber.Ctx) error {
 }
 
 func (h *Handler) LoginHandler(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req ebs_fields.User
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
@@ -67,9 +61,6 @@ func (h *Handler) LoginHandler(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SingleLoginHandler(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req gateway.Token
 	if err := parseJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
@@ -95,9 +86,6 @@ func (h *Handler) SingleLoginHandler(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req gateway.Token
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
@@ -118,9 +106,6 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateUser(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req ebs_fields.User
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
@@ -141,9 +126,6 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 }
 
 func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req ebs_fields.User
 	if err := parseJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
@@ -171,9 +153,6 @@ func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 }
 
 func (h *Handler) BalanceStep(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req consumer.BalanceStepRequest
 	_ = parseJSON(c, &req)
 
@@ -201,9 +180,6 @@ func (h *Handler) BalanceStep(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ChangePassword(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	mobile := getMobile(c)
 	var req ebs_fields.User
 	if err := bindJSON(c, &req); err != nil || req.NewPassword == "" {
@@ -230,9 +206,6 @@ func (h *Handler) GenerateSignInCode(c *fiber.Ctx) error {
 }
 
 func (h *Handler) generateSignInCode(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req gateway.Token
 	_ = parseJSON(c, &req)
 	if strings.TrimSpace(req.Mobile) == "" {

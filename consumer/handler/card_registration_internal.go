@@ -8,9 +8,6 @@ import (
 )
 
 func (h *Handler) CreateCompletedRegistrationIdentity(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -28,9 +25,6 @@ func (h *Handler) CreateCompletedRegistrationIdentity(c *fiber.Ctx) error {
 }
 
 func (h *Handler) RegisterWithCardIdentity(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -48,9 +42,6 @@ func (h *Handler) RegisterWithCardIdentity(c *fiber.Ctx) error {
 }
 
 func (h *Handler) IssueRecoveryJWT(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
@@ -68,9 +59,6 @@ func (h *Handler) IssueRecoveryJWT(c *fiber.Ctx) error {
 }
 
 func (h *Handler) StoreCompletedRegistrationCard(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})

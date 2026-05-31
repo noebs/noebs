@@ -113,6 +113,11 @@ Last updated: 2026-05-31
     - Fix: make handler constructors validate required service/store dependencies and return typed startup errors; route registration now fails during engine construction instead of relying on per-handler compensation.
     - Tests: `go test -count=1 ./consumer/handler ./merchant/handler ./cli`.
 
+23. Handler request paths still carried service nil checks after construction guaranteed service wiring.
+    - Evidence: consumer and merchant HTTP handlers repeatedly returned `service_unavailable` for `h == nil || h.Service == nil`, even though routes are registered from validated constructors and nil handlers cannot be produced by normal startup.
+    - Fix: remove the redundant per-request nil guards and simplify EBS helper signatures so handlers rely on the startup invariant.
+    - Tests: `go test -count=1 ./consumer/handler ./merchant/handler ./cli`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

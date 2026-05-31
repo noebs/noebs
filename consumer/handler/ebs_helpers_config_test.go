@@ -27,7 +27,7 @@ func TestHandleConfiguredEBSAppliesMountedConfigBeforeValidation(t *testing.T) {
 	app.Use(gateway.InternalTenantIdentityMiddleware())
 	app.Post("/", func(c *fiber.Ctx) error {
 		var req ebs_fields.ConsumerPurchaseFields
-		return handleConfiguredEBS(h, c, &req, func(r *ebs_fields.ConsumerPurchaseFields) {
+		return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerPurchaseFields) {
 			r.ApplicationId = h.Service.NoebsConfig.ConsumerID
 			r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.SpecialPaymentFees
 		}, func(ctx context.Context, tenantID string, req ebs_fields.ConsumerPurchaseFields) (ebs_fields.EBSParserFields, error) {

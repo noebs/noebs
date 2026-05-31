@@ -8,9 +8,6 @@ import (
 )
 
 func (h *Handler) RegisterWithCard(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var card ebs_fields.CacheCards
 	if err := bindJSON(c, &card); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
@@ -27,9 +24,6 @@ func (h *Handler) RegisterWithCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CheckUser(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	type checkUserRequest struct {
 		Phones []string `json:"phones"`
 	}
@@ -51,9 +45,6 @@ func (h *Handler) CheckUser(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SetMainCard(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	type cardRequest struct {
 		Pan string `json:"PAN"`
 	}
@@ -74,9 +65,6 @@ func (h *Handler) SetMainCard(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetTransactions(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {

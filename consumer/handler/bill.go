@@ -12,15 +12,12 @@ import (
 
 func (h *Handler) BillPayment(c *fiber.Ctx) error {
 	var req ebs_fields.ConsumerBillPaymentFields
-	return handleConfiguredEBS(h, c, &req, func(r *ebs_fields.ConsumerBillPaymentFields) {
+	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerBillPaymentFields) {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
 	}, h.Service.BillPayment, nil)
 }
 
 func (h *Handler) GetBills(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	var req consumer.Bills
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
@@ -42,9 +39,6 @@ func (h *Handler) GetBills(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetBiller(c *fiber.Ctx) error {
-	if h == nil || h.Service == nil {
-		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
 	mobile := strings.TrimSpace(c.Query("mobile"))
 	if mobile == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "empty_mobile", "code": "empty_mobile"})

@@ -21,13 +21,12 @@ func ebsErrorDetails(res ebs_fields.EBSParserFields) ebs_fields.ErrorDetails {
 }
 
 func handleEBS[Req any](
-	h *Handler,
 	c *fiber.Ctx,
 	req *Req,
 	call ebsCall[Req],
 	successPayload func(ebs_fields.EBSParserFields) interface{},
 ) error {
-	tenantID, err := prepareEBS(h, c, req)
+	tenantID, err := prepareEBS(c, req)
 	if err != nil {
 		return err
 	}
@@ -36,14 +35,13 @@ func handleEBS[Req any](
 }
 
 func handleConfiguredEBS[Req any](
-	h *Handler,
 	c *fiber.Ctx,
 	req *Req,
 	applyConfig func(*Req),
 	call ebsCall[Req],
 	successPayload func(ebs_fields.EBSParserFields) interface{},
 ) error {
-	tenantID, err := parseEBS(h, c, req)
+	tenantID, err := parseEBS(c, req)
 	if err != nil {
 		return err
 	}
@@ -55,8 +53,8 @@ func handleConfiguredEBS[Req any](
 	return completeEBS(c, tenantID, *req, call, successPayload)
 }
 
-func prepareEBS[Req any](h *Handler, c *fiber.Ctx, req *Req) (string, error) {
-	tenantID, err := parseEBS(h, c, req)
+func prepareEBS[Req any](c *fiber.Ctx, req *Req) (string, error) {
+	tenantID, err := parseEBS(c, req)
 	if err != nil {
 		return "", err
 	}
@@ -66,10 +64,7 @@ func prepareEBS[Req any](h *Handler, c *fiber.Ctx, req *Req) (string, error) {
 	return tenantID, nil
 }
 
-func parseEBS[Req any](h *Handler, c *fiber.Ctx, req *Req) (string, error) {
-	if h == nil || h.Service == nil {
-		return "", jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable"})
-	}
+func parseEBS[Req any](c *fiber.Ctx, req *Req) (string, error) {
 	if err := parseJSON(c, req); err != nil {
 		return "", jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
