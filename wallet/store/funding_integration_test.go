@@ -156,4 +156,46 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 	if _, err := store.CreateFundingLink(ctx, mismatchedLink); !errors.Is(err, ErrDuplicateFundingLink) {
 		t.Fatalf("mismatched funding link error = %v, want %v", err, ErrDuplicateFundingLink)
 	}
+
+	withdrawal, err := store.PostDoubleEntry(ctx, DoubleEntryParams{
+		TenantID:       tenantID,
+		IdempotencyKey: "withdrawal-ref:withdrawal",
+		Currency:       "AED",
+		ReferenceType:  "withdrawal",
+		ReferenceID:    "withdrawal-ref",
+		DebitWalletID:  userWallet.ID,
+		CreditWalletID: treasuryWallet.ID,
+		Amount:         400,
+		Description:    "withdrawal",
+	})
+	if err != nil {
+		t.Fatalf("post withdrawal ledger entry: %v", err)
+	}
+	usageLink := LedgerFundingLink{
+		TenantID:        tenantID,
+		LedgerEntryID:   withdrawal.DebitEntry.ID,
+		FundingSourceID: stored.ID,
+		Amount:          400,
+		Currency:        "AED",
+	}
+	if _, err := store.CreateFundingLink(ctx, usageLink); err != nil {
+		t.Fatalf("create funding usage link: %v", err)
+	}
+	got, err = store.GetFundingSourceByID(ctx, tenantID, stored.ID)
+	if err != nil {
+		t.Fatalf("get funding source after usage: %v", err)
+	}
+	if got.TotalWithdrawn != 400 {
+		t.Fatalf("source total_withdrawn after usage = %d, want 400", got.TotalWithdrawn)
+	}
+	if _, err := store.CreateFundingLink(ctx, usageLink); err != nil {
+		t.Fatalf("replay funding usage link: %v", err)
+	}
+	got, err = store.GetFundingSourceByID(ctx, tenantID, stored.ID)
+	if err != nil {
+		t.Fatalf("get funding source after usage replay: %v", err)
+	}
+	if got.TotalWithdrawn != 400 {
+		t.Fatalf("source total_withdrawn after usage replay = %d, want 400", got.TotalWithdrawn)
+	}
 }

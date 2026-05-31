@@ -929,7 +929,14 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		}
 	}
 	if fundingSource != nil {
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateFundingSourceUsage, params.TenantID, fundingSource.ID, validation.WalletDebitAmount, now).Get(ctx, nil); err != nil {
+		link := walletstore.LedgerFundingLink{
+			TenantID:        params.TenantID,
+			LedgerEntryID:   posted.DebitEntry.ID,
+			FundingSourceID: fundingSource.ID,
+			Amount:          validation.WalletDebitAmount,
+			Currency:        validation.WalletCurrency,
+		}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityLinkLedgerToFundingSource, link).Get(ctx, nil); err != nil {
 			return err
 		}
 	}

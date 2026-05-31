@@ -254,6 +254,14 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		}
 	}()
 
+	ledgerEntry, err := getLedgerEntryForFundingLinkTx(ctx, tx, tenantID, link.LedgerEntryID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateFundingLinkLedgerEntry(ledgerEntry, link); err != nil {
+		return nil, err
+	}
+
 	now := time.Now().UTC()
 	stmt := tx.Rebind(`INSERT INTO ledger_funding_links(
 		tenant_id, ledger_entry_id, funding_source_id, amount, currency, created_at
@@ -285,11 +293,7 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		committed = true
 		return existing, nil
 	}
-	updateStmt := tx.Rebind(`UPDATE funding_sources
-		SET total_funded = total_funded + ?,
-			last_funded_at = GREATEST(COALESCE(last_funded_at, ?), ?),
-			updated_at = ?
-		WHERE tenant_id = ? AND id = ?`)
+	updateStmt := tx.Rebind(fundingSourceUsageUpdateSQL(ledgerEntry.EntryType))
 	result, err := tx.ExecContext(ctx, updateStmt, link.Amount, now, now, now, tenantID, link.FundingSourceID)
 	if err != nil {
 		return nil, err
@@ -308,6 +312,22 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	return &stored, nil
 }
 
+func getLedgerEntryForFundingLinkTx(ctx context.Context, tx interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}, tenantID string, ledgerEntryID int64) (*LedgerEntry, error) {
+	stmt := tx.Rebind(`SELECT * FROM ledger_entries
+		WHERE tenant_id = ? AND id = ?`)
+	var entry LedgerEntry
+	if err := tx.GetContext(ctx, &entry, stmt, tenantID, ledgerEntryID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrLedgerEntryNotFound
+		}
+		return nil, err
+	}
+	return &entry, nil
+}
+
 func getFundingLinkTx(ctx context.Context, tx interface {
 	Rebind(string) string
 	GetContext(context.Context, any, string, ...any) error
@@ -324,6 +344,27 @@ func getFundingLinkTx(ctx context.Context, tx interface {
 	return &link, nil
 }
 
+func ValidateFundingLinkLedgerEntry(entry *LedgerEntry, link LedgerFundingLink) error {
+	if entry == nil {
+		return ErrLedgerEntryNotFound
+	}
+	if entry.TenantID != link.TenantID || entry.ID != link.LedgerEntryID {
+		return ErrDuplicateFundingLink
+	}
+	if entry.Amount != link.Amount {
+		return ErrInvalidAmount
+	}
+	if entry.Currency != link.Currency {
+		return ErrCurrencyMismatch
+	}
+	switch entry.EntryType {
+	case "credit", "debit":
+		return nil
+	default:
+		return ErrInvalidDirection
+	}
+}
+
 func ValidateFundingLinkReplay(existing *LedgerFundingLink, requested LedgerFundingLink) error {
 	if existing == nil ||
 		existing.TenantID != requested.TenantID ||
@@ -334,6 +375,25 @@ func ValidateFundingLinkReplay(existing *LedgerFundingLink, requested LedgerFund
 		return ErrDuplicateFundingLink
 	}
 	return nil
+}
+
+func fundingSourceUsageUpdateSQL(entryType string) string {
+	switch entryType {
+	case "credit":
+		return `UPDATE funding_sources
+			SET total_funded = total_funded + ?,
+				last_funded_at = GREATEST(COALESCE(last_funded_at, ?), ?),
+				updated_at = ?
+			WHERE tenant_id = ? AND id = ?`
+	case "debit":
+		return `UPDATE funding_sources
+			SET total_withdrawn = total_withdrawn + ?,
+				last_withdrawn_at = GREATEST(COALESCE(last_withdrawn_at, ?), ?),
+				updated_at = ?
+			WHERE tenant_id = ? AND id = ?`
+	default:
+		return ""
+	}
 }
 
 func (s *Store) UpdateFundingSourceUsage(ctx context.Context, tenantID string, sourceID int64, amount int64, usedAt time.Time) error {

@@ -229,6 +229,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrAdminRoleNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
+		errors.Is(err, walletstore.ErrLedgerEntryNotFound),
 		errors.Is(err, walletstore.ErrVerificationNotFound),
 		errors.Is(err, walletstore.ErrUserTwoFANotFound),
 		errors.Is(err, walletstore.ErrManualTransferNotFound),

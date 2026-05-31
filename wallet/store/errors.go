@@ -79,6 +79,7 @@ var (
 	ErrMissingSourceDetails         = errors.New("missing source details")
 	ErrMissingFundingSourceID       = errors.New("missing funding source id")
 	ErrMissingLedgerEntryID         = errors.New("missing ledger entry id")
+	ErrLedgerEntryNotFound          = errors.New("ledger entry not found")
 	ErrFundingSourceNotFound        = errors.New("funding source not found")
 	ErrFundingSourceNotVerified     = errors.New("funding source not verified")
 	ErrFundingSourceNotWithdrawable = errors.New("funding source not withdrawable")

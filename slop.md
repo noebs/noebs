@@ -173,6 +173,11 @@ Last updated: 2026-05-31
     - Fix: make funding-source upsert validate immutable source identity and metadata only, move `total_funded` increments into `CreateFundingLink`, make ledger funding links exact-replay idempotent with mismatches returning typed duplicate errors, and add a partial unique index for null external references.
     - Tests: `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingSourceMerge|TestValidateFundingLinkReplay|TestFundingSourceValidation|TestCreateFundingLinkValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+35. Return-to-source withdrawal usage could overcount funding source capacity on retry.
+    - Evidence: after withdrawal ledger posting, the workflow called `UpdateFundingSourceUsage`, which incremented `funding_sources.total_withdrawn` without a ledger-entry idempotency key. A retry after the DB update could consume return-to-source capacity multiple times for one ledger debit.
+    - Fix: use `ledger_funding_links` for debit entries too, validate each link against the ledger entry amount/currency/type, and update `total_funded` for credit links or `total_withdrawn` for debit links only when a new link is inserted.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingLinkLedgerEntry|TestValidateFundingLinkReplay'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -1109,6 +1109,43 @@ func TestValidateFundingLinkReplay(t *testing.T) {
 	}
 }
 
+func TestValidateFundingLinkLedgerEntry(t *testing.T) {
+	entry := LedgerEntry{
+		ID:        10,
+		TenantID:  "tenant",
+		EntryType: "credit",
+		Amount:    100,
+		Currency:  "USD",
+	}
+	link := LedgerFundingLink{
+		TenantID:      "tenant",
+		LedgerEntryID: 10,
+		Amount:        100,
+		Currency:      "USD",
+	}
+	if err := ValidateFundingLinkLedgerEntry(&entry, link); err != nil {
+		t.Fatalf("ValidateFundingLinkLedgerEntry() error = %v", err)
+	}
+
+	debit := entry
+	debit.EntryType = "debit"
+	if err := ValidateFundingLinkLedgerEntry(&debit, link); err != nil {
+		t.Fatalf("ValidateFundingLinkLedgerEntry() debit error = %v", err)
+	}
+
+	amountMismatch := entry
+	amountMismatch.Amount = 99
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&amountMismatch, link), ErrInvalidAmount)
+
+	currencyMismatch := entry
+	currencyMismatch.Currency = "EUR"
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&currencyMismatch, link), ErrCurrencyMismatch)
+
+	invalidType := entry
+	invalidType.EntryType = "pending"
+	assertErrorIs(t, ValidateFundingLinkLedgerEntry(&invalidType, link), ErrInvalidDirection)
+}
+
 func TestGetFundingSourceByPSPRefValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetFundingSourceByPSPRef(t.Context(), "", "coinsbuy", "ref-1")

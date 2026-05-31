@@ -38,6 +38,7 @@
 - Fixed PSP transaction replay validation so duplicate deposit/withdrawal client references must match the original request contract before reusing a workflow.
 - Fixed PSP workflow-start failure handling so failed Temporal starts must also record PSP transaction failure, and status-repair failures surface as joined internal errors.
 - Fixed funding-source accounting so source totals are incremented by idempotent ledger-link creation rather than source upsert, with mismatched source/link replays rejected.
+- Fixed return-to-source withdrawal usage so funding source `total_withdrawn` is tied to idempotent debit ledger links instead of an unkeyed counter update.
 
 Verification:
 
@@ -68,6 +69,7 @@ Verification:
 - `go test -count=1 ./wallet/grpc`
 - `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`
 - `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingSourceMerge|TestValidateFundingLinkReplay|TestFundingSourceValidation|TestCreateFundingLinkValidation'`
+- `go test -count=1 -v ./wallet/store -run 'TestFundingSourceTotalsFollowIdempotentLedgerLinks|TestValidateFundingLinkLedgerEntry|TestValidateFundingLinkReplay'`
 
 Next candidates:
 
