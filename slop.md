@@ -233,6 +233,11 @@ Last updated: 2026-05-31
     - Fix: add a shared rows-affected contract for keyed updates and return `sql.ErrNoRows` when a targeted update touches no rows.
     - Tests: `go test -count=1 ./store`; `go test -count=1 -v ./store -run 'TestExecContextRequireRowsAffected|TestStoreTargetedUpdatesReportMissingRows|TestStoreTenantValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+47. KYC writes could create or split identity records below the service boundary.
+    - Evidence: `consumer.Service.UpdateKYC` built KYC/passport rows directly from request mobile data without verifying the user existed, while `store.UpdateKYC` only checked that the KYC pointer was non-nil. Direct or malformed calls could create KYC/passport rows for nonexistent users or write KYC and passport records under different mobiles.
+    - Fix: resolve the user at the service boundary, canonicalize KYC/passport identity fields from the persisted user, add typed store validation for missing/mismatched mobiles, and require the target user row before inserting KYC or passport data.
+    - Tests: `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 -v ./store -run 'TestStore_UpdateKYCValidationFailsBeforeDB|TestStore_UpdateKYCRequiresExistingUser|TestStoreTenantValidation'`; `go test -count=1 -v ./consumer -run 'TestUpdateKYCRequiresExistingUser|TestUpdateKYCPersistsForExistingUser|TestUserServiceTenantValidationFailsBeforeDB'` (Postgres container cases skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

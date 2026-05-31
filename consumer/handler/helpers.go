@@ -102,6 +102,8 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrMissingToken),
 		errors.Is(err, store.ErrMissingUUID),
 		errors.Is(err, store.ErrInvalidUserID),
+		errors.Is(err, store.ErrMissingMobile),
+		errors.Is(err, store.ErrInvalidMobile),
 		errors.Is(err, store.ErrMissingPAN),
 		errors.Is(err, store.ErrMissingData),
 		errors.Is(err, store.ErrMissingBillType),

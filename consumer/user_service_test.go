@@ -90,3 +90,54 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 		}
 	}
 }
+
+func TestUpdateKYCRequiresExistingUser(t *testing.T) {
+	ctx := context.Background()
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	service := &Service{Store: storeSvc}
+
+	err := service.UpdateKYC(ctx, tenantID, ebs_fields.KYCPassport{
+		Selfie:      "selfie",
+		PassportImg: "passport-image",
+		Passport:    ebs_fields.Passport{Mobile: "0990000000", PassportNumber: "P123"},
+	})
+	if !store.ErrNotFound(err) {
+		t.Fatalf("error = %v, want not found", err)
+	}
+}
+
+func TestUpdateKYCPersistsForExistingUser(t *testing.T) {
+	ctx := context.Background()
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	service := &Service{Store: storeSvc}
+	mobile := "0990000000"
+	seedUser(t, storeSvc, tenantID, mobile, "password")
+
+	if err := service.UpdateKYC(ctx, tenantID, ebs_fields.KYCPassport{
+		Selfie:      "selfie",
+		PassportImg: "passport-image",
+		Passport:    ebs_fields.Passport{Mobile: " " + mobile + " ", PassportNumber: "P123"},
+	}); err != nil {
+		t.Fatalf("UpdateKYC(): %v", err)
+	}
+
+	_, kyc, passport, err := storeSvc.GetUserWithKYC(ctx, tenantID, mobile)
+	if err != nil {
+		t.Fatalf("GetUserWithKYC(): %v", err)
+	}
+	if kyc == nil {
+		t.Fatal("kyc is nil, want persisted record")
+	}
+	if kyc.UserMobile != mobile || kyc.Mobile != mobile {
+		t.Fatalf("kyc mobile = (%q, %q), want %q", kyc.UserMobile, kyc.Mobile, mobile)
+	}
+	if passport == nil {
+		t.Fatal("passport is nil, want persisted record")
+	}
+	if passport.Mobile != mobile {
+		t.Fatalf("passport mobile = %q, want %q", passport.Mobile, mobile)
+	}
+	if passport.PassportNumber != "P123" {
+		t.Fatalf("passport number = %q, want P123", passport.PassportNumber)
+	}
+}

@@ -709,6 +709,82 @@ func TestStore_AuthAccountValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestStore_UpdateKYCValidationFailsBeforeDB(t *testing.T) {
+	ctx := context.Background()
+	s := &Store{}
+	tests := []struct {
+		name     string
+		kyc      *ebs_fields.KYC
+		passport *ebs_fields.Passport
+		want     error
+	}{
+		{
+			name: "missing kyc",
+			want: ErrMissingKYC,
+		},
+		{
+			name: "missing user mobile",
+			kyc:  &ebs_fields.KYC{Mobile: "0990000000"},
+			want: ErrMissingMobile,
+		},
+		{
+			name: "missing kyc mobile",
+			kyc:  &ebs_fields.KYC{UserMobile: "0990000000"},
+			want: ErrMissingMobile,
+		},
+		{
+			name: "mismatched kyc mobile",
+			kyc:  &ebs_fields.KYC{UserMobile: "0990000000", Mobile: "0991111111"},
+			want: ErrInvalidMobile,
+		},
+		{
+			name:     "missing passport mobile",
+			kyc:      &ebs_fields.KYC{UserMobile: "0990000000", Mobile: "0990000000"},
+			passport: &ebs_fields.Passport{},
+			want:     ErrMissingMobile,
+		},
+		{
+			name:     "mismatched passport mobile",
+			kyc:      &ebs_fields.KYC{UserMobile: "0990000000", Mobile: "0990000000"},
+			passport: &ebs_fields.Passport{Mobile: "0991111111"},
+			want:     ErrInvalidMobile,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := s.UpdateKYC(ctx, "tenant", tt.kyc, tt.passport)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestStore_UpdateKYCRequiresExistingUser(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	mobile := "0990000000"
+
+	err := s.UpdateKYC(
+		ctx,
+		"tenant",
+		&ebs_fields.KYC{UserMobile: mobile, Mobile: mobile, Selfie: "selfie"},
+		&ebs_fields.Passport{Mobile: mobile, PassportNumber: "P123"},
+	)
+	if !ErrNotFound(err) {
+		t.Fatalf("error = %v, want not found", err)
+	}
+
+	var kycRows int
+	stmt := s.DB.Rebind("SELECT COUNT(*) FROM kyc WHERE tenant_id = ? AND mobile = ?")
+	if err := s.DB.GetContext(ctx, &kycRows, stmt, "tenant", mobile); err != nil {
+		t.Fatalf("count kyc rows: %v", err)
+	}
+	if kycRows != 0 {
+		t.Fatalf("kyc rows = %d, want 0", kycRows)
+	}
+}
+
 func TestStore_CreateUserWithAuthAccountPersistsUserAndAccount(t *testing.T) {
 	ctx := context.Background()
 	s := newIdentityAuthTestStore(t, ctx)

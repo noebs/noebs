@@ -287,14 +287,19 @@ func (s *Service) UpdateKYC(ctx context.Context, tenantID string, req ebs_fields
 	if strings.TrimSpace(req.Mobile) == "" {
 		return ErrMissingMobile
 	}
+	user, err := s.Store.GetUserByMobile(ctx, tenantID, strings.TrimSpace(req.Mobile))
+	if err != nil {
+		return err
+	}
 
 	kyc := &ebs_fields.KYC{
-		UserMobile:  req.Mobile,
-		Mobile:      req.Mobile,
+		UserMobile:  user.Mobile,
+		Mobile:      user.Mobile,
 		Selfie:      req.Selfie,
 		PassportImg: req.PassportImg,
 	}
 	passport := req.Passport
+	passport.Mobile = user.Mobile
 	return s.Store.UpdateKYC(ctx, tenantID, kyc, &passport)
 }
 

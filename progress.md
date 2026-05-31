@@ -126,6 +126,9 @@ Verification:
 - `git diff --check`
 - `go test -count=1 ./store`
 - `go test -count=1 -v ./store -run 'TestExecContextRequireRowsAffected|TestStoreTargetedUpdatesReportMissingRows|TestStoreTenantValidation'`
+- `go test -count=1 ./store ./consumer ./consumer/handler`
+- `go test -count=1 -v ./store -run 'TestStore_UpdateKYCValidationFailsBeforeDB|TestStore_UpdateKYCRequiresExistingUser|TestStoreTenantValidation'`
+- `go test -count=1 -v ./consumer -run 'TestUpdateKYCRequiresExistingUser|TestUpdateKYCPersistsForExistingUser|TestUserServiceTenantValidationFailsBeforeDB'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

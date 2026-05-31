@@ -1290,8 +1290,9 @@ func (s *Store) UpdateKYC(ctx context.Context, tenantID string, kyc *ebs_fields.
 	if err != nil {
 		return err
 	}
-	if kyc == nil {
-		return ErrMissingKYC
+	identity, err := validateKYCIdentity(kyc, passport)
+	if err != nil {
+		return err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -1302,10 +1303,16 @@ func (s *Store) UpdateKYC(ctx context.Context, tenantID string, kyc *ebs_fields.
 	if err != nil {
 		return err
 	}
+	userStmt := db.Rebind("SELECT 1 FROM users WHERE tenant_id = ? AND mobile = ? AND deleted_at IS NULL")
+	var userExists int
+	if err := tx.GetContext(ctx, &userExists, userStmt, tenantID, identity.mobile); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 	kycStmt := db.Rebind(`INSERT INTO kyc(tenant_id, user_mobile, mobile, selfie, passport_img, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(tenant_id, mobile) DO UPDATE SET user_mobile = excluded.user_mobile, selfie = excluded.selfie, passport_img = excluded.passport_img, updated_at = excluded.updated_at`)
-	if _, err := tx.ExecContext(ctx, kycStmt, tenantID, kyc.UserMobile, kyc.Mobile, kyc.Selfie, kyc.PassportImg, now, now); err != nil {
+	if _, err := tx.ExecContext(ctx, kycStmt, tenantID, identity.userMobile, identity.mobile, kyc.Selfie, kyc.PassportImg, now, now); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -1314,12 +1321,45 @@ func (s *Store) UpdateKYC(ctx context.Context, tenantID string, kyc *ebs_fields.
 			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(tenant_id, mobile) DO UPDATE SET birth_date = excluded.birth_date, issue_date = excluded.issue_date, expiration_date = excluded.expiration_date,
 			national_number = excluded.national_number, passport_number = excluded.passport_number, gender = excluded.gender, nationality = excluded.nationality, holder_name = excluded.holder_name, updated_at = excluded.updated_at`)
-		if _, err := tx.ExecContext(ctx, passStmt, tenantID, passport.Mobile, passport.BirthDate, passport.IssueDate, passport.ExpirationDate, passport.NationalNumber, passport.PassportNumber, passport.Gender, passport.Nationality, passport.HolderName, now, now); err != nil {
+		if _, err := tx.ExecContext(ctx, passStmt, tenantID, identity.passportMobile, passport.BirthDate, passport.IssueDate, passport.ExpirationDate, passport.NationalNumber, passport.PassportNumber, passport.Gender, passport.Nationality, passport.HolderName, now, now); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
 	}
 	return tx.Commit()
+}
+
+type kycIdentity struct {
+	userMobile     string
+	mobile         string
+	passportMobile string
+}
+
+func validateKYCIdentity(kyc *ebs_fields.KYC, passport *ebs_fields.Passport) (kycIdentity, error) {
+	if kyc == nil {
+		return kycIdentity{}, ErrMissingKYC
+	}
+	identity := kycIdentity{
+		userMobile: strings.TrimSpace(kyc.UserMobile),
+		mobile:     strings.TrimSpace(kyc.Mobile),
+	}
+	if identity.userMobile == "" || identity.mobile == "" {
+		return kycIdentity{}, ErrMissingMobile
+	}
+	if identity.userMobile != identity.mobile {
+		return kycIdentity{}, ErrInvalidMobile
+	}
+	if passport == nil {
+		return identity, nil
+	}
+	identity.passportMobile = strings.TrimSpace(passport.Mobile)
+	if identity.passportMobile == "" {
+		return kycIdentity{}, ErrMissingMobile
+	}
+	if identity.passportMobile != identity.mobile {
+		return kycIdentity{}, ErrInvalidMobile
+	}
+	return identity, nil
 }
 
 func (s *Store) GetUserWithKYC(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, *ebs_fields.KYC, *ebs_fields.Passport, error) {
