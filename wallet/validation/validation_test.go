@@ -97,6 +97,30 @@ func TestValidateDepositRequestAllowsMissingProviderTransactionID(t *testing.T) 
 	}
 }
 
+func TestValidateDepositWalletRequiresCurrencyMatch(t *testing.T) {
+	wallet := &walletstore.Wallet{
+		TenantID:  "tenant",
+		Currency:  "USD",
+		Status:    "active",
+		OwnerType: walletstore.OwnerTypeUser,
+		OwnerID:   "user-1",
+	}
+	req := DepositValidationRequest{
+		Currency:  "AED",
+		OwnerType: walletstore.OwnerTypeUser,
+		OwnerID:   "user-1",
+	}
+
+	if err := validateDepositWallet(wallet, req); err != walletstore.ErrCurrencyMismatch {
+		t.Fatalf("validateDepositWallet() error = %v, want %v", err, walletstore.ErrCurrencyMismatch)
+	}
+
+	req.Currency = "USD"
+	if err := validateDepositWallet(wallet, req); err != nil {
+		t.Fatalf("validateDepositWallet() error = %v, want nil", err)
+	}
+}
+
 func TestValidateWithdrawalRequest(t *testing.T) {
 	base := WithdrawalValidationRequest{
 		TenantID:        "tenant",

@@ -250,7 +250,7 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	if err != nil {
 		return nil, err
 	}
-	if err := validateWallet(wallet, "", req.OwnerType, req.OwnerID); err != nil {
+	if err := validateDepositWallet(wallet, req); err != nil {
 		return nil, err
 	}
 
@@ -417,6 +417,10 @@ func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID str
 		return ErrWalletOwnerMismatch
 	}
 	return nil
+}
+
+func validateDepositWallet(wallet *walletstore.Wallet, req DepositValidationRequest) error {
+	return validateWallet(wallet, req.Currency, req.OwnerType, req.OwnerID)
 }
 
 func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) error {

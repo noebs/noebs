@@ -52,6 +52,7 @@
 - Fixed targeted root-store updates so missing users/tokens/payment requests return not-found errors instead of silent success.
 - Fixed PSP method catalog pagination so scoped overrides and eligibility filters are applied before `LIMIT/OFFSET`, including methods enabled only by matching overrides.
 - Fixed PSP currency configuration so missing `enabled_currencies` no longer means every currency, and PSP validation failures no longer map to internal gRPC errors.
+- Fixed deposit validation so the target wallet currency must match the requested deposit currency before PSP config, fee, limit, or ledger work.
 
 Verification:
 
@@ -164,6 +165,11 @@ Verification:
 - `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsRequiresConfiguredCurrencies|TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod'`
 - `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`
 - `go test -count=1 ./wallet/validation ./wallet/store ./wallet/grpc`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/validation -run 'TestValidateDepositRequest|TestValidateDepositWalletRequiresCurrencyMatch'`
+- `go test -count=1 ./wallet/validation`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

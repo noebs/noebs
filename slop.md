@@ -298,6 +298,11 @@ Last updated: 2026-05-31
     - Fix: require PSP configs to declare at least one enabled currency before provider validation or catalog exposure, and map PSP validation failures to explicit API status codes instead of falling through as internal errors.
     - Tests: `go test -count=1 ./wallet/validation ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/validation -run 'TestValidatePSPConfigRequiresExplicitCurrency|TestValidatePSPConfigRequiresConfiguredCurrencies|TestValidatePSPConfigMatchesTrimmedCurrency'`; `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsRequiresConfiguredCurrencies|TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod'`; `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`.
 
+60. Deposit validation skipped wallet currency.
+    - Evidence: `ValidateDeposit` called `validateWallet(wallet, "", ...)`, so a deposit request in `AED` could pass status/owner checks against a `USD` wallet and only fail later when the workflow tried to post an `AED` ledger credit into that wallet. That creates PSP transaction/workflow side effects before the currency mismatch is rejected.
+    - Fix: validate the deposit wallet against the requested deposit currency at the validation boundary.
+    - Tests: `go test -count=1 ./wallet/validation`; `go test -count=1 -v ./wallet/validation -run 'TestValidateDepositRequest|TestValidateDepositWalletRequiresCurrencyMatch'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
