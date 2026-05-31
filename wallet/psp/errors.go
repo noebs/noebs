@@ -6,6 +6,7 @@ var (
 	ErrPSPNotRegistered   = errors.New("psp not registered")
 	ErrPSPSecretMissing   = errors.New("psp secret missing")
 	ErrPSPConfigInvalid   = errors.New("psp config invalid")
+	ErrPSPRequestInvalid  = errors.New("psp request invalid")
 	ErrPSPWebhookInvalid  = errors.New("psp webhook invalid")
 	ErrPSPResponseInvalid = errors.New("psp response invalid")
 	ErrPSPTemporary       = errors.New("psp temporary error")

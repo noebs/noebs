@@ -1,34 +1,44 @@
 package psp
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type RequestMapping struct {
 	Fields map[string]string `json:"fields"`
 	Static map[string]any    `json:"static"`
 }
 
-func MapRequest(input map[string]any, mapping RequestMapping) map[string]any {
+func MapRequest(input map[string]any, mapping RequestMapping) (map[string]any, error) {
 	if len(mapping.Fields) == 0 && len(mapping.Static) == 0 {
-		return cloneMap(input)
+		return cloneMap(input), nil
 	}
 	mapped := cloneMap(mapping.Static)
 	for targetPath, sourcePath := range mapping.Fields {
+		targetPath = strings.TrimSpace(targetPath)
+		sourcePath = strings.TrimSpace(sourcePath)
+		if targetPath == "" || sourcePath == "" {
+			return nil, fmt.Errorf("%w: empty request mapping path", ErrPSPConfigInvalid)
+		}
 		value, ok := valueAtPath(input, sourcePath)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("%w: missing mapped source %q", ErrPSPRequestInvalid, sourcePath)
 		}
-		setValueAtPath(mapped, targetPath, value)
+		if err := setValueAtPath(mapped, targetPath, value); err != nil {
+			return nil, err
+		}
 	}
-	return mapped
+	return mapped, nil
 }
 
-func setValueAtPath(payload map[string]any, path string, value any) {
+func setValueAtPath(payload map[string]any, path string, value any) error {
 	if payload == nil || path == "" {
-		return
+		return fmt.Errorf("%w: empty request mapping target", ErrPSPConfigInvalid)
 	}
 	parts := splitPath(path)
 	if len(parts) == 0 {
-		return
+		return fmt.Errorf("%w: empty request mapping target", ErrPSPConfigInvalid)
 	}
 	current := payload
 	for _, part := range parts[:len(parts)-1] {
@@ -40,6 +50,7 @@ func setValueAtPath(payload map[string]any, path string, value any) {
 		current = next
 	}
 	current[parts[len(parts)-1]] = value
+	return nil
 }
 
 func splitPath(path string) []string {

@@ -243,6 +243,11 @@ Last updated: 2026-05-31
     - Fix: make response amount mapping return `ErrPSPResponseInvalid` for missing or malformed configured amount paths, preserve absent amounts only when no amount mapping is configured, and propagate mapping errors through HTTP PSP provider and webhook mapping paths.
     - Tests: `go test -count=1 ./wallet/psp ./wallet/psp/httpjson ./wallet/handler`; `go test -count=1 -v ./wallet/psp -run 'TestMapResponse'`; `go test -count=1 -v ./wallet/psp/httpjson -run 'TestVerifyDepositRejectsInvalidMappedAmount|TestDoJSONReturnsInvalidResponseError'`; `go test -count=1 -v ./wallet/handler -run 'TestMappedPSPWebhookFields'`.
 
+49. PSP request mapping silently dropped configured outbound fields.
+    - Evidence: `wallet/psp.MapRequest` skipped a configured field when its source path was missing and ignored empty target/source mapping paths. A bad PSP mapping or incomplete payout destination could therefore issue an HTTP provider request with required fields omitted instead of failing before the network boundary.
+    - Fix: make request mapping return typed errors, reject empty mapping paths as `ErrPSPConfigInvalid`, reject missing configured source paths as `ErrPSPRequestInvalid`, and propagate those errors through HTTP PSP provider methods before outbound calls.
+    - Tests: `go test -count=1 ./wallet/psp ./wallet/psp/httpjson`; `go test -count=1 -v ./wallet/psp -run 'TestMapRequest|TestMapResponse'`; `go test -count=1 -v ./wallet/psp/httpjson -run 'TestSendPayoutRejectsMissingMappedSourceBeforeHTTP|TestVerifyDepositRejectsInvalidMappedAmount'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

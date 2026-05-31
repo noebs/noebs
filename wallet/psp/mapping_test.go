@@ -127,7 +127,7 @@ func TestMapRequestUsesStaticAndConfiguredFields(t *testing.T) {
 			"iban": "AE070331234567890123456",
 		},
 	}
-	mapped := MapRequest(input, RequestMapping{
+	mapped, err := MapRequest(input, RequestMapping{
 		Static: map[string]any{"channel": "bank"},
 		Fields: map[string]string{
 			"reference":        "client_reference",
@@ -136,6 +136,9 @@ func TestMapRequestUsesStaticAndConfiguredFields(t *testing.T) {
 			"beneficiary.iban": "destination.iban",
 		},
 	})
+	if err != nil {
+		t.Fatalf("MapRequest() error = %v", err)
+	}
 
 	if mapped["channel"] != "bank" || mapped["reference"] != "front-ref" {
 		t.Fatalf("unexpected top-level mapped request: %+v", mapped)
@@ -147,5 +150,38 @@ func TestMapRequestUsesStaticAndConfiguredFields(t *testing.T) {
 	beneficiary, ok := mapped["beneficiary"].(map[string]any)
 	if !ok || beneficiary["iban"] != "AE070331234567890123456" {
 		t.Fatalf("unexpected beneficiary mapping: %+v", mapped["beneficiary"])
+	}
+}
+
+func TestMapRequestRejectsMissingConfiguredSource(t *testing.T) {
+	_, err := MapRequest(map[string]any{"amount": int64(1500)}, RequestMapping{
+		Fields: map[string]string{"payment.amount": "missing.amount"},
+	})
+	if !errors.Is(err, ErrPSPRequestInvalid) {
+		t.Fatalf("MapRequest() error = %v, want %v", err, ErrPSPRequestInvalid)
+	}
+}
+
+func TestMapRequestRejectsInvalidConfiguredPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		mapping RequestMapping
+	}{
+		{
+			name:    "empty target",
+			mapping: RequestMapping{Fields: map[string]string{" ": "amount"}},
+		},
+		{
+			name:    "empty source",
+			mapping: RequestMapping{Fields: map[string]string{"payment.amount": " "}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := MapRequest(map[string]any{"amount": int64(1500)}, tt.mapping)
+			if !errors.Is(err, ErrPSPConfigInvalid) {
+				t.Fatalf("MapRequest() error = %v, want %v", err, ErrPSPConfigInvalid)
+			}
+		})
 	}
 }

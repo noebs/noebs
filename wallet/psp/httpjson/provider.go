@@ -53,7 +53,10 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 		return nil, psp.ErrPSPConfigInvalid
 	}
 	canonical := map[string]any{"transaction_id": txID}
-	payload := psp.MapRequest(canonical, p.config.DepositRequestMapping)
+	payload, err := psp.MapRequest(canonical, p.config.DepositRequestMapping)
+	if err != nil {
+		return nil, err
+	}
 	resp := map[string]any{}
 	method := normalizeMethod(p.config.DepositRequestMethod)
 	path := renderRequestPath(strings.TrimSpace(p.config.DepositRequestPath), canonical)
@@ -85,7 +88,10 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 		"destination":      req.Destination,
 		"metadata":         req.Metadata,
 	}
-	payload := psp.MapRequest(canonical, p.config.PayoutRequestMapping)
+	payload, err := psp.MapRequest(canonical, p.config.PayoutRequestMapping)
+	if err != nil {
+		return nil, err
+	}
 	resp := map[string]any{}
 	idempotencyKey := req.ClientReference
 	method := normalizeMethod(p.config.PayoutRequestMethod)
@@ -111,7 +117,10 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	}
 	resp := map[string]any{}
 	canonical := map[string]any{"transaction_id": txID}
-	payload := psp.MapRequest(canonical, p.config.StatusRequestMapping)
+	payload, err := psp.MapRequest(canonical, p.config.StatusRequestMapping)
+	if err != nil {
+		return nil, err
+	}
 	method := normalizeMethod(p.config.StatusRequestMethod)
 	path := renderRequestPath(strings.TrimSpace(p.config.StatusRequestPath), canonical)
 	path = appendQueryForMethod(method, path, payload)

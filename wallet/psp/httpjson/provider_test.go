@@ -147,6 +147,46 @@ func TestVerifyDepositRejectsInvalidMappedAmount(t *testing.T) {
 	}
 }
 
+func TestSendPayoutRejectsMissingMappedSourceBeforeHTTP(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"pending"}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           server.URL,
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposit/verify",
+		PayoutRequestMethod:  http.MethodPost,
+		PayoutRequestPath:    "/payouts",
+		PayoutRequestMapping: psp.RequestMapping{
+			Fields: map[string]string{"beneficiary.iban": "destination.iban"},
+		},
+		StatusRequestMethod: http.MethodGet,
+		StatusRequestPath:   "/status",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	_, err = provider.SendPayout(context.Background(), psp.PayoutRequest{
+		ClientReference: "ref-1",
+		Amount:          1500,
+		Currency:        "AED",
+		Destination:     map[string]any{},
+	})
+	if !errors.Is(err, psp.ErrPSPRequestInvalid) {
+		t.Fatalf("SendPayout() error = %v, want %v", err, psp.ErrPSPRequestInvalid)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want 0", requests)
+	}
+}
+
 func TestDoJSONReturnsReadError(t *testing.T) {
 	provider := &Provider{
 		config: &psp.Config{
