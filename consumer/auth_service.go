@@ -8,7 +8,6 @@ import (
 
 	noebsCrypto "github.com/adonese/crypto"
 	gateway "github.com/adonese/noebs/apigateway"
-	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/utils"
@@ -190,6 +189,9 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (
 		return ebs_fields.User{}, err
 	}
 	if !u.VerifyOtp(otp) {
+		if err := s.Store.IncrementSuspicious(ctx, tenantID, mobile); err != nil {
+			return ebs_fields.User{}, err
+		}
 		return ebs_fields.User{}, ErrInvalidOTP
 	}
 	_ = s.Store.UpdateUserColumns(ctx, tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true})
@@ -226,15 +228,6 @@ func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassw
 	return sanitizeUser(*u), nil
 }
 
-// SendPush is a no-op placeholder while push delivery is disabled.
-func (s *Service) SendPush(ctx context.Context, data PushData) error {
-	_ = ctx
-	if s.Logger != nil {
-		s.Logger.Printf("push disabled: drop notification type=%s uuid=%s", data.Type, data.UUID)
-	}
-	return apperr.ErrUnavailable
-}
-
 func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
@@ -249,6 +242,9 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile strin
 	}
 	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
+		return err
+	}
+	if _, err := s.Store.RecordLoginAttempt(ctx, tenantID, mobile, true); err != nil {
 		return err
 	}
 	key, err := user.GenerateOtp()

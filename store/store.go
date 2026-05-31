@@ -19,6 +19,8 @@ type Store struct {
 	crypto *dataCrypto
 }
 
+const loginAttemptWindow = 15 * time.Minute
+
 func New(db *DB, opts ...Option) *Store {
 	options := StoreOptions{}
 	for _, opt := range opts {
@@ -779,34 +781,43 @@ func (s *Store) RecordLoginAttempt(ctx context.Context, tenantID, mobile string,
 	if err != nil {
 		return 0, err
 	}
+	if strings.TrimSpace(mobile) == "" {
+		return 0, ErrMissingMobile
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return 0, err
 	}
 
-	stmt := s.DB.Rebind("SELECT login_count, window_started_at FROM login_metrics WHERE tenant_id = ? AND mobile = ?")
-	var count int
-	var window time.Time
-	if err := db.QueryRowContext(ctx, stmt, tenantID, mobile).Scan(&count, &window); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			now := time.Now().UTC()
-			insertStmt := s.DB.Rebind("INSERT INTO login_metrics(tenant_id, mobile, login_count, window_started_at, suspicious_count) VALUES(?, ?, ?, ?, 0)")
-			if _, err := db.ExecContext(ctx, insertStmt, tenantID, mobile, 0, now); err != nil {
-				return 0, err
-			}
-			return 0, nil
-		}
-		return 0, err
-	}
-
-	_ = window // TODO: enforce window logic (rate-limits) instead of counting unbounded.
+	now := time.Now().UTC()
+	cutoff := now.Add(-loginAttemptWindow)
+	incrementBy := 0
 	if increment {
-		count++
-		now := time.Now().UTC()
-		updateStmt := s.DB.Rebind("UPDATE login_metrics SET login_count = ?, window_started_at = ?, updated_at = ? WHERE tenant_id = ? AND mobile = ?")
-		if _, err := db.ExecContext(ctx, updateStmt, count, now, now, tenantID, mobile); err != nil {
-			return 0, err
-		}
+		incrementBy = 1
+	}
+	stmt := s.DB.Rebind(`INSERT INTO login_metrics(
+		tenant_id, mobile, login_count, window_started_at, suspicious_count, updated_at
+	) VALUES(?, ?, ?, ?, 0, ?)
+	ON CONFLICT(tenant_id, mobile) DO UPDATE SET
+		login_count = CASE
+			WHEN login_metrics.window_started_at <= ? OR login_metrics.window_started_at > ?
+			THEN EXCLUDED.login_count
+			ELSE login_metrics.login_count + ?
+		END,
+		window_started_at = CASE
+			WHEN login_metrics.window_started_at <= ? OR login_metrics.window_started_at > ?
+			THEN EXCLUDED.window_started_at
+			ELSE login_metrics.window_started_at
+		END,
+		updated_at = EXCLUDED.updated_at
+	RETURNING login_count`)
+	var count int
+	if err := db.QueryRowContext(ctx, stmt,
+		tenantID, mobile, incrementBy, now, now,
+		cutoff, now, incrementBy,
+		cutoff, now,
+	).Scan(&count); err != nil {
+		return 0, err
 	}
 	return count, nil
 }
@@ -816,12 +827,21 @@ func (s *Store) IncrementSuspicious(ctx context.Context, tenantID, mobile string
 	if err != nil {
 		return err
 	}
+	if strings.TrimSpace(mobile) == "" {
+		return ErrMissingMobile
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind("UPDATE login_metrics SET suspicious_count = suspicious_count + 1 WHERE tenant_id = ? AND mobile = ?")
-	_, err = db.ExecContext(ctx, stmt, tenantID, mobile)
+	now := time.Now().UTC()
+	stmt := s.DB.Rebind(`INSERT INTO login_metrics(
+		tenant_id, mobile, login_count, window_started_at, suspicious_count, updated_at
+	) VALUES(?, ?, 0, ?, 1, ?)
+	ON CONFLICT(tenant_id, mobile) DO UPDATE SET
+		suspicious_count = login_metrics.suspicious_count + 1,
+		updated_at = EXCLUDED.updated_at`)
+	_, err = db.ExecContext(ctx, stmt, tenantID, mobile, now, now)
 	return err
 }
 

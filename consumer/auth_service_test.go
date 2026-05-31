@@ -175,6 +175,58 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+
+	if err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000"); err != nil {
+		t.Fatalf("GenerateSignInCode(): %v", err)
+	}
+
+	loginCount, suspiciousCount := readLoginMetric(t, env, "0990000000")
+	if loginCount != 1 {
+		t.Fatalf("login count = %d, want 1", loginCount)
+	}
+	if suspiciousCount != 0 {
+		t.Fatalf("suspicious count = %d, want 0", suspiciousCount)
+	}
+}
+
+func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+
+	_, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", "not-otp")
+	if !errors.Is(err, ErrInvalidOTP) {
+		t.Fatalf("VerifyOTP() error = %v, want %v", err, ErrInvalidOTP)
+	}
+
+	loginCount, suspiciousCount := readLoginMetric(t, env, "0990000000")
+	if loginCount != 0 {
+		t.Fatalf("login count = %d, want 0", loginCount)
+	}
+	if suspiciousCount != 1 {
+		t.Fatalf("suspicious count = %d, want 1", suspiciousCount)
+	}
+}
+
+func readLoginMetric(t *testing.T, env *testEnv, mobile string) (int, int) {
+	t.Helper()
+	var loginCount int
+	var suspiciousCount int
+	stmt := env.DB.Rebind("SELECT login_count, suspicious_count FROM login_metrics WHERE tenant_id = ? AND mobile = ?")
+	if err := env.DB.QueryRowContext(context.Background(), stmt, env.Tenant, mobile).Scan(&loginCount, &suspiciousCount); err != nil {
+		t.Fatalf("read login metric: %v", err)
+	}
+	return loginCount, suspiciousCount
+}
+
 func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 	auth := &refreshAuthStub{
 		claims: &gateway.TokenClaims{UserID: 42, Mobile: "0990000000", TenantID: "tenant-a"},

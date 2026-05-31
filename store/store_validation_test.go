@@ -2,12 +2,14 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/testdb"
@@ -462,4 +464,87 @@ func TestStore_MarkNotificationsRead_MissingMobile(t *testing.T) {
 	if !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("expected ErrMissingMobile, got %v", err)
 	}
+}
+
+func TestStore_LoginMetricsRequireMobileBeforeDB(t *testing.T) {
+	s := &Store{}
+	if _, err := s.RecordLoginAttempt(context.Background(), "tenant", " ", true); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("RecordLoginAttempt() error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := s.IncrementSuspicious(context.Background(), "tenant", " "); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("IncrementSuspicious() error = %v, want %v", err, ErrMissingMobile)
+	}
+}
+
+func TestStore_RecordLoginAttemptCountsFirstAttemptAndResetsWindow(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+
+	count, err := s.RecordLoginAttempt(ctx, "tenant", "0990000000", true)
+	if err != nil {
+		t.Fatalf("first RecordLoginAttempt(): %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("first login count = %d, want 1", count)
+	}
+
+	count, err = s.RecordLoginAttempt(ctx, "tenant", "0990000000", true)
+	if err != nil {
+		t.Fatalf("second RecordLoginAttempt(): %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("second login count = %d, want 2", count)
+	}
+
+	expiredWindow := time.Now().UTC().Add(-loginAttemptWindow - time.Second)
+	stmt := s.DB.Rebind("UPDATE login_metrics SET window_started_at = ? WHERE tenant_id = ? AND mobile = ?")
+	if _, err := s.DB.ExecContext(ctx, stmt, expiredWindow, "tenant", "0990000000"); err != nil {
+		t.Fatalf("expire login window: %v", err)
+	}
+
+	count, err = s.RecordLoginAttempt(ctx, "tenant", "0990000000", true)
+	if err != nil {
+		t.Fatalf("expired-window RecordLoginAttempt(): %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expired-window login count = %d, want 1", count)
+	}
+}
+
+func TestStore_IncrementSuspiciousCreatesAndUpdatesMetric(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+
+	if err := s.IncrementSuspicious(ctx, "tenant", "0990000000"); err != nil {
+		t.Fatalf("first IncrementSuspicious(): %v", err)
+	}
+	if err := s.IncrementSuspicious(ctx, "tenant", "0990000000"); err != nil {
+		t.Fatalf("second IncrementSuspicious(): %v", err)
+	}
+
+	var suspiciousCount int
+	var loginCount int
+	var updatedAt sql.NullTime
+	stmt := s.DB.Rebind("SELECT suspicious_count, login_count, updated_at FROM login_metrics WHERE tenant_id = ? AND mobile = ?")
+	if err := s.DB.QueryRowContext(ctx, stmt, "tenant", "0990000000").Scan(&suspiciousCount, &loginCount, &updatedAt); err != nil {
+		t.Fatalf("read login metric: %v", err)
+	}
+	if suspiciousCount != 2 {
+		t.Fatalf("suspicious count = %d, want 2", suspiciousCount)
+	}
+	if loginCount != 0 {
+		t.Fatalf("login count = %d, want 0", loginCount)
+	}
+	if !updatedAt.Valid {
+		t.Fatal("updated_at is NULL, want timestamp")
+	}
+}
+
+func newIdentityAuthTestStore(t *testing.T, ctx context.Context) *Store {
+	t.Helper()
+	db := newValidationDB(t)
+	if err := MigrateScope(ctx, db, "tenant", MigrationScopeIdentityAuth); err != nil {
+		t.Fatalf("migrate identity-auth scope: %v", err)
+	}
+	return New(db)
 }
