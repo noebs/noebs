@@ -518,6 +518,11 @@ Last updated: 2026-05-31
     - Fix: add PSP config amount-bound validation and apply it in both deposit and withdrawal validation before fee, limit, FX, or workflow work.
     - Tests: `go test -count=1 -v ./wallet/validation -run 'TestValidatePSPConfig|TestValidateDepositRequest|TestValidateWithdrawalRequest'`; `go test -count=1 ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+104. Admin pending approvals hid malformed withdrawal request payloads.
+    - Evidence: `adminWithdrawalApproval` ignored `json.Unmarshal` errors for `psp_transactions.raw_request`. Corrupt raw request JSON therefore rendered a pending withdrawal approval with empty wallet, owner, destination, and approval fields instead of surfacing data corruption.
+    - Fix: make admin withdrawal approval rendering return a contextual decode error and fail the admin render path with an internal error when the stored raw request is malformed.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestAdminWithdrawalApproval|TestRenderWalletAdmin'`; `go test -count=1 ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

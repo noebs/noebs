@@ -82,6 +82,7 @@
 - Fixed admin-reporting transaction projections so duplicate EBS UUID events must be exact replays instead of rewriting reporting rows.
 - Fixed dashboard browser search parsing so malformed non-empty JSON is rejected before DB access instead of falling back to an unfiltered transaction list.
 - Fixed PSP request validation so provider min/max amount bounds are enforced for deposits and withdrawals, not only shown in method discovery.
+- Fixed admin pending-approval rendering so malformed withdrawal raw-request JSON fails visibly instead of rendering empty approval context.
 
 Verification:
 
@@ -461,6 +462,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./wallet/validation -run 'TestValidatePSPConfig|TestValidateDepositRequest|TestValidateWithdrawalRequest'`
 - `go test -count=1 ./wallet/validation`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestAdminWithdrawalApproval|TestRenderWalletAdmin'`
+- `go test -count=1 ./wallet/grpc`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

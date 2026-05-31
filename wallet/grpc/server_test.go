@@ -2,6 +2,7 @@ package walletgrpc
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 
@@ -88,6 +89,38 @@ func TestRenderWalletAdminDecisionRequiresExplicitTenant(t *testing.T) {
 func TestAdminCurrencyRequiresExplicitCurrency(t *testing.T) {
 	if _, err := adminCurrency(" "); err != walletstore.ErrMissingCurrency {
 		t.Fatalf("adminCurrency() error = %v, want %v", err, walletstore.ErrMissingCurrency)
+	}
+}
+
+func TestAdminWithdrawalApprovalDecodesRawRequest(t *testing.T) {
+	item, err := adminWithdrawalApproval(walletstore.PSPTransaction{
+		ClientReference: "withdrawal-1",
+		WorkflowID:      sql.NullString{String: "workflow-1", Valid: true},
+		Amount:          1000,
+		Currency:        "AED",
+		PSPProvider:     "provider",
+		Status:          "held",
+		RawRequest:      walletstore.RawJSON(`{"wallet_id":"wallet-1","owner_type":"user","owner_id":"42","destination_id":7,"approval_required":true}`),
+	})
+	if err != nil {
+		t.Fatalf("adminWithdrawalApproval() error = %v", err)
+	}
+	if item.WalletID != "wallet-1" || item.OwnerType != "user" || item.OwnerID != "42" || item.DestinationID != 7 || !item.ApprovalNeeded {
+		t.Fatalf("decoded item = %+v", item)
+	}
+}
+
+func TestAdminWithdrawalApprovalRejectsMalformedRawRequest(t *testing.T) {
+	_, err := adminWithdrawalApproval(walletstore.PSPTransaction{
+		ClientReference: "withdrawal-1",
+		WorkflowID:      sql.NullString{String: "workflow-1", Valid: true},
+		RawRequest:      walletstore.RawJSON(`{`),
+	})
+	if err == nil {
+		t.Fatal("adminWithdrawalApproval() error = nil, want malformed raw request error")
+	}
+	if !strings.Contains(err.Error(), "withdrawal-1") {
+		t.Fatalf("adminWithdrawalApproval() error = %v, want client reference context", err)
 	}
 }
 

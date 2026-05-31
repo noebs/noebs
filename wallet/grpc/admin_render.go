@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -144,7 +145,11 @@ func (s *Server) renderAdminPendingApprovals(ctx context.Context, req *walletv1.
 	withdrawals := make([]wallethandler.WithdrawalApprovalItem, 0, len(withdrawalTxns))
 	for _, txn := range withdrawalTxns {
 		if txn.WorkflowID.Valid {
-			withdrawals = append(withdrawals, adminWithdrawalApproval(txn))
+			withdrawal, err := adminWithdrawalApproval(txn)
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+			withdrawals = append(withdrawals, withdrawal)
 		}
 	}
 	return adminHTML(ctx, wallethandler.PendingApprovalsPage(wallethandler.PendingApprovalsView{
@@ -838,7 +843,7 @@ func adminUUID(raw string) (uuid.UUID, error) {
 	return uuid.Parse(raw)
 }
 
-func adminWithdrawalApproval(txn walletstore.PSPTransaction) wallethandler.WithdrawalApprovalItem {
+func adminWithdrawalApproval(txn walletstore.PSPTransaction) (wallethandler.WithdrawalApprovalItem, error) {
 	item := wallethandler.WithdrawalApprovalItem{
 		WorkflowID:  txn.WorkflowID.String,
 		ClientRef:   txn.ClientReference,
@@ -856,13 +861,14 @@ func adminWithdrawalApproval(txn walletstore.PSPTransaction) wallethandler.Withd
 			DestinationID    int64  `json:"destination_id"`
 			ApprovalRequired bool   `json:"approval_required"`
 		}
-		if err := json.Unmarshal(txn.RawRequest, &payload); err == nil {
-			item.WalletID = payload.WalletID
-			item.OwnerType = payload.OwnerType
-			item.OwnerID = payload.OwnerID
-			item.DestinationID = payload.DestinationID
-			item.ApprovalNeeded = payload.ApprovalRequired
+		if err := json.Unmarshal(txn.RawRequest, &payload); err != nil {
+			return item, fmt.Errorf("decode withdrawal approval raw request %q: %w", txn.ClientReference, err)
 		}
+		item.WalletID = payload.WalletID
+		item.OwnerType = payload.OwnerType
+		item.OwnerID = payload.OwnerID
+		item.DestinationID = payload.DestinationID
+		item.ApprovalNeeded = payload.ApprovalRequired
 	}
-	return item
+	return item, nil
 }
