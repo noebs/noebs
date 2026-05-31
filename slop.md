@@ -388,6 +388,11 @@ Last updated: 2026-05-31
     - Fix: keep waiting on the original timer and ignore verification-decision signals whose verification ID does not match the expected verification.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestAwaitDestinationVerificationDecisionIgnoresUnrelatedSignals|TestAwaitTerminalPSPStatusReceivesSignal'`; `go test -count=1 ./wallet/workflow ./wallet/worker`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+78. Direct card identity lookups accepted blank PANs.
+    - Evidence: `GetUserByCard` and `GetDeviceIDsByPan` validated tenant IDs but did not reject blank PANs before building encrypted/plain PAN lookup arguments. Direct store callers could issue meaningless card identity queries instead of failing at the store boundary.
+    - Fix: require explicit PAN values before DB access in direct user/device card lookup paths.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_CardIdentityLookupsRequirePAN|TestStore_IdentityTenantValidationFailsBeforeDB|TestStore_CoreTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

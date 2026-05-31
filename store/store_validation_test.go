@@ -778,6 +778,17 @@ func TestStore_CardExists_RequiresPAN(t *testing.T) {
 	}
 }
 
+func TestStore_CardIdentityLookupsRequirePAN(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	if _, err := s.GetUserByCard(ctx, "t1", " "); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("GetUserByCard(missing pan) error = %v, want %v", err, ErrMissingPAN)
+	}
+	if _, err := s.GetDeviceIDsByPan(ctx, "t1", " "); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("GetDeviceIDsByPan(missing pan) error = %v, want %v", err, ErrMissingPAN)
+	}
+}
+
 func TestStore_SetMainCard_RequiresPAN(t *testing.T) {
 	s := &Store{}
 	if err := s.SetMainCard(context.Background(), "t1", 42, " "); !errors.Is(err, ErrMissingPAN) {

@@ -298,6 +298,10 @@ func (s *Store) GetUserByCard(ctx context.Context, tenantID, pan string) (*ebs_f
 	if err != nil {
 		return nil, err
 	}
+	pan = strings.TrimSpace(pan)
+	if pan == "" {
+		return nil, ErrMissingPAN
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -1759,6 +1763,10 @@ func (s *Store) GetDeviceIDsByPan(ctx context.Context, tenantID, pan string) ([]
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	pan = strings.TrimSpace(pan)
+	if pan == "" {
+		return nil, ErrMissingPAN
 	}
 	db, err := s.ensureDB()
 	if err != nil {

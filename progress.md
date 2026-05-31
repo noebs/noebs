@@ -309,6 +309,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_CardIdentityLookupsRequirePAN|TestStore_IdentityTenantValidationFailsBeforeDB|TestStore_CoreTenantValidationFailsBeforeDB'`
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
