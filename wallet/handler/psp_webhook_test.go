@@ -145,6 +145,36 @@ func TestMappedPSPWebhookFieldsRejectsInvalidAmount(t *testing.T) {
 	}
 }
 
+func TestPSPWebhookStatusUpdateDoesNotRewriteConfirmedAtOnTerminalReplay(t *testing.T) {
+	confirmedAt := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
+	payload := []byte(`{"status":"success","psp_tx":"psp-1","message":"ok"}`)
+	existing := &walletstore.PSPTransaction{
+		Status:           walletstore.PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		ResponseMessage:  sql.NullString{String: "ok", Valid: true},
+		RawResponse:      walletstore.RawJSON(payload),
+		ConfirmedAt:      sql.NullTime{Time: confirmedAt, Valid: true},
+	}
+	fields := pspWebhookFields{
+		PSPTransactionID: "psp-1",
+		Status:           walletstore.PSPStatusSuccess,
+		Message:          "ok",
+	}
+
+	replay := pspWebhookStatusUpdate(existing, fields, payload, confirmedAt.Add(time.Hour))
+	if replay.ConfirmedAt.Valid {
+		t.Fatalf("terminal replay confirmed_at = %+v, want unset so store preserves existing evidence", replay.ConfirmedAt)
+	}
+	if err := walletstore.ValidatePSPStatusUpdate(existing, replay); err != nil {
+		t.Fatalf("ValidatePSPStatusUpdate(replay) error = %v", err)
+	}
+
+	firstSuccess := pspWebhookStatusUpdate(&walletstore.PSPTransaction{Status: walletstore.PSPStatusPending}, fields, payload, confirmedAt)
+	if !firstSuccess.ConfirmedAt.Valid || !firstSuccess.ConfirmedAt.Time.Equal(confirmedAt) {
+		t.Fatalf("first success confirmed_at = %+v, want %s", firstSuccess.ConfirmedAt, confirmedAt)
+	}
+}
+
 func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
@@ -311,6 +341,41 @@ func TestPSPWebhookRejectsWorkflowWebhookWithoutTemporalSignaler(t *testing.T) {
 	}
 	if stored.PSPTransactionID.Valid {
 		t.Fatalf("stored psp transaction id = %q, want unset", stored.PSPTransactionID.String)
+	}
+}
+
+func TestPSPWebhookSignalFailureIsRetriable(t *testing.T) {
+	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
+	fixture.createPSPTransaction(t, "signal-retry-ref", "SDG", "workflow-signal-retry")
+	payload := `{"ref":"signal-retry-ref","psp_tx":"psp-signal-retry","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`
+
+	failing := &captureTemporalSignaler{err: errors.New("temporal unavailable")}
+	statusCode, body := fixture.postWebhook(t, fixture.app(failing), payload)
+	if statusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d, body=%s", statusCode, http.StatusServiceUnavailable, body)
+	}
+	if failing.calls != 1 {
+		t.Fatalf("failing signal calls = %d, want 1", failing.calls)
+	}
+	storedAfterFailure := fixture.mustGetPSPTransaction(t, "signal-retry-ref")
+	if storedAfterFailure.Status != walletstore.PSPStatusSuccess {
+		t.Fatalf("stored status after signal failure = %q, want success", storedAfterFailure.Status)
+	}
+	if !storedAfterFailure.ConfirmedAt.Valid {
+		t.Fatal("stored confirmed_at should be set after first success webhook")
+	}
+
+	signaler := &captureTemporalSignaler{}
+	statusCode, body = fixture.postWebhook(t, fixture.app(signaler), payload)
+	if statusCode != http.StatusOK {
+		t.Fatalf("retry status = %d, want %d, body=%s", statusCode, http.StatusOK, body)
+	}
+	if signaler.calls != 1 {
+		t.Fatalf("retry signal calls = %d, want 1", signaler.calls)
+	}
+	storedAfterRetry := fixture.mustGetPSPTransaction(t, "signal-retry-ref")
+	if !storedAfterRetry.ConfirmedAt.Valid || storedAfterRetry.ConfirmedAt.Time.Sub(storedAfterFailure.ConfirmedAt.Time).Abs() >= time.Millisecond {
+		t.Fatalf("retry confirmed_at = %+v, want preserved %+v", storedAfterRetry.ConfirmedAt, storedAfterFailure.ConfirmedAt)
 	}
 }
 
@@ -507,6 +572,7 @@ type captureTemporalSignaler struct {
 	workflowID string
 	signalName string
 	arg        interface{}
+	err        error
 }
 
 func (s *captureTemporalSignaler) SignalWorkflow(_ context.Context, workflowID, runID, signalName string, arg interface{}) error {
@@ -515,7 +581,7 @@ func (s *captureTemporalSignaler) SignalWorkflow(_ context.Context, workflowID, 
 	s.workflowID = workflowID
 	s.signalName = signalName
 	s.arg = arg
-	return nil
+	return s.err
 }
 
 type acceptingWebhookProvider struct {

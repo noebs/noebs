@@ -156,17 +156,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		}
 	}
 
-	update := walletstore.PSPStatusUpdate{Status: fields.Status}
-	if pspTransactionID != "" {
-		update.PSPTransactionID = sql.NullString{String: pspTransactionID, Valid: true}
-	}
-	if fields.Message != "" {
-		update.ResponseMessage = sql.NullString{String: fields.Message, Valid: true}
-	}
-	update.RawResponse = walletstore.RawJSON(payload)
-	if update.Status == "success" {
-		update.ConfirmedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	}
+	update := pspWebhookStatusUpdate(stored, fields, payload, time.Now().UTC())
 	if err := h.Store.UpdatePSPTransactionStatus(c.Context(), tenantID, clientRef, update); err != nil {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
@@ -180,7 +170,11 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			RawResponse:  payloadMap,
 		}
 		if err := h.Temporal.SignalWorkflow(c.Context(), stored.WorkflowID.String, "", walletworkflow.PSPStatusUpdateSignal, signal); err != nil {
-			return jsonResponse(c, http.StatusAccepted, fiber.Map{"status": update.Status, "client_reference": clientRef, "signal_error": err.Error()})
+			errMsg := err.Error()
+			if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, stored.Direction, http.StatusServiceUnavailable, fiber.Map{"status": update.Status, "client_reference": clientRef, "signal_error": errMsg}, errMsg, payload); logErr != nil {
+				return jsonResponse(c, 0, mapWalletError(logErr))
+			}
+			return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"status": update.Status, "client_reference": clientRef, "signal_error": errMsg})
 		}
 	}
 
@@ -198,6 +192,23 @@ type pspWebhookFields struct {
 	Currency         string
 	Direction        string
 	Message          string
+}
+
+func pspWebhookStatusUpdate(stored *walletstore.PSPTransaction, fields pspWebhookFields, payload []byte, now time.Time) walletstore.PSPStatusUpdate {
+	update := walletstore.PSPStatusUpdate{
+		Status:      fields.Status,
+		RawResponse: walletstore.RawJSON(payload),
+	}
+	if fields.PSPTransactionID != "" {
+		update.PSPTransactionID = sql.NullString{String: fields.PSPTransactionID, Valid: true}
+	}
+	if fields.Message != "" {
+		update.ResponseMessage = sql.NullString{String: fields.Message, Valid: true}
+	}
+	if update.Status == walletstore.PSPStatusSuccess && (stored == nil || !stored.ConfirmedAt.Valid) {
+		update.ConfirmedAt = sql.NullTime{Time: now, Valid: true}
+	}
+	return update
 }
 
 func mappedPSPWebhookFields(payload map[string]any, mapping walletpsp.ResponseMapping) (pspWebhookFields, error) {
