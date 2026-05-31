@@ -53,6 +53,11 @@ Last updated: 2026-05-31
     - Fix: make SMS delivery synchronous for OTP generation, return a typed SMS delivery error on transport or non-2xx gateway failures, bound the SMS HTTP client with a timeout, and map delivery failures to HTTP 502.
     - Tests: `go test -count=1 ./utils`, `go test -count=1 ./consumer ./consumer/handler`.
 
+11. Validator initialization could terminate the process from a shared package.
+    - Evidence: `ebs_fields/custom_validator.go` called `log.Fatalf` if custom validation registration failed, using a package logger from another file and exiting instead of returning an error.
+    - Fix: store a typed validator initialization error and return it through `ValidateStruct`; keep validator setup lazy without process termination.
+    - Tests: `go test -count=1 ./ebs_fields`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

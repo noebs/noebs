@@ -1,6 +1,8 @@
 package ebs_fields
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -10,18 +12,21 @@ import (
 
 var validatorOnce sync.Once
 var validate *validator.Validate
+var validateErr error
+
+var ErrValidatorInit = errors.New("validator initialization failed")
 
 func Validator() *validator.Validate {
 	validatorOnce.Do(func() {
-		validate = validator.New()
-		validate.SetTagName("binding")
+		v := validator.New()
+		v.SetTagName("binding")
 
-		err := validate.RegisterValidation("iso8601", iso8601)
-		if err != nil {
-			log.Fatalf("Unexpected err %v", err)
+		if err := v.RegisterValidation("iso8601", iso8601); err != nil {
+			validateErr = fmt.Errorf("%w: %v", ErrValidatorInit, err)
+			return
 		}
 
-		validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
 			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
 
 			if name == "-" {
@@ -30,13 +35,21 @@ func Validator() *validator.Validate {
 
 			return name
 		})
+		validate = v
 	})
 	return validate
 }
 
 func ValidateStruct(obj interface{}) error {
 	if kindOfData(obj) == reflect.Struct {
-		if err := Validator().Struct(obj); err != nil {
+		v := Validator()
+		if validateErr != nil {
+			return validateErr
+		}
+		if v == nil {
+			return ErrValidatorInit
+		}
+		if err := v.Struct(obj); err != nil {
 			return err
 		}
 	}
