@@ -3,6 +3,9 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -19,6 +22,9 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 	}
 	if err := ValidateOwnershipVerificationStatus(verification.Status); err != nil {
 		return nil, err
+	}
+	if verification.Status != OwnershipVerificationStatusPending {
+		return nil, ErrInvalidStatus
 	}
 	if verification.MaxAttempts <= 0 {
 		return nil, ErrMissingMaxAttempts
@@ -37,6 +43,7 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 		micro_deposit_confirmed_at, card_verification_amount, document_type, document_url,
 		attempts, max_attempts, expires_at, completed_at, workflow_id, reference_id, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT DO NOTHING
 	RETURNING *`)
 	var stored OwnershipVerification
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -58,9 +65,80 @@ func (s *Store) CreateOwnershipVerification(ctx context.Context, verification Ow
 		now,
 		now,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			existing, replayErr := s.getOwnershipVerificationByReplayKey(ctx, tenantID, verification)
+			if replayErr != nil {
+				return nil, replayErr
+			}
+			if err := ValidateOwnershipVerificationCreateReplay(existing, verification); err != nil {
+				return nil, err
+			}
+			return existing, nil
+		}
 		return nil, err
 	}
 	return &stored, nil
+}
+
+func (s *Store) getOwnershipVerificationByReplayKey(ctx context.Context, tenantID string, verification OwnershipVerification) (*OwnershipVerification, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	if verification.WorkflowID.Valid && strings.TrimSpace(verification.WorkflowID.String) != "" {
+		stmt := db.Rebind("SELECT * FROM ownership_verifications WHERE tenant_id = ? AND destination_id = ? AND workflow_id = ?")
+		var existing OwnershipVerification
+		if err := db.GetContext(ctx, &existing, stmt, tenantID, verification.DestinationID, verification.WorkflowID.String); err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				return nil, err
+			}
+		} else {
+			return &existing, nil
+		}
+	}
+	if verification.ReferenceID.Valid && strings.TrimSpace(verification.ReferenceID.String) != "" {
+		stmt := db.Rebind("SELECT * FROM ownership_verifications WHERE tenant_id = ? AND destination_id = ? AND reference_id = ?")
+		var existing OwnershipVerification
+		if err := db.GetContext(ctx, &existing, stmt, tenantID, verification.DestinationID, verification.ReferenceID.String); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrDuplicateVerification
+			}
+			return nil, err
+		}
+		return &existing, nil
+	}
+	return nil, ErrDuplicateVerification
+}
+
+func ValidateOwnershipVerificationCreateReplay(existing *OwnershipVerification, requested OwnershipVerification) error {
+	if existing == nil ||
+		existing.TenantID != requested.TenantID ||
+		existing.DestinationID != requested.DestinationID ||
+		existing.VerificationType != requested.VerificationType ||
+		!slices.Equal(existing.MicroDepositAmounts, requested.MicroDepositAmounts) ||
+		!nullTimeEqual(existing.MicroDepositConfirmedAt, requested.MicroDepositConfirmedAt) ||
+		!nullInt64Equal(existing.CardVerificationAmount, requested.CardVerificationAmount) ||
+		!nullStringEqual(existing.DocumentType, requested.DocumentType) ||
+		!nullStringEqual(existing.DocumentURL, requested.DocumentURL) ||
+		existing.MaxAttempts != requested.MaxAttempts ||
+		!timeEqualAtDBPrecision(existing.ExpiresAt, requested.ExpiresAt) ||
+		!nullStringEqual(existing.WorkflowID, requested.WorkflowID) ||
+		!nullStringEqual(existing.ReferenceID, requested.ReferenceID) {
+		return ErrDuplicateVerification
+	}
+	return nil
+}
+
+func nullTimeEqual(left, right sql.NullTime) bool {
+	return left.Valid == right.Valid && (!left.Valid || timeEqualAtDBPrecision(left.Time, right.Time))
+}
+
+func timeEqualAtDBPrecision(left, right time.Time) bool {
+	diff := left.Sub(right)
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff < time.Microsecond
 }
 
 func (s *Store) GetOwnershipVerification(ctx context.Context, tenantID string, verificationID int64) (*OwnershipVerification, error) {

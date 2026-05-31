@@ -218,6 +218,11 @@ Last updated: 2026-05-31
     - Fix: add explicit destination ownership and ownership-verification status validators, enforce them on create/update paths, require destination usage links to target active verified destinations, and map the typed destination-not-verified error at API boundaries.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestUpdateWithdrawalDestinationOwnershipValidation|TestCreateOwnershipVerificationValidation|TestUpdateOwnershipVerificationStatusValidation|TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+44. Ownership verification initiation was not idempotent by workflow or request reference.
+    - Evidence: `CreateOwnershipVerification` stored `workflow_id` and `reference_id` but had no unique replay key and no conflict handling. An activity retry after a successful insert could create a second pending verification for the same withdrawal request, leaving callers/signals split across multiple verification IDs.
+    - Fix: add partial unique indexes for non-empty `(tenant_id, destination_id, workflow_id)` and `(tenant_id, destination_id, reference_id)`, make creation `ON CONFLICT DO NOTHING`, return existing rows only when the creation contract matches, and return `ErrDuplicateVerification` on mismatched duplicates.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestOwnershipVerificationCreateReplaysAreExact|TestValidateOwnershipVerificationCreateReplay|TestCreateOwnershipVerificationValidation|TestUpdateOwnershipVerificationStatusValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

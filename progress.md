@@ -47,6 +47,7 @@
 - Fixed manual transfer creation and approval retries so unique-key conflicts must be exact replays and creation cannot seed approved/completed state.
 - Fixed PSP status validation so invalid states fail before SQL and conflicting terminal-state updates return a typed transition error.
 - Fixed withdrawal ownership state validation so invalid ownership/verification statuses fail before SQL and usage links cannot attach inactive or unverified destinations.
+- Fixed ownership verification initiation so workflow/reference-key retries return exact existing rows and mismatched duplicates fail with a typed error.
 
 Verification:
 
@@ -108,6 +109,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`
 - `go test -count=1 -v ./wallet/store -run 'TestUpdateWithdrawalDestinationOwnershipValidation|TestCreateOwnershipVerificationValidation|TestUpdateOwnershipVerificationStatusValidation|TestWithdrawalDestinationValidation|TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/handler`
+- `go test -count=1 -v ./wallet/store -run 'TestOwnershipVerificationCreateReplaysAreExact|TestValidateOwnershipVerificationCreateReplay|TestCreateOwnershipVerificationValidation|TestUpdateOwnershipVerificationStatusValidation'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

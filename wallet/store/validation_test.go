@@ -979,6 +979,11 @@ func TestCreateOwnershipVerificationValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidStatus)
 
 	bad = base
+	bad.Status = OwnershipVerificationStatusVerified
+	_, err = s.CreateOwnershipVerification(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidStatus)
+
+	bad = base
 	bad.MaxAttempts = 0
 	_, err = s.CreateOwnershipVerification(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingMaxAttempts)
@@ -1022,6 +1027,58 @@ func TestUpdateOwnershipVerificationStatusValidation(t *testing.T) {
 
 	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "verified", time.Time{})
 	assertErrorIs(t, err, ErrMissingVerificationTime)
+}
+
+func TestValidateOwnershipVerificationCreateReplay(t *testing.T) {
+	expiresAt := time.Now().UTC().Add(time.Hour)
+	requested := OwnershipVerification{
+		TenantID:                "tenant",
+		DestinationID:           1,
+		VerificationType:        "micro_deposit",
+		Status:                  OwnershipVerificationStatusPending,
+		MicroDepositAmounts:     []int64{11, 22},
+		MicroDepositConfirmedAt: sql.NullTime{Time: expiresAt.Add(-time.Minute), Valid: true},
+		CardVerificationAmount:  sql.NullInt64{Int64: 33, Valid: true},
+		DocumentType:            sql.NullString{String: "passport", Valid: true},
+		DocumentURL:             sql.NullString{String: "s3://proof", Valid: true},
+		MaxAttempts:             3,
+		ExpiresAt:               expiresAt,
+		WorkflowID:              sql.NullString{String: "workflow-1", Valid: true},
+		ReferenceID:             sql.NullString{String: "reference-1", Valid: true},
+	}
+	existing := requested
+	existing.Status = OwnershipVerificationStatusVerified
+	existing.Attempts = 2
+	existing.CompletedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+	if err := ValidateOwnershipVerificationCreateReplay(&existing, requested); err != nil {
+		t.Fatalf("ValidateOwnershipVerificationCreateReplay() error = %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*OwnershipVerification)
+	}{
+		{"tenant", func(v *OwnershipVerification) { v.TenantID = "other" }},
+		{"destination", func(v *OwnershipVerification) { v.DestinationID = 2 }},
+		{"type", func(v *OwnershipVerification) { v.VerificationType = "document" }},
+		{"amounts", func(v *OwnershipVerification) { v.MicroDepositAmounts = []int64{44, 55} }},
+		{"confirmed-at", func(v *OwnershipVerification) { v.MicroDepositConfirmedAt = sql.NullTime{} }},
+		{"card-amount", func(v *OwnershipVerification) { v.CardVerificationAmount = sql.NullInt64{Int64: 34, Valid: true} }},
+		{"document-type", func(v *OwnershipVerification) { v.DocumentType = sql.NullString{String: "national_id", Valid: true} }},
+		{"document-url", func(v *OwnershipVerification) { v.DocumentURL = sql.NullString{String: "s3://other", Valid: true} }},
+		{"max-attempts", func(v *OwnershipVerification) { v.MaxAttempts = 5 }},
+		{"expiry", func(v *OwnershipVerification) { v.ExpiresAt = v.ExpiresAt.Add(time.Minute) }},
+		{"workflow", func(v *OwnershipVerification) { v.WorkflowID = sql.NullString{String: "workflow-2", Valid: true} }},
+		{"reference", func(v *OwnershipVerification) { v.ReferenceID = sql.NullString{String: "reference-2", Valid: true} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			replay := requested
+			tc.mutate(&replay)
+			assertErrorIs(t, ValidateOwnershipVerificationCreateReplay(&existing, replay), ErrDuplicateVerification)
+		})
+	}
+	assertErrorIs(t, ValidateOwnershipVerificationCreateReplay(nil, requested), ErrDuplicateVerification)
 }
 
 func TestWithdrawalDestinationValidation(t *testing.T) {

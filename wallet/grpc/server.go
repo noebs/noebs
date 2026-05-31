@@ -244,7 +244,8 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrDuplicateDestinationLink),
 		errors.Is(err, walletstore.ErrDuplicateAmount),
 		errors.Is(err, walletstore.ErrDuplicateManualTransfer),
-		errors.Is(err, walletstore.ErrDuplicateManualApproval):
+		errors.Is(err, walletstore.ErrDuplicateManualApproval),
+		errors.Is(err, walletstore.ErrDuplicateVerification):
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),

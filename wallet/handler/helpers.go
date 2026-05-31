@@ -57,7 +57,8 @@ func mapWalletError(err error) error {
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrDuplicateWallet),
 		errors.Is(err, walletstore.ErrDuplicateManualTransfer),
-		errors.Is(err, walletstore.ErrDuplicateManualApproval):
+		errors.Is(err, walletstore.ErrDuplicateManualApproval),
+		errors.Is(err, walletstore.ErrDuplicateVerification):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrWalletNotFound),
 		errors.Is(err, walletstore.ErrHoldNotFound),

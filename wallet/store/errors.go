@@ -119,6 +119,7 @@ var (
 	ErrDuplicateAmount              = errors.New("duplicate amount")
 	ErrDuplicateManualTransfer      = errors.New("duplicate manual transfer")
 	ErrDuplicateManualApproval      = errors.New("duplicate manual transfer approval")
+	ErrDuplicateVerification        = errors.New("duplicate verification")
 	ErrHoldNotFound                 = errors.New("hold not found")
 	ErrHoldNotActive                = errors.New("hold not active")
 	ErrHoldWalletMismatch           = errors.New("hold wallet mismatch")
