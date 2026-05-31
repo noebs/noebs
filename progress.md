@@ -283,6 +283,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_UserIdentityRequiresExplicitFields|TestStore_IdentityTenantValidationFailsBeforeDB|TestStore_CreateUser_MissingUser'` (`TestStore_CreateUser_MissingUser` skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./consumer -run 'TestUserServiceIdentityInputsFailBeforeStore|TestCreateUserRequiresMobileBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB|TestUserServiceTenantValidationFailsBeforeDB'`
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

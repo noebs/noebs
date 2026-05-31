@@ -114,6 +114,27 @@ func TestAddDeviceTokenRequiresExplicitInputs(t *testing.T) {
 	}
 }
 
+func TestUserServiceIdentityInputsFailBeforeStore(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	ctx := context.Background()
+
+	if _, err := service.GetUserLanguage(ctx, "tenant", " "); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("GetUserLanguage(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := service.SetUserLanguage(ctx, "tenant", " ", "en"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("SetUserLanguage(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", " ", ebs_fields.UserProfile{Fullname: "User"}); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("UpdateUserProfile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Username: " "}); !errors.Is(err, store.ErrMissingUsername) {
+		t.Fatalf("UpdateUserProfile(missing username) error = %v, want %v", err, store.ErrMissingUsername)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Email: " "}); !errors.Is(err, store.ErrMissingEmail) {
+		t.Fatalf("UpdateUserProfile(missing email) error = %v, want %v", err, store.ErrMissingEmail)
+	}
+}
+
 func TestUpdateKYCRequiresExistingUser(t *testing.T) {
 	ctx := context.Background()
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})

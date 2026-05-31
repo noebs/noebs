@@ -244,6 +244,14 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestCreateUserRequiresMobileBeforeStore(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{Mobile: " ", Password: "password"})
+	if !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("CreateUser(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+}
+
 func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")

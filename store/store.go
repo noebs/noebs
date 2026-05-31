@@ -168,6 +168,9 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 	if user == nil {
 		return ErrMissingUser
 	}
+	if err := validateUserCreateIdentity(user); err != nil {
+		return err
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
@@ -234,10 +237,21 @@ func (s *Store) insertUser(ctx context.Context, exec dbExecutor, tenantID string
 	return nil
 }
 
+func validateUserCreateIdentity(user *ebs_fields.User) error {
+	if strings.TrimSpace(user.Mobile) == "" {
+		return ErrMissingMobile
+	}
+	return nil
+}
+
 func (s *Store) GetUserByMobile(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, error) {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return nil, ErrMissingMobile
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -258,6 +272,10 @@ func (s *Store) GetUserByEmailOrMobile(ctx context.Context, tenantID, query stri
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, ErrMissingUserIdentifier
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -305,6 +323,10 @@ func (s *Store) FindUserByUsername(ctx context.Context, tenantID, username strin
 	if err != nil {
 		return nil, err
 	}
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil, ErrMissingUsername
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -324,6 +346,10 @@ func (s *Store) GetUserByUsernameEmailOrMobile(ctx context.Context, tenantID, qu
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return nil, ErrMissingUserIdentifier
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -1517,6 +1543,9 @@ func (s *Store) CreateUserWithAuthAccount(ctx context.Context, tenantID string, 
 	if user == nil {
 		return ErrMissingUser
 	}
+	if err := validateUserCreateIdentity(user); err != nil {
+		return err
+	}
 	if err := validateAuthAccountForNewUser(account); err != nil {
 		return err
 	}
@@ -1613,6 +1642,10 @@ func (s *Store) FindUserByEmail(ctx context.Context, tenantID, email string) (*e
 	if err != nil {
 		return nil, err
 	}
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, ErrMissingEmail
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -1626,6 +1659,17 @@ func (s *Store) FindUserByEmail(ctx context.Context, tenantID, email string) (*e
 }
 
 func (s *Store) UpdateUserMobile(ctx context.Context, tenantID string, userID int64, mobile, fullname string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
 	updates := map[string]any{"mobile": mobile, "username": mobile}
 	if fullname != "" {
 		updates["fullname"] = fullname
@@ -1634,15 +1678,30 @@ func (s *Store) UpdateUserMobile(ctx context.Context, tenantID string, userID in
 }
 
 func (s *Store) UpdateUserProfile(ctx context.Context, tenantID string, userID int64, profile ebs_fields.UserProfile) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
 	updates := map[string]any{}
 	if profile.Fullname != "" {
-		updates["fullname"] = profile.Fullname
+		updates["fullname"] = strings.TrimSpace(profile.Fullname)
 	}
 	if profile.Username != "" {
-		updates["username"] = profile.Username
+		username := strings.TrimSpace(profile.Username)
+		if username == "" {
+			return ErrMissingUsername
+		}
+		updates["username"] = username
 	}
 	if profile.Email != "" {
-		updates["email"] = profile.Email
+		email := strings.TrimSpace(profile.Email)
+		if email == "" {
+			return ErrMissingEmail
+		}
+		updates["email"] = strings.ToLower(email)
 	}
 	if profile.Birthday != "" {
 		updates["birthday"] = profile.Birthday

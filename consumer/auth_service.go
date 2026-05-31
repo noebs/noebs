@@ -80,11 +80,12 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 	if err != nil {
 		return "", empty, err
 	}
-	if strings.TrimSpace(req.Mobile) == "" {
+	mobile := strings.TrimSpace(req.Mobile)
+	if mobile == "" {
 		return "", empty, errors.New("missing mobile")
 	}
 
-	u, err := s.Store.GetUserByUsernameEmailOrMobile(ctx, tenantID, req.Mobile)
+	u, err := s.Store.GetUserByUsernameEmailOrMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return "", empty, err
 	}
@@ -148,6 +149,12 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	if err != nil {
 		return ebs_fields.User{}, err
 	}
+	u.Mobile = strings.TrimSpace(u.Mobile)
+	if u.Mobile == "" {
+		return ebs_fields.User{}, ErrMissingMobile
+	}
+	u.Username = strings.TrimSpace(u.Username)
+	u.Email = strings.TrimSpace(u.Email)
 
 	// Make sure user is unique
 	if _, err := s.Store.GetUserByMobile(ctx, tenantID, u.Mobile); err == nil {

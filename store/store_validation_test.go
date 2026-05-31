@@ -134,6 +134,43 @@ func TestStore_APIKeyRequiresExplicitFields(t *testing.T) {
 	}
 }
 
+func TestStore_UserIdentityRequiresExplicitFields(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	account := &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "provider-user"}
+
+	if err := s.CreateUser(ctx, "tenant", &ebs_fields.User{Mobile: " "}); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("CreateUser(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := s.CreateUserWithAuthAccount(ctx, "tenant", &ebs_fields.User{Mobile: " "}, account); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("CreateUserWithAuthAccount(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if _, err := s.GetUserByMobile(ctx, "tenant", " "); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("GetUserByMobile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if _, err := s.GetUserByEmailOrMobile(ctx, "tenant", " "); !errors.Is(err, ErrMissingUserIdentifier) {
+		t.Fatalf("GetUserByEmailOrMobile(missing query) error = %v, want %v", err, ErrMissingUserIdentifier)
+	}
+	if _, err := s.FindUserByUsername(ctx, "tenant", " "); !errors.Is(err, ErrMissingUsername) {
+		t.Fatalf("FindUserByUsername(missing username) error = %v, want %v", err, ErrMissingUsername)
+	}
+	if _, err := s.GetUserByUsernameEmailOrMobile(ctx, "tenant", " "); !errors.Is(err, ErrMissingUserIdentifier) {
+		t.Fatalf("GetUserByUsernameEmailOrMobile(missing query) error = %v, want %v", err, ErrMissingUserIdentifier)
+	}
+	if _, err := s.FindUserByEmail(ctx, "tenant", " "); !errors.Is(err, ErrMissingEmail) {
+		t.Fatalf("FindUserByEmail(missing email) error = %v, want %v", err, ErrMissingEmail)
+	}
+	if err := s.UpdateUserMobile(ctx, "tenant", 1, " ", "User"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("UpdateUserMobile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Username: " "}); !errors.Is(err, ErrMissingUsername) {
+		t.Fatalf("UpdateUserProfile(missing username) error = %v, want %v", err, ErrMissingUsername)
+	}
+	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Email: " "}); !errors.Is(err, ErrMissingEmail) {
+		t.Fatalf("UpdateUserProfile(missing email) error = %v, want %v", err, ErrMissingEmail)
+	}
+}
+
 func TestStore_UserWritesDoNotPersistMainExpDate(t *testing.T) {
 	ctx := context.Background()
 	s := newIdentityAuthTestStore(t, ctx)

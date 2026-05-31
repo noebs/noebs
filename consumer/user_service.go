@@ -230,6 +230,10 @@ func (s *Service) UpdateUserProfile(ctx context.Context, tenantID, mobile string
 	if mobile == "" {
 		return ErrMissingMobile
 	}
+	profile, err = normalizeUserProfileInput(profile)
+	if err != nil {
+		return err
+	}
 	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return err
@@ -250,7 +254,11 @@ func (s *Service) GetUserLanguage(ctx context.Context, tenantID, mobile string) 
 	if err != nil {
 		return "", err
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, strings.TrimSpace(mobile))
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return "", ErrMissingMobile
+	}
+	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return "", err
 	}
@@ -265,7 +273,11 @@ func (s *Service) SetUserLanguage(ctx context.Context, tenantID, mobile, languag
 	if err != nil {
 		return err
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, strings.TrimSpace(mobile))
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
+	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return err
 	}
@@ -274,6 +286,25 @@ func (s *Service) SetUserLanguage(ctx context.Context, tenantID, mobile, languag
 		return errors.New("missing language")
 	}
 	return s.Store.UpdateUserLanguage(ctx, tenantID, user.ID, language)
+}
+
+func normalizeUserProfileInput(profile ebs_fields.UserProfile) (ebs_fields.UserProfile, error) {
+	if profile.Fullname != "" {
+		profile.Fullname = strings.TrimSpace(profile.Fullname)
+	}
+	if profile.Username != "" {
+		profile.Username = strings.TrimSpace(profile.Username)
+		if profile.Username == "" {
+			return profile, store.ErrMissingUsername
+		}
+	}
+	if profile.Email != "" {
+		profile.Email = strings.ToLower(strings.TrimSpace(profile.Email))
+		if profile.Email == "" {
+			return profile, store.ErrMissingEmail
+		}
+	}
+	return profile, nil
 }
 
 func (s *Service) UpdateKYC(ctx context.Context, tenantID string, req ebs_fields.KYCPassport) error {

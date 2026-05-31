@@ -363,6 +363,11 @@ Last updated: 2026-05-31
     - Fix: treat only not-found KYC/passport rows as absent optional data and return all other query errors.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_GetUserWithKYCReturnsKYCQueryErrors|TestStore_GetUserWithKYCReturnsPassportQueryErrors|TestStore_UpdateKYCValidationFailsBeforeDB'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+73. User identity persistence and lookups accepted blank identifiers.
+    - Evidence: `CreateUser`, `CreateUserWithAuthAccount`, `GetUserByMobile`, `GetUserByEmailOrMobile`, `FindUserByUsername`, `GetUserByUsernameEmailOrMobile`, and `FindUserByEmail` validated tenant IDs but did not reject blank identity fields before DB access. Direct store callers could persist users with empty mobiles, issue meaningless empty identity queries, or let service paths pass blank mobiles/profile identities to the store.
+    - Fix: require explicit user mobile/email/username lookup inputs with typed store errors, reject blank user creation/update identities before DB access, normalize profile username/email at the service boundary, and map the new validation errors to HTTP 400 responses.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_UserIdentityRequiresExplicitFields|TestStore_IdentityTenantValidationFailsBeforeDB|TestStore_CreateUser_MissingUser'` (`TestStore_CreateUser_MissingUser` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestUserServiceIdentityInputsFailBeforeStore|TestCreateUserRequiresMobileBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB|TestUserServiceTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

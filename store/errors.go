@@ -19,6 +19,8 @@ var (
 	ErrMissingData           = errors.New("missing data")
 	ErrMissingBillType       = errors.New("missing bill_type")
 	ErrMissingEmail          = errors.New("missing email")
+	ErrMissingUsername       = errors.New("missing username")
+	ErrMissingUserIdentifier = errors.New("missing user identifier")
 	ErrMissingAPIKey         = errors.New("missing api_key")
 	ErrMissingEventID        = errors.New("missing event id")
 	ErrMissingEventKey       = errors.New("missing event key")
