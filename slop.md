@@ -658,6 +658,11 @@ Last updated: 2026-05-31
     - Fix: add a handler-level internal-RPC admin guard keyed from the gRPC method context and apply it before request validation across the internal/public shared handlers and internal-only wallet lookup/ensure/validation/funding paths. Public wallet RPCs still require user identity through the existing claims path.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestWalletInternalRPCs|TestClaimsForRPCRequiresGatewayIdentityOnPublicUserMethods|TestRequestP2PTransferPublicRequiresGatewayIdentity|TestResetWalletPIN'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+132. FX conversion could turn nonzero PSP money movement into zero or negative wallet amounts.
+    - Evidence: withdrawal payout conversion and PSP deposit settlement conversion multiplied by an injected/provider FX rate and rounded to integer minor units without validating the rate or the converted result. A zero/negative rate, or a tiny positive rate that rounded `amount * rate` to zero, could pass deeper into fee/limit/ledger logic instead of failing as invalid money input.
+    - Fix: centralize positive FX conversion validation, reject nonpositive rates with `ErrInvalidRate`, and reject nonpositive converted wallet amounts with `ErrInvalidAmount` for both withdrawal debit conversion and PSP deposit credit/variance conversion.
+    - Tests: `go test -count=1 -v ./wallet/validation -run 'Test(ConvertWithdrawalAmount|ResolvePSPDepositAmounts)'`; `go test -count=1 ./wallet/validation ./wallet/workflow ./wallet/activity ./wallet/store ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

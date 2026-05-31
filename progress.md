@@ -614,6 +614,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- FX conversion now rejects nonpositive rates and converted wallet amounts that round to zero in withdrawal and PSP deposit settlement paths.
+- `go test -count=1 -v ./wallet/validation -run 'Test(ConvertWithdrawalAmount|ResolvePSPDepositAmounts)'`
+- `go test -count=1 ./wallet/validation ./wallet/workflow ./wallet/activity ./wallet/store ./wallet/grpc`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

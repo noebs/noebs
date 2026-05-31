@@ -295,6 +295,33 @@ func TestConvertWithdrawalAmountSameCurrencySkipsRateLookup(t *testing.T) {
 	}
 }
 
+func TestConvertWithdrawalAmountRejectsInvalidFX(t *testing.T) {
+	tests := []struct {
+		name    string
+		amount  int64
+		rate    decimal.Decimal
+		wantErr error
+	}{
+		{name: "zero rate", amount: 100, rate: decimal.Zero, wantErr: walletstore.ErrInvalidRate},
+		{name: "negative rate", amount: 100, rate: decimal.NewFromInt(-1), wantErr: walletstore.ErrInvalidRate},
+		{name: "rounded to zero", amount: 1, rate: decimal.RequireFromString("0.01"), wantErr: walletstore.ErrInvalidAmount},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &Service{
+				RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+					return tt.rate, nil
+				},
+			}
+			_, _, _, err := service.convertWithdrawalAmount(t.Context(), "tenant", tt.amount, "USD", "AED")
+			if err != tt.wantErr {
+				t.Fatalf("convertWithdrawalAmount() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestResolvePSPDepositAmountsSameCurrency(t *testing.T) {
 	service := &Service{
 		Store: &walletstore.Store{},
@@ -373,6 +400,38 @@ func TestResolvePSPDepositAmountsRateLookup(t *testing.T) {
 	}
 	if result.AppliedFXSource != "rates" {
 		t.Fatalf("expected fx source rates, got %s", result.AppliedFXSource)
+	}
+}
+
+func TestResolvePSPDepositAmountsRejectsInvalidFX(t *testing.T) {
+	tests := []struct {
+		name    string
+		rate    decimal.Decimal
+		wantErr error
+	}{
+		{name: "zero rate", rate: decimal.Zero, wantErr: walletstore.ErrInvalidRate},
+		{name: "negative rate", rate: decimal.NewFromInt(-1), wantErr: walletstore.ErrInvalidRate},
+		{name: "rounded to zero", rate: decimal.RequireFromString("0.01"), wantErr: walletstore.ErrInvalidAmount},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &Service{Store: &walletstore.Store{}}
+			_, err := service.ResolvePSPDepositAmounts(t.Context(), PSPAmountResolutionRequest{
+				TenantID:           "tenant",
+				RequestedAmount:    1,
+				RequestedCurrency:  "EUR",
+				SettlementAmount:   1,
+				SettlementCurrency: "EUR",
+				WalletCurrency:     "USD",
+				FXRate:             decimal.NullDecimal{Decimal: tt.rate, Valid: true},
+				FXBaseCurrency:     "EUR",
+				FXQuoteCurrency:    "USD",
+			})
+			if err != tt.wantErr {
+				t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 

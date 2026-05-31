@@ -389,6 +389,9 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 }
 
 func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, payoutAmount int64, payoutCurrency, walletCurrency string) (int64, decimal.NullDecimal, string, error) {
+	if payoutAmount <= 0 {
+		return 0, decimal.NullDecimal{}, "", walletstore.ErrInvalidAmount
+	}
 	if payoutCurrency == walletCurrency {
 		return payoutAmount, decimal.NullDecimal{}, "", nil
 	}
@@ -397,7 +400,11 @@ func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, 
 		if err != nil {
 			return 0, decimal.NullDecimal{}, "", err
 		}
-		return decimal.NewFromInt(payoutAmount).Mul(rate).Round(0).IntPart(), decimal.NullDecimal{Decimal: rate, Valid: true}, "rates", nil
+		converted, err := convertPositiveAmount(payoutAmount, rate)
+		if err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
+		return converted, decimal.NullDecimal{Decimal: rate, Valid: true}, "rates", nil
 	}
 	if s.Store == nil {
 		return 0, decimal.NullDecimal{}, "", ErrMissingStore
@@ -406,7 +413,11 @@ func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, 
 	if err != nil {
 		return 0, decimal.NullDecimal{}, "", err
 	}
-	return decimal.NewFromInt(payoutAmount).Mul(rate.SellRate).Round(0).IntPart(), decimal.NullDecimal{Decimal: rate.SellRate, Valid: true}, "rates", nil
+	converted, err := convertPositiveAmount(payoutAmount, rate.SellRate)
+	if err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
+	return converted, decimal.NullDecimal{Decimal: rate.SellRate, Valid: true}, "rates", nil
 }
 
 func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID string) error {

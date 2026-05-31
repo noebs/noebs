@@ -88,6 +88,9 @@ func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountRes
 }
 
 func (s *Service) convertAmount(ctx context.Context, tenantID string, amount int64, fromCurrency, toCurrency string, fxRate decimal.NullDecimal, fxBase, fxQuote string) (int64, decimal.NullDecimal, string, error) {
+	if amount <= 0 {
+		return 0, decimal.NullDecimal{}, "", walletstore.ErrInvalidAmount
+	}
 	if fromCurrency == toCurrency {
 		return amount, decimal.NullDecimal{}, "", nil
 	}
@@ -98,7 +101,10 @@ func (s *Service) convertAmount(ctx context.Context, tenantID string, amount int
 		if fxQuote != "" && fxQuote != toCurrency {
 			return 0, decimal.NullDecimal{}, "", ErrFXCurrencyMismatch
 		}
-		converted := decimal.NewFromInt(amount).Mul(fxRate.Decimal).Round(0).IntPart()
+		converted, err := convertPositiveAmount(amount, fxRate.Decimal)
+		if err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
 		return converted, fxRate, "psp", nil
 	}
 
@@ -106,7 +112,10 @@ func (s *Service) convertAmount(ctx context.Context, tenantID string, amount int
 	if err != nil {
 		return 0, decimal.NullDecimal{}, "", err
 	}
-	converted := decimal.NewFromInt(amount).Mul(rate).Round(0).IntPart()
+	converted, err := convertPositiveAmount(amount, rate)
+	if err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
 	return converted, decimal.NullDecimal{Decimal: rate, Valid: true}, "rates", nil
 }
 
@@ -119,4 +128,18 @@ func (s *Service) lookupRate(ctx context.Context, tenantID, fromCurrency, toCurr
 		return decimal.Zero, err
 	}
 	return rate.SellRate, nil
+}
+
+func convertPositiveAmount(amount int64, rate decimal.Decimal) (int64, error) {
+	if amount <= 0 {
+		return 0, walletstore.ErrInvalidAmount
+	}
+	if rate.Cmp(decimal.Zero) <= 0 {
+		return 0, walletstore.ErrInvalidRate
+	}
+	converted := decimal.NewFromInt(amount).Mul(rate).Round(0).IntPart()
+	if converted <= 0 {
+		return 0, walletstore.ErrInvalidAmount
+	}
+	return converted, nil
 }
