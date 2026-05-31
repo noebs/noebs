@@ -1099,6 +1099,19 @@ func TestUpdateOwnershipVerificationStatusValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingVerificationTime)
 }
 
+func TestValidateOwnershipVerificationStatusTransition(t *testing.T) {
+	if err := ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusPending, OwnershipVerificationStatusVerified); err != nil {
+		t.Fatalf("pending->verified transition error = %v", err)
+	}
+	if err := ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusVerified, OwnershipVerificationStatusVerified); err != nil {
+		t.Fatalf("verified replay transition error = %v", err)
+	}
+	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition("", OwnershipVerificationStatusVerified), ErrMissingStatus)
+	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusPending, OwnershipVerificationStatusPending), ErrInvalidStatusTransition)
+	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusVerified, OwnershipVerificationStatusFailed), ErrInvalidStatusTransition)
+	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusExpired, OwnershipVerificationStatusPending), ErrInvalidStatusTransition)
+}
+
 func TestValidateOwnershipVerificationCreateReplay(t *testing.T) {
 	expiresAt := time.Now().UTC().Add(time.Hour)
 	requested := OwnershipVerification{

@@ -294,6 +294,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidateOwnershipVerificationStatusTransition|TestUpdateOwnershipVerificationStatusValidation|TestOwnershipVerificationCreateReplaysAreExact'` (Postgres container case skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/store ./wallet/handler ./wallet/grpc ./wallet/workflow`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

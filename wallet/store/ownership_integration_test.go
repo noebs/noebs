@@ -100,6 +100,27 @@ func TestOwnershipVerificationCreateReplaysAreExact(t *testing.T) {
 		t.Fatalf("replayed verification id = %d, want %d", replayed.ID, created.ID)
 	}
 
+	completedAt := time.Now().UTC()
+	if err := store.UpdateOwnershipVerificationStatus(ctx, tenantID, created.ID, OwnershipVerificationStatusVerified, completedAt); err != nil {
+		t.Fatalf("complete ownership verification: %v", err)
+	}
+	if err := store.UpdateOwnershipVerificationStatus(ctx, tenantID, created.ID, OwnershipVerificationStatusVerified, completedAt); err != nil {
+		t.Fatalf("replay ownership verification completion: %v", err)
+	}
+	if err := store.UpdateOwnershipVerificationStatus(ctx, tenantID, created.ID, OwnershipVerificationStatusFailed, completedAt.Add(time.Second)); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("rewrite terminal verification error = %v, want %v", err, ErrInvalidStatusTransition)
+	}
+	if err := store.UpdateOwnershipVerificationStatus(ctx, tenantID, created.ID, OwnershipVerificationStatusPending, completedAt.Add(time.Second)); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("reopen terminal verification error = %v, want %v", err, ErrInvalidStatusTransition)
+	}
+	current, err := store.GetOwnershipVerification(ctx, tenantID, created.ID)
+	if err != nil {
+		t.Fatalf("get ownership verification: %v", err)
+	}
+	if current.Status != OwnershipVerificationStatusVerified {
+		t.Fatalf("verification status = %q, want %q", current.Status, OwnershipVerificationStatusVerified)
+	}
+
 	mismatched := request
 	mismatched.MaxAttempts = 5
 	if _, err := store.CreateOwnershipVerification(ctx, mismatched); !errors.Is(err, ErrDuplicateVerification) {

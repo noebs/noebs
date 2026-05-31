@@ -129,6 +129,22 @@ func ValidateOwnershipVerificationCreateReplay(existing *OwnershipVerification, 
 	return nil
 }
 
+func ValidateOwnershipVerificationStatusTransition(current, next string) error {
+	if err := ValidateOwnershipVerificationStatus(current); err != nil {
+		return err
+	}
+	if err := ValidateOwnershipVerificationStatus(next); err != nil {
+		return err
+	}
+	if current == OwnershipVerificationStatusPending && next != OwnershipVerificationStatusPending {
+		return nil
+	}
+	if current == next && current != OwnershipVerificationStatusPending {
+		return nil
+	}
+	return ErrInvalidStatusTransition
+}
+
 func nullTimeEqual(left, right sql.NullTime) bool {
 	return left.Valid == right.Valid && (!left.Valid || timeEqualAtDBPrecision(left.Time, right.Time))
 }
@@ -182,10 +198,23 @@ func (s *Store) UpdateOwnershipVerificationStatus(ctx context.Context, tenantID 
 	if err != nil {
 		return err
 	}
+	existing, err := s.GetOwnershipVerification(ctx, tenantID, verificationID)
+	if err != nil {
+		return err
+	}
+	if err := ValidateOwnershipVerificationStatusTransition(existing.Status, status); err != nil {
+		return err
+	}
+	if existing.Status == status {
+		if !existing.CompletedAt.Valid || !timeEqualAtDBPrecision(existing.CompletedAt.Time, completedAt) {
+			return ErrInvalidStatusTransition
+		}
+		return nil
+	}
 	stmt := db.Rebind(`UPDATE ownership_verifications
 		SET status = ?, completed_at = ?, updated_at = ?
-		WHERE tenant_id = ? AND id = ?`)
-	result, err := db.ExecContext(ctx, stmt, status, completedAt, completedAt, tenantID, verificationID)
+		WHERE tenant_id = ? AND id = ? AND status = ?`)
+	result, err := db.ExecContext(ctx, stmt, status, completedAt, completedAt, tenantID, verificationID, existing.Status)
 	if err != nil {
 		return err
 	}
@@ -194,7 +223,7 @@ func (s *Store) UpdateOwnershipVerificationStatus(ctx context.Context, tenantID 
 		return err
 	}
 	if affected == 0 {
-		return ErrVerificationNotFound
+		return ErrInvalidStatusTransition
 	}
 	return nil
 }

@@ -373,6 +373,11 @@ Last updated: 2026-05-31
     - Fix: make the shared float parser reject non-finite values for string, `json.Number`, `float64`, and `float32` inputs before returning parsed amounts.
     - Tests: `go test -count=1 -v ./parsing ./merchant -run 'TestRequiredFloat64|TestNECBillNewFromMap'`; `go test -count=1 ./parsing ./merchant ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+75. Ownership verification status updates could rewrite terminal decisions.
+    - Evidence: `UpdateOwnershipVerificationStatus` validated that the requested status was known, but it did not inspect the current verification status. A direct store call could move a terminal verification from `verified` to `failed`, back to `pending`, or overwrite the completion timestamp.
+    - Fix: validate ownership verification status transitions, allow only pending-to-terminal updates plus exact terminal replays, and reject terminal rewrites/reopens without mutating the row.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateOwnershipVerificationStatusTransition|TestUpdateOwnershipVerificationStatusValidation|TestOwnershipVerificationCreateReplaysAreExact'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/handler ./wallet/grpc ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
