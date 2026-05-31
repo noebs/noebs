@@ -58,6 +58,7 @@
 - Fixed device-token writes so the store no longer creates partial users when updating a missing mobile; missing targets now return `sql.ErrNoRows`.
 - Fixed targeted user/card writes so missing users/cards return `sql.ErrNoRows`, card targets are required before DB access, and `SetMainCard` rolls back when the requested card is absent.
 - Fixed beneficiary persistence so repeated saves update the existing beneficiary identity, legacy duplicates are deduplicated by migration, and missing deletes return `sql.ErrNoRows`.
+- Fixed payment token creation so tokens require an explicit positive user ID before persistence instead of allowing orphan UUID-only records.
 
 Verification:
 
@@ -234,6 +235,11 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./store -run 'TestStore_UpsertBeneficiary_RequiresExplicitFields|TestStore_DeleteBeneficiary_RequiresExplicitFields|TestStore_BeneficiaryUpsertReplacesExisting|TestStore_DeleteBeneficiaryReportsMissingRows'` (Postgres container cases skipped locally when the container runtime is unavailable)
 - `go test -count=1 -v ./consumer -run 'TestBeneficiaryServiceUsesGatewayUserIDOnly|TestBeneficiaryServiceRejectsMissingUserID'` (Postgres container case skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_CreateToken_MissingTenantID|TestStore_CreateToken_RequiresExplicitFields|TestStore_CreateToken_RequiresDataKeyForDestinationPAN|TestStore_CoreTenantValidationFailsBeforeDB'`
 - `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`

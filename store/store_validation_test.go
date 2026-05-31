@@ -401,18 +401,22 @@ func TestStore_CreateUser_MissingUser(t *testing.T) {
 }
 
 func TestStore_CreateToken_MissingTenantID(t *testing.T) {
-	s := newTestStore(t)
+	s := &Store{}
 	err := s.CreateToken(context.Background(), "", &ebs_fields.Token{UUID: "u1"})
 	if !errors.Is(err, ErrMissingTenantID) {
 		t.Fatalf("expected ErrMissingTenantID, got %v", err)
 	}
 }
 
-func TestStore_CreateToken_MissingUUID(t *testing.T) {
-	s := newTestStore(t)
+func TestStore_CreateToken_RequiresExplicitFields(t *testing.T) {
+	s := &Store{}
 	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{})
 	if !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("expected ErrMissingUUID, got %v", err)
+	}
+	err = s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1"})
+	if !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("expected ErrInvalidUserID, got %v", err)
 	}
 }
 
@@ -708,8 +712,8 @@ func TestStore_UpsertCacheCard_RequiresDataKey(t *testing.T) {
 }
 
 func TestStore_CreateToken_RequiresDataKeyForDestinationPAN(t *testing.T) {
-	s := newTestStoreWithoutDataKey(t)
-	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", ToCard: "9222081700000000"})
+	s := &Store{}
+	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", UserID: 1, ToCard: "9222081700000000"})
 	if !errors.Is(err, ErrMissingDataKey) {
 		t.Fatalf("expected ErrMissingDataKey, got %v", err)
 	}

@@ -951,6 +951,12 @@ func (s *Store) CreateToken(ctx context.Context, tenantID string, token *ebs_fie
 	if token.UUID == "" {
 		return ErrMissingUUID
 	}
+	if token.UserID <= 0 {
+		return ErrInvalidUserID
+	}
+	if s == nil {
+		return fmt.Errorf("nil db")
+	}
 	if err := s.requireDataKeyForSensitiveValue(token.ToCard); err != nil {
 		return err
 	}

@@ -328,6 +328,11 @@ Last updated: 2026-05-31
     - Fix: add a migration that deduplicates existing beneficiary rows and enforces the beneficiary identity key, make upserts use `ON CONFLICT` updates for editable fields, and require deletes to affect a row.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_UpsertBeneficiary_RequiresExplicitFields|TestStore_DeleteBeneficiary_RequiresExplicitFields|TestStore_BeneficiaryUpsertReplacesExisting|TestStore_DeleteBeneficiaryReportsMissingRows'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestBeneficiaryServiceUsesGatewayUserIDOnly|TestBeneficiaryServiceRejectsMissingUserID'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+66. Payment tokens could be created without a user identity.
+    - Evidence: `CreateToken` validated tenant and UUID but accepted `token.UserID == 0` even though tokens are listed and authorized by user ID. A direct store caller could create an orphan token that bypasses the user-scoped token list and only participates in UUID-based flows.
+    - Fix: require a positive user ID before token persistence and keep sensitive destination-card validation after the identity contract is satisfied.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_CreateToken_MissingTenantID|TestStore_CreateToken_RequiresExplicitFields|TestStore_CreateToken_RequiresDataKeyForDestinationPAN|TestStore_CoreTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
