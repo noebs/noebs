@@ -441,7 +441,7 @@ func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) e
 		return walletstore.ErrMissingCurrency
 	}
 	if len(cfg.EnabledCurrencies) == 0 {
-		return nil
+		return ErrPSPConfigMissingCurrencies
 	}
 	for _, allowed := range cfg.EnabledCurrencies {
 		if strings.EqualFold(currency, strings.TrimSpace(allowed)) {

@@ -51,6 +51,7 @@
 - Fixed EBS transaction payload writes so JSON encoding failures return errors instead of persisting empty payloads.
 - Fixed targeted root-store updates so missing users/tokens/payment requests return not-found errors instead of silent success.
 - Fixed PSP method catalog pagination so scoped overrides and eligibility filters are applied before `LIMIT/OFFSET`, including methods enabled only by matching overrides.
+- Fixed PSP currency configuration so missing `enabled_currencies` no longer means every currency, and PSP validation failures no longer map to internal gRPC errors.
 
 Verification:
 
@@ -156,6 +157,13 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./wallet/store -run 'TestExistingHoldMatches|TestLedgerAccountingForHeldAndSystemDebits'`
 - `go test -count=1 ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/validation -run 'TestValidatePSPConfigRequiresExplicitCurrency|TestValidatePSPConfigRequiresConfiguredCurrencies|TestValidatePSPConfigMatchesTrimmedCurrency'`
+- `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsRequiresConfiguredCurrencies|TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod'`
+- `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`
+- `go test -count=1 ./wallet/validation ./wallet/store ./wallet/grpc`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

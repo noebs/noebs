@@ -306,10 +306,14 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrDestinationNotVerified),
 		errors.Is(err, walletstore.ErrFundingSourceNotWithdrawable),
 		errors.Is(err, walletstore.ErrFundingSourceLimitExceeded),
-		errors.Is(err, walletstore.ErrApproverIsRequester):
+		errors.Is(err, walletstore.ErrApproverIsRequester),
+		errors.Is(err, walletvalidation.ErrPSPCurrencyInvalid):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, wallet.ErrMissingStore),
 		errors.Is(err, walletvalidation.ErrMissingStore),
+		errors.Is(err, walletvalidation.ErrPSPConfigDisabled),
+		errors.Is(err, walletvalidation.ErrPSPConfigMissingCurrencies),
+		errors.Is(err, walletvalidation.ErrPSPDirectionInvalid),
 		errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled),
 		errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return status.Error(codes.FailedPrecondition, err.Error())

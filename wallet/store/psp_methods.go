@@ -60,6 +60,9 @@ func availablePSPMethodsFromConfigs(configs []*PSPConfig, filter PSPMethodFilter
 		if !methodSupportsDirection(cfg, direction) {
 			continue
 		}
+		if len(cfg.EnabledCurrencies) == 0 {
+			continue
+		}
 		if filter.Currency != "" && !methodSupportsCurrency(cfg, filter.Currency) {
 			continue
 		}
@@ -131,8 +134,14 @@ func methodSupportsDirection(cfg *PSPConfig, direction string) bool {
 }
 
 func methodSupportsCurrency(cfg *PSPConfig, currency string) bool {
-	if cfg == nil || currency == "" || len(cfg.EnabledCurrencies) == 0 {
+	if cfg == nil {
+		return false
+	}
+	if currency == "" {
 		return true
+	}
+	if len(cfg.EnabledCurrencies) == 0 {
+		return false
 	}
 	for _, supported := range cfg.EnabledCurrencies {
 		if strings.EqualFold(strings.TrimSpace(supported), strings.TrimSpace(currency)) {

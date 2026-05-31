@@ -293,6 +293,11 @@ Last updated: 2026-05-31
     - Fix: resolve each tenant PSP config for the requested scope, apply active/direction/currency/region/amount eligibility first, then paginate the eligible method list.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod|TestListAvailablePSPMethodsValidation'`; `go test -count=1 -v ./wallet/store -run 'TestListAvailablePSPMethodsPaginatesAfterScopedEligibility|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container cases skipped locally when the container runtime is unavailable).
 
+59. PSP configs without enabled currencies were treated as global providers.
+    - Evidence: `ValidatePSPConfig` returned nil when `EnabledCurrencies` was empty, and `methodSupportsCurrency` treated an empty configured currency list as supporting every requested currency. A provider config or scoped override missing its explicit currency contract could therefore process or appear for currencies it never declared.
+    - Fix: require PSP configs to declare at least one enabled currency before provider validation or catalog exposure, and map PSP validation failures to explicit API status codes instead of falling through as internal errors.
+    - Tests: `go test -count=1 ./wallet/validation ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/validation -run 'TestValidatePSPConfigRequiresExplicitCurrency|TestValidatePSPConfigRequiresConfiguredCurrencies|TestValidatePSPConfigMatchesTrimmedCurrency'`; `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsRequiresConfiguredCurrencies|TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod'`; `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

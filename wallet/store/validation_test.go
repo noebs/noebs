@@ -2480,6 +2480,51 @@ func TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility(t *testing.T) {
 	}
 }
 
+func TestAvailablePSPMethodsFromConfigsRequiresConfiguredCurrencies(t *testing.T) {
+	configs := []*PSPConfig{
+		{
+			TenantID:         "tenant",
+			ProviderCode:     "unconfigured",
+			ProviderName:     "Unconfigured",
+			IsActive:         true,
+			SupportsDeposit:  true,
+			SupportedRegions: StringArray{"AE"},
+		},
+		{
+			TenantID:          "tenant",
+			ProviderCode:      "configured",
+			ProviderName:      "Configured",
+			IsActive:          true,
+			SupportsDeposit:   true,
+			EnabledCurrencies: StringArray{"AED"},
+			SupportedRegions:  StringArray{"AE"},
+		},
+	}
+
+	methods := availablePSPMethodsFromConfigs(configs, PSPMethodFilter{
+		Region: "AE",
+		Limit:  10,
+	}, "deposit")
+	if len(methods) != 1 {
+		t.Fatalf("expected only configured-currency method, got %d", len(methods))
+	}
+	if methods[0].ProviderCode != "configured" {
+		t.Fatalf("expected configured method, got %q", methods[0].ProviderCode)
+	}
+
+	methods = availablePSPMethodsFromConfigs(configs, PSPMethodFilter{
+		Currency: "AED",
+		Region:   "AE",
+		Limit:    10,
+	}, "deposit")
+	if len(methods) != 1 {
+		t.Fatalf("expected only configured AED method, got %d", len(methods))
+	}
+	if methods[0].ProviderCode != "configured" {
+		t.Fatalf("expected configured AED method, got %q", methods[0].ProviderCode)
+	}
+}
+
 func TestMergePSPConfigOverrideCanActivateScopedMethod(t *testing.T) {
 	base := &PSPConfig{
 		TenantID:          "tenant",
