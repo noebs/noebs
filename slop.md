@@ -118,6 +118,11 @@ Last updated: 2026-05-31
     - Fix: remove the redundant per-request nil guards and simplify EBS helper signatures so handlers rely on the startup invariant.
     - Tests: `go test -count=1 ./consumer/handler ./merchant/handler ./cli`.
 
+24. HTTP JSON PSP provider treated malformed successful responses as empty success.
+    - Evidence: `wallet/psp/httpjson.Provider.doJSON` ignored `io.ReadAll` and `json.Unmarshal` errors, so read failures or invalid 2xx JSON could continue with an empty mapped PSP response.
+    - Fix: return read failures as temporary PSP errors and malformed response JSON as a typed `ErrPSPResponseInvalid`.
+    - Tests: `go test -count=1 ./wallet/psp ./wallet/psp/httpjson`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

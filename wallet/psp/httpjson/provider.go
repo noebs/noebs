@@ -263,7 +263,10 @@ func (p *Provider) doJSON(ctx context.Context, method, path string, payload any,
 		return psp.ErrPSPTemporary
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("%w: read response body: %v", psp.ErrPSPTemporary, err)
+	}
 	if resp.StatusCode >= 500 {
 		return psp.ErrPSPTemporary
 	}
@@ -271,7 +274,9 @@ func (p *Provider) doJSON(ctx context.Context, method, path string, payload any,
 		return psp.ErrPSPPermanent
 	}
 	if out != nil && len(respBody) > 0 {
-		_ = json.Unmarshal(respBody, out)
+		if err := json.Unmarshal(respBody, out); err != nil {
+			return fmt.Errorf("%w: decode response body: %v", psp.ErrPSPResponseInvalid, err)
+		}
 	}
 	return nil
 }

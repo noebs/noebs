@@ -1,8 +1,10 @@
 package httpjson
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 
@@ -82,4 +84,71 @@ func TestAppendQueryForMethodLeavesPOSTBodyFieldsOutOfURL(t *testing.T) {
 	if path != "/status" {
 		t.Fatalf("path = %q, want /status", path)
 	}
+}
+
+func TestDoJSONReturnsInvalidResponseError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{"))
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           server.URL,
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposit/verify",
+		PayoutRequestMethod:  http.MethodPost,
+		PayoutRequestPath:    "/payouts",
+		StatusRequestMethod:  http.MethodGet,
+		StatusRequestPath:    "/status",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	out := map[string]any{}
+	err = provider.doJSON(context.Background(), http.MethodGet, "/status", nil, "", &out)
+	if !errors.Is(err, psp.ErrPSPResponseInvalid) {
+		t.Fatalf("doJSON() error = %v, want %v", err, psp.ErrPSPResponseInvalid)
+	}
+}
+
+func TestDoJSONReturnsReadError(t *testing.T) {
+	provider := &Provider{
+		config: &psp.Config{
+			ProviderCode: "pay",
+			APIBaseURL:   "https://pay.example",
+		},
+		client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       failingReadCloser{},
+				Header:     make(http.Header),
+				Request:    req,
+			}, nil
+		})},
+	}
+
+	out := map[string]any{}
+	err := provider.doJSON(context.Background(), http.MethodGet, "/status", nil, "", &out)
+	if !errors.Is(err, psp.ErrPSPTemporary) {
+		t.Fatalf("doJSON() error = %v, want %v", err, psp.ErrPSPTemporary)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type failingReadCloser struct{}
+
+func (failingReadCloser) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+func (failingReadCloser) Close() error {
+	return nil
 }

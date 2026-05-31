@@ -27,6 +27,7 @@
 - Added a top-level `parsing` package for shared map-field parsing and moved bill/receipt extraction onto it; removed the unused `utils.GetOrDefault` helper.
 - Moved consumer/merchant handler dependency validation to construction so nil services or missing stores fail during HTTP startup.
 - Removed redundant consumer/merchant per-request handler nil checks now covered by startup construction invariants.
+- Fixed HTTP JSON PSP response handling so body read failures and malformed 2xx JSON do not map to empty successful responses.
 
 Verification:
 
@@ -41,6 +42,7 @@ Verification:
 - `go test -count=1 ./dashboard`
 - `go test -count=1 ./parsing ./utils ./consumer ./merchant`
 - `go test -count=1 ./consumer/handler ./merchant/handler ./cli`
+- `go test -count=1 ./wallet/psp ./wallet/psp/httpjson`
 - `go test -count=1 ./...`
 - `go vet ./...`
 
