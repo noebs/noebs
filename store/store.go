@@ -738,7 +738,11 @@ func (s *Store) UpsertBeneficiary(ctx context.Context, tenantID string, userID i
 	}
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO beneficiaries(tenant_id, user_id, data, bill_type, name, created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?)`)
+		VALUES(?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(tenant_id, user_id, data) DO UPDATE SET
+			bill_type = excluded.bill_type,
+			name = excluded.name,
+			updated_at = excluded.updated_at`)
 	_, err = db.ExecContext(ctx, stmt, tenantID, userID, b.Data, b.BillType, b.Name, now, now)
 	return err
 }
@@ -760,8 +764,7 @@ func (s *Store) DeleteBeneficiary(ctx context.Context, tenantID string, userID i
 		return err
 	}
 	stmt := s.DB.Rebind("DELETE FROM beneficiaries WHERE tenant_id = ? AND user_id = ? AND data = ?")
-	_, err = db.ExecContext(ctx, stmt, tenantID, userID, data)
-	return err
+	return execContextRequireRowsAffected(ctx, db, stmt, tenantID, userID, data)
 }
 
 func (s *Store) UpsertCacheCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) error {

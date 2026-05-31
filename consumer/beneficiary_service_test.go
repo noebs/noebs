@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
@@ -32,6 +33,21 @@ func TestBeneficiaryServiceUsesGatewayUserIDOnly(t *testing.T) {
 		t.Fatalf("beneficiaries = %+v", list)
 	}
 
+	if err := service.UpsertBeneficiaryForUserID(ctx, tenantID, userID, ebs_fields.Beneficiary{
+		Data:     "0912141660",
+		BillType: "0010010002",
+		Name:     "Updated",
+	}); err != nil {
+		t.Fatalf("repeat upsert beneficiary: %v", err)
+	}
+	list, err = service.ListBeneficiariesForUserID(ctx, tenantID, userID)
+	if err != nil {
+		t.Fatalf("list beneficiaries after repeat upsert: %v", err)
+	}
+	if len(list) != 1 || list[0].BillType != "0010010002" || list[0].Name != "Updated" {
+		t.Fatalf("beneficiaries after repeat upsert = %+v", list)
+	}
+
 	if _, err := db.ExecContext(ctx, "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("consumer-beneficiary scope should not create user tables, err=%v", err)
 	}
@@ -46,12 +62,15 @@ func TestBeneficiaryServiceUsesGatewayUserIDOnly(t *testing.T) {
 	if len(list) != 0 {
 		t.Fatalf("beneficiaries after delete = %+v", list)
 	}
+	if err := service.DeleteBeneficiaryForUserID(ctx, tenantID, userID, "0912141660"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("delete missing beneficiary error = %v, want %v", err, sql.ErrNoRows)
+	}
 }
 
 func TestBeneficiaryServiceRejectsMissingUserID(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeConsumerBeneficiary})
-	service := &Service{Store: storeSvc}
+	service := &Service{Store: &store.Store{}}
 	ctx := context.Background()
+	tenantID := "tenant"
 
 	if _, err := service.ListBeneficiariesForUserID(ctx, tenantID, 0); !errors.Is(err, store.ErrInvalidUserID) {
 		t.Fatalf("list missing user_id error = %v", err)

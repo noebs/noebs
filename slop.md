@@ -323,6 +323,11 @@ Last updated: 2026-05-31
     - Fix: require explicit card identifiers before DB access, use rows-affected checks for targeted user/card updates, and roll back `SetMainCard` when the requested target row is absent.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_UserWritesDoNotPersistMainExpDate|TestStore_UpdateUserRequiresExplicitTarget|TestStore_CardTargetedWritesRequirePAN|TestStore_SetMainCard_RequiresPAN|TestStoreTargetedUpdatesReportMissingRows|TestStore_SetMainCardMissingTargetRollsBackReset'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 ./store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+65. Beneficiary upserts inserted duplicates and deletes hid missing rows.
+    - Evidence: `UpsertBeneficiary` performed a plain insert while the consumer-beneficiary schema had no uniqueness on the API's beneficiary identity `(tenant_id, user_id, data)`, so retries or edits created duplicate beneficiaries instead of updating the saved one. `DeleteBeneficiary` also ignored rows affected and reported success when nothing matched.
+    - Fix: add a migration that deduplicates existing beneficiary rows and enforces the beneficiary identity key, make upserts use `ON CONFLICT` updates for editable fields, and require deletes to affect a row.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_UpsertBeneficiary_RequiresExplicitFields|TestStore_DeleteBeneficiary_RequiresExplicitFields|TestStore_BeneficiaryUpsertReplacesExisting|TestStore_DeleteBeneficiaryReportsMissingRows'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestBeneficiaryServiceUsesGatewayUserIDOnly|TestBeneficiaryServiceRejectsMissingUserID'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

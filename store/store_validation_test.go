@@ -603,7 +603,7 @@ func TestStore_AddCards_RequiresMobile(t *testing.T) {
 }
 
 func TestStore_UpsertBeneficiary_RequiresExplicitFields(t *testing.T) {
-	s := newTestStore(t)
+	s := &Store{}
 	if err := s.UpsertBeneficiary(context.Background(), "t1", 0, ebs_fields.Beneficiary{Data: "0912141660", BillType: "0010010001"}); !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
 	}
@@ -616,12 +616,65 @@ func TestStore_UpsertBeneficiary_RequiresExplicitFields(t *testing.T) {
 }
 
 func TestStore_DeleteBeneficiary_RequiresExplicitFields(t *testing.T) {
-	s := newTestStore(t)
+	s := &Store{}
 	if err := s.DeleteBeneficiary(context.Background(), "t1", 0, "0912141660"); !errors.Is(err, ErrInvalidUserID) {
 		t.Fatalf("expected ErrInvalidUserID, got %v", err)
 	}
 	if err := s.DeleteBeneficiary(context.Background(), "t1", 1, " "); !errors.Is(err, ErrMissingData) {
 		t.Fatalf("expected ErrMissingData, got %v", err)
+	}
+}
+
+func TestStore_BeneficiaryUpsertReplacesExisting(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	tenantID := "tenant-beneficiary-upsert"
+	if err := MigrateScope(ctx, db, tenantID, MigrationScopeConsumerBeneficiary); err != nil {
+		t.Fatalf("migrate consumer-beneficiary scope: %v", err)
+	}
+	s := New(db)
+	if err := s.EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	if err := s.UpsertBeneficiary(ctx, tenantID, 42, ebs_fields.Beneficiary{
+		Data:     "0912141660",
+		BillType: "0010010001",
+		Name:     "Primary",
+	}); err != nil {
+		t.Fatalf("first UpsertBeneficiary(): %v", err)
+	}
+	if err := s.UpsertBeneficiary(ctx, tenantID, 42, ebs_fields.Beneficiary{
+		Data:     "0912141660",
+		BillType: "0010010002",
+		Name:     "Updated",
+	}); err != nil {
+		t.Fatalf("second UpsertBeneficiary(): %v", err)
+	}
+	list, err := s.ListBeneficiaries(ctx, tenantID, 42)
+	if err != nil {
+		t.Fatalf("ListBeneficiaries(): %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("beneficiary count = %d, want 1: %+v", len(list), list)
+	}
+	if list[0].BillType != "0010010002" || list[0].Name != "Updated" {
+		t.Fatalf("beneficiary after upsert = %+v", list[0])
+	}
+}
+
+func TestStore_DeleteBeneficiaryReportsMissingRows(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	tenantID := "tenant-beneficiary-delete"
+	if err := MigrateScope(ctx, db, tenantID, MigrationScopeConsumerBeneficiary); err != nil {
+		t.Fatalf("migrate consumer-beneficiary scope: %v", err)
+	}
+	s := New(db)
+	if err := s.EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	if err := s.DeleteBeneficiary(ctx, tenantID, 42, "missing-data"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("DeleteBeneficiary(missing) error = %v, want %v", err, sql.ErrNoRows)
 	}
 }
 
