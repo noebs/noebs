@@ -93,7 +93,13 @@ func stringFromPaths(payload map[string]any, paths []string) string {
 	case json.Number:
 		return typed.String()
 	case float64:
-		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.0f", typed), "0"), ".")
+		if math.IsNaN(typed) || math.IsInf(typed, 0) {
+			return ""
+		}
+		if math.Trunc(typed) == typed {
+			return strconv.FormatInt(int64(typed), 10)
+		}
+		return strconv.FormatFloat(typed, 'f', -1, 64)
 	case int64:
 		return strconv.FormatInt(typed, 10)
 	case int:

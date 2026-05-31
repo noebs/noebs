@@ -248,6 +248,11 @@ Last updated: 2026-05-31
     - Fix: make request mapping return typed errors, reject empty mapping paths as `ErrPSPConfigInvalid`, reject missing configured source paths as `ErrPSPRequestInvalid`, and propagate those errors through HTTP PSP provider methods before outbound calls.
     - Tests: `go test -count=1 ./wallet/psp ./wallet/psp/httpjson`; `go test -count=1 -v ./wallet/psp -run 'TestMapRequest|TestMapResponse'`; `go test -count=1 -v ./wallet/psp/httpjson -run 'TestSendPayoutRejectsMissingMappedSourceBeforeHTTP|TestVerifyDepositRejectsInvalidMappedAmount'`.
 
+50. PSP response string mapping corrupted numeric identifiers with trailing zeroes.
+    - Evidence: `wallet/psp.stringFromPaths` formatted `float64` values with `%.0f` and then trimmed trailing `0` characters, so configured numeric identifiers like `1000` or `2500` became `"1"` or `"25"`. That could corrupt numeric provider transaction IDs, client references, or response messages before workflow/status matching.
+    - Fix: preserve integral numeric strings with `strconv.FormatInt`, use `strconv.FormatFloat` for non-integral values, and reject NaN/Inf string values as empty.
+    - Tests: `go test -count=1 -v ./wallet/psp -run 'TestMapResponsePreservesNumericStringFields|TestMapResponseUsesConfiguredPaths|TestMapResponseRejectsInvalidConfiguredAmount'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

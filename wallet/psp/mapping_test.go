@@ -93,6 +93,31 @@ func TestMapResponseRequiresConfiguredPaths(t *testing.T) {
 	}
 }
 
+func TestMapResponsePreservesNumericStringFields(t *testing.T) {
+	payload := map[string]any{
+		"client_reference": float64(1000),
+		"provider_id":      float64(2500),
+		"message":          json.Number("9000"),
+	}
+	mapped, err := MapResponse(payload, ResponseMapping{
+		ClientReference: []string{"client_reference"},
+		TransactionID:   []string{"provider_id"},
+		Message:         []string{"message"},
+	})
+	if err != nil {
+		t.Fatalf("MapResponse() error = %v", err)
+	}
+	if mapped.ClientReference != "1000" {
+		t.Fatalf("client reference = %q, want 1000", mapped.ClientReference)
+	}
+	if mapped.TransactionID != "2500" {
+		t.Fatalf("transaction id = %q, want 2500", mapped.TransactionID)
+	}
+	if mapped.Message != "9000" {
+		t.Fatalf("message = %q, want 9000", mapped.Message)
+	}
+}
+
 func TestMapResponseRejectsInvalidConfiguredAmount(t *testing.T) {
 	tests := []struct {
 		name  string
