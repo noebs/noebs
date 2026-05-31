@@ -31,25 +31,32 @@ func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFil
 		return nil, err
 	}
 	stmt := db.Rebind(`SELECT * FROM psp_configs
-		WHERE tenant_id = ? AND is_active = TRUE
-		ORDER BY provider_name ASC, provider_code ASC
-		LIMIT ? OFFSET ?`)
+		WHERE tenant_id = ?
+		ORDER BY provider_name ASC, provider_code ASC`)
 	var configs []PSPConfig
-	if err := db.SelectContext(ctx, &configs, stmt, tenantID, filter.Limit, filter.Offset); err != nil {
+	if err := db.SelectContext(ctx, &configs, stmt, tenantID); err != nil {
 		return nil, err
 	}
 
-	methods := make([]PSPPaymentMethod, 0, len(configs))
+	resolved := make([]*PSPConfig, 0, len(configs))
 	scope := PSPConfigScope{
 		Region:    filter.Region,
 		Currency:  filter.Currency,
 		Direction: direction,
 	}
-	for _, base := range configs {
-		cfg, _, err := s.ResolvePSPConfig(ctx, tenantID, base.ProviderCode, scope)
+	for i := range configs {
+		cfg, _, err := s.resolvePSPConfigFromBase(ctx, &configs[i], scope)
 		if err != nil {
 			return nil, err
 		}
+		resolved = append(resolved, cfg)
+	}
+	return availablePSPMethodsFromConfigs(resolved, filter, direction), nil
+}
+
+func availablePSPMethodsFromConfigs(configs []*PSPConfig, filter PSPMethodFilter, direction string) []PSPPaymentMethod {
+	methods := make([]PSPPaymentMethod, 0, len(configs))
+	for _, cfg := range configs {
 		if !methodSupportsDirection(cfg, direction) {
 			continue
 		}
@@ -64,7 +71,18 @@ func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFil
 		}
 		methods = append(methods, pspPaymentMethodFromConfig(cfg, direction, filter.Currency))
 	}
-	return methods, nil
+	return paginatePSPMethods(methods, filter.Limit, filter.Offset)
+}
+
+func paginatePSPMethods(methods []PSPPaymentMethod, limit, offset int) []PSPPaymentMethod {
+	if offset >= len(methods) {
+		return []PSPPaymentMethod{}
+	}
+	end := offset + limit
+	if end < offset || end > len(methods) {
+		end = len(methods)
+	}
+	return methods[offset:end]
 }
 
 func pspPaymentMethodFromConfig(cfg *PSPConfig, direction, currency string) PSPPaymentMethod {

@@ -288,6 +288,11 @@ Last updated: 2026-05-31
     - Fix: validate status updates against the existing row before writing, preserve valid terminal-transition behavior, allow filling an empty provider transaction ID once, and reject mismatched later IDs as `ErrDuplicateTransaction`.
     - Tests: `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/handler`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+58. PSP method catalog pagination ran before scoped eligibility.
+    - Evidence: `ListAvailablePSPMethods` selected only active base PSP config rows with `LIMIT/OFFSET` before resolving scoped overrides and before applying direction, currency, region, and amount filters. That could return an empty or short page even when eligible methods existed later in provider order, and it hid methods that are enabled only by a matching scoped override.
+    - Fix: resolve each tenant PSP config for the requested scope, apply active/direction/currency/region/amount eligibility first, then paginate the eligible method list.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod|TestListAvailablePSPMethodsValidation'`; `go test -count=1 -v ./wallet/store -run 'TestListAvailablePSPMethodsPaginatesAfterScopedEligibility|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container cases skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

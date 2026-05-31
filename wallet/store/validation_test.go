@@ -2407,6 +2407,114 @@ func TestListAvailablePSPMethodsValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidOffset)
 }
 
+func TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility(t *testing.T) {
+	filter := PSPMethodFilter{
+		Currency: "AED",
+		Region:   "AE",
+		Amount:   500,
+		Limit:    1,
+		Offset:   1,
+	}
+	configs := []*PSPConfig{
+		{
+			TenantID:              "tenant",
+			ProviderCode:          "withdraw-only",
+			ProviderName:          "A Withdraw",
+			IsActive:              true,
+			SupportsWithdrawal:    true,
+			EnabledCurrencies:     StringArray{"AED"},
+			SupportedRegions:      StringArray{"AE"},
+			MinAmount:             sql.NullInt64{Int64: 100, Valid: true},
+			MaxAmount:             sql.NullInt64{Int64: 1000, Valid: true},
+			DepositInputSchema:    RawJSON(`{"kind":"withdraw"}`),
+			PresentationSchema:    RawJSON(`{"kind":"withdraw"}`),
+			WithdrawalInputSchema: RawJSON(`{"kind":"withdraw"}`),
+		},
+		{
+			TenantID:           "tenant",
+			ProviderCode:       "usd-only",
+			ProviderName:       "B USD",
+			IsActive:           true,
+			SupportsDeposit:    true,
+			EnabledCurrencies:  StringArray{"USD"},
+			SupportedRegions:   StringArray{"AE"},
+			MinAmount:          sql.NullInt64{Int64: 100, Valid: true},
+			MaxAmount:          sql.NullInt64{Int64: 1000, Valid: true},
+			DepositInputSchema: RawJSON(`{"kind":"usd"}`),
+			PresentationSchema: RawJSON(`{"kind":"usd"}`),
+		},
+		{
+			TenantID:           "tenant",
+			ProviderCode:       "eligible-a",
+			ProviderName:       "C Eligible",
+			IsActive:           true,
+			SupportsDeposit:    true,
+			EnabledCurrencies:  StringArray{"AED"},
+			SupportedRegions:   StringArray{"AE"},
+			MinAmount:          sql.NullInt64{Int64: 100, Valid: true},
+			MaxAmount:          sql.NullInt64{Int64: 1000, Valid: true},
+			DepositInputSchema: RawJSON(`{"kind":"eligible-a"}`),
+			PresentationSchema: RawJSON(`{"kind":"eligible-a"}`),
+		},
+		{
+			TenantID:           "tenant",
+			ProviderCode:       "eligible-b",
+			ProviderName:       "D Eligible",
+			IsActive:           true,
+			SupportsDeposit:    true,
+			EnabledCurrencies:  StringArray{"AED"},
+			SupportedRegions:   StringArray{"AE"},
+			MinAmount:          sql.NullInt64{Int64: 100, Valid: true},
+			MaxAmount:          sql.NullInt64{Int64: 1000, Valid: true},
+			DepositInputSchema: RawJSON(`{"kind":"eligible-b"}`),
+			PresentationSchema: RawJSON(`{"kind":"eligible-b"}`),
+		},
+	}
+
+	methods := availablePSPMethodsFromConfigs(configs, filter, "deposit")
+	if len(methods) != 1 {
+		t.Fatalf("expected one paginated method, got %d", len(methods))
+	}
+	if methods[0].ProviderCode != "eligible-b" {
+		t.Fatalf("expected second eligible method after pagination, got %q", methods[0].ProviderCode)
+	}
+}
+
+func TestMergePSPConfigOverrideCanActivateScopedMethod(t *testing.T) {
+	base := &PSPConfig{
+		TenantID:          "tenant",
+		ProviderCode:      "scoped",
+		ProviderName:      "Scoped Pay",
+		IsActive:          false,
+		SupportsDeposit:   false,
+		EnabledCurrencies: StringArray{"USD"},
+		SupportedRegions:  StringArray{"US"},
+		MethodType:        "redirect",
+	}
+	override := &PSPConfigOverride{
+		IsActive:           true,
+		SupportsDeposit:    true,
+		EnabledCurrencies:  StringArray{"AED"},
+		SupportedRegions:   StringArray{"AE"},
+		MethodType:         sql.NullString{String: "qr", Valid: true},
+		DisplayName:        sql.NullString{String: "Scoped QR", Valid: true},
+		DepositInputSchema: RawJSON(`{"kind":"qr"}`),
+	}
+
+	merged := mergePSPConfigOverride(base, override)
+	methods := availablePSPMethodsFromConfigs([]*PSPConfig{merged}, PSPMethodFilter{
+		Currency: "AED",
+		Region:   "AE",
+		Limit:    10,
+	}, "deposit")
+	if len(methods) != 1 {
+		t.Fatalf("expected scoped override method, got %d", len(methods))
+	}
+	if methods[0].ProviderCode != "scoped" || methods[0].MethodType != "qr" || methods[0].DisplayName != "Scoped QR" {
+		t.Fatalf("unexpected scoped method: %+v", methods[0])
+	}
+}
+
 func assertErrorIs(t *testing.T, err, want error) {
 	t.Helper()
 	if !errors.Is(err, want) {

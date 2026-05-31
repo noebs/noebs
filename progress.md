@@ -50,6 +50,7 @@
 - Fixed ownership verification initiation so workflow/reference-key retries return exact existing rows and mismatched duplicates fail with a typed error.
 - Fixed EBS transaction payload writes so JSON encoding failures return errors instead of persisting empty payloads.
 - Fixed targeted root-store updates so missing users/tokens/payment requests return not-found errors instead of silent success.
+- Fixed PSP method catalog pagination so scoped overrides and eligibility filters are applied before `LIMIT/OFFSET`, including methods enabled only by matching overrides.
 
 Verification:
 
@@ -181,6 +182,12 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation|TestPSPTransactionPersistenceReplaysAndStatusUpdates'`
 - `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestAvailablePSPMethodsFromConfigsPaginatesAfterEligibility|TestMergePSPConfigOverrideCanActivateScopedMethod|TestListAvailablePSPMethodsValidation'`
+- `go test -count=1 -v ./wallet/store -run 'TestListAvailablePSPMethodsPaginatesAfterScopedEligibility|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container cases skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/store`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

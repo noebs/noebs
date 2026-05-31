@@ -277,3 +277,110 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		t.Fatalf("expected below-min amount to hide method, got %d", len(methods))
 	}
 }
+
+func TestListAvailablePSPMethodsPaginatesAfterScopedEligibility(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	container, err := testdb.StartPostgresContainer(ctx)
+	if err != nil {
+		if testdb.IsContainerRuntimeUnavailable(err) {
+			t.Skipf("container runtime unavailable: %v", err)
+		}
+		t.Fatalf("start postgres container: %v", err)
+	}
+	defer func() {
+		_ = container.Terminate(context.Background())
+	}()
+
+	dbName := fmt.Sprintf("noebs_wallet_store_%d", time.Now().UnixNano())
+	dbURL, err := container.CreateDatabase(ctx, dbName)
+	if err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+
+	db, err := basestore.OpenFromConfig(dbURL, basestore.DriverPostgres)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() {
+		_ = db.Close()
+		dropCtx, dropCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer dropCancel()
+		_ = container.DropDatabase(dropCtx, dbName)
+	}()
+
+	if err := basestore.MigrateScope(ctx, db, "tenant", basestore.MigrationScopePSPWebhook); err != nil {
+		t.Fatalf("migrate db: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx, `INSERT INTO psp_configs(
+		tenant_id, provider_code, provider_name, api_base_url, enabled_currencies,
+		is_active, supports_deposit, supports_withdrawal, method_type, display_name,
+		supported_regions, min_amount, max_amount, deposit_input_schema, presentation_schema
+	) VALUES
+		('tenant', 'alpha', 'Alpha Pay', 'https://alpha.example',
+		 ARRAY['USD'], FALSE, FALSE, FALSE, 'redirect', 'Alpha Pay',
+		 ARRAY['US'], 100, 100000, '{"kind":"redirect"}', '{"kind":"redirect"}'),
+		('tenant', 'beta', 'Beta Pay', 'https://beta.example',
+		 ARRAY['AED'], TRUE, FALSE, TRUE, 'bank_transfer', 'Beta Pay',
+		 ARRAY['AE'], 100, 100000, '{"kind":"bank"}', '{"kind":"bank"}'),
+		('tenant', 'gamma', 'Gamma Pay', 'https://gamma.example',
+		 ARRAY['USD'], TRUE, TRUE, FALSE, 'card', 'Gamma Pay',
+		 ARRAY['AE'], 100, 100000, '{"kind":"card"}', '{"kind":"card"}'),
+		('tenant', 'zeta', 'Zeta Pay', 'https://zeta.example',
+		 ARRAY['AED'], TRUE, TRUE, FALSE, 'qr', 'Zeta Pay',
+		 ARRAY['AE'], 100, 100000, '{"kind":"qr"}', '{"kind":"qr"}')`); err != nil {
+		t.Fatalf("insert psp configs: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO psp_config_overrides(
+		tenant_id, provider_code, region, currency, direction, is_active,
+		supports_deposit, supports_withdrawal, enabled_currencies, method_type,
+		display_name, supported_regions, min_amount, max_amount, deposit_input_schema,
+		presentation_schema
+	) VALUES(
+		'tenant', 'alpha', 'AE', 'AED', 'deposit', TRUE,
+		TRUE, FALSE, ARRAY['AED'], 'qr', 'Alpha AE QR',
+		ARRAY['AE'], 100, 100000, '{"kind":"qr"}', '{"kind":"qr"}'
+	)`); err != nil {
+		t.Fatalf("insert psp override: %v", err)
+	}
+
+	s := New(db)
+	methods, err := s.ListAvailablePSPMethods(ctx, PSPMethodFilter{
+		TenantID:  "tenant",
+		Direction: "deposit",
+		Currency:  "AED",
+		Region:    "AE",
+		Amount:    500,
+		Limit:     1,
+	})
+	if err != nil {
+		t.Fatalf("list first page: %v", err)
+	}
+	if len(methods) != 1 {
+		t.Fatalf("expected first eligible page to contain alpha override, got %d", len(methods))
+	}
+	if methods[0].ProviderCode != "alpha" || methods[0].DisplayName != "Alpha AE QR" || methods[0].MethodType != "qr" {
+		t.Fatalf("unexpected first eligible method: %+v", methods[0])
+	}
+
+	methods, err = s.ListAvailablePSPMethods(ctx, PSPMethodFilter{
+		TenantID:  "tenant",
+		Direction: "deposit",
+		Currency:  "AED",
+		Region:    "AE",
+		Amount:    500,
+		Limit:     1,
+		Offset:    1,
+	})
+	if err != nil {
+		t.Fatalf("list second page: %v", err)
+	}
+	if len(methods) != 1 {
+		t.Fatalf("expected second eligible page to contain zeta, got %d", len(methods))
+	}
+	if methods[0].ProviderCode != "zeta" {
+		t.Fatalf("unexpected second eligible method: %+v", methods[0])
+	}
+}

@@ -43,14 +43,28 @@ func (s *Store) ResolvePSPConfig(ctx context.Context, tenantID, providerCode str
 	if err != nil {
 		return nil, nil, err
 	}
-	override, err := s.GetPSPConfigOverride(ctx, tenantID, providerCode, scope)
+	return s.resolvePSPConfigFromBase(ctx, cfg, scope)
+}
+
+func (s *Store) resolvePSPConfigFromBase(ctx context.Context, cfg *PSPConfig, scope PSPConfigScope) (*PSPConfig, *PSPConfigOverride, error) {
+	if cfg == nil {
+		return nil, nil, ErrPSPConfigNotFound
+	}
+	override, err := s.GetPSPConfigOverride(ctx, cfg.TenantID, cfg.ProviderCode, scope)
 	if err != nil {
 		if errors.Is(err, ErrPSPConfigOverrideNotFound) {
 			return cfg, nil, nil
 		}
 		return nil, nil, err
 	}
+	return mergePSPConfigOverride(cfg, override), override, nil
+}
+
+func mergePSPConfigOverride(cfg *PSPConfig, override *PSPConfigOverride) *PSPConfig {
 	merged := *cfg
+	if override == nil {
+		return &merged
+	}
 	merged.IsActive = override.IsActive
 	merged.SupportsDeposit = override.SupportsDeposit
 	merged.SupportsWithdrawal = override.SupportsWithdrawal
@@ -129,5 +143,5 @@ func (s *Store) ResolvePSPConfig(ctx context.Context, tenantID, providerCode str
 	if len(override.WebhookResponseMapping) > 0 {
 		merged.WebhookResponseMapping = override.WebhookResponseMapping
 	}
-	return &merged, override, nil
+	return &merged
 }
