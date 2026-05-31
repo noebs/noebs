@@ -282,6 +282,47 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	}
 }
 
+func TestCreateHoldInsufficientFundsRollsBack(t *testing.T) {
+	ctx, store, tenantID := newWalletStoreIntegration(t)
+
+	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID:  tenantID,
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "user-hold-rollback",
+		UserID:    42,
+		Currency:  "AED",
+		KYCTier:   KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure wallet: %v", err)
+	}
+	setWalletBalances(t, ctx, store.DB, tenantID, wallet.ID, 100, 100)
+
+	_, err = store.CreateHold(ctx, HoldParams{
+		TenantID:       tenantID,
+		WalletID:       wallet.ID,
+		Amount:         200,
+		Reason:         "withdrawal",
+		ReferenceType:  "withdrawal",
+		ReferenceID:    "insufficient-hold",
+		IdempotencyKey: "insufficient-hold",
+		ExpiresAt:      time.Now().UTC().Add(time.Hour),
+	})
+	if !errors.Is(err, ErrInsufficientFunds) {
+		t.Fatalf("CreateHold() error = %v, want %v", err, ErrInsufficientFunds)
+	}
+	assertWalletBalances(t, ctx, store, tenantID, wallet.ID, 100, 100)
+
+	var count int
+	stmt := store.DB.Rebind("SELECT COUNT(*) FROM balance_holds WHERE tenant_id = ? AND reference_id = ?")
+	if err := store.DB.GetContext(ctx, &count, stmt, tenantID, "insufficient-hold"); err != nil {
+		t.Fatalf("count holds: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("hold rows after insufficient funds = %d, want 0", count)
+	}
+}
+
 func TestExistingDoubleEntryMatches(t *testing.T) {
 	debitID := uuid.New()
 	creditID := uuid.New()

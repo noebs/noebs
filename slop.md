@@ -348,6 +348,11 @@ Last updated: 2026-05-31
     - Fix: require explicit PAN values before card insert/update DB access while preserving data-key checks for non-empty sensitive values.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_AddCards_RequiresDataKey|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresPAN|TestStore_CardTargetedWritesRequirePAN|TestStoreTargetedUpdatesReportMissingRows'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestUserServiceCardWritesRequirePAN|TestUserServiceTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+70. Wallet hold transactions could skip rollback on error.
+    - Evidence: `CreateHold` and `ReleaseHold` opened SQL transactions with a rollback defer guarded by the outer `err` variable, but the functions did not use named error returns. Error paths after `BeginTxx`, including insufficient funds and shadowed `if err := ...` failures, could return without setting that outer variable, leaving the transaction uncommitted and unrolled back.
+    - Fix: switch hold transaction cleanup to an explicit committed flag so every non-committed exit rolls back regardless of how the error is returned.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestCreateHoldInsufficientFundsRollsBack|TestReleaseHoldValidation|TestHoldValidation|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container cases skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

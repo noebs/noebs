@@ -62,6 +62,7 @@
 - Fixed cache persistence so cache-card and cache-biller operations require explicit PAN/mobile/biller lookup keys before touching the DB.
 - Fixed push-notification persistence so records require an addressable target before storage and payment-request JSON encoding errors are no longer ignored.
 - Fixed card-vault writes so card inserts and full-card updates require explicit PAN identities instead of allowing empty-PAN rows or overwrites.
+- Fixed wallet hold transaction cleanup so `CreateHold`/`ReleaseHold` roll back on every non-committed exit, including insufficient funds and shadowed update errors.
 
 Verification:
 
@@ -261,6 +262,11 @@ Verification:
 - `go test -count=1 -v ./store -run 'TestStore_AddCards_RequiresDataKey|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresPAN|TestStore_CardTargetedWritesRequirePAN|TestStoreTargetedUpdatesReportMissingRows'` (Postgres container case skipped locally when the container runtime is unavailable)
 - `go test -count=1 -v ./consumer -run 'TestUserServiceCardWritesRequirePAN|TestUserServiceTenantValidationFailsBeforeDB'`
 - `go test -count=1 ./store ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestCreateHoldInsufficientFundsRollsBack|TestReleaseHoldValidation|TestHoldValidation|TestLedgerAccountingForHeldAndSystemDebits'` (Postgres container cases skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/store`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

@@ -37,8 +37,9 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	if err != nil {
 		return nil, err
 	}
+	committed := false
 	defer func() {
-		if err != nil {
+		if !committed {
 			_ = tx.Rollback()
 		}
 	}()
@@ -98,6 +99,7 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	committed = true
 	return &hold, nil
 }
 
@@ -114,8 +116,9 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	if err != nil {
 		return err
 	}
+	committed := false
 	defer func() {
-		if err != nil {
+		if !committed {
 			_ = tx.Rollback()
 		}
 	}()
@@ -128,6 +131,7 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+		committed = true
 		return nil
 	}
 
@@ -149,7 +153,11 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 		return err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }
 
 func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, params HoldParams) (BalanceHold, error) {
