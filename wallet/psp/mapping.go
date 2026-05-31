@@ -3,6 +3,7 @@ package psp
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -29,27 +30,31 @@ type MappedResponse struct {
 	Metadata        map[string]any
 }
 
-func MapResponse(payload map[string]any, mapping ResponseMapping) MappedResponse {
+func MapResponse(payload map[string]any, mapping ResponseMapping) (MappedResponse, error) {
+	amount, err := int64FromPaths(payload, mapping.Amount)
+	if err != nil {
+		return MappedResponse{}, err
+	}
 	return MappedResponse{
 		ClientReference: stringFromPaths(payload, mapping.ClientReference),
 		TransactionID:   stringFromPaths(payload, mapping.TransactionID),
 		Status:          strings.ToLower(stringFromPaths(payload, mapping.Status)),
-		Amount:          int64FromPaths(payload, mapping.Amount),
+		Amount:          amount,
 		Currency:        stringFromPaths(payload, mapping.Currency),
 		Direction:       stringFromPaths(payload, mapping.Direction),
 		Message:         stringFromPaths(payload, mapping.Message),
 		Metadata:        mapFromPaths(payload, mapping.Metadata),
-	}
+	}, nil
 }
 
-func valueFromPaths(payload map[string]any, paths []string) any {
+func valueFromPaths(payload map[string]any, paths []string) (string, any, bool) {
 	for _, path := range paths {
 		value, ok := valueAtPath(payload, path)
 		if ok {
-			return value
+			return strings.TrimSpace(path), value, true
 		}
 	}
-	return nil
+	return "", nil, false
 }
 
 func valueAtPath(payload map[string]any, path string) (any, bool) {
@@ -78,7 +83,10 @@ func valueAtPath(payload map[string]any, path string) (any, bool) {
 }
 
 func stringFromPaths(payload map[string]any, paths []string) string {
-	value := valueFromPaths(payload, paths)
+	_, value, ok := valueFromPaths(payload, paths)
+	if !ok {
+		return ""
+	}
 	switch typed := value.(type) {
 	case string:
 		return strings.TrimSpace(typed)
@@ -95,30 +103,56 @@ func stringFromPaths(payload map[string]any, paths []string) string {
 	}
 }
 
-func int64FromPaths(payload map[string]any, paths []string) int64 {
-	value := valueFromPaths(payload, paths)
+func int64FromPaths(payload map[string]any, paths []string) (int64, error) {
+	if len(paths) == 0 {
+		return 0, nil
+	}
+	path, value, ok := valueFromPaths(payload, paths)
+	if !ok {
+		return 0, fmt.Errorf("%w: missing amount at configured paths", ErrPSPResponseInvalid)
+	}
 	switch typed := value.(type) {
 	case int64:
-		return typed
+		return typed, nil
 	case int:
-		return int64(typed)
+		return int64(typed), nil
 	case float64:
-		return int64(typed)
+		if math.IsNaN(typed) || math.IsInf(typed, 0) || math.Trunc(typed) != typed {
+			return 0, invalidMappedField("amount", path, value)
+		}
+		return int64(typed), nil
 	case json.Number:
-		parsed, _ := typed.Int64()
-		return parsed
+		parsed, err := typed.Int64()
+		if err != nil {
+			return 0, invalidMappedField("amount", path, value)
+		}
+		return parsed, nil
 	case string:
-		parsed, _ := strconv.ParseInt(strings.TrimSpace(typed), 10, 64)
-		return parsed
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return 0, invalidMappedField("amount", path, value)
+		}
+		parsed, err := strconv.ParseInt(trimmed, 10, 64)
+		if err != nil {
+			return 0, invalidMappedField("amount", path, value)
+		}
+		return parsed, nil
 	default:
-		return 0
+		return 0, invalidMappedField("amount", path, value)
 	}
 }
 
 func mapFromPaths(payload map[string]any, paths []string) map[string]any {
-	value := valueFromPaths(payload, paths)
+	_, value, ok := valueFromPaths(payload, paths)
+	if !ok {
+		return nil
+	}
 	if typed, ok := value.(map[string]any); ok {
 		return typed
 	}
 	return nil
+}
+
+func invalidMappedField(field, path string, value any) error {
+	return fmt.Errorf("%w: invalid %s at %q (%T)", ErrPSPResponseInvalid, field, path, value)
 }

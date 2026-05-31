@@ -114,6 +114,39 @@ func TestDoJSONReturnsInvalidResponseError(t *testing.T) {
 	}
 }
 
+func TestVerifyDepositRejectsInvalidMappedAmount(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"provider_id":"psp-123","state":"success","minor_units":"12.34","currency":"AED"}}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           server.URL,
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposit/verify",
+		DepositResponseMapping: psp.ResponseMapping{
+			TransactionID: []string{"result.provider_id"},
+			Status:        []string{"result.state"},
+			Amount:        []string{"result.minor_units"},
+			Currency:      []string{"result.currency"},
+		},
+		PayoutRequestMethod: http.MethodPost,
+		PayoutRequestPath:   "/payouts",
+		StatusRequestMethod: http.MethodGet,
+		StatusRequestPath:   "/status",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	_, err = provider.VerifyDeposit(context.Background(), "psp-123")
+	if !errors.Is(err, psp.ErrPSPResponseInvalid) {
+		t.Fatalf("VerifyDeposit() error = %v, want %v", err, psp.ErrPSPResponseInvalid)
+	}
+}
+
 func TestDoJSONReturnsReadError(t *testing.T) {
 	provider := &Provider{
 		config: &psp.Config{

@@ -132,6 +132,13 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 ./wallet/psp ./wallet/psp/httpjson ./wallet/handler`
+- `go test -count=1 -v ./wallet/psp -run 'TestMapResponse'`
+- `go test -count=1 -v ./wallet/psp/httpjson -run 'TestVerifyDepositRejectsInvalidMappedAmount|TestDoJSONReturnsInvalidResponseError'`
+- `go test -count=1 -v ./wallet/handler -run 'TestMappedPSPWebhookFields'`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

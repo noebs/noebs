@@ -1,6 +1,10 @@
 package psp
 
-import "testing"
+import (
+	"encoding/json"
+	"errors"
+	"testing"
+)
 
 func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 	payload := map[string]any{
@@ -14,7 +18,7 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 		},
 		"meta": map[string]any{"card_last4": "4242"},
 	}
-	mapped := MapResponse(payload, ResponseMapping{
+	mapped, err := MapResponse(payload, ResponseMapping{
 		TransactionID: []string{"result.provider_id"},
 		Status:        []string{"result.state"},
 		Amount:        []string{"result.minor_units"},
@@ -23,6 +27,9 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 		Message:       []string{"result.message"},
 		Metadata:      []string{"meta"},
 	})
+	if err != nil {
+		t.Fatalf("MapResponse() error = %v", err)
+	}
 
 	if mapped.TransactionID != "psp-123" {
 		t.Fatalf("expected provider id psp-123, got %q", mapped.TransactionID)
@@ -53,10 +60,13 @@ func TestMapResponseDoesNotDefaultMissingCurrency(t *testing.T) {
 			"minor_units": float64(2500),
 		},
 	}
-	mapped := MapResponse(payload, ResponseMapping{
+	mapped, err := MapResponse(payload, ResponseMapping{
 		Amount:   []string{"result.minor_units"},
 		Currency: []string{"result.currency"},
 	})
+	if err != nil {
+		t.Fatalf("MapResponse() error = %v", err)
+	}
 
 	if mapped.Amount != 2500 {
 		t.Fatalf("expected amount 2500, got %d", mapped.Amount)
@@ -74,9 +84,37 @@ func TestMapResponseRequiresConfiguredPaths(t *testing.T) {
 		"amount":             "1200",
 		"currency":           "USD",
 	}
-	mapped := MapResponse(payload, ResponseMapping{})
+	mapped, err := MapResponse(payload, ResponseMapping{})
+	if err != nil {
+		t.Fatalf("MapResponse() error = %v", err)
+	}
 	if mapped.ClientReference != "" || mapped.TransactionID != "" || mapped.Status != "" || mapped.Amount != 0 || mapped.Currency != "" || mapped.Direction != "" || mapped.Message != "" {
 		t.Fatalf("MapResponse() = %+v, want empty fields without configured paths", mapped)
+	}
+}
+
+func TestMapResponseRejectsInvalidConfiguredAmount(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+	}{
+		{name: "missing", value: nil},
+		{name: "fractional string", value: "12.34"},
+		{name: "fractional float", value: float64(12.5)},
+		{name: "json decimal", value: json.Number("12.5")},
+		{name: "object", value: map[string]any{"amount": 1200}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := map[string]any{"result": map[string]any{}}
+			if tt.value != nil {
+				payload["result"].(map[string]any)["minor_units"] = tt.value
+			}
+			_, err := MapResponse(payload, ResponseMapping{Amount: []string{"result.minor_units"}})
+			if !errors.Is(err, ErrPSPResponseInvalid) {
+				t.Fatalf("MapResponse() error = %v, want %v", err, ErrPSPResponseInvalid)
+			}
+		})
 	}
 }
 

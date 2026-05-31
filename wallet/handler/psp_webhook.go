@@ -77,7 +77,14 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			return jsonResponse(c, http.StatusInternalServerError, apperr.Wrap(err, apperr.ErrInternal, err.Error()))
 		}
 	}
-	fields := mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
+	fields, err := mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
+	if err != nil {
+		errMsg := err.Error()
+		if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, "", "", scope.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
+			return jsonResponse(c, 0, mapWalletError(logErr))
+		}
+		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, errMsg))
+	}
 	provider, err := h.Registry.Resolve(cfg)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, err.Error()))
@@ -99,7 +106,14 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		}
 		payloadMap = checkedMap
 		payload = checkedPayload
-		fields = mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
+		fields, err = mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
+		if err != nil {
+			errMsg := err.Error()
+			if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, "", "", scope.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
+				return jsonResponse(c, 0, mapWalletError(logErr))
+			}
+			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, errMsg))
+		}
 	}
 
 	if fields.ClientReference == "" {
@@ -186,8 +200,11 @@ type pspWebhookFields struct {
 	Message          string
 }
 
-func mappedPSPWebhookFields(payload map[string]any, mapping walletpsp.ResponseMapping) pspWebhookFields {
-	mapped := walletpsp.MapResponse(payload, mapping)
+func mappedPSPWebhookFields(payload map[string]any, mapping walletpsp.ResponseMapping) (pspWebhookFields, error) {
+	mapped, err := walletpsp.MapResponse(payload, mapping)
+	if err != nil {
+		return pspWebhookFields{}, err
+	}
 	return pspWebhookFields{
 		ClientReference:  mapped.ClientReference,
 		PSPTransactionID: mapped.TransactionID,
@@ -196,7 +213,7 @@ func mappedPSPWebhookFields(payload map[string]any, mapping walletpsp.ResponseMa
 		Currency:         mapped.Currency,
 		Direction:        normalizeDirection(mapped.Direction),
 		Message:          mapped.Message,
-	}
+	}, nil
 }
 
 func (h *PSPWebhookHandler) recordWebhookInteraction(c *fiber.Ctx, tenantID, providerCode, clientReference, pspTransactionID, direction string, statusCode int, responseBody any, errorMessage string, payload []byte) error {

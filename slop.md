@@ -238,6 +238,11 @@ Last updated: 2026-05-31
     - Fix: resolve the user at the service boundary, canonicalize KYC/passport identity fields from the persisted user, add typed store validation for missing/mismatched mobiles, and require the target user row before inserting KYC or passport data.
     - Tests: `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 -v ./store -run 'TestStore_UpdateKYCValidationFailsBeforeDB|TestStore_UpdateKYCRequiresExistingUser|TestStoreTenantValidation'`; `go test -count=1 -v ./consumer -run 'TestUpdateKYCRequiresExistingUser|TestUpdateKYCPersistsForExistingUser|TestUserServiceTenantValidationFailsBeforeDB'` (Postgres container cases skipped locally when the container runtime is unavailable).
 
+48. PSP response amount mapping silently converted malformed provider values into money facts.
+    - Evidence: `wallet/psp.MapResponse` parsed configured amount paths with ignored parse errors and direct float truncation. A provider response like `"12.34"`, `json.Number("12.5")`, or `12.5` became `0` or `12` instead of a typed invalid-response error, allowing HTTP PSP providers and webhook signals to carry bad settlement amounts into wallet workflows.
+    - Fix: make response amount mapping return `ErrPSPResponseInvalid` for missing or malformed configured amount paths, preserve absent amounts only when no amount mapping is configured, and propagate mapping errors through HTTP PSP provider and webhook mapping paths.
+    - Tests: `go test -count=1 ./wallet/psp ./wallet/psp/httpjson ./wallet/handler`; `go test -count=1 -v ./wallet/psp -run 'TestMapResponse'`; `go test -count=1 -v ./wallet/psp/httpjson -run 'TestVerifyDepositRejectsInvalidMappedAmount|TestDoJSONReturnsInvalidResponseError'`; `go test -count=1 -v ./wallet/handler -run 'TestMappedPSPWebhookFields'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

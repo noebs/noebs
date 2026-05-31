@@ -98,7 +98,10 @@ func TestMappedPSPWebhookFieldsRequireConfiguredPaths(t *testing.T) {
 		"message":            "accepted",
 	}
 
-	fields := mappedPSPWebhookFields(payload, walletpsp.ResponseMapping{})
+	fields, err := mappedPSPWebhookFields(payload, walletpsp.ResponseMapping{})
+	if err != nil {
+		t.Fatalf("mappedPSPWebhookFields() error = %v", err)
+	}
 	if fields.ClientReference != "" ||
 		fields.PSPTransactionID != "" ||
 		fields.Status != "" ||
@@ -109,7 +112,7 @@ func TestMappedPSPWebhookFieldsRequireConfiguredPaths(t *testing.T) {
 		t.Fatalf("fields = %+v, want empty without configured paths", fields)
 	}
 
-	fields = mappedPSPWebhookFields(payload, walletpsp.ResponseMapping{
+	fields, err = mappedPSPWebhookFields(payload, walletpsp.ResponseMapping{
 		ClientReference: []string{"client_reference"},
 		TransactionID:   []string{"psp_transaction_id"},
 		Status:          []string{"status"},
@@ -118,6 +121,9 @@ func TestMappedPSPWebhookFieldsRequireConfiguredPaths(t *testing.T) {
 		Direction:       []string{"direction"},
 		Message:         []string{"message"},
 	})
+	if err != nil {
+		t.Fatalf("mappedPSPWebhookFields() error = %v", err)
+	}
 	if fields.ClientReference != "payload-ref" ||
 		fields.PSPTransactionID != "payload-tx" ||
 		fields.Status != "success" ||
@@ -126,6 +132,16 @@ func TestMappedPSPWebhookFieldsRequireConfiguredPaths(t *testing.T) {
 		fields.Direction != "deposit" ||
 		fields.Message != "accepted" {
 		t.Fatalf("fields = %+v, want configured mapping values", fields)
+	}
+}
+
+func TestMappedPSPWebhookFieldsRejectsInvalidAmount(t *testing.T) {
+	_, err := mappedPSPWebhookFields(
+		map[string]any{"amount": "12.34"},
+		walletpsp.ResponseMapping{Amount: []string{"amount"}},
+	)
+	if !errors.Is(err, walletpsp.ErrPSPResponseInvalid) {
+		t.Fatalf("mappedPSPWebhookFields() error = %v, want %v", err, walletpsp.ErrPSPResponseInvalid)
 	}
 }
 
