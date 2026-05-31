@@ -114,6 +114,40 @@ func TestStore_CreateUser_MissingTenantID(t *testing.T) {
 	}
 }
 
+func TestStore_UserWritesDoNotPersistMainExpDate(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	user := &ebs_fields.User{
+		Mobile:   "0990000000",
+		Username: "0990000000",
+		Email:    "user@example.test",
+		ExpDate:  "2601",
+	}
+	if err := s.CreateUser(ctx, "tenant", user); err != nil {
+		t.Fatalf("CreateUser(): %v", err)
+	}
+	assertUserMainExpDateEmpty(t, s, user.ID)
+
+	user.Fullname = "Updated User"
+	user.ExpDate = "3001"
+	if err := s.UpdateUser(ctx, "tenant", user); err != nil {
+		t.Fatalf("UpdateUser(): %v", err)
+	}
+	assertUserMainExpDateEmpty(t, s, user.ID)
+}
+
+func assertUserMainExpDateEmpty(t *testing.T, s *Store, userID int64) {
+	t.Helper()
+	var mainExpDate sql.NullString
+	stmt := s.DB.Rebind("SELECT main_expdate FROM users WHERE tenant_id = ? AND id = ?")
+	if err := s.DB.QueryRowContext(context.Background(), stmt, "tenant", userID).Scan(&mainExpDate); err != nil {
+		t.Fatalf("read main_expdate: %v", err)
+	}
+	if mainExpDate.Valid && mainExpDate.String != "" {
+		t.Fatalf("main_expdate = %q, want empty", mainExpDate.String)
+	}
+}
+
 func TestStore_IdentityTenantValidationFailsBeforeDB(t *testing.T) {
 	ctx := context.Background()
 	s := &Store{}
@@ -182,6 +216,19 @@ func TestStore_IdentityTenantValidationFailsBeforeDB(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestStore_UpdateUserColumnsRejectsUnsafeColumns(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	for _, column := range []string{"main_expdate", "main_card_enc", "fullname = 'x'"} {
+		t.Run(column, func(t *testing.T) {
+			err := s.UpdateUserColumns(ctx, "tenant", 1, map[string]any{column: "value"})
+			if !errors.Is(err, ErrInvalidUserColumn) {
+				t.Fatalf("UpdateUserColumns() error = %v, want %v", err, ErrInvalidUserColumn)
+			}
+		})
 	}
 }
 

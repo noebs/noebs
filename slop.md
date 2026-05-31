@@ -58,6 +58,11 @@ Last updated: 2026-05-31
     - Fix: store a typed validator initialization error and return it through `ValidateStruct`; keep validator setup lazy without process termination.
     - Tests: `go test -count=1 ./ebs_fields`.
 
+12. User writes persisted main-card expiry and allowed arbitrary user columns.
+    - Evidence: `CreateUser` and `UpdateUser` wrote `User.ExpDate` into `users.main_expdate`, despite card expiry belonging to card-vault data. `UpdateUserColumns` built SQL directly from caller-provided map keys.
+    - Fix: stop persisting main-card expiry on user create/update, and reject unknown or unsafe user update columns before building SQL.
+    - Tests: `go test -count=1 ./store`, `go test -count=1 ./consumer ./consumer/handler`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

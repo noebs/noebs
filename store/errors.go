@@ -21,5 +21,6 @@ var (
 	ErrMissingEventType    = errors.New("missing event type")
 	ErrMissingEventPayload = errors.New("missing event payload")
 	ErrInvalidUserID       = errors.New("invalid user_id")
+	ErrInvalidUserColumn   = errors.New("invalid user column")
 	ErrMissingDataKey      = errors.New("missing data_key")
 )

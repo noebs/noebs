@@ -21,6 +21,22 @@ type Store struct {
 
 const loginAttemptWindow = 15 * time.Minute
 
+var allowedUserUpdateColumns = map[string]struct{}{
+	"password":        {},
+	"fullname":        {},
+	"username":        {},
+	"gender":          {},
+	"birthday":        {},
+	"email":           {},
+	"public_key":      {},
+	"device_token":    {},
+	"is_password_otp": {},
+	"main_card":       {},
+	"language":        {},
+	"is_verified":     {},
+	"mobile":          {},
+}
+
 func New(db *DB, opts ...Option) *Store {
 	options := StoreOptions{}
 	for _, opt := range opts {
@@ -153,7 +169,7 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 		user.IsPasswordOTP,
 		user.MainCard,
 		user.MainCardEnc,
-		user.ExpDate,
+		"",
 		user.Language,
 		user.IsVerified,
 		user.Mobile,
@@ -317,7 +333,7 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 		user.IsPasswordOTP,
 		user.MainCard,
 		user.MainCardEnc,
-		user.ExpDate,
+		"",
 		user.Language,
 		user.IsVerified,
 		user.Mobile,
@@ -338,6 +354,9 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 	}
 	if len(updates) == 0 {
 		return nil
+	}
+	if err := validateUserUpdateColumns(updates); err != nil {
+		return err
 	}
 	if value, ok := updates["main_card"].(string); ok {
 		if err := s.requireDataKeyForSensitiveValue(value); err != nil {
@@ -373,6 +392,15 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 	stmt := s.DB.Rebind(fmt.Sprintf("UPDATE users SET %s WHERE tenant_id = ? AND id = ?", strings.Join(setParts, ", ")))
 	_, err = db.ExecContext(ctx, stmt, args...)
 	return err
+}
+
+func validateUserUpdateColumns(updates map[string]any) error {
+	for key := range updates {
+		if _, ok := allowedUserUpdateColumns[key]; !ok {
+			return fmt.Errorf("%w: %s", ErrInvalidUserColumn, key)
+		}
+	}
+	return nil
 }
 
 func (s *Store) UpsertDeviceToken(ctx context.Context, tenantID string, mobile, deviceToken string) error {
