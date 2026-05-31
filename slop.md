@@ -603,6 +603,11 @@ Last updated: 2026-05-31
     - Fix: require gateway admin metadata inside `SignalManualTransferDecision` before request validation, store lookup, or Temporal signaling, matching withdrawal signal behavior.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestSignalManualTransferDecisionRequires(AdminAuth|Reason)|TestRequireAdmin|TestWithdrawalSignalsRequireAdminAuth|TestWithdrawalSignalsValidateAfterAdminAuth'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+121. Manual-transfer requests also trusted interceptor-only admin auth.
+    - Evidence: public `/wallet/manual_transfers` is classified as admin-only by the gateway, but `RequestManualTransfer` itself did not require admin metadata. Direct invocation of the shared gRPC handler could start a manual debit/credit workflow without the admin boundary, as long as request fields were otherwise valid.
+    - Fix: require gateway admin metadata inside `RequestManualTransfer` before request validation or workflow start, keep tenant validation covered with an authenticated admin context, and preserve the explicit requester/user mismatch check when user identity metadata is also present.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRequestManualTransfer(RequiresAdminAuth|PublicIdentityMustMatchRequester|RequiresTimeout|RejectsInvalidTransferType|UsesDefaultTimeout)|TestWorkflowRequestsValidateTenantBeforeTemporal|TestSignalManualTransferDecisionRequires(AdminAuth|Reason)'`; `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

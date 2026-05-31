@@ -25,6 +25,7 @@ func TestRequestManualTransferRequiresTimeout(t *testing.T) {
 		Config: ebs_fields.NoebsConfig{},
 	}
 	server := NewServer(svc)
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
 	req := &walletv1.ManualTransferRequest{
 		TenantId:       "tenant",
@@ -37,7 +38,7 @@ func TestRequestManualTransferRequiresTimeout(t *testing.T) {
 		RequestedBy:    10,
 	}
 
-	_, err := server.RequestManualTransfer(context.Background(), req)
+	_, err := server.RequestManualTransfer(ctx, req)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -52,6 +53,7 @@ func TestRequestManualTransferRejectsInvalidTransferType(t *testing.T) {
 		Config: ebs_fields.NoebsConfig{WalletManualTransferApprovalTimeoutSeconds: 60},
 	}
 	server := NewServer(svc)
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
 	req := &walletv1.ManualTransferRequest{
 		TenantId:       "tenant",
@@ -64,7 +66,7 @@ func TestRequestManualTransferRejectsInvalidTransferType(t *testing.T) {
 		RequestedBy:    10,
 	}
 
-	_, err := server.RequestManualTransfer(context.Background(), req)
+	_, err := server.RequestManualTransfer(ctx, req)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -83,10 +85,12 @@ func TestRequestManualTransferPublicIdentityMustMatchRequester(t *testing.T) {
 	}
 	server := NewServer(svc)
 
-	ctx := walletServerMethodContext(
-		walletGatewayIdentityContext(42, "tenant"),
-		walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
-	)
+	md := metadata.Join(adminMetadata(), metadata.Pairs(
+		"x-noebs-tenant-id", "tenant",
+		"x-noebs-user-id", "42",
+		"x-noebs-mobile", "0990000000",
+	))
+	ctx := walletServerMethodContext(metadata.NewIncomingContext(context.Background(), md), walletv1.WalletPublicService_RequestManualTransfer_FullMethodName)
 	req := &walletv1.ManualTransferRequest{
 		TenantId:       "tenant",
 		IdempotencyKey: "manual-1",
@@ -99,6 +103,30 @@ func TestRequestManualTransferPublicIdentityMustMatchRequester(t *testing.T) {
 	}
 
 	_, err := server.RequestManualTransfer(ctx, req)
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
+	}
+}
+
+func TestRequestManualTransferRequiresAdminAuth(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{WalletManualTransferApprovalTimeoutSeconds: 60},
+	}
+	server := NewServer(svc)
+
+	req := &walletv1.ManualTransferRequest{
+		TenantId:       "tenant",
+		IdempotencyKey: "manual-1",
+		TransferType:   walletstore.ManualTransferTypeDebit,
+		WalletId:       uuid.NewString(),
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "test",
+		RequestedBy:    7,
+	}
+
+	_, err := server.RequestManualTransfer(context.Background(), req)
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
 	}
@@ -161,6 +189,7 @@ func TestRequestManualTransferUsesDefaultTimeout(t *testing.T) {
 	mockTemporal := walletgrpcmock.NewMocktemporalClient(ctrl)
 	server.TemporalClient = mockTemporal
 	server.TemporalOptions = walletworker.Options{TaskQueue: walletworker.TaskQueueMain}
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
 	run := stubWorkflowRun{id: "manual-wf", runID: "manual-run"}
 	mockTemporal.EXPECT().
@@ -187,7 +216,7 @@ func TestRequestManualTransferUsesDefaultTimeout(t *testing.T) {
 		RequestedBy:    10,
 	}
 
-	if _, err := server.RequestManualTransfer(context.Background(), req); err != nil {
+	if _, err := server.RequestManualTransfer(ctx, req); err != nil {
 		t.Fatalf("request manual transfer: %v", err)
 	}
 }

@@ -23,6 +23,10 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	if err := s.requireAdmin(md); err != nil {
+		return nil, err
+	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}

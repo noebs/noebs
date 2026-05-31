@@ -10,6 +10,7 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -52,7 +53,8 @@ func TestWorkflowRequestsValidateTenantBeforeTemporal(t *testing.T) {
 			return err
 		}},
 		{"manual_transfer", func(tenantID string) error {
-			_, err := server.RequestManualTransfer(ctx, &walletv1.ManualTransferRequest{
+			adminCtx := metadata.NewIncomingContext(ctx, adminMetadata())
+			_, err := server.RequestManualTransfer(adminCtx, &walletv1.ManualTransferRequest{
 				TenantId:               tenantID,
 				IdempotencyKey:         "manual-ref",
 				TransferType:           "manual_debit",

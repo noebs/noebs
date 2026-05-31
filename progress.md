@@ -557,6 +557,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestRequestManualTransfer(RequiresAdminAuth|PublicIdentityMustMatchRequester|RequiresTimeout|RejectsInvalidTransferType|UsesDefaultTimeout)|TestWorkflowRequestsValidateTenantBeforeTemporal|TestSignalManualTransferDecisionRequires(AdminAuth|Reason)'`
+- `go test -count=1 ./wallet/grpc ./wallet/handler ./wallet/store ./wallet/workflow`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
