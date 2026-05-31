@@ -542,6 +542,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./consumer -run 'TestIPINFlowsPropagateUUIDGenerationErrors'`
+- `go test -count=1 ./consumer ./consumer/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

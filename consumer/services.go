@@ -210,11 +210,14 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 		return err
 	}
 	url := s.NoebsConfig.IPINIp + ebs_fields.QRPublicKey
-	id, _ := uuid.NewRandom()
+	id, err := newConsumerUUIDString()
+	if err != nil {
+		return err
+	}
 	fields := ebs_fields.ConsumerGenerateIPINFields{
 		Username:     s.NoebsConfig.EBSIPINUsername,
 		TranDateTime: ebs_fields.EbsDate(),
-		UUID:         id.String(),
+		UUID:         id,
 	}
 	jsonBuffer, err := json.Marshal(fields)
 	if err != nil {

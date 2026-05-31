@@ -588,6 +588,11 @@ Last updated: 2026-05-31
     - Fix: replace regex matching with explicit first/last-4 digit matching, reject malformed selectors with typed errors, and fail ambiguous selectors instead of choosing the first card.
     - Tests: `go test -count=1 -v ./ebs_fields ./consumer -run 'TestExpandCard|TestGeneratePaymentTokenRejectsMalformedCardSelectorBeforeStore|TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore'`; `go test -count=1 ./ebs_fields ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+118. IPIN request UUID failures silently became the zero UUID.
+    - Evidence: `GenerateIpin`, `CompleteIpin`, `IPINKey`, and `GetIpinPubKey` ignored `uuid.NewRandom` errors. If the random source failed, the zero UUID could be used for IPIN encryption, EBS request identity, and transaction recording instead of failing closed.
+    - Fix: centralize consumer UUID-string generation, return UUID generation errors before encryption/EBS/store work, and preserve caller-supplied UUIDs for public-key requests.
+    - Tests: `go test -count=1 -v ./consumer -run 'TestIPINFlowsPropagateUUIDGenerationErrors'`; `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
