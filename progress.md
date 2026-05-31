@@ -344,6 +344,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/activity -run 'TestRecordInteractionRequiresExplicitProvider|TestNewPSPActivitiesUsesLoaderStoreForAuditing|TestResolveProviderRequiresAuditStoreBeforeProviderWork'`
+- `go test -count=1 ./wallet/activity`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

@@ -188,6 +188,9 @@ func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerC
 	if a == nil || a.Loader == nil || a.Registry == nil {
 		return nil, nil, ErrMissingPSPDependencies
 	}
+	if a.Store == nil {
+		return nil, nil, ErrMissingStore
+	}
 	cfg, err := a.Loader.LoadForScope(ctx, tenantID, providerCode, psp.Scope{
 		Region:    region,
 		Currency:  currency,
