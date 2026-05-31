@@ -680,6 +680,49 @@ func TestValidatePSPStatusUpdate(t *testing.T) {
 		PSPTransactionID: sql.NullString{String: "psp-2", Valid: true},
 	}), ErrDuplicateTransaction)
 	assertErrorIs(t, ValidatePSPStatusUpdate(&PSPTransaction{Status: PSPStatusSuccess}, PSPStatusUpdate{Status: PSPStatusPending}), ErrInvalidStatusTransition)
+
+	confirmedAt := time.Now().UTC().Truncate(time.Microsecond)
+	terminal := &PSPTransaction{
+		Status:           PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		ResponseCode:     sql.NullString{String: "00", Valid: true},
+		ResponseMessage:  sql.NullString{String: "ok", Valid: true},
+		RawResponse:      RawJSON(`{"provider_id":"psp-1","status":"success"}`),
+		ConfirmedAt:      sql.NullTime{Time: confirmedAt, Valid: true},
+	}
+	if err := ValidatePSPStatusUpdate(terminal, PSPStatusUpdate{
+		Status:           PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		ResponseCode:     sql.NullString{String: "00", Valid: true},
+		ResponseMessage:  sql.NullString{String: "ok", Valid: true},
+		RawResponse:      RawJSON(`{"status":"success","provider_id":"psp-1"}`),
+		ConfirmedAt:      sql.NullTime{Time: confirmedAt, Valid: true},
+	}); err != nil {
+		t.Fatalf("ValidatePSPStatusUpdate(terminal replay) error = %v", err)
+	}
+	assertErrorIs(t, ValidatePSPStatusUpdate(terminal, PSPStatusUpdate{
+		Status:       PSPStatusSuccess,
+		ResponseCode: sql.NullString{String: "05", Valid: true},
+	}), ErrDuplicateTransaction)
+	assertErrorIs(t, ValidatePSPStatusUpdate(terminal, PSPStatusUpdate{
+		Status:          PSPStatusSuccess,
+		ResponseMessage: sql.NullString{String: "changed", Valid: true},
+	}), ErrDuplicateTransaction)
+	assertErrorIs(t, ValidatePSPStatusUpdate(terminal, PSPStatusUpdate{
+		Status:      PSPStatusSuccess,
+		RawResponse: RawJSON(`{"provider_id":"psp-1","status":"success","amount":101}`),
+	}), ErrDuplicateTransaction)
+	assertErrorIs(t, ValidatePSPStatusUpdate(terminal, PSPStatusUpdate{
+		Status:      PSPStatusSuccess,
+		ConfirmedAt: sql.NullTime{Time: confirmedAt.Add(time.Second), Valid: true},
+	}), ErrDuplicateTransaction)
+
+	if err := ValidatePSPStatusUpdate(&PSPTransaction{Status: PSPStatusSuccess}, PSPStatusUpdate{
+		Status:       PSPStatusSuccess,
+		ResponseCode: sql.NullString{String: "00", Valid: true},
+	}); err != nil {
+		t.Fatalf("ValidatePSPStatusUpdate(fill terminal details) error = %v", err)
+	}
 }
 
 func TestValidatePSPTransactionCreateReplay(t *testing.T) {

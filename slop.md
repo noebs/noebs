@@ -308,6 +308,11 @@ Last updated: 2026-05-31
     - Fix: validate withdrawal wallets for active status and owner only, then use the existing conversion path to compute the wallet-currency debit.
     - Tests: `go test -count=1 ./wallet/validation`; `go test -count=1 -v ./wallet/validation -run 'TestValidateWithdrawalRequest|TestValidateWithdrawalWalletAllowsPayoutCurrencyMismatch|TestConvertWithdrawalAmountUsesRateLookup|TestConvertWithdrawalAmountSameCurrencySkipsRateLookup'`.
 
+62. Terminal PSP status replays could rewrite settlement evidence.
+    - Evidence: `UpdatePSPTransactionStatus` used `COALESCE` updates for response code, response message, raw response, and `confirmed_at`, while `ValidatePSPStatusUpdate` only protected the provider transaction ID. A same-status terminal replay could therefore change the stored response evidence or confirmation timestamp without changing the transaction status.
+    - Fix: allow terminal status replays to fill missing evidence once, but reject contradictory existing response code/message/raw response/confirmation time as duplicate transaction conflicts.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation'`; `go test -count=1 -v ./wallet/store -run 'TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

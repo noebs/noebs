@@ -54,6 +54,7 @@
 - Fixed PSP currency configuration so missing `enabled_currencies` no longer means every currency, and PSP validation failures no longer map to internal gRPC errors.
 - Fixed deposit validation so the target wallet currency must match the requested deposit currency before PSP config, fee, limit, or ledger work.
 - Fixed withdrawal validation so cross-currency payouts can reach the existing FX conversion path instead of failing on wallet currency before rate lookup.
+- Fixed terminal PSP status replays so existing response evidence and confirmation timestamps cannot be silently rewritten by same-status updates.
 
 Verification:
 
@@ -171,6 +172,12 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./wallet/validation -run 'TestValidateDepositRequest|TestValidateDepositWalletRequiresCurrencyMatch'`
 - `go test -count=1 ./wallet/validation`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation'`
+- `go test -count=1 -v ./wallet/store -run 'TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/store`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

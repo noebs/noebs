@@ -177,6 +177,20 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	}
 	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{
 		Status:           "success",
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		ResponseMessage:  sql.NullString{String: "changed", Valid: true},
+	}); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("terminal response message rewrite error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{
+		Status:           "success",
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		ConfirmedAt:      sql.NullTime{Time: confirmedAt.Add(time.Second), Valid: true},
+	}); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("terminal confirmed_at rewrite error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	if err := s.UpdatePSPTransactionStatus(ctx, txn.TenantID, txn.ClientReference, PSPStatusUpdate{
+		Status:           "success",
 		PSPTransactionID: sql.NullString{String: "psp-2", Valid: true},
 	}); !errors.Is(err, ErrDuplicateTransaction) {
 		t.Fatalf("provider transaction id mismatch update error = %v, want %v", err, ErrDuplicateTransaction)

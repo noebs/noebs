@@ -293,7 +293,27 @@ func ValidatePSPStatusUpdate(existing *PSPTransaction, update PSPStatusUpdate) e
 	if existing.PSPTransactionID.Valid && update.PSPTransactionID.Valid && existing.PSPTransactionID.String != update.PSPTransactionID.String {
 		return ErrDuplicateTransaction
 	}
+	if existing.Status == update.Status && PSPTransactionStatusTerminal(existing.Status) {
+		if nullStringRewriteConflict(existing.ResponseCode, update.ResponseCode) ||
+			nullStringRewriteConflict(existing.ResponseMessage, update.ResponseMessage) ||
+			rawJSONRewriteConflict(existing.RawResponse, update.RawResponse) ||
+			nullTimeRewriteConflict(existing.ConfirmedAt, update.ConfirmedAt) {
+			return ErrDuplicateTransaction
+		}
+	}
 	return nil
+}
+
+func nullStringRewriteConflict(existing, update sql.NullString) bool {
+	return existing.Valid && update.Valid && existing.String != update.String
+}
+
+func nullTimeRewriteConflict(existing, update sql.NullTime) bool {
+	return existing.Valid && update.Valid && !nullTimeEqual(existing, update)
+}
+
+func rawJSONRewriteConflict(existing, update RawJSON) bool {
+	return len(existing) > 0 && len(update) > 0 && !rawJSONMatches([]byte(existing), []byte(update))
 }
 
 func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID string, limit int) ([]PSPTransaction, error) {
