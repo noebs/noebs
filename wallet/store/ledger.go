@@ -100,7 +100,7 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			existing, err := s.loadExistingEntries(ctx, tx, params.TenantID, params.IdempotencyKey)
+			existing, err := s.loadExistingEntries(ctx, tx, params)
 			if err != nil {
 				return nil, err
 			}
@@ -281,17 +281,17 @@ func (s *Store) LedgerTransactionExists(ctx context.Context, tenantID, idempoten
 	return true, nil
 }
 
-func (s *Store) loadExistingEntries(ctx context.Context, tx *sqlx.Tx, tenantID, idempotencyKey string) (*DoubleEntryResult, error) {
-	stmt := s.DB.Rebind("SELECT id FROM ledger_transactions WHERE tenant_id = ? AND idempotency_key = ?")
-	var txID int64
-	if err := tx.GetContext(ctx, &txID, stmt, tenantID, idempotencyKey); err != nil {
+func (s *Store) loadExistingEntries(ctx context.Context, tx *sqlx.Tx, params DoubleEntryParams) (*DoubleEntryResult, error) {
+	stmt := s.DB.Rebind("SELECT * FROM ledger_transactions WHERE tenant_id = ? AND idempotency_key = ?")
+	var txn LedgerTransaction
+	if err := tx.GetContext(ctx, &txn, stmt, params.TenantID, params.IdempotencyKey); err != nil {
 		return nil, err
 	}
-	entries, err := s.listEntriesByTransaction(ctx, tx, tenantID, txID)
+	entries, err := s.listEntriesByTransaction(ctx, tx, params.TenantID, txn.ID)
 	if err != nil {
 		return nil, err
 	}
-	result := &DoubleEntryResult{TransactionID: txID, Existing: true}
+	result := &DoubleEntryResult{TransactionID: txn.ID, Existing: true}
 	for _, entry := range entries {
 		if entry.EntryType == "debit" {
 			result.DebitEntry = entry
@@ -299,7 +299,31 @@ func (s *Store) loadExistingEntries(ctx context.Context, tx *sqlx.Tx, tenantID, 
 			result.CreditEntry = entry
 		}
 	}
+	if !existingDoubleEntryMatches(txn, result, params) {
+		return nil, ErrDuplicateTransaction
+	}
 	return result, nil
+}
+
+func existingDoubleEntryMatches(txn LedgerTransaction, result *DoubleEntryResult, params DoubleEntryParams) bool {
+	if txn.Currency != params.Currency || txn.ReferenceType != params.ReferenceType {
+		return false
+	}
+	if txn.ReferenceID.Valid != (params.ReferenceID != "") {
+		return false
+	}
+	if txn.ReferenceID.Valid && txn.ReferenceID.String != params.ReferenceID {
+		return false
+	}
+	if result == nil || result.DebitEntry == nil || result.CreditEntry == nil {
+		return false
+	}
+	return result.DebitEntry.WalletID == params.DebitWalletID &&
+		result.CreditEntry.WalletID == params.CreditWalletID &&
+		result.DebitEntry.Amount == params.Amount &&
+		result.CreditEntry.Amount == params.Amount &&
+		result.DebitEntry.Currency == params.Currency &&
+		result.CreditEntry.Currency == params.Currency
 }
 
 func (s *Store) listEntriesByTransaction(ctx context.Context, tx *sqlx.Tx, tenantID string, txID int64) ([]*LedgerEntry, error) {

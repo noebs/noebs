@@ -33,6 +33,7 @@
 - Fixed held wallet debit accounting so withdrawal/manual-debit workflows consume reserved holds instead of requiring available balance twice or releasing captured funds.
 - Fixed external credit ledger posting so deposits/manual credits use an explicit system-debit path instead of requiring treasury pre-funding.
 - Fixed manual-transfer type validation so unknown transfer types cannot bypass hold or system-debit semantics.
+- Fixed ledger idempotency replay validation so duplicate keys with different debit/credit/amount/currency/reference fail instead of returning the prior entry as success.
 
 Verification:
 
@@ -53,6 +54,8 @@ Verification:
 - `go test -count=1 ./wallet/store ./wallet/activity ./wallet/workflow`
 - `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestPostHeldDoubleEntryValidation'`
 - `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/workflow`
+- `go test -count=1 ./wallet/store`
+- `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestExistingDoubleEntryMatches|TestPostHeldDoubleEntryValidation'`
 - `go test -count=1 ./...`
 - `go vet ./...`
 

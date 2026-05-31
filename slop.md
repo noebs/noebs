@@ -148,6 +148,11 @@ Last updated: 2026-05-31
     - Fix: add typed manual-transfer type validation for `manual_credit`, `manual_debit`, and `manual_withdrawal`; enforce it at gRPC/admin boundaries, workflow startup, and store create.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc ./wallet/workflow`.
 
+30. Ledger idempotency accepted mismatched duplicate requests as successful replays.
+    - Evidence: when `PostDoubleEntry` hit an existing `(tenant_id, idempotency_key)`, it returned the stored ledger entries without verifying currency, reference, debit wallet, credit wallet, or amount matched the new request.
+    - Fix: validate existing ledger transaction and debit/credit entries against the requested double-entry contract; exact replays return `Existing`, mismatched replays return `ErrDuplicateTransaction`.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestLedgerAccounting|TestExistingDoubleEntryMatches|TestPostHeldDoubleEntryValidation'` (Postgres container case skipped locally because the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

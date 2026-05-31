@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -208,6 +209,23 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	assertWalletBalances(t, ctx, store, tenantID, clearingWallet.ID, -500, -500)
 	assertWalletBalances(t, ctx, store, tenantID, receiverWallet.ID, 500, 500)
 
+	replayed, err := store.PostSystemDebitDoubleEntry(ctx, systemCreditEntry)
+	if err != nil {
+		t.Fatalf("idempotent system debit replay: %v", err)
+	}
+	if !replayed.Existing {
+		t.Fatal("idempotent system debit replay Existing = false, want true")
+	}
+	assertWalletBalances(t, ctx, store, tenantID, clearingWallet.ID, -500, -500)
+	assertWalletBalances(t, ctx, store, tenantID, receiverWallet.ID, 500, 500)
+
+	amountMismatch := systemCreditEntry
+	amountMismatch.Amount = 600
+	_, err = store.PostSystemDebitDoubleEntry(ctx, amountMismatch)
+	if !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("idempotent amount mismatch error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+
 	userDebitEntry := systemCreditEntry
 	userDebitEntry.IdempotencyKey = "not-system-debit"
 	userDebitEntry.DebitWalletID = receiverWallet.ID
@@ -216,6 +234,89 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	_, err = store.PostSystemDebitDoubleEntry(ctx, userDebitEntry)
 	if !errors.Is(err, ErrSystemDebitWalletRequired) {
 		t.Fatalf("user system-debit error = %v, want %v", err, ErrSystemDebitWalletRequired)
+	}
+}
+
+func TestExistingDoubleEntryMatches(t *testing.T) {
+	debitID := uuid.New()
+	creditID := uuid.New()
+	params := DoubleEntryParams{
+		TenantID:       "tenant",
+		IdempotencyKey: "entry-1",
+		Currency:       "AED",
+		ReferenceType:  "deposit",
+		ReferenceID:    "deposit-ref",
+		DebitWalletID:  debitID,
+		CreditWalletID: creditID,
+		Amount:         500,
+	}
+	txn := LedgerTransaction{
+		Currency:      params.Currency,
+		ReferenceType: params.ReferenceType,
+		ReferenceID:   sql.NullString{String: params.ReferenceID, Valid: true},
+	}
+	result := &DoubleEntryResult{
+		DebitEntry:  &LedgerEntry{WalletID: debitID, Amount: params.Amount, Currency: params.Currency},
+		CreditEntry: &LedgerEntry{WalletID: creditID, Amount: params.Amount, Currency: params.Currency},
+	}
+	if !existingDoubleEntryMatches(txn, result, params) {
+		t.Fatal("existingDoubleEntryMatches() = false, want true")
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*LedgerTransaction, *DoubleEntryResult, *DoubleEntryParams)
+	}{
+		{
+			name: "amount",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.Amount++
+			},
+		},
+		{
+			name: "debit-wallet",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.DebitWalletID = uuid.New()
+			},
+		},
+		{
+			name: "credit-wallet",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.CreditWalletID = uuid.New()
+			},
+		},
+		{
+			name: "currency",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.Currency = "USD"
+			},
+		},
+		{
+			name: "reference",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				params.ReferenceID = "other-ref"
+			},
+		},
+		{
+			name: "missing-entry",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				result.CreditEntry = nil
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testTxn := txn
+			testResult := &DoubleEntryResult{
+				DebitEntry:  &LedgerEntry{WalletID: debitID, Amount: params.Amount, Currency: params.Currency},
+				CreditEntry: &LedgerEntry{WalletID: creditID, Amount: params.Amount, Currency: params.Currency},
+			}
+			testParams := params
+			tc.mutate(&testTxn, testResult, &testParams)
+			if existingDoubleEntryMatches(testTxn, testResult, testParams) {
+				t.Fatal("existingDoubleEntryMatches() = true, want false")
+			}
+		})
 	}
 }
 
