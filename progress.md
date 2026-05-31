@@ -53,6 +53,7 @@
 - Fixed PSP method catalog pagination so scoped overrides and eligibility filters are applied before `LIMIT/OFFSET`, including methods enabled only by matching overrides.
 - Fixed PSP currency configuration so missing `enabled_currencies` no longer means every currency, and PSP validation failures no longer map to internal gRPC errors.
 - Fixed deposit validation so the target wallet currency must match the requested deposit currency before PSP config, fee, limit, or ledger work.
+- Fixed withdrawal validation so cross-currency payouts can reach the existing FX conversion path instead of failing on wallet currency before rate lookup.
 
 Verification:
 
@@ -169,6 +170,11 @@ Verification:
 - `go vet ./...`
 - `git diff --check`
 - `go test -count=1 -v ./wallet/validation -run 'TestValidateDepositRequest|TestValidateDepositWalletRequiresCurrencyMatch'`
+- `go test -count=1 ./wallet/validation`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/validation -run 'TestValidateWithdrawalRequest|TestValidateWithdrawalWalletAllowsPayoutCurrencyMismatch|TestConvertWithdrawalAmountUsesRateLookup|TestConvertWithdrawalAmountSameCurrencySkipsRateLookup'`
 - `go test -count=1 ./wallet/validation`
 - `go test -count=1 ./...`
 - `go vet ./...`

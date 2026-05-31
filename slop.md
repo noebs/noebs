@@ -303,6 +303,11 @@ Last updated: 2026-05-31
     - Fix: validate the deposit wallet against the requested deposit currency at the validation boundary.
     - Tests: `go test -count=1 ./wallet/validation`; `go test -count=1 -v ./wallet/validation -run 'TestValidateDepositRequest|TestValidateDepositWalletRequiresCurrencyMatch'`.
 
+61. Withdrawal validation made its FX conversion path unreachable.
+    - Evidence: `ValidateWithdrawal` first required the wallet currency to equal the requested payout currency, then called `convertWithdrawalAmount(req.Currency, wallet.Currency)` and returned wallet/payout currency fields. Any legitimate cross-currency payout failed before rate lookup and wallet-debit calculation.
+    - Fix: validate withdrawal wallets for active status and owner only, then use the existing conversion path to compute the wallet-currency debit.
+    - Tests: `go test -count=1 ./wallet/validation`; `go test -count=1 -v ./wallet/validation -run 'TestValidateWithdrawalRequest|TestValidateWithdrawalWalletAllowsPayoutCurrencyMismatch|TestConvertWithdrawalAmountUsesRateLookup|TestConvertWithdrawalAmountSameCurrencySkipsRateLookup'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

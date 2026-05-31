@@ -157,6 +157,30 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 	}
 }
 
+func TestValidateWithdrawalWalletAllowsPayoutCurrencyMismatch(t *testing.T) {
+	wallet := &walletstore.Wallet{
+		TenantID:  "tenant",
+		Currency:  "USD",
+		Status:    "active",
+		OwnerType: walletstore.OwnerTypeUser,
+		OwnerID:   "user-1",
+	}
+	req := WithdrawalValidationRequest{
+		Currency:  "AED",
+		OwnerType: walletstore.OwnerTypeUser,
+		OwnerID:   "user-1",
+	}
+
+	if err := validateWithdrawalWallet(wallet, req); err != nil {
+		t.Fatalf("validateWithdrawalWallet() error = %v, want nil", err)
+	}
+
+	req.OwnerID = "user-2"
+	if err := validateWithdrawalWallet(wallet, req); err != ErrWalletOwnerMismatch {
+		t.Fatalf("validateWithdrawalWallet(owner mismatch) error = %v, want %v", err, ErrWalletOwnerMismatch)
+	}
+}
+
 func TestValidatePSPConfigRequiresExplicitCurrency(t *testing.T) {
 	cfg := &walletstore.PSPConfig{
 		IsActive:          true,

@@ -317,7 +317,7 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 	if err != nil {
 		return nil, err
 	}
-	if err := validateWallet(wallet, req.Currency, req.OwnerType, req.OwnerID); err != nil {
+	if err := validateWithdrawalWallet(wallet, req); err != nil {
 		return nil, err
 	}
 
@@ -421,6 +421,10 @@ func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID str
 
 func validateDepositWallet(wallet *walletstore.Wallet, req DepositValidationRequest) error {
 	return validateWallet(wallet, req.Currency, req.OwnerType, req.OwnerID)
+}
+
+func validateWithdrawalWallet(wallet *walletstore.Wallet, req WithdrawalValidationRequest) error {
+	return validateWallet(wallet, "", req.OwnerType, req.OwnerID)
 }
 
 func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) error {
