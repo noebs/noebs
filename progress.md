@@ -55,6 +55,7 @@
 - Fixed deposit validation so the target wallet currency must match the requested deposit currency before PSP config, fee, limit, or ledger work.
 - Fixed withdrawal validation so cross-currency payouts can reach the existing FX conversion path instead of failing on wallet currency before rate lookup.
 - Fixed terminal PSP status replays so existing response evidence and confirmation timestamps cannot be silently rewritten by same-status updates.
+- Fixed device-token writes so the store no longer creates partial users when updating a missing mobile; missing targets now return `sql.ErrNoRows`.
 
 Verification:
 
@@ -160,6 +161,12 @@ Verification:
 - `git diff --check`
 - `go test -count=1 -v ./wallet/store -run 'TestExistingHoldMatches|TestLedgerAccountingForHeldAndSystemDebits'`
 - `go test -count=1 ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./store -run 'TestStore_UpsertDeviceTokenRequiresExplicitFields|TestStoreTargetedUpdatesReportMissingRows|TestStoreTenantValidation'` (Postgres container case skipped locally when the container runtime is unavailable)
+- `go test -count=1 -v ./consumer -run 'TestAddDeviceTokenRequiresExplicitInputs|TestUserServiceTenantValidationFailsBeforeDB'`
+- `go test -count=1 ./store ./consumer`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

@@ -91,6 +91,18 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
+func TestAddDeviceTokenRequiresExplicitInputs(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	ctx := context.Background()
+
+	if err := service.AddDeviceToken(ctx, "tenant", " ", "device-token"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("AddDeviceToken(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := service.AddDeviceToken(ctx, "tenant", "0990000000", " "); !errors.Is(err, store.ErrMissingToken) {
+		t.Fatalf("AddDeviceToken(missing token) error = %v, want %v", err, store.ErrMissingToken)
+	}
+}
+
 func TestUpdateKYCRequiresExistingUser(t *testing.T) {
 	ctx := context.Background()
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})

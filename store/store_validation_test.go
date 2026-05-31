@@ -483,6 +483,9 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 		{"UpdateTokenCard", func() error {
 			return s.UpdateTokenCard(ctx, tenantID, "missing-token", "")
 		}},
+		{"UpsertDeviceToken", func() error {
+			return s.UpsertDeviceToken(ctx, tenantID, "0990000000", "device-token")
+		}},
 		{"UpdatePaymentRequest", func() error {
 			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
 		}},
@@ -493,6 +496,16 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 				t.Fatalf("%s error = %v, want %v", tt.name, err, sql.ErrNoRows)
 			}
 		})
+	}
+}
+
+func TestStore_UpsertDeviceTokenRequiresExplicitFields(t *testing.T) {
+	s := &Store{}
+	if err := s.UpsertDeviceToken(context.Background(), "tenant", " ", "device-token"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("UpsertDeviceToken(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+	if err := s.UpsertDeviceToken(context.Background(), "tenant", "0990000000", " "); !errors.Is(err, ErrMissingToken) {
+		t.Fatalf("UpsertDeviceToken(missing token) error = %v, want %v", err, ErrMissingToken)
 	}
 }
 

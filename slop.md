@@ -313,6 +313,11 @@ Last updated: 2026-05-31
     - Fix: allow terminal status replays to fill missing evidence once, but reject contradictory existing response code/message/raw response/confirmation time as duplicate transaction conflicts.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPStatusUpdate|TestUpdatePSPTransactionStatusValidation'`; `go test -count=1 -v ./wallet/store -run 'TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+63. Device-token updates created partial users in the store layer.
+    - Evidence: `Store.UpsertDeviceToken` updated by mobile, then created a new user with only mobile/username/device token when no row matched. A lower-layer device-token write could therefore manufacture an identity record instead of failing on a missing user.
+    - Fix: require explicit mobile and token values in the store and return `sql.ErrNoRows` when the target user does not already exist.
+    - Tests: `go test -count=1 ./store ./consumer`; `go test -count=1 -v ./store -run 'TestStore_UpsertDeviceTokenRequiresExplicitFields|TestStoreTargetedUpdatesReportMissingRows|TestStoreTenantValidation'` (Postgres container case skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestAddDeviceTokenRequiresExplicitInputs|TestUserServiceTenantValidationFailsBeforeDB'`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

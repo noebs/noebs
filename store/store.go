@@ -439,21 +439,20 @@ func (s *Store) UpsertDeviceToken(ctx context.Context, tenantID string, mobile, 
 	if err != nil {
 		return err
 	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
+	deviceToken = strings.TrimSpace(deviceToken)
+	if deviceToken == "" {
+		return ErrMissingToken
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
 	stmt := s.DB.Rebind("UPDATE users SET device_token = ?, updated_at = ? WHERE tenant_id = ? AND mobile = ?")
-	res, err := db.ExecContext(ctx, stmt, deviceToken, time.Now().UTC(), tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		user := &ebs_fields.User{Mobile: mobile, Username: mobile, DeviceToken: deviceToken}
-		return s.CreateUser(ctx, tenantID, user)
-	}
-	return nil
+	return execContextRequireRowsAffected(ctx, db, stmt, deviceToken, time.Now().UTC(), tenantID, mobile)
 }
 
 func (s *Store) GetUserWithCards(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, error) {
