@@ -92,6 +92,11 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if req.NetAmount != nil {
 		netAmount = sql.NullInt64{Int64: req.GetNetAmount(), Valid: true}
 	}
+	metadata := metadataFromStruct(req.Metadata)
+	rawRequest, err := depositRawRequest(req, metadata)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	requestedTxn := walletstore.PSPTransaction{
 		TenantID:         req.TenantId,
 		PSPProvider:      req.ProviderCode,
@@ -105,6 +110,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		Currency:         req.Currency,
 		Status:           "initiated",
 		WorkflowID:       sql.NullString{String: workflowID, Valid: workflowID != ""},
+		RawRequest:       walletstore.RawJSON(rawRequest),
 	}
 	if existing, err := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); err == nil {
 		if err := walletstore.ValidatePSPTransactionCreateReplay(existing, requestedTxn); err != nil {
@@ -119,14 +125,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		return nil, mapError(err)
 	}
 
-	metadata := metadataFromStruct(req.Metadata)
-	rawRequest, err := depositRawRequest(req, metadata)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
 	txn := requestedTxn
-	txn.RawRequest = walletstore.RawJSON(rawRequest)
 	if _, err := s.Service.Store.CreatePSPTransaction(ctx, txn); err != nil {
 		return nil, mapError(err)
 	}

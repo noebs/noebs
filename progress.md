@@ -173,6 +173,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionCreateReplay|TestPSPTransactionPersistenceReplaysAndStatusUpdates'`
+- `go test -count=1 ./wallet/store ./wallet/grpc`
+- `go test -count=1 -v ./wallet/grpc -run 'TestRequestDepositDoesNotGenerateProviderTransactionID|TestRequestWithdrawalRequiresPin|TestRequestWithdrawalStartsWorkflow'`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

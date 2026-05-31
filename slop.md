@@ -278,6 +278,11 @@ Last updated: 2026-05-31
     - Fix: treat funding-source details as part of the merge contract and reject mismatched existing withdrawal methods while still allowing an initially empty method to be filled later.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestValidateFundingSourceMerge|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+56. PSP transaction create replays ignored raw request mismatches.
+    - Evidence: `ValidatePSPTransactionCreateReplay` compared provider, idempotency key, client reference, direction, amount, currency, fees, provider transaction ID, and workflow ID, but not `raw_request`. The gRPC deposit/withdrawal handlers also checked existing transactions before constructing `raw_request`, so a retry with the same idempotency key but different metadata/options could be accepted as the existing workflow.
+    - Fix: include semantic `raw_request` equality in PSP create replay validation and build deposit/withdrawal raw requests before the existing-transaction replay check.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionCreateReplay|TestPSPTransactionPersistenceReplaysAndStatusUpdates'`; `go test -count=1 -v ./wallet/grpc -run 'TestRequestDepositDoesNotGenerateProviderTransactionID|TestRequestWithdrawalRequiresPin|TestRequestWithdrawalStartsWorkflow'` (Postgres container cases skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

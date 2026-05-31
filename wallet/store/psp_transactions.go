@@ -154,7 +154,8 @@ func pspTransactionCreateReplayMatches(existing PSPTransaction, requested PSPTra
 		nullInt64Equal(existing.FeeAmount, requested.FeeAmount) &&
 		nullInt64Equal(existing.NetAmount, requested.NetAmount) &&
 		requestedNullStringMatches(existing.PSPTransactionID, requested.PSPTransactionID) &&
-		requestedNullStringMatches(existing.WorkflowID, requested.WorkflowID)
+		requestedNullStringMatches(existing.WorkflowID, requested.WorkflowID) &&
+		rawJSONMatches([]byte(existing.RawRequest), []byte(requested.RawRequest))
 }
 
 func nullInt64Equal(left, right sql.NullInt64) bool {

@@ -671,6 +671,7 @@ func TestValidatePSPTransactionCreateReplay(t *testing.T) {
 		Currency:         "USD",
 		Status:           "initiated",
 		WorkflowID:       sql.NullString{String: "workflow-1", Valid: true},
+		RawRequest:       RawJSON(`{"client_reference":"ref-1","amount":100}`),
 	}
 	existing := requested
 	existing.Status = "success"
@@ -697,6 +698,7 @@ func TestValidatePSPTransactionCreateReplay(t *testing.T) {
 		{"fee", func(txn *PSPTransaction) { txn.FeeAmount = sql.NullInt64{} }},
 		{"currency", func(txn *PSPTransaction) { txn.Currency = "AED" }},
 		{"workflow", func(txn *PSPTransaction) { txn.WorkflowID = sql.NullString{String: "other", Valid: true} }},
+		{"raw request", func(txn *PSPTransaction) { txn.RawRequest = RawJSON(`{"client_reference":"ref-1","amount":101}`) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

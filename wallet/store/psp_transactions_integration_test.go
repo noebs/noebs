@@ -63,6 +63,7 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		Status:          "success",
 		ConfirmedAt:     sql.NullTime{Time: confirmedAt, Valid: true},
 		RetryCount:      7,
+		RawRequest:      RawJSON(`{"client_reference":"ref-1","amount":100}`),
 	}
 	created, err := s.CreatePSPTransaction(ctx, txn)
 	if err != nil {
@@ -79,6 +80,11 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	mismatch.Amount++
 	if _, err := s.CreatePSPTransaction(ctx, mismatch); !errors.Is(err, ErrDuplicateTransaction) {
 		t.Fatalf("mismatched create transaction replay error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	rawRequestMismatch := txn
+	rawRequestMismatch.RawRequest = RawJSON(`{"client_reference":"ref-1","amount":101}`)
+	if _, err := s.CreatePSPTransaction(ctx, rawRequestMismatch); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("mismatched create transaction raw request replay error = %v, want %v", err, ErrDuplicateTransaction)
 	}
 
 	amount := PSPTransactionAmount{
