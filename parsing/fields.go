@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -65,17 +66,17 @@ func RequiredFloat64(fields map[string]any, key string) (float64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("%w: %s", ErrInvalidField, key)
 		}
-		return parsed, nil
+		return requireFiniteFloat64(parsed, key)
 	case json.Number:
 		parsed, err := typed.Float64()
 		if err != nil {
 			return 0, fmt.Errorf("%w: %s", ErrInvalidField, key)
 		}
-		return parsed, nil
+		return requireFiniteFloat64(parsed, key)
 	case float64:
-		return typed, nil
+		return requireFiniteFloat64(typed, key)
 	case float32:
-		return float64(typed), nil
+		return requireFiniteFloat64(float64(typed), key)
 	case int:
 		return float64(typed), nil
 	case int64:
@@ -85,4 +86,11 @@ func RequiredFloat64(fields map[string]any, key string) (float64, error) {
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrInvalidField, key)
 	}
+}
+
+func requireFiniteFloat64(value float64, key string) (float64, error) {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0, fmt.Errorf("%w: %s", ErrInvalidField, key)
+	}
+	return value, nil
 }

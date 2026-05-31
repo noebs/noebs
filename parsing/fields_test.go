@@ -3,6 +3,7 @@ package parsing
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -72,5 +73,28 @@ func TestRequiredFloat64(t *testing.T) {
 	}
 	if _, err := RequiredFloat64(map[string]any{"amount": "bad"}, "amount"); !errors.Is(err, ErrInvalidField) {
 		t.Fatalf("RequiredFloat64(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+}
+
+func TestRequiredFloat64RejectsNonFiniteValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		value any
+	}{
+		{"string nan", "NaN"},
+		{"string infinity", "+Inf"},
+		{"json number nan", json.Number("NaN")},
+		{"float64 nan", math.NaN()},
+		{"float64 infinity", math.Inf(1)},
+		{"float32 infinity", float32(math.Inf(-1))},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := RequiredFloat64(map[string]any{"amount": tt.value}, "amount")
+			if !errors.Is(err, ErrInvalidField) {
+				t.Fatalf("RequiredFloat64(non-finite) error = %v, want %v", err, ErrInvalidField)
+			}
+		})
 	}
 }

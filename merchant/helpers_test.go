@@ -47,6 +47,16 @@ func TestNECBillNewFromMapRejectsMalformedFields(t *testing.T) {
 			},
 		},
 		{
+			name: "non-finite amount",
+			fields: map[string]interface{}{
+				"netAmount":    "NaN",
+				"customerName": "Customer",
+				"meterFees":    "1.25",
+				"meterNumber":  "04203594959",
+				"token":        "07246305192693082213",
+			},
+		},
+		{
 			name: "non-string token",
 			fields: map[string]interface{}{
 				"netAmount":    "10.5",

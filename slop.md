@@ -368,6 +368,11 @@ Last updated: 2026-05-31
     - Fix: require explicit user mobile/email/username lookup inputs with typed store errors, reject blank user creation/update identities before DB access, normalize profile username/email at the service boundary, and map the new validation errors to HTTP 400 responses.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_UserIdentityRequiresExplicitFields|TestStore_IdentityTenantValidationFailsBeforeDB|TestStore_CreateUser_MissingUser'` (`TestStore_CreateUser_MissingUser` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer -run 'TestUserServiceIdentityInputsFailBeforeStore|TestCreateUserRequiresMobileBeforeStore|TestAuthServiceTenantValidationFailsBeforeDB|TestUserServiceTenantValidationFailsBeforeDB'`; `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+74. Shared float parsing accepted non-finite amounts.
+    - Evidence: `parsing.RequiredFloat64` accepted values produced by `strconv.ParseFloat`, `json.Number.Float64`, and direct `float64`/`float32` inputs without rejecting `NaN`, `+Inf`, or `-Inf`. Merchant bill parsing consumes this helper for required bill amounts, so malformed gateway fields could become non-finite amounts and fail later serialization or calculations instead of being rejected at parse time.
+    - Fix: make the shared float parser reject non-finite values for string, `json.Number`, `float64`, and `float32` inputs before returning parsed amounts.
+    - Tests: `go test -count=1 -v ./parsing ./merchant -run 'TestRequiredFloat64|TestNECBillNewFromMap'`; `go test -count=1 ./parsing ./merchant ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

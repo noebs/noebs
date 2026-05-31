@@ -289,6 +289,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./parsing ./merchant -run 'TestRequiredFloat64|TestNECBillNewFromMap'`
+- `go test -count=1 ./parsing ./merchant ./consumer`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
