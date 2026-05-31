@@ -273,6 +273,11 @@ Last updated: 2026-05-31
     - Fix: require withdrawal destination links to match the ledger debit amount and currency before insert/replay.
     - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestValidateWithdrawalDestinationLinkLedgerEntry|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+55. Funding-source merges accepted contradictory source details.
+    - Evidence: `UpsertFundingSource` reused an existing funding source by wallet/source/external reference, but `ValidateFundingSourceMerge` did not compare `source_details` and ignored a different incoming `withdrawal_method` once one was already stored. The update path then returned the old row, silently hiding provider/account-detail contradictions under one funding-source identity.
+    - Fix: treat funding-source details as part of the merge contract and reject mismatched existing withdrawal methods while still allowing an initially empty method to be filled later.
+    - Tests: `go test -count=1 ./wallet/store`; `go test -count=1 -v ./wallet/store -run 'TestValidateFundingSourceMerge|TestFundingSourceTotalsFollowIdempotentLedgerLinks'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

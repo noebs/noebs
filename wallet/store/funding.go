@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -93,10 +94,19 @@ func ValidateFundingSourceMerge(existing *FundingSource, incoming FundingSource)
 		existing.SourceType != incoming.SourceType ||
 		existing.Currency != incoming.Currency ||
 		!nullStringEqual(existing.PSPProvider, incoming.PSPProvider) ||
-		!nullStringEqual(existing.ExternalReference, incoming.ExternalReference) {
+		!nullStringEqual(existing.ExternalReference, incoming.ExternalReference) ||
+		!rawJSONMatches(existing.SourceDetails, incoming.SourceDetails) ||
+		!fundingSourceWithdrawalMethodMergeAllowed(existing.WithdrawalMethod, incoming.WithdrawalMethod) {
 		return ErrDuplicateFundingSource
 	}
 	return nil
+}
+
+func fundingSourceWithdrawalMethodMergeAllowed(existing, incoming json.RawMessage) bool {
+	if len(existing) == 0 || len(incoming) == 0 {
+		return true
+	}
+	return rawJSONMatches(existing, incoming)
 }
 
 func nullStringEqual(left, right sql.NullString) bool {

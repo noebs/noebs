@@ -1291,6 +1291,8 @@ func TestValidateFundingSourceMerge(t *testing.T) {
 		PSPProvider:       sql.NullString{String: "provider-a", Valid: true},
 		ExternalReference: sql.NullString{String: "source-ref", Valid: true},
 		Currency:          "USD",
+		SourceDetails:     []byte(`{"account_last4":"4321","bank":"044"}`),
+		WithdrawalMethod:  []byte(`{"account_number":"1234567890","bank_code":"044"}`),
 	}
 	if err := ValidateFundingSourceMerge(&existing, existing); err != nil {
 		t.Fatalf("ValidateFundingSourceMerge() error = %v", err)
@@ -1344,6 +1346,28 @@ func TestValidateFundingSourceMerge(t *testing.T) {
 			PSPProvider:       existing.PSPProvider,
 			ExternalReference: existing.ExternalReference,
 			Currency:          "EUR",
+			SourceDetails:     existing.SourceDetails,
+			WithdrawalMethod:  existing.WithdrawalMethod,
+		},
+		"source details": {
+			TenantID:          existing.TenantID,
+			WalletID:          walletID,
+			SourceType:        existing.SourceType,
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: existing.ExternalReference,
+			Currency:          existing.Currency,
+			SourceDetails:     []byte(`{"account_last4":"9999","bank":"044"}`),
+			WithdrawalMethod:  existing.WithdrawalMethod,
+		},
+		"withdrawal method": {
+			TenantID:          existing.TenantID,
+			WalletID:          walletID,
+			SourceType:        existing.SourceType,
+			PSPProvider:       existing.PSPProvider,
+			ExternalReference: existing.ExternalReference,
+			Currency:          existing.Currency,
+			SourceDetails:     existing.SourceDetails,
+			WithdrawalMethod:  []byte(`{"account_number":"0000000000","bank_code":"044"}`),
 		},
 	}
 	for name, requested := range cases {

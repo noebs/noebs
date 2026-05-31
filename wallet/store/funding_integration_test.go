@@ -101,6 +101,16 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 	if _, err := store.UpsertFundingSource(ctx, mismatch); !errors.Is(err, ErrDuplicateFundingSource) {
 		t.Fatalf("mismatched funding source error = %v, want %v", err, ErrDuplicateFundingSource)
 	}
+	sourceDetailsMismatch := source
+	sourceDetailsMismatch.SourceDetails = []byte(`{"account_last4":"9999"}`)
+	if _, err := store.UpsertFundingSource(ctx, sourceDetailsMismatch); !errors.Is(err, ErrDuplicateFundingSource) {
+		t.Fatalf("mismatched funding source details error = %v, want %v", err, ErrDuplicateFundingSource)
+	}
+	withdrawalMethodMismatch := source
+	withdrawalMethodMismatch.WithdrawalMethod = []byte(`{"account_number":"0000000000","bank_code":"044"}`)
+	if _, err := store.UpsertFundingSource(ctx, withdrawalMethodMismatch); !errors.Is(err, ErrDuplicateFundingSource) {
+		t.Fatalf("mismatched funding source withdrawal method error = %v, want %v", err, ErrDuplicateFundingSource)
+	}
 
 	posted, err := store.PostSystemDebitDoubleEntry(ctx, DoubleEntryParams{
 		TenantID:       tenantID,
