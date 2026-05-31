@@ -538,6 +538,11 @@ Last updated: 2026-05-31
     - Fix: add reusable string-map parsing helpers to the top-level `parsing` package, route wallet admin query/form parsing through that shared package, and reject malformed boolean values as invalid arguments instead of defaulting them to false.
     - Tests: `go test -count=1 -v ./parsing`; `go test -count=1 -v ./wallet/grpc -run 'TestAdminBoolRejectsMalformedValues|TestAdminLimitOffsetUsesTypedValidation|TestRenderWalletAdmin|TestAdminWithdrawalApproval'`; `go test -count=1 ./parsing ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+108. EBS IPIN fallback parsing could accept malformed gateway responses as success.
+    - Evidence: `EBSHttpClient` has a fallback parser for EBS responses where `tranDateTime` arrives as a number instead of the normal string. The fallback trigger matched a brittle error string, ignored `json.Unmarshal` errors into `IPINResponse`, and then treated the zero-value fallback response as success because `responseCode` defaults to 0. Gateway failure responses parsed through that fallback also returned the empty primary response message instead of the fallback payload's message.
+    - Fix: detect `tranDateTime` string decode errors by field/type content, return fallback decode errors instead of zero-value success, and use the fallback response/message for non-success gateway responses.
+    - Tests: `go test -count=1 -v ./ebs_fields -run 'TestEBSHTTPClientIPINFallback|TestConfigureEBSHTTPClient'`; `go test -count=1 ./ebs_fields ./consumer ./merchant`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

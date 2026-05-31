@@ -118,20 +118,31 @@ func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse E
 			"response_bytes": len(responseBody),
 			"ebs_fields":     ebsGenericResponse,
 		}).Info("ebs response transaction")
-		if strings.Contains(err.Error(), " EBSParserFields.tranDateTime of type string") {
-			json.Unmarshal(responseBody, &tmpRes)
+		if isTranDateTimeStringDecodeError(err) {
+			if fallbackErr := json.Unmarshal(responseBody, &tmpRes); fallbackErr != nil {
+				code = http.StatusInternalServerError
+				return code, ebsGenericResponse, fallbackErr
+			}
 			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
 				code = http.StatusOK
 				return code, tmpRes.newResponse(), nil
 			} else {
 				code = http.StatusBadGateway
-				return code, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
+				return code, tmpRes.newResponse(), errors.New(tmpRes.ResponseMessage)
 			}
 		}
 		code = http.StatusInternalServerError
 		return code, ebsGenericResponse, err
 	}
 
+}
+
+func isTranDateTimeStringDecodeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "tranDateTime") && strings.Contains(message, "type string")
 }
 
 type IPINResponse struct {
