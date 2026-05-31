@@ -28,3 +28,12 @@ func SystemWalletCodes() []string {
 		SystemFXGainLoss,
 	}
 }
+
+func OwnerTypeValid(ownerType string) bool {
+	switch ownerType {
+	case OwnerTypeUser, OwnerTypeSystem, OwnerTypeMerchant, OwnerTypePSP:
+		return true
+	default:
+		return false
+	}
+}

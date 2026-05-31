@@ -237,6 +237,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrExchangeRateNotFound):
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, walletstore.ErrDuplicateTransaction),
+		errors.Is(err, walletstore.ErrDuplicateWallet),
 		errors.Is(err, walletstore.ErrDuplicateHold),
 		errors.Is(err, walletstore.ErrDuplicateFundingSource),
 		errors.Is(err, walletstore.ErrDuplicateFundingLink),
@@ -249,6 +250,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingWalletID),
 		errors.Is(err, walletstore.ErrMissingOwnerID),
 		errors.Is(err, walletstore.ErrMissingOwnerType),
+		errors.Is(err, walletstore.ErrInvalidOwnerType),
 		errors.Is(err, walletstore.ErrMissingProviderCode),
 		errors.Is(err, walletstore.ErrMissingClientReference),
 		errors.Is(err, walletstore.ErrMissingPSPTransactionID),

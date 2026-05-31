@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +25,9 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	}
 	if params.OwnerType == "" {
 		return nil, ErrMissingOwnerType
+	}
+	if !OwnerTypeValid(params.OwnerType) {
+		return nil, ErrInvalidOwnerType
 	}
 	if params.OwnerID == "" {
 		return nil, ErrMissingOwnerID
@@ -54,11 +58,25 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 		tenant_id, owner_type, owner_id, user_id, currency,
 		kyc_tier, balance, available_balance, status, created_at, updated_at
 	) VALUES(?, ?, ?, ?, ?, ?, 0, 0, 'active', ?, ?)
-	ON CONFLICT(tenant_id, owner_type, owner_id, currency) DO NOTHING`)
+	ON CONFLICT DO NOTHING`)
 	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, params.KYCTier, now, now); err != nil {
 		return nil, err
 	}
-	return s.GetWalletByOwner(ctx, tenantID, params.OwnerType, params.OwnerID, params.Currency)
+	params.TenantID = tenantID
+	wallet, err := s.GetWalletByOwner(ctx, tenantID, params.OwnerType, params.OwnerID, params.Currency)
+	if err != nil {
+		if !errors.Is(err, ErrWalletNotFound) || params.OwnerType != OwnerTypeUser {
+			return nil, err
+		}
+		wallet, err = s.getWalletByUser(ctx, tenantID, params.UserID, params.Currency)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := ValidateEnsureWalletReplay(wallet, params); err != nil {
+		return nil, err
+	}
+	return wallet, nil
 }
 
 func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency, kycTier string) (map[string]*Wallet, error) {
@@ -120,6 +138,9 @@ func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, owner
 	if ownerType == "" {
 		return nil, ErrMissingOwnerType
 	}
+	if !OwnerTypeValid(ownerType) {
+		return nil, ErrInvalidOwnerType
+	}
 	if ownerID == "" {
 		return nil, ErrMissingOwnerID
 	}
@@ -139,6 +160,44 @@ func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, owner
 		return nil, err
 	}
 	return &w, nil
+}
+
+func (s *Store) getWalletByUser(ctx context.Context, tenantID string, userID int64, currency string) (*Wallet, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := s.DB.Rebind(`SELECT * FROM wallets
+		WHERE tenant_id = ? AND owner_type = ? AND user_id = ? AND currency = ?`)
+	var w Wallet
+	if err := db.GetContext(ctx, &w, stmt, tenantID, OwnerTypeUser, userID, currency); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrWalletNotFound
+		}
+		return nil, err
+	}
+	return &w, nil
+}
+
+func ValidateEnsureWalletReplay(existing *Wallet, params EnsureWalletParams) error {
+	if existing == nil ||
+		existing.TenantID != params.TenantID ||
+		existing.OwnerType != params.OwnerType ||
+		existing.OwnerID != params.OwnerID ||
+		existing.Currency != params.Currency ||
+		existing.KYCTier != params.KYCTier {
+		return ErrDuplicateWallet
+	}
+	if params.OwnerType == OwnerTypeUser {
+		if !existing.UserID.Valid || existing.UserID.Int64 != params.UserID {
+			return ErrDuplicateWallet
+		}
+		return nil
+	}
+	if existing.UserID.Valid || params.UserID != 0 {
+		return ErrDuplicateWallet
+	}
+	return nil
 }
 
 func (s *Store) UpdateWalletPIN(ctx context.Context, tenantID string, walletID uuid.UUID, pinHash string, updatedAt time.Time) error {

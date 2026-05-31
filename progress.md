@@ -42,6 +42,7 @@
 - Fixed withdrawal destination usage so `total_withdrawn` is tied to idempotent debit ledger links, link wallet ownership is validated, and the old unkeyed usage activities are gone.
 - Fixed withdrawal destination creation so return-to-source destinations must link a valid withdrawable funding source and cannot seed usage counters.
 - Fixed PSP amount replay handling so duplicate amount keys cannot rewrite money or FX fields; exact replays return the original row and mismatches return `ErrDuplicateAmount`.
+- Fixed wallet ensure replay handling so existing wallets must match the requested owner/user/currency/KYC contract instead of silently returning mismatched rows or raw unique-index errors.
 
 Verification:
 
@@ -81,6 +82,11 @@ Verification:
 - `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionAmountReplay|TestPSPTransactionPersistenceReplaysAndStatusUpdates'`
 - `go test -count=1 ./...`
 - `go vet ./...`
+- `go test -count=1 ./wallet/store ./wallet/grpc`
+- `go test -count=1 -v ./wallet/store -run 'TestEnsureWallet|TestValidateEnsureWalletReplay|TestGetWalletByOwnerValidation'`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

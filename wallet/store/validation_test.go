@@ -33,6 +33,11 @@ func TestEnsureWalletValidation(t *testing.T) {
 			wantErr: ErrMissingOwnerType,
 		},
 		{
+			name:    "invalid-owner-type",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: "unknown", OwnerID: "user-1", Currency: "USD", KYCTier: KYCTierUnverified},
+			wantErr: ErrInvalidOwnerType,
+		},
+		{
 			name:    "missing-owner-id",
 			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingOwnerID,
@@ -70,6 +75,69 @@ func TestEnsureWalletValidation(t *testing.T) {
 			assertErrorIs(t, err, tc.wantErr)
 		})
 	}
+}
+
+func TestValidateEnsureWalletReplay(t *testing.T) {
+	params := EnsureWalletParams{
+		TenantID:  "tenant",
+		OwnerType: OwnerTypeUser,
+		OwnerID:   "user-42",
+		UserID:    42,
+		Currency:  "USD",
+		KYCTier:   KYCTierUnverified,
+	}
+	existing := Wallet{
+		TenantID:  params.TenantID,
+		OwnerType: params.OwnerType,
+		OwnerID:   params.OwnerID,
+		UserID:    sql.NullInt64{Int64: params.UserID, Valid: true},
+		Currency:  params.Currency,
+		KYCTier:   params.KYCTier,
+	}
+	if err := ValidateEnsureWalletReplay(&existing, params); err != nil {
+		t.Fatalf("ValidateEnsureWalletReplay() error = %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*EnsureWalletParams)
+	}{
+		{"tenant", func(p *EnsureWalletParams) { p.TenantID = "other" }},
+		{"owner-type", func(p *EnsureWalletParams) { p.OwnerType = OwnerTypeMerchant }},
+		{"owner-id", func(p *EnsureWalletParams) { p.OwnerID = "user-99" }},
+		{"user-id", func(p *EnsureWalletParams) { p.UserID = 99 }},
+		{"currency", func(p *EnsureWalletParams) { p.Currency = "AED" }},
+		{"kyc-tier", func(p *EnsureWalletParams) { p.KYCTier = "verified" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			replay := params
+			tc.mutate(&replay)
+			assertErrorIs(t, ValidateEnsureWalletReplay(&existing, replay), ErrDuplicateWallet)
+		})
+	}
+
+	assertErrorIs(t, ValidateEnsureWalletReplay(nil, params), ErrDuplicateWallet)
+
+	systemParams := EnsureWalletParams{
+		TenantID:  "tenant",
+		OwnerType: OwnerTypeSystem,
+		OwnerID:   SystemTreasury,
+		Currency:  "USD",
+		KYCTier:   KYCTierUnverified,
+	}
+	systemWallet := Wallet{
+		TenantID:  systemParams.TenantID,
+		OwnerType: systemParams.OwnerType,
+		OwnerID:   systemParams.OwnerID,
+		Currency:  systemParams.Currency,
+		KYCTier:   systemParams.KYCTier,
+	}
+	if err := ValidateEnsureWalletReplay(&systemWallet, systemParams); err != nil {
+		t.Fatalf("ValidateEnsureWalletReplay(system) error = %v", err)
+	}
+	systemParams.UserID = 42
+	assertErrorIs(t, ValidateEnsureWalletReplay(&systemWallet, systemParams), ErrDuplicateWallet)
 }
 
 func TestGetWalletValidation(t *testing.T) {
@@ -144,6 +212,9 @@ func TestGetWalletByOwnerValidation(t *testing.T) {
 
 	_, err = s.GetWalletByOwner(t.Context(), "tenant", "", "user-1", "USD")
 	assertErrorIs(t, err, ErrMissingOwnerType)
+
+	_, err = s.GetWalletByOwner(t.Context(), "tenant", "unknown", "user-1", "USD")
+	assertErrorIs(t, err, ErrInvalidOwnerType)
 
 	_, err = s.GetWalletByOwner(t.Context(), "tenant", OwnerTypeUser, "", "USD")
 	assertErrorIs(t, err, ErrMissingOwnerID)

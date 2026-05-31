@@ -193,6 +193,11 @@ Last updated: 2026-05-31
     - Fix: make PSP amount inserts exact-replay idempotent: conflicts fetch the existing amount row, validate tenant/transaction/kind/amount/currency/FX fields, return the existing row on exact replay, and return `ErrDuplicateAmount` on mismatches.
     - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestValidatePSPTransactionAmountReplay|TestPSPTransactionPersistenceReplaysAndStatusUpdates'` (Postgres container case skipped locally when the container runtime is unavailable).
 
+39. Wallet ensure replay could bind callers to the wrong wallet identity or KYC tier.
+    - Evidence: `EnsureWallet` inserted with `ON CONFLICT ... DO NOTHING` and then returned the wallet by owner key without validating that the stored `user_id` and `kyc_tier` matched the request. The separate unique user-wallet index could also surface as a raw DB conflict instead of a typed wallet replay error when the same user/currency appeared under a different owner ID.
+    - Fix: validate owner types before hitting the DB, make wallet uniqueness conflicts exact-replay idempotent across both owner and user keys, return existing wallets only when tenant/owner/user/currency/KYC match, and return `ErrDuplicateWallet` for mismatches.
+    - Tests: `go test -count=1 ./wallet/store ./wallet/grpc`; `go test -count=1 -v ./wallet/store -run 'TestEnsureWallet|TestValidateEnsureWalletReplay|TestGetWalletByOwnerValidation'` (Postgres container case skipped locally when the container runtime is unavailable).
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
