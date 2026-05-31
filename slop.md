@@ -453,6 +453,11 @@ Last updated: 2026-05-31
     - Fix: normalize the verification type, load the withdrawal destination by the same tenant before insert, require the destination to be active and non-terminal, require a configured ownership verification method, and reject method mismatches with a typed error.
     - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateOwnershipVerificationDestination|TestCreateOwnershipVerificationValidation|TestOwnershipVerificationCreateReplaysAreExact'` (`TestOwnershipVerificationCreateReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`; `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+91. Manual transfer approvals could target foreign transfers or approvers.
+    - Evidence: `AddManualTransferApproval` inserted `tenant_id`, `manual_transfer_id`, and `approver_id` without loading the referenced transfer or approver under that tenant. Because both foreign keys reference only row IDs, a direct store call could create an approval under one tenant for another tenant's transfer/admin user, approve a terminal transfer, or approve the requester's own transfer.
+    - Fix: load the manual transfer and approver by tenant before insert, require the approver to be active, require the transfer to still be pending, and enforce the maker-checker self-approval rule at the store boundary.
+    - Tests: `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferApprovalTarget|TestAddManualTransferApprovalValidation|TestValidateManualTransferApprovalReplay|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

@@ -69,6 +69,7 @@
 - Fixed withdrawal-destination ownership so `verified` destinations require `ownership_verified_at`, invalid status/timestamp combinations fail before persistence, and withdrawals no longer trust ownership status strings without timestamped evidence.
 - Fixed withdrawal-destination ownership transitions so already verified destinations cannot be downgraded or have their verification timestamp rewritten.
 - Fixed ownership verification creation so verification rows must target an active, non-terminal withdrawal destination in the same tenant with the expected verification method.
+- Fixed manual-transfer approvals so approval rows must target a pending transfer and active approver in the same tenant, with self-approval rejected at the store boundary.
 
 Verification:
 
@@ -380,6 +381,11 @@ Verification:
 - `go test -count=1 -v ./wallet/store -run 'TestValidateOwnershipVerificationDestination|TestCreateOwnershipVerificationValidation|TestOwnershipVerificationCreateReplaysAreExact'` (`TestOwnershipVerificationCreateReplaysAreExact` skipped locally when the container runtime is unavailable)
 - `go test -count=1 -v ./wallet/grpc -run 'TestMapErrorMapsPSPValidationFailures'`
 - `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc ./wallet/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
+- `go test -count=1 -v ./wallet/store -run 'TestValidateManualTransferApprovalTarget|TestAddManualTransferApprovalValidation|TestValidateManualTransferApprovalReplay|TestManualTransferAndApprovalReplaysAreExact'` (`TestManualTransferAndApprovalReplaysAreExact` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/store ./wallet/workflow ./wallet/grpc`
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`

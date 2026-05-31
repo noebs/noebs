@@ -93,6 +93,38 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	return &stored, nil
 }
 
+func (s *Store) getManualTransferByID(ctx context.Context, tenantID string, manualTransferID int64) (*ManualTransfer, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM manual_transfers WHERE tenant_id = ? AND id = ?")
+	var transfer ManualTransfer
+	if err := db.GetContext(ctx, &transfer, stmt, tenantID, manualTransferID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrManualTransferNotFound
+		}
+		return nil, err
+	}
+	return &transfer, nil
+}
+
+func (s *Store) getAdminUserByID(ctx context.Context, tenantID string, adminID int64) (*AdminUser, error) {
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM admin_users WHERE tenant_id = ? AND id = ?")
+	var user AdminUser
+	if err := db.GetContext(ctx, &user, stmt, tenantID, adminID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAdminUserNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTransferApproval) (*ManualTransferApproval, error) {
 	tenantID, err := ValidateTenantID(approval.TenantID)
 	if err != nil {
@@ -109,6 +141,18 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	}
 	db, err := s.ensureDB()
 	if err != nil {
+		return nil, err
+	}
+	transfer, err := s.getManualTransferByID(ctx, tenantID, approval.ManualTransferID)
+	if err != nil {
+		return nil, err
+	}
+	approver, err := s.getAdminUserByID(ctx, tenantID, approval.ApproverID)
+	if err != nil {
+		return nil, err
+	}
+	approval.TenantID = tenantID
+	if err := ValidateManualTransferApprovalTarget(transfer, approver, approval); err != nil {
 		return nil, err
 	}
 
@@ -255,6 +299,27 @@ func ValidateManualTransferApprovalReplay(existing *ManualTransferApproval, requ
 		existing.Decision != requested.Decision ||
 		!nullStringEqual(existing.Reason, requested.Reason) {
 		return ErrDuplicateManualApproval
+	}
+	return nil
+}
+
+func ValidateManualTransferApprovalTarget(transfer *ManualTransfer, approver *AdminUser, approval ManualTransferApproval) error {
+	if transfer == nil ||
+		transfer.TenantID != approval.TenantID ||
+		transfer.ID != approval.ManualTransferID {
+		return ErrManualTransferNotFound
+	}
+	if approver == nil ||
+		approver.TenantID != approval.TenantID ||
+		approver.ID != approval.ApproverID ||
+		!approver.IsActive {
+		return ErrAdminUserNotFound
+	}
+	if transfer.Status != ManualTransferStatusPending {
+		return ErrInvalidStatusTransition
+	}
+	if transfer.RequestedBy.Valid && transfer.RequestedBy.Int64 == approval.ApproverID {
+		return ErrApproverIsRequester
 	}
 	return nil
 }

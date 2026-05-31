@@ -164,6 +164,33 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	if _, err := store.AddManualTransferApproval(ctx, decisionMismatch); !errors.Is(err, ErrDuplicateManualApproval) {
 		t.Fatalf("manual approval decision mismatch error = %v, want %v", err, ErrDuplicateManualApproval)
 	}
+
+	selfApproval := approval
+	selfApproval.ApproverID = requesterID
+	if _, err := store.AddManualTransferApproval(ctx, selfApproval); !errors.Is(err, ErrApproverIsRequester) {
+		t.Fatalf("self manual approval error = %v, want %v", err, ErrApproverIsRequester)
+	}
+
+	foreignApproverID := insertWalletAdmin(t, ctx, store, "other-tenant", "foreign-approver@example.test")
+	foreignApproval := approval
+	foreignApproval.ApproverID = foreignApproverID
+	if _, err := store.AddManualTransferApproval(ctx, foreignApproval); !errors.Is(err, ErrAdminUserNotFound) {
+		t.Fatalf("foreign approver error = %v, want %v", err, ErrAdminUserNotFound)
+	}
+
+	terminalApproverID := insertWalletAdmin(t, ctx, store, tenantID, "terminal-approver@example.test")
+	if err := store.UpdateManualTransferStatus(ctx, tenantID, transfer.WorkflowID, ManualTransferStatusUpdate{
+		Status:     ManualTransferStatusApproved,
+		ApprovedBy: sql.NullInt64{Int64: approverID, Valid: true},
+		ApprovedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
+	}); err != nil {
+		t.Fatalf("approve manual transfer: %v", err)
+	}
+	terminalApproval := approval
+	terminalApproval.ApproverID = terminalApproverID
+	if _, err := store.AddManualTransferApproval(ctx, terminalApproval); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("terminal transfer approval error = %v, want %v", err, ErrInvalidStatusTransition)
+	}
 }
 
 func newWalletStoreIntegration(t *testing.T) (context.Context, *Store, string) {

@@ -548,6 +548,58 @@ func TestValidateManualTransferApprovalReplay(t *testing.T) {
 	assertErrorIs(t, ValidateManualTransferApprovalReplay(nil, requested), ErrDuplicateManualApproval)
 }
 
+func TestValidateManualTransferApprovalTarget(t *testing.T) {
+	transfer := &ManualTransfer{
+		ID:          11,
+		TenantID:    "tenant",
+		Status:      ManualTransferStatusPending,
+		RequestedBy: sql.NullInt64{Int64: 7, Valid: true},
+	}
+	approver := &AdminUser{
+		ID:       42,
+		TenantID: "tenant",
+		IsActive: true,
+	}
+	approval := ManualTransferApproval{
+		TenantID:         "tenant",
+		ManualTransferID: 11,
+		ApproverID:       42,
+		Decision:         ManualTransferStatusApproved,
+	}
+	if err := ValidateManualTransferApprovalTarget(transfer, approver, approval); err != nil {
+		t.Fatalf("ValidateManualTransferApprovalTarget() error = %v", err)
+	}
+
+	foreignTransfer := *transfer
+	foreignTransfer.TenantID = "other"
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(&foreignTransfer, approver, approval), ErrManualTransferNotFound)
+
+	otherTransfer := *transfer
+	otherTransfer.ID = 12
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(&otherTransfer, approver, approval), ErrManualTransferNotFound)
+
+	foreignApprover := *approver
+	foreignApprover.TenantID = "other"
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, &foreignApprover, approval), ErrAdminUserNotFound)
+
+	inactiveApprover := *approver
+	inactiveApprover.IsActive = false
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, &inactiveApprover, approval), ErrAdminUserNotFound)
+
+	terminalTransfer := *transfer
+	terminalTransfer.Status = ManualTransferStatusApproved
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(&terminalTransfer, approver, approval), ErrInvalidStatusTransition)
+
+	selfApproval := approval
+	selfApproval.ApproverID = transfer.RequestedBy.Int64
+	requester := *approver
+	requester.ID = transfer.RequestedBy.Int64
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, &requester, selfApproval), ErrApproverIsRequester)
+
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(nil, approver, approval), ErrManualTransferNotFound)
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, nil, approval), ErrAdminUserNotFound)
+}
+
 func TestGetManualTransferByWorkflowValidation(t *testing.T) {
 	s := &Store{}
 	_, err := s.GetManualTransferByWorkflow(t.Context(), "", "wf-1")
