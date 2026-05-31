@@ -8,6 +8,7 @@ import (
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/google/uuid"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -66,7 +67,8 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	if _, err := uuid.Parse(req.ToWalletId); err != nil {
+	toWalletID, err := uuid.Parse(req.ToWalletId)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
 	if err := s.authorizeWalletForClaims(ctx, tenantID, fromWalletID, claims); err != nil {
@@ -96,6 +98,9 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	}
 	if referenceID == "" {
 		referenceID = idempotencyKey
+	}
+	if err := s.validateP2PTransferRequest(ctx, req, fromWalletID, toWalletID); err != nil {
+		return nil, mapError(err)
 	}
 
 	temporalClient, err := s.ensureTemporalClient()
@@ -144,6 +149,23 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 		WorkflowId: run.GetID(),
 		RunId:      run.GetRunID(),
 	}, nil
+}
+
+func (s *Server) validateP2PTransferRequest(ctx context.Context, req *walletv1.P2PTransferRequest, fromWalletID, toWalletID uuid.UUID) error {
+	validator := walletvalidation.Service{Store: s.Service.Store}
+	_, err := validator.ValidateP2P(ctx, walletvalidation.P2PValidationRequest{
+		TenantID:        req.TenantId,
+		TransactionType: "p2p",
+		FromWalletID:    fromWalletID,
+		ToWalletID:      toWalletID,
+		Currency:        req.Currency,
+		Amount:          req.Amount,
+		FromOwnerType:   req.FromOwnerType,
+		FromOwnerID:     req.FromOwnerId,
+		ToOwnerType:     req.ToOwnerType,
+		ToOwnerID:       req.ToOwnerId,
+	})
+	return err
 }
 
 func p2pWorkflowID(tenantID, idempotencyKey string) string {

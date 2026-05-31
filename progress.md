@@ -578,6 +578,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/grpc -run 'TestRequestP2PTransfer(ValidatesWalletsBeforeTemporal|RejectsInsufficientFundsBeforeTemporal|StartsWorkflowAfterValidation|RequiresIdempotency|RequiresPIN|PublicRequiresGatewayIdentity)'` (`TestRequestP2PTransferValidatesWalletsBeforeTemporal`, `TestRequestP2PTransferRejectsInsufficientFundsBeforeTemporal`, and `TestRequestP2PTransferStartsWorkflowAfterValidation` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./wallet/grpc ./wallet/validation ./wallet/store ./wallet/workflow`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

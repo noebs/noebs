@@ -623,6 +623,11 @@ Last updated: 2026-05-31
     - Fix: apply the configured consumer card-transfer dynamic fee to quick-pay requests and carry `DynamicFees` into the EBS card-transfer payload while keeping the encoded payment token out of the EBS request.
     - Tests: `go test -count=1 -v ./ebs_fields -run 'TestQuickPaymentMarshalsCardTransferPayload'`; `go test -count=1 -v ./consumer -run 'TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat|TestQuickPaymentTokenUUID|TestResolveQuickPaymentAmount'` (end-to-end quick-pay service test skipped locally when the container runtime is unavailable); `go test -count=1 ./ebs_fields ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+125. P2P requests started workflows before wallet business validation.
+    - Evidence: `RequestP2PTransfer` validated request shape, PIN/2FA requirements, and idempotency, then started the Temporal workflow. Wallet existence, active status, owner/currency matching, fee config, available balance, and transaction limits were only checked inside the workflow through the existing P2P validator, so impossible transfers could be admitted as workflow runs and fail asynchronously.
+    - Fix: run the existing `walletvalidation.Service.ValidateP2P` in the gRPC boundary before resolving Temporal, while keeping workflow validation as the concurrency guard.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'TestRequestP2PTransfer(ValidatesWalletsBeforeTemporal|RejectsInsufficientFundsBeforeTemporal|StartsWorkflowAfterValidation|RequiresIdempotency|RequiresPIN|PublicRequiresGatewayIdentity)'` (DB-backed P2P admission tests skipped locally when the container runtime is unavailable); `go test -count=1 ./wallet/grpc ./wallet/validation ./wallet/store ./wallet/workflow`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
