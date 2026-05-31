@@ -17,6 +17,7 @@
 - Fixed shared validator initialization so setup errors are returned through `ValidateStruct` instead of terminating the process from `ebs_fields`.
 - Stopped user create/update paths from persisting main-card expiry and constrained generic user-column updates to a known safe set.
 - Fixed dashboard transaction decoding so malformed stored payloads fail loudly and fetch/decode errors return HTTP 500 instead of being swallowed or treated as missing rows.
+- Fixed sensitive-field encryption helpers so crypto failures are returned and failed encryption does not partially mutate user/card/cache-card structs.
 
 Verification:
 

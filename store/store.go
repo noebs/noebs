@@ -146,7 +146,9 @@ func (s *Store) CreateUser(ctx context.Context, tenantID string, user *ebs_field
 	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
 		return err
 	}
-	s.encryptUserFields(user)
+	if err := s.encryptUserFields(user); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	stmt := `INSERT INTO users(
 		tenant_id, password, fullname, username, gender, birthday, email, is_merchant, public_key, device_id, otp, signed_otp,
@@ -311,7 +313,9 @@ func (s *Store) UpdateUser(ctx context.Context, tenantID string, user *ebs_field
 	if err := s.requireDataKeyForSensitiveValue(user.MainCard); err != nil {
 		return err
 	}
-	s.encryptUserFields(user)
+	if err := s.encryptUserFields(user); err != nil {
+		return err
+	}
 	user.UpdatedAt = time.Now().UTC()
 	stmt := s.DB.Rebind(`UPDATE users SET
 		password = ?, fullname = ?, username = ?, gender = ?, birthday = ?, email = ?, is_merchant = ?, public_key = ?, device_id = ?,
@@ -372,6 +376,8 @@ func (s *Store) UpdateUserColumns(ctx context.Context, tenantID string, userID i
 				if err == nil {
 					updates["main_card"] = s.crypto.Hash(value)
 					updates["main_card_enc"] = enc
+				} else {
+					return err
 				}
 			}
 		}
@@ -506,7 +512,9 @@ func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, car
 		if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
 			return err
 		}
-		s.encryptCardFields(&card)
+		if err := s.encryptCardFields(&card); err != nil {
+			return err
+		}
 		stmt := s.DB.Rebind(`INSERT INTO cards(
 			tenant_id, user_id, mobile, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
 		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -546,7 +554,9 @@ func (s *Store) UpdateCard(ctx context.Context, tenantID string, userID int64, c
 	if err != nil {
 		return err
 	}
-	s.encryptCardFields(&card)
+	if err := s.encryptCardFields(&card); err != nil {
+		return err
+	}
 	panClause := s.panLookupClause("pan")
 	panArgs := s.panLookupArgs(card.CardIdx)
 	stmt := s.DB.Rebind(`UPDATE cards SET
@@ -716,7 +726,9 @@ func (s *Store) UpsertCacheCard(ctx context.Context, tenantID string, card ebs_f
 	if err != nil {
 		return err
 	}
-	s.encryptCacheCardFields(&card)
+	if err := s.encryptCacheCardFields(&card); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO cache_cards(tenant_id, pan, pan_enc, expiry, name, is_valid, created_at, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?)

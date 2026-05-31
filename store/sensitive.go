@@ -27,14 +27,19 @@ func (s *Store) requireDataKeyForSensitiveValue(values ...string) error {
 	return nil
 }
 
-func (s *Store) encryptUserFields(user *ebs_fields.User) {
+func (s *Store) encryptUserFields(user *ebs_fields.User) error {
 	if s.crypto == nil || user == nil {
-		return
+		return nil
 	}
 	if user.MainCard != "" && !s.crypto.IsHash(user.MainCard) {
-		user.MainCardEnc, _ = s.crypto.Encrypt(user.MainCard)
+		enc, err := s.crypto.Encrypt(user.MainCard)
+		if err != nil {
+			return err
+		}
+		user.MainCardEnc = enc
 		user.MainCard = s.crypto.Hash(user.MainCard)
 	}
+	return nil
 }
 
 func (s *Store) hydrateUserFields(ctx context.Context, tenantID string, user *ebs_fields.User) {
@@ -72,18 +77,35 @@ func (s *Store) updateUserMainCard(ctx context.Context, tenantID string, userID 
 	return err
 }
 
-func (s *Store) encryptCardFields(card *ebs_fields.Card) {
+func (s *Store) encryptCardFields(card *ebs_fields.Card) error {
 	if s.crypto == nil || card == nil {
-		return
+		return nil
 	}
+	pan := card.Pan
+	panEnc := card.PanEnc
+	ipin := card.IPIN
+	ipinEnc := card.IPINEnc
 	if card.Pan != "" && !s.crypto.IsHash(card.Pan) {
-		card.PanEnc, _ = s.crypto.Encrypt(card.Pan)
-		card.Pan = s.crypto.Hash(card.Pan)
+		enc, err := s.crypto.Encrypt(card.Pan)
+		if err != nil {
+			return err
+		}
+		panEnc = enc
+		pan = s.crypto.Hash(card.Pan)
 	}
 	if card.IPIN != "" && !s.crypto.IsEncrypted(card.IPIN) {
-		card.IPINEnc, _ = s.crypto.Encrypt(card.IPIN)
-		card.IPIN = ""
+		enc, err := s.crypto.Encrypt(card.IPIN)
+		if err != nil {
+			return err
+		}
+		ipinEnc = enc
+		ipin = ""
 	}
+	card.Pan = pan
+	card.PanEnc = panEnc
+	card.IPIN = ipin
+	card.IPINEnc = ipinEnc
+	return nil
 }
 
 func (s *Store) hydrateCardFields(ctx context.Context, tenantID string, card *ebs_fields.Card) {
@@ -143,14 +165,19 @@ func (s *Store) updateCardIPIN(ctx context.Context, tenantID string, cardID int6
 	return err
 }
 
-func (s *Store) encryptCacheCardFields(card *ebs_fields.CacheCards) {
+func (s *Store) encryptCacheCardFields(card *ebs_fields.CacheCards) error {
 	if s.crypto == nil || card == nil {
-		return
+		return nil
 	}
 	if card.Pan != "" && !s.crypto.IsHash(card.Pan) {
-		card.PanEnc, _ = s.crypto.Encrypt(card.Pan)
+		enc, err := s.crypto.Encrypt(card.Pan)
+		if err != nil {
+			return err
+		}
+		card.PanEnc = enc
 		card.Pan = s.crypto.Hash(card.Pan)
 	}
+	return nil
 }
 
 func (s *Store) hydrateCacheCardFields(ctx context.Context, tenantID string, card *ebs_fields.CacheCards) {
