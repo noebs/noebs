@@ -60,7 +60,10 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 	resp := map[string]any{}
 	method := normalizeMethod(p.config.DepositRequestMethod)
 	path := renderRequestPath(strings.TrimSpace(p.config.DepositRequestPath), canonical)
-	path = appendQueryForMethod(method, path, payload)
+	path, err = appendQueryForMethod(method, path, payload)
+	if err != nil {
+		return nil, err
+	}
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
@@ -96,7 +99,10 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 	idempotencyKey := req.ClientReference
 	method := normalizeMethod(p.config.PayoutRequestMethod)
 	path := renderRequestPath(strings.TrimSpace(p.config.PayoutRequestPath), canonical)
-	path = appendQueryForMethod(method, path, payload)
+	path, err = appendQueryForMethod(method, path, payload)
+	if err != nil {
+		return nil, err
+	}
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), idempotencyKey, &resp); err != nil {
 		return nil, err
 	}
@@ -123,7 +129,10 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	}
 	method := normalizeMethod(p.config.StatusRequestMethod)
 	path := renderRequestPath(strings.TrimSpace(p.config.StatusRequestPath), canonical)
-	path = appendQueryForMethod(method, path, payload)
+	path, err = appendQueryForMethod(method, path, payload)
+	if err != nil {
+		return nil, err
+	}
 	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
 		return nil, err
 	}
@@ -169,28 +178,29 @@ func payloadForMethod(method string, payload map[string]any) any {
 	}
 }
 
-func appendQueryForMethod(method, path string, payload map[string]any) string {
+func appendQueryForMethod(method, path string, payload map[string]any) (string, error) {
 	if len(payload) == 0 {
-		return path
+		return path, nil
 	}
 	switch normalizeMethod(method) {
 	case http.MethodGet, http.MethodHead:
 	default:
-		return path
+		return path, nil
 	}
 	parts := strings.SplitN(path, "?", 2)
 	values := url.Values{}
 	if len(parts) == 2 {
 		parsed, err := url.ParseQuery(parts[1])
-		if err == nil {
-			values = parsed
+		if err != nil {
+			return "", fmt.Errorf("%w: invalid request query", psp.ErrPSPConfigInvalid)
 		}
+		values = parsed
 	}
 	addQueryValues(values, "", payload)
 	if encoded := values.Encode(); encoded != "" {
-		return parts[0] + "?" + encoded
+		return parts[0] + "?" + encoded, nil
 	}
-	return parts[0]
+	return parts[0], nil
 }
 
 func addQueryValues(values url.Values, prefix string, payload map[string]any) {

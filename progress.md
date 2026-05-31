@@ -522,6 +522,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./wallet/psp/httpjson -run 'TestAppendQueryForMethod|TestGetTransactionStatusRejectsMalformedConfiguredQueryBeforeHTTP'`
+- `go test -count=1 ./wallet/psp/httpjson ./wallet/psp ./wallet/validation`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

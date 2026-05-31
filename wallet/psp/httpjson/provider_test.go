@@ -58,12 +58,15 @@ func TestNewProviderDoesNotUseEnvironmentProxy(t *testing.T) {
 }
 
 func TestAppendQueryForMethodAddsMappedGETFields(t *testing.T) {
-	path := appendQueryForMethod(http.MethodGet, "/status", map[string]any{
+	path, err := appendQueryForMethod(http.MethodGet, "/status?existing=1", map[string]any{
 		"reference": "ref-1",
 		"nested": map[string]any{
 			"code": "abc",
 		},
 	})
+	if err != nil {
+		t.Fatalf("appendQueryForMethod() error = %v", err)
+	}
 	parsed, err := url.Parse(path)
 	if err != nil {
 		t.Fatalf("parse path: %v", err)
@@ -77,12 +80,57 @@ func TestAppendQueryForMethodAddsMappedGETFields(t *testing.T) {
 	if got := parsed.Query().Get("nested.code"); got != "abc" {
 		t.Fatalf("nested.code query = %q, want abc", got)
 	}
+	if got := parsed.Query().Get("existing"); got != "1" {
+		t.Fatalf("existing query = %q, want 1", got)
+	}
 }
 
 func TestAppendQueryForMethodLeavesPOSTBodyFieldsOutOfURL(t *testing.T) {
-	path := appendQueryForMethod(http.MethodPost, "/status", map[string]any{"reference": "ref-1"})
+	path, err := appendQueryForMethod(http.MethodPost, "/status", map[string]any{"reference": "ref-1"})
+	if err != nil {
+		t.Fatalf("appendQueryForMethod() error = %v", err)
+	}
 	if path != "/status" {
 		t.Fatalf("path = %q, want /status", path)
+	}
+}
+
+func TestAppendQueryForMethodRejectsMalformedExistingQuery(t *testing.T) {
+	_, err := appendQueryForMethod(http.MethodGet, "/status?existing=%zz", map[string]any{"reference": "ref-1"})
+	if !errors.Is(err, psp.ErrPSPConfigInvalid) {
+		t.Fatalf("appendQueryForMethod() error = %v, want %v", err, psp.ErrPSPConfigInvalid)
+	}
+}
+
+func TestGetTransactionStatusRejectsMalformedConfiguredQueryBeforeHTTP(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"pending"}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           server.URL,
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposit/verify",
+		PayoutRequestMethod:  http.MethodPost,
+		PayoutRequestPath:    "/payouts",
+		StatusRequestMethod:  http.MethodGet,
+		StatusRequestPath:    "/status?existing=%zz",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	_, err = provider.GetTransactionStatus(context.Background(), "psp-123")
+	if !errors.Is(err, psp.ErrPSPConfigInvalid) {
+		t.Fatalf("GetTransactionStatus() error = %v, want %v", err, psp.ErrPSPConfigInvalid)
+	}
+	if requests != 0 {
+		t.Fatalf("requests = %d, want 0", requests)
 	}
 }
 

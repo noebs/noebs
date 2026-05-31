@@ -568,6 +568,11 @@ Last updated: 2026-05-31
     - Fix: normalize check-user phones once at the service boundary, require at least one non-blank phone, reject any blank entry with the existing typed `ErrMissingMobile`, and only touch card-vault after the request shape is valid.
     - Tests: `go test -count=1 -v ./consumer -run 'TestCheckUserRejectsBlankPhonesBeforeCardVault|TestNormalizeCheckUserPhonesTrimsAndPreservesOrder|TestCheckUserRequiresCardVaultClient|TestCheckUserPropagatesIdentityLookupErrors'`; `go test -count=1 ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+114. PSP HTTP query mapping ignored malformed configured query strings.
+    - Evidence: `appendQueryForMethod` parsed the existing query portion of configured GET/HEAD request paths, ignored `url.ParseQuery` errors, and then rebuilt the URL with only mapped payload values. A PSP config path like `/status?existing=%zz` could silently drop configured query parameters or send a different request than configured.
+    - Fix: make query appending return errors, propagate malformed configured query strings as `ErrPSPConfigInvalid`, preserve valid existing query values, and verify status checks fail before making an HTTP call when the configured query is invalid.
+    - Tests: `go test -count=1 -v ./wallet/psp/httpjson -run 'TestAppendQueryForMethod|TestGetTransactionStatusRejectsMalformedConfiguredQueryBeforeHTTP'`; `go test -count=1 ./wallet/psp/httpjson ./wallet/psp ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
