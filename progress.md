@@ -483,6 +483,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./parsing`
+- `go test -count=1 -v ./wallet/grpc -run 'TestAdminBoolRejectsMalformedValues|TestAdminLimitOffsetUsesTypedValidation|TestRenderWalletAdmin|TestAdminWithdrawalApproval'`
+- `go test -count=1 ./parsing ./wallet/grpc`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

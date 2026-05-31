@@ -15,6 +15,7 @@ import (
 	"github.com/a-h/templ"
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	"github.com/adonese/noebs/parsing"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
@@ -439,7 +440,10 @@ func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletR
 	if err != nil {
 		return nil, err
 	}
-	activeOnly := adminBool(req.Query, "active_only")
+	activeOnly, err := adminBool(req.Query, "active_only")
+	if err != nil {
+		return nil, err
+	}
 	filter := walletstore.FeeConfigFilter{
 		TenantID:        tenantID,
 		TransactionType: adminQuery(req, "transaction_type"),
@@ -507,6 +511,10 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRe
 		return nil, err
 	}
 	feeAccount := adminForm(form, "fee_account_code")
+	isActive, err := adminBool(form, "is_active")
+	if err != nil {
+		return nil, err
+	}
 	_, err = s.Service.Store.CreateFeeConfig(ctx, walletstore.FeeConfig{
 		TenantID:        tenantID,
 		TransactionType: txType,
@@ -518,7 +526,7 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRe
 		MinFee:          minFee,
 		MaxFee:          maxFee,
 		FeeAccountCode:  sql.NullString{String: feeAccount, Valid: feeAccount != ""},
-		IsActive:        adminBool(form, "is_active"),
+		IsActive:        isActive,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -535,11 +543,15 @@ func (s *Server) renderAdminRates(ctx context.Context, req *walletv1.AdminWallet
 	if err != nil {
 		return nil, err
 	}
+	activeOnly, err := adminBool(req.Query, "active_only")
+	if err != nil {
+		return nil, err
+	}
 	filter := walletstore.ExchangeRateFilter{
 		TenantID:      tenantID,
 		BaseCurrency:  adminQuery(req, "base_currency"),
 		QuoteCurrency: adminQuery(req, "quote_currency"),
-		ActiveOnly:    adminBool(req.Query, "active_only"),
+		ActiveOnly:    activeOnly,
 		Limit:         limit,
 		Offset:        offset,
 	}
@@ -720,45 +732,40 @@ func adminCurrency(currency string) (string, error) {
 }
 
 func adminQuery(req *walletv1.AdminWalletRequest, key string) string {
-	return strings.TrimSpace(req.GetQuery()[key])
+	return parsing.StringParam(req.GetQuery(), key)
 }
 
 func adminPath(req *walletv1.AdminWalletRequest, key string) string {
-	return strings.TrimSpace(req.GetPath()[key])
+	return parsing.StringParam(req.GetPath(), key)
 }
 
 func adminForm(form map[string]string, key string) string {
-	return strings.TrimSpace(form[key])
+	return parsing.StringParam(form, key)
 }
 
-func adminBool(values map[string]string, key string) bool {
-	value := strings.TrimSpace(values[key])
-	return value == "on" || value == "true"
+func adminBool(values map[string]string, key string) (bool, error) {
+	value, err := parsing.BoolParam(values, key)
+	if err != nil {
+		return false, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return value, nil
 }
 
 func adminLimitOffset(values map[string]string, defaultLimit int) (int, int, error) {
-	limit := defaultLimit
-	offset := 0
-	if raw := strings.TrimSpace(values["limit"]); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed <= 0 {
-			return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidLimit.Error())
-		}
-		limit = parsed
+	limit, err := parsing.PositiveIntOrDefaultParam(values, "limit", defaultLimit)
+	if err != nil {
+		return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidLimit.Error())
 	}
-	if raw := strings.TrimSpace(values["offset"]); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 0 {
-			return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidOffset.Error())
-		}
-		offset = parsed
+	offset, err := parsing.NonNegativeIntOrDefaultParam(values, "offset", 0)
+	if err != nil {
+		return 0, 0, status.Error(codes.InvalidArgument, walletstore.ErrInvalidOffset.Error())
 	}
 	return limit, offset, nil
 }
 
 func adminTimeRange(values map[string]string) (time.Time, time.Time, string, string, error) {
-	startStr := strings.TrimSpace(values["start"])
-	endStr := strings.TrimSpace(values["end"])
+	startStr := parsing.StringParam(values, "start")
+	endStr := parsing.StringParam(values, "end")
 	if startStr == "" && endStr == "" {
 		return time.Time{}, time.Time{}, "", "", nil
 	}
@@ -768,11 +775,11 @@ func adminTimeRange(values map[string]string) (time.Time, time.Time, string, str
 	if endStr == "" {
 		return time.Time{}, time.Time{}, startStr, endStr, status.Error(codes.InvalidArgument, walletstore.ErrMissingEndTime.Error())
 	}
-	start, err := time.Parse(time.RFC3339, startStr)
+	start, _, err := parsing.RFC3339Param(values, "start")
 	if err != nil {
 		return time.Time{}, time.Time{}, startStr, endStr, status.Error(codes.InvalidArgument, "invalid start time")
 	}
-	end, err := time.Parse(time.RFC3339, endStr)
+	end, _, err := parsing.RFC3339Param(values, "end")
 	if err != nil {
 		return time.Time{}, time.Time{}, startStr, endStr, status.Error(codes.InvalidArgument, "invalid end time")
 	}
@@ -780,37 +787,28 @@ func adminTimeRange(values map[string]string) (time.Time, time.Time, string, str
 }
 
 func adminPositiveInt64(values map[string]string, key string, typedErr error) (int64, error) {
-	raw := strings.TrimSpace(values[key])
-	if raw == "" {
-		return 0, status.Error(codes.InvalidArgument, typedErr.Error())
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
+	value, ok, err := parsing.PositiveInt64Param(values, key)
+	if err != nil || !ok {
 		return 0, status.Error(codes.InvalidArgument, typedErr.Error())
 	}
 	return value, nil
 }
 
 func adminNonNegativeInt64(values map[string]string, key string, typedErr error) (int64, error) {
-	raw := strings.TrimSpace(values[key])
-	if raw == "" {
-		return 0, status.Error(codes.InvalidArgument, typedErr.Error())
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value < 0 {
+	value, ok, err := parsing.NonNegativeInt64Param(values, key)
+	if err != nil || !ok {
 		return 0, status.Error(codes.InvalidArgument, typedErr.Error())
 	}
 	return value, nil
 }
 
 func adminOptionalNonNegativeInt64(values map[string]string, key string) (sql.NullInt64, error) {
-	raw := strings.TrimSpace(values[key])
-	if raw == "" {
-		return sql.NullInt64{}, nil
-	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value < 0 {
+	value, ok, err := parsing.NonNegativeInt64Param(values, key)
+	if err != nil {
 		return sql.NullInt64{}, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
+	}
+	if !ok {
+		return sql.NullInt64{}, nil
 	}
 	return sql.NullInt64{Int64: value, Valid: true}, nil
 }
@@ -824,13 +822,12 @@ func adminOptionalNonNegativeInt64Value(values map[string]string, key string) (i
 }
 
 func adminOptionalPositiveInt(values map[string]string, key string) (int, error) {
-	raw := strings.TrimSpace(values[key])
-	if raw == "" {
-		return 0, nil
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
+	value, ok, err := parsing.PositiveIntParam(values, key)
+	if err != nil {
 		return 0, status.Error(codes.InvalidArgument, "invalid approval timeout")
+	}
+	if !ok {
+		return 0, nil
 	}
 	return value, nil
 }

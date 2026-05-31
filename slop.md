@@ -533,6 +533,11 @@ Last updated: 2026-05-31
     - Fix: keep zero as the explicit open-amount token contract, reject negative token amounts in the service and store, require a positive requested amount when resolving open-amount tokens, return that requested amount to quick-pay execution, and map invalid-amount errors across HTTP and internal service boundaries.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_CreateToken_RequiresExplicitFields|TestStore_CreateToken_RequiresDataKeyForDestinationPAN|TestStore_CreateToken_MissingTenantID'`; `go test -count=1 -v ./consumer -run 'TestGeneratePaymentTokenRejectsNegativeAmountBeforeStore|TestResolveQuickPaymentAmount|TestServiceCommandErrorMapsInvalidAmount|TestCardVaultOwnedOperationsUseOnlyCardVaultSchema'` (`TestCardVaultOwnedOperationsUseOnlyCardVaultSchema` skipped locally when the container runtime is unavailable); `go test -count=1 -v ./consumer/handler -run 'TestStatusForErrorMapsInvalidAmountToBadRequest|TestStatusForErrorMapsDuplicateTransactionsToConflict'`; `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+107. Wallet admin parsing mixed local ad hoc helpers with silent boolean fallback.
+    - Evidence: `wallet/grpc/admin_render.go` hand-parsed query and form maps for strings, limits, offsets, booleans, RFC3339 ranges, and integer fields. The local `adminBool` treated every malformed value other than `on` or `true` as false, so `active_only=maybe` or `is_active=maybe` silently changed request semantics at the admin boundary.
+    - Fix: add reusable string-map parsing helpers to the top-level `parsing` package, route wallet admin query/form parsing through that shared package, and reject malformed boolean values as invalid arguments instead of defaulting them to false.
+    - Tests: `go test -count=1 -v ./parsing`; `go test -count=1 -v ./wallet/grpc -run 'TestAdminBoolRejectsMalformedValues|TestAdminLimitOffsetUsesTypedValidation|TestRenderWalletAdmin|TestAdminWithdrawalApproval'`; `go test -count=1 ./parsing ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

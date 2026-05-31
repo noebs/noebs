@@ -98,3 +98,94 @@ func TestRequiredFloat64RejectsNonFiniteValues(t *testing.T) {
 		})
 	}
 }
+
+func TestStringParam(t *testing.T) {
+	if got := StringParam(map[string]string{"name": " noebs "}, "name"); got != "noebs" {
+		t.Fatalf("StringParam() = %q, want noebs", got)
+	}
+	if got := StringParam(nil, "name"); got != "" {
+		t.Fatalf("StringParam(nil) = %q, want empty", got)
+	}
+}
+
+func TestBoolParam(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "missing", want: false},
+		{name: "checkbox on", raw: "on", want: true},
+		{name: "checkbox off", raw: "off", want: false},
+		{name: "true", raw: "true", want: true},
+		{name: "false", raw: "false", want: false},
+		{name: "one", raw: "1", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values := map[string]string{}
+			if tt.raw != "" {
+				values["active"] = tt.raw
+			}
+			got, err := BoolParam(values, "active")
+			if err != nil {
+				t.Fatalf("BoolParam() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("BoolParam() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	if _, err := BoolParam(map[string]string{"active": "maybe"}, "active"); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("BoolParam(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+}
+
+func TestIntParams(t *testing.T) {
+	if got, err := PositiveIntOrDefaultParam(map[string]string{}, "limit", 50); err != nil || got != 50 {
+		t.Fatalf("PositiveIntOrDefaultParam(default) = %d, %v; want 50, nil", got, err)
+	}
+	if got, err := PositiveIntOrDefaultParam(map[string]string{"limit": "25"}, "limit", 50); err != nil || got != 25 {
+		t.Fatalf("PositiveIntOrDefaultParam(value) = %d, %v; want 25, nil", got, err)
+	}
+	if _, err := PositiveIntOrDefaultParam(map[string]string{"limit": "0"}, "limit", 50); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("PositiveIntOrDefaultParam(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+	if got, err := NonNegativeIntOrDefaultParam(map[string]string{"offset": "0"}, "offset", 5); err != nil || got != 0 {
+		t.Fatalf("NonNegativeIntOrDefaultParam(value) = %d, %v; want 0, nil", got, err)
+	}
+	if _, err := NonNegativeIntOrDefaultParam(map[string]string{"offset": "-1"}, "offset", 5); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("NonNegativeIntOrDefaultParam(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+}
+
+func TestInt64Params(t *testing.T) {
+	if got, ok, err := PositiveInt64Param(map[string]string{"amount": "10"}, "amount"); err != nil || !ok || got != 10 {
+		t.Fatalf("PositiveInt64Param() = %d, %v, %v; want 10, true, nil", got, ok, err)
+	}
+	if _, ok, err := PositiveInt64Param(map[string]string{}, "amount"); err != nil || ok {
+		t.Fatalf("PositiveInt64Param(missing) ok=%v err=%v; want false, nil", ok, err)
+	}
+	if _, _, err := PositiveInt64Param(map[string]string{"amount": "0"}, "amount"); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("PositiveInt64Param(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+	if got, ok, err := NonNegativeInt64Param(map[string]string{"amount": "0"}, "amount"); err != nil || !ok || got != 0 {
+		t.Fatalf("NonNegativeInt64Param() = %d, %v, %v; want 0, true, nil", got, ok, err)
+	}
+	if _, _, err := NonNegativeInt64Param(map[string]string{"amount": "-1"}, "amount"); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("NonNegativeInt64Param(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+}
+
+func TestRFC3339Param(t *testing.T) {
+	got, ok, err := RFC3339Param(map[string]string{"start": "2026-05-31T12:00:00Z"}, "start")
+	if err != nil || !ok || got.Year() != 2026 {
+		t.Fatalf("RFC3339Param() = %v, %v, %v; want 2026, true, nil", got, ok, err)
+	}
+	if _, ok, err := RFC3339Param(map[string]string{}, "start"); err != nil || ok {
+		t.Fatalf("RFC3339Param(missing) ok=%v err=%v; want false, nil", ok, err)
+	}
+	if _, _, err := RFC3339Param(map[string]string{"start": "bad"}, "start"); !errors.Is(err, ErrInvalidField) {
+		t.Fatalf("RFC3339Param(invalid) error = %v, want %v", err, ErrInvalidField)
+	}
+}

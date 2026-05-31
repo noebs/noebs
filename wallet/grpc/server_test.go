@@ -92,6 +92,32 @@ func TestAdminCurrencyRequiresExplicitCurrency(t *testing.T) {
 	}
 }
 
+func TestAdminBoolRejectsMalformedValues(t *testing.T) {
+	_, err := adminBool(map[string]string{"active_only": "maybe"}, "active_only")
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+	}
+	if !strings.Contains(status.Convert(err).Message(), "active_only") {
+		t.Fatalf("status message = %q, want field name", status.Convert(err).Message())
+	}
+}
+
+func TestAdminLimitOffsetUsesTypedValidation(t *testing.T) {
+	limit, offset, err := adminLimitOffset(map[string]string{"limit": "25", "offset": "5"}, 50)
+	if err != nil {
+		t.Fatalf("adminLimitOffset() error = %v", err)
+	}
+	if limit != 25 || offset != 5 {
+		t.Fatalf("adminLimitOffset() = %d, %d; want 25, 5", limit, offset)
+	}
+	if _, _, err := adminLimitOffset(map[string]string{"limit": "0"}, 50); status.Convert(err).Message() != walletstore.ErrInvalidLimit.Error() {
+		t.Fatalf("adminLimitOffset(invalid limit) error = %v, want %v", err, walletstore.ErrInvalidLimit)
+	}
+	if _, _, err := adminLimitOffset(map[string]string{"offset": "-1"}, 50); status.Convert(err).Message() != walletstore.ErrInvalidOffset.Error() {
+		t.Fatalf("adminLimitOffset(invalid offset) error = %v, want %v", err, walletstore.ErrInvalidOffset)
+	}
+}
+
 func TestAdminWithdrawalApprovalDecodesRawRequest(t *testing.T) {
 	item, err := adminWithdrawalApproval(walletstore.PSPTransaction{
 		ClientReference: "withdrawal-1",
