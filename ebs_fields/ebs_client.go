@@ -40,6 +40,11 @@ func ConfigureEBSHTTPClient(cfg NoebsConfig) {
 
 // EBSHttpClient the client to interact with EBS
 func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
+	return EBSHttpClientWithClient(ebsHTTPClient, targetURL, req)
+}
+
+// EBSHttpClientWithClient sends an EBS request using the caller-provided HTTP client.
+func EBSHttpClientWithClient(client *http.Client, targetURL string, req []byte) (code int, ebsGenericResponse EBSParserFields, err error) {
 	initEBSMetrics()
 	start := time.Now()
 	reqSize := len(req)
@@ -58,6 +63,11 @@ func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse E
 		recordEBSMetrics(endpointLabel, targetLabel, http.MethodPost, code, err, reqSize, respSize, time.Since(start))
 	}()
 
+	if client == nil {
+		code = http.StatusInternalServerError
+		return code, ebsGenericResponse, errors.New("missing EBS HTTP client")
+	}
+
 	log.WithFields(logrus.Fields{"url": targetURL, "bytes": reqSize}).Debug("EBS request")
 	reqBuffer := bytes.NewBuffer(req)
 
@@ -72,7 +82,7 @@ func EBSHttpClient(targetURL string, req []byte) (code int, ebsGenericResponse E
 	}
 	reqHandler.Header.Set("Content-Type", "application/json")
 
-	ebsResponse, err := ebsHTTPClient.Do(reqHandler)
+	ebsResponse, err := client.Do(reqHandler)
 	if err != nil {
 		code = http.StatusGatewayTimeout
 		log.WithFields(logrus.Fields{

@@ -638,6 +638,11 @@ Last updated: 2026-05-31
     - Fix: construct bill inquiry payment info from explicit request fields, trim required values, and reject missing biller-specific fields with `ErrInvalidPaymentInfo` before UUID/IPIN/EBS work.
     - Tests: `go test -count=1 -v ./consumer -run 'Test(UpdatePaymentInfoBuildsCustomsPaymentInfoFromRequestFields|GetBillsRejectsMissingCustomsPaymentInfoBeforeEBS|GetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError|GetBillsRequiresExplicitPayeeID|EBSAdapterTenantValidationFailsBeforeDBOrHTTP|ParseDueAmounts)'` (`TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError` skipped locally when the container runtime is unavailable); `go test -count=1 ./consumer ./consumer/handler ./parsing`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+128. EBS adapter services ignored their configured HTTP clients.
+    - Evidence: consumer and merchant services carried an `HTTPClient` dependency and several public methods checked for it, but the shared EBS proxy helpers still called the package-global `ebs_fields.EBSHttpClient`. Runtime timeouts/transports and tests that injected clients were therefore bypassed, while the dependency check gave a false sense of control.
+    - Fix: add `EBSHttpClientWithClient`, keep `EBSHttpClient` as the shared default wrapper, require configured service clients before EBS calls, and route consumer/merchant EBS calls through the injected client without weakening tenant validation ordering or IPIN UUID failure propagation.
+    - Tests: `go test -count=1 -v ./ebs_fields ./consumer ./merchant -run 'Test(EBSHTTPClientWithClientUsesProvidedClient|CallEBSUsesConfiguredHTTPClient|CallEBSRequiresConfiguredHTTPClient|CallEBSRejectsReservedTenantBeforeHTTP|Service_isValidCard|EBSAdapterTenantValidationFailsBeforeDBOrHTTP)'` (`TestService_isValidCard` skipped locally when the container runtime is unavailable); `go test -count=1 ./ebs_fields ./consumer ./consumer/handler ./merchant ./merchant/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

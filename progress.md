@@ -593,6 +593,11 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `go test -count=1 -v ./ebs_fields ./consumer ./merchant -run 'Test(EBSHTTPClientWithClientUsesProvidedClient|CallEBSUsesConfiguredHTTPClient|CallEBSRequiresConfiguredHTTPClient|CallEBSRejectsReservedTenantBeforeHTTP|Service_isValidCard|EBSAdapterTenantValidationFailsBeforeDBOrHTTP)'` (`TestService_isValidCard` skipped locally when the container runtime is unavailable)
+- `go test -count=1 ./ebs_fields ./consumer ./consumer/handler ./merchant ./merchant/handler`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

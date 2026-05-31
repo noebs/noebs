@@ -2,8 +2,10 @@ package ebs_fields
 
 import (
 	"crypto/tls"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -85,4 +87,39 @@ func TestEBSHTTPClientIPINFallbackReturnsGatewayFailureMessage(t *testing.T) {
 	if code != http.StatusBadGateway {
 		t.Fatalf("EBSHttpClient() status = %d, want %d", code, http.StatusBadGateway)
 	}
+}
+
+func TestEBSHTTPClientWithClientUsesProvidedClient(t *testing.T) {
+	var called bool
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			called = true
+			if req.URL.String() != "https://ebs.example/purchase" {
+				t.Fatalf("request URL = %q, want configured target", req.URL.String())
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"responseCode":0,"responseMessage":"Success","UUID":"uuid-1"}`)),
+				Request:    req,
+			}, nil
+		}),
+	}
+
+	code, res, err := EBSHttpClientWithClient(client, "https://ebs.example/purchase", []byte(`{"amount":100}`))
+	if err != nil {
+		t.Fatalf("EBSHttpClientWithClient() error = %v", err)
+	}
+	if code != http.StatusOK || res.UUID != "uuid-1" {
+		t.Fatalf("EBSHttpClientWithClient() = status %d response %+v, want success uuid", code, res)
+	}
+	if !called {
+		t.Fatalf("provided client was not used")
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

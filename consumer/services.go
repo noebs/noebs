@@ -236,9 +236,15 @@ func requiredPaymentInfoString(paymentInfo map[string]any, key string) (string, 
 
 // isValidCard verifies card credentials with EBS.
 func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
+	if s == nil {
+		return false, ErrMissingService
+	}
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
 		return false, err
+	}
+	if s.HTTPClient == nil {
+		return false, ErrMissingHTTPClient
 	}
 	if strings.TrimSpace(card.Pan) == "" {
 		return false, store.ErrMissingPAN
@@ -270,7 +276,7 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 		return false, err
 	}
 
-	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	_, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, jsonBuffer)
 	res.MaskPAN()
 	res.Name = s.ToDatabasename(url)
 	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
@@ -300,6 +306,9 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	if err != nil {
 		return err
 	}
+	if s.HTTPClient == nil {
+		return ErrMissingHTTPClient
+	}
 	fields := ebs_fields.ConsumerGenerateIPINFields{
 		Username:     s.NoebsConfig.EBSIPINUsername,
 		TranDateTime: ebs_fields.EbsDate(),
@@ -309,7 +318,7 @@ func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {
 	if err != nil {
 		return errors.New("missing fields")
 	}
-	_, res, ebsErr := ebs_fields.EBSHttpClient(url, jsonBuffer)
+	_, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, jsonBuffer)
 	res.Name = s.ToDatabasename(url)
 	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
 	if ebsErr != nil {
