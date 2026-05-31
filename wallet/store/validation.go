@@ -46,6 +46,13 @@ func ValidateDoubleEntryParams(params DoubleEntryParams) error {
 	return nil
 }
 
+func ValidateHeldDoubleEntryParams(params HeldDoubleEntryParams) error {
+	if err := ValidateDoubleEntryParams(params.Entry); err != nil {
+		return err
+	}
+	return ValidateReleaseHold(params.Entry.TenantID, params.HoldID)
+}
+
 func ValidateHoldParams(params HoldParams) error {
 	if _, err := ValidateTenantID(params.TenantID); err != nil {
 		return err

@@ -11,7 +11,9 @@ import (
 
 var activityNames = []string{
 	"ExecuteDoubleEntry",
+	"ExecuteHeldDoubleEntry",
 	"ValidateDoubleEntry",
+	"ValidateHeldDoubleEntry",
 	"CreateHold",
 	"ValidateHold",
 	"ReleaseHold",

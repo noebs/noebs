@@ -876,11 +876,12 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		Amount:         validation.WalletDebitAmount,
 		Description:    "withdrawal",
 	}
-	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, withdrawEntry).Get(ctx, nil); err != nil {
+	heldWithdrawEntry := walletstore.HeldDoubleEntryParams{HoldID: holdID, Entry: withdrawEntry}
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateHeldDoubleEntry, heldWithdrawEntry).Get(ctx, nil); err != nil {
 		return releaseHold(err)
 	}
 	var posted walletstore.DoubleEntryResult
-	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, withdrawEntry).Get(ctx, &posted); err != nil {
+	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteHeldDoubleEntry, heldWithdrawEntry).Get(ctx, &posted); err != nil {
 		return releaseHold(err)
 	}
 
@@ -910,18 +911,15 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			Amount:         feeAmount,
 			Description:    "withdrawal fee",
 		}
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, feeEntry).Get(ctx, nil); err != nil {
+		heldFeeEntry := walletstore.HeldDoubleEntryParams{HoldID: holdID, Entry: feeEntry}
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateHeldDoubleEntry, heldFeeEntry).Get(ctx, nil); err != nil {
 			return releaseHold(err)
 		}
 		var feePosted walletstore.DoubleEntryResult
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, feeEntry).Get(ctx, &feePosted); err != nil {
+		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteHeldDoubleEntry, heldFeeEntry).Get(ctx, &feePosted); err != nil {
 			return releaseHold(err)
 		}
 		_ = feePosted
-	}
-
-	if err := releaseHold(nil); err != nil {
-		return err
 	}
 
 	now := workflow.Now(ctx)
@@ -1250,7 +1248,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	now := workflow.Now(ctx)
 	if decision.Approved {
 		if decision.ProofOfPayment == "" {
-			return walletstore.ErrMissingProofOfPayment
+			return releaseHoldAndReturn(ctx, params.TenantID, holdID, walletstore.ErrMissingProofOfPayment)
 		}
 		approval := walletstore.ManualTransferApproval{
 			TenantID:         params.TenantID,
@@ -1260,7 +1258,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			Reason:           sql.NullString{String: decision.Reason, Valid: decision.Reason != ""},
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, approval).Get(ctx, nil); err != nil {
-			return err
+			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 		}
 		update := walletstore.ManualTransferStatusUpdate{
 			Status:         ManualTransferStatusApproved,
@@ -1269,15 +1267,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			ProofOfPayment: sql.NullString{String: decision.ProofOfPayment, Valid: true},
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil); err != nil {
-			return err
-		}
-		if holdID > 0 {
-			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
-				return err
-			}
-			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
-				return err
-			}
+			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 		}
 		var treasury walletstore.Wallet
 		treasuryParams := walletactivity.EnsureSystemWalletParams{
@@ -1287,7 +1277,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			KYCTier:    walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
-			return err
+			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 		}
 
 		debitID := walletID
@@ -1307,12 +1297,22 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			Amount:         params.Amount,
 			Description:    params.Reason,
 		}
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, entry).Get(ctx, nil); err != nil {
-			return err
-		}
 		var posted walletstore.DoubleEntryResult
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, entry).Get(ctx, &posted); err != nil {
-			return err
+		if holdID > 0 {
+			heldEntry := walletstore.HeldDoubleEntryParams{HoldID: holdID, Entry: entry}
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateHeldDoubleEntry, heldEntry).Get(ctx, nil); err != nil {
+				return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
+			}
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteHeldDoubleEntry, heldEntry).Get(ctx, &posted); err != nil {
+				return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
+			}
+		} else {
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDoubleEntry, entry).Get(ctx, nil); err != nil {
+				return err
+			}
+			if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityExecuteDoubleEntry, entry).Get(ctx, &posted); err != nil {
+				return err
+			}
 		}
 		_ = posted
 
@@ -1348,7 +1348,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	}
 
 	if decision.Reason == "" {
-		return walletstore.ErrMissingReason
+		return releaseHoldAndReturn(ctx, params.TenantID, holdID, walletstore.ErrMissingReason)
 	}
 	rejection := walletstore.ManualTransferApproval{
 		TenantID:         params.TenantID,
@@ -1358,7 +1358,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		Reason:           sql.NullString{String: decision.Reason, Valid: true},
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, rejection).Get(ctx, nil); err != nil {
-		return err
+		return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 	}
 	rejectMeta, err := auditMetadata(map[string]any{
 		"transfer_type": params.TransferType,
@@ -1368,7 +1368,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		"reason":        decision.Reason,
 	})
 	if err != nil {
-		return err
+		return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 	}
 	rejectEvent := walletstore.AuditEvent{
 		TenantID:   params.TenantID,
@@ -1383,7 +1383,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		RequestID:  sql.NullString{String: params.IdempotencyKey, Valid: params.IdempotencyKey != ""},
 	}
 	if err := recordAuditEvent(ctx, rejectEvent); err != nil {
-		return err
+		return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 	}
 	if holdID > 0 {
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateReleaseHold, params.TenantID, holdID).Get(ctx, nil); err != nil {

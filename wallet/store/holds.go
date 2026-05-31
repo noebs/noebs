@@ -54,7 +54,7 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 	insertStmt := db.Rebind(`INSERT INTO balance_holds(
 		tenant_id, wallet_id, amount, amount_remaining, reason, reference_type, reference_id,
 		idempotency_key, status, expires_at, created_at, metadata
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(tenant_id, wallet_id, reference_type, reference_id) DO NOTHING
 	RETURNING *`)
 	var hold BalanceHold
@@ -67,6 +67,7 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 		params.ReferenceType,
 		params.ReferenceID,
 		params.IdempotencyKey,
+		HoldStatusActive,
 		params.ExpiresAt,
 		now,
 		params.Metadata,
@@ -119,7 +120,7 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	if err != nil {
 		return err
 	}
-	if hold.Status != "active" {
+	if hold.Status != HoldStatusActive {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
@@ -138,9 +139,9 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	}
 
 	updateStmt := db.Rebind(`UPDATE balance_holds
-		SET status = 'released', amount_remaining = 0, released_at = ?
+		SET status = ?, amount_remaining = 0, released_at = ?
 		WHERE tenant_id = ? AND id = ?`)
-	if _, err := tx.ExecContext(ctx, updateStmt, now, tenantID, hold.ID); err != nil {
+	if _, err := tx.ExecContext(ctx, updateStmt, HoldStatusReleased, now, tenantID, hold.ID); err != nil {
 		return err
 	}
 

@@ -33,10 +33,26 @@ type DoubleEntryResult struct {
 	Existing      bool
 }
 
+type HeldDoubleEntryParams struct {
+	HoldID int64
+	Entry  DoubleEntryParams
+}
+
 func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (*DoubleEntryResult, error) {
 	if err := ValidateDoubleEntryParams(params); err != nil {
 		return nil, err
 	}
+	return s.postDoubleEntry(ctx, params, 0)
+}
+
+func (s *Store) PostHeldDoubleEntry(ctx context.Context, params HeldDoubleEntryParams) (*DoubleEntryResult, error) {
+	if err := ValidateHeldDoubleEntryParams(params); err != nil {
+		return nil, err
+	}
+	return s.postDoubleEntry(ctx, params.Entry, params.HoldID)
+}
+
+func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, debitHoldID int64) (result *DoubleEntryResult, err error) {
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -84,6 +100,17 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 		return nil, err
 	}
 
+	var debitHold *BalanceHold
+	if debitHoldID > 0 {
+		debitHold, err = s.lockHold(ctx, tx, params.TenantID, debitHoldID)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateDebitHold(debitHold, params); err != nil {
+			return nil, err
+		}
+	}
+
 	wallets, err := s.lockWallets(ctx, tx, params.TenantID, params.DebitWalletID, params.CreditWalletID)
 	if err != nil {
 		return nil, err
@@ -93,12 +120,17 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 	if debitWallet.Currency != params.Currency || creditWallet.Currency != params.Currency {
 		return nil, ErrCurrencyMismatch
 	}
-	if debitWallet.AvailableBalance < params.Amount {
+	if debitHold == nil && debitWallet.AvailableBalance < params.Amount {
+		return nil, ErrInsufficientFunds
+	}
+	if debitHold != nil && debitWallet.Balance < params.Amount {
 		return nil, ErrInsufficientFunds
 	}
 
 	debitWallet.Balance -= params.Amount
-	debitWallet.AvailableBalance -= params.Amount
+	if debitHold == nil {
+		debitWallet.AvailableBalance -= params.Amount
+	}
 	creditWallet.Balance += params.Amount
 	creditWallet.AvailableBalance += params.Amount
 
@@ -161,7 +193,13 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 		return nil, err
 	}
 
-	result := &DoubleEntryResult{
+	if debitHold != nil {
+		if err := s.captureDebitHold(ctx, tx, params.TenantID, debitHold, params.Amount, now); err != nil {
+			return nil, err
+		}
+	}
+
+	result = &DoubleEntryResult{
 		TransactionID: txID,
 		DebitEntry:    debitEntry,
 		CreditEntry:   creditEntry,
@@ -173,6 +211,36 @@ func (s *Store) PostDoubleEntry(ctx context.Context, params DoubleEntryParams) (
 		return nil, err
 	}
 	return result, nil
+}
+
+func validateDebitHold(hold *BalanceHold, params DoubleEntryParams) error {
+	if hold.Status != HoldStatusActive {
+		return ErrHoldNotActive
+	}
+	if hold.WalletID != params.DebitWalletID {
+		return ErrHoldWalletMismatch
+	}
+	if hold.AmountRemaining < params.Amount {
+		return ErrHoldAmountExceeded
+	}
+	return nil
+}
+
+func (s *Store) captureDebitHold(ctx context.Context, tx *sqlx.Tx, tenantID string, hold *BalanceHold, amount int64, now time.Time) error {
+	remaining := hold.AmountRemaining - amount
+	if remaining == 0 {
+		stmt := s.DB.Rebind(`UPDATE balance_holds
+			SET amount_remaining = 0, status = ?, captured_at = ?
+			WHERE tenant_id = ? AND id = ?`)
+		_, err := tx.ExecContext(ctx, stmt, HoldStatusCaptured, now, tenantID, hold.ID)
+		return err
+	}
+
+	stmt := s.DB.Rebind(`UPDATE balance_holds
+		SET amount_remaining = ?
+		WHERE tenant_id = ? AND id = ?`)
+	_, err := tx.ExecContext(ctx, stmt, remaining, tenantID, hold.ID)
+	return err
 }
 
 func (s *Store) LedgerTransactionExists(ctx context.Context, tenantID, idempotencyKey string) (bool, error) {

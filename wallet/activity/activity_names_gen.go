@@ -6,7 +6,9 @@ type ActivityName = string
 
 const (
 	ActivityExecuteDoubleEntry                 ActivityName = "ExecuteDoubleEntry"
+	ActivityExecuteHeldDoubleEntry             ActivityName = "ExecuteHeldDoubleEntry"
 	ActivityValidateDoubleEntry                ActivityName = "ValidateDoubleEntry"
+	ActivityValidateHeldDoubleEntry            ActivityName = "ValidateHeldDoubleEntry"
 	ActivityCreateHold                         ActivityName = "CreateHold"
 	ActivityValidateHold                       ActivityName = "ValidateHold"
 	ActivityReleaseHold                        ActivityName = "ReleaseHold"

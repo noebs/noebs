@@ -104,5 +104,8 @@ var (
 	ErrDuplicateTransaction         = errors.New("duplicate transaction")
 	ErrDuplicateHold                = errors.New("duplicate hold")
 	ErrHoldNotFound                 = errors.New("hold not found")
+	ErrHoldNotActive                = errors.New("hold not active")
+	ErrHoldWalletMismatch           = errors.New("hold wallet mismatch")
+	ErrHoldAmountExceeded           = errors.New("hold amount exceeded")
 	ErrPSPTransactionNotFound       = errors.New("psp transaction not found")
 )

@@ -8,6 +8,14 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	HoldStatusActive   = "active"
+	HoldStatusReleased = "released"
+	HoldStatusExpired  = "expired"
+	HoldStatusCanceled = "canceled"
+	HoldStatusCaptured = "captured"
+)
+
 type Wallet struct {
 	ID               uuid.UUID      `db:"id"`
 	TenantID         string         `db:"tenant_id"`
@@ -67,6 +75,7 @@ type BalanceHold struct {
 	Status          string          `db:"status"`
 	ExpiresAt       time.Time       `db:"expires_at"`
 	ReleasedAt      sql.NullTime    `db:"released_at"`
+	CapturedAt      sql.NullTime    `db:"captured_at"`
 	CreatedAt       time.Time       `db:"created_at"`
 	Metadata        json.RawMessage `db:"metadata"`
 }
