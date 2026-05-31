@@ -606,11 +606,21 @@ func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, car
 	if err != nil {
 		return err
 	}
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 	for _, card := range prepared {
 		stmt := s.DB.Rebind(`INSERT INTO cards(
 			tenant_id, user_id, mobile, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
 		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-		if _, err := db.ExecContext(ctx, stmt,
+		if _, err := tx.ExecContext(ctx, stmt,
 			tenantID,
 			userID,
 			card.Mobile,
@@ -628,6 +638,10 @@ func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, car
 			return err
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
 	return nil
 }
 

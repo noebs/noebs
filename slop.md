@@ -473,6 +473,11 @@ Last updated: 2026-05-31
     - Fix: require the target user to exist under the same tenant before linking, make provider-link conflicts exact replays, and return `ErrDuplicateAuthAccount` for mismatched user/email/verification retries instead of silently updating the existing link.
     - Tests: `go test -count=1 -v ./store -run 'TestStore_LinkAuthAccountRequiresTenantUserAndExactReplay|TestStore_CreateUserWithAuthAccountPersistsUserAndAccount|TestStore_AuthAccountValidationFailsBeforeDB'` (`TestStore_LinkAuthAccountRequiresTenantUserAndExactReplay` and `TestStore_CreateUserWithAuthAccountPersistsUserAndAccount` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer ./consumer/handler`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+95. Batched card inserts could partially persist before returning an error.
+    - Evidence: `AddCards` prepared the full input batch, then inserted each card one by one on the raw DB connection. If a later insert failed, for example on a duplicate `(tenant_id, user_id, pan)`, earlier cards in the same request were already committed even though the method returned an error.
+    - Fix: execute the prepared card batch inside a single transaction and roll it back on any failed insert or commit failure, making the batch all-or-nothing.
+    - Tests: `go test -count=1 -v ./store -run 'TestStore_AddCardsRollsBackPartialBatch|TestStore_AddCards_RequiresPAN|TestStore_AddCards_RequiresMobile|TestStore_AddCards_RequiresDataKey'` (`TestStore_AddCardsRollsBackPartialBatch` skipped locally when the container runtime is unavailable); `go test -count=1 ./store ./consumer`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

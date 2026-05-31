@@ -715,6 +715,41 @@ func TestStore_AddCards_RequiresPAN(t *testing.T) {
 	}
 }
 
+func TestStore_AddCardsRollsBackPartialBatch(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	tenantID := "tenant-add-cards-rollback"
+	if err := MigrateScope(ctx, db, tenantID, MigrationScopeCardVault); err != nil {
+		t.Fatalf("migrate card-vault scope: %v", err)
+	}
+	s := New(db)
+	valid := true
+	cards := []ebs_fields.Card{
+		{
+			Mobile:  "0990000000",
+			Pan:     "9222081700000000",
+			Expiry:  "3001",
+			IsValid: &valid,
+		},
+		{
+			Mobile:  "0990000000",
+			Pan:     "9222081700000000",
+			Expiry:  "3001",
+			IsValid: &valid,
+		},
+	}
+	if err := s.AddCards(ctx, tenantID, 42, cards); err == nil {
+		t.Fatal("AddCards() error = nil, want duplicate-card failure")
+	}
+	stored, err := s.ListCardsByUserID(ctx, tenantID, 42)
+	if err != nil {
+		t.Fatalf("ListCardsByUserID(): %v", err)
+	}
+	if len(stored) != 0 {
+		t.Fatalf("stored cards after failed batch = %d, want 0", len(stored))
+	}
+}
+
 func TestStore_UpsertBeneficiary_RequiresExplicitFields(t *testing.T) {
 	s := &Store{}
 	if err := s.UpsertBeneficiary(context.Background(), "t1", 0, ebs_fields.Beneficiary{Data: "0912141660", BillType: "0010010001"}); !errors.Is(err, ErrInvalidUserID) {
