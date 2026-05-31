@@ -2,7 +2,7 @@
 
 package activity
 
-type ActivityName string
+type ActivityName = string
 
 const (
 	ActivityExecuteDoubleEntry                 ActivityName = "ExecuteDoubleEntry"

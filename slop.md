@@ -128,6 +128,11 @@ Last updated: 2026-05-31
     - Fix: distinguish not-found from real lookup errors, require link success for existing email matches, add typed auth-account validation, and create new Google users plus auth accounts in one store transaction.
     - Tests: `go test -count=1 ./store ./consumer`.
 
+26. Wallet workflows could hide failed compensation and, in tests, could not schedule generated activity names as Temporal activity types.
+    - Evidence: withdrawal/manual-transfer paths discarded release-hold, destination usage, funding-source usage, ownership status, and manual-transfer status activity errors. A Temporal workflow regression test also exposed that generated `ActivityName` was a distinct string type, causing `ActivityType is not set` when used with `ExecuteActivity`.
+    - Fix: make generated activity names a string alias, propagate compensation/update failures with joined workflow errors, and require withdrawal hold-release failure to surface when approval rejection cleanup fails.
+    - Tests: `go test -count=1 ./wallet/activity ./wallet/workflow`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
