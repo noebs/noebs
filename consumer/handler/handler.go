@@ -9,6 +9,12 @@ type Handler struct {
 	Service *consumer.Service
 }
 
-func New(service *consumer.Service) *Handler {
-	return &Handler{Service: service}
+func New(service *consumer.Service) (*Handler, error) {
+	if service == nil {
+		return nil, consumer.ErrMissingService
+	}
+	if service.Store == nil {
+		return nil, consumer.ErrMissingStore
+	}
+	return &Handler{Service: service}, nil
 }

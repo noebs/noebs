@@ -551,24 +551,39 @@ func GetMainEngine() *fiber.App {
 	})
 	route.Get("/metrics", metricsGuard, adaptor.HTTPHandler(promhttp.Handler()))
 
+	buildConsumerHandler := func() *consumerhandler.Handler {
+		h, err := consumerhandler.New(&consumerService)
+		if err != nil {
+			logrusLogger.Fatalf("consumer handler startup: %v", err)
+		}
+		return h
+	}
+	buildMerchantHandler := func() *merchanthandler.Handler {
+		h, err := merchanthandler.New(&merchantServices)
+		if err != nil {
+			logrusLogger.Fatalf("merchant handler startup: %v", err)
+		}
+		return h
+	}
+
 	if role == serviceRolePSPWebhook {
 		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(pspWebhookStore, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
 		wallethandler.RegisterWebhookRoutes(route.Group("", tenantIdentity), walletWebhookHandler)
 		return route
 	}
 	if role == serviceRoleIdentityAuth {
-		consumerHandler := consumerhandler.New(&consumerService)
+		consumerHandler := buildConsumerHandler()
 		registerIdentityAuthRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleCardVault {
-		consumerHandler := consumerhandler.New(&consumerService)
+		consumerHandler := buildConsumerHandler()
 		registerCardVaultRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleEBSAdapter {
-		consumerHandler := consumerhandler.New(&consumerService)
-		merchantHandler := merchanthandler.New(&merchantServices)
+		consumerHandler := buildConsumerHandler()
+		merchantHandler := buildMerchantHandler()
 		registerEBSAdapterRoutes(route, tenantIdentity, userIdentity, consumerHandler, merchantHandler)
 		return route
 	}
@@ -577,12 +592,12 @@ func GetMainEngine() *fiber.App {
 		return route
 	}
 	if role == serviceRoleNotification {
-		consumerHandler := consumerhandler.New(&consumerService)
+		consumerHandler := buildConsumerHandler()
 		registerNotificationChatRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleBeneficiary {
-		consumerHandler := consumerhandler.New(&consumerService)
+		consumerHandler := buildConsumerHandler()
 		registerConsumerBeneficiaryRoutes(route, userIdentity, consumerHandler)
 		return route
 	}

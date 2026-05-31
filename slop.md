@@ -108,6 +108,11 @@ Last updated: 2026-05-31
     - Fix: add a top-level `parsing` package with typed missing/invalid field errors, required string/float helpers, and safe optional string defaults; remove the unused `utils.GetOrDefault` surface and route bill/receipt parsing through the shared package.
     - Tests: `go test -count=1 ./parsing ./utils ./consumer ./merchant`.
 
+22. HTTP handler constructors accepted invalid service wiring, forcing every request path to defensively check impossible nil dependencies.
+    - Evidence: `consumer/handler.New` and `merchant/handler.New` returned handlers around nil services or services with nil stores, while `GetMainEngine` assumed construction could not fail.
+    - Fix: make handler constructors validate required service/store dependencies and return typed startup errors; route registration now fails during engine construction instead of relying on per-handler compensation.
+    - Tests: `go test -count=1 ./consumer/handler ./merchant/handler ./cli`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
