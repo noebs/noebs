@@ -626,6 +626,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- `GetIpinPubKey` now preserves typed `CallError` status/response on EBS failures while still joining record errors.
+- `go test -count=1 -v ./consumer -run 'TestGetIpinPubKeyReturnsTypedEBSCallError|TestIPINFlowsPropagateUUIDGenerationErrors'`
+- `go test -count=1 ./consumer ./consumer/handler ./ebs_fields`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

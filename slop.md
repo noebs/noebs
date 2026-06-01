@@ -668,6 +668,11 @@ Last updated: 2026-05-31
     - Fix: require positive amounts in fee config lookup and validate tenant, wallet id, transaction type, currency, and amount at the limit-enforcer boundary before store reads.
     - Tests: `go test -count=1 -v ./wallet/limits ./wallet/store -run 'TestCheckRejectsInvalidInputsBeforeStoreLookup|TestGetFeeConfigForAmountValidation'`; `go test -count=1 ./wallet/limits ./wallet/fees ./wallet/store ./wallet/validation ./wallet/workflow ./wallet/activity`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+134. IPIN public-key failures hid typed EBS call errors.
+    - Evidence: `GetIpinPubKey` called EBS directly but discarded the transport/status error when EBS failed, returning only a generic `"error in transaction: ebs"` plus any record error. Handlers therefore could not recover the `CallError` status/response details used by the shared EBS proxy error contract.
+    - Fix: carry the EBS HTTP status and parsed response into `ebs_fields.CallError` on `GetIpinPubKey` failures while preserving record errors with `errors.Join`.
+    - Tests: `go test -count=1 -v ./consumer -run 'TestGetIpinPubKeyReturnsTypedEBSCallError|TestIPINFlowsPropagateUUIDGenerationErrors'`; `go test -count=1 ./consumer ./consumer/handler ./ebs_fields`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
