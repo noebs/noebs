@@ -683,6 +683,11 @@ Last updated: 2026-05-31
     - Fix: reject malformed deposit and P2P workflow params at the workflow entrypoint before UUID parsing or any activity execution, requiring explicit idempotency and reference IDs in P2P instead of repeating boundary defaults.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(DepositWorkflowValidatesRequestBeforeActivities|P2PWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+137. Reconciliation workflow silently defaulted missing time ranges.
+    - Evidence: runtime config already requires `wallet_reconciliation_lookback_hours`, but the workflow still substituted a 24-hour lookback when both range and lookback were absent, and it recomputed both times when only one side of a range was supplied. Direct workflow starts or bad scheduler params could therefore run reconciliation over an implicit window instead of failing typed validation.
+    - Fix: require either a complete explicit `StartTime`/`EndTime` range or an explicit positive `LookbackHours`; partial ranges now fail with the matching typed time error and no default is created inside the workflow.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestReconciliationWorkflowRequiresExplicitRangeOrLookback'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

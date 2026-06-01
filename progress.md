@@ -644,6 +644,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Reconciliation workflow no longer creates a hidden 24-hour default when no explicit range/lookback is supplied; partial ranges now fail before activity execution.
+- `go test -count=1 -v ./wallet/workflow -run 'TestReconciliationWorkflowRequiresExplicitRangeOrLookback'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./cli`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

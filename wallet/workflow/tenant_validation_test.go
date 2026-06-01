@@ -293,6 +293,58 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	}
 }
 
+func TestReconciliationWorkflowRequiresExplicitRangeOrLookback(t *testing.T) {
+	start := time.Date(2026, 5, 31, 10, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	baseParams := func() ReconciliationParams {
+		return ReconciliationParams{
+			TenantID:  "tenant",
+			Status:    "success",
+			StartTime: start,
+			EndTime:   end,
+			Limit:     10,
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*ReconciliationParams)
+		wantErr error
+	}{
+		{
+			name: "missing-range-and-lookback",
+			mutate: func(params *ReconciliationParams) {
+				params.StartTime = time.Time{}
+				params.EndTime = time.Time{}
+			},
+			wantErr: walletstore.ErrMissingStartTime,
+		},
+		{
+			name:    "missing-start",
+			mutate:  func(params *ReconciliationParams) { params.StartTime = time.Time{} },
+			wantErr: walletstore.ErrMissingStartTime,
+		},
+		{
+			name:    "missing-end",
+			mutate:  func(params *ReconciliationParams) { params.EndTime = time.Time{} },
+			wantErr: walletstore.ErrMissingEndTime,
+		},
+		{
+			name:    "invalid-range",
+			mutate:  func(params *ReconciliationParams) { params.StartTime = params.EndTime.Add(time.Hour) },
+			wantErr: walletstore.ErrInvalidTimeRange,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := baseParams()
+			tc.mutate(&params)
+			executeWorkflowExpectError(t, Reconciliation, params, tc.wantErr)
+		})
+	}
+}
+
 func executeWorkflowExpectError(t *testing.T, workflow any, params any, wantErr error) {
 	t.Helper()
 	var suite testsuite.WorkflowTestSuite

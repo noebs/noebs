@@ -1506,13 +1506,12 @@ func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
 	}
 	startTime := params.StartTime
 	endTime := params.EndTime
-	if startTime.IsZero() || endTime.IsZero() {
-		lookback := params.LookbackHours
-		if lookback <= 0 {
-			lookback = 24
+	if startTime.IsZero() && endTime.IsZero() {
+		if params.LookbackHours <= 0 {
+			return walletstore.ErrMissingStartTime
 		}
 		endTime = workflow.Now(ctx)
-		startTime = endTime.Add(time.Duration(-lookback) * time.Hour)
+		startTime = endTime.Add(time.Duration(-params.LookbackHours) * time.Hour)
 	}
 	if startTime.IsZero() {
 		return walletstore.ErrMissingStartTime
