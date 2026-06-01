@@ -632,6 +632,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Wallet workflow entrypoints now validate and normalize tenant IDs before parsing IDs or executing activities, closing the direct Temporal-start gap below the gRPC boundary.
+- `go test -count=1 -v ./wallet/workflow -run 'TestWalletWorkflowsValidateTenantBeforeActivities'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./wallet/validation`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

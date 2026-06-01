@@ -137,6 +137,12 @@ type PSPStatusPollerParams struct {
 }
 
 func Deposit(ctx workflow.Context, params DepositParams) error {
+	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
+	if err != nil {
+		return err
+	}
+	params.TenantID = tenantID
+
 	walletID, err := uuid.Parse(params.WalletID)
 	if err != nil {
 		return err
@@ -407,9 +413,11 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 }
 
 func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
-	if params.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
+	if err != nil {
+		return err
 	}
+	params.TenantID = tenantID
 	if params.WalletID == "" {
 		return walletstore.ErrMissingWalletID
 	}
@@ -990,6 +998,12 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 }
 
 func P2P(ctx workflow.Context, params P2PParams) error {
+	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
+	if err != nil {
+		return err
+	}
+	params.TenantID = tenantID
+
 	fromID, err := uuid.Parse(params.FromWalletID)
 	if err != nil {
 		return err
@@ -1139,9 +1153,11 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 }
 
 func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
-	if params.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
+	if err != nil {
+		return err
 	}
+	params.TenantID = tenantID
 	if params.IdempotencyKey == "" {
 		return walletstore.ErrMissingIdempotencyKey
 	}
@@ -1430,9 +1446,11 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 }
 
 func Reconciliation(ctx workflow.Context, params ReconciliationParams) error {
-	if params.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
+	if err != nil {
+		return err
 	}
+	params.TenantID = tenantID
 	if params.Status == "" {
 		return walletstore.ErrMissingStatus
 	}
@@ -1540,9 +1558,11 @@ func referenceTypeForPSPDirection(direction string) string {
 }
 
 func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
-	if params.TenantID == "" {
-		return walletstore.ErrMissingTenantID
+	tenantID, err := walletstore.ValidateTenantID(params.TenantID)
+	if err != nil {
+		return err
 	}
+	params.TenantID = tenantID
 	if params.Limit <= 0 {
 		return walletstore.ErrInvalidLimit
 	}

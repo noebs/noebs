@@ -673,6 +673,11 @@ Last updated: 2026-05-31
     - Fix: carry the EBS HTTP status and parsed response into `ebs_fields.CallError` on `GetIpinPubKey` failures while preserving record errors with `errors.Join`.
     - Tests: `go test -count=1 -v ./consumer -run 'TestGetIpinPubKeyReturnsTypedEBSCallError|TestIPINFlowsPropagateUUIDGenerationErrors'`; `go test -count=1 ./consumer ./consumer/handler ./ebs_fields`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+135. Wallet workflow entrypoints accepted invalid tenant IDs below the boundary.
+    - Evidence: the gRPC boundary rejects missing/reserved tenants before Temporal starts, but the wallet workflows themselves either skipped tenant validation entirely (`Deposit`, `P2P`) or only checked `TenantID == ""` (`Withdrawal`, `ManualTransfer`, `Reconciliation`, `PSPStatusPoller`). Direct Temporal starts could therefore carry blank whitespace or reserved `default` tenants into UUID parsing or activity/store calls.
+    - Fix: validate and normalize tenant IDs with `walletstore.ValidateTenantID` at the top of every wallet workflow entrypoint before parsing IDs, deriving defaults, or executing activities.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestWalletWorkflowsValidateTenantBeforeActivities'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.
