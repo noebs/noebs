@@ -678,6 +678,11 @@ Last updated: 2026-05-31
     - Fix: validate and normalize tenant IDs with `walletstore.ValidateTenantID` at the top of every wallet workflow entrypoint before parsing IDs, deriving defaults, or executing activities.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestWalletWorkflowsValidateTenantBeforeActivities'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+136. Deposit and P2P workflows trusted boundary-only request validation.
+    - Evidence: `Deposit` could start a PSP lookup before checking client reference or owner identity, and `P2P` parsed wallets and could run PIN/2FA activities before rejecting missing idempotency, reference, currency, owners, or auth factors. A direct Temporal start could therefore perform lower-layer work with malformed workflow params, and P2P could persist ledger rows with no reference ID when idempotency alone was supplied.
+    - Fix: reject malformed deposit and P2P workflow params at the workflow entrypoint before UUID parsing or any activity execution, requiring explicit idempotency and reference IDs in P2P instead of repeating boundary defaults.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(DepositWorkflowValidatesRequestBeforeActivities|P2PWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./wallet/validation`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

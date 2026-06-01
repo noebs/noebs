@@ -126,23 +126,189 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 	for _, tc := range cases {
 		for _, tenantCase := range tenantCases {
 			t.Run(tc.name+"/"+tenantCase.name, func(t *testing.T) {
-				var suite testsuite.WorkflowTestSuite
-				env := suite.NewTestWorkflowEnvironment()
-				env.RegisterWorkflow(tc.workflow)
-
-				env.ExecuteWorkflow(tc.workflow, tc.params(tenantCase.tenantID))
-
-				if !env.IsWorkflowCompleted() {
-					t.Fatal("expected workflow to complete")
-				}
-				err := env.GetWorkflowError()
-				if err == nil {
-					t.Fatalf("workflow error = nil, want %v", tenantCase.wantErr)
-				}
-				if !strings.Contains(err.Error(), tenantCase.wantErr.Error()) {
-					t.Fatalf("workflow error = %v, want %v", err, tenantCase.wantErr)
-				}
+				executeWorkflowExpectError(t, tc.workflow, tc.params(tenantCase.tenantID), tenantCase.wantErr)
 			})
 		}
+	}
+}
+
+func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
+	baseParams := func() DepositParams {
+		return DepositParams{
+			TenantID:        "tenant",
+			ClientReference: "deposit-ref",
+			WalletID:        uuid.NewString(),
+			OwnerType:       "user",
+			OwnerID:         "42",
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*DepositParams)
+		wantErr error
+	}{
+		{
+			name:    "missing-client-reference",
+			mutate:  func(params *DepositParams) { params.ClientReference = "" },
+			wantErr: walletstore.ErrMissingClientReference,
+		},
+		{
+			name:    "missing-wallet-id",
+			mutate:  func(params *DepositParams) { params.WalletID = "" },
+			wantErr: walletstore.ErrMissingWalletID,
+		},
+		{
+			name:    "invalid-wallet-id",
+			mutate:  func(params *DepositParams) { params.WalletID = "not-a-uuid" },
+			wantErr: walletstore.ErrMissingWalletID,
+		},
+		{
+			name:    "missing-owner-type",
+			mutate:  func(params *DepositParams) { params.OwnerType = "" },
+			wantErr: walletstore.ErrMissingOwnerType,
+		},
+		{
+			name:    "missing-owner-id",
+			mutate:  func(params *DepositParams) { params.OwnerID = "" },
+			wantErr: walletstore.ErrMissingOwnerID,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := baseParams()
+			tc.mutate(&params)
+			executeWorkflowExpectError(t, Deposit, params, tc.wantErr)
+		})
+	}
+}
+
+func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
+	baseParams := func() P2PParams {
+		return P2PParams{
+			TenantID:       "tenant",
+			IdempotencyKey: "p2p-idem",
+			ReferenceID:    "p2p-ref",
+			Currency:       "USD",
+			FromWalletID:   uuid.NewString(),
+			ToWalletID:     uuid.NewString(),
+			Amount:         100,
+			UserID:         42,
+			WalletPIN:      "1234",
+			TwoFACode:      "123456",
+			FromOwnerType:  "user",
+			FromOwnerID:    "1",
+			ToOwnerType:    "user",
+			ToOwnerID:      "2",
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*P2PParams)
+		wantErr error
+	}{
+		{
+			name:    "missing-idempotency-key",
+			mutate:  func(params *P2PParams) { params.IdempotencyKey = "" },
+			wantErr: walletstore.ErrMissingIdempotencyKey,
+		},
+		{
+			name:    "missing-reference-id",
+			mutate:  func(params *P2PParams) { params.ReferenceID = "" },
+			wantErr: walletstore.ErrMissingReferenceID,
+		},
+		{
+			name:    "missing-currency",
+			mutate:  func(params *P2PParams) { params.Currency = "" },
+			wantErr: walletstore.ErrMissingCurrency,
+		},
+		{
+			name:    "missing-from-wallet-id",
+			mutate:  func(params *P2PParams) { params.FromWalletID = "" },
+			wantErr: walletstore.ErrMissingWalletID,
+		},
+		{
+			name:    "invalid-to-wallet-id",
+			mutate:  func(params *P2PParams) { params.ToWalletID = "not-a-uuid" },
+			wantErr: walletstore.ErrMissingWalletID,
+		},
+		{
+			name: "same-wallet",
+			mutate: func(params *P2PParams) {
+				walletID := uuid.NewString()
+				params.FromWalletID = walletID
+				params.ToWalletID = walletID
+			},
+			wantErr: walletstore.ErrInvalidWalletPair,
+		},
+		{
+			name:    "invalid-amount",
+			mutate:  func(params *P2PParams) { params.Amount = 0 },
+			wantErr: walletstore.ErrInvalidAmount,
+		},
+		{
+			name:    "missing-from-owner-type",
+			mutate:  func(params *P2PParams) { params.FromOwnerType = "" },
+			wantErr: walletstore.ErrMissingOwnerType,
+		},
+		{
+			name:    "missing-to-owner-id",
+			mutate:  func(params *P2PParams) { params.ToOwnerID = "" },
+			wantErr: walletstore.ErrMissingOwnerID,
+		},
+		{
+			name: "missing-pin",
+			mutate: func(params *P2PParams) {
+				params.RequirePIN = true
+				params.WalletPIN = ""
+			},
+			wantErr: walletstore.ErrMissingWalletPIN,
+		},
+		{
+			name: "missing-2fa-user",
+			mutate: func(params *P2PParams) {
+				params.Require2FA = true
+				params.UserID = 0
+			},
+			wantErr: walletstore.ErrInvalidUserID,
+		},
+		{
+			name: "missing-2fa-code",
+			mutate: func(params *P2PParams) {
+				params.Require2FA = true
+				params.TwoFACode = ""
+			},
+			wantErr: walletstore.ErrMissingTwoFACode,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := baseParams()
+			tc.mutate(&params)
+			executeWorkflowExpectError(t, P2P, params, tc.wantErr)
+		})
+	}
+}
+
+func executeWorkflowExpectError(t *testing.T, workflow any, params any, wantErr error) {
+	t.Helper()
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(workflow)
+
+	env.ExecuteWorkflow(workflow, params)
+
+	if !env.IsWorkflowCompleted() {
+		t.Fatal("expected workflow to complete")
+	}
+	err := env.GetWorkflowError()
+	if err == nil {
+		t.Fatalf("workflow error = nil, want %v", wantErr)
+	}
+	if !strings.Contains(err.Error(), wantErr.Error()) {
+		t.Fatalf("workflow error = %v, want %v", err, wantErr)
 	}
 }

@@ -142,10 +142,22 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		return err
 	}
 	params.TenantID = tenantID
+	if params.ClientReference == "" {
+		return walletstore.ErrMissingClientReference
+	}
+	if params.WalletID == "" {
+		return walletstore.ErrMissingWalletID
+	}
+	if params.OwnerType == "" {
+		return walletstore.ErrMissingOwnerType
+	}
+	if params.OwnerID == "" {
+		return walletstore.ErrMissingOwnerID
+	}
 
 	walletID, err := uuid.Parse(params.WalletID)
 	if err != nil {
-		return err
+		return walletstore.ErrMissingWalletID
 	}
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -1003,14 +1015,49 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 		return err
 	}
 	params.TenantID = tenantID
+	if params.IdempotencyKey == "" {
+		return walletstore.ErrMissingIdempotencyKey
+	}
+	if params.ReferenceID == "" {
+		return walletstore.ErrMissingReferenceID
+	}
+	if params.Currency == "" {
+		return walletstore.ErrMissingCurrency
+	}
+	if params.FromWalletID == "" || params.ToWalletID == "" {
+		return walletstore.ErrMissingWalletID
+	}
+	if params.Amount <= 0 {
+		return walletstore.ErrInvalidAmount
+	}
+	if params.FromOwnerType == "" || params.ToOwnerType == "" {
+		return walletstore.ErrMissingOwnerType
+	}
+	if params.FromOwnerID == "" || params.ToOwnerID == "" {
+		return walletstore.ErrMissingOwnerID
+	}
+	if params.RequirePIN && params.WalletPIN == "" {
+		return walletstore.ErrMissingWalletPIN
+	}
+	if params.Require2FA {
+		if params.UserID <= 0 {
+			return walletstore.ErrInvalidUserID
+		}
+		if params.TwoFACode == "" {
+			return walletstore.ErrMissingTwoFACode
+		}
+	}
 
 	fromID, err := uuid.Parse(params.FromWalletID)
 	if err != nil {
-		return err
+		return walletstore.ErrMissingWalletID
 	}
 	toID, err := uuid.Parse(params.ToWalletID)
 	if err != nil {
-		return err
+		return walletstore.ErrMissingWalletID
+	}
+	if fromID == toID {
+		return walletstore.ErrInvalidWalletPair
 	}
 	info := workflow.GetInfo(ctx)
 	workflowID := ""

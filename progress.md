@@ -638,6 +638,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Deposit and P2P workflows now reject malformed request params before parsing IDs or executing activities, including explicit P2P idempotency/reference requirements and PIN/2FA prerequisites.
+- `go test -count=1 -v ./wallet/workflow -run 'Test(DepositWorkflowValidatesRequestBeforeActivities|P2PWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./wallet/validation`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
