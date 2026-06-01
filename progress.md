@@ -650,6 +650,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- PSP status poller now requires an explicit positive poll interval before listing transactions and uses it consistently for next poll and lock expiry.
+- `go test -count=1 -v ./wallet/workflow ./wallet/grpc -run 'Test(PSPStatusPollerRequiresPollIntervalBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities|MapErrorMapsPSPValidationFailures)'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./cli`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

@@ -1612,6 +1612,9 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 	if params.Limit <= 0 {
 		return walletstore.ErrInvalidLimit
 	}
+	if params.PollIntervalSeconds <= 0 {
+		return walletstore.ErrMissingStatusTimeout
+	}
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
@@ -1624,14 +1627,8 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 	}
 
 	now := workflow.Now(ctx)
-	nextPoll := sql.NullTime{}
-	if params.PollIntervalSeconds > 0 {
-		nextPoll = sql.NullTime{Time: now.Add(time.Duration(params.PollIntervalSeconds) * time.Second), Valid: true}
-	}
-	lockExpiry := now.Add(time.Minute)
-	if params.PollIntervalSeconds > 0 {
-		lockExpiry = now.Add(time.Duration(params.PollIntervalSeconds) * time.Second)
-	}
+	nextPoll := sql.NullTime{Time: now.Add(time.Duration(params.PollIntervalSeconds) * time.Second), Valid: true}
+	lockExpiry := now.Add(time.Duration(params.PollIntervalSeconds) * time.Second)
 
 	for _, txn := range txns {
 		if !txn.PSPTransactionID.Valid {

@@ -688,6 +688,11 @@ Last updated: 2026-05-31
     - Fix: require either a complete explicit `StartTime`/`EndTime` range or an explicit positive `LookbackHours`; partial ranges now fail with the matching typed time error and no default is created inside the workflow.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestReconciliationWorkflowRequiresExplicitRangeOrLookback'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+138. PSP status poller silently accepted missing poll intervals.
+    - Evidence: runtime config rejects nonpositive `wallet_psp_poller_interval_seconds`, but the workflow tolerated `PollIntervalSeconds <= 0` by writing no `next_poll_at` and using a one-minute lock expiry. Direct workflow starts could therefore poll and lock PSP transactions on an implicit cadence instead of failing validation.
+    - Fix: require a positive poll interval in `PSPStatusPoller` before listing transactions, use that same explicit interval for `next_poll_at` and lock expiry, and map the typed timeout error through the wallet gRPC error contract.
+    - Tests: `go test -count=1 -v ./wallet/workflow ./wallet/grpc -run 'Test(PSPStatusPollerRequiresPollIntervalBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities|MapErrorMapsPSPValidationFailures)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

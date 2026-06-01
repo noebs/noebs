@@ -106,8 +106,9 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 			workflow: PSPStatusPoller,
 			params: func(tenantID string) any {
 				return PSPStatusPollerParams{
-					TenantID: tenantID,
-					Limit:    10,
+					TenantID:            tenantID,
+					Limit:               10,
+					PollIntervalSeconds: 300,
 				}
 			},
 		},
@@ -343,6 +344,13 @@ func TestReconciliationWorkflowRequiresExplicitRangeOrLookback(t *testing.T) {
 			executeWorkflowExpectError(t, Reconciliation, params, tc.wantErr)
 		})
 	}
+}
+
+func TestPSPStatusPollerRequiresPollIntervalBeforeActivities(t *testing.T) {
+	executeWorkflowExpectError(t, PSPStatusPoller, PSPStatusPollerParams{
+		TenantID: "tenant",
+		Limit:    10,
+	}, walletstore.ErrMissingStatusTimeout)
 }
 
 func executeWorkflowExpectError(t *testing.T, workflow any, params any, wantErr error) {
