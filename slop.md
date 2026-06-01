@@ -693,6 +693,11 @@ Last updated: 2026-05-31
     - Fix: require a positive poll interval in `PSPStatusPoller` before listing transactions, use that same explicit interval for `next_poll_at` and lock expiry, and map the typed timeout error through the wallet gRPC error contract.
     - Tests: `go test -count=1 -v ./wallet/workflow ./wallet/grpc -run 'Test(PSPStatusPollerRequiresPollIntervalBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities|MapErrorMapsPSPValidationFailures)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/activity ./wallet/store ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+139. Deposit verification could persist success before validating settlement money.
+    - Evidence: after provider deposit verification, the workflow wrote PSP status updates before validating that a `success` response carried a positive settlement amount and explicit currency. A provider success with zero amount or missing currency could therefore mark the PSP transaction successful, then fail later during amount resolution before ledger crediting.
+    - Fix: validate successful deposit statuses for positive amount and currency before any PSP status update or final settlement work.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestDepositRejectsInvalidSuccessfulProviderStatusBeforeStoreUpdate|TestStatusFromPSPTransaction'`; `go test -count=1 ./wallet/workflow ./wallet/validation ./wallet/activity ./wallet/store ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

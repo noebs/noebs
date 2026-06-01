@@ -1,12 +1,19 @@
 package workflow
 
 import (
+	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
+	walletactivity "github.com/adonese/noebs/wallet/activity"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	walletvalidation "github.com/adonese/noebs/wallet/validation"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
+	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 )
@@ -82,6 +89,106 @@ func TestProviderStatusConversionsDoNotFallBackToStoredStatus(t *testing.T) {
 	if payout.ProviderTxID != "provider-payout-id" {
 		t.Fatalf("payout provider id = %q", payout.ProviderTxID)
 	}
+}
+
+func TestDepositRejectsInvalidSuccessfulProviderStatusBeforeStoreUpdate(t *testing.T) {
+	cases := []struct {
+		name    string
+		status  walletpsp.DepositVerification
+		wantErr error
+	}{
+		{
+			name: "zero-amount",
+			status: walletpsp.DepositVerification{
+				ProviderTxID: "provider-deposit-id",
+				Status:       "success",
+				Amount:       0,
+				Currency:     "AED",
+			},
+			wantErr: walletstore.ErrInvalidAmount,
+		},
+		{
+			name: "missing-currency",
+			status: walletpsp.DepositVerification{
+				ProviderTxID: "provider-deposit-id",
+				Status:       "success",
+				Amount:       2500,
+				Currency:     "",
+			},
+			wantErr: walletstore.ErrMissingCurrency,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var suite testsuite.WorkflowTestSuite
+			env := suite.NewTestWorkflowEnvironment()
+			env.RegisterWorkflow(Deposit)
+			registerDepositStatusValidationTestActivities(env)
+
+			tenantID := "tenant"
+			clientReference := "deposit-ref"
+			walletID := uuid.New()
+			env.OnActivity(string(walletactivity.ActivityGetPSPTransactionByReference), mock.Anything, tenantID, clientReference).
+				Return(&walletstore.PSPTransaction{
+					ID:               10,
+					TenantID:         tenantID,
+					PSPProvider:      "pay",
+					PSPTransactionID: sql.NullString{String: "provider-deposit-id", Valid: true},
+					ClientReference:  clientReference,
+					Direction:        "inbound",
+					Amount:           2500,
+					Currency:         "AED",
+					Status:           "pending",
+				}, nil)
+			env.OnActivity(string(walletactivity.ActivityValidateDeposit), mock.Anything, mock.Anything).
+				Return(&walletvalidation.DepositValidationResult{
+					WalletID:  walletID,
+					Currency:  "AED",
+					Amount:    2500,
+					NetAmount: 2500,
+				}, nil)
+			env.OnActivity(string(walletactivity.ActivityVerifyDeposit), mock.Anything, mock.Anything).
+				Return(&tc.status, nil)
+
+			env.ExecuteWorkflow(Deposit, DepositParams{
+				TenantID:        tenantID,
+				ProviderCode:    "pay",
+				ClientReference: clientReference,
+				WalletID:        walletID.String(),
+				OwnerType:       "user",
+				OwnerID:         "42",
+			})
+
+			if !env.IsWorkflowCompleted() {
+				t.Fatal("expected workflow to complete")
+			}
+			err := env.GetWorkflowError()
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr.Error()) {
+				t.Fatalf("workflow error = %v, want %v", err, tc.wantErr)
+			}
+			env.AssertExpectations(t)
+		})
+	}
+}
+
+func registerDepositStatusValidationTestActivities(env *testsuite.TestWorkflowEnvironment) {
+	env.RegisterActivityWithOptions(
+		func(context.Context, string, string) (*walletstore.PSPTransaction, error) { return nil, nil },
+		activity.RegisterOptions{Name: string(walletactivity.ActivityGetPSPTransactionByReference)},
+	)
+	env.RegisterActivityWithOptions(
+		func(context.Context, walletvalidation.DepositValidationRequest) (*walletvalidation.DepositValidationResult, error) {
+			return nil, nil
+		},
+		activity.RegisterOptions{Name: string(walletactivity.ActivityValidateDeposit)},
+	)
+	env.RegisterActivityWithOptions(
+		func(context.Context, walletactivity.VerifyDepositParams) (*walletpsp.DepositVerification, error) {
+			return nil, nil
+		},
+		activity.RegisterOptions{Name: string(walletactivity.ActivityVerifyDeposit)},
+	)
 }
 
 func TestAwaitTerminalPSPStatusReceivesSignal(t *testing.T) {

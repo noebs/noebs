@@ -213,6 +213,9 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 			return err
 		}
 		statusResult = statusFromDepositVerification(result)
+		if err := validateSuccessfulDepositStatus(statusResult); err != nil {
+			return err
+		}
 		if err := updatePSPTransactionFromStatus(ctx, params.TenantID, params.ClientReference, statusResult); err != nil {
 			return err
 		}
@@ -226,6 +229,9 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	}
 	finalStatus, err := awaitTerminalPSPStatus(ctx, statusResult)
 	if err != nil {
+		return err
+	}
+	if err := validateSuccessfulDepositStatus(finalStatus); err != nil {
 		return err
 	}
 	if finalStatus.Status != statusResult.Status || finalStatus.ProviderTxID != statusResult.ProviderTxID || finalStatus.RawResponse != nil {
@@ -1721,6 +1727,19 @@ func statusFromDepositVerification(result walletpsp.DepositVerification) walletp
 		Status:       normalizePSPStatus(result.Status),
 		RawResponse:  result.Metadata,
 	}
+}
+
+func validateSuccessfulDepositStatus(status walletpsp.TxStatus) error {
+	if status.Status != "success" {
+		return nil
+	}
+	if status.Amount <= 0 {
+		return walletstore.ErrInvalidAmount
+	}
+	if status.Currency == "" {
+		return walletstore.ErrMissingCurrency
+	}
+	return nil
 }
 
 func statusFromPayoutResult(result walletpsp.PayoutResult) walletpsp.TxStatus {

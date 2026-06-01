@@ -656,6 +656,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Deposit verification now validates successful provider status money fields before writing a PSP status update, preventing success-without-settlement-money state.
+- `go test -count=1 -v ./wallet/workflow -run 'TestDepositRejectsInvalidSuccessfulProviderStatusBeforeStoreUpdate|TestStatusFromPSPTransaction'`
+- `go test -count=1 ./wallet/workflow ./wallet/validation ./wallet/activity ./wallet/store ./wallet/grpc`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
