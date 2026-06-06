@@ -708,6 +708,11 @@ Last updated: 2026-05-31
     - Fix: require explicit provider codes at the workflow entrypoint before loading PSP transactions or resolving destination/funding-source data, and keep provider mismatch checks without fallback assignment.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(DepositWorkflowValidatesRequestBeforeActivities|WithdrawalWorkflowRequiresProviderCodeBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities|WithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/validation ./wallet/activity ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+142. Wallet validation treated whitespace-only PSP fields as present.
+    - Evidence: PSP workflow and validation request checks used `value == ""` for required text, while later PSP config and amount resolution paths trimmed or compared those values differently. Direct workflow starts or service calls could therefore load PSP transactions, schedule auth activities, or hit FX rate lookup with whitespace-only provider, reference, currency, owner, PIN, or 2FA fields instead of failing at the boundary.
+    - Fix: reject whitespace-only required text at the deposit/withdrawal workflow entrypoints and wallet validation service boundary without mutating accepted values, and require PSP amount currencies before any conversion/rate lookup work.
+    - Tests: `go test -count=1 -v ./wallet/validation ./wallet/workflow -run 'Test(ValidateP2PRequest|ValidateDepositRequest|ValidateWithdrawalRequest|ResolvePSPDepositAmountsRejectsBlankCurrenciesBeforeRateLookup|DepositWorkflowValidatesRequestBeforeActivities|WithdrawalWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/validation ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

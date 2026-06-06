@@ -102,10 +102,10 @@ func ValidateP2PRequest(req P2PValidationRequest) error {
 	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
 		return err
 	}
-	if req.TransactionType == "" {
+	if missingRequiredText(req.TransactionType) {
 		return walletstore.ErrMissingTransactionType
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
 	if req.FromWalletID == uuid.Nil || req.ToWalletID == uuid.Nil {
@@ -124,13 +124,13 @@ func ValidateDepositRequest(req DepositValidationRequest) error {
 	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
 		return err
 	}
-	if req.TransactionType == "" {
+	if missingRequiredText(req.TransactionType) {
 		return walletstore.ErrMissingTransactionType
 	}
-	if req.ProviderCode == "" {
+	if missingRequiredText(req.ProviderCode) {
 		return walletstore.ErrMissingProviderCode
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
 	if req.WalletID == uuid.Nil {
@@ -146,13 +146,13 @@ func ValidateWithdrawalRequest(req WithdrawalValidationRequest) error {
 	if _, err := walletstore.ValidateTenantID(req.TenantID); err != nil {
 		return err
 	}
-	if req.TransactionType == "" {
+	if missingRequiredText(req.TransactionType) {
 		return walletstore.ErrMissingTransactionType
 	}
-	if req.ProviderCode == "" {
+	if missingRequiredText(req.ProviderCode) {
 		return walletstore.ErrMissingProviderCode
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
 	if req.WalletID == uuid.Nil {
@@ -490,4 +490,8 @@ func ValidatePSPConfigAmount(cfg *walletstore.PSPConfig, amount int64) error {
 		return walletstore.ErrInvalidAmount
 	}
 	return nil
+}
+
+func missingRequiredText(value string) bool {
+	return strings.TrimSpace(value) == ""
 }

@@ -674,6 +674,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Wallet PSP workflows and validation services now reject whitespace-only required provider/reference/currency/auth text before PSP transaction loads, auth activities, or FX rate lookup.
+- `go test -count=1 -v ./wallet/validation ./wallet/workflow -run 'Test(ValidateP2PRequest|ValidateDepositRequest|ValidateWithdrawalRequest|ResolvePSPDepositAmountsRejectsBlankCurrenciesBeforeRateLookup|DepositWorkflowValidatesRequestBeforeActivities|WithdrawalWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`
+- `go test -count=1 ./wallet/validation ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

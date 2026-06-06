@@ -158,8 +158,18 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			wantErr: walletstore.ErrMissingClientReference,
 		},
 		{
+			name:    "blank-client-reference",
+			mutate:  func(params *DepositParams) { params.ClientReference = " \t " },
+			wantErr: walletstore.ErrMissingClientReference,
+		},
+		{
 			name:    "missing-provider-code",
 			mutate:  func(params *DepositParams) { params.ProviderCode = "" },
+			wantErr: walletstore.ErrMissingProviderCode,
+		},
+		{
+			name:    "blank-provider-code",
+			mutate:  func(params *DepositParams) { params.ProviderCode = " \t " },
 			wantErr: walletstore.ErrMissingProviderCode,
 		},
 		{
@@ -178,8 +188,18 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			wantErr: walletstore.ErrMissingOwnerType,
 		},
 		{
+			name:    "blank-owner-type",
+			mutate:  func(params *DepositParams) { params.OwnerType = " \t " },
+			wantErr: walletstore.ErrMissingOwnerType,
+		},
+		{
 			name:    "missing-owner-id",
 			mutate:  func(params *DepositParams) { params.OwnerID = "" },
+			wantErr: walletstore.ErrMissingOwnerID,
+		},
+		{
+			name:    "blank-owner-id",
+			mutate:  func(params *DepositParams) { params.OwnerID = " \t " },
 			wantErr: walletstore.ErrMissingOwnerID,
 		},
 	}
@@ -193,20 +213,75 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	}
 }
 
-func TestWithdrawalWorkflowRequiresProviderCodeBeforeActivities(t *testing.T) {
-	executeWorkflowExpectError(t, Withdrawal, WithdrawalParams{
-		TenantID:          "tenant",
-		WalletID:          uuid.NewString(),
-		OwnerType:         "user",
-		OwnerID:           "42",
-		DestinationID:     1,
-		HoldExpirySeconds: 60,
-		Request: walletpsp.PayoutRequest{
-			ClientReference: "withdrawal-ref",
-			Amount:          100,
-			Currency:        "USD",
+func TestWithdrawalWorkflowValidatesRequestBeforeActivities(t *testing.T) {
+	baseParams := func() WithdrawalParams {
+		return WithdrawalParams{
+			TenantID:          "tenant",
+			ProviderCode:      "pay",
+			WalletID:          uuid.NewString(),
+			OwnerType:         "user",
+			OwnerID:           "42",
+			DestinationID:     1,
+			HoldExpirySeconds: 60,
+			Request: walletpsp.PayoutRequest{
+				ClientReference: "withdrawal-ref",
+				Amount:          100,
+				Currency:        "USD",
+			},
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*WithdrawalParams)
+		wantErr error
+	}{
+		{
+			name:    "missing-provider-code",
+			mutate:  func(params *WithdrawalParams) { params.ProviderCode = "" },
+			wantErr: walletstore.ErrMissingProviderCode,
 		},
-	}, walletstore.ErrMissingProviderCode)
+		{
+			name:    "blank-provider-code",
+			mutate:  func(params *WithdrawalParams) { params.ProviderCode = " \t " },
+			wantErr: walletstore.ErrMissingProviderCode,
+		},
+		{
+			name:    "blank-client-reference",
+			mutate:  func(params *WithdrawalParams) { params.Request.ClientReference = " \t " },
+			wantErr: walletstore.ErrMissingClientReference,
+		},
+		{
+			name:    "blank-currency",
+			mutate:  func(params *WithdrawalParams) { params.Request.Currency = " \t " },
+			wantErr: walletstore.ErrMissingCurrency,
+		},
+		{
+			name: "blank-pin",
+			mutate: func(params *WithdrawalParams) {
+				params.RequirePIN = true
+				params.WalletPIN = " \t "
+			},
+			wantErr: walletstore.ErrMissingWalletPIN,
+		},
+		{
+			name: "blank-2fa-code",
+			mutate: func(params *WithdrawalParams) {
+				params.Require2FA = true
+				params.UserID = 42
+				params.TwoFACode = " \t "
+			},
+			wantErr: walletstore.ErrMissingTwoFACode,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := baseParams()
+			tc.mutate(&params)
+			executeWorkflowExpectError(t, Withdrawal, params, tc.wantErr)
+		})
+	}
 }
 
 func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {

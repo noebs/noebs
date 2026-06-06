@@ -45,13 +45,13 @@ func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountRes
 	if req.SettlementAmount <= 0 {
 		return nil, walletstore.ErrInvalidAmount
 	}
-	if req.RequestedCurrency == "" {
+	if missingRequiredText(req.RequestedCurrency) {
 		return nil, ErrMissingRequestedCurrency
 	}
-	if req.SettlementCurrency == "" {
+	if missingRequiredText(req.SettlementCurrency) {
 		return nil, ErrMissingSettlementCurrency
 	}
-	if req.WalletCurrency == "" {
+	if missingRequiredText(req.WalletCurrency) {
 		return nil, ErrMissingWalletCurrency
 	}
 

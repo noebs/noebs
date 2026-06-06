@@ -142,19 +142,19 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		return err
 	}
 	params.TenantID = tenantID
-	if params.ClientReference == "" {
+	if missingRequiredText(params.ClientReference) {
 		return walletstore.ErrMissingClientReference
 	}
-	if params.ProviderCode == "" {
+	if missingRequiredText(params.ProviderCode) {
 		return walletstore.ErrMissingProviderCode
 	}
-	if params.WalletID == "" {
+	if missingRequiredText(params.WalletID) {
 		return walletstore.ErrMissingWalletID
 	}
-	if params.OwnerType == "" {
+	if missingRequiredText(params.OwnerType) {
 		return walletstore.ErrMissingOwnerType
 	}
-	if params.OwnerID == "" {
+	if missingRequiredText(params.OwnerID) {
 		return walletstore.ErrMissingOwnerID
 	}
 
@@ -436,35 +436,35 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		return err
 	}
 	params.TenantID = tenantID
-	if params.WalletID == "" {
+	if missingRequiredText(params.WalletID) {
 		return walletstore.ErrMissingWalletID
 	}
-	if params.OwnerType == "" {
+	if missingRequiredText(params.OwnerType) {
 		return walletstore.ErrMissingOwnerType
 	}
-	if params.OwnerID == "" {
+	if missingRequiredText(params.OwnerID) {
 		return walletstore.ErrMissingOwnerID
 	}
-	if params.Request.ClientReference == "" {
+	if missingRequiredText(params.Request.ClientReference) {
 		return walletstore.ErrMissingClientReference
 	}
-	if params.ProviderCode == "" {
+	if missingRequiredText(params.ProviderCode) {
 		return walletstore.ErrMissingProviderCode
 	}
-	if params.Request.Currency == "" {
+	if missingRequiredText(params.Request.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
 	if params.Request.Amount <= 0 {
 		return walletstore.ErrInvalidAmount
 	}
-	if params.RequirePIN && params.WalletPIN == "" {
+	if params.RequirePIN && missingRequiredText(params.WalletPIN) {
 		return walletstore.ErrMissingWalletPIN
 	}
 	if params.Require2FA {
 		if params.UserID <= 0 {
 			return walletstore.ErrInvalidUserID
 		}
-		if params.TwoFACode == "" {
+		if missingRequiredText(params.TwoFACode) {
 			return walletstore.ErrMissingTwoFACode
 		}
 	}
@@ -2328,4 +2328,8 @@ func absInt64(value int64) int64 {
 		return -value
 	}
 	return value
+}
+
+func missingRequiredText(value string) bool {
+	return strings.TrimSpace(value) == ""
 }

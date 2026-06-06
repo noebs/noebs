@@ -28,7 +28,9 @@ func TestValidateP2PRequest(t *testing.T) {
 		{"missing-tenant", func(req *P2PValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
 		{"reserved-tenant", func(req *P2PValidationRequest) { req.TenantID = "default" }, walletstore.ErrInvalidTenantID},
 		{"missing-tx-type", func(req *P2PValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
+		{"blank-tx-type", func(req *P2PValidationRequest) { req.TransactionType = " \t " }, walletstore.ErrMissingTransactionType},
 		{"missing-currency", func(req *P2PValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
+		{"blank-currency", func(req *P2PValidationRequest) { req.Currency = " \t " }, walletstore.ErrMissingCurrency},
 		{"missing-wallet", func(req *P2PValidationRequest) { req.FromWalletID = uuid.Nil }, walletstore.ErrMissingWalletID},
 		{"same-wallet", func(req *P2PValidationRequest) { req.ToWalletID = req.FromWalletID }, walletstore.ErrInvalidWalletPair},
 		{"invalid-amount", func(req *P2PValidationRequest) { req.Amount = 0 }, walletstore.ErrInvalidAmount},
@@ -65,8 +67,11 @@ func TestValidateDepositRequest(t *testing.T) {
 		{"missing-tenant", func(req *DepositValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
 		{"reserved-tenant", func(req *DepositValidationRequest) { req.TenantID = "default" }, walletstore.ErrInvalidTenantID},
 		{"missing-tx-type", func(req *DepositValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
+		{"blank-tx-type", func(req *DepositValidationRequest) { req.TransactionType = " \t " }, walletstore.ErrMissingTransactionType},
 		{"missing-provider", func(req *DepositValidationRequest) { req.ProviderCode = "" }, walletstore.ErrMissingProviderCode},
+		{"blank-provider", func(req *DepositValidationRequest) { req.ProviderCode = " \t " }, walletstore.ErrMissingProviderCode},
 		{"missing-currency", func(req *DepositValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
+		{"blank-currency", func(req *DepositValidationRequest) { req.Currency = " \t " }, walletstore.ErrMissingCurrency},
 		{"missing-wallet", func(req *DepositValidationRequest) { req.WalletID = uuid.Nil }, walletstore.ErrMissingWalletID},
 		{"invalid-amount", func(req *DepositValidationRequest) { req.Amount = 0 }, walletstore.ErrInvalidAmount},
 	}
@@ -140,8 +145,11 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 		{"missing-tenant", func(req *WithdrawalValidationRequest) { req.TenantID = "" }, walletstore.ErrMissingTenantID},
 		{"reserved-tenant", func(req *WithdrawalValidationRequest) { req.TenantID = "default" }, walletstore.ErrInvalidTenantID},
 		{"missing-tx-type", func(req *WithdrawalValidationRequest) { req.TransactionType = "" }, walletstore.ErrMissingTransactionType},
+		{"blank-tx-type", func(req *WithdrawalValidationRequest) { req.TransactionType = " \t " }, walletstore.ErrMissingTransactionType},
 		{"missing-provider", func(req *WithdrawalValidationRequest) { req.ProviderCode = "" }, walletstore.ErrMissingProviderCode},
+		{"blank-provider", func(req *WithdrawalValidationRequest) { req.ProviderCode = " \t " }, walletstore.ErrMissingProviderCode},
 		{"missing-currency", func(req *WithdrawalValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
+		{"blank-currency", func(req *WithdrawalValidationRequest) { req.Currency = " \t " }, walletstore.ErrMissingCurrency},
 		{"missing-wallet", func(req *WithdrawalValidationRequest) { req.WalletID = uuid.Nil }, walletstore.ErrMissingWalletID},
 		{"invalid-amount", func(req *WithdrawalValidationRequest) { req.Amount = 0 }, walletstore.ErrInvalidAmount},
 	}
@@ -428,6 +436,57 @@ func TestResolvePSPDepositAmountsRejectsInvalidFX(t *testing.T) {
 				FXBaseCurrency:     "EUR",
 				FXQuoteCurrency:    "USD",
 			})
+			if err != tt.wantErr {
+				t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestResolvePSPDepositAmountsRejectsBlankCurrenciesBeforeRateLookup(t *testing.T) {
+	base := PSPAmountResolutionRequest{
+		TenantID:           "tenant",
+		RequestedAmount:    100,
+		RequestedCurrency:  "USD",
+		SettlementAmount:   100,
+		SettlementCurrency: "EUR",
+		WalletCurrency:     "USD",
+	}
+	cases := []struct {
+		name    string
+		mutate  func(req *PSPAmountResolutionRequest)
+		wantErr error
+	}{
+		{
+			name:    "requested-currency",
+			mutate:  func(req *PSPAmountResolutionRequest) { req.RequestedCurrency = " \t " },
+			wantErr: ErrMissingRequestedCurrency,
+		},
+		{
+			name:    "settlement-currency",
+			mutate:  func(req *PSPAmountResolutionRequest) { req.SettlementCurrency = " \t " },
+			wantErr: ErrMissingSettlementCurrency,
+		},
+		{
+			name:    "wallet-currency",
+			mutate:  func(req *PSPAmountResolutionRequest) { req.WalletCurrency = " \t " },
+			wantErr: ErrMissingWalletCurrency,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			req := base
+			tt.mutate(&req)
+			service := &Service{
+				Store: &walletstore.Store{},
+				RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+					t.Fatal("rate lookup should not run for missing currencies")
+					return decimal.Zero, nil
+				},
+			}
+
+			_, err := service.ResolvePSPDepositAmounts(t.Context(), req)
 			if err != tt.wantErr {
 				t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, tt.wantErr)
 			}
