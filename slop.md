@@ -713,6 +713,11 @@ Last updated: 2026-05-31
     - Fix: reject whitespace-only required text at the deposit/withdrawal workflow entrypoints and wallet validation service boundary without mutating accepted values, and require PSP amount currencies before any conversion/rate lookup work.
     - Tests: `go test -count=1 -v ./wallet/validation ./wallet/workflow -run 'Test(ValidateP2PRequest|ValidateDepositRequest|ValidateWithdrawalRequest|ResolvePSPDepositAmountsRejectsBlankCurrenciesBeforeRateLookup|DepositWorkflowValidatesRequestBeforeActivities|WithdrawalWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/validation ./wallet/workflow ./wallet/activity ./wallet/grpc ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+143. Wallet gRPC handlers accepted blank PSP request fields before persistence.
+    - Evidence: `RequestDeposit`, `RequestWithdrawal`, and `RequestP2PTransfer` checked required request strings with `== ""`. Whitespace-only client references, provider codes, currencies, auth factors, owners, or idempotency/reference values could therefore pass the API boundary, become workflow IDs or PSP transaction idempotency keys, or reach store/Temporal validation later with inconsistent errors.
+    - Fix: make gRPC required-text validation whitespace-aware, treat blank optional idempotency keys as omitted at the API boundary, and centralize P2P idempotency/reference resolution so at least one explicit nonblank value is required.
+    - Tests: `go test -count=1 -v ./wallet/grpc -run 'Test(TextOrDefaultTreatsBlankAsOmitted|ResolveIdempotencyAndReference|WorkflowRequestsRejectBlankRequiredTextBeforeTemporal|WorkflowRequestsValidateTenantBeforeTemporal|RequestWithdrawalStartsWorkflow|RequestP2PTransferStartsWorkflowAfterValidation)'` (container-backed start tests skipped because Docker is unavailable); `go test -count=1 ./wallet/grpc ./wallet/workflow ./wallet/validation ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

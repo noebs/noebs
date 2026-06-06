@@ -28,10 +28,10 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
-	if req.FromWalletId == "" || req.ToWalletId == "" {
+	if missingRequiredText(req.FromWalletId) || missingRequiredText(req.ToWalletId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
 	if req.FromWalletId == req.ToWalletId {
@@ -60,10 +60,10 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	req.UserId = userID
 	req.FromOwnerType = fromOwnerType
 	req.FromOwnerId = fromOwnerID
-	if req.FromOwnerType == "" || req.ToOwnerType == "" {
+	if missingRequiredText(req.FromOwnerType) || missingRequiredText(req.ToOwnerType) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerType.Error())
 	}
-	if req.FromOwnerId == "" || req.ToOwnerId == "" {
+	if missingRequiredText(req.FromOwnerId) || missingRequiredText(req.ToOwnerId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
 	fromWalletID, err := uuid.Parse(req.FromWalletId)
@@ -79,28 +79,21 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	}
 
 	requirePIN, require2FA := p2pRequirements(s.Service.Config, req.Amount)
-	if requirePIN && req.WalletPin == "" {
+	if requirePIN && missingRequiredText(req.WalletPin) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
 	}
 	if require2FA {
 		if req.UserId <= 0 {
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 		}
-		if req.TwoFaCode == "" {
+		if missingRequiredText(req.TwoFaCode) {
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
 		}
 	}
 
-	idempotencyKey := req.IdempotencyKey
-	referenceID := req.ReferenceId
-	if idempotencyKey == "" && referenceID == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingIdempotencyKey.Error())
-	}
-	if idempotencyKey == "" {
-		idempotencyKey = referenceID
-	}
-	if referenceID == "" {
-		referenceID = idempotencyKey
+	idempotencyKey, referenceID, err := resolveIdempotencyAndReference(req.IdempotencyKey, req.ReferenceId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if err := s.validateP2PTransferRequest(ctx, req, fromWalletID, toWalletID); err != nil {
 		return nil, mapError(err)

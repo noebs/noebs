@@ -680,6 +680,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Wallet gRPC PSP/P2P handlers now reject whitespace-only required text at the API boundary and treat blank idempotency fields as omitted before PSP persistence or workflow start.
+- `go test -count=1 -v ./wallet/grpc -run 'Test(TextOrDefaultTreatsBlankAsOmitted|ResolveIdempotencyAndReference|WorkflowRequestsRejectBlankRequiredTextBeforeTemporal|WorkflowRequestsValidateTenantBeforeTemporal|RequestWithdrawalStartsWorkflow|RequestP2PTransferStartsWorkflowAfterValidation)'` (container-backed start tests skipped because Docker is unavailable)
+- `go test -count=1 ./wallet/grpc ./wallet/workflow ./wallet/validation ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

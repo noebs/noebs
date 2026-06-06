@@ -35,16 +35,16 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.ClientReference == "" {
+	if missingRequiredText(req.ClientReference) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingClientReference.Error())
 	}
-	if req.ProviderCode == "" {
+	if missingRequiredText(req.ProviderCode) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingProviderCode.Error())
 	}
-	if req.WalletId == "" {
+	if missingRequiredText(req.WalletId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
 	if req.Amount <= 0 {
@@ -108,14 +108,14 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	}
 
 	requirePIN, require2FA, approvalRequired := withdrawalRequirements(s.Service.Config, req.Amount)
-	if requirePIN && req.WalletPin == "" {
+	if requirePIN && missingRequiredText(req.WalletPin) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
 	}
 	if require2FA {
 		if req.UserId <= 0 {
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 		}
-		if req.TwoFaCode == "" {
+		if missingRequiredText(req.TwoFaCode) {
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
 		}
 	}
@@ -136,10 +136,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	}
 
 	workflowID := withdrawalWorkflowID(req.TenantId, req.ClientReference)
-	idempotencyKey := req.IdempotencyKey
-	if idempotencyKey == "" {
-		idempotencyKey = req.ClientReference
-	}
+	idempotencyKey := textOrDefault(req.IdempotencyKey, req.ClientReference)
 	metadata := metadataFromStruct(req.Metadata)
 	rawRequest, err := withdrawalRawRequest(req, allowReturnToSource, requirePIN, require2FA, approvalRequired, metadata)
 	if err != nil {

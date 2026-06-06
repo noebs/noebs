@@ -30,19 +30,19 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.ClientReference == "" {
+	if missingRequiredText(req.ClientReference) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingClientReference.Error())
 	}
-	if req.ProviderCode == "" {
+	if missingRequiredText(req.ProviderCode) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingProviderCode.Error())
 	}
-	if req.WalletId == "" {
+	if missingRequiredText(req.WalletId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
 	walletID, err := uuid.Parse(req.WalletId)
@@ -83,10 +83,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	}
 
 	workflowID := depositWorkflowID(req.TenantId, req.ClientReference)
-	idempotencyKey := req.IdempotencyKey
-	if idempotencyKey == "" {
-		idempotencyKey = req.ClientReference
-	}
+	idempotencyKey := textOrDefault(req.IdempotencyKey, req.ClientReference)
 	feeAmount := sql.NullInt64{}
 	if req.FeeAmount != nil {
 		feeAmount = sql.NullInt64{Int64: req.GetFeeAmount(), Valid: true}

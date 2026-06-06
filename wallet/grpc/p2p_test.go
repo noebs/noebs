@@ -218,6 +218,9 @@ func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 			if params.Amount != 100 || params.Currency != "USD" {
 				t.Fatalf("unexpected P2P params: %+v", params)
 			}
+			if params.IdempotencyKey != "p2p-valid" || params.ReferenceID != "p2p-valid" {
+				t.Fatalf("workflow idempotency/reference = %q/%q, want p2p-valid/p2p-valid", params.IdempotencyKey, params.ReferenceID)
+			}
 			if params.FromWalletID != fromWallet.ID.String() || params.ToWalletID != toWallet.ID.String() {
 				t.Fatalf("workflow wallet params = %q/%q, want %q/%q", params.FromWalletID, params.ToWalletID, fromWallet.ID, toWallet.ID)
 			}
@@ -226,7 +229,8 @@ func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 
 	req := &walletv1.P2PTransferRequest{
 		TenantId:       tenantID,
-		IdempotencyKey: "p2p-valid",
+		IdempotencyKey: " \t ",
+		ReferenceId:    "p2p-valid",
 		Currency:       "USD",
 		FromWalletId:   fromWallet.ID.String(),
 		ToWalletId:     toWallet.ID.String(),

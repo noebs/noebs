@@ -103,3 +103,163 @@ func TestWorkflowRequestsValidateTenantBeforeTemporal(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
+	baseServer := func(cfg ebs_fields.NoebsConfig) *Server {
+		return NewServer(&wallet.Service{
+			Store:  &walletstore.Store{},
+			Config: cfg,
+		})
+	}
+	ctx := context.Background()
+
+	cases := []struct {
+		name    string
+		run     func() error
+		wantErr error
+	}{
+		{
+			name: "deposit-client-reference",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestDeposit(ctx, &walletv1.DepositRequest{
+					TenantId:        "tenant",
+					ClientReference: " \t ",
+					ProviderCode:    "noop",
+					WalletId:        uuid.NewString(),
+					OwnerType:       "user",
+					OwnerId:         "42",
+					Amount:          100,
+					Currency:        "USD",
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingClientReference,
+		},
+		{
+			name: "deposit-provider",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestDeposit(ctx, &walletv1.DepositRequest{
+					TenantId:        "tenant",
+					ClientReference: "deposit-ref",
+					ProviderCode:    " \t ",
+					WalletId:        uuid.NewString(),
+					OwnerType:       "user",
+					OwnerId:         "42",
+					Amount:          100,
+					Currency:        "USD",
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingProviderCode,
+		},
+		{
+			name: "withdrawal-currency",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
+					TenantId:          "tenant",
+					ClientReference:   "withdrawal-ref",
+					ProviderCode:      "noop",
+					WalletId:          uuid.NewString(),
+					Amount:            100,
+					Currency:          " \t ",
+					OwnerType:         "user",
+					OwnerId:           "42",
+					HoldExpirySeconds: 60,
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingCurrency,
+		},
+		{
+			name: "withdrawal-pin",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{WalletPINRequired: true}).RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
+					TenantId:          "tenant",
+					ClientReference:   "withdrawal-ref",
+					ProviderCode:      "noop",
+					WalletId:          uuid.NewString(),
+					Amount:            100,
+					Currency:          "USD",
+					OwnerType:         "user",
+					OwnerId:           "42",
+					WalletPin:         " \t ",
+					HoldExpirySeconds: 60,
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingWalletPIN,
+		},
+		{
+			name: "withdrawal-2fa",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{Wallet2FAThreshold: 1}).RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
+					TenantId:          "tenant",
+					ClientReference:   "withdrawal-ref",
+					ProviderCode:      "noop",
+					WalletId:          uuid.NewString(),
+					Amount:            100,
+					Currency:          "USD",
+					UserId:            42,
+					OwnerType:         "user",
+					OwnerId:           "42",
+					WalletPin:         "1234",
+					TwoFaCode:         " \t ",
+					HoldExpirySeconds: 60,
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingTwoFACode,
+		},
+		{
+			name: "p2p-idempotency-and-reference",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.P2PTransferRequest{
+					TenantId:       "tenant",
+					IdempotencyKey: " \t ",
+					ReferenceId:    " \t ",
+					Currency:       "USD",
+					FromWalletId:   uuid.NewString(),
+					ToWalletId:     uuid.NewString(),
+					Amount:         100,
+					FromOwnerType:  "user",
+					FromOwnerId:    "1",
+					ToOwnerType:    "user",
+					ToOwnerId:      "2",
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingIdempotencyKey,
+		},
+		{
+			name: "p2p-to-owner",
+			run: func() error {
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.P2PTransferRequest{
+					TenantId:       "tenant",
+					IdempotencyKey: "p2p-ref",
+					Currency:       "USD",
+					FromWalletId:   uuid.NewString(),
+					ToWalletId:     uuid.NewString(),
+					Amount:         100,
+					FromOwnerType:  "user",
+					FromOwnerId:    "1",
+					ToOwnerType:    " \t ",
+					ToOwnerId:      "2",
+				})
+				return err
+			},
+			wantErr: walletstore.ErrMissingOwnerType,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+			}
+			if status.Convert(err).Message() != tc.wantErr.Error() {
+				t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), tc.wantErr.Error())
+			}
+		})
+	}
+}

@@ -208,6 +208,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	allowReturn := true
 	req := &walletv1.WithdrawalRequest{
 		TenantId:                   "tenant",
+		IdempotencyKey:             " \t ",
 		ClientReference:            "ref-2",
 		ProviderCode:               "noop",
 		WalletId:                   walletRow.ID.String(),
@@ -239,6 +240,9 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}
 	if stored.Status != "initiated" {
 		t.Fatalf("expected initiated status, got %s", stored.Status)
+	}
+	if stored.IdempotencyKey != req.ClientReference {
+		t.Fatalf("idempotency key = %q, want %q", stored.IdempotencyKey, req.ClientReference)
 	}
 	if !stored.WorkflowID.Valid || stored.WorkflowID.String == "" {
 		t.Fatalf("expected workflow id persisted")
