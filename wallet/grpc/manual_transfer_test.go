@@ -78,6 +78,53 @@ func TestRequestManualTransferRejectsInvalidTransferType(t *testing.T) {
 	}
 }
 
+func TestRequestManualTransferRejectsBlankRequiredText(t *testing.T) {
+	svc := &wallet.Service{
+		Store:  &walletstore.Store{},
+		Config: ebs_fields.NoebsConfig{WalletManualTransferApprovalTimeoutSeconds: 60},
+	}
+	server := NewServer(svc)
+	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
+
+	base := func() *walletv1.ManualTransferRequest {
+		return &walletv1.ManualTransferRequest{
+			TenantId:       "tenant",
+			IdempotencyKey: "manual-1",
+			TransferType:   walletstore.ManualTransferTypeDebit,
+			WalletId:       uuid.NewString(),
+			Amount:         100,
+			Currency:       "USD",
+			Reason:         "test",
+			RequestedBy:    10,
+		}
+	}
+	cases := []struct {
+		name    string
+		mutate  func(req *walletv1.ManualTransferRequest)
+		wantErr error
+	}{
+		{"idempotency", func(req *walletv1.ManualTransferRequest) { req.IdempotencyKey = " \t " }, walletstore.ErrMissingIdempotencyKey},
+		{"transfer type", func(req *walletv1.ManualTransferRequest) { req.TransferType = " \t " }, walletstore.ErrMissingTransferType},
+		{"wallet", func(req *walletv1.ManualTransferRequest) { req.WalletId = " \t " }, walletstore.ErrMissingWalletID},
+		{"currency", func(req *walletv1.ManualTransferRequest) { req.Currency = " \t " }, walletstore.ErrMissingCurrency},
+		{"reason", func(req *walletv1.ManualTransferRequest) { req.Reason = " \t " }, walletstore.ErrMissingReason},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := base()
+			tc.mutate(req)
+			_, err := server.RequestManualTransfer(ctx, req)
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+			}
+			if status.Convert(err).Message() != tc.wantErr.Error() {
+				t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), tc.wantErr.Error())
+			}
+		})
+	}
+}
+
 func TestRequestManualTransferPublicIdentityMustMatchRequester(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},
@@ -132,7 +179,7 @@ func TestRequestManualTransferRequiresAdminAuth(t *testing.T) {
 	}
 }
 
-func TestSignalManualTransferDecisionRequiresReason(t *testing.T) {
+func TestSignalManualTransferDecisionRejectsBlankRequiredText(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},
 		Config: ebs_fields.NoebsConfig{},
@@ -140,18 +187,53 @@ func TestSignalManualTransferDecisionRequiresReason(t *testing.T) {
 	server := NewServer(svc)
 	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
 
-	req := &walletv1.ManualTransferDecisionRequest{
-		WorkflowId: "wf-1",
-		Approved:   false,
-		ApproverId: 22,
+	cases := []struct {
+		name    string
+		req     *walletv1.ManualTransferDecisionRequest
+		wantErr error
+	}{
+		{
+			name: "workflow",
+			req: &walletv1.ManualTransferDecisionRequest{
+				WorkflowId: " \t ",
+				Approved:   false,
+				ApproverId: 22,
+				Reason:     "risk",
+			},
+			wantErr: walletstore.ErrMissingWorkflowID,
+		},
+		{
+			name: "rejection reason",
+			req: &walletv1.ManualTransferDecisionRequest{
+				WorkflowId: "wf-1",
+				Approved:   false,
+				ApproverId: 22,
+				Reason:     " \t ",
+			},
+			wantErr: walletstore.ErrMissingReason,
+		},
+		{
+			name: "approval proof",
+			req: &walletv1.ManualTransferDecisionRequest{
+				WorkflowId:     "wf-1",
+				Approved:       true,
+				ApproverId:     22,
+				ProofOfPayment: " \t ",
+			},
+			wantErr: walletstore.ErrMissingProofOfPayment,
+		},
 	}
 
-	_, err := server.SignalManualTransferDecision(ctx, req)
-	if err == nil {
-		t.Fatalf("expected validation error")
-	}
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected invalid argument, got %v", status.Code(err))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := server.SignalManualTransferDecision(ctx, tc.req)
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+			}
+			if status.Convert(err).Message() != tc.wantErr.Error() {
+				t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), tc.wantErr.Error())
+			}
+		})
 	}
 }
 

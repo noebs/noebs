@@ -34,22 +34,25 @@ func (s *Server) RequestManualTransfer(ctx context.Context, req *walletv1.Manual
 	if err != nil {
 		return nil, err
 	}
-	if req.IdempotencyKey == "" {
+	if missingRequiredText(req.IdempotencyKey) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingIdempotencyKey.Error())
+	}
+	if missingRequiredText(req.TransferType) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTransferType.Error())
 	}
 	if err := walletstore.ValidateManualTransferType(req.TransferType); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if req.WalletId == "" {
+	if missingRequiredText(req.WalletId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
-	if req.Currency == "" {
+	if missingRequiredText(req.Currency) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
-	if req.Reason == "" {
+	if missingRequiredText(req.Reason) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
 	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
@@ -137,17 +140,17 @@ func (s *Server) SignalManualTransferDecision(ctx context.Context, req *walletv1
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.WorkflowId == "" {
+	if missingRequiredText(req.WorkflowId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
 	}
 	if req.ApproverId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApproverID.Error())
 	}
 	if req.Approved {
-		if req.ProofOfPayment == "" {
+		if missingRequiredText(req.ProofOfPayment) {
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingProofOfPayment.Error())
 		}
-	} else if req.Reason == "" {
+	} else if missingRequiredText(req.Reason) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
 

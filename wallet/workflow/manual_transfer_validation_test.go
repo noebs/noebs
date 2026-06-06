@@ -22,6 +22,85 @@ func TestValidateManualTransferDecision(t *testing.T) {
 	}
 }
 
+func TestValidateManualTransferDecisionText(t *testing.T) {
+	cases := []struct {
+		name     string
+		decision ManualTransferDecision
+		wantErr  error
+	}{
+		{
+			name:     "approved missing proof",
+			decision: ManualTransferDecision{Approved: true, ProofOfPayment: " \t "},
+			wantErr:  walletstore.ErrMissingProofOfPayment,
+		},
+		{
+			name:     "approved proof present",
+			decision: ManualTransferDecision{Approved: true, ProofOfPayment: "receipt"},
+		},
+		{
+			name:     "rejected missing reason",
+			decision: ManualTransferDecision{Approved: false, Reason: " \t "},
+			wantErr:  walletstore.ErrMissingReason,
+		},
+		{
+			name:     "rejected reason present",
+			decision: ManualTransferDecision{Approved: false, Reason: "risk"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateManualTransferDecisionText(tc.decision); err != tc.wantErr {
+				t.Fatalf("validateManualTransferDecisionText() error = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateWithdrawalApprovalDecision(t *testing.T) {
+	cases := []struct {
+		name     string
+		decision WithdrawalApprovalDecision
+		wantErr  error
+	}{
+		{
+			name:     "approved missing proof",
+			decision: WithdrawalApprovalDecision{Approved: true, ProofOfPayment: " \t "},
+			wantErr:  walletstore.ErrMissingProofOfPayment,
+		},
+		{
+			name:     "rejected missing reason",
+			decision: WithdrawalApprovalDecision{Approved: false, Reason: " \t "},
+			wantErr:  walletstore.ErrMissingApprovalReason,
+		},
+		{
+			name:     "approved proof present",
+			decision: WithdrawalApprovalDecision{Approved: true, ProofOfPayment: "receipt"},
+		},
+		{
+			name:     "rejected reason present",
+			decision: WithdrawalApprovalDecision{Approved: false, Reason: "risk"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := validateWithdrawalApprovalDecision(tc.decision); err != tc.wantErr {
+				t.Fatalf("validateWithdrawalApprovalDecision() error = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateDestinationVerificationDecision(t *testing.T) {
+	if err := validateDestinationVerificationDecision(DestinationVerificationDecision{Verified: false, Reason: " \t "}); err != walletstore.ErrMissingReason {
+		t.Fatalf("validateDestinationVerificationDecision(rejected) error = %v, want %v", err, walletstore.ErrMissingReason)
+	}
+	if err := validateDestinationVerificationDecision(DestinationVerificationDecision{Verified: true}); err != nil {
+		t.Fatalf("validateDestinationVerificationDecision(verified) error = %v, want nil", err)
+	}
+}
+
 func TestAwaitManualTransferDecisionIgnoresRequesterSignals(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()

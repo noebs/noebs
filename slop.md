@@ -723,6 +723,11 @@ Last updated: 2026-05-31
     - Fix: make P2P and manual-transfer workflow entrypoint validation whitespace-aware before UUID parsing or any activity execution, returning the existing typed missing-field errors.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(P2PWorkflowValidatesRequestBeforeActivities|ManualTransferWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/validation ./wallet/store ./wallet/activity`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+145. Manual-transfer and withdrawal decision signals accepted blank proof/reason text.
+    - Evidence: manual-transfer requests and decision signals, plus withdrawal approval/verification signals, used raw empty-string checks. Whitespace-only workflow IDs, transfer reasons, approval proof, or rejection reasons could be signaled to workflows; direct workflow signals could then run partial update/audit activities before store validation caught missing proof/reason, or record rejection metadata without an explicit reason.
+    - Fix: reject whitespace-only manual-transfer request and signal text at the gRPC boundary, add workflow-level decision validators for manual transfer approval/rejection, withdrawal approval/rejection, and destination verification rejection, and call them before update/audit activities.
+    - Tests: `go test -count=1 -v ./wallet/workflow ./wallet/grpc -run 'Test(ValidateManualTransferDecision|ValidateManualTransferDecisionText|ValidateWithdrawalApprovalDecision|ValidateDestinationVerificationDecision|SignalManualTransferDecisionRejectsBlankRequiredText|RequestManualTransferRejectsBlankRequiredText|WithdrawalSignalsRejectBlankRequiredText|WithdrawalSignalsValidateAfterAdminAuth)'`; `go test -count=1 ./wallet/grpc ./wallet/workflow ./wallet/store ./wallet/activity`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

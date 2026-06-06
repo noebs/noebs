@@ -692,6 +692,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Manual-transfer request/signal and withdrawal approval/verification signal paths now reject whitespace-only proof/reason/workflow text before Temporal signaling or workflow update/audit activities.
+- `go test -count=1 -v ./wallet/workflow ./wallet/grpc -run 'Test(ValidateManualTransferDecision|ValidateManualTransferDecisionText|ValidateWithdrawalApprovalDecision|ValidateDestinationVerificationDecision|SignalManualTransferDecisionRejectsBlankRequiredText|RequestManualTransferRejectsBlankRequiredText|WithdrawalSignalsRejectBlankRequiredText|WithdrawalSignalsValidateAfterAdminAuth)'`
+- `go test -count=1 ./wallet/grpc ./wallet/workflow ./wallet/store ./wallet/activity`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

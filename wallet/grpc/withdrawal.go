@@ -246,17 +246,17 @@ func (s *Server) SignalWithdrawalApproval(ctx context.Context, req *walletv1.Wit
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.WorkflowId == "" {
+	if missingRequiredText(req.WorkflowId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
 	}
 	if req.ApproverId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApproverID.Error())
 	}
 	if req.Approved {
-		if req.ProofOfPayment == "" {
+		if missingRequiredText(req.ProofOfPayment) {
 			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingProofOfPayment.Error())
 		}
-	} else if req.Reason == "" {
+	} else if missingRequiredText(req.Reason) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalReason.Error())
 	}
 
@@ -288,11 +288,14 @@ func (s *Server) SignalWithdrawalVerification(ctx context.Context, req *walletv1
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.WorkflowId == "" {
+	if missingRequiredText(req.WorkflowId) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
 	}
 	if req.VerificationId <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationID.Error())
+	}
+	if !req.Verified && missingRequiredText(req.Reason) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
 	}
 
 	temporalClient, err := s.ensureTemporalClient()

@@ -631,6 +631,9 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 				destination.OwnershipStatus = "verified"
 				destination.OwnershipVerifiedAt = sql.NullTime{Time: now, Valid: true}
 			} else {
+				if err := validateDestinationVerificationDecision(decision); err != nil {
+					return err
+				}
 				if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateOwnershipVerificationStatus, params.TenantID, stored.ID, "failed", now).Get(ctx, nil); err != nil {
 					return err
 				}
@@ -712,8 +715,8 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			return releaseHold(err)
 		}
 		if !decision.Approved {
-			if decision.Reason == "" {
-				return releaseHold(walletstore.ErrMissingApprovalReason)
+			if err := validateWithdrawalApprovalDecision(decision); err != nil {
+				return releaseHold(err)
 			}
 			rejectMeta, err := auditMetadata(map[string]any{
 				"client_reference": params.Request.ClientReference,
@@ -742,8 +745,8 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			}
 			return releaseHold(walletstore.ErrApprovalRejected)
 		}
-		if decision.ProofOfPayment == "" {
-			return releaseHold(walletstore.ErrMissingProofOfPayment)
+		if err := validateWithdrawalApprovalDecision(decision); err != nil {
+			return releaseHold(err)
 		}
 	}
 
@@ -1334,8 +1337,8 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 
 	now := workflow.Now(ctx)
 	if decision.Approved {
-		if decision.ProofOfPayment == "" {
-			return releaseHoldAndReturn(ctx, params.TenantID, holdID, walletstore.ErrMissingProofOfPayment)
+		if err := validateManualTransferDecisionText(decision); err != nil {
+			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 		}
 		approval := walletstore.ManualTransferApproval{
 			TenantID:         params.TenantID,
@@ -1441,8 +1444,8 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		return recordAuditEvent(ctx, completeEvent)
 	}
 
-	if decision.Reason == "" {
-		return releaseHoldAndReturn(ctx, params.TenantID, holdID, walletstore.ErrMissingReason)
+	if err := validateManualTransferDecisionText(decision); err != nil {
+		return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 	}
 	rejection := walletstore.ManualTransferApproval{
 		TenantID:         params.TenantID,
@@ -1909,6 +1912,39 @@ func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferPara
 func validateManualTransferDecision(requestedBy int64, decision ManualTransferDecision) error {
 	if requestedBy > 0 && decision.ApproverID == requestedBy {
 		return walletstore.ErrApproverIsRequester
+	}
+	return nil
+}
+
+func validateManualTransferDecisionText(decision ManualTransferDecision) error {
+	if decision.Approved {
+		if missingRequiredText(decision.ProofOfPayment) {
+			return walletstore.ErrMissingProofOfPayment
+		}
+		return nil
+	}
+	if missingRequiredText(decision.Reason) {
+		return walletstore.ErrMissingReason
+	}
+	return nil
+}
+
+func validateWithdrawalApprovalDecision(decision WithdrawalApprovalDecision) error {
+	if decision.Approved {
+		if missingRequiredText(decision.ProofOfPayment) {
+			return walletstore.ErrMissingProofOfPayment
+		}
+		return nil
+	}
+	if missingRequiredText(decision.Reason) {
+		return walletstore.ErrMissingApprovalReason
+	}
+	return nil
+}
+
+func validateDestinationVerificationDecision(decision DestinationVerificationDecision) error {
+	if !decision.Verified && missingRequiredText(decision.Reason) {
+		return walletstore.ErrMissingReason
 	}
 	return nil
 }
