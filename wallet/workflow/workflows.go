@@ -145,6 +145,9 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if params.ClientReference == "" {
 		return walletstore.ErrMissingClientReference
 	}
+	if params.ProviderCode == "" {
+		return walletstore.ErrMissingProviderCode
+	}
 	if params.WalletID == "" {
 		return walletstore.ErrMissingWalletID
 	}
@@ -174,9 +177,6 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	}
 
 	providerCode := params.ProviderCode
-	if providerCode == "" {
-		providerCode = pspTxn.PSPProvider
-	}
 	transactionID := ""
 	if pspTxn.PSPTransactionID.Valid {
 		transactionID = pspTxn.PSPTransactionID.String
@@ -448,6 +448,9 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	if params.Request.ClientReference == "" {
 		return walletstore.ErrMissingClientReference
 	}
+	if params.ProviderCode == "" {
+		return walletstore.ErrMissingProviderCode
+	}
 	if params.Request.Currency == "" {
 		return walletstore.ErrMissingCurrency
 	}
@@ -496,9 +499,6 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	}
 
 	providerCode := params.ProviderCode
-	if providerCode == "" {
-		providerCode = pspTxn.PSPProvider
-	}
 
 	if params.RequirePIN {
 		var ok bool
@@ -671,26 +671,16 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 		}
 		destinationID = destination.ID
 		if destination.PSPProvider.Valid {
-			if providerCode == "" {
-				providerCode = destination.PSPProvider.String
-			} else if providerCode != destination.PSPProvider.String {
+			if providerCode != destination.PSPProvider.String {
 				return walletstore.ErrMissingProviderCode
 			}
 		}
 	} else {
 		if fundingSource.PSPProvider.Valid {
-			if providerCode == "" {
-				providerCode = fundingSource.PSPProvider.String
-			} else if providerCode != fundingSource.PSPProvider.String {
+			if providerCode != fundingSource.PSPProvider.String {
 				return walletstore.ErrMissingProviderCode
 			}
-		} else if providerCode == "" {
-			return walletstore.ErrMissingProviderCode
 		}
-	}
-
-	if providerCode == "" {
-		return walletstore.ErrMissingProviderCode
 	}
 
 	holdParams := walletstore.HoldParams{

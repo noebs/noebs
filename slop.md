@@ -703,6 +703,11 @@ Last updated: 2026-05-31
     - Fix: require a positive approval timeout at the workflow entrypoint before any activity, and make the await helper return `ErrMissingApprovalTimeout` instead of carrying its own fallback.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(ManualTransferWorkflowRequiresApprovalTimeoutBeforeActivities|AwaitManualTransferDecisionIgnoresRequesterSignals|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/store ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+141. Deposit and withdrawal workflows inferred missing PSP provider codes.
+    - Evidence: the gRPC boundary requires `ProviderCode`, but `Deposit` defaulted a missing provider from the stored PSP transaction and `Withdrawal` could backfill it from stored PSP transactions, destinations, or funding sources. Direct Temporal starts could therefore choose a PSP provider from lower-layer state instead of carrying the explicit boundary decision.
+    - Fix: require explicit provider codes at the workflow entrypoint before loading PSP transactions or resolving destination/funding-source data, and keep provider mismatch checks without fallback assignment.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(DepositWorkflowValidatesRequestBeforeActivities|WithdrawalWorkflowRequiresProviderCodeBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities|WithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/validation ./wallet/activity ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

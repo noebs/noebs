@@ -26,6 +26,7 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 			params: func(tenantID string) any {
 				return DepositParams{
 					TenantID:        tenantID,
+					ProviderCode:    "pay",
 					ClientReference: "deposit-ref",
 					WalletID:        uuid.NewString(),
 					OwnerType:       "user",
@@ -39,6 +40,7 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 			params: func(tenantID string) any {
 				return WithdrawalParams{
 					TenantID:          tenantID,
+					ProviderCode:      "pay",
 					WalletID:          uuid.NewString(),
 					OwnerType:         "user",
 					OwnerID:           "42",
@@ -137,6 +139,7 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	baseParams := func() DepositParams {
 		return DepositParams{
 			TenantID:        "tenant",
+			ProviderCode:    "pay",
 			ClientReference: "deposit-ref",
 			WalletID:        uuid.NewString(),
 			OwnerType:       "user",
@@ -153,6 +156,11 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			name:    "missing-client-reference",
 			mutate:  func(params *DepositParams) { params.ClientReference = "" },
 			wantErr: walletstore.ErrMissingClientReference,
+		},
+		{
+			name:    "missing-provider-code",
+			mutate:  func(params *DepositParams) { params.ProviderCode = "" },
+			wantErr: walletstore.ErrMissingProviderCode,
 		},
 		{
 			name:    "missing-wallet-id",
@@ -183,6 +191,22 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			executeWorkflowExpectError(t, Deposit, params, tc.wantErr)
 		})
 	}
+}
+
+func TestWithdrawalWorkflowRequiresProviderCodeBeforeActivities(t *testing.T) {
+	executeWorkflowExpectError(t, Withdrawal, WithdrawalParams{
+		TenantID:          "tenant",
+		WalletID:          uuid.NewString(),
+		OwnerType:         "user",
+		OwnerID:           "42",
+		DestinationID:     1,
+		HoldExpirySeconds: 60,
+		Request: walletpsp.PayoutRequest{
+			ClientReference: "withdrawal-ref",
+			Amount:          100,
+			Currency:        "USD",
+		},
+	}, walletstore.ErrMissingProviderCode)
 }
 
 func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {

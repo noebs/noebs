@@ -668,6 +668,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Deposit and withdrawal workflows now require explicit PSP provider codes before PSP transaction loads or funding/destination resolution, removing lower-state provider inference.
+- `go test -count=1 -v ./wallet/workflow -run 'Test(DepositWorkflowValidatesRequestBeforeActivities|WithdrawalWorkflowRequiresProviderCodeBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities|WithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotFound)'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/validation ./wallet/activity ./wallet/store`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
