@@ -1232,6 +1232,9 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	if params.RequestedBy <= 0 {
 		return walletstore.ErrMissingRequesterID
 	}
+	if params.ApprovalTimeoutSeconds <= 0 {
+		return walletstore.ErrMissingApprovalTimeout
+	}
 
 	walletID, err := uuid.Parse(params.WalletID)
 	if err != nil {
@@ -1881,7 +1884,7 @@ func releaseHoldAndReturn(ctx workflow.Context, tenantID string, holdID int64, c
 func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferParams) (ManualTransferDecision, error) {
 	timeout := time.Duration(params.ApprovalTimeoutSeconds) * time.Second
 	if timeout <= 0 {
-		timeout = 24 * time.Hour
+		return ManualTransferDecision{}, walletstore.ErrMissingApprovalTimeout
 	}
 	decisionCh := workflow.GetSignalChannel(ctx, ManualTransferDecisionSignal)
 	timer := workflow.NewTimer(ctx, timeout)

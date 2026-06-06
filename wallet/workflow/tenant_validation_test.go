@@ -294,6 +294,19 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	}
 }
 
+func TestManualTransferWorkflowRequiresApprovalTimeoutBeforeActivities(t *testing.T) {
+	executeWorkflowExpectError(t, ManualTransfer, ManualTransferParams{
+		TenantID:       "tenant",
+		IdempotencyKey: "manual-ref",
+		TransferType:   "manual_debit",
+		WalletID:       uuid.NewString(),
+		Amount:         100,
+		Currency:       "USD",
+		Reason:         "test",
+		RequestedBy:    10,
+	}, walletstore.ErrMissingApprovalTimeout)
+}
+
 func TestReconciliationWorkflowRequiresExplicitRangeOrLookback(t *testing.T) {
 	start := time.Date(2026, 5, 31, 10, 0, 0, 0, time.UTC)
 	end := start.Add(time.Hour)

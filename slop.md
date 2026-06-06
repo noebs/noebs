@@ -698,6 +698,11 @@ Last updated: 2026-05-31
     - Fix: validate successful deposit statuses for positive amount and currency before any PSP status update or final settlement work.
     - Tests: `go test -count=1 -v ./wallet/workflow -run 'TestDepositRejectsInvalidSuccessfulProviderStatusBeforeStoreUpdate|TestStatusFromPSPTransaction'`; `go test -count=1 ./wallet/workflow ./wallet/validation ./wallet/activity ./wallet/store ./wallet/grpc`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+140. Manual-transfer workflow silently defaulted missing approval timeouts.
+    - Evidence: the gRPC boundary requires an approval timeout or configured default before starting `ManualTransfer`, but the workflow accepted `ApprovalTimeoutSeconds <= 0`; `awaitManualTransferDecision` then substituted a 24-hour timeout. Direct Temporal starts could therefore create manual-transfer rows, holds, and audit events with an implicit approval window.
+    - Fix: require a positive approval timeout at the workflow entrypoint before any activity, and make the await helper return `ErrMissingApprovalTimeout` instead of carrying its own fallback.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(ManualTransferWorkflowRequiresApprovalTimeoutBeforeActivities|AwaitManualTransferDecisionIgnoresRequesterSignals|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/store ./cli`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

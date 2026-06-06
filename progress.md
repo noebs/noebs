@@ -662,6 +662,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- Manual-transfer workflow now rejects missing approval timeouts before creating transfer state, holds, or audit events, and the await helper no longer has a 24-hour fallback.
+- `go test -count=1 -v ./wallet/workflow -run 'Test(ManualTransferWorkflowRequiresApprovalTimeoutBeforeActivities|AwaitManualTransferDecisionIgnoresRequesterSignals|WalletWorkflowsValidateTenantBeforeActivities)'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/store ./cli`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 
