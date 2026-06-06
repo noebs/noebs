@@ -686,6 +686,12 @@ Verification:
 - `go test -count=1 ./...`
 - `go vet ./...`
 - `git diff --check`
+- P2P and manual-transfer workflows now reject whitespace-only required request text before UUID parsing, auth activities, transfer creation, or ledger activity scheduling.
+- `go test -count=1 -v ./wallet/workflow -run 'Test(P2PWorkflowValidatesRequestBeforeActivities|ManualTransferWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`
+- `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/validation ./wallet/store ./wallet/activity`
+- `go test -count=1 ./...`
+- `go vet ./...`
+- `git diff --check`
 
 Next candidates:
 

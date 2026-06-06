@@ -718,6 +718,11 @@ Last updated: 2026-05-31
     - Fix: make gRPC required-text validation whitespace-aware, treat blank optional idempotency keys as omitted at the API boundary, and centralize P2P idempotency/reference resolution so at least one explicit nonblank value is required.
     - Tests: `go test -count=1 -v ./wallet/grpc -run 'Test(TextOrDefaultTreatsBlankAsOmitted|ResolveIdempotencyAndReference|WorkflowRequestsRejectBlankRequiredTextBeforeTemporal|WorkflowRequestsValidateTenantBeforeTemporal|RequestWithdrawalStartsWorkflow|RequestP2PTransferStartsWorkflowAfterValidation)'` (container-backed start tests skipped because Docker is unavailable); `go test -count=1 ./wallet/grpc ./wallet/workflow ./wallet/validation ./wallet/store`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
 
+144. P2P and manual-transfer workflows accepted blank required fields.
+    - Evidence: after the API boundary fixes, direct Temporal starts for `P2P` and `ManualTransfer` still used raw `== ""` checks. Whitespace-only idempotency/reference/currency/owner/auth values could reach PIN/2FA validation or ledger activities, and a blank manual-transfer reason or transfer type could be treated as an invalid lower-layer value instead of a missing workflow input.
+    - Fix: make P2P and manual-transfer workflow entrypoint validation whitespace-aware before UUID parsing or any activity execution, returning the existing typed missing-field errors.
+    - Tests: `go test -count=1 -v ./wallet/workflow -run 'Test(P2PWorkflowValidatesRequestBeforeActivities|ManualTransferWorkflowValidatesRequestBeforeActivities|WalletWorkflowsValidateTenantBeforeActivities)'`; `go test -count=1 ./wallet/workflow ./wallet/grpc ./wallet/validation ./wallet/store ./wallet/activity`; `go test -count=1 ./...`; `go vet ./...`; `git diff --check`.
+
 ## Open Candidates
 
 No open candidates in this file yet after the current pass. Continue scanning the repo for remaining TODO/FIXME markers, silent defaults, hidden errors, dead paths, and tooling gaps.

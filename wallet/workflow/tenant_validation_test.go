@@ -315,8 +315,18 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			wantErr: walletstore.ErrMissingIdempotencyKey,
 		},
 		{
+			name:    "blank-idempotency-key",
+			mutate:  func(params *P2PParams) { params.IdempotencyKey = " \t " },
+			wantErr: walletstore.ErrMissingIdempotencyKey,
+		},
+		{
 			name:    "missing-reference-id",
 			mutate:  func(params *P2PParams) { params.ReferenceID = "" },
+			wantErr: walletstore.ErrMissingReferenceID,
+		},
+		{
+			name:    "blank-reference-id",
+			mutate:  func(params *P2PParams) { params.ReferenceID = " \t " },
 			wantErr: walletstore.ErrMissingReferenceID,
 		},
 		{
@@ -325,8 +335,18 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			wantErr: walletstore.ErrMissingCurrency,
 		},
 		{
+			name:    "blank-currency",
+			mutate:  func(params *P2PParams) { params.Currency = " \t " },
+			wantErr: walletstore.ErrMissingCurrency,
+		},
+		{
 			name:    "missing-from-wallet-id",
 			mutate:  func(params *P2PParams) { params.FromWalletID = "" },
+			wantErr: walletstore.ErrMissingWalletID,
+		},
+		{
+			name:    "blank-to-wallet-id",
+			mutate:  func(params *P2PParams) { params.ToWalletID = " \t " },
 			wantErr: walletstore.ErrMissingWalletID,
 		},
 		{
@@ -354,8 +374,18 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			wantErr: walletstore.ErrMissingOwnerType,
 		},
 		{
+			name:    "blank-to-owner-type",
+			mutate:  func(params *P2PParams) { params.ToOwnerType = " \t " },
+			wantErr: walletstore.ErrMissingOwnerType,
+		},
+		{
 			name:    "missing-to-owner-id",
 			mutate:  func(params *P2PParams) { params.ToOwnerID = "" },
+			wantErr: walletstore.ErrMissingOwnerID,
+		},
+		{
+			name:    "blank-from-owner-id",
+			mutate:  func(params *P2PParams) { params.FromOwnerID = " \t " },
 			wantErr: walletstore.ErrMissingOwnerID,
 		},
 		{
@@ -363,6 +393,14 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			mutate: func(params *P2PParams) {
 				params.RequirePIN = true
 				params.WalletPIN = ""
+			},
+			wantErr: walletstore.ErrMissingWalletPIN,
+		},
+		{
+			name: "blank-pin",
+			mutate: func(params *P2PParams) {
+				params.RequirePIN = true
+				params.WalletPIN = " \t "
 			},
 			wantErr: walletstore.ErrMissingWalletPIN,
 		},
@@ -382,6 +420,14 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			},
 			wantErr: walletstore.ErrMissingTwoFACode,
 		},
+		{
+			name: "blank-2fa-code",
+			mutate: func(params *P2PParams) {
+				params.Require2FA = true
+				params.TwoFACode = " \t "
+			},
+			wantErr: walletstore.ErrMissingTwoFACode,
+		},
 	}
 
 	for _, tc := range cases {
@@ -393,17 +439,65 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	}
 }
 
-func TestManualTransferWorkflowRequiresApprovalTimeoutBeforeActivities(t *testing.T) {
-	executeWorkflowExpectError(t, ManualTransfer, ManualTransferParams{
-		TenantID:       "tenant",
-		IdempotencyKey: "manual-ref",
-		TransferType:   "manual_debit",
-		WalletID:       uuid.NewString(),
-		Amount:         100,
-		Currency:       "USD",
-		Reason:         "test",
-		RequestedBy:    10,
-	}, walletstore.ErrMissingApprovalTimeout)
+func TestManualTransferWorkflowValidatesRequestBeforeActivities(t *testing.T) {
+	baseParams := func() ManualTransferParams {
+		return ManualTransferParams{
+			TenantID:               "tenant",
+			IdempotencyKey:         "manual-ref",
+			TransferType:           "manual_debit",
+			WalletID:               uuid.NewString(),
+			Amount:                 100,
+			Currency:               "USD",
+			Reason:                 "test",
+			RequestedBy:            10,
+			ApprovalTimeoutSeconds: 60,
+		}
+	}
+
+	cases := []struct {
+		name    string
+		mutate  func(*ManualTransferParams)
+		wantErr error
+	}{
+		{
+			name:    "blank-idempotency-key",
+			mutate:  func(params *ManualTransferParams) { params.IdempotencyKey = " \t " },
+			wantErr: walletstore.ErrMissingIdempotencyKey,
+		},
+		{
+			name:    "blank-transfer-type",
+			mutate:  func(params *ManualTransferParams) { params.TransferType = " \t " },
+			wantErr: walletstore.ErrMissingTransferType,
+		},
+		{
+			name:    "blank-wallet-id",
+			mutate:  func(params *ManualTransferParams) { params.WalletID = " \t " },
+			wantErr: walletstore.ErrMissingWalletID,
+		},
+		{
+			name:    "blank-currency",
+			mutate:  func(params *ManualTransferParams) { params.Currency = " \t " },
+			wantErr: walletstore.ErrMissingCurrency,
+		},
+		{
+			name:    "blank-reason",
+			mutate:  func(params *ManualTransferParams) { params.Reason = " \t " },
+			wantErr: walletstore.ErrMissingReason,
+		},
+		{
+			name:    "missing-approval-timeout",
+			mutate:  func(params *ManualTransferParams) { params.ApprovalTimeoutSeconds = 0 },
+			wantErr: walletstore.ErrMissingApprovalTimeout,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			params := baseParams()
+			tc.mutate(&params)
+			executeWorkflowExpectError(t, ManualTransfer, params, tc.wantErr)
+		})
+	}
 }
 
 func TestReconciliationWorkflowRequiresExplicitRangeOrLookback(t *testing.T) {

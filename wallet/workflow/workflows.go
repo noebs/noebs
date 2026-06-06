@@ -1011,35 +1011,35 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 		return err
 	}
 	params.TenantID = tenantID
-	if params.IdempotencyKey == "" {
+	if missingRequiredText(params.IdempotencyKey) {
 		return walletstore.ErrMissingIdempotencyKey
 	}
-	if params.ReferenceID == "" {
+	if missingRequiredText(params.ReferenceID) {
 		return walletstore.ErrMissingReferenceID
 	}
-	if params.Currency == "" {
+	if missingRequiredText(params.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
-	if params.FromWalletID == "" || params.ToWalletID == "" {
+	if missingRequiredText(params.FromWalletID) || missingRequiredText(params.ToWalletID) {
 		return walletstore.ErrMissingWalletID
 	}
 	if params.Amount <= 0 {
 		return walletstore.ErrInvalidAmount
 	}
-	if params.FromOwnerType == "" || params.ToOwnerType == "" {
+	if missingRequiredText(params.FromOwnerType) || missingRequiredText(params.ToOwnerType) {
 		return walletstore.ErrMissingOwnerType
 	}
-	if params.FromOwnerID == "" || params.ToOwnerID == "" {
+	if missingRequiredText(params.FromOwnerID) || missingRequiredText(params.ToOwnerID) {
 		return walletstore.ErrMissingOwnerID
 	}
-	if params.RequirePIN && params.WalletPIN == "" {
+	if params.RequirePIN && missingRequiredText(params.WalletPIN) {
 		return walletstore.ErrMissingWalletPIN
 	}
 	if params.Require2FA {
 		if params.UserID <= 0 {
 			return walletstore.ErrInvalidUserID
 		}
-		if params.TwoFACode == "" {
+		if missingRequiredText(params.TwoFACode) {
 			return walletstore.ErrMissingTwoFACode
 		}
 	}
@@ -1201,22 +1201,25 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		return err
 	}
 	params.TenantID = tenantID
-	if params.IdempotencyKey == "" {
+	if missingRequiredText(params.IdempotencyKey) {
 		return walletstore.ErrMissingIdempotencyKey
+	}
+	if missingRequiredText(params.TransferType) {
+		return walletstore.ErrMissingTransferType
 	}
 	if err := walletstore.ValidateManualTransferType(params.TransferType); err != nil {
 		return err
 	}
-	if params.WalletID == "" {
+	if missingRequiredText(params.WalletID) {
 		return walletstore.ErrMissingWalletID
 	}
 	if params.Amount <= 0 {
 		return walletstore.ErrInvalidAmount
 	}
-	if params.Currency == "" {
+	if missingRequiredText(params.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
-	if params.Reason == "" {
+	if missingRequiredText(params.Reason) {
 		return walletstore.ErrMissingReason
 	}
 	if params.RequestedBy <= 0 {
