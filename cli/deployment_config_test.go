@@ -179,6 +179,7 @@ type mountedNoebsConfig struct {
 	Noebs struct {
 		DatabaseDriver                             string                `yaml:"db_driver"`
 		OtelServiceName                            string                `yaml:"otel_service_name"`
+		PaymentLinkBase                            string                `yaml:"payment_link_base"`
 		ServiceDiscovery                           map[string]string     `yaml:"service_discovery"`
 		GRPCServiceDiscovery                       map[string]string     `yaml:"grpc_service_discovery"`
 		KafkaBrokers                               []string              `yaml:"kafka_brokers"`
@@ -206,6 +207,13 @@ type mountedNoebsConfig struct {
 		WalletReconciliationBatchSize              int                   `yaml:"wallet_reconciliation_batch_size"`
 		WalletReconciliationLookbackHours          int                   `yaml:"wallet_reconciliation_lookback_hours"`
 	} `yaml:"noebs"`
+}
+
+func TestKubernetesPaymentLinksUseVerifiedHTTPSOrigin(t *testing.T) {
+	config := decodeKubernetesBaseNoebsConfig(t)
+	if got, want := config.Noebs.PaymentLinkBase, "https://api.noebs.sd/pay/"; got != want {
+		t.Fatalf("payment_link_base = %q, want %q", got, want)
+	}
 }
 
 type mountedEBSDynamicFees struct {
