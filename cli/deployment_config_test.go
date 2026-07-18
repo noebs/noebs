@@ -372,6 +372,7 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		Value struct {
 			Requests map[string]string `yaml:"requests"`
 			Limits   map[string]string `yaml:"limits"`
+			Type     string            `yaml:"type"`
 		} `yaml:"value"`
 	}
 	type resourcePatch struct {
@@ -379,6 +380,7 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		name *regexp.Regexp
 	}
 	resourcePatches := make([]resourcePatch, 0, len(overlay.Patches))
+	recreateCutoverTargets := map[string]bool{}
 	for _, patch := range overlay.Patches {
 		namePattern, err := regexp.Compile("^(?:" + patch.Target.Name + ")$")
 		if err != nil {
@@ -388,14 +390,27 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		if err := yaml.Unmarshal([]byte(patch.Patch), &operations); err != nil {
 			t.Fatalf("decode %s patch for %s/%s: %v", path, patch.Target.Kind, patch.Target.Name, err)
 		}
-		if len(operations) != 1 || operations[0].Op != "add" || operations[0].Path != "/spec/template/spec/containers/0/resources" {
-			t.Fatalf("%s patch for %s/%s must add the primary container resources", path, patch.Target.Kind, patch.Target.Name)
+		resourceOperations := make([]resourceOperation, 0, 1)
+		for _, operation := range operations {
+			if operation.Op == "add" && operation.Path == "/spec/template/spec/containers/0/resources" {
+				resourceOperations = append(resourceOperations, operation)
+			}
+			if operation.Op == "add" && operation.Path == "/spec/strategy" && operation.Value.Type == "Recreate" {
+				recreateCutoverTargets[patch.Target.Name] = true
+			}
 		}
+		if len(resourceOperations) == 0 {
+			continue
+		}
+		if len(resourceOperations) != 1 {
+			t.Fatalf("%s patch for %s/%s must add primary container resources exactly once", path, patch.Target.Kind, patch.Target.Name)
+		}
+		resourceOperation := resourceOperations[0]
 		for _, resourceName := range []string{"cpu", "memory"} {
-			if strings.TrimSpace(operations[0].Value.Requests[resourceName]) == "" {
+			if strings.TrimSpace(resourceOperation.Value.Requests[resourceName]) == "" {
 				t.Fatalf("%s patch for %s/%s has no %s request", path, patch.Target.Kind, patch.Target.Name, resourceName)
 			}
-			if strings.TrimSpace(operations[0].Value.Limits[resourceName]) == "" {
+			if strings.TrimSpace(resourceOperation.Value.Limits[resourceName]) == "" {
 				t.Fatalf("%s patch for %s/%s has no %s limit", path, patch.Target.Kind, patch.Target.Name, resourceName)
 			}
 		}
@@ -441,6 +456,9 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatalf("no current-host workloads were checked")
+	}
+	if !recreateCutoverTargets[`(api-gateway|card-vault|identity-auth)`] {
+		t.Fatalf("%s must use Recreate for the API gateway and schema-coupled identity/card cutover", path)
 	}
 }
 
@@ -2104,15 +2122,21 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 		`name      = each.key`,
 		`resource "kubernetes_manifest" "noebs_application"`,
 		`count = var.create_noebs_application ? 1 : 0`,
+		`resource "kubernetes_manifest" "noebs_edge_application"`,
+		`count = var.create_edge_application ? 1 : 0`,
+		`name      = "noebs-edge"`,
 		`namespace = var.argocd_namespace`,
 		`var.noebs_repo_url`,
 		`repoURL        = var.noebs_repo_url`,
 		`targetRevision = var.noebs_target_revision`,
 		`path           = var.noebs_manifest_path`,
+		`path           = var.edge_manifest_path`,
 		`namespace = kubernetes_namespace_v1.noebs.metadata[0].name`,
+		`namespace = var.edge_namespace`,
 		`server    = "https://kubernetes.default.svc"`,
 		`prune    = true`,
 		`selfHeal = true`,
+		`"CreateNamespace=true"`,
 		`"PruneLast=true"`,
 		`depends_on = [
     kubernetes_manifest.noebs_project,
@@ -2139,6 +2163,14 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 	if match[1] != "deploy/kubernetes/overlays/current-host" {
 		t.Fatalf("noebs_manifest_path = %q, want deploy/kubernetes/overlays/current-host", match[1])
 	}
+	edgeManifestPathRe := regexp.MustCompile(`(?m)^\s*edge_manifest_path\s*=\s*"([^"]+)"\s*$`)
+	edgeManifestPathMatch := edgeManifestPathRe.FindStringSubmatch(string(tfvarsExample))
+	if len(edgeManifestPathMatch) != 2 {
+		t.Fatalf("%s must assign edge_manifest_path", tfvarsExamplePath)
+	}
+	if edgeManifestPathMatch[1] != "deploy/kubernetes/edge" {
+		t.Fatalf("edge_manifest_path = %q, want deploy/kubernetes/edge", edgeManifestPathMatch[1])
+	}
 	repoURLRe := regexp.MustCompile(`(?m)^\s*noebs_repo_url\s*=\s*"([^"]+)"\s*$`)
 	repoURLMatch := repoURLRe.FindStringSubmatch(string(tfvarsExample))
 	if len(repoURLMatch) != 2 {
@@ -2157,6 +2189,9 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join("..", filepath.FromSlash(match[1]), "kustomization.yaml")); err != nil {
 		t.Fatalf("noebs_manifest_path does not contain kustomization.yaml: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join("..", filepath.FromSlash(edgeManifestPathMatch[1]), "kustomization.yaml")); err != nil {
+		t.Fatalf("edge_manifest_path does not contain kustomization.yaml: %v", err)
 	}
 }
 
@@ -2565,12 +2600,15 @@ func TestFoundationTerraformVariablesRequireExplicitInputs(t *testing.T) {
 		"kubeconfig_path",
 		"argocd_namespace",
 		"noebs_namespace",
+		"edge_namespace",
 		"argocd_chart_version",
 		"argocd_installation_mode",
 		"noebs_repo_url",
 		"noebs_target_revision",
 		"noebs_manifest_path",
+		"edge_manifest_path",
 		"create_noebs_application",
+		"create_edge_application",
 	}
 	defaultRe := regexp.MustCompile(`(?m)^\s*default\s*=`)
 	nullableFalseRe := regexp.MustCompile(`(?m)^\s*nullable\s*=\s*false\s*$`)

@@ -30,6 +30,16 @@ patches:
       group: apps
       version: v1
       kind: Deployment
+      name: (api-gateway|card-vault|identity-auth)
+    patch: |-
+      - op: add
+        path: /spec/strategy
+        value:
+          type: Recreate
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
       name: (admin-reporting|api-gateway|card-vault|consumer-beneficiary|ebs-adapter|identity-auth|notification-chat|psp-webhook|wallet-api|wallet-ledger)
     patch: |-
       - op: add

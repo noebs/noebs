@@ -10,12 +10,24 @@ output "noebs_namespace" {
   value = kubernetes_namespace_v1.noebs.metadata[0].name
 }
 
+output "edge_namespace" {
+  value = var.edge_namespace
+}
+
 output "noebs_manifest_path" {
   value = var.noebs_manifest_path
 }
 
+output "edge_manifest_path" {
+  value = var.edge_manifest_path
+}
+
 output "create_noebs_application" {
   value = var.create_noebs_application
+}
+
+output "create_edge_application" {
+  value = var.create_edge_application
 }
 
 output "noebs_service_discovery" {

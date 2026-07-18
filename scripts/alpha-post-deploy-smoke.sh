@@ -38,18 +38,48 @@ fail() {
 command -v kubectl >/dev/null 2>&1 || fail "kubectl is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 
-application="$(kubectl -n argocd get application noebs -o json)"
-actual_revision="$(jq -r '.status.sync.revision // ""' <<<"$application")"
-sync_status="$(jq -r '.status.sync.status // ""' <<<"$application")"
-health_status="$(jq -r '.status.health.status // ""' <<<"$application")"
+assert_application_ready() {
+    local name="$1"
+    local application actual_revision sync_status health_status
+    application="$(kubectl -n argocd get application "$name" -o json)"
+    actual_revision="$(jq -r '.status.sync.revision // ""' <<<"$application")"
+    sync_status="$(jq -r '.status.sync.status // ""' <<<"$application")"
+    health_status="$(jq -r '.status.health.status // ""' <<<"$application")"
 
-[[ "$actual_revision" == "$expected_revision" ]] || fail "Argo revision $actual_revision does not match $expected_revision"
-[[ "$sync_status" == Synced ]] || fail "Argo sync status is $sync_status"
-[[ "$health_status" == Healthy ]] || fail "Argo health status is $health_status"
+    [[ "$actual_revision" == "$expected_revision" ]] || fail "$name Argo revision $actual_revision does not match $expected_revision"
+    [[ "$sync_status" == Synced ]] || fail "$name Argo sync status is $sync_status"
+    [[ "$health_status" == Healthy ]] || fail "$name Argo health status is $health_status"
+}
+
+assert_application_ready noebs
+assert_application_ready noebs-edge
 
 while IFS= read -r workload; do
     kubectl -n "$namespace" rollout status "$workload" --timeout=5m >/dev/null
 done < <(kubectl -n "$namespace" get deployment,statefulset -o name | sort)
+
+kubectl -n edge rollout status deployment/caddy --timeout=2m >/dev/null
+expected_caddy_digest="sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d"
+caddy_pod="$(kubectl -n edge get pods -l app.kubernetes.io/name=caddy -o json)"
+[[ "$(jq '.items | length' <<<"$caddy_pod")" == 1 ]] || fail "edge must have exactly one Caddy pod"
+[[ "$(jq -r '.items[0].spec.containers[0].image' <<<"$caddy_pod")" == "caddy@$expected_caddy_digest" ]] || fail "edge Caddy declaration is not pinned to the release digest"
+[[ "$(jq -r '.items[0].status.containerStatuses[0].imageID' <<<"$caddy_pod")" == *@"$expected_caddy_digest" ]] || fail "running edge Caddy digest does not match its declaration"
+[[ "$(jq -r '.items[0].status.containerStatuses[0].ready' <<<"$caddy_pod")" == true ]] || fail "edge Caddy is not ready"
+[[ "$(jq -r '.items[0].status.containerStatuses[0].restartCount' <<<"$caddy_pod")" == 0 ]] || fail "edge Caddy restarted after rollout"
+[[ "$(jq -r '.items[0].status.qosClass' <<<"$caddy_pod")" != BestEffort ]] || fail "edge Caddy is BestEffort"
+
+caddy_deployment="$(kubectl -n edge get deployment caddy -o json)"
+caddy_missing_resources="$(jq -r '
+  .spec.template.spec.containers[]
+  | select(
+      (.resources.requests.cpu // "") == ""
+      or (.resources.requests.memory // "") == ""
+      or (.resources.limits.cpu // "") == ""
+      or (.resources.limits.memory // "") == ""
+    )
+  | .name
+' <<<"$caddy_deployment")"
+[[ -z "$caddy_missing_resources" ]] || fail "edge Caddy lacks CPU/memory requests or limits"
 
 expected_image="ghcr.io/noebs/noebs@$expected_digest"
 pods="$(kubectl -n "$namespace" get pods -o json)"
@@ -132,7 +162,7 @@ card_vault_version="$(database_version card_vault goose_db_version_card_vault)"
 [[ "$card_vault_version" =~ ^[0-9]+$ && "$card_vault_version" -ge 104 ]] || fail "card-vault migration version is $card_vault_version, want at least 104"
 
 printf 'alpha post-deploy smoke (cluster): PASS revision=%s image=%s identity=%s card-vault=%s\n' \
-    "$actual_revision" "$expected_digest" "$identity_version" "$card_vault_version"
+    "$expected_revision" "$expected_digest" "$identity_version" "$card_vault_version"
 REMOTE
 
 printf 'alpha post-deploy smoke: checking public HTTPS edge without creating data\n'
@@ -154,6 +184,41 @@ serialized = json.dumps(payload).lower()
 for forbidden in ("jwt", "admin_key", "password", "secret", "private_key"):
     assert forbidden not in serialized
 ' <<<"$app_config" || die "/app/config is malformed or exposes a private field"
+
+python3 - "$api_origin" <<'PY' || die "Android App Links or payment-link fallback is invalid"
+import json
+import sys
+import urllib.request
+
+origin = sys.argv[1].rstrip("/")
+
+with urllib.request.urlopen(origin + "/.well-known/assetlinks.json", timeout=15) as response:
+    assert response.status == 200
+    assert response.headers.get_content_type() == "application/json"
+    links = json.load(response)
+
+assert links == [{
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+        "namespace": "android_app",
+        "package_name": "com.tutipay.app.alpha",
+        "sha256_cert_fingerprints": [
+            "B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE",
+        ],
+    },
+}]
+
+payment_url = origin + "/pay/00000000-0000-4000-8000-000000000000"
+with urllib.request.urlopen(payment_url, timeout=15) as response:
+    assert response.status == 200
+    assert response.headers.get_content_type() == "text/html"
+    assert response.headers.get("Cache-Control") == "no-store"
+    assert response.headers.get("Content-Security-Policy") == "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    body = response.read(64 * 1024).decode("utf-8")
+
+assert "Open this link with TutiPay Alpha" in body
+assert "<form" not in body.lower()
+PY
 
 http_status() {
     local method="$1"

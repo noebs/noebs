@@ -222,3 +222,10 @@ check "noebs_manifest_path_exists" {
     error_message = "noebs_manifest_path must contain a kustomization.yaml under the repository root."
   }
 }
+
+check "edge_manifest_path_exists" {
+  assert {
+    condition     = fileexists("${local.repo_root}/${var.edge_manifest_path}/kustomization.yaml")
+    error_message = "edge_manifest_path must contain a kustomization.yaml under the repository root."
+  }
+}

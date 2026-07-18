@@ -147,9 +147,12 @@ Database migrations are a separate boundary. Identity migration 103 adds a
 old OTP conflict target, so they are not compatible with either advanced
 schema. The migration Jobs run before the wave-20 workloads, which also means
 this alpha cutover has a bounded service-interruption risk between migration
-and successful rollout. Once either migration has run, the baseline digest
-above is not a safe application rollback target. The release must retain a
-tested, immutable schema-aware digest as its rollback floor; after recovery or
+and successful rollout. The current-host overlay uses `Recreate` for
+api-gateway, identity-auth, and card-vault so a mixed old/new security or schema
+version cannot keep serving during that cutover. Once either migration has
+run, the baseline digest above is not a safe application rollback target. The
+release must retain a tested, immutable schema-aware digest as its rollback
+floor; after recovery or
 payment traffic starts, prefer a forward fix rather than dropping state. There
 is no automatic down-migration in the Argo CD rollback path.
 

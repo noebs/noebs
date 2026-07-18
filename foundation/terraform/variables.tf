@@ -42,6 +42,17 @@ variable "noebs_namespace" {
   }
 }
 
+variable "edge_namespace" {
+  description = "Namespace where the current-host Caddy edge is deployed."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.edge_namespace) != ""
+    error_message = "edge_namespace must be explicit."
+  }
+}
+
 variable "argocd_chart_version" {
   description = "argo-cd Helm chart version."
   type        = string
@@ -97,8 +108,25 @@ variable "noebs_manifest_path" {
   }
 }
 
+variable "edge_manifest_path" {
+  description = "Kustomize path used by Argo CD for the current-host edge."
+  type        = string
+  nullable    = false
+
+  validation {
+    condition     = trimspace(var.edge_manifest_path) != ""
+    error_message = "edge_manifest_path must be explicit."
+  }
+}
+
 variable "create_noebs_application" {
   description = "Whether to create the Noebs Argo CD Application after the explicit release Secrets exist."
+  type        = bool
+  nullable    = false
+}
+
+variable "create_edge_application" {
+  description = "Whether to create the current-host edge Argo CD Application."
   type        = bool
   nullable    = false
 }

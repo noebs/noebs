@@ -5,7 +5,10 @@ This root owns platform-level deployment wiring for the existing host `100.102.1
 - install Argo CD into the configured cluster or bind to the existing Argo CD install on the current host;
 - create the `noebs` namespace for microservice workloads;
 - create the noebs Argo CD project;
-- create the noebs Argo CD application pointing at `deploy/kubernetes/overlays/current-host`.
+- create the noebs Argo CD application pointing at `deploy/kubernetes/overlays/current-host`;
+- optionally create the `noebs-edge` Argo CD application pointing at
+  `deploy/kubernetes/edge`, so the host-network Caddy deployment and its full
+  shared-host configuration are pruned and self-healed from Git.
 
 Every input is explicit. Copy `terraform.tfvars.example` to `terraform.tfvars`, review each value, and keep the chosen host, kubeconfig, namespaces, Argo CD installation mode, Argo CD chart version, repository, branch, manifest path, and application-creation phase in that file rather than relying on OpenTofu defaults. The current host already has Argo CD installed, so its explicit mode is `existing`; use `helm` only when foundation should create the Argo CD Helm release on a fresh cluster.
 
@@ -46,6 +49,25 @@ The foundation root also checks each required Secret's expected data keys and re
 `wallet-api-secrets` carries wallet HTTP facade auth/admin material only; it must not include `noebs.db_url`.
 `wallet-worker-secrets` carries worker-specific PSP credentials and the `wallet-ledger` service database owner entry; wallet-worker does not own a database or migration role.
 `keycloak-secrets` carries Keycloak's own `keycloak.conf`; no noebs auth data is wired to Keycloak yet.
+
+## Edge GitOps adoption
+
+The existing current-host Caddy deployment is a separate release component in
+the `edge` namespace because it binds host ports 80 and 443 and serves other
+hostnames in addition to Noebs. Keep `create_edge_application = false` during
+foundation bootstrap or while reviewing an adoption. Before enabling it,
+render `deploy/kubernetes/edge`, compare it with the live `edge/caddy`
+Deployment and ConfigMap, and run a server-side dry-run. Then set
+`create_edge_application = true`, review the OpenTofu plan, and apply it to
+create the `noebs-edge` Application. Argo CD creates the namespace when absent
+and thereafter prunes and self-heals this exact kustomization.
+
+The edge Deployment uses `Recreate` because only one pod can own the host
+ports. A pod-template difference during the first Argo sync causes a brief
+public-edge interruption, so adopt it in the same controlled cutover window as
+the alpha release and verify `/.well-known/assetlinks.json` plus a payment-link
+fallback immediately after the sync. Do not leave a second manual edge apply
+workflow active after adoption.
 
 For Docker Compose cutovers on the current host, run `noebs validate-deployment /path/to/noebs-release` against the prepared release directory before replacing the old project. It validates the same explicit config and secret contracts locally, including the exact service role file set, absence of extra real service secret files, exact HTTP/gRPC service discovery catalogs, per-service database ownership, Keycloak inputs, Temporal/Postgres password files, non-reserved tenant IDs, and EBS adapter endpoint/app-id/IPIN/key/bill-inquiry requirements.
 

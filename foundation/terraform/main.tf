@@ -70,6 +70,10 @@ resource "kubernetes_manifest" "noebs_project" {
           namespace = kubernetes_namespace_v1.noebs.metadata[0].name
           server    = "https://kubernetes.default.svc"
         },
+        {
+          namespace = var.edge_namespace
+          server    = "https://kubernetes.default.svc"
+        },
       ]
       namespaceResourceWhitelist = [
         {
@@ -167,4 +171,43 @@ resource "kubernetes_manifest" "noebs_application" {
       error_message = "ghcr-credentials must be a kubernetes.io/dockerconfigjson Secret."
     }
   }
+}
+
+resource "kubernetes_manifest" "noebs_edge_application" {
+  count = var.create_edge_application ? 1 : 0
+
+  manifest = {
+    apiVersion = "argoproj.io/v1alpha1"
+    kind       = "Application"
+    metadata = {
+      name      = "noebs-edge"
+      namespace = var.argocd_namespace
+    }
+    spec = {
+      project = "noebs"
+      source = {
+        repoURL        = var.noebs_repo_url
+        targetRevision = var.noebs_target_revision
+        path           = var.edge_manifest_path
+      }
+      destination = {
+        server    = "https://kubernetes.default.svc"
+        namespace = var.edge_namespace
+      }
+      syncPolicy = {
+        automated = {
+          prune    = true
+          selfHeal = true
+        }
+        syncOptions = [
+          "CreateNamespace=true",
+          "PruneLast=true",
+        ]
+      }
+    }
+  }
+
+  depends_on = [
+    kubernetes_manifest.noebs_project,
+  ]
 }
