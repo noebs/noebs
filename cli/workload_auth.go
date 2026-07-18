@@ -284,6 +284,7 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 		for _, caller := range []string{string(serviceRoleAPIGateway), string(serviceRoleNotification)} {
 			add(caller, http.MethodPost, "/internal/identity-auth/sessions/validate")
 		}
+		add(string(serviceRoleNotification), http.MethodPost, "/internal/identity-auth/users/resolve-batch")
 		for _, path := range []string{
 			"/internal/identity-auth/card-registration/users",
 			"/internal/identity-auth/register-with-card/users",

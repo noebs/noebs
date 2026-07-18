@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,6 +24,53 @@ func TestResolveIdentityUserByMobileUsesIdentityScope(t *testing.T) {
 	}
 	if result.UserID <= 0 || result.Mobile != "0912141660" {
 		t.Fatalf("identity result = %+v", result)
+	}
+}
+
+func TestResolveIdentityUsersBatchIsTenantScopedAndBounded(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
+	const otherTenant = "other-tenant"
+	if err := storeSvc.EnsureTenant(context.Background(), otherTenant); err != nil {
+		t.Fatalf("ensure other tenant: %v", err)
+	}
+	first := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
+	second := seedUser(t, storeSvc, tenantID, "0912141661", "My$Passw0rd!")
+	foreign := seedUser(t, storeSvc, otherTenant, "0912141660", "My$Passw0rd!")
+	service := &Service{Store: storeSvc}
+
+	result, err := service.ResolveIdentityUsersBatch(context.Background(), tenantID, IdentityUsersBatchCommand{
+		Mobiles: []string{"0912141661", "0912141660", "0912141660", "0912141999"},
+	})
+	if err != nil {
+		t.Fatalf("ResolveIdentityUsersBatch(): %v", err)
+	}
+	if len(result.Users) != 2 {
+		t.Fatalf("users = %+v, want two tenant-local matches", result.Users)
+	}
+	resolved := map[string]int64{}
+	for _, user := range result.Users {
+		resolved[user.Mobile] = user.UserID
+	}
+	if resolved[first.Mobile] != first.ID || resolved[second.Mobile] != second.ID {
+		t.Fatalf("resolved = %+v, want local IDs %d and %d", resolved, first.ID, second.ID)
+	}
+	if resolved[first.Mobile] == foreign.ID {
+		t.Fatalf("foreign tenant ID %d leaked into result %+v", foreign.ID, resolved)
+	}
+}
+
+func TestResolveIdentityUsersBatchRejectsInvalidInputBeforeStore(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	tests := []IdentityUsersBatchCommand{
+		{},
+		{Mobiles: []string{"+249912141660"}},
+		{Mobiles: []string{"091214166x"}},
+		{Mobiles: make([]string, maxIdentityUserBatch+1)},
+	}
+	for index, command := range tests {
+		if _, err := service.ResolveIdentityUsersBatch(context.Background(), "tenant", command); !errors.Is(err, store.ErrInvalidMobile) {
+			t.Fatalf("case %d error = %v, want %v", index, err, store.ErrInvalidMobile)
+		}
 	}
 }
 

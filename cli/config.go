@@ -48,7 +48,6 @@ type chatGatewayIdentityContextKey struct{}
 
 type chatGatewayIdentity struct {
 	gateway.UserIdentity
-	Token string
 }
 
 const chatSessionValidationInterval = 5 * time.Second
@@ -417,13 +416,7 @@ func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handl
 	cons := route.Group("/consumer", userIdentity)
 	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
 	cons.Post("/submit_contacts", func(c *fiber.Ctx) error {
-		mobile, ok := c.Locals("mobile").(string)
-		if !ok || strings.TrimSpace(mobile) == "" {
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "missing_mobile", "message": "missing mobile claim"})
-		}
-		return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			chat.SubmitContacts(mobile, database.DB, w, r)
-		})(c)
+		return submitChatContacts(c, chatContactsResolver, database.DB)
 	})
 }
 
@@ -444,18 +437,18 @@ func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Hand
 	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
-func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
+func chatClientIdentityFromGatewayIdentity(r *http.Request) (chat.ClientIdentity, error) {
 	if r == nil {
-		return "", chat.ErrUnauthorized
+		return chat.ClientIdentity{}, chat.ErrUnauthorized
 	}
 	identity, ok := r.Context().Value(chatGatewayIdentityContextKey{}).(chatGatewayIdentity)
 	if !ok {
-		return "", chat.ErrUnauthorized
+		return chat.ClientIdentity{}, chat.ErrUnauthorized
 	}
-	if identity.Mobile == "" {
-		return "", chat.ErrUnauthorized
+	if identity.TenantID == "" || identity.UserID <= 0 {
+		return chat.ClientIdentity{}, chat.ErrUnauthorized
 	}
-	return identity.Mobile, nil
+	return chat.ClientIdentity{TenantID: identity.TenantID, UserID: identity.UserID}, nil
 }
 
 func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
@@ -474,10 +467,6 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 	if !ok || sessionEpoch <= 0 {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
-	token, ok := c.Locals("session_token").(string)
-	if !ok || strings.TrimSpace(token) == "" {
-		return chatGatewayIdentity{}, chat.ErrUnauthorized
-	}
 	mobile, ok := c.Locals("mobile").(string)
 	if !ok || strings.TrimSpace(mobile) == "" {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
@@ -487,7 +476,7 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
 	identity.SessionEpoch = sessionEpoch
-	return chatGatewayIdentity{UserIdentity: identity, Token: token}, nil
+	return chatGatewayIdentity{UserIdentity: identity}, nil
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
@@ -748,12 +737,14 @@ func initConfig() {
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000
 		chatCfg.UnreadBatchSize = 200
-		chatCfg.PersistBatchSize = 128
-		chatCfg.PersistFlushInterval = 10 * time.Millisecond
-		chatCfg.ClientIDFromRequest = chatClientIDFromGatewayIdentity
+		chatCfg.ClientIdentityFromRequest = chatClientIdentityFromGatewayIdentity
 		chatCfg.ValidateClientSession = chatSessionValidation(sessionValidator)
 		chatCfg.SessionValidationInterval = chatSessionValidationInterval
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
+		chatContactsResolver, err = newIdentityContactResolver(noebsConfig, workloadSigners)
+		if err != nil {
+			logrusLogger.Fatalf("configure chat contact resolution: %v", err)
+		}
 	}
 	if role.startsChat() && (database == nil || database.DB == nil) {
 		logrusLogger.Fatalf("%s role requires an initialized database", role)

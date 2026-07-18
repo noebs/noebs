@@ -135,15 +135,15 @@ func TestNotificationWebsocketRejectsBearerWithoutGatewayIdentity(t *testing.T) 
 	}
 }
 
-func TestChatClientIDUsesGatewayIdentity(t *testing.T) {
+func TestChatClientIdentityUsesGatewayIdentity(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	req.Header.Set("Authorization", testAuthorizationHeader(t))
-	if _, err := chatClientIDFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
+	if _, err := chatClientIdentityFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
 		t.Fatalf("bearer-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
 	}
 
 	setGatewayUserIdentityHeaders(req, 1, "test-tenant", "0912345678")
-	if _, err := chatClientIDFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
+	if _, err := chatClientIdentityFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
 		t.Fatalf("header-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
 	}
 	req = req.WithContext(context.WithValue(req.Context(), chatGatewayIdentityContextKey{}, chatGatewayIdentity{
@@ -153,14 +153,14 @@ func TestChatClientIDUsesGatewayIdentity(t *testing.T) {
 			Mobile:       "0912345678",
 			SessionEpoch: 1,
 		},
-		Token: "signed-session",
 	}))
-	got, err := chatClientIDFromGatewayIdentity(req)
+	got, err := chatClientIdentityFromGatewayIdentity(req)
 	if err != nil {
 		t.Fatalf("chatClientIDFromGatewayIdentity() error = %v", err)
 	}
-	if got != "0912345678" {
-		t.Fatalf("client id = %q, want %q", got, "0912345678")
+	want := (chat.ClientIdentity{TenantID: "test-tenant", UserID: 1})
+	if got != want {
+		t.Fatalf("client identity = %+v, want %+v", got, want)
 	}
 }
 

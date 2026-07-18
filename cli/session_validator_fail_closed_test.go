@@ -42,7 +42,6 @@ func TestSessionValidatorsDoNotSendUnsignedRequests(t *testing.T) {
 			UserID:       42,
 			SessionEpoch: 1,
 		},
-		Token: "session-token",
 	})
 	if !errors.Is(err, gateway.ErrSessionValidation) || !errors.Is(err, workloadauth.ErrMissingSigner) {
 		t.Fatalf("chat validation error = %v", err)

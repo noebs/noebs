@@ -90,9 +90,6 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 		default:
 			return fmt.Errorf("unknown gateway auth mode %d for %s %s", spec.auth, spec.method, spec.path)
 		}
-		if spec.websocket {
-			handlers = append(handlers, propagateGatewaySessionToken)
-		}
 		handlers = append(handlers, signGatewayWorkload(string(spec.role), workloadSigners))
 		handlers = append(handlers, handler)
 		route.Add(spec.method, spec.path, handlers...)
@@ -125,7 +122,6 @@ func gatewayWebSocketProxyHandler(endpoint string) fiber.Handler {
 			gateway.GatewayUserIDHeader,
 			gateway.GatewayMobileHeader,
 			gateway.GatewaySessionEpochHeader,
-			gateway.GatewaySessionTokenHeader,
 			gateway.GatewaySourceIPHeader,
 		} {
 			if value := strings.TrimSpace(c.Get(name)); value != "" {
@@ -367,15 +363,6 @@ func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 		c.Request().Header.Set(gateway.GatewayMobileHeader, mobile)
 	}
 	stripPublicCredentialHeaders(c)
-	return c.Next()
-}
-
-func propagateGatewaySessionToken(c *fiber.Ctx) error {
-	token, ok := c.Locals("session_token").(string)
-	if !ok || strings.TrimSpace(token) == "" {
-		return fiber.NewError(http.StatusUnauthorized, "missing gateway session token")
-	}
-	c.Request().Header.Set(gateway.GatewaySessionTokenHeader, token)
 	return c.Next()
 }
 

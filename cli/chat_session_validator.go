@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -45,7 +44,7 @@ func newChatSessionValidator(cfg ebs_fields.NoebsConfig, signers *workloadauth.S
 }
 
 func (v *chatSessionValidator) ValidateSession(ctx context.Context, identity chatGatewayIdentity) error {
-	if v == nil || v.client == nil || v.endpoint == "" || strings.TrimSpace(identity.Token) == "" {
+	if v == nil || v.client == nil || v.endpoint == "" || identity.UserID <= 0 || identity.SessionEpoch <= 0 {
 		return gateway.ErrSessionValidation
 	}
 	if v.signers == nil {
@@ -97,7 +96,7 @@ func chatSessionValidation(validator interface {
 			return chat.ErrSessionValidationUnavailable
 		}
 		identity, ok := ctx.Value(chatGatewayIdentityContextKey{}).(chatGatewayIdentity)
-		if !ok || identity.SessionEpoch <= 0 || strings.TrimSpace(identity.Token) == "" {
+		if !ok || identity.UserID <= 0 || identity.SessionEpoch <= 0 {
 			return chat.ErrUnauthorized
 		}
 		err := validator.ValidateSession(ctx, identity)

@@ -21,6 +21,7 @@ import (
 )
 
 func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
+	ensureInit()
 	for _, tt := range []struct {
 		name       string
 		invalidate func(*atomic.Int64, *atomic.Bool)
@@ -68,6 +69,7 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 				if r.Method != http.MethodPost ||
 					r.URL.Path != "/internal/identity-auth/sessions/validate" ||
 					r.Header.Get(gateway.GatewayTenantIDHeader) != tenant ||
+					r.Header.Get(gateway.GatewaySessionTokenHeader) != "" ||
 					json.NewDecoder(r.Body).Decode(&command) != nil ||
 					command.UserID != userID {
 					w.WriteHeader(http.StatusBadRequest)
@@ -106,10 +108,10 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 
 			chatCfg := chat.DefaultHubConfig()
 			chatCfg.PingPeriod = time.Hour
-			chatCfg.ClientIDFromRequest = chatClientIDFromGatewayIdentity
+			chatCfg.ClientIdentityFromRequest = chatClientIdentityFromGatewayIdentity
 			chatCfg.ValidateClientSession = chatSessionValidation(chatValidator)
 			chatCfg.SessionValidationInterval = 10 * time.Millisecond
-			chatHub := chat.NewHubWithConfig(nil, chatCfg)
+			chatHub := chat.NewHubWithConfig(database.DB, chatCfg)
 			go chatHub.Run()
 			defer chatHub.Stop()
 
@@ -140,7 +142,6 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 			spoofHeaders.Set(gateway.GatewayUserIDHeader, "42")
 			spoofHeaders.Set(gateway.GatewayMobileHeader, victimMobile)
 			spoofHeaders.Set(gateway.GatewaySessionEpochHeader, "3")
-			spoofHeaders.Set(gateway.GatewaySessionTokenHeader, token)
 			spoofURL := "ws" + strings.TrimPrefix(notificationURL, "http") + "/ws"
 			spoofConn, spoofResponse, spoofErr := websocket.DefaultDialer.Dial(spoofURL, spoofHeaders)
 			if spoofConn != nil {
@@ -159,7 +160,7 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 			defer conn.Close()
 
 			typing := true
-			if err := conn.WriteJSON(chat.Message{Type: "typing", To: mobile, IsTyping: &typing}); err != nil {
+			if err := conn.WriteJSON(map[string]any{"type": chat.FrameTypeTyping, "to_user_id": userID, "is_typing": typing}); err != nil {
 				t.Fatalf("write through gateway: %v", err)
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
@@ -167,7 +168,7 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 			if err := conn.ReadJSON(&response); err != nil {
 				t.Fatalf("read through gateway: %v", err)
 			}
-			if len(response.Messages) != 1 || response.Messages[0].From != mobile || response.Messages[0].Type != "typing" {
+			if len(response.Messages) != 1 || response.Messages[0].FromUserID != userID || response.Messages[0].Type != chat.FrameTypeTyping {
 				t.Fatalf("typing response = %#v", response)
 			}
 
@@ -210,7 +211,6 @@ func TestChatSessionValidatorCallsIdentityAuthDirectly(t *testing.T) {
 			Mobile:       "0990000000",
 			SessionEpoch: 3,
 		},
-		Token: "gateway-validated-session-token",
 	})
 	if !errors.Is(err, gateway.ErrSessionRevoked) {
 		t.Fatalf("ValidateSession() error = %v, want %v", err, gateway.ErrSessionRevoked)

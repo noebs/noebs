@@ -121,6 +121,7 @@ func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/recovery-credential", h.IssueRecoveryCredential)
 	router.Post("/sessions/validate", h.ValidateSession)
 	router.Post("/users/by-mobile", h.ResolveIdentityUserByMobile)
+	router.Post("/users/resolve-batch", h.ResolveIdentityUsersBatch)
 }
 
 func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {

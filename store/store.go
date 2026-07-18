@@ -270,6 +270,38 @@ func (s *Store) GetUserByMobile(ctx context.Context, tenantID, mobile string) (*
 	return &user, nil
 }
 
+type IdentityUserReference struct {
+	UserID int64  `db:"id"`
+	Mobile string `db:"mobile"`
+}
+
+func (s *Store) ListIdentityUsersByMobile(ctx context.Context, tenantID string, mobiles []string) ([]IdentityUserReference, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if len(mobiles) == 0 || len(mobiles) > 50 {
+		return nil, ErrInvalidMobile
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	query, args, err := sqlx.In(`
+		SELECT id, mobile
+		FROM users
+		WHERE tenant_id = ? AND deleted_at IS NULL AND mobile IN (?)
+		ORDER BY id`, tenantID, mobiles)
+	if err != nil {
+		return nil, err
+	}
+	var users []IdentityUserReference
+	if err := db.SelectContext(ctx, &users, s.DB.Rebind(query), args...); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func (s *Store) GetUserByEmailOrMobile(ctx context.Context, tenantID, query string) (*ebs_fields.User, error) {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {

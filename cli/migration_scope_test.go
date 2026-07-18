@@ -57,8 +57,8 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		},
 		serviceRoleNotificationMigrate: {
 			"tenants",
-			"chats",
-			"contacts",
+			"chats_v2",
+			"contacts_v2",
 			"push_data",
 		},
 		serviceRoleBeneficiaryMigrate: {
@@ -82,6 +82,10 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		},
 		serviceRoleBeneficiaryMigrate: {
 			"beneficiaries",
+		},
+		serviceRoleNotificationMigrate: {
+			"chats",
+			"contacts",
 		},
 	}
 
