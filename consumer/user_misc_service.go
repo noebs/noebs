@@ -2,8 +2,9 @@ package consumer
 
 import (
 	"context"
-	"errors"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -12,10 +13,11 @@ import (
 type CheckUserResult struct {
 	Phone  string `json:"phone"`
 	IsUser bool   `json:"is_user"`
-	Pan    string `json:"PAN"`
 }
 
-func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []string) ([]CheckUserResult, error) {
+const maxCheckUserPhones = 50
+
+func (s *Service) CheckUser(ctx context.Context, tenantID string, requesterID int64, phones []string, source string, now time.Time) ([]CheckUserResult, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
@@ -23,17 +25,32 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 	if err != nil {
 		return nil, err
 	}
+	if requesterID <= 0 {
+		return nil, store.ErrInvalidUserID
+	}
 	phones, err = normalizeCheckUserPhones(phones)
 	if err != nil {
 		return nil, err
 	}
-	if s.HTTPClient == nil {
-		return nil, ErrMissingHTTPClient
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		sourceLimit("check-user-source", source, 60, 15*time.Minute),
+		authLimitRule{
+			action:  "check-user-account",
+			subject: authSubjectHash("user_id", strconv.FormatInt(requesterID, 10)),
+			limit:   20,
+			window:  15 * time.Minute,
+		},
+	); err != nil {
+		return nil, err
 	}
 
 	out := make([]CheckUserResult, 0, len(phones))
 	for _, phone := range phones {
-		user, err := s.Store.GetUserByMobile(ctx, tenantID, phone)
+		_, err := s.Store.GetUserByMobile(ctx, tenantID, phone)
 		if err != nil {
 			if !store.ErrNotFound(err) {
 				return nil, err
@@ -42,14 +59,7 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, phones []strin
 			continue
 		}
 
-		maskedCard, err := s.ResolveMaskedCardByMobileInCardVault(ctx, tenantID, user.Mobile)
-		if errors.Is(err, ErrReceiverHasNoCard) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, CheckUserResult{Phone: phone, IsUser: true, Pan: maskedCard.MaskedPAN})
+		out = append(out, CheckUserResult{Phone: phone, IsUser: true})
 	}
 	return out, nil
 }
@@ -58,12 +68,20 @@ func normalizeCheckUserPhones(phones []string) ([]string, error) {
 	if len(phones) == 0 {
 		return nil, ErrMissingMobile
 	}
+	if len(phones) > maxCheckUserPhones {
+		return nil, ErrCheckUserBatchTooLarge
+	}
 	normalized := make([]string, 0, len(phones))
+	seen := make(map[string]struct{}, len(phones))
 	for _, phone := range phones {
 		phone = strings.TrimSpace(phone)
 		if phone == "" {
 			return nil, ErrMissingMobile
 		}
+		if _, exists := seen[phone]; exists {
+			continue
+		}
+		seen[phone] = struct{}{}
 		normalized = append(normalized, phone)
 	}
 	return normalized, nil

@@ -17,11 +17,16 @@ import (
 )
 
 const (
-	otpChallengeTTL  = 10 * time.Minute
-	otpMaxAttempts   = 5
-	refreshMaxAge    = 30 * 24 * time.Hour
-	refreshClockSkew = 5 * time.Minute
+	otpChallengeTTL    = 10 * time.Minute
+	otpMaxAttempts     = 5
+	refreshMaxAge      = 30 * 24 * time.Hour
+	refreshClockSkew   = 5 * time.Minute
+	refreshProofDomain = "noebs-refresh-v1\n"
 )
+
+func refreshJWTProofMessage(token string) string {
+	return refreshProofDomain + token
+}
 
 type authLimitRule struct {
 	action  string

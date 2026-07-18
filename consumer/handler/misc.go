@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"time"
 
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
 )
@@ -36,9 +39,17 @@ func (h *Handler) CheckUser(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-
-	out, err := h.Service.CheckUser(c.UserContext(), tenantID, req.Phones)
+	requesterID := getUserID(c)
+	source, err := resolveRequestSource(c)
 	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+
+	out, err := h.Service.CheckUser(c.UserContext(), tenantID, requesterID, req.Phones, source, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	return jsonResponse(c, http.StatusOK, out)

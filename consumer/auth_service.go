@@ -208,7 +208,7 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 	if strings.TrimSpace(req.Mobile) != user.Mobile {
 		return "", ErrInvalidSignature
 	}
-	if err := verifyUserSignature(user.PublicKey, req.Signature, req.Message); err != nil {
+	if err := verifyUserSignature(user.PublicKey, req.Signature, refreshJWTProofMessage(oldToken)); err != nil {
 		return "", err
 	}
 	newToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, user.SessionEpoch)

@@ -70,8 +70,6 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 	// Social auth (public)
 	router.Post("/auth/google", h.GoogleAuth)
 
-	// User identity checks
-	router.Post("/check_user", h.CheckUser)
 }
 
 func RegisterBeneficiaryRoutes(router fiber.Router, h *Handler) {
@@ -126,6 +124,7 @@ func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Put("/user/lang", h.SetUserLanguage)
 	router.Post("/user/device", h.AddDeviceToken)
 	router.Post("/change_password", h.ChangePassword)
+	router.Post("/check_user", h.CheckUser)
 	router.Post("/kyc", h.KYC)
 }
 

@@ -763,7 +763,8 @@ func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 	env := newTestEnv(t)
 	env.Auth.Now = func() time.Time { return authTestNow }
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
-	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
+	publicKey, sign := newSignatureProof(t)
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": publicKey}); err != nil {
 		t.Fatalf("set public key: %v", err)
 	}
 	oldToken, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
@@ -773,8 +774,8 @@ func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 
 	token, err := env.Service.RefreshJWT(context.Background(), env.Tenant, gateway.Token{
 		JWT:       oldToken,
-		Signature: refreshProofSignature,
-		Message:   refreshProofMessage,
+		Signature: sign(refreshJWTProofMessage(oldToken)),
+		Message:   "caller-controlled-value",
 		Mobile:    user.Mobile,
 	}, authTestSource, authTestNow)
 	if err != nil {
@@ -799,14 +800,15 @@ func TestServiceRefreshJWTRotatesAndRejectsReplay(t *testing.T) {
 	env := newTestEnv(t)
 	env.Auth.Now = func() time.Time { return authTestNow }
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
-	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
+	publicKey, sign := newSignatureProof(t)
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": publicKey}); err != nil {
 		t.Fatalf("set public key: %v", err)
 	}
 	oldToken, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
 	if err != nil {
 		t.Fatalf("generate jwt: %v", err)
 	}
-	req := gateway.Token{JWT: oldToken, Signature: refreshProofSignature, Message: refreshProofMessage, Mobile: user.Mobile}
+	req := gateway.Token{JWT: oldToken, Signature: sign(refreshJWTProofMessage(oldToken)), Mobile: user.Mobile}
 	newToken, err := env.Service.RefreshJWT(context.Background(), env.Tenant, req, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("RefreshJWT(first use): %v", err)
@@ -816,6 +818,39 @@ func TestServiceRefreshJWTRotatesAndRejectsReplay(t *testing.T) {
 	}
 	if _, err := env.Service.RefreshJWT(context.Background(), env.Tenant, req, authTestSource, authTestNow.Add(time.Second)); !errors.Is(err, ErrRefreshReplay) {
 		t.Fatalf("RefreshJWT(replay) error = %v, want %v", err, ErrRefreshReplay)
+	}
+}
+
+func TestServiceRefreshJWTBindsSignatureToPresentedToken(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	publicKey, sign := newSignatureProof(t)
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": publicKey}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+
+	env.Auth.Now = func() time.Time { return authTestNow }
+	tokenA, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
+	if err != nil {
+		t.Fatalf("generate token A: %v", err)
+	}
+	env.Auth.Now = func() time.Time { return authTestNow.Add(time.Second) }
+	tokenB, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
+	if err != nil {
+		t.Fatalf("generate token B: %v", err)
+	}
+	if tokenA == tokenB {
+		t.Fatal("test setup generated identical tokens")
+	}
+
+	_, err = env.Service.RefreshJWT(context.Background(), env.Tenant, gateway.Token{
+		JWT:       tokenB,
+		Mobile:    user.Mobile,
+		Message:   refreshJWTProofMessage(tokenA),
+		Signature: sign(refreshJWTProofMessage(tokenA)),
+	}, authTestSource, authTestNow.Add(time.Second))
+	if !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("RefreshJWT(token B with token A proof) error = %v, want %v", err, ErrInvalidSignature)
 	}
 }
 
