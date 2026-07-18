@@ -136,6 +136,9 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 		if errors.Is(err, consumer.ErrSessionRevoked) {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Session has been revoked", "code": "session_revoked"})
 		}
+		if errors.Is(err, consumer.ErrInvalidSignature) {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Invalid signature", "code": "invalid_signature"})
+		}
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
 		}
@@ -256,9 +259,10 @@ func (h *Handler) BalanceStep(c *fiber.Ctx) error {
 func (h *Handler) ChangePassword(c *fiber.Ctx) error {
 	mobile := getMobile(c)
 	var req struct {
+		CurrentPassword string `json:"password"`
 		NewPassword string `json:"new_password"`
 	}
-	if err := parseJSON(c, &req); err != nil || strings.TrimSpace(req.NewPassword) == "" {
+	if err := parseJSON(c, &req); err != nil || strings.TrimSpace(req.CurrentPassword) == "" || strings.TrimSpace(req.NewPassword) == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Bad request.", "code": "bad_request"})
 	}
 
@@ -267,17 +271,21 @@ func (h *Handler) ChangePassword(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	user, err := h.Service.ChangePassword(c.UserContext(), tenantID, mobile, req.NewPassword)
+	token, user, err := h.Service.ChangePassword(c.UserContext(), tenantID, mobile, req.CurrentPassword, req.NewPassword, time.Now().UTC())
 	if err != nil {
 		if errors.Is(err, consumer.ErrPasswordInvalid) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Password must be at least 8 characters long, and must include at least one capital letter, one symbol and one number", "code": "password_invalid"})
+		}
+		if errors.Is(err, consumer.ErrWrongPassword) {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "wrong password entered", "code": "wrong_password"})
 		}
 		if store.ErrNotFound(err) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "not_found"})
 		}
 		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok", "user": user})
+	c.Set("Authorization", token)
+	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok", "authorization": token, "user": user})
 }
 
 func (h *Handler) GenerateSignInCode(c *fiber.Ctx) error {

@@ -1,0 +1,4 @@
+services:
+  api-gateway:
+    ports:
+      - "127.0.0.1:${NOEBS_ALPHA_DEVICE_PORT}:8080"

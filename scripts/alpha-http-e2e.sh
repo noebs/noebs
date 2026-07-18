@@ -6,10 +6,26 @@ umask 077
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 harness_dir="$root/scripts/alpha-http-e2e"
 compose_file="$harness_dir/compose.yaml"
+device_compose_file="$harness_dir/device-fixture.compose.yaml"
 runtime=""
 image=""
 project=""
 HTTP_BODY=""
+remove_image=false
+device_ready=false
+
+mode="${1:-journey}"
+[[ $# -le 1 ]] || {
+    printf 'usage: %s [journey|device]\n' "$0" >&2
+    exit 2
+}
+case "$mode" in
+journey | device) ;;
+*)
+    printf 'usage: %s [journey|device]\n' "$0" >&2
+    exit 2
+    ;;
+esac
 
 die() {
     printf 'alpha HTTP E2E: %s\n' "$1" >&2
@@ -22,23 +38,66 @@ require_command() {
 
 cleanup() {
     local status=$?
+    local cleanup_failed=false
     trap - EXIT INT TERM
 
     if [[ -n "$runtime" && -n "$project" && -f "$compose_file" ]]; then
-        COMPOSE_PROJECT_NAME="$project" \
-        NOEBS_ALPHA_E2E_IMAGE="$image" \
-        NOEBS_ALPHA_E2E_RUNTIME="$runtime" \
-            docker compose --project-directory "$harness_dir" -f "$compose_file" \
-            down --volumes --remove-orphans --timeout 5 >/dev/null 2>&1 || true
-    fi
-    if [[ -n "$image" ]]; then
-        docker image rm --force "$image" >/dev/null 2>&1 || true
-    fi
-    if [[ -n "$runtime" && "$runtime" == /dev/shm/noebs-alpha-e2e-* ]]; then
-        rm -rf -- "$runtime"
+        local -a cleanup_compose=(
+            docker compose
+            --project-directory "$harness_dir"
+            -f "$compose_file"
+        )
+        if [[ "$mode" == device ]]; then
+            cleanup_compose+=(-f "$device_compose_file")
+        fi
+        if [[ "$device_ready" == true ]]; then
+            if ! COMPOSE_PROJECT_NAME="$project" \
+                NOEBS_ALPHA_E2E_IMAGE="$image" \
+                NOEBS_ALPHA_E2E_RUNTIME="$runtime" \
+                "${cleanup_compose[@]}" exec -T capture \
+                python /opt/noebs-e2e/capture.py assert-zero >/dev/null 2>&1; then
+                printf 'alpha HTTP E2E: device fixture contacted a guarded external boundary\n' >&2
+                if ((status == 0)); then
+                    status=1
+                fi
+            fi
+        fi
+        if ! COMPOSE_PROJECT_NAME="$project" \
+            NOEBS_ALPHA_E2E_IMAGE="$image" \
+            NOEBS_ALPHA_E2E_RUNTIME="$runtime" \
+            "${cleanup_compose[@]}" down \
+            --volumes --remove-orphans --timeout 5 >/dev/null 2>&1; then
+            cleanup_failed=true
+        fi
+
+        local remaining_containers remaining_volumes remaining_networks
+        remaining_containers="$(docker ps --all --quiet \
+            --filter "label=com.docker.compose.project=$project" 2>/dev/null)" || cleanup_failed=true
+        remaining_volumes="$(docker volume ls --quiet \
+            --filter "label=com.docker.compose.project=$project" 2>/dev/null)" || cleanup_failed=true
+        remaining_networks="$(docker network ls --quiet \
+            --filter "label=com.docker.compose.project=$project" 2>/dev/null)" || cleanup_failed=true
+        if [[ -n "$remaining_containers" || -n "$remaining_volumes" || -n "$remaining_networks" ]]; then
+            cleanup_failed=true
+        fi
     fi
 
-    if ((status != 0)); then
+    if [[ "$cleanup_failed" == false ]]; then
+        if [[ "$remove_image" == true && -n "$image" ]]; then
+            docker image rm --force "$image" >/dev/null 2>&1 || cleanup_failed=true
+        fi
+        if [[ "$cleanup_failed" == false && -n "$runtime" && "$runtime" == /dev/shm/noebs-alpha-e2e-* ]]; then
+            rm -rf -- "$runtime" || cleanup_failed=true
+        fi
+    fi
+
+    if [[ "$cleanup_failed" == true ]]; then
+        printf 'alpha HTTP E2E: cleanup incomplete for project %s; retained runtime %s for operator recovery\n' \
+            "$project" "$runtime" >&2
+        if ((status == 0)); then
+            status=1
+        fi
+    elif ((status != 0)); then
         printf 'alpha HTTP E2E: failed; isolated containers, databases, and in-memory secrets were removed\n' >&2
     fi
     exit "$status"
@@ -54,6 +113,7 @@ docker compose version >/dev/null 2>&1 || die "Docker Compose is unavailable"
 docker info >/dev/null 2>&1 || die "Docker daemon is unavailable"
 [[ -d /dev/shm && -w /dev/shm ]] || die "a writable memory-backed /dev/shm is required"
 [[ -f "$compose_file" ]] || die "missing harness compose file"
+[[ "$mode" != device || -f "$device_compose_file" ]] || die "missing device fixture Compose override"
 
 cd "$root"
 [[ -z "$(git status --porcelain --untracked-files=normal)" ]] || \
@@ -62,18 +122,50 @@ cd "$root"
 commit="$(git rev-parse --verify HEAD)"
 run_id="$(openssl rand -hex 6)"
 project="noebs-alpha-$run_id"
-image="noebs-alpha-e2e:${commit:0:12}-$run_id"
 runtime="/dev/shm/noebs-alpha-e2e-$run_id"
 mkdir -m 0700 "$runtime" "$runtime/services"
+
+tenant_id="alpha-e2e"
+device_port="${NOEBS_ALPHA_DEVICE_PORT:-18080}"
+prebuilt_image="${NOEBS_ALPHA_E2E_PREBUILT_IMAGE:-}"
+allow_local_build="${NOEBS_ALPHA_E2E_ALLOW_LOCAL_BUILD:-false}"
+[[ "$allow_local_build" == true || "$allow_local_build" == false ]] || \
+    die "NOEBS_ALPHA_E2E_ALLOW_LOCAL_BUILD must be true or false"
+if [[ -n "$prebuilt_image" && ! "$prebuilt_image" =~ ^ghcr\.io/noebs/noebs@sha256:[0-9a-f]{64}$ ]]; then
+    die "NOEBS_ALPHA_E2E_PREBUILT_IMAGE must be an immutable GHCR digest"
+fi
+if [[ "$mode" == device ]]; then
+    tenant_id="${NOEBS_ALPHA_DEVICE_TENANT:-}"
+    [[ "$tenant_id" =~ ^alpha-device-[a-z0-9][a-z0-9-]{0,62}$ ]] || \
+        die "NOEBS_ALPHA_DEVICE_TENANT must match alpha-device-[a-z0-9-] and be at most 76 characters"
+    [[ "$device_port" =~ ^[0-9]+$ ]] && ((device_port >= 1024 && device_port <= 65535)) || \
+        die "NOEBS_ALPHA_DEVICE_PORT must be between 1024 and 65535"
+    [[ -n "$prebuilt_image" ]] || \
+        die "device mode requires NOEBS_ALPHA_E2E_PREBUILT_IMAGE as an immutable GHCR digest"
+fi
+if [[ -z "$prebuilt_image" && "$allow_local_build" != true ]]; then
+    die "set NOEBS_ALPHA_E2E_PREBUILT_IMAGE; workstation-only source builds require NOEBS_ALPHA_E2E_ALLOW_LOCAL_BUILD=true"
+fi
+
+if [[ -n "$prebuilt_image" ]]; then
+    image="$prebuilt_image"
+else
+    image="noebs-alpha-e2e:${commit:0:12}-$run_id"
+    remove_image=true
+fi
 
 compose=(
     docker compose
     --project-directory "$harness_dir"
     -f "$compose_file"
 )
+if [[ "$mode" == device ]]; then
+    compose+=(-f "$device_compose_file")
+fi
 export COMPOSE_PROJECT_NAME="$project"
 export NOEBS_ALPHA_E2E_IMAGE="$image"
 export NOEBS_ALPHA_E2E_RUNTIME="$runtime"
+export NOEBS_ALPHA_DEVICE_PORT="$device_port"
 
 quiet_compose() {
     if ! "${compose[@]}" "$@" >"$runtime/compose-operation.log" 2>&1; then
@@ -82,13 +174,26 @@ quiet_compose() {
     : >"$runtime/compose-operation.log"
 }
 
-printf 'alpha HTTP E2E: building revision %s\n' "${commit:0:12}"
-if ! docker build --quiet \
-    --label "org.opencontainers.image.revision=$commit" \
-    --tag "$image" "$root" >"$runtime/build.log" 2>&1; then
-    die "image build failed"
+if [[ -z "$prebuilt_image" ]]; then
+    printf 'alpha HTTP E2E: building revision %s\n' "${commit:0:12}"
+    if ! docker build --quiet \
+        --label "org.opencontainers.image.revision=$commit" \
+        --tag "$image" "$root" >"$runtime/build.log" 2>&1; then
+        die "image build failed"
+    fi
+    : >"$runtime/build.log"
+else
+    printf 'alpha HTTP E2E: using immutable candidate %s\n' "$image"
+    if ! docker pull --quiet "$image" >"$runtime/pull.log" 2>&1; then
+        die "immutable candidate pull failed"
+    fi
+    image_revision="$(docker image inspect \
+        --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+        "$image" 2>/dev/null)"
+    [[ "$image_revision" == "$commit" ]] || \
+        die "immutable candidate revision label does not match the checked-out commit"
+    : >"$runtime/pull.log"
 fi
-: >"$runtime/build.log"
 
 host_uid="$(id -u)"
 host_gid="$(id -g)"
@@ -117,17 +222,20 @@ data_key="$(openssl rand -hex 32)"
 google_secret="$(openssl rand -hex 24)"
 old_password="A1!$(openssl rand -hex 6)"
 new_password="B2@$(openssl rand -hex 6)"
+payer_old_password="C3#$(openssl rand -hex 6)"
+payer_new_password="D4\$$(openssl rand -hex 6)"
+payer_recovered_password="E5%$(openssl rand -hex 6)"
 
 printf '%s' "$postgres_password" >"$runtime/postgres-password.txt"
 printf '%s' "$sms_key" >"$runtime/otp-sms-key.txt"
 printf '%s' "$otp_read_token" >"$runtime/otp-read-token.txt"
 
-cat >"$runtime/config.yaml" <<'YAML'
+cat >"$runtime/config.yaml" <<YAML
 noebs:
   sops_age_key_file: /app/.sops/age-key.txt
   runtime_dir: /tmp/noebs
   port: ":8080"
-  default_tenant_id: alpha-e2e
+  default_tenant_id: $tenant_id
   payment_link_base: "https://pay.alpha.invalid/"
   is_debug: false
   otel_enabled: false
@@ -237,15 +345,59 @@ quiet_compose up --detach --wait --wait-timeout 120 \
     identity-auth card-vault consumer-beneficiary
 quiet_compose up --detach --wait --wait-timeout 120 api-gateway
 
+if [[ "$mode" == device ]]; then
+    device_ready=true
+    printf 'alpha device fixture: READY project=%s tenant=%s loopback=http://127.0.0.1:%s image=%s\n' \
+        "$project" "$tenant_id" "$device_port" "$image"
+    printf 'alpha device fixture: commands: otp, status, stop\n'
+    while IFS= read -r command; do
+        case "${command//[[:space:]]/}" in
+        otp)
+            if ! "${compose[@]}" exec -T capture \
+                python /opt/noebs-e2e/capture.py read 2>/dev/null; then
+                printf 'alpha device fixture: no captured OTP is waiting\n' >&2
+            fi
+            ;;
+        status)
+            "${compose[@]}" ps
+            ;;
+        stop)
+            break
+            ;;
+        "") ;;
+        *)
+            printf 'alpha device fixture: commands: otp, status, stop\n' >&2
+            ;;
+        esac
+    done
+    printf 'alpha device fixture: stopping isolated project %s; teardown follows automatically\n' "$project"
+    exit 0
+fi
+
+generate_keypair() {
+    local private_key_path="$1"
+    local public_key_path="$2"
+    openssl genpkey \
+        -algorithm RSA \
+        -pkeyopt rsa_keygen_bits:2048 \
+        -out "$private_key_path" 2>>"$runtime/openssl.log"
+    openssl pkey -in "$private_key_path" -pubout -out "$public_key_path" 2>>"$runtime/openssl.log"
+}
+
+: >"$runtime/openssl.log"
 private_key="$runtime/user-private.pem"
 public_key_file="$runtime/user-public.pem"
-openssl genpkey \
-    -algorithm RSA \
-    -pkeyopt rsa_keygen_bits:2048 \
-    -out "$private_key" 2>"$runtime/openssl.log"
-openssl pkey -in "$private_key" -pubout -out "$public_key_file" 2>>"$runtime/openssl.log"
+generate_keypair "$private_key" "$public_key_file"
+payer_private_key="$runtime/payer-private.pem"
+payer_public_key_file="$runtime/payer-public.pem"
+generate_keypair "$payer_private_key" "$payer_public_key_file"
+payer_recovery_private_key="$runtime/payer-recovery-private.pem"
+payer_recovery_public_key_file="$runtime/payer-recovery-public.pem"
+generate_keypair "$payer_recovery_private_key" "$payer_recovery_public_key_file"
 : >"$runtime/openssl.log"
 public_key="$(<"$public_key_file")"
+payer_public_key="$(<"$payer_public_key_file")"
+payer_recovery_public_key="$(<"$payer_recovery_public_key_file")"
 
 json_object() {
     (($# > 0 && $# % 2 == 0)) || die "internal JSON object error"
@@ -287,7 +439,7 @@ request() {
     local status
 
     case "$mode" in
-    public) tenant="alpha-e2e" ;;
+    public) tenant="$tenant_id" ;;
     auth)
         [[ -n "${authorization:-}" ]] || die "internal missing authorization token"
         bearer="$authorization"
@@ -329,6 +481,7 @@ json_value() {
 }
 
 mobile="0990000000"
+payer_mobile="0990000001"
 pan_original="4111111111111111"
 pan_updated="4242424242424242"
 
@@ -358,12 +511,17 @@ fi
     python /opt/noebs-e2e/capture.py expect-empty >/dev/null 2>&1 || \
     die "OTP capture was not one-time"
 
-body="$(json_object mobile "$mobile" otp "$otp")"
+unsigned_body="$(json_object mobile "$mobile" otp "$otp")"
+request POST /consumer/otp/verify public 400 "$unsigned_body"
+assert_json unsigned-signup-otp-rejected '.code == "invalid_signature"'
+signup_signature="$(printf '%s' "$otp" | \
+    openssl dgst -sha256 -sign "$private_key" 2>/dev/null | base64 | tr -d '\n')"
+body="$(json_object mobile "$mobile" otp "$otp" signature "$signup_signature")"
 request POST /consumer/otp/verify public 200 "$body"
 assert_json otp-verification '.result == "ok" and .user.is_verified == true'
 request POST /consumer/otp/verify public 400 "$body"
 assert_json otp-replay '.code == "invalid_otp"'
-unset otp
+unset otp signup_signature unsigned_body
 
 body="$(json_object mobile "$mobile" password "$old_password")"
 request POST /consumer/login public 200 "$body"
@@ -462,6 +620,149 @@ request GET "/consumer/payment_token?uuid=$payment_uuid" auth 200
 assert_json payment-link-read \
     '.uuid == $uuid and .amount == 0 and .toCard == "424242*****4242"' \
     --arg uuid "$payment_uuid"
+
+printf 'alpha HTTP E2E: creator-owned list and same-tenant payer capability\n'
+creator_authorization="$authorization"
+body="$(json_object \
+    mobile "$payer_mobile" \
+    password "$payer_old_password" \
+    fullname "Alpha Payer" \
+    username "$payer_mobile" \
+    user_pubkey "$payer_public_key")"
+request POST /consumer/register public 201 "$body"
+assert_json payer-registration \
+    '.details.mobile == $mobile and (.details.password // "") == "" and (.details.user_pubkey // "") == ""' \
+    --arg mobile "$payer_mobile"
+
+body="$(json_object mobile "$payer_mobile" password "$payer_old_password")"
+request POST /consumer/login public 403 "$body"
+assert_json payer-unverified-login-rejected '.code == "user_not_verified"'
+body="$(json_object mobile "$payer_mobile")"
+request POST /consumer/otp/generate public 201 "$body"
+if ! payer_otp="$("${compose[@]}" exec -T capture \
+    python /opt/noebs-e2e/capture.py read 2>/dev/null)"; then
+    die "payer OTP was not delivered to the isolated capture sink"
+fi
+[[ "$payer_otp" =~ ^[0-9]{6}$ ]] || die "captured payer OTP was malformed"
+payer_signature="$(printf '%s' "$payer_otp" | \
+    openssl dgst -sha256 -sign "$payer_private_key" 2>/dev/null | base64 | tr -d '\n')"
+body="$(json_object \
+    mobile "$payer_mobile" \
+    message "$payer_otp" \
+    signature "$payer_signature")"
+request POST /consumer/otp/login public 200 "$body"
+assert_json payer-signed-otp-login \
+    '(.authorization | type == "string" and length > 20) and .user.mobile == $mobile and .user.is_verified == true' \
+    --arg mobile "$payer_mobile"
+authorization="$(json_value '.authorization')"
+request POST /consumer/otp/login public 400 "$body"
+assert_json payer-signed-otp-replay '.code == "wrong_otp"'
+unset payer_otp payer_signature
+
+body="$(json_object new_password "$payer_new_password")"
+request POST /consumer/change_password auth 200 "$body"
+assert_json payer-password-change '.result == "ok"'
+body="$(json_object mobile "$payer_mobile" password "$payer_old_password")"
+request POST /consumer/login public 400 "$body"
+assert_json payer-old-password-rejected '.code == "wrong_password"'
+body="$(json_object mobile "$payer_mobile" password "$payer_new_password")"
+request POST /consumer/login public 200 "$body"
+authorization="$(json_value '.authorization')"
+request GET /consumer/payment_token auth 200
+assert_json payer-owner-list-empty '.count == 0 and ((.token // []) | length == 0)'
+request GET "/consumer/payment_token?uuid=$payment_uuid" auth 200
+assert_json payer-capability-detail \
+    '.uuid == $uuid and .amount == 0 and .toCard == "424242*****4242" and (has("ID") | not) and (has("UserID") | not) and (has("RailUUID") | not)' \
+    --arg uuid "$payment_uuid"
+
+printf 'alpha HTTP E2E: opaque lost-device recovery and credential replay rejection\n'
+pre_recovery_authorization="$authorization"
+body="$(json_object mobile "$payer_mobile")"
+request POST /consumer/recovery/request public 202 "$body"
+assert_json recovery-request '.result == "accepted"'
+if ! recovery_otp="$("${compose[@]}" exec -T capture \
+    python /opt/noebs-e2e/capture.py read 2>/dev/null)"; then
+    die "recovery OTP was not delivered to the isolated capture sink"
+fi
+[[ "$recovery_otp" =~ ^[0-9]{6}$ ]] || die "captured recovery OTP was malformed"
+body="$(json_object mobile "$payer_mobile" otp "$recovery_otp")"
+request POST /consumer/recovery/verify public 200 "$body"
+assert_json recovery-verify \
+    '(.recovery_credential | type == "string" and length > 20) and .expires_in == 600'
+recovery_credential="$(json_value '.recovery_credential')"
+unset recovery_otp
+
+body="$(json_object \
+    recovery_credential "$recovery_credential" \
+    new_password "$payer_recovered_password" \
+    new_public_key "$payer_recovery_public_key")"
+request POST /consumer/recovery/reset public 204 "$body"
+request POST /consumer/recovery/reset public 401 "$body"
+assert_json recovery-replay '.code == "invalid_recovery_credential"'
+unset recovery_credential
+
+authorization="$pre_recovery_authorization"
+request GET /consumer/auth/me auth 401
+assert_json pre-recovery-session-revoked '.code == "session_revoked"'
+pre_recovery_refresh_message="alpha-revoked-refresh-$run_id"
+pre_recovery_refresh_signature="$(printf '%s' "$pre_recovery_refresh_message" | \
+    openssl dgst -sha256 -sign "$payer_private_key" 2>/dev/null | base64 | tr -d '\n')"
+body="$(json_object \
+    authorization "$pre_recovery_authorization" \
+    signature "$pre_recovery_refresh_signature" \
+    message "$pre_recovery_refresh_message" \
+    mobile "$payer_mobile")"
+request POST /consumer/refresh public 401 "$body"
+assert_json pre-recovery-refresh-revoked '.code == "session_revoked"'
+unset pre_recovery_authorization pre_recovery_refresh_message pre_recovery_refresh_signature
+
+body="$(json_object mobile "$payer_mobile" password "$payer_new_password")"
+request POST /consumer/login public 400 "$body"
+assert_json pre-recovery-password-rejected '.code == "wrong_password"'
+body="$(json_object mobile "$payer_mobile" password "$payer_recovered_password")"
+request POST /consumer/login public 200 "$body"
+authorization="$(json_value '.authorization')"
+
+recovered_authorization="$authorization"
+recovered_refresh_message="alpha-recovered-refresh-$run_id"
+old_key_signature="$(printf '%s' "$recovered_refresh_message" | \
+    openssl dgst -sha256 -sign "$payer_private_key" 2>/dev/null | base64 | tr -d '\n')"
+body="$(json_object \
+    authorization "$recovered_authorization" \
+    signature "$old_key_signature" \
+    message "$recovered_refresh_message" \
+    mobile "$payer_mobile")"
+request POST /consumer/refresh public 400 "$body"
+assert_json pre-recovery-key-rejected '.code == "invalid_signature"'
+
+new_key_signature="$(printf '%s' "$recovered_refresh_message" | \
+    openssl dgst -sha256 -sign "$payer_recovery_private_key" 2>/dev/null | base64 | tr -d '\n')"
+body="$(json_object \
+    authorization "$recovered_authorization" \
+    signature "$new_key_signature" \
+    message "$recovered_refresh_message" \
+    mobile "$payer_mobile")"
+request POST /consumer/refresh public 200 "$body"
+assert_json recovered-key-refresh '.authorization | type == "string" and length > 20'
+authorization="$(json_value '.authorization')"
+[[ "$authorization" != "$recovered_authorization" ]] || \
+    die "recovered-key refresh did not rotate the token"
+request GET /consumer/auth/me auth 200
+assert_json recovered-key-session '.user.mobile == $mobile' --arg mobile "$payer_mobile"
+unset recovered_authorization recovered_refresh_message old_key_signature new_key_signature
+
+body='{"mobile":"0999999999"}'
+request POST /consumer/recovery/request public 202 "$body"
+assert_json missing-recovery-request '.result == "accepted"'
+"${compose[@]}" exec -T capture \
+    python /opt/noebs-e2e/capture.py expect-empty >/dev/null 2>&1 || \
+    die "missing-account recovery request sent an OTP"
+
+authorization="$creator_authorization"
+request GET /consumer/payment_token auth 200
+assert_json creator-owner-list-preserved '.count == 1 and (.token | length == 1)'
+unset creator_authorization
+unset payer_old_password payer_new_password payer_recovered_password
 request POST /consumer/payment_request auth 404 '{}'
 
 body='{"card_index":"4242424242424242"}'
@@ -500,12 +801,14 @@ printf 'alpha HTTP E2E: verifying persistence boundaries and zero side effects\n
 sql_scalar postgres \
     "SELECT count(*) FROM pg_database WHERE datname IN ('ebs_adapter','wallet_ledger','psp_webhook','admin_reporting')" \
     0 forbidden-service-databases
-sql_scalar identity_auth "SELECT count(*) FROM users WHERE tenant_id='alpha-e2e'" 1 identity-user
-sql_scalar identity_auth "SELECT count(*) FROM kyc WHERE tenant_id='alpha-e2e'" 1 identity-kyc
-sql_scalar identity_auth "SELECT count(*) FROM used_refresh_tokens WHERE tenant_id='alpha-e2e'" 1 refresh-consumption
-sql_scalar card_vault "SELECT count(*) FROM tokens WHERE tenant_id='alpha-e2e' AND amount=0" 1 payment-token
-sql_scalar card_vault "SELECT count(*) FROM cards WHERE tenant_id='alpha-e2e' AND deleted_at IS NULL" 0 active-cards
-sql_scalar consumer_beneficiary "SELECT count(*) FROM beneficiaries WHERE tenant_id='alpha-e2e'" 0 beneficiaries-cleaned
+sql_scalar identity_auth "SELECT count(*) FROM users WHERE tenant_id='$tenant_id'" 2 identity-users
+sql_scalar identity_auth "SELECT count(*) FROM users WHERE tenant_id='$tenant_id' AND is_verified=TRUE" 2 verified-identity-users
+sql_scalar identity_auth "SELECT count(*) FROM kyc WHERE tenant_id='$tenant_id'" 1 identity-kyc
+sql_scalar identity_auth "SELECT count(*) FROM used_refresh_tokens WHERE tenant_id='$tenant_id'" 2 refresh-consumption
+sql_scalar card_vault "SELECT count(*) FROM tokens WHERE tenant_id='$tenant_id' AND amount=0" 1 payment-token
+sql_scalar card_vault "SELECT count(*) FROM tokens WHERE tenant_id='$tenant_id' AND payment_status='available' AND payer_user_id IS NULL" 1 available-unclaimed-payment-token
+sql_scalar card_vault "SELECT count(*) FROM cards WHERE tenant_id='$tenant_id' AND deleted_at IS NULL" 0 active-cards
+sql_scalar consumer_beneficiary "SELECT count(*) FROM beneficiaries WHERE tenant_id='$tenant_id'" 0 beneficiaries-cleaned
 
 "${compose[@]}" exec -T capture \
     python /opt/noebs-e2e/capture.py assert-zero >/dev/null 2>&1 || \
