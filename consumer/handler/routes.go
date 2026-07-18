@@ -77,9 +77,9 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterBeneficiaryRoutes(router fiber.Router, h *Handler) {
-	router.Post("/beneficiary", h.CreateBeneficiary)
-	router.Get("/beneficiary", h.ListBeneficiaries)
-	router.Delete("/beneficiary", h.DeleteBeneficiary)
+	router.Post("/beneficiary", h.RetiredBeneficiaryContract)
+	router.Get("/beneficiary", h.RetiredBeneficiaryContract)
+	router.Delete("/beneficiary", h.RetiredBeneficiaryContract)
 }
 
 func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {

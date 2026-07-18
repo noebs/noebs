@@ -59,6 +59,7 @@ var (
 	ErrFundedClaimMismatch       = errors.New("funded_operation_claim_mismatch")
 	ErrInvalidRailTranDateTime   = errors.New("invalid_rail_tran_date_time")
 	ErrLegacyCardOperation       = errors.New("legacy_card_operation_unavailable")
+	ErrBeneficiaryRetired        = errors.New("beneficiary_contract_retired")
 	ErrInvalidUserColumn         = errors.New("invalid user column")
 	ErrMissingDataKey            = errors.New("missing data_key")
 	ErrMissingAuthAction         = errors.New("missing auth action")

@@ -51,46 +51,15 @@ func (s *Service) AddDeviceToken(ctx context.Context, tenantID, mobile, token st
 }
 
 func (s *Service) ListBeneficiariesForUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Beneficiary, error) {
-	if s == nil || s.Store == nil {
-		return nil, ErrMissingStore
-	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if userID <= 0 {
-		return nil, store.ErrInvalidUserID
-	}
-	return s.Store.ListBeneficiaries(ctx, tenantID, userID)
+	return nil, store.ErrBeneficiaryRetired
 }
 
 func (s *Service) UpsertBeneficiaryForUserID(ctx context.Context, tenantID string, userID int64, b ebs_fields.Beneficiary) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return store.ErrInvalidUserID
-	}
-	b.UserID = userID
-	return s.Store.UpsertBeneficiary(ctx, tenantID, userID, b)
+	return store.ErrBeneficiaryRetired
 }
 
 func (s *Service) DeleteBeneficiaryForUserID(ctx context.Context, tenantID string, userID int64, data string) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return store.ErrInvalidUserID
-	}
-	return s.Store.DeleteBeneficiary(ctx, tenantID, userID, data)
+	return store.ErrBeneficiaryRetired
 }
 
 func (s *Service) AddCardsForUserID(ctx context.Context, tenantID string, userID int64, mobile string, cards []ebs_fields.Card) error {

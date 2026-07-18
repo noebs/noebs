@@ -50,52 +50,11 @@ func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, nil)
 }
 
-func (h *Handler) CreateBeneficiary(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-
-	var req ebs_fields.Beneficiary
-	if err := bindJSON(c, &req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	if err := h.Service.UpsertBeneficiaryForUserID(c.UserContext(), tenantID, userID, req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	return jsonResponse(c, http.StatusCreated, nil)
-}
-
-func (h *Handler) ListBeneficiaries(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-
-	list, err := h.Service.ListBeneficiariesForUserID(c.UserContext(), tenantID, userID)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	return jsonResponse(c, http.StatusOK, list)
-}
-
-func (h *Handler) DeleteBeneficiary(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-
-	var req ebs_fields.Beneficiary
-	if err := parseJSON(c, &req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	if err := h.Service.DeleteBeneficiaryForUserID(c.UserContext(), tenantID, userID, req.Data); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	return jsonResponse(c, http.StatusNoContent, nil)
+func (h *Handler) RetiredBeneficiaryContract(c *fiber.Ctx) error {
+	return jsonResponse(c, http.StatusGone, fiber.Map{
+		"code":    "beneficiary_contract_retired",
+		"message": "Generic beneficiaries are unavailable; upgrade to typed recipient and biller references.",
+	})
 }
 
 func (h *Handler) AddCards(c *fiber.Ctx) error {

@@ -63,7 +63,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		},
 		serviceRoleBeneficiaryMigrate: {
 			"tenants",
-			"beneficiaries",
 		},
 		serviceRoleWalletLedgerMigrate: {
 			"tenants",
@@ -80,6 +79,9 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		serviceRoleCardVaultMigrate: {
 			"cache_cards",
 			"push_data",
+		},
+		serviceRoleBeneficiaryMigrate: {
+			"beneficiaries",
 		},
 	}
 

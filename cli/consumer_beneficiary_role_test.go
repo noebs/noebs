@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -48,14 +51,28 @@ func TestConsumerBeneficiaryRoutesAreOwnedByConsumerBeneficiary(t *testing.T) {
 
 	for _, tt := range consumerBeneficiaryRoutes() {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			const panSentinel = "6011000073184629"
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(`{"data":"`+panSentinel+`"} trailing`))
 			setTestGatewayUserIdentityHeaders(req)
 			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
 			}
 			defer resp.Body.Close()
-			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
+			if resp.StatusCode != http.StatusGone {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusGone, body)
+			}
+			var payload struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if payload.Code != "beneficiary_contract_retired" || strings.Contains(payload.Message, panSentinel) {
+				t.Fatalf("response = %+v", payload)
+			}
 		})
 	}
 }

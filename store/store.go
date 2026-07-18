@@ -526,74 +526,15 @@ func (s *Store) GetPanByMobile(ctx context.Context, tenantID, mobile string) (st
 }
 
 func (s *Store) ListBeneficiaries(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Beneficiary, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if userID <= 0 {
-		return nil, ErrInvalidUserID
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := s.DB.Rebind("SELECT * FROM beneficiaries WHERE tenant_id = ? AND user_id = ?")
-	var list []ebs_fields.Beneficiary
-	if err := db.SelectContext(ctx, &list, stmt, tenantID, userID); err != nil {
-		return nil, err
-	}
-	return list, nil
+	return nil, ErrBeneficiaryRetired
 }
 
 func (s *Store) UpsertBeneficiary(ctx context.Context, tenantID string, userID int64, b ebs_fields.Beneficiary) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return ErrInvalidUserID
-	}
-	b.Data = strings.TrimSpace(b.Data)
-	if b.Data == "" {
-		return ErrMissingData
-	}
-	b.BillType = strings.TrimSpace(b.BillType)
-	if b.BillType == "" {
-		return ErrMissingBillType
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	stmt := s.DB.Rebind(`INSERT INTO beneficiaries(tenant_id, user_id, data, bill_type, name, created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(tenant_id, user_id, data) DO UPDATE SET
-			bill_type = excluded.bill_type,
-			name = excluded.name,
-			updated_at = excluded.updated_at`)
-	_, err = db.ExecContext(ctx, stmt, tenantID, userID, b.Data, b.BillType, b.Name, now, now)
-	return err
+	return ErrBeneficiaryRetired
 }
 
 func (s *Store) DeleteBeneficiary(ctx context.Context, tenantID string, userID int64, data string) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return ErrInvalidUserID
-	}
-	data = strings.TrimSpace(data)
-	if data == "" {
-		return ErrMissingData
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	stmt := s.DB.Rebind("DELETE FROM beneficiaries WHERE tenant_id = ? AND user_id = ? AND data = ?")
-	return execContextRequireRowsAffected(ctx, db, stmt, tenantID, userID, data)
+	return ErrBeneficiaryRetired
 }
 
 func (s *Store) UpsertCacheCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) error {

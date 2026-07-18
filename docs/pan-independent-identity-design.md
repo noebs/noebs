@@ -93,7 +93,7 @@ This inventory distinguishes forbidden product linkage from legitimate, bounded 
 | Payment tokens | `tokens.to_card`, `to_card_enc`, `Token.ToCard`, `QrData.ToCard`, `ExpandCard` matching first/last four, generate/get/quick-pay services | Store payee user ID and payee `card_id`; public QR/link contains an opaque payment-token ID, not a PAN. Resolve the payee's verified card at execution. Expire legacy available tokens at cutover. |
 | Contact discovery | historical `CheckUser` PAN response and Card Vault mask lookup; SDK/app still expect it | Contract is exactly `phone` + `is_user`, authenticated and rate-limited. No card lookup occurs. |
 | Transfer recipient | `MobileTransfer` and `CardTransfer` resolve/compare raw PAN; notification data copies PAN; `GetDeviceIDsByPan` | Resolve mobile to recipient user ID, then resolve verified main card by that user ID. Notifications target user ID/mobile/device identity independently of PAN. Mask may appear only in a receipt body/payload. |
-| Beneficiaries | generic beneficiary `data` can durably store a P2P PAN | In-app beneficiaries use phone/recipient reference. External-card destinations use a backend `destination_id` plus mask, with protected rail data in the appropriate vault. Do not store full PAN in the generic beneficiary service. |
+| Beneficiaries | generic beneficiary `data` can durably store a P2P PAN | Retire the generic contract for alpha. Future recipient favorites use immutable `(tenant_id, recipient_user_id)`; biller references and protected external-card destinations are separate typed resources. |
 | Identity JSON | generic `User` contains `main_card` and expiry, although sanitizer currently clears them | Remove the fields and columns. Safety must not depend on every caller remembering a sanitizer. |
 | IPIN storage | `cards.ipin`, `cards.ipin_enc`; `Card.IPIN`, encryption/hydration/backfill in `store/sensitive.go` | Drop columns and code. Never persist an IPIN or encrypted IPIN block. |
 | Legacy PAN type | unused `apigateway.Cards` and stale Swagger/generated docs | Delete or replace so new code cannot revive the PAN contract. |
@@ -143,7 +143,9 @@ Raw EBS DTOs may retain PAN fields in an internal compatibility namespace while 
 | Result screens | `ProcessResultToFields` and transaction components display response PAN | May render a server-masked display value; may not compare it or use it as a key. |
 | Saved state/account switching | Parcelable Card carries raw PAN; one global database can show stale prior-account cache after failed refresh | Store no raw card data and namespace caches by a stable authenticated account subject. Session change switches/purges scope atomically before showing home. |
 
-The explicit Android migration must remove `Card.pan`, `Card.ipin`, `Card.newIpin`, `Contact.mainCardMaskedPan`, full-PAN beneficiary data, and legacy serialized `TransactionParty.Card`. Do not preserve those values in a temporary table. Card and history caches are re-fetchable; purge unsafe legacy cache rather than guessing mappings. Do not rely on generic destructive fallback that unnecessarily erases unrelated chat and beneficiary data.
+The explicit Android migration must remove `Card.pan`, `Card.ipin`, `Card.newIpin`, `Contact.mainCardMaskedPan`, every generic beneficiary row, and legacy serialized `TransactionParty.Card`. Do not preserve those values in a temporary table. Card and history caches are re-fetchable; purge unsafe legacy cache rather than guessing mappings. Preserve unrelated safe chat data.
+
+For alpha, `POST`, `GET`, and `DELETE /consumer/beneficiary` are terminal `410 Gone` boundaries and the runtime beneficiary table is dropped. A `bill_type` label cannot prove that arbitrary `data` is not a PAN, and mobile numbers are mutable locators rather than durable identity. A later design may resolve a mobile number at selection time, but the saved recipient must be an immutable tenant-scoped user ID. Biller references and any vault-backed external destination are different resource types and must not share a generic payload.
 
 ### Concrete source inventory
 
@@ -278,7 +280,7 @@ The API boundary validates UUIDs and required fields. EBS Adapter sends an exact
 
 For mobile transfer, EBS Adapter resolves the normalized recipient phone to a tenant user ID through Identity Auth, then asks Card Vault for that user's verified main card. The app and Identity Auth never see the recipient PAN. If there is no active main card, return a typed unavailable-recipient error without disclosing card details.
 
-An external destination PAN may be supplied only on an explicitly named external-card rail field. It never creates a recipient participant or notification target. Repeat external destinations become a protected vault `destination_id`; generic beneficiary data stores only that ID and a mask.
+An external destination PAN may be supplied only on an explicitly named external-card rail field. It never creates a recipient participant or notification target. A future repeat-destination feature may issue a protected vault `destination_id` plus mask through its own typed contract; the retired generic beneficiary surface must not be reused.
 
 ### Transaction participants
 
@@ -369,7 +371,7 @@ Legacy PAN endpoints may coexist server-side for a short old-client migration wi
 ### Client migration
 
 1. Publish additive SDK `CardSummary`, `CardRef`, card-authorization and new endpoint models. Remove PAN from `IsUser`. Do not overload legacy `Card` so a compiler can accidentally serialize a mask into a PAN field.
-2. Add an explicit Room migration (expected database version 16, after verifying the current schema) that creates an account-scoped safe card table, drops unsafe card rows/columns without copying secrets, removes contact PAN linkage, removes full-PAN beneficiary rows, and clears/refetches legacy PAN-based transaction cache.
+2. Add an explicit Room migration that creates an account-scoped safe card table, drops unsafe card rows/columns without copying secrets, removes contact PAN linkage, drops the generic beneficiary cache, and clears/refetches legacy PAN-based transaction cache.
 3. Replace every DAO, UI key, selection, balance update, SavedState/navigation value and network request with card ID. Duplicate names/masks must work.
 4. Namespace local caches by a stable authenticated account subject, not merely a recycled mobile number. Switch/purge scope before home renders after login/account change.
 5. Ship the new client with legacy funded/card paths fail-closed. Enable them only after the server capability and fixture acceptance suite pass.
@@ -408,7 +410,7 @@ Unit tests are necessary but not sufficient. The release gate uses real Postgres
 
 ### Android unit and instrumented tests
 
-1. Upgrade a version-15 database populated with raw PAN, non-empty IPIN/newIPIN, contact mask, PAN beneficiary, and `crd<pan>` history. Verify none survive the explicit migration; unrelated safe chat data remains.
+1. Upgrade a legacy database populated with raw PAN, non-empty IPIN/newIPIN, contact mask, generic beneficiaries (including a PAN sentinel), and `crd<pan>` history. Verify none survive the explicit migration; unrelated safe chat data remains.
 2. Cache two cards with the same name or mask and distinct card IDs. Both render and select correctly; edit/delete/main/balance update affects only the selected ID.
 3. Log in as user A, populate cards/history, then switch to B while network refresh fails. No A card, balance, recipient mask, or history renders in B's scope.
 4. Inspect Compose semantics and navigation/SavedState bundles for add/edit/cash-in/payment flows. No full PAN is present after enrollment submission; routes carry card ID.

@@ -310,16 +310,6 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		name string
 		run  func(string) error
 	}{
-		{"ListBeneficiaries", func(tenantID string) error {
-			_, err := s.ListBeneficiaries(ctx, tenantID, 1)
-			return err
-		}},
-		{"UpsertBeneficiary", func(tenantID string) error {
-			return s.UpsertBeneficiary(ctx, tenantID, 1, ebs_fields.Beneficiary{Data: "meter", BillType: "electricity"})
-		}},
-		{"DeleteBeneficiary", func(tenantID string) error {
-			return s.DeleteBeneficiary(ctx, tenantID, 1, "meter")
-		}},
 		{"UpsertCacheBiller", func(tenantID string) error {
 			return s.UpsertCacheBiller(ctx, tenantID, "0990000000", "biller")
 		}},
@@ -626,79 +616,20 @@ func TestLegacyCardStoreOperationsAreTerminal(t *testing.T) {
 	}
 }
 
-func TestStore_UpsertBeneficiary_RequiresExplicitFields(t *testing.T) {
+func TestStore_GenericBeneficiaryOperationsAreTerminal(t *testing.T) {
 	s := &Store{}
-	if err := s.UpsertBeneficiary(context.Background(), "t1", 0, ebs_fields.Beneficiary{Data: "0912141660", BillType: "0010010001"}); !errors.Is(err, ErrInvalidUserID) {
-		t.Fatalf("expected ErrInvalidUserID, got %v", err)
-	}
-	if err := s.UpsertBeneficiary(context.Background(), "t1", 1, ebs_fields.Beneficiary{BillType: "0010010001"}); !errors.Is(err, ErrMissingData) {
-		t.Fatalf("expected ErrMissingData, got %v", err)
-	}
-	if err := s.UpsertBeneficiary(context.Background(), "t1", 1, ebs_fields.Beneficiary{Data: "0912141660"}); !errors.Is(err, ErrMissingBillType) {
-		t.Fatalf("expected ErrMissingBillType, got %v", err)
-	}
-}
-
-func TestStore_DeleteBeneficiary_RequiresExplicitFields(t *testing.T) {
-	s := &Store{}
-	if err := s.DeleteBeneficiary(context.Background(), "t1", 0, "0912141660"); !errors.Is(err, ErrInvalidUserID) {
-		t.Fatalf("expected ErrInvalidUserID, got %v", err)
-	}
-	if err := s.DeleteBeneficiary(context.Background(), "t1", 1, " "); !errors.Is(err, ErrMissingData) {
-		t.Fatalf("expected ErrMissingData, got %v", err)
-	}
-}
-
-func TestStore_BeneficiaryUpsertReplacesExisting(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
-	tenantID := "tenant-beneficiary-upsert"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeConsumerBeneficiary); err != nil {
-		t.Fatalf("migrate consumer-beneficiary scope: %v", err)
+	operations := []func() error{
+		func() error { _, err := s.ListBeneficiaries(ctx, "tenant", 42); return err },
+		func() error {
+			return s.UpsertBeneficiary(ctx, "tenant", 42, ebs_fields.Beneficiary{Data: "6011000073184629", BillType: "mobile"})
+		},
+		func() error { return s.DeleteBeneficiary(ctx, "tenant", 42, "6011000073184629") },
 	}
-	s := New(db)
-	if err := s.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
-	if err := s.UpsertBeneficiary(ctx, tenantID, 42, ebs_fields.Beneficiary{
-		Data:     "0912141660",
-		BillType: "0010010001",
-		Name:     "Primary",
-	}); err != nil {
-		t.Fatalf("first UpsertBeneficiary(): %v", err)
-	}
-	if err := s.UpsertBeneficiary(ctx, tenantID, 42, ebs_fields.Beneficiary{
-		Data:     "0912141660",
-		BillType: "0010010002",
-		Name:     "Updated",
-	}); err != nil {
-		t.Fatalf("second UpsertBeneficiary(): %v", err)
-	}
-	list, err := s.ListBeneficiaries(ctx, tenantID, 42)
-	if err != nil {
-		t.Fatalf("ListBeneficiaries(): %v", err)
-	}
-	if len(list) != 1 {
-		t.Fatalf("beneficiary count = %d, want 1: %+v", len(list), list)
-	}
-	if list[0].BillType != "0010010002" || list[0].Name != "Updated" {
-		t.Fatalf("beneficiary after upsert = %+v", list[0])
-	}
-}
-
-func TestStore_DeleteBeneficiaryReportsMissingRows(t *testing.T) {
-	ctx := context.Background()
-	db := newValidationDB(t)
-	tenantID := "tenant-beneficiary-delete"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeConsumerBeneficiary); err != nil {
-		t.Fatalf("migrate consumer-beneficiary scope: %v", err)
-	}
-	s := New(db)
-	if err := s.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
-	if err := s.DeleteBeneficiary(ctx, tenantID, 42, "missing-data"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("DeleteBeneficiary(missing) error = %v, want %v", err, sql.ErrNoRows)
+	for index, operation := range operations {
+		if err := operation(); !errors.Is(err, ErrBeneficiaryRetired) {
+			t.Fatalf("operation %d error = %v, want %v", index, err, ErrBeneficiaryRetired)
+		}
 	}
 }
 

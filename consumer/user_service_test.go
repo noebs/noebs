@@ -23,16 +23,6 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 		{"AddDeviceToken", func(tenantID string) error {
 			return service.AddDeviceToken(ctx, tenantID, "0990000000", "device-token")
 		}},
-		{"ListBeneficiariesForUserID", func(tenantID string) error {
-			_, err := service.ListBeneficiariesForUserID(ctx, tenantID, 1)
-			return err
-		}},
-		{"UpsertBeneficiaryForUserID", func(tenantID string) error {
-			return service.UpsertBeneficiaryForUserID(ctx, tenantID, 1, ebs_fields.Beneficiary{Data: "meter", BillType: "electricity"})
-		}},
-		{"DeleteBeneficiaryForUserID", func(tenantID string) error {
-			return service.DeleteBeneficiaryForUserID(ctx, tenantID, 1, "meter")
-		}},
 		{"AddCardsForUserID", func(tenantID string) error {
 			return service.AddCardsForUserID(ctx, tenantID, 1, "0990000000", []ebs_fields.Card{{Pan: "9222081700000000"}})
 		}},
