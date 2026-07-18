@@ -111,6 +111,14 @@ func statusForError(err error) int {
 	switch {
 	case errors.Is(err, store.ErrDuplicateTransaction):
 		return http.StatusConflict
+	case errors.Is(err, store.ErrCardEnrollmentConflict),
+		errors.Is(err, store.ErrEnrollmentIntentOpen),
+		errors.Is(err, store.ErrEnrollmentIntentConsumed),
+		errors.Is(err, store.ErrEnrollmentClaimMismatch):
+		return http.StatusConflict
+	case errors.Is(err, store.ErrEnrollmentIntentExpired),
+		errors.Is(err, consumer.ErrUpgradeRequired):
+		return http.StatusGone
 	case errors.Is(err, store.ErrPaymentTokenUnavailable):
 		return http.StatusConflict
 	case errors.Is(err, store.ErrMissingTenantID),
@@ -127,6 +135,12 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrMissingUsername),
 		errors.Is(err, store.ErrMissingUserIdentifier),
 		errors.Is(err, store.ErrMissingPAN),
+		errors.Is(err, store.ErrMissingCardID),
+		errors.Is(err, store.ErrInvalidCardID),
+		errors.Is(err, store.ErrInvalidEnrollmentIntent),
+		errors.Is(err, store.ErrInvalidCardExpiry),
+		errors.Is(err, store.ErrMissingRailUUID),
+		errors.Is(err, store.ErrInvalidRailUUID),
 		errors.Is(err, store.ErrMissingData),
 		errors.Is(err, store.ErrMissingLanguage),
 		errors.Is(err, store.ErrMissingPassword),
@@ -147,11 +161,16 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidMerchantID),
 		errors.Is(err, consumer.ErrMissingPublicKey),
 		errors.Is(err, consumer.ErrInvalidPublicKey),
+		errors.Is(err, consumer.ErrMissingIPINBlock),
+		errors.Is(err, consumer.ErrInvalidIPINBlock),
+		errors.Is(err, consumer.ErrEnrollmentRailUUIDMismatch),
 		errors.Is(err, consumer.ErrPasswordInvalid),
 		errors.Is(err, consumer.ErrInvalidCard),
 		errors.Is(err, consumer.ErrUserAlreadyExists):
 		return http.StatusBadRequest
 	case errors.Is(err, consumer.ErrCardNotFound),
+		errors.Is(err, store.ErrCardNotFound),
+		errors.Is(err, store.ErrEnrollmentIntentNotFound),
 		errors.Is(err, consumer.ErrTransactionNotFound):
 		return http.StatusNotFound
 	case store.ErrNotFound(err):
@@ -165,6 +184,8 @@ func statusForError(err error) int {
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrPaymentOutcomeUnknown):
 		return http.StatusBadGateway
+	case errors.Is(err, consumer.ErrEnrollmentOutcomeUnknown):
+		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
 		errors.Is(err, consumer.ErrMissingAuth),
@@ -177,6 +198,8 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidNotification),
 		errors.Is(err, consumer.ErrInvalidBillerHookEndpoint),
 		errors.Is(err, store.ErrMissingDataKey),
+		errors.Is(err, consumer.ErrMissingEnrollmentPublicKey),
+		errors.Is(err, consumer.ErrInvalidEnrollmentPublicKey),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable
 	default:

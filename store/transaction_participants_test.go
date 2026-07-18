@@ -10,14 +10,12 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 )
 
-func TestTransactionParticipantsIsolateMaskedPANCollisionsAndSurviveCardDeletion(t *testing.T) {
+func TestTransactionParticipantsIsolateMaskedPANCollisionsWithoutCardOwnershipState(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)
 	tenantID := "tenant-participant-isolation"
-	for _, scope := range []string{MigrationScopeCardVault, MigrationScopeEBSAdapter} {
-		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
-			t.Fatalf("migrate %s: %v", scope, err)
-		}
+	if err := MigrateScope(ctx, db, tenantID, MigrationScopeEBSAdapter); err != nil {
+		t.Fatalf("migrate %s: %v", MigrationScopeEBSAdapter, err)
 	}
 	storeSvc := New(db, WithDataKey("participant-test-data-key"))
 	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
@@ -30,17 +28,6 @@ func TestTransactionParticipantsIsolateMaskedPANCollisionsAndSurviveCardDeletion
 		firstPAN           = "9222081700000000"
 		secondPAN          = "9222089999900000"
 	)
-	if err := storeSvc.AddCards(ctx, tenantID, firstUserID, []ebs_fields.Card{{
-		Pan: firstPAN, Expiry: "2912", Mobile: "0911000101", IsMain: true,
-	}}); err != nil {
-		t.Fatalf("add first card: %v", err)
-	}
-	if err := storeSvc.AddCards(ctx, tenantID, secondUserID, []ebs_fields.Card{{
-		Pan: secondPAN, Expiry: "2912", Mobile: "0911000202", IsMain: true,
-	}}); err != nil {
-		t.Fatalf("add second card: %v", err)
-	}
-
 	create := func(uuid, pan string, participants []TransactionParticipant) {
 		t.Helper()
 		event := TransactionEventCreate{
@@ -123,14 +110,11 @@ func TestTransactionParticipantsIsolateMaskedPANCollisionsAndSurviveCardDeletion
 		t.Fatalf("legacy detail error = %v, want %v", err, sql.ErrNoRows)
 	}
 
-	if err := storeSvc.DeleteCard(ctx, tenantID, firstUserID, firstPAN); err != nil {
-		t.Fatalf("delete first card: %v", err)
-	}
 	firstHistory, err = storeSvc.GetTransactionsByParticipantUserID(ctx, tenantID, firstUserID)
 	if err != nil {
-		t.Fatalf("get first history after card deletion: %v", err)
+		t.Fatalf("get first history without card ownership state: %v", err)
 	}
 	if len(firstHistory) != 1 || firstHistory[0].UUID != "first-transaction" {
-		t.Fatalf("history after card deletion = %+v, want first-transaction", firstHistory)
+		t.Fatalf("history without card ownership state = %+v, want first-transaction", firstHistory)
 	}
 }

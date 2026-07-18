@@ -296,32 +296,7 @@ func (s *Store) GetUserByEmailOrMobile(ctx context.Context, tenantID, query stri
 }
 
 func (s *Store) GetUserByCard(ctx context.Context, tenantID, pan string) (*ebs_fields.User, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	pan = strings.TrimSpace(pan)
-	if pan == "" {
-		return nil, ErrMissingPAN
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	args := []any{tenantID, tenantID}
-	args = append(args, s.panLookupArgs(pan)...)
-	stmt := s.DB.Rebind(`SELECT users.* FROM users
-		LEFT JOIN cards ON cards.user_id = users.id
-		WHERE users.tenant_id = ? AND cards.tenant_id = ? AND ` + s.panLookupClause("cards.pan") + ` AND cards.deleted_at IS NULL
-		LIMIT 1`)
-	var user ebs_fields.User
-	if err := db.GetContext(ctx, &user, stmt, args...); err != nil {
-		return nil, err
-	}
-	if err := s.hydrateUserFields(ctx, tenantID, &user); err != nil {
-		return nil, err
-	}
-	return &user, nil
+	return nil, ErrLegacyCardOperation
 }
 
 func (s *Store) FindUserByUsername(ctx context.Context, tenantID, username string) (*ebs_fields.User, error) {
@@ -523,259 +498,31 @@ func (s *Store) GetUserWithCards(ctx context.Context, tenantID, mobile string) (
 }
 
 func (s *Store) ListCardsByUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Card, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	if userID <= 0 {
-		return nil, ErrInvalidUserID
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := s.DB.Rebind("SELECT * FROM cards WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL ORDER BY is_main DESC")
-	cards := []ebs_fields.Card{}
-	if err := db.SelectContext(ctx, &cards, stmt, tenantID, userID); err != nil {
-		return nil, err
-	}
-	for i := range cards {
-		if err := s.hydrateCardFields(ctx, tenantID, &cards[i]); err != nil {
-			return nil, err
-		}
-	}
-	return cards, nil
+	return nil, ErrLegacyCardOperation
 }
 
 func (s *Store) ListCardsByMobile(ctx context.Context, tenantID, mobile string) ([]ebs_fields.Card, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return nil, ErrMissingMobile
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := s.DB.Rebind("SELECT * FROM cards WHERE tenant_id = ? AND mobile = ? AND deleted_at IS NULL ORDER BY is_main DESC")
-	cards := []ebs_fields.Card{}
-	if err := db.SelectContext(ctx, &cards, stmt, tenantID, mobile); err != nil {
-		return nil, err
-	}
-	for i := range cards {
-		if err := s.hydrateCardFields(ctx, tenantID, &cards[i]); err != nil {
-			return nil, err
-		}
-	}
-	return cards, nil
+	return nil, ErrLegacyCardOperation
 }
 
 func (s *Store) AddCards(ctx context.Context, tenantID string, userID int64, cards []ebs_fields.Card) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return ErrInvalidUserID
-	}
-	now := time.Now().UTC()
-	prepared := make([]ebs_fields.Card, 0, len(cards))
-	for i := range cards {
-		cards[i].Mobile = strings.TrimSpace(cards[i].Mobile)
-		if cards[i].Mobile == "" {
-			return ErrMissingMobile
-		}
-		cards[i].Pan = strings.TrimSpace(cards[i].Pan)
-		if cards[i].Pan == "" {
-			return ErrMissingPAN
-		}
-		if s == nil {
-			return fmt.Errorf("nil db")
-		}
-		if err := s.requireDataKeyForSensitiveValue(cards[i].Pan, cards[i].IPIN); err != nil {
-			return err
-		}
-		card := cards[i]
-		if err := s.encryptCardFields(&card); err != nil {
-			return err
-		}
-		prepared = append(prepared, card)
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-	for _, card := range prepared {
-		stmt := s.DB.Rebind(`INSERT INTO cards(
-			tenant_id, user_id, mobile, pan, pan_enc, expiry, name, ipin, ipin_enc, is_main, is_valid, created_at, updated_at
-		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-		if _, err := tx.ExecContext(ctx, stmt,
-			tenantID,
-			userID,
-			card.Mobile,
-			card.Pan,
-			card.PanEnc,
-			card.Expiry,
-			card.Name,
-			card.IPIN,
-			card.IPINEnc,
-			card.IsMain,
-			card.IsValid,
-			now,
-			now,
-		); err != nil {
-			return err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+	return ErrLegacyCardOperation
 }
 
 func (s *Store) UpdateCard(ctx context.Context, tenantID string, userID int64, card ebs_fields.Card) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return ErrInvalidUserID
-	}
-	card.CardIdx = strings.TrimSpace(card.CardIdx)
-	if card.CardIdx == "" {
-		return ErrMissingPAN
-	}
-	card.Pan = strings.TrimSpace(card.Pan)
-	if card.Pan == "" {
-		return ErrMissingPAN
-	}
-	if s == nil {
-		return fmt.Errorf("nil db")
-	}
-	if err := s.requireDataKeyForSensitiveValue(card.Pan, card.IPIN); err != nil {
-		return err
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	if err := s.encryptCardFields(&card); err != nil {
-		return err
-	}
-	panClause := s.panLookupClause("pan")
-	panArgs := s.panLookupArgs(card.CardIdx)
-	stmt := s.DB.Rebind(`UPDATE cards SET
-		pan = ?, pan_enc = ?, expiry = ?, name = ?, ipin = ?, ipin_enc = ?, is_main = ?, is_valid = ?, updated_at = ?
-		WHERE tenant_id = ? AND user_id = ? AND ` + panClause + ` AND deleted_at IS NULL`)
-	args := []any{
-		card.Pan,
-		card.PanEnc,
-		card.Expiry,
-		card.Name,
-		card.IPIN,
-		card.IPINEnc,
-		card.IsMain,
-		card.IsValid,
-		time.Now().UTC(),
-		tenantID,
-		userID,
-	}
-	args = append(args, panArgs...)
-	return execContextRequireRowsAffected(ctx, db, stmt, args...)
+	return ErrLegacyCardOperation
 }
 
 func (s *Store) DeleteCard(ctx context.Context, tenantID string, userID int64, cardIdx string) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return ErrInvalidUserID
-	}
-	cardIdx = strings.TrimSpace(cardIdx)
-	if cardIdx == "" {
-		return ErrMissingPAN
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	panClause := s.panLookupClause("pan")
-	stmt := s.DB.Rebind("UPDATE cards SET deleted_at = ? WHERE tenant_id = ? AND user_id = ? AND " + panClause + " AND deleted_at IS NULL")
-	args := []any{time.Now().UTC(), tenantID, userID}
-	args = append(args, s.panLookupArgs(cardIdx)...)
-	return execContextRequireRowsAffected(ctx, db, stmt, args...)
+	return ErrLegacyCardOperation
 }
 
 func (s *Store) SetMainCard(ctx context.Context, tenantID string, userID int64, cardIdx string) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if userID <= 0 {
-		return ErrInvalidUserID
-	}
-	cardIdx = strings.TrimSpace(cardIdx)
-	if cardIdx == "" {
-		return ErrMissingPAN
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	tx, err := db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	resetStmt := db.Rebind("UPDATE cards SET is_main = FALSE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND deleted_at IS NULL")
-	if _, err := tx.ExecContext(ctx, resetStmt, time.Now().UTC(), tenantID, userID); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	panClause := s.panLookupClause("pan")
-	setStmt := db.Rebind("UPDATE cards SET is_main = TRUE, updated_at = ? WHERE tenant_id = ? AND user_id = ? AND " + panClause + " AND deleted_at IS NULL")
-	args := []any{time.Now().UTC(), tenantID, userID}
-	args = append(args, s.panLookupArgs(cardIdx)...)
-	result, err := tx.ExecContext(ctx, setStmt, args...)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if affected == 0 {
-		_ = tx.Rollback()
-		return sql.ErrNoRows
-	}
-	return tx.Commit()
+	return ErrLegacyCardOperation
 }
 
 func (s *Store) GetPanByMobile(ctx context.Context, tenantID, mobile string) (string, error) {
-	cards, err := s.ListCardsByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return "", err
-	}
-	if len(cards) == 0 {
-		return "", errors.New("no cards")
-	}
-	return cards[0].Pan, nil
+	return "", ErrLegacyCardOperation
 }
 
 func (s *Store) ListBeneficiaries(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Beneficiary, error) {
@@ -850,84 +597,15 @@ func (s *Store) DeleteBeneficiary(ctx context.Context, tenantID string, userID i
 }
 
 func (s *Store) UpsertCacheCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	card.Pan = strings.TrimSpace(card.Pan)
-	if card.Pan == "" {
-		return ErrMissingPAN
-	}
-	if s == nil {
-		return fmt.Errorf("nil db")
-	}
-	if err := s.requireDataKeyForSensitiveValue(card.Pan); err != nil {
-		return err
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	if err := s.encryptCacheCardFields(&card); err != nil {
-		return err
-	}
-	now := time.Now().UTC()
-	stmt := s.DB.Rebind(`INSERT INTO cache_cards(tenant_id, pan, pan_enc, expiry, name, is_valid, created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(tenant_id, pan) DO UPDATE SET is_valid = excluded.is_valid, pan_enc = excluded.pan_enc, expiry = excluded.expiry, name = excluded.name, updated_at = excluded.updated_at`)
-	_, err = db.ExecContext(ctx, stmt, tenantID, card.Pan, card.PanEnc, card.Expiry, card.Name, card.IsValid, now, now)
-	return err
+	return ErrLegacyCardOperation
 }
 
 func (s *Store) GetCacheCard(ctx context.Context, tenantID, pan string) (*ebs_fields.CacheCards, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	pan = strings.TrimSpace(pan)
-	if pan == "" {
-		return nil, ErrMissingPAN
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := s.DB.Rebind("SELECT * FROM cache_cards WHERE tenant_id = ? AND " + s.panLookupClause("pan"))
-	var card ebs_fields.CacheCards
-	args := []any{tenantID}
-	args = append(args, s.panLookupArgs(pan)...)
-	if err := db.GetContext(ctx, &card, stmt, args...); err != nil {
-		return nil, err
-	}
-	if err := s.hydrateCacheCardFields(ctx, tenantID, &card); err != nil {
-		return nil, err
-	}
-	return &card, nil
+	return nil, ErrLegacyCardOperation
 }
 
 func (s *Store) CardExists(ctx context.Context, tenantID, pan string) (bool, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return false, err
-	}
-	if strings.TrimSpace(pan) == "" {
-		return false, ErrMissingPAN
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return false, err
-	}
-	stmt := s.DB.Rebind("SELECT 1 FROM cards WHERE tenant_id = ? AND " + s.panLookupClause("pan") + " AND deleted_at IS NULL LIMIT 1")
-	var one int
-	args := []any{tenantID}
-	args = append(args, s.panLookupArgs(pan)...)
-	if err := db.GetContext(ctx, &one, stmt, args...); err != nil {
-		if ErrNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+	return false, ErrLegacyCardOperation
 }
 
 func (s *Store) UpsertCacheBiller(ctx context.Context, tenantID, mobile, billerID string) error {
@@ -1385,6 +1063,23 @@ func (s *Store) CreatePushData(ctx context.Context, tenantID string, data *ebs_f
 	data.Phone = strings.TrimSpace(data.Phone)
 	data.DeviceID = strings.TrimSpace(data.DeviceID)
 	data.UserMobile = strings.TrimSpace(data.UserMobile)
+	rawTransactionUUID := data.TransactionUUID
+	data.TransactionUUID = strings.TrimSpace(rawTransactionUUID)
+	data.EBSUUID = strings.TrimSpace(data.EBSUUID)
+	if data.TransactionUUID != "" {
+		if rawTransactionUUID != data.TransactionUUID {
+			return ErrInvalidTransactionUUID
+		}
+		transactionUUID, err := normalizeCanonicalTransactionUUID(data.TransactionUUID)
+		if err != nil {
+			return err
+		}
+		if data.EBSUUID != "" && data.EBSUUID != transactionUUID {
+			return ErrInvalidTransactionUUID
+		}
+		data.TransactionUUID = transactionUUID
+		data.EBSUUID = transactionUUID
+	}
 	if data.To == "" && data.Phone == "" && data.DeviceID == "" && data.UserMobile == "" {
 		return ErrMissingPushTarget
 	}
@@ -1472,9 +1167,21 @@ func (s *Store) GetNotifications(ctx context.Context, tenantID, userMobile strin
 			}
 			record.PaymentRequest = paymentRequest
 		}
+		if transactionUUID, err := normalizeCanonicalTransactionUUID(record.EBSUUID); err == nil {
+			record.TransactionUUID = transactionUUID
+		}
 		records = append(records, record)
 	}
 	return records, rows.Err()
+}
+
+func normalizeCanonicalTransactionUUID(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	parsed, err := uuid.Parse(value)
+	if err != nil || parsed.String() != value {
+		return "", ErrInvalidTransactionUUID
+	}
+	return value, nil
 }
 
 func decodePaymentRequestPayload(payload, uuid string) (ebs_fields.QrData, error) {
@@ -1992,28 +1699,7 @@ func (s *Store) FindUserByID(ctx context.Context, tenantID string, id int64) (*e
 }
 
 func (s *Store) GetDeviceIDsByPan(ctx context.Context, tenantID, pan string) ([]string, error) {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	pan = strings.TrimSpace(pan)
-	if pan == "" {
-		return nil, ErrMissingPAN
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := s.DB.Rebind(`SELECT DISTINCT users.device_id
-		FROM users LEFT JOIN cards ON cards.user_id = users.id
-		WHERE users.device_id != '' AND ` + s.panLookupClause("cards.pan") + ` AND cards.deleted_at IS NULL AND users.tenant_id = ? AND cards.tenant_id = ?`)
-	var devices []string
-	args := s.panLookupArgs(pan)
-	args = append(args, tenantID, tenantID)
-	if err := db.SelectContext(ctx, &devices, stmt, args...); err != nil {
-		return nil, err
-	}
-	return devices, nil
+	return nil, ErrLegacyCardOperation
 }
 
 func (s *Store) GetTokenWithTransaction(ctx context.Context, tenantID, uuid string) (*ebs_fields.Token, error) {

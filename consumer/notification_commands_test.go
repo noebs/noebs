@@ -66,6 +66,71 @@ func TestNotificationRecordForEventRequiresTransactionUUID(t *testing.T) {
 	}
 }
 
+func TestNotificationTransactionUUIDIsDistinctAndTapAuthorizationUsesParticipants(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{
+		store.MigrationScopeEBSAdapter,
+		store.MigrationScopeNotificationChat,
+	})
+	service := &Service{
+		Store:       storeSvc,
+		NoebsConfig: ebs_fields.NoebsConfig{KafkaTransactionTopic: testKafkaTransactionTopic},
+	}
+	const transactionUUID = "ed9de23b-734f-4db4-91f0-b6299a7b80a2"
+	actorCtx, err := WithTransactionActor(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("bind actor: %v", err)
+	}
+	if err := service.recordTransaction(actorCtx, tenantID, ebs_fields.EBSResponse{UUID: transactionUUID, ResponseCode: 0}); err != nil {
+		t.Fatalf("record transaction: %v", err)
+	}
+	notification, err := notificationRecordForEvent(PushData{
+		UUID: transactionUUID, UserMobile: "0912141660", Type: EBS_NOTIFICATION,
+	}, "sender")
+	if err != nil {
+		t.Fatalf("build notification event: %v", err)
+	}
+	if notification.UUID != transactionUUID+":sender" || notification.TransactionUUID != transactionUUID || notification.EBSUUID != transactionUUID {
+		t.Fatalf("notification identities = %+v", notification)
+	}
+	payload, err := json.Marshal(notification)
+	if err != nil {
+		t.Fatalf("marshal push payload: %v", err)
+	}
+	if !strings.Contains(string(payload), `"uuid":"`+transactionUUID+`:sender"`) ||
+		!strings.Contains(string(payload), `"transaction_uuid":"`+transactionUUID+`"`) ||
+		strings.Contains(string(payload), "ebs_uuid") {
+		t.Fatalf("push payload identities = %s", payload)
+	}
+	if err := service.StoreNotificationPushData(context.Background(), tenantID, StorePushDataCommand{Data: notification}); err != nil {
+		t.Fatalf("store notification: %v", err)
+	}
+	records, err := storeSvc.GetNotifications(context.Background(), tenantID, "0912141660")
+	if err != nil {
+		t.Fatalf("read notifications: %v", err)
+	}
+	if len(records) != 1 || records[0].UUID != transactionUUID+":sender" || records[0].TransactionUUID != transactionUUID {
+		t.Fatalf("stored notification identities = %+v", records)
+	}
+	if _, err := service.GetTransactionByUUIDForUser(context.Background(), tenantID, 42, records[0].TransactionUUID); err != nil {
+		t.Fatalf("participant notification tap: %v", err)
+	}
+	if _, err := service.GetTransactionByUUIDForUser(context.Background(), tenantID, 84, records[0].TransactionUUID); !errors.Is(err, ErrTransactionNotFound) {
+		t.Fatalf("non-participant notification tap error = %v, want %v", err, ErrTransactionNotFound)
+	}
+}
+
+func TestNotificationRecordRejectsNonCanonicalTransactionUUID(t *testing.T) {
+	for _, value := range []string{
+		"not-a-uuid",
+		"ED9DE23B-734F-4DB4-91F0-B6299A7B80A2",
+		" ed9de23b-734f-4db4-91f0-b6299a7b80a2 ",
+	} {
+		if _, err := notificationRecordForEvent(PushData{UUID: value}, "sender"); !errors.Is(err, store.ErrInvalidTransactionUUID) {
+			t.Fatalf("notificationRecordForEvent(%q) error = %v, want %v", value, err, store.ErrInvalidTransactionUUID)
+		}
+	}
+}
+
 func TestSubmitBillerHookUsesNotificationScopeOnly(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeNotificationChat})
 

@@ -435,6 +435,13 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/user/device", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/change_password", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 
+		{method: fiber.MethodGet, path: "/consumer/cards", role: serviceRoleCardVault, auth: gatewayAuthUser},
+		{method: fiber.MethodPatch, path: "/consumer/cards/:card_id", role: serviceRoleCardVault, auth: gatewayAuthUser},
+		{method: fiber.MethodDelete, path: "/consumer/cards/:card_id", role: serviceRoleCardVault, auth: gatewayAuthUser},
+		{method: fiber.MethodPut, path: "/consumer/cards/:card_id/main", role: serviceRoleCardVault, auth: gatewayAuthUser},
+		{method: fiber.MethodPost, path: "/consumer/cards/enrollment-intents", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
+		{method: fiber.MethodPost, path: "/consumer/cards/enrollment-intents/:enrollment_id/confirm", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
+
 		{method: fiber.MethodGet, path: "/consumer/get_cards", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/add_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
 		{method: fiber.MethodPut, path: "/consumer/edit_card", role: serviceRoleCardVault, auth: gatewayAuthUser},

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/store"
+	"github.com/google/uuid"
 )
 
 type StorePushDataCommand struct {
@@ -56,15 +57,24 @@ func (s *Service) StoreNotificationEventsInNotificationChat(ctx context.Context,
 }
 
 func notificationRecordForEvent(data PushData, event string) (PushData, error) {
-	transactionUUID := strings.TrimSpace(data.UUID)
+	rawTransactionUUID := data.UUID
+	transactionUUID := strings.TrimSpace(rawTransactionUUID)
 	if transactionUUID == "" {
 		return PushData{}, ErrMissingUUID
+	}
+	if rawTransactionUUID != transactionUUID {
+		return PushData{}, store.ErrInvalidTransactionUUID
+	}
+	parsed, err := uuid.Parse(transactionUUID)
+	if err != nil || parsed.String() != transactionUUID {
+		return PushData{}, store.ErrInvalidTransactionUUID
 	}
 	event = strings.TrimSpace(event)
 	if event == "" {
 		return PushData{}, ErrMissingUUID
 	}
 	data.EBSUUID = transactionUUID
+	data.TransactionUUID = transactionUUID
 	data.UUID = transactionUUID + ":" + event
 	return data, nil
 }

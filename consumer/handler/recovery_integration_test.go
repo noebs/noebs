@@ -35,8 +35,8 @@ func TestPasswordRecoveryHTTPJourney(t *testing.T) {
 		}
 		t.Fatalf("start postgres: %v", err)
 	}
-	t.Cleanup(func() { _ = postgres.Terminate(context.Background()) })
-	dbURL, err := postgres.CreateDatabase(ctx, "handler_recovery")
+	databaseName := fmt.Sprintf("handler_recovery_%d", time.Now().UnixNano())
+	dbURL, err := postgres.CreateDatabase(ctx, databaseName)
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -44,7 +44,11 @@ func TestPasswordRecoveryHTTPJourney(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() {
+		_ = db.Close()
+		_ = postgres.DropDatabase(context.Background(), databaseName)
+		_ = postgres.Terminate(context.Background())
+	})
 	const tenantID = "http-test-tenant"
 	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopeIdentityAuth); err != nil {
 		t.Fatalf("migrate identity auth: %v", err)

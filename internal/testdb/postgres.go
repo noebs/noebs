@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -26,6 +27,12 @@ type PostgresContainer struct {
 
 // StartPostgresContainer boots a postgres container for tests.
 func StartPostgresContainer(ctx context.Context) (pc *PostgresContainer, err error) {
+	if adminURL := strings.TrimSpace(os.Getenv("NOEBS_TEST_POSTGRES_URL")); adminURL != "" {
+		if _, err := url.ParseRequestURI(adminURL); err != nil {
+			return nil, fmt.Errorf("invalid NOEBS_TEST_POSTGRES_URL: %w", err)
+		}
+		return &PostgresContainer{adminURL: adminURL}, nil
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			pc = nil

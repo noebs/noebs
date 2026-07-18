@@ -49,7 +49,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
 			EBSResponse: ebs_fields.EBSResponse{
-				UUID:            "transfer-uuid",
+				UUID:            "0f8fad5b-d9cb-469f-a165-70867728950e",
 				ResponseCode:    0,
 				ResponseMessage: "Approved",
 				PAN:             "9222081700009999",
@@ -91,7 +91,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
 			ApplicationId: "consumer-app",
 			TranDateTime:  "270526205500",
-			UUID:          "transfer-uuid",
+			UUID:          "0f8fad5b-d9cb-469f-a165-70867728950e",
 			DeviceID:      "sender-device",
 		},
 		ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
@@ -117,13 +117,13 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	if len(notifications) != 2 {
 		t.Fatalf("notification commands = %d, want 2", len(notifications))
 	}
-	if got, want := notifications[0].Data.UUID, "transfer-uuid:receiver"; got != want {
+	if got, want := notifications[0].Data.UUID, "0f8fad5b-d9cb-469f-a165-70867728950e:receiver"; got != want {
 		t.Fatalf("receiver notification uuid = %q, want %q", got, want)
 	}
 	if got, want := notifications[0].Data.UserMobile, "0912141660"; got != want {
 		t.Fatalf("receiver notification user_mobile = %q, want %q", got, want)
 	}
-	if got, want := notifications[1].Data.UUID, "transfer-uuid:sender"; got != want {
+	if got, want := notifications[1].Data.UUID, "0f8fad5b-d9cb-469f-a165-70867728950e:sender"; got != want {
 		t.Fatalf("sender notification uuid = %q, want %q", got, want)
 	}
 	if got, want := notifications[1].Data.To, "sender-device"; got != want {
@@ -134,7 +134,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get participant %d history: %v", userID, err)
 		}
-		if len(history) != 1 || history[0].UUID != "transfer-uuid" {
+		if len(history) != 1 || history[0].UUID != "0f8fad5b-d9cb-469f-a165-70867728950e" {
 			t.Fatalf("participant %d history = %+v", userID, history)
 		}
 	}
@@ -150,7 +150,7 @@ func TestMobileTransferFailureRetainsActorAndRecipientParticipants(t *testing.T)
 	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{EBSResponse: ebs_fields.EBSResponse{
-			UUID: "declined-transfer", ResponseCode: 51, ResponseMessage: "Declined",
+			UUID: "7c9e6679-7425-40de-944b-e07fc1f90ae7", ResponseCode: 51, ResponseMessage: "Declined",
 		}})
 	}))
 	t.Cleanup(ebsServer.Close)
@@ -172,7 +172,7 @@ func TestMobileTransferFailureRetainsActorAndRecipientParticipants(t *testing.T)
 		},
 	}
 	_, err := service.MobileTransfer(transactionActorContext(t, 42), tenantID, ebs_fields.ConsumerMobileTransferFields{
-		ConsumerCommonFields:     ebs_fields.ConsumerCommonFields{UUID: "declined-transfer", TranDateTime: "270526205500", DeviceID: "sender-device"},
+		ConsumerCommonFields:     ebs_fields.ConsumerCommonFields{UUID: "7c9e6679-7425-40de-944b-e07fc1f90ae7", TranDateTime: "270526205500", DeviceID: "sender-device"},
 		ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{Pan: "9222081700009999", Ipin: "encrypted-ipin", ExpDate: "2601"},
 		AmountFields:             ebs_fields.AmountFields{TranAmount: 50, TranCurrencyCode: "SDG"},
 		Mobile:                   "0912141660",
@@ -189,7 +189,7 @@ func TestMobileTransferFailureRetainsActorAndRecipientParticipants(t *testing.T)
 		if historyErr != nil {
 			t.Fatalf("get failed-transfer participant %d history: %v", userID, historyErr)
 		}
-		if len(history) != 1 || history[0].UUID != "declined-transfer" || history[0].ResponseCode != 51 {
+		if len(history) != 1 || history[0].UUID != "7c9e6679-7425-40de-944b-e07fc1f90ae7" || history[0].ResponseCode != 51 {
 			t.Fatalf("failed-transfer participant %d history = %+v", userID, history)
 		}
 	}

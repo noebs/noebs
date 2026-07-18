@@ -91,14 +91,14 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
-func TestUserServiceCardWritesRequirePAN(t *testing.T) {
+func TestLegacyUserServiceCardWritesAreTerminal(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
 	ctx := context.Background()
-	if err := service.AddCardsForUserID(ctx, "tenant", 1, "0990000000", []ebs_fields.Card{{Pan: " "}}); !errors.Is(err, store.ErrMissingPAN) {
-		t.Fatalf("AddCardsForUserID(missing pan) error = %v, want %v", err, store.ErrMissingPAN)
+	if err := service.AddCardsForUserID(ctx, "tenant", 1, "0990000000", []ebs_fields.Card{{Pan: " "}}); !errors.Is(err, store.ErrLegacyCardOperation) {
+		t.Fatalf("AddCardsForUserID error = %v, want %v", err, store.ErrLegacyCardOperation)
 	}
-	if err := service.EditCardForUserID(ctx, "tenant", 1, ebs_fields.Card{CardIdx: "9222081700000000", Pan: " "}); !errors.Is(err, store.ErrMissingPAN) {
-		t.Fatalf("EditCardForUserID(missing pan) error = %v, want %v", err, store.ErrMissingPAN)
+	if err := service.EditCardForUserID(ctx, "tenant", 1, ebs_fields.Card{CardIdx: "9222081700000000", Pan: " "}); !errors.Is(err, store.ErrLegacyCardOperation) {
+		t.Fatalf("EditCardForUserID error = %v, want %v", err, store.ErrLegacyCardOperation)
 	}
 }
 

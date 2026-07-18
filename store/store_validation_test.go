@@ -253,10 +253,6 @@ func TestStore_IdentityTenantValidationFailsBeforeDB(t *testing.T) {
 			_, err := s.GetUserByEmailOrMobile(ctx, tenantID, "0990000000")
 			return err
 		}},
-		{"GetUserByCard", func(tenantID string) error {
-			_, err := s.GetUserByCard(ctx, tenantID, "9222081700000000")
-			return err
-		}},
 		{"FindUserByUsername", func(tenantID string) error {
 			_, err := s.FindUserByUsername(ctx, tenantID, "user")
 			return err
@@ -314,26 +310,6 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		name string
 		run  func(string) error
 	}{
-		{"ListCardsByUserID", func(tenantID string) error {
-			_, err := s.ListCardsByUserID(ctx, tenantID, 1)
-			return err
-		}},
-		{"ListCardsByMobile", func(tenantID string) error {
-			_, err := s.ListCardsByMobile(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"AddCards", func(tenantID string) error {
-			return s.AddCards(ctx, tenantID, 1, []ebs_fields.Card{{Mobile: "0990000000"}})
-		}},
-		{"UpdateCard", func(tenantID string) error {
-			return s.UpdateCard(ctx, tenantID, 1, ebs_fields.Card{})
-		}},
-		{"DeleteCard", func(tenantID string) error {
-			return s.DeleteCard(ctx, tenantID, 1, "9222081700000000")
-		}},
-		{"SetMainCard", func(tenantID string) error {
-			return s.SetMainCard(ctx, tenantID, 1, "9222081700000000")
-		}},
 		{"ListBeneficiaries", func(tenantID string) error {
 			_, err := s.ListBeneficiaries(ctx, tenantID, 1)
 			return err
@@ -343,17 +319,6 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		}},
 		{"DeleteBeneficiary", func(tenantID string) error {
 			return s.DeleteBeneficiary(ctx, tenantID, 1, "meter")
-		}},
-		{"UpsertCacheCard", func(tenantID string) error {
-			return s.UpsertCacheCard(ctx, tenantID, ebs_fields.CacheCards{Pan: "9222081700000000"})
-		}},
-		{"GetCacheCard", func(tenantID string) error {
-			_, err := s.GetCacheCard(ctx, tenantID, "9222081700000000")
-			return err
-		}},
-		{"CardExists", func(tenantID string) error {
-			_, err := s.CardExists(ctx, tenantID, "9222081700000000")
-			return err
 		}},
 		{"UpsertCacheBiller", func(tenantID string) error {
 			return s.UpsertCacheBiller(ctx, tenantID, "0990000000", "biller")
@@ -431,10 +396,6 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		}},
 		{"FindUserByID", func(tenantID string) error {
 			_, err := s.FindUserByID(ctx, tenantID, 1)
-			return err
-		}},
-		{"GetDeviceIDsByPan", func(tenantID string) error {
-			_, err := s.GetDeviceIDsByPan(ctx, tenantID, "9222081700000000")
 			return err
 		}},
 		{"GetAllTokensByUserID", func(tenantID string) error {
@@ -593,15 +554,6 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 		{"UpdateUser", func() error {
 			return s.UpdateUser(ctx, tenantID, &ebs_fields.User{Model: ebs_fields.Model{ID: 999}, Mobile: "0990000000"})
 		}},
-		{"UpdateCard", func() error {
-			return s.UpdateCard(ctx, tenantID, 999, ebs_fields.Card{CardIdx: "9222081700000000", Pan: "9222081700000000"})
-		}},
-		{"DeleteCard", func() error {
-			return s.DeleteCard(ctx, tenantID, 999, "9222081700000000")
-		}},
-		{"SetMainCard", func() error {
-			return s.SetMainCard(ctx, tenantID, 999, "9222081700000000")
-		}},
 		{"MarkTokenPaid", func() error {
 			return s.MarkTokenPaid(ctx, tenantID, "missing-token", "rail-uuid", 1)
 		}},
@@ -616,15 +568,6 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 		}},
 		{"updateUserMainCard", func() error {
 			return s.updateUserMainCard(ctx, tenantID, 999, "hash:missing-user-card", "enc:missing-user-card")
-		}},
-		{"updateCardPan", func() error {
-			return s.updateCardPan(ctx, tenantID, 999, "hash:missing-card-pan", "enc:missing-card-pan")
-		}},
-		{"updateCardIPIN", func() error {
-			return s.updateCardIPIN(ctx, tenantID, 999, "enc:missing-card-ipin")
-		}},
-		{"updateCacheCardPan", func() error {
-			return s.updateCacheCardPan(ctx, tenantID, 999, "hash:missing-cache-card-pan", "enc:missing-cache-card-pan")
 		}},
 		{"updateTokenCard", func() error {
 			return s.updateTokenCard(ctx, tenantID, "missing-token", "hash:missing-token-card", "enc:missing-token-card")
@@ -649,64 +592,6 @@ func TestStore_UpdateUserRequiresExplicitTarget(t *testing.T) {
 	}
 }
 
-func TestStore_CardTargetedWritesRequirePAN(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	if err := s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{CardIdx: " "}); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("UpdateCard(missing card index) error = %v, want %v", err, ErrMissingPAN)
-	}
-	if err := s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{CardIdx: "9222081700000000", Pan: " "}); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("UpdateCard(missing replacement pan) error = %v, want %v", err, ErrMissingPAN)
-	}
-	if err := s.DeleteCard(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("DeleteCard(missing card index) error = %v, want %v", err, ErrMissingPAN)
-	}
-}
-
-func TestStore_SetMainCardMissingTargetRollsBackReset(t *testing.T) {
-	ctx := context.Background()
-	db := newValidationDB(t)
-	tenantID := "tenant-main-card-rollback"
-	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeCardVault} {
-		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
-			t.Fatalf("migrate %s: %v", scope, err)
-		}
-	}
-	s := New(db, WithDataKey("test-data-key"))
-	if err := s.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
-	user := &ebs_fields.User{Mobile: "0990000000", Username: "0990000000"}
-	if err := s.CreateUser(ctx, tenantID, user); err != nil {
-		t.Fatalf("CreateUser(): %v", err)
-	}
-	valid := true
-	if err := s.AddCards(ctx, tenantID, user.ID, []ebs_fields.Card{{
-		Mobile:  "0990000000",
-		Pan:     "9222081700000000",
-		Expiry:  "3001",
-		IsMain:  true,
-		IsValid: &valid,
-	}}); err != nil {
-		t.Fatalf("AddCards(): %v", err)
-	}
-
-	if err := s.SetMainCard(ctx, tenantID, user.ID, "9222081700009999"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("SetMainCard(missing target) error = %v, want %v", err, sql.ErrNoRows)
-	}
-
-	cards, err := s.ListCardsByUserID(ctx, tenantID, user.ID)
-	if err != nil {
-		t.Fatalf("ListCardsByUserID(): %v", err)
-	}
-	if len(cards) != 1 {
-		t.Fatalf("cards length = %d, want 1", len(cards))
-	}
-	if !cards[0].IsMain {
-		t.Fatal("existing main card was reset after missing-target SetMainCard")
-	}
-}
-
 func TestStore_UpsertDeviceTokenRequiresExplicitFields(t *testing.T) {
 	s := &Store{}
 	if err := s.UpsertDeviceToken(context.Background(), "tenant", " ", "device-token"); !errors.Is(err, ErrMissingMobile) {
@@ -717,62 +602,27 @@ func TestStore_UpsertDeviceTokenRequiresExplicitFields(t *testing.T) {
 	}
 }
 
-func TestStore_AddCards_RequiresDataKey(t *testing.T) {
+func TestLegacyCardStoreOperationsAreTerminal(t *testing.T) {
 	s := &Store{}
-	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000", IPIN: "1234", Mobile: "0912141660"}})
-	if !errors.Is(err, ErrMissingDataKey) {
-		t.Fatalf("expected ErrMissingDataKey, got %v", err)
-	}
-}
-
-func TestStore_AddCards_RequiresMobile(t *testing.T) {
-	s := &Store{}
-	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Pan: "9222081700000000"}})
-	if !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("expected ErrMissingMobile, got %v", err)
-	}
-}
-
-func TestStore_AddCards_RequiresPAN(t *testing.T) {
-	s := &Store{}
-	err := s.AddCards(context.Background(), "t1", 1, []ebs_fields.Card{{Mobile: "0912141660", Pan: " "}})
-	if !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("expected ErrMissingPAN, got %v", err)
-	}
-}
-
-func TestStore_AddCardsRollsBackPartialBatch(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
-	tenantID := "tenant-add-cards-rollback"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeCardVault); err != nil {
-		t.Fatalf("migrate card-vault scope: %v", err)
+	operations := []func() error{
+		func() error { _, err := s.GetUserByCard(ctx, "tenant", "9222081700000000"); return err },
+		func() error { _, err := s.ListCardsByUserID(ctx, "tenant", 1); return err },
+		func() error { _, err := s.ListCardsByMobile(ctx, "tenant", "0912141660"); return err },
+		func() error { return s.AddCards(ctx, "tenant", 1, nil) },
+		func() error { return s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{}) },
+		func() error { return s.DeleteCard(ctx, "tenant", 1, "9222081700000000") },
+		func() error { return s.SetMainCard(ctx, "tenant", 1, "9222081700000000") },
+		func() error { _, err := s.GetPanByMobile(ctx, "tenant", "0912141660"); return err },
+		func() error { return s.UpsertCacheCard(ctx, "tenant", ebs_fields.CacheCards{}) },
+		func() error { _, err := s.GetCacheCard(ctx, "tenant", "9222081700000000"); return err },
+		func() error { _, err := s.CardExists(ctx, "tenant", "9222081700000000"); return err },
+		func() error { _, err := s.GetDeviceIDsByPan(ctx, "tenant", "9222081700000000"); return err },
 	}
-	s := New(db)
-	valid := true
-	cards := []ebs_fields.Card{
-		{
-			Mobile:  "0990000000",
-			Pan:     "9222081700000000",
-			Expiry:  "3001",
-			IsValid: &valid,
-		},
-		{
-			Mobile:  "0990000000",
-			Pan:     "9222081700000000",
-			Expiry:  "3001",
-			IsValid: &valid,
-		},
-	}
-	if err := s.AddCards(ctx, tenantID, 42, cards); err == nil {
-		t.Fatal("AddCards() error = nil, want duplicate-card failure")
-	}
-	stored, err := s.ListCardsByUserID(ctx, tenantID, 42)
-	if err != nil {
-		t.Fatalf("ListCardsByUserID(): %v", err)
-	}
-	if len(stored) != 0 {
-		t.Fatalf("stored cards after failed batch = %d, want 0", len(stored))
+	for index, operation := range operations {
+		if err := operation(); !errors.Is(err, ErrLegacyCardOperation) {
+			t.Fatalf("legacy operation %d error = %v, want %v", index, err, ErrLegacyCardOperation)
+		}
 	}
 }
 
@@ -863,49 +713,6 @@ func TestStore_TransactionParticipantQueriesRequireExplicitInputs(t *testing.T) 
 	}
 	if _, err := s.GetTransactionByUUIDForParticipantUserID(ctx, "t1", 1, " "); !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("missing uuid error = %v, want %v", err, ErrMissingUUID)
-	}
-}
-
-func TestStore_CardExists_RequiresPAN(t *testing.T) {
-	s := newTestStore(t)
-	if _, err := s.CardExists(context.Background(), "t1", " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("expected ErrMissingPAN, got %v", err)
-	}
-}
-
-func TestStore_CardIdentityLookupsRequirePAN(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	if _, err := s.GetUserByCard(ctx, "t1", " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("GetUserByCard(missing pan) error = %v, want %v", err, ErrMissingPAN)
-	}
-	if _, err := s.GetDeviceIDsByPan(ctx, "t1", " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("GetDeviceIDsByPan(missing pan) error = %v, want %v", err, ErrMissingPAN)
-	}
-}
-
-func TestStore_SetMainCard_RequiresPAN(t *testing.T) {
-	s := &Store{}
-	if err := s.SetMainCard(context.Background(), "t1", 42, " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("expected ErrMissingPAN, got %v", err)
-	}
-}
-
-func TestStore_UpsertCacheCard_RequiresDataKey(t *testing.T) {
-	s := &Store{}
-	err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: "9222081700000000"})
-	if !errors.Is(err, ErrMissingDataKey) {
-		t.Fatalf("expected ErrMissingDataKey, got %v", err)
-	}
-}
-
-func TestStore_CacheCardRequiresPAN(t *testing.T) {
-	s := &Store{}
-	if err := s.UpsertCacheCard(context.Background(), "t1", ebs_fields.CacheCards{Pan: " "}); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("UpsertCacheCard(missing pan) error = %v, want %v", err, ErrMissingPAN)
-	}
-	if _, err := s.GetCacheCard(context.Background(), "t1", " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("GetCacheCard(missing pan) error = %v, want %v", err, ErrMissingPAN)
 	}
 }
 

@@ -3,54 +3,58 @@ package handler
 import "github.com/gofiber/fiber/v2"
 
 func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
-	// Registration, recovery, and cryptographic bootstrap are the only EBS
-	// adapter operations available before a user has authenticated.
-	router.Post("/otp/balance", publicEBS(h.BalanceStep))
-	router.Post("/register_with_card", publicEBS(h.RegisterWithCard))
-	router.Post("/card_info", publicEBS(h.EbsGetCardInfo))
-	router.Post("/cards/new", publicEBS(h.RegisterCard))
-	router.Post("/cards/complete", publicEBS(h.CompleteRegistration))
+	// PAN-selected recovery/registration is terminal after the opaque cutover.
+	router.Post("/otp/balance", h.LegacyCardUpgradeRequired)
+	router.Post("/register_with_card", h.LegacyCardUpgradeRequired)
+	router.Post("/card_info", h.LegacyCardUpgradeRequired)
+	router.Post("/cards/new", h.LegacyCardUpgradeRequired)
+	router.Post("/cards/complete", h.LegacyCardUpgradeRequired)
 	router.Post("/key", publicEBS(h.WorkingKey))
 	router.Post("/ipin_key", publicEBS(h.IPINKey))
 }
 
 func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
+	// Opaque card enrollment is verified by the EBS adapter and persisted only
+	// through authenticated Card Vault commands.
+	router.Post("/cards/enrollment-intents", h.CreateOpaqueCardEnrollmentIntent)
+	router.Post("/cards/enrollment-intents/:enrollment_id/confirm", h.ConfirmOpaqueCardEnrollment)
+
 	// Card and account operations
-	router.Post("/balance", authenticatedEBS(h.Balance))
+	router.Post("/balance", h.LegacyCardUpgradeRequired)
 	router.Post("/status", authenticatedEBS(h.TransactionStatus))
 	router.Post("/is_alive", authenticatedEBS(h.IsAlive))
-	router.Post("/bill_payment", authenticatedEBS(h.BillPayment))
-	router.Post("/bills", authenticatedEBS(h.GetBills))
+	router.Post("/bill_payment", h.LegacyCardUpgradeRequired)
+	router.Post("/bills", h.LegacyCardUpgradeRequired)
 	router.Get("/biller", authenticatedEBS(h.GetBiller))
-	router.Post("/bill_inquiry", authenticatedEBS(h.BillInquiry))
-	router.Post("/p2p", authenticatedEBS(h.CardTransfer))
-	router.Post("/cashIn", authenticatedEBS(h.CashIn))
-	router.Post("/cashOut", authenticatedEBS(h.CashOut))
-	router.Post("/account", authenticatedEBS(h.AccountTransfer))
-	router.Post("/purchase", authenticatedEBS(h.Purchase))
+	router.Post("/bill_inquiry", h.LegacyCardUpgradeRequired)
+	router.Post("/p2p", h.LegacyCardUpgradeRequired)
+	router.Post("/cashIn", h.LegacyCardUpgradeRequired)
+	router.Post("/cashOut", h.LegacyCardUpgradeRequired)
+	router.Post("/account", h.LegacyCardUpgradeRequired)
+	router.Post("/purchase", h.LegacyCardUpgradeRequired)
 	router.Post("/n/status", authenticatedEBS(h.Status))
-	router.Post("/ipin", authenticatedEBS(h.IPinChange))
+	router.Post("/ipin", h.LegacyCardUpgradeRequired)
 	router.Get("/nec2name", authenticatedEBS(h.NecToName))
 
 	// QR
 	router.Post("/generate_qr", authenticatedEBS(h.QRMerchantRegistration))
-	router.Post("/qr_payment", authenticatedEBS(h.QRPayment))
+	router.Post("/qr_payment", h.LegacyCardUpgradeRequired)
 	router.Post("/qr_status", authenticatedEBS(h.QRTransactions))
 	router.Post("/qr_refund", authenticatedEBS(h.QRRefund))
 	router.Post("/qr_complete", authenticatedEBS(h.QRComplete))
 
 	// IPIN
-	router.Post("/generate_ipin", authenticatedEBS(h.GenerateIpin))
-	router.Post("/complete_ipin", authenticatedEBS(h.CompleteIpin))
+	router.Post("/generate_ipin", h.LegacyCardUpgradeRequired)
+	router.Post("/complete_ipin", h.LegacyCardUpgradeRequired)
 
 	// Vouchers
-	router.Post("/vouchers/generate", authenticatedEBS(h.GenerateVoucher))
+	router.Post("/vouchers/generate", h.LegacyCardUpgradeRequired)
 
 	// Transactions / payment compatibility
 	router.Get("/transaction", authenticatedEBS(h.TransactionByUUID))
 	router.Get("/transactions", authenticatedEBS(h.GetTransactions))
-	router.Post("/p2p_mobile", authenticatedEBS(h.MobileTransfer))
-	router.Post("/payment_token/quick_pay", authenticatedEBS(h.NoebsQuickPayment))
+	router.Post("/p2p_mobile", h.LegacyCardUpgradeRequired)
+	router.Post("/payment_token/quick_pay", h.LegacyCardUpgradeRequired)
 }
 
 func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
@@ -79,29 +83,36 @@ func RegisterBeneficiaryRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
-	// Cards
-	router.Get("/get_cards", h.GetCards)
-	router.Post("/add_card", h.AddCards)
-	router.Put("/edit_card", h.EditCard)
-	router.Delete("/delete_card", h.RemoveCard)
-	router.Post("/cards/set_main", h.SetMainCard)
+	// Opaque card contract.
+	router.Get("/cards", h.ListOpaqueCards)
+	router.Patch("/cards/:card_id", h.RenameOpaqueCard)
+	router.Delete("/cards/:card_id", h.RetireOpaqueCard)
+	router.Put("/cards/:card_id/main", h.SetOpaqueMainCard)
 
-	// Payment tokens
-	router.Get("/payment_token", h.GetPaymentToken)
-	router.Post("/payment_token", h.GeneratePaymentToken)
+	// Legacy PAN selectors are intentionally terminal. They do not bind or
+	// inspect request bodies, so a new client can never fall back through them.
+	router.Get("/get_cards", h.LegacyCardUpgradeRequired)
+	router.Post("/add_card", h.LegacyCardUpgradeRequired)
+	router.Put("/edit_card", h.LegacyCardUpgradeRequired)
+	router.Delete("/delete_card", h.LegacyCardUpgradeRequired)
+	router.Post("/cards/set_main", h.LegacyCardUpgradeRequired)
+
+	// PAN-backed payment tokens are unavailable until the opaque token contract.
+	router.Get("/payment_token", h.LegacyCardUpgradeRequired)
+	router.Post("/payment_token", h.LegacyCardUpgradeRequired)
 }
 
 func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
-	router.Post("/quick-pay/resolve", h.ResolveQuickPaymentToken)
-	router.Post("/quick-pay/finalize", h.FinalizeQuickPaymentToken)
-	router.Post("/cards/masked", h.ListMaskedCards)
+	router.Post("/enrollment-intents", h.CreateCardEnrollmentIntentInternal)
+	router.Post("/enrollment-intents/begin", h.BeginCardEnrollmentInternal)
+	router.Post("/enrollment-intents/claim-rail", h.ClaimCardEnrollmentRailInternal)
+	router.Post("/enrollment-intents/complete", h.CompleteCardEnrollmentInternal)
+	router.Post("/enrollment-intents/fail", h.FailCardEnrollmentInternal)
 }
 
 func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
-	router.Post("/card-registration/cards", h.StoreCompletedRegistrationCard)
-	router.Post("/cards/by-mobile", h.ResolveCardByMobile)
-	router.Post("/cards/by-mobile-pan", h.ResolveCardByMobilePAN)
-	router.Post("/cards/masked-by-mobile", h.ResolveMaskedCardByMobile)
+	// Funded rail resolution is intentionally absent until each request is
+	// authorized by a durable, one-use operation claim.
 }
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {

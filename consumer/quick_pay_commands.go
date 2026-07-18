@@ -365,6 +365,32 @@ func errorForServiceCommandCode(code string) error {
 		return store.ErrInvalidAmount
 	case store.ErrMissingPAN.Error():
 		return store.ErrMissingPAN
+	case store.ErrMissingCardID.Error():
+		return store.ErrMissingCardID
+	case store.ErrInvalidCardID.Error():
+		return store.ErrInvalidCardID
+	case store.ErrCardNotFound.Error():
+		return store.ErrCardNotFound
+	case store.ErrCardEnrollmentConflict.Error():
+		return store.ErrCardEnrollmentConflict
+	case store.ErrEnrollmentIntentOpen.Error():
+		return store.ErrEnrollmentIntentOpen
+	case store.ErrEnrollmentIntentNotFound.Error():
+		return store.ErrEnrollmentIntentNotFound
+	case store.ErrEnrollmentIntentExpired.Error():
+		return store.ErrEnrollmentIntentExpired
+	case store.ErrEnrollmentIntentConsumed.Error():
+		return store.ErrEnrollmentIntentConsumed
+	case store.ErrEnrollmentClaimMismatch.Error():
+		return store.ErrEnrollmentClaimMismatch
+	case store.ErrInvalidEnrollmentIntent.Error():
+		return store.ErrInvalidEnrollmentIntent
+	case store.ErrInvalidCardExpiry.Error():
+		return store.ErrInvalidCardExpiry
+	case store.ErrMissingRailUUID.Error():
+		return store.ErrMissingRailUUID
+	case store.ErrInvalidRailUUID.Error():
+		return store.ErrInvalidRailUUID
 	default:
 		return nil
 	}

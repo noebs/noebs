@@ -310,6 +310,19 @@ type Card struct {
 	IsValid  *bool  `json:"is_valid"`
 }
 
+// CardSummary is the complete public representation of an enrolled card.
+// It exposes only the opaque card ID and display metadata; it contains no
+// private database key, full PAN, fingerprint, ciphertext, mobile number,
+// PIN, or IPIN.
+type CardSummary struct {
+	CardID    string `json:"card_id"`
+	Name      string `json:"name"`
+	MaskedPAN string `json:"masked_pan"`
+	Expiry    string `json:"exp_date"`
+	IsMain    bool   `json:"is_main"`
+	Status    string `json:"status"`
+}
+
 var (
 	ErrInvalidCardQuery   = errors.New("invalid card query")
 	ErrEmptyCards         = errors.New("empty_cards")
