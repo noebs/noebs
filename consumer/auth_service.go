@@ -340,7 +340,7 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	return sanitizeUser(u), nil
 }
 
-func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, source string, now time.Time) (ebs_fields.User, error) {
+func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, signature, source string, now time.Time) (ebs_fields.User, error) {
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
@@ -367,11 +367,14 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, source s
 	if err != nil {
 		return ebs_fields.User{}, err
 	}
+	if err := verifyUserSignature(u.PublicKey, signature, strings.TrimSpace(otp)); err != nil {
+		return ebs_fields.User{}, err
+	}
 	digest, err := s.otpDigest(tenantID, mobile, strings.TrimSpace(otp))
 	if err != nil {
 		return ebs_fields.User{}, err
 	}
-	if err := s.Store.ConsumeOTPChallenge(ctx, tenantID, mobile, digest, now); err != nil {
+	if err := s.Store.ConsumeSignInChallengeAndVerifyUser(ctx, tenantID, mobile, digest, u.ID, now); err != nil {
 		if !isOTPChallengeRejection(err) {
 			return ebs_fields.User{}, err
 		}
@@ -379,9 +382,6 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, source s
 			return ebs_fields.User{}, err
 		}
 		return ebs_fields.User{}, ErrInvalidOTP
-	}
-	if err := s.Store.UpdateUserColumns(ctx, tenantID, u.ID, map[string]any{"is_password_otp": true, "is_verified": true}); err != nil {
-		return ebs_fields.User{}, err
 	}
 	u.IsPasswordOTP = true
 	u.IsVerified = true

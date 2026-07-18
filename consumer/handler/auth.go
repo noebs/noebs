@@ -183,7 +183,11 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 }
 
 func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
-	var req ebs_fields.User
+	var req struct {
+		Mobile    string `json:"mobile"`
+		OTP       string `json:"otp"`
+		Signature string `json:"signature"`
+	}
 	if err := parseJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
@@ -201,7 +205,7 @@ func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
 	}
 
-	user, err := h.Service.VerifyOTP(c.UserContext(), tenantID, req.Mobile, req.OTP, source, time.Now().UTC())
+	user, err := h.Service.VerifyOTP(c.UserContext(), tenantID, req.Mobile, req.OTP, req.Signature, source, time.Now().UTC())
 	if err != nil {
 		if errors.Is(err, consumer.ErrRateLimited) {
 			return rateLimitResponse(c, err)
@@ -211,6 +215,9 @@ func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 		}
 		if errors.Is(err, consumer.ErrInvalidOTP) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Invalid otp", "code": "invalid_otp"})
+		}
+		if errors.Is(err, consumer.ErrInvalidSignature) {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Invalid signature", "code": "invalid_signature"})
 		}
 		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "db_error"})
 	}

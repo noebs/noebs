@@ -3,6 +3,12 @@ package consumer
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -89,6 +95,27 @@ func TestVerifyUserSignatureRequiresValidProof(t *testing.T) {
 				t.Fatalf("verifyUserSignature() error = %v, want %v", err, ErrInvalidSignature)
 			}
 		})
+	}
+}
+
+func newSignatureProof(t *testing.T) (string, func(string) string) {
+	t.Helper()
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %v", err)
+	}
+	encoded, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		t.Fatalf("encode RSA public key: %v", err)
+	}
+	return base64.StdEncoding.EncodeToString(encoded), func(message string) string {
+		t.Helper()
+		digest := sha256.Sum256([]byte(message))
+		signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, digest[:])
+		if err != nil {
+			t.Fatalf("sign proof: %v", err)
+		}
+		return base64.StdEncoding.EncodeToString(signature)
 	}
 }
 
@@ -276,7 +303,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"VerifyOTP", func(tenantID string) error {
-			_, err := service.VerifyOTP(ctx, tenantID, "0990000000", "123456", authTestSource, authTestNow)
+			_, err := service.VerifyOTP(ctx, tenantID, "0990000000", "123456", "signature", authTestSource, authTestNow)
 			return err
 		}},
 		{"ChangePassword", func(tenantID string) error {
@@ -451,10 +478,10 @@ func TestGenerateSignInCodeHidesSMSErrorAndRemovesChallenge(t *testing.T) {
 func TestVerifyOTPMarksUserVerified(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
-	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
 		t.Fatalf("set public key: %v", err)
 	}
-	code := "123456"
+	code := refreshProofMessage
 	digest, err := env.Service.otpDigest(env.Tenant, "0990000000", code)
 	if err != nil {
 		t.Fatalf("otp digest: %v", err)
@@ -462,8 +489,11 @@ func TestVerifyOTPMarksUserVerified(t *testing.T) {
 	if err := env.Store.StoreOTPChallenge(context.Background(), env.Tenant, "0990000000", digest, authTestNow, authTestNow.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
 		t.Fatalf("store otp challenge: %v", err)
 	}
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", code, "", authTestSource, authTestNow); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("VerifyOTP(unsigned) error = %v, want %v", err, ErrInvalidSignature)
+	}
 
-	verified, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", code, authTestSource, authTestNow)
+	verified, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", code, refreshProofSignature, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("VerifyOTP(): %v", err)
 	}
@@ -487,7 +517,7 @@ func TestRegisteredUserMustVerifyOTPBeforePasswordLogin(t *testing.T) {
 	const (
 		mobile   = "0992220000"
 		password = "Valid1!Password"
-		code     = "123456"
+		code     = refreshProofMessage
 	)
 
 	created, err := env.Service.CreateUser(context.Background(), env.Tenant, ebs_fields.User{
@@ -512,7 +542,7 @@ func TestRegisteredUserMustVerifyOTPBeforePasswordLogin(t *testing.T) {
 	if err := env.Store.StoreOTPChallenge(context.Background(), env.Tenant, mobile, digest, authTestNow, authTestNow.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
 		t.Fatalf("store otp challenge: %v", err)
 	}
-	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, mobile, code, authTestSource, authTestNow); err != nil {
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, mobile, code, refreshProofSignature, authTestSource, authTestNow); err != nil {
 		t.Fatalf("VerifyOTP(): %v", err)
 	}
 	if token, _, err := env.Service.Login(context.Background(), env.Tenant, mobile, password, authTestSource, authTestNow.Add(time.Second)); err != nil {
@@ -525,7 +555,8 @@ func TestRegisteredUserMustVerifyOTPBeforePasswordLogin(t *testing.T) {
 func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
-	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
+	publicKey, sign := newSignatureProof(t)
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": publicKey}); err != nil {
 		t.Fatalf("set public key: %v", err)
 	}
 
@@ -537,7 +568,7 @@ func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
 		t.Fatalf("store otp challenge: %v", err)
 	}
 
-	_, err = env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", "not-otp", authTestSource, authTestNow)
+	_, err = env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", "not-otp", sign("not-otp"), authTestSource, authTestNow)
 	if !errors.Is(err, ErrInvalidOTP) {
 		t.Fatalf("VerifyOTP() error = %v, want %v", err, ErrInvalidOTP)
 	}
@@ -553,7 +584,11 @@ func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
 
 func TestGeneratedOTPCanBeConsumedOnlyOnce(t *testing.T) {
 	env := newTestEnv(t)
-	seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	publicKey, sign := newSignatureProof(t)
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": publicKey}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
 	messages := make(chan string, 1)
 	smsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		messages <- r.URL.Query().Get("sms")
@@ -569,10 +604,11 @@ func TestGeneratedOTPCanBeConsumedOnlyOnce(t *testing.T) {
 	if len(match) != 2 {
 		t.Fatalf("SMS did not contain a six-digit OTP")
 	}
-	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", match[1], authTestSource, authTestNow.Add(time.Second)); err != nil {
+	signature := sign(match[1])
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", match[1], signature, authTestSource, authTestNow.Add(time.Second)); err != nil {
 		t.Fatalf("VerifyOTP(first use): %v", err)
 	}
-	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", match[1], authTestSource, authTestNow.Add(2*time.Second)); !errors.Is(err, ErrInvalidOTP) {
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", match[1], signature, authTestSource, authTestNow.Add(2*time.Second)); !errors.Is(err, ErrInvalidOTP) {
 		t.Fatalf("VerifyOTP(replay) error = %v, want %v", err, ErrInvalidOTP)
 	}
 }
