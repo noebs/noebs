@@ -10,3 +10,6 @@ configMapGenerator:
   - name: caddy-config
     files:
       - Caddyfile
+
+generatorOptions:
+  disableNameSuffixHash: true

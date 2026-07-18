@@ -62,6 +62,7 @@ func configureWalletRouteTest(t *testing.T) {
 	originalWalletPublicClient := walletPublicClient
 	originalWalletAdminClient := walletAdminClient
 	originalWalletLedgerConn := walletLedgerGRPCConn
+	originalWorkloadVerifier := workloadVerifier
 	var testGRPCServer *grpc.Server
 	var testGRPCListener *bufconn.Listener
 	var testGRPCConn *grpc.ClientConn
@@ -83,12 +84,14 @@ func configureWalletRouteTest(t *testing.T) {
 		walletPublicClient = originalWalletPublicClient
 		walletAdminClient = originalWalletAdminClient
 		walletLedgerGRPCConn = originalWalletLedgerConn
+		workloadVerifier = originalWorkloadVerifier
 	})
 
 	noebsConfig.WalletEnabled = true
 	noebsConfig.WalletDefaultCurrency = "USD"
 	noebsConfig.JWTKey = "test-key"
 	noebsConfig.ServiceRole = string(serviceRoleWalletAPI)
+	workloadVerifier = roleTestWorkloadVerifier{}
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 	auth.Init()
 	walletService.Config = noebsConfig

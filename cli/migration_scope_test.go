@@ -31,7 +31,9 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		serviceRoleCardVaultMigrate: {
 			"tenants",
 			"cards",
-			"cache_cards",
+			"legacy_card_quarantine",
+			"card_enrollment_intents",
+			"card_funded_operation_claims",
 			"tokens",
 		},
 		serviceRoleEBSAdapterMigrate: {
@@ -76,6 +78,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 	}
 	forbiddenTables := map[serviceRole][]string{
 		serviceRoleCardVaultMigrate: {
+			"cache_cards",
 			"push_data",
 		},
 	}

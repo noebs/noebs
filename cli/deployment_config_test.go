@@ -738,6 +738,9 @@ func TestRepositoryDoesNotCarryDirectVMDeploymentScripts(t *testing.T) {
 		"ssh ",
 		"systemctl enable --now docker",
 	}
+	readOnlyRemoteScripts := map[string]bool{
+		"alpha-post-deploy-smoke.sh": true,
+	}
 	for _, path := range scripts {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -745,8 +748,26 @@ func TestRepositoryDoesNotCarryDirectVMDeploymentScripts(t *testing.T) {
 		}
 		text := string(data)
 		for _, token := range forbidden {
+			if token == "ssh " && readOnlyRemoteScripts[filepath.Base(path)] {
+				continue
+			}
 			if strings.Contains(text, token) {
 				t.Fatalf("%s carries direct VM/Docker deployment behavior %q; deployment must go through Kubernetes/k3s and Argo CD", path, token)
+			}
+		}
+		if readOnlyRemoteScripts[filepath.Base(path)] {
+			for _, mutation := range []string{
+				"kubectl apply",
+				"kubectl delete",
+				"kubectl patch",
+				"kubectl set image",
+				"kubectl rollout restart",
+				"argocd app sync",
+				"helm upgrade",
+			} {
+				if strings.Contains(text, mutation) {
+					t.Fatalf("%s mutates the deployment with %q; post-deploy smoke must remain read-only", path, mutation)
+				}
 			}
 		}
 	}

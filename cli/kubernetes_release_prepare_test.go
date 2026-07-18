@@ -60,7 +60,7 @@ func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
 	if got := firstString(identityNoebs, "sms_sender"); got != "input-sms-sender" {
 		t.Fatalf("sms_sender = %q, want explicit input", got)
 	}
-	if got := firstString(identityNoebs, "sms_gateway"); got != "https://input.sms.example" {
+	if got := firstString(identityNoebs, "sms_gateway"); got != "https://sms-gateway.noebs.sd/send?" {
 		t.Fatalf("sms_gateway = %q, want explicit input", got)
 	}
 	walletWorkerSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "wallet-worker.secrets.yaml"))
@@ -542,7 +542,7 @@ func writeCompleteLegacyReleaseRoot(t *testing.T) string {
   admin_password: legacy-admin-password
   sms_key: legacy-sms-key
   sms_sender: legacy-sms-sender
-  sms_gateway: "https://legacy.sms.example"
+  sms_gateway: "https://sms-gateway.noebs.sd/send?"
   sms_message: "legacy-code"
   google_client_id: legacy-google-client-id
   google_client_secret: legacy-google-client-secret
@@ -586,7 +586,7 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
   admin_password: admin-password
   sms_key: input-sms-key
   sms_sender: input-sms-sender
-  sms_gateway: "https://input.sms.example"
+  sms_gateway: "https://sms-gateway.noebs.sd/send?"
   sms_message: "code"
   google_redirect_url: "https://api.noebs.sd/oauth/callback"
   card_vault_data_key: card-vault-data-key
@@ -629,7 +629,7 @@ func replaceKubernetesReleaseInputPlaceholders(t *testing.T, payload string) str
 		"REPLACE_WITH_GATEWAY_ADMIN_PASSWORD":            "admin-password",
 		"REPLACE_WITH_SMS_API_KEY":                       "input-sms-key",
 		"REPLACE_WITH_SMS_SENDER":                        "input-sms-sender",
-		"REPLACE_WITH_SMS_GATEWAY":                       "https://input.sms.example",
+		"REPLACE_WITH_SMS_GATEWAY":                       "https://sms-gateway.noebs.sd/send?",
 		"REPLACE_WITH_SMS_MESSAGE":                       "code",
 		"REPLACE_WITH_GOOGLE_CLIENT_ID":                  "input-google-client-id",
 		"REPLACE_WITH_GOOGLE_CLIENT_SECRET":              "input-google-client-secret",
