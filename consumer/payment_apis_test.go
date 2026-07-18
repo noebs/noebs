@@ -128,10 +128,11 @@ func TestService_CreateUser(t *testing.T) {
 	env := newTestEnv(t)
 
 	user, err := env.Service.CreateUser(context.Background(), env.Tenant, ebs_fields.User{
-		Mobile:   "0912141660",
-		Username: "0912141660",
-		Password: "me@Suckit1",
-	})
+		Mobile:    "0912141660",
+		Username:  "0912141660",
+		Password:  "me@Suckit1",
+		PublicKey: refreshProofPublicKey,
+	}, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -142,7 +143,10 @@ func TestService_CreateUser(t *testing.T) {
 
 func TestService_LoginHandler(t *testing.T) {
 	env := newTestEnv(t)
-	seedUser(t, env.Store, env.Tenant, "0912141660", "me@Suckit1")
+	user := seedUser(t, env.Store, env.Tenant, "0912141660", "me@Suckit1")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"is_verified": true}); err != nil {
+		t.Fatalf("verify user: %v", err)
+	}
 
 	token, _, err := env.Service.Login(context.Background(), env.Tenant, "0912141660", "me@Suckit1", authTestSource, authTestNow)
 	if err != nil {

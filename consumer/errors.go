@@ -10,6 +10,7 @@ var (
 	ErrWrongPassword         = errors.New("wrong_password")
 	ErrWrongOTP              = errors.New("wrong_otp")
 	ErrPasswordInvalid       = errors.New("password_invalid")
+	ErrUserNotVerified       = errors.New("user_not_verified")
 	ErrEmptyOTP              = errors.New("empty_otp")
 	ErrInvalidOTP            = errors.New("invalid_otp")
 	ErrMissingAuth           = errors.New("missing_auth")
@@ -54,6 +55,7 @@ var (
 	// Registration
 	ErrMissingMobile     = errors.New("missing mobile")
 	ErrMissingPublicKey  = errors.New("missing public key")
+	ErrInvalidPublicKey  = errors.New("invalid public key")
 	ErrInvalidCard       = errors.New("invalid card")
 	ErrMissingPassword   = errors.New("missing password")
 	ErrMissingIssuedPAN  = errors.New("missing_issued_pan")

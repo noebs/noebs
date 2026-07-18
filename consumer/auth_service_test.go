@@ -264,7 +264,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"CreateUser", func(tenantID string) error {
-			_, err := service.CreateUser(ctx, tenantID, ebs_fields.User{Mobile: "0990000000", Password: "password"})
+			_, err := service.CreateUser(ctx, tenantID, ebs_fields.User{Mobile: "0990000000", Password: "password"}, authTestSource, authTestNow)
 			return err
 		}},
 		{"VerifyOTP", func(tenantID string) error {
@@ -300,7 +300,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 
 func TestCreateUserRequiresMobileBeforeStore(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
-	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{Mobile: " ", Password: "password"})
+	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{Mobile: " ", Password: "password"}, authTestSource, authTestNow)
 	if !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("CreateUser(missing mobile) error = %v, want %v", err, ErrMissingMobile)
 	}
@@ -316,23 +316,75 @@ func TestChangePasswordRequiresExplicitInputsBeforeStore(t *testing.T) {
 	if _, err := service.ChangePassword(ctx, "tenant", "0990000000", " "); !errors.Is(err, ErrMissingPassword) {
 		t.Fatalf("ChangePassword(missing password) error = %v, want %v", err, ErrMissingPassword)
 	}
+	if _, err := service.ChangePassword(ctx, "tenant", "0990000000", "all-lowercase1!"); !errors.Is(err, ErrPasswordInvalid) {
+		t.Fatalf("ChangePassword(weak password) error = %v, want %v", err, ErrPasswordInvalid)
+	}
 }
 
-func TestCreateUserPropagatesUniquenessLookupErrors(t *testing.T) {
+func TestCreateUserValidatesCredentialsBeforeStore(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
 	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{
 		Mobile:   "0990000000",
 		Password: "short",
+	}, authTestSource, authTestNow)
+	if !errors.Is(err, ErrPasswordInvalid) {
+		t.Fatalf("CreateUser(weak password) error = %v, want %v", err, ErrPasswordInvalid)
+	}
+
+	for _, tc := range []struct {
+		name      string
+		publicKey string
+		wantErr   error
+	}{
+		{name: "missing", wantErr: ErrMissingPublicKey},
+		{name: "malformed", publicKey: "not-a-public-key", wantErr: ErrInvalidPublicKey},
+	} {
+		t.Run(tc.name+"_public_key", func(t *testing.T) {
+			_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{
+				Mobile:    "0990000000",
+				Password:  "Valid1!Password",
+				PublicKey: tc.publicKey,
+			}, authTestSource, authTestNow)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("CreateUser() error = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestCreateUserEnforcesPersistentMobileAndSourceLimits(t *testing.T) {
+	t.Run("mobile", func(t *testing.T) {
+		env := newTestEnv(t)
+		user := ebs_fields.User{Mobile: "0990000000", Password: "Valid1!Password", PublicKey: refreshProofPublicKey}
+		for attempt := 1; attempt <= 4; attempt++ {
+			_, err := env.Service.CreateUser(context.Background(), env.Tenant, user, authTestSource, authTestNow)
+			if attempt < 4 && errors.Is(err, ErrRateLimited) {
+				t.Fatalf("attempt %d was rate limited early", attempt)
+			}
+			if attempt == 4 && !errors.Is(err, ErrRateLimited) {
+				t.Fatalf("attempt %d error = %v, want %v", attempt, err, ErrRateLimited)
+			}
+		}
 	})
-	if err == nil {
-		t.Fatal("CreateUser() error = nil, want store lookup error")
-	}
-	if errors.Is(err, ErrPasswordInvalid) {
-		t.Fatalf("CreateUser() error = %v, want uniqueness lookup error before password validation", err)
-	}
-	if !strings.Contains(err.Error(), "nil db") {
-		t.Fatalf("CreateUser() error = %v, want nil db lookup error", err)
-	}
+
+	t.Run("source", func(t *testing.T) {
+		env := newTestEnv(t)
+		for attempt := 1; attempt <= 11; attempt++ {
+			user := ebs_fields.User{
+				Mobile:    fmt.Sprintf("099100%04d", attempt),
+				Email:     fmt.Sprintf("registration-%d@example.test", attempt),
+				Password:  "Valid1!Password",
+				PublicKey: refreshProofPublicKey,
+			}
+			_, err := env.Service.CreateUser(context.Background(), env.Tenant, user, authTestSource, authTestNow)
+			if attempt <= 10 && err != nil {
+				t.Fatalf("attempt %d: %v", attempt, err)
+			}
+			if attempt == 11 && !errors.Is(err, ErrRateLimited) {
+				t.Fatalf("attempt %d error = %v, want %v", attempt, err, ErrRateLimited)
+			}
+		}
+	})
 }
 
 func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
@@ -405,6 +457,46 @@ func TestVerifyOTPMarksUserVerified(t *testing.T) {
 	}
 	if !isVerified || !isPasswordOTP {
 		t.Fatalf("stored flags = verified:%v password_otp:%v", isVerified, isPasswordOTP)
+	}
+}
+
+func TestRegisteredUserMustVerifyOTPBeforePasswordLogin(t *testing.T) {
+	env := newTestEnv(t)
+	const (
+		mobile   = "0992220000"
+		password = "Valid1!Password"
+		code     = "123456"
+	)
+
+	created, err := env.Service.CreateUser(context.Background(), env.Tenant, ebs_fields.User{
+		Mobile:    mobile,
+		Password:  password,
+		PublicKey: refreshProofPublicKey,
+	}, authTestSource, authTestNow)
+	if err != nil {
+		t.Fatalf("CreateUser(): %v", err)
+	}
+	if created.IsVerified {
+		t.Fatal("new user is verified before OTP verification")
+	}
+	if _, _, err := env.Service.Login(context.Background(), env.Tenant, mobile, password, authTestSource, authTestNow); !errors.Is(err, ErrUserNotVerified) {
+		t.Fatalf("Login(unverified) error = %v, want %v", err, ErrUserNotVerified)
+	}
+
+	digest, err := env.Service.otpDigest(env.Tenant, mobile, code)
+	if err != nil {
+		t.Fatalf("otp digest: %v", err)
+	}
+	if err := env.Store.StoreOTPChallenge(context.Background(), env.Tenant, mobile, digest, authTestNow, authTestNow.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
+		t.Fatalf("store otp challenge: %v", err)
+	}
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, mobile, code, authTestSource, authTestNow); err != nil {
+		t.Fatalf("VerifyOTP(): %v", err)
+	}
+	if token, _, err := env.Service.Login(context.Background(), env.Tenant, mobile, password, authTestSource, authTestNow.Add(time.Second)); err != nil {
+		t.Fatalf("Login(verified): %v", err)
+	} else if token == "" {
+		t.Fatal("Login(verified) returned an empty token")
 	}
 }
 

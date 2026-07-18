@@ -63,6 +63,9 @@ func (h *Handler) LoginHandler(c *fiber.Ctx) error {
 		if errors.Is(err, consumer.ErrWrongPassword) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "wrong password entered", "code": "wrong_password"})
 		}
+		if errors.Is(err, consumer.ErrUserNotVerified) {
+			return jsonResponse(c, http.StatusForbidden, fiber.Map{"message": "Verify your mobile number before signing in", "code": "user_not_verified"})
+		}
 		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 	c.Set("Authorization", token)
@@ -146,17 +149,28 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 func (h *Handler) CreateUser(c *fiber.Ctx) error {
 	var req ebs_fields.User
 	if err := bindJSON(c, &req); err != nil {
-		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	user, err := h.Service.CreateUser(c.UserContext(), tenantID, req)
+	source, err := resolveRequestSource(c)
 	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+
+	user, err := h.Service.CreateUser(c.UserContext(), tenantID, req, source, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
 		if errors.Is(err, consumer.ErrPasswordInvalid) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Password must be at least 8 characters long, and must include at least one capital letter, one symbol and one number", "code": "password_invalid"})
+		}
+		if errors.Is(err, consumer.ErrMissingPublicKey) || errors.Is(err, consumer.ErrInvalidPublicKey) {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "A valid RSA public key is required", "code": "invalid_public_key"})
 		}
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "duplicate_username"})
 	}
@@ -241,6 +255,9 @@ func (h *Handler) ChangePassword(c *fiber.Ctx) error {
 
 	user, err := h.Service.ChangePassword(c.UserContext(), tenantID, mobile, req.NewPassword)
 	if err != nil {
+		if errors.Is(err, consumer.ErrPasswordInvalid) {
+			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Password must be at least 8 characters long, and must include at least one capital letter, one symbol and one number", "code": "password_invalid"})
+		}
 		if store.ErrNotFound(err) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "not_found"})
 		}

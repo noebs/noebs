@@ -79,6 +79,9 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password, 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
 		return "", empty, ErrWrongPassword
 	}
+	if !u.IsVerified {
+		return "", empty, ErrUserNotVerified
+	}
 	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
 	if err != nil {
 		return "", empty, err
@@ -217,22 +220,13 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 }
 
 func verifyUserSignature(publicKey, signature, message string) error {
-	publicKey = strings.TrimSpace(publicKey)
 	signature = strings.TrimSpace(signature)
-	if publicKey == "" || signature == "" || strings.TrimSpace(message) == "" {
+	if signature == "" || strings.TrimSpace(message) == "" {
 		return ErrInvalidSignature
 	}
-	block, _ := pem.Decode([]byte("-----BEGIN PUBLIC KEY-----\n" + publicKey + "\n-----END PUBLIC KEY-----"))
-	if block == nil || block.Type != "PUBLIC KEY" {
-		return ErrInvalidSignature
-	}
-	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	rsaPublicKey, _, err := parseUserPublicKey(publicKey)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
-	}
-	rsaPublicKey, ok := parsed.(*rsa.PublicKey)
-	if !ok {
-		return ErrInvalidSignature
 	}
 	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
@@ -245,7 +239,35 @@ func verifyUserSignature(publicKey, signature, message string) error {
 	return nil
 }
 
-func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.User) (ebs_fields.User, error) {
+func parseUserPublicKey(value string) (*rsa.PublicKey, string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, "", ErrMissingPublicKey
+	}
+	pemBytes := []byte(value)
+	if !strings.Contains(value, "-----BEGIN PUBLIC KEY-----") {
+		pemBytes = []byte("-----BEGIN PUBLIC KEY-----\n" + value + "\n-----END PUBLIC KEY-----")
+	}
+	block, rest := pem.Decode(pemBytes)
+	if block == nil || block.Type != "PUBLIC KEY" || len(strings.TrimSpace(string(rest))) != 0 {
+		return nil, "", ErrInvalidPublicKey
+	}
+	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, "", ErrInvalidPublicKey
+	}
+	publicKey, ok := parsed.(*rsa.PublicKey)
+	if !ok || publicKey.N.BitLen() < 2048 {
+		return nil, "", ErrInvalidPublicKey
+	}
+	der, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, "", ErrInvalidPublicKey
+	}
+	return publicKey, base64.StdEncoding.EncodeToString(der), nil
+}
+
+func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.User, source string, now time.Time) (ebs_fields.User, error) {
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
@@ -259,6 +281,24 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	}
 	u.Username = strings.TrimSpace(u.Username)
 	u.Email = strings.TrimSpace(u.Email)
+	if !validatePassword(u.Password) {
+		return ebs_fields.User{}, ErrPasswordInvalid
+	}
+	_, publicKey, err := parseUserPublicKey(u.PublicKey)
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	u.PublicKey = publicKey
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		mobileLimit("registration-mobile", u.Mobile, 3, time.Hour),
+		sourceLimit("registration-source", source, 10, 15*time.Minute),
+	); err != nil {
+		return ebs_fields.User{}, err
+	}
 
 	// Make sure user is unique
 	if _, err := s.Store.GetUserByMobile(ctx, tenantID, u.Mobile); err == nil {
@@ -277,9 +317,6 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 		u.Username = u.Mobile
 	}
 
-	if !validatePassword(u.Password) {
-		return ebs_fields.User{}, ErrPasswordInvalid
-	}
 	if err := u.HashPassword(); err != nil {
 		return ebs_fields.User{}, err
 	}
@@ -351,6 +388,9 @@ func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassw
 	}
 	if strings.TrimSpace(newPassword) == "" {
 		return ebs_fields.User{}, ErrMissingPassword
+	}
+	if !validatePassword(newPassword) {
+		return ebs_fields.User{}, ErrPasswordInvalid
 	}
 
 	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
