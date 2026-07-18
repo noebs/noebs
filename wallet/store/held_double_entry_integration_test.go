@@ -447,7 +447,7 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 		ReferenceType:  params.ReferenceType,
 		ReferenceID:    sql.NullString{String: params.ReferenceID, Valid: true},
 		Status:         "completed",
-		Metadata:       json.RawMessage(`{"sequence":1,"purpose":"deposit"}`),
+		Metadata:       RawJSON(`{"sequence":1,"purpose":"deposit"}`),
 	}
 	result := &DoubleEntryResult{
 		DebitEntry:  matchingTestLedgerEntry(debitID, "debit", params),
@@ -546,7 +546,7 @@ func matchingTestLedgerEntry(walletID uuid.UUID, entryType string, params Double
 		Currency:    params.Currency,
 		Status:      "completed",
 		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
-		Metadata:    json.RawMessage(`{"sequence":1,"purpose":"deposit"}`),
+		Metadata:    RawJSON(`{"sequence":1,"purpose":"deposit"}`),
 	}
 }
 
@@ -574,7 +574,7 @@ func TestExistingHoldMatches(t *testing.T) {
 		IdempotencyKey:  params.IdempotencyKey,
 		Status:          HoldStatusActive,
 		ExpiresAt:       params.ExpiresAt,
-		Metadata:        json.RawMessage(`{"sequence":1,"purpose":"withdrawal"}`),
+		Metadata:        RawJSON(`{"sequence":1,"purpose":"withdrawal"}`),
 	}
 	if !existingHoldMatches(hold, params) {
 		t.Fatal("existingHoldMatches() = false, want true")

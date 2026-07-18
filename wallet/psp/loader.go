@@ -25,10 +25,34 @@ type Loader struct {
 }
 
 func (l *Loader) Load(ctx context.Context, tenantID, providerCode string) (*Config, error) {
-	return l.LoadForScope(ctx, tenantID, providerCode, Scope{})
+	return l.LoadWebhook(ctx, tenantID, providerCode, Scope{})
 }
 
 func (l *Loader) LoadForScope(ctx context.Context, tenantID, providerCode string, scope Scope) (*Config, error) {
+	cfg, err := l.resolve(ctx, tenantID, providerCode, scope)
+	if err != nil {
+		return nil, err
+	}
+	if err := walletvalidation.ValidatePSPConfig(cfg, scope.Currency, scope.Direction); err != nil {
+		return nil, err
+	}
+	return l.mergeSecrets(ctx, tenantID, providerCode, cfg)
+}
+
+// LoadWebhook resolves regional overrides without requiring request-scoped
+// currency before the configured webhook mapping has been applied.
+func (l *Loader) LoadWebhook(ctx context.Context, tenantID, providerCode string, scope Scope) (*Config, error) {
+	cfg, err := l.resolve(ctx, tenantID, providerCode, scope)
+	if err != nil {
+		return nil, err
+	}
+	if err := walletvalidation.ValidatePSPConfigBase(cfg); err != nil {
+		return nil, err
+	}
+	return l.mergeSecrets(ctx, tenantID, providerCode, cfg)
+}
+
+func (l *Loader) resolve(ctx context.Context, tenantID, providerCode string, scope Scope) (*walletstore.PSPConfig, error) {
 	if l == nil || l.Store == nil {
 		return nil, ErrPSPConfigInvalid
 	}
@@ -51,9 +75,10 @@ func (l *Loader) LoadForScope(ctx context.Context, tenantID, providerCode string
 		}
 		return nil, err
 	}
-	if err := walletvalidation.ValidatePSPConfig(cfg, scope.Currency, scope.Direction); err != nil {
-		return nil, err
-	}
+	return cfg, nil
+}
+
+func (l *Loader) mergeSecrets(ctx context.Context, tenantID, providerCode string, cfg *walletstore.PSPConfig) (*Config, error) {
 	if l.Secrets == nil {
 		return nil, ErrPSPSecretMissing
 	}

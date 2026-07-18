@@ -578,7 +578,7 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 			t.Fatalf("migrate %s: %v", scope, err)
 		}
 	}
-	s := New(db)
+	s := New(db, WithDataKey("test-data-key"))
 	if err := s.EnsureTenant(ctx, tenantID); err != nil {
 		t.Fatalf("ensure tenant: %v", err)
 	}

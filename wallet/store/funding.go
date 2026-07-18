@@ -264,6 +264,21 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		}
 	}()
 
+	existing, err := getFundingLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.FundingSourceID)
+	if err == nil {
+		if err := ValidateFundingLinkReplay(existing, link); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
 	ledgerEntry, err := getLedgerEntryForUsageLinkTx(ctx, tx, tenantID, link.LedgerEntryID)
 	if err != nil {
 		return nil, err
@@ -296,6 +311,9 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		}
 		existing, err := getFundingLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.FundingSourceID)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrDuplicateFundingLink
+			}
 			return nil, err
 		}
 		if err := ValidateFundingLinkReplay(existing, link); err != nil {
@@ -366,9 +384,6 @@ func getFundingLinkTx(ctx context.Context, tx interface {
 		WHERE tenant_id = ? AND ledger_entry_id = ? AND funding_source_id = ?`)
 	var link LedgerFundingLink
 	if err := tx.GetContext(ctx, &link, stmt, tenantID, ledgerEntryID, fundingSourceID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrDuplicateFundingLink
-		}
 		return nil, err
 	}
 	return &link, nil

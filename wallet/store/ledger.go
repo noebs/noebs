@@ -176,7 +176,7 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 		WalletSeq:     debitSeq,
 		Status:        "completed",
 		Description:   sql.NullString{String: params.Description, Valid: params.Description != ""},
-		Metadata:      params.Metadata,
+		Metadata:      RawJSON(params.Metadata),
 		CreatedAt:     now,
 	})
 	if err != nil {
@@ -194,7 +194,7 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 		WalletSeq:     creditSeq,
 		Status:        "completed",
 		Description:   sql.NullString{String: params.Description, Valid: params.Description != ""},
-		Metadata:      params.Metadata,
+		Metadata:      RawJSON(params.Metadata),
 		CreatedAt:     now,
 	})
 	if err != nil {

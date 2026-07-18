@@ -66,7 +66,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	if h.Loader == nil || h.Registry == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	cfg, err := h.Loader.LoadForScope(c.Context(), tenantID, providerCode, scope)
+	cfg, err := h.Loader.LoadWebhook(c.Context(), tenantID, providerCode, scope)
 	if err != nil {
 		switch {
 		case errors.Is(err, walletpsp.ErrPSPNotRegistered), errors.Is(err, walletpsp.ErrPSPConfigInvalid):

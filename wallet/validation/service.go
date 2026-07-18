@@ -445,11 +445,8 @@ func validateWithdrawalWallet(wallet *walletstore.Wallet, req WithdrawalValidati
 }
 
 func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) error {
-	if cfg == nil {
-		return walletstore.ErrPSPConfigNotFound
-	}
-	if !cfg.IsActive {
-		return ErrPSPConfigDisabled
+	if err := ValidatePSPConfigBase(cfg); err != nil {
+		return err
 	}
 	switch direction {
 	case "deposit":
@@ -465,15 +462,25 @@ func ValidatePSPConfig(cfg *walletstore.PSPConfig, currency, direction string) e
 	if currency == "" {
 		return walletstore.ErrMissingCurrency
 	}
-	if len(cfg.EnabledCurrencies) == 0 {
-		return ErrPSPConfigMissingCurrencies
-	}
 	for _, allowed := range cfg.EnabledCurrencies {
 		if strings.EqualFold(currency, strings.TrimSpace(allowed)) {
 			return nil
 		}
 	}
 	return ErrPSPCurrencyInvalid
+}
+
+func ValidatePSPConfigBase(cfg *walletstore.PSPConfig) error {
+	if cfg == nil {
+		return walletstore.ErrPSPConfigNotFound
+	}
+	if !cfg.IsActive {
+		return ErrPSPConfigDisabled
+	}
+	if len(cfg.EnabledCurrencies) == 0 {
+		return ErrPSPConfigMissingCurrencies
+	}
+	return nil
 }
 
 func ValidatePSPConfigAmount(cfg *walletstore.PSPConfig, amount int64) error {

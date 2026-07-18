@@ -22,7 +22,7 @@ type WithdrawalDestination struct {
 	OwnershipVerificationMethod sql.NullString  `db:"ownership_verification_method"`
 	OwnershipVerifiedAt         sql.NullTime    `db:"ownership_verified_at"`
 	OwnershipVerifiedBy         sql.NullString  `db:"ownership_verified_by"`
-	OwnershipProof              json.RawMessage `db:"ownership_proof"`
+	OwnershipProof              RawJSON         `db:"ownership_proof"`
 	LinkedFundingSourceID       sql.NullInt64   `db:"linked_funding_source_id"`
 	IsReturnToSource            bool            `db:"is_return_to_source"`
 	IsActive                    bool            `db:"is_active"`

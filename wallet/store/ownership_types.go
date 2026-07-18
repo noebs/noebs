@@ -125,7 +125,7 @@ type OwnershipVerification struct {
 	DestinationID           int64          `db:"destination_id"`
 	VerificationType        string         `db:"verification_type"`
 	Status                  string         `db:"status"`
-	MicroDepositAmounts     []int64        `db:"micro_deposit_amounts"`
+	MicroDepositAmounts     Int64Array     `db:"micro_deposit_amounts"`
 	MicroDepositConfirmedAt sql.NullTime   `db:"micro_deposit_confirmed_at"`
 	CardVerificationAmount  sql.NullInt64  `db:"card_verification_amount"`
 	DocumentType            sql.NullString `db:"document_type"`

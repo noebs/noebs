@@ -202,6 +202,16 @@ func TestValidatePSPConfigRequiresExplicitCurrency(t *testing.T) {
 	}
 }
 
+func TestValidatePSPConfigBaseDoesNotRequireRequestCurrency(t *testing.T) {
+	cfg := &walletstore.PSPConfig{
+		IsActive:          true,
+		EnabledCurrencies: walletstore.StringArray{"USD"},
+	}
+	if err := ValidatePSPConfigBase(cfg); err != nil {
+		t.Fatalf("ValidatePSPConfigBase() error = %v", err)
+	}
+}
+
 func TestValidatePSPConfigRequiresConfiguredCurrencies(t *testing.T) {
 	for _, currencies := range []walletstore.StringArray{nil, walletstore.StringArray{}} {
 		cfg := &walletstore.PSPConfig{

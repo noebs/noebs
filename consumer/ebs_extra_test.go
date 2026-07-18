@@ -84,7 +84,8 @@ func TestQRTransactionsRecordsLastTransactions(t *testing.T) {
 	t.Cleanup(ebsServer.Close)
 
 	service := &Service{
-		Store: storeSvc,
+		Store:      storeSvc,
+		HTTPClient: ebsServer.Client(),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			ConsumerID:            "consumer-app",

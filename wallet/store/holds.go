@@ -194,7 +194,7 @@ func sameHoldExpiry(stored, requested time.Time) bool {
 	return stored.Sub(requested).Abs() <= time.Microsecond
 }
 
-func rawJSONMatches(stored, requested json.RawMessage) bool {
+func rawJSONMatches(stored, requested []byte) bool {
 	if len(stored) == 0 && len(requested) == 0 {
 		return true
 	}

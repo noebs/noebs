@@ -195,6 +195,21 @@ func (s *Store) CreateWithdrawalDestinationLink(ctx context.Context, link Ledger
 		}
 	}()
 
+	existing, err := getWithdrawalDestinationLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.DestinationID)
+	if err == nil {
+		if err := ValidateWithdrawalDestinationLinkReplay(existing, link); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
 	ledgerEntry, err := getLedgerEntryForUsageLinkTx(ctx, tx, tenantID, link.LedgerEntryID)
 	if err != nil {
 		return nil, err
@@ -227,6 +242,9 @@ func (s *Store) CreateWithdrawalDestinationLink(ctx context.Context, link Ledger
 		}
 		existing, err := getWithdrawalDestinationLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.DestinationID)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, ErrDuplicateDestinationLink
+			}
 			return nil, err
 		}
 		if err := ValidateWithdrawalDestinationLinkReplay(existing, link); err != nil {
@@ -286,9 +304,6 @@ func getWithdrawalDestinationLinkTx(ctx context.Context, tx interface {
 		WHERE tenant_id = ? AND ledger_entry_id = ? AND destination_id = ?`)
 	var link LedgerWithdrawalDestinationLink
 	if err := tx.GetContext(ctx, &link, stmt, tenantID, ledgerEntryID, destinationID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrDuplicateDestinationLink
-		}
 		return nil, err
 	}
 	return &link, nil
