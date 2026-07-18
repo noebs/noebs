@@ -64,7 +64,83 @@ When using the in-cluster `postgres` StatefulSet, service database URLs should p
 
 Noebs service roles and OTel service names are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
-Noebs workloads currently use the mutable `ghcr.io/noebs/noebs:master` image tag with `imagePullPolicy: IfNotPresent` so a k3s node can complete a cutover from its local image cache when GHCR is slow or unreachable. Bump the deployed image tag when the release process moves away from `master`.
+The overlay pins every runtime image by registry digest. The checked-in Noebs
+digest is the immutable baseline that was already serving traffic before the
+alpha rollout (`f2e3e660aaf7cca6932a585f2d5d0ffddfa2a446`,
+`sha256:dee1f46c6826b741be166fcb04edb0c579af6f495db518c954e887b0bf2d806e`).
+Do not replace a digest with `master`, a release tag, or another mutable tag.
+`IfNotPresent` is safe with a digest because the requested content cannot move.
+
+The current-host resource patches are based on observed steady-state usage on
+the 12 GiB single-node host. Go HTTP services reserve 25 millicores/64 MiB and
+workers reserve 50 millicores/64 MiB, with bounded burst limits. PostgreSQL,
+Kafka, Temporal, and Keycloak have role-specific reservations and limits. All
+runtime and hook pods must render with both requests and limits; a
+`BestEffort` pod is a release failure.
+
+## Immutable alpha release
+
+The CI workflow publishes an image only after a push to `master` passes the
+full test and race-test jobs. It publishes both `ghcr.io/noebs/noebs:master`
+and `ghcr.io/noebs/noebs:<git-sha>` to one OCI manifest digest. Release in two
+Git commits so Argo CD never deploys code merely because `master` moved:
+
+1. Merge the application release commit and wait for its `CI` workflow to
+   succeed. Record the full source SHA as `RELEASE_SHA`.
+2. Read the `containerimage.digest` emitted by that workflow. With a temporary
+   Docker config containing the existing GHCR pull credential, independently
+   verify that `ghcr.io/noebs/noebs:$RELEASE_SHA` resolves to the same digest.
+3. Change only the Noebs `digest:` value in `kustomization.yaml`. Render the
+   overlay and confirm every Noebs runtime, preflight, and migration image uses
+   `ghcr.io/noebs/noebs@sha256:<digest>`.
+4. Commit the digest pin, push it to `master`, and let the automated Argo CD
+   sync run its preflight and migration hooks before wave-20 workloads.
+
+Example verification on the deployment host (the temporary credential file is
+deleted on exit and its contents must never be printed):
+
+```sh
+release_sha='<full-git-sha>'
+release_digest='sha256:<64-hex-digest>'
+docker_config="$(mktemp -d)"
+trap 'find "$docker_config" -depth -delete' EXIT
+kubectl -n noebs get secret ghcr-credentials \
+  -o jsonpath='{.data.\.dockerconfigjson}' \
+  | base64 -d > "$docker_config/config.json"
+DOCKER_CONFIG="$docker_config" docker buildx imagetools inspect \
+  "ghcr.io/noebs/noebs:$release_sha"
+kubectl kustomize deploy/kubernetes/overlays/current-host > /tmp/noebs-rendered.yaml
+grep -F "ghcr.io/noebs/noebs@$release_digest" /tmp/noebs-rendered.yaml
+kubectl apply --dry-run=server -f /tmp/noebs-rendered.yaml >/dev/null
+```
+
+After Argo CD reports `Synced` and `Healthy`, verify that its revision is the
+digest-pin commit, every Deployment and StatefulSet has completed rollout, all
+Noebs pod `imageID` values end in the expected digest, no runtime pod is
+`BestEffort`, and the identity/card-vault migration versions are at least the
+versions required by the release. Then run the non-financial live smoke script
+with the digest-pin commit and released OCI digest:
+
+```sh
+scripts/alpha-post-deploy-smoke.sh \
+  '<40-character-digest-pin-commit>' \
+  'sha256:<64-hex-release-digest>'
+```
+
+## Rollback boundary
+
+Roll back application content by reverting the digest-pin commit and allowing
+Argo CD to sync the previous immutable digest. Do not use `kubectl set image`:
+self-heal will overwrite it. Confirm the previous digest still resolves in
+GHCR before starting the release.
+
+Database migrations are a separate boundary. Card-vault migration 104 adds
+columns that pre-104 binaries cannot scan through their legacy `SELECT *`
+queries. Once migration 104 has run, the baseline digest above is not a safe
+application rollback target. The release must retain a tested, immutable
+schema-aware digest as its rollback floor; after payment traffic starts,
+prefer a forward fix rather than dropping payment state. There is no automatic
+down-migration in the Argo CD rollback path.
 
 Noebs images are pulled through the explicit `ghcr-credentials` image pull Secret. The release input `noebs.ghcr_dockerconfigjson` must contain a Docker config JSON with `auths.ghcr.io.auth`; the renderer emits it as a `kubernetes.io/dockerconfigjson` Secret with the `.dockerconfigjson` key.
 

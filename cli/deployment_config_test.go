@@ -175,6 +175,22 @@ type composeSecret struct {
 	File   string `yaml:"file"`
 }
 
+type currentHostKustomization struct {
+	Images []struct {
+		Name    string `yaml:"name"`
+		NewName string `yaml:"newName"`
+		NewTag  string `yaml:"newTag"`
+		Digest  string `yaml:"digest"`
+	} `yaml:"images"`
+	Patches []struct {
+		Target struct {
+			Kind string `yaml:"kind"`
+			Name string `yaml:"name"`
+		} `yaml:"target"`
+		Patch string `yaml:"patch"`
+	} `yaml:"patches"`
+}
+
 type mountedNoebsConfig struct {
 	Noebs struct {
 		DatabaseDriver                             string                `yaml:"db_driver"`
@@ -318,6 +334,113 @@ func TestNoebsKubernetesImagesUseNodeCache(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatalf("no Noebs Kubernetes images were checked")
+	}
+}
+
+func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var overlay currentHostKustomization
+	if err := yaml.Unmarshal(payload, &overlay); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+
+	digestPattern := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	images := make(map[string]string, len(overlay.Images))
+	for _, image := range overlay.Images {
+		if strings.TrimSpace(image.Name) == "" {
+			t.Fatalf("%s has image with no source name", path)
+		}
+		if image.NewTag != "" {
+			t.Fatalf("%s image %q uses mutable newTag %q", path, image.Name, image.NewTag)
+		}
+		if !digestPattern.MatchString(image.Digest) {
+			t.Fatalf("%s image %q digest = %q", path, image.Name, image.Digest)
+		}
+		if _, exists := images[image.Name]; exists {
+			t.Fatalf("%s transforms image %q more than once", path, image.Name)
+		}
+		images[image.Name] = image.Digest
+	}
+
+	type resourceOperation struct {
+		Op    string `yaml:"op"`
+		Path  string `yaml:"path"`
+		Value struct {
+			Requests map[string]string `yaml:"requests"`
+			Limits   map[string]string `yaml:"limits"`
+		} `yaml:"value"`
+	}
+	type resourcePatch struct {
+		kind string
+		name *regexp.Regexp
+	}
+	resourcePatches := make([]resourcePatch, 0, len(overlay.Patches))
+	for _, patch := range overlay.Patches {
+		namePattern, err := regexp.Compile("^(?:" + patch.Target.Name + ")$")
+		if err != nil {
+			t.Fatalf("%s target name %q: %v", path, patch.Target.Name, err)
+		}
+		var operations []resourceOperation
+		if err := yaml.Unmarshal([]byte(patch.Patch), &operations); err != nil {
+			t.Fatalf("decode %s patch for %s/%s: %v", path, patch.Target.Kind, patch.Target.Name, err)
+		}
+		if len(operations) != 1 || operations[0].Op != "add" || operations[0].Path != "/spec/template/spec/containers/0/resources" {
+			t.Fatalf("%s patch for %s/%s must add the primary container resources", path, patch.Target.Kind, patch.Target.Name)
+		}
+		for _, resourceName := range []string{"cpu", "memory"} {
+			if strings.TrimSpace(operations[0].Value.Requests[resourceName]) == "" {
+				t.Fatalf("%s patch for %s/%s has no %s request", path, patch.Target.Kind, patch.Target.Name, resourceName)
+			}
+			if strings.TrimSpace(operations[0].Value.Limits[resourceName]) == "" {
+				t.Fatalf("%s patch for %s/%s has no %s limit", path, patch.Target.Kind, patch.Target.Name, resourceName)
+			}
+		}
+		resourcePatches = append(resourcePatches, resourcePatch{
+			kind: patch.Target.Kind,
+			name: namePattern,
+		})
+	}
+
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	checked := 0
+	for _, object := range objects {
+		if !isKubernetesWorkloadKind(object.Kind) {
+			continue
+		}
+		containers := append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...)
+		if len(containers) == 0 {
+			continue
+		}
+		checked++
+		for _, container := range containers {
+			repository := container.Image
+			if at := strings.IndexByte(repository, '@'); at >= 0 {
+				repository = repository[:at]
+			}
+			if slash, colon := strings.LastIndexByte(repository, '/'), strings.LastIndexByte(repository, ':'); colon > slash {
+				repository = repository[:colon]
+			}
+			if _, ok := images[repository]; !ok {
+				t.Fatalf("%s/%s image %q has no immutable current-host transform", object.Metadata.Name, container.Name, container.Image)
+			}
+		}
+
+		matches := 0
+		for _, patch := range resourcePatches {
+			if patch.kind == object.Kind && patch.name.MatchString(object.Metadata.Name) {
+				matches++
+			}
+		}
+		if matches != 1 {
+			t.Fatalf("%s/%s matches %d current-host resource patches, want 1", object.Kind, object.Metadata.Name, matches)
+		}
+	}
+	if checked == 0 {
+		t.Fatalf("no current-host workloads were checked")
 	}
 }
 

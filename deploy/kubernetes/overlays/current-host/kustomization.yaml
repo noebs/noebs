@@ -7,4 +7,172 @@ resources:
 
 images:
   - name: ghcr.io/noebs/noebs
-    newTag: master
+    newName: ghcr.io/noebs/noebs
+    digest: sha256:dee1f46c6826b741be166fcb04edb0c579af6f495db518c954e887b0bf2d806e
+  - name: postgres
+    newName: docker.io/library/postgres
+    digest: sha256:4b7183ac05f8ef417db21fd72d71047a4238340c261d3cc3ddb6d579ab5071ae
+  - name: apache/kafka
+    newName: docker.io/apache/kafka
+    digest: sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
+  - name: quay.io/keycloak/keycloak
+    newName: quay.io/keycloak/keycloak
+    digest: sha256:dea26401d06341095cc4ea9d66896200b55de5ca1daa1d2fcbe58493afa6e0ad
+  - name: temporalio/auto-setup
+    newName: docker.io/temporalio/auto-setup
+    digest: sha256:5b3502a3b685f9eff1b925af90c57c9e3dbeccbef367cc28a2a9712c63379312
+  - name: temporalio/ui
+    newName: docker.io/temporalio/ui
+    digest: sha256:cb17ea423d76a8a19a269d0bcd81fc12eee1f6365acd2a56b590dafb35696a95
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: (admin-reporting|api-gateway|card-vault|consumer-beneficiary|ebs-adapter|identity-auth|notification-chat|psp-webhook|wallet-api|wallet-ledger)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: (admin-reporting-projector|ebs-adapter-events|wallet-worker)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: (postgres|temporal-postgres)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: keycloak-postgres
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: kafka
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 768Mi
+          limits:
+            cpu: "1500m"
+            memory: 1536Mi
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: temporal
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: keycloak
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 250m
+            memory: 768Mi
+          limits:
+            cpu: "1"
+            memory: 1536Mi
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: temporal-ui
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+  - target:
+      group: batch
+      version: v1
+      kind: Job
+      name: (noebs-deployment-preflight|noebs-.*-migrate)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+  - target:
+      group: batch
+      version: v1
+      kind: Job
+      name: (kafka-topics|temporal-schema-migrate|temporal-namespace-bootstrap)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
