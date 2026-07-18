@@ -1830,6 +1830,48 @@ func TestCaddyServesAlphaAppLinksWithoutProxyingPaymentCapabilityURLs(t *testing
 	}
 }
 
+func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
+	edgeRoot := filepath.Join("..", "deploy", "kubernetes", "edge")
+	read := func(name string) string {
+		t.Helper()
+		path := filepath.Join(edgeRoot, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		return string(data)
+	}
+
+	caddyfile := read("Caddyfile")
+	for _, required := range []string{
+		`api.noebs.sd`,
+		`dsa.adonese.sd`,
+		`rd.adonese.sd`,
+		`unido.noebs.sd`,
+		`iptv.2t.sd`,
+		`path /.well-known/assetlinks.json`,
+		`path_regexp payment_link ^/pay/`,
+		`Strict-Transport-Security "max-age=31536000; includeSubDomains"`,
+	} {
+		if !strings.Contains(caddyfile, required) {
+			t.Errorf("edge Caddyfile missing %q", required)
+		}
+	}
+
+	kustomization := read("kustomization.yaml")
+	if !strings.Contains(kustomization, "disableNameSuffixHash: true") {
+		t.Error("edge ConfigMap name must remain stable for the existing deployment")
+	}
+
+	deployment := read("deployment.yaml")
+	if !strings.Contains(deployment, "image: caddy@sha256:") {
+		t.Error("edge Caddy image must be pinned by digest")
+	}
+	if strings.Contains(deployment, "image: caddy:2-alpine") {
+		t.Error("edge deployment must not use a mutable Caddy tag")
+	}
+}
+
 func TestDockerfileDoesNotDefineRoleAgnosticRuntimeMetadata(t *testing.T) {
 	path := filepath.Join("..", "Dockerfile")
 	data, err := os.ReadFile(path)

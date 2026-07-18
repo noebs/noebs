@@ -1,0 +1,90 @@
+(common_headers) {
+	encode gzip zstd
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
+
+dsa.adonese.sd {
+	import common_headers
+	reverse_proxy 127.0.0.1:8080
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+api.noebs.sd {
+	import common_headers
+
+	@assetlinks path /.well-known/assetlinks.json
+	header @assetlinks Content-Type application/json
+	header @assetlinks Cache-Control "public, max-age=3600"
+	respond @assetlinks `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.tutipay.app.alpha","sha256_cert_fingerprints":["B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE"]}}]` 200
+
+	@payment_link {
+		method GET HEAD
+		path_regexp payment_link ^/pay/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+	}
+	header @payment_link Content-Type "text/html; charset=utf-8"
+	header @payment_link Cache-Control "no-store"
+	header @payment_link Content-Security-Policy "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+	respond @payment_link `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutiPay payment link</title><h1>Open this link with TutiPay Alpha</h1><p>The TutiPay app completes payment securely. Never enter card or PIN details in a browser.</p></html>` 200
+
+	reverse_proxy api-gateway.noebs.svc.cluster.local:8080
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+rd.adonese.sd {
+	import common_headers
+	reverse_proxy rd.rd.svc.cluster.local:7000
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+unido.noebs.sd {
+	import common_headers
+
+	handle_path /bo* {
+		reverse_proxy 172.21.0.5:8080
+	}
+
+	@api_paths path /api/* /openapi.json /openapi.yaml
+	handle @api_paths {
+		reverse_proxy 172.21.0.4:8080
+	}
+
+	handle /auth* {
+		reverse_proxy 127.0.0.1:18081
+	}
+
+	handle {
+		reverse_proxy 172.21.0.7:8080
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+iptv.2t.sd {
+	import common_headers
+	reverse_proxy 100.102.164.34:8088
+
+	log {
+		output stdout
+		format json
+	}
+}
