@@ -18,7 +18,7 @@ type User struct {
 	Model
 	TenantID string `json:"-"`
 	Created  int64
-	Password string `binding:"required,min=8,max=20" json:"password"`
+	Password string `binding:"required,min=8,max=72" json:"password"`
 	Fullname string `json:"fullname"`
 	Username string `json:"username"`
 	Gender   string `json:"gender"`

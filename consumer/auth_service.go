@@ -388,37 +388,49 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, signatur
 	return sanitizeUser(*u), nil
 }
 
-func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassword string) (ebs_fields.User, error) {
+func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, currentPassword, newPassword string, now time.Time) (string, ebs_fields.User, error) {
 	if s == nil || s.Store == nil {
-		return ebs_fields.User{}, ErrMissingStore
+		return "", ebs_fields.User{}, ErrMissingStore
 	}
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
-		return ebs_fields.User{}, err
+		return "", ebs_fields.User{}, err
 	}
 	mobile = strings.ToLower(strings.TrimSpace(mobile))
 	if mobile == "" {
-		return ebs_fields.User{}, ErrMissingMobile
+		return "", ebs_fields.User{}, ErrMissingMobile
+	}
+	if strings.TrimSpace(currentPassword) == "" {
+		return "", ebs_fields.User{}, ErrMissingPassword
 	}
 	if strings.TrimSpace(newPassword) == "" {
-		return ebs_fields.User{}, ErrMissingPassword
+		return "", ebs_fields.User{}, ErrMissingPassword
 	}
 	if !validatePassword(newPassword) {
-		return ebs_fields.User{}, ErrPasswordInvalid
+		return "", ebs_fields.User{}, ErrPasswordInvalid
 	}
 
 	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
-		return ebs_fields.User{}, err
+		return "", ebs_fields.User{}, err
 	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 8)
+	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(currentPassword)); err != nil {
+		return "", ebs_fields.User{}, ErrWrongPassword
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return ebs_fields.User{}, err
+		return "", ebs_fields.User{}, err
 	}
-	if err := s.Store.UpdateUserPassword(ctx, tenantID, u.ID, string(hashedPassword)); err != nil {
-		return ebs_fields.User{}, err
+	sessionEpoch, err := s.Store.RotateUserPassword(ctx, tenantID, u.ID, string(hashedPassword), now)
+	if err != nil {
+		return "", ebs_fields.User{}, err
 	}
-	return sanitizeUser(*u), nil
+	u.SessionEpoch = sessionEpoch
+	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, sessionEpoch)
+	if err != nil {
+		return "", ebs_fields.User{}, err
+	}
+	return token, sanitizeUser(*u), nil
 }
 
 func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile, source string, now time.Time) error {

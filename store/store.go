@@ -2004,6 +2004,39 @@ func (s *Store) UpdateUserPassword(ctx context.Context, tenantID string, userID 
 	return s.UpdateUserColumns(ctx, tenantID, userID, map[string]any{"password": hash})
 }
 
+func (s *Store) RotateUserPassword(ctx context.Context, tenantID string, userID int64, hash string, now time.Time) (int64, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return 0, err
+	}
+	if userID <= 0 {
+		return 0, ErrInvalidUserID
+	}
+	hash = strings.TrimSpace(hash)
+	if hash == "" {
+		return 0, ErrMissingPassword
+	}
+	if now.IsZero() {
+		return 0, ErrInvalidAuthTime
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return 0, err
+	}
+	stmt := s.DB.Rebind(`UPDATE users
+		SET password = ?, session_epoch = session_epoch + 1, updated_at = ?
+		WHERE tenant_id = ? AND id = ? AND deleted_at IS NULL AND is_verified = TRUE
+		RETURNING session_epoch`)
+	var sessionEpoch int64
+	if err := db.QueryRowContext(ctx, stmt, hash, now.UTC(), tenantID, userID).Scan(&sessionEpoch); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, sql.ErrNoRows
+		}
+		return 0, err
+	}
+	return sessionEpoch, nil
+}
+
 func (s *Store) EnsureUserExists(ctx context.Context, tenantID, mobile string) (*ebs_fields.User, error) {
 	user, err := s.GetUserByMobile(ctx, tenantID, mobile)
 	if err == nil {

@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"encoding/base32"
+	"strings"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -25,6 +26,9 @@ func Test_validatePassword(t *testing.T) {
 		{"=", args{"MY=SuperPassword11"}, true},
 		{"<", args{"MY>SuperPassword11"}, true},
 		{"&", args{"MY&SuperPassword11"}, true},
+		{"maximum bcrypt length", args{strings.Repeat("A", 69) + "1!a"}, true},
+		{"over bcrypt length", args{strings.Repeat("A", 70) + "1!a"}, false},
+		{"multibyte over bcrypt length", args{"A1!" + strings.Repeat("界", 24)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

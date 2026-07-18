@@ -27,10 +27,15 @@ var (
 	errObjectNotFound = errors.New("object not found")
 )
 
+const (
+	minPasswordBytes = 8
+	maxPasswordBytes = 72
+)
+
 // validatePassword to include at least one capital letter, one symbol and one number
-// and that it is at least 8 characters long
+// within bcrypt's supported byte-length boundary.
 func validatePassword(password string) bool {
-	if len(password) < 8 {
+	if len(password) < minPasswordBytes || len(password) > maxPasswordBytes {
 		return false
 	}
 	var hasUpper, hasSymbol, hasNumber bool

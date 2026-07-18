@@ -307,7 +307,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"ChangePassword", func(tenantID string) error {
-			_, err := service.ChangePassword(ctx, tenantID, "0990000000", "new-password")
+			_, _, err := service.ChangePassword(ctx, tenantID, "0990000000", "current-password", "new-password", authTestNow)
 			return err
 		}},
 		{"GenerateSignInCode", func(tenantID string) error {
@@ -345,14 +345,56 @@ func TestChangePasswordRequiresExplicitInputsBeforeStore(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
 	ctx := context.Background()
 
-	if _, err := service.ChangePassword(ctx, "tenant", " ", "new-password"); !errors.Is(err, ErrMissingMobile) {
+	if _, _, err := service.ChangePassword(ctx, "tenant", " ", "current-password", "new-password", authTestNow); !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("ChangePassword(missing mobile) error = %v, want %v", err, ErrMissingMobile)
 	}
-	if _, err := service.ChangePassword(ctx, "tenant", "0990000000", " "); !errors.Is(err, ErrMissingPassword) {
+	if _, _, err := service.ChangePassword(ctx, "tenant", "0990000000", " ", "new-password", authTestNow); !errors.Is(err, ErrMissingPassword) {
+		t.Fatalf("ChangePassword(missing current password) error = %v, want %v", err, ErrMissingPassword)
+	}
+	if _, _, err := service.ChangePassword(ctx, "tenant", "0990000000", "current-password", " ", authTestNow); !errors.Is(err, ErrMissingPassword) {
 		t.Fatalf("ChangePassword(missing password) error = %v, want %v", err, ErrMissingPassword)
 	}
-	if _, err := service.ChangePassword(ctx, "tenant", "0990000000", "all-lowercase1!"); !errors.Is(err, ErrPasswordInvalid) {
+	if _, _, err := service.ChangePassword(ctx, "tenant", "0990000000", "current-password", "all-lowercase1!", authTestNow); !errors.Is(err, ErrPasswordInvalid) {
 		t.Fatalf("ChangePassword(weak password) error = %v, want %v", err, ErrPasswordInvalid)
+	}
+	if _, _, err := service.ChangePassword(ctx, "tenant", "0990000000", "current-password", strings.Repeat("A1!", 25), authTestNow); !errors.Is(err, ErrPasswordInvalid) {
+		t.Fatalf("ChangePassword(oversized password) error = %v, want %v", err, ErrPasswordInvalid)
+	}
+}
+
+func TestChangePasswordReauthenticatesAndRotatesSession(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "Old1!Password")
+	if err := env.Store.SetUserVerified(ctx, env.Tenant, user.ID, true); err != nil {
+		t.Fatalf("verify user: %v", err)
+	}
+
+	if _, _, err := env.Service.ChangePassword(ctx, env.Tenant, user.Mobile, "wrong-password", "New2@Password", authTestNow); !errors.Is(err, ErrWrongPassword) {
+		t.Fatalf("ChangePassword(wrong current password) error = %v, want %v", err, ErrWrongPassword)
+	}
+	if err := env.Store.ValidateSessionEpoch(ctx, env.Tenant, user.ID, 1); err != nil {
+		t.Fatalf("wrong password changed session epoch: %v", err)
+	}
+
+	token, changed, err := env.Service.ChangePassword(ctx, env.Tenant, user.Mobile, "Old1!Password", "New2@Password", authTestNow.Add(time.Second))
+	if err != nil {
+		t.Fatalf("ChangePassword(): %v", err)
+	}
+	if token == "" || changed.SessionEpoch != 2 {
+		t.Fatalf("change response = token:%q epoch:%d", token, changed.SessionEpoch)
+	}
+	if err := env.Store.ValidateSessionEpoch(ctx, env.Tenant, user.ID, 1); !errors.Is(err, store.ErrSessionRevoked) {
+		t.Fatalf("old session error = %v, want %v", err, store.ErrSessionRevoked)
+	}
+	if err := env.Store.ValidateSessionEpoch(ctx, env.Tenant, user.ID, 2); err != nil {
+		t.Fatalf("new session epoch: %v", err)
+	}
+	if _, _, err := env.Service.Login(ctx, env.Tenant, user.Mobile, "Old1!Password", authTestSource, authTestNow.Add(2*time.Second)); !errors.Is(err, ErrWrongPassword) {
+		t.Fatalf("old password login error = %v, want %v", err, ErrWrongPassword)
+	}
+	if _, _, err := env.Service.Login(ctx, env.Tenant, user.Mobile, "New2@Password", authTestSource, authTestNow.Add(3*time.Second)); err != nil {
+		t.Fatalf("new password login: %v", err)
 	}
 }
 

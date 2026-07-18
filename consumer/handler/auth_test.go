@@ -136,7 +136,7 @@ func TestChangePasswordAcceptsNewPasswordPayload(t *testing.T) {
 	})
 	app.Post("/change-password", handler.ChangePassword)
 
-	req := httptest.NewRequest(http.MethodPost, "/change-password", strings.NewReader(`{"new_password":"Valid2@Password"}`))
+	req := httptest.NewRequest(http.MethodPost, "/change-password", strings.NewReader(`{"password":"Valid1!Password","new_password":"Valid2@Password"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)
 	if err != nil {
