@@ -726,6 +726,34 @@ func TestAPIGatewayRejectsMissingPublicTenantBeforeProxy(t *testing.T) {
 	}
 }
 
+func TestAPIGatewayRejectsUnknownPublicTenantBeforeProxy(t *testing.T) {
+	ensureInit()
+	var hits atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
+	req.Header.Set("X-Tenant-ID", "attacker-created-tenant")
+	resp, err := route.Test(req, routeTestTimeout)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	}
+}
+
 func TestAPIGatewayPropagatesValidatedWebhookQueryTenant(t *testing.T) {
 	ensureInit()
 	type observedHeaders struct {

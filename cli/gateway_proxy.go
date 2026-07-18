@@ -37,6 +37,10 @@ type gatewayRouteSpec struct {
 }
 
 func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig, jwt gateway.JWTAuth, adminGuard fiber.Handler) error {
+	publicTenantID, err := store.ValidateTenantID(cfg.DefaultTenantID)
+	if err != nil {
+		return fmt.Errorf("noebs.default_tenant_id: %w", err)
+	}
 	proxies := map[serviceRole]fiber.Handler{}
 	for _, spec := range gatewayProxyRouteSpecs() {
 		handler, ok := proxies[spec.role]
@@ -55,9 +59,9 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 		case gatewayAuthPublic:
 			handlers = append(handlers, clearPublicCredentialHeaders)
 		case gatewayAuthPublicTenant:
-			handlers = append(handlers, propagateGatewayPublicTenant)
+			handlers = append(handlers, propagateGatewayPublicTenant(publicTenantID))
 		case gatewayAuthPublicQueryTenant:
-			handlers = append(handlers, propagateGatewayPublicQueryTenant)
+			handlers = append(handlers, propagateGatewayPublicQueryTenant(publicTenantID))
 		case gatewayAuthUser:
 			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
 		case gatewayAuthAdmin:
@@ -129,26 +133,41 @@ func stripPublicCredentialHeaders(c *fiber.Ctx) {
 	c.Request().Header.Del("X-Admin-Permissions")
 }
 
-func propagateGatewayPublicTenant(c *fiber.Ctx) error {
-	tenantID, err := store.ValidateTenantID(c.Get("X-Tenant-ID"))
-	if err != nil {
-		return tenantValidationError(c, err)
+func propagateGatewayPublicTenant(publicTenantID string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		tenantID, err := requirePublicTenant(c.Get("X-Tenant-ID"), publicTenantID)
+		if err != nil {
+			return tenantValidationError(c, err)
+		}
+		c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+		c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
+		stripPublicCredentialHeaders(c)
+		return c.Next()
 	}
-	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
-	stripPublicCredentialHeaders(c)
-	return c.Next()
 }
 
-func propagateGatewayPublicQueryTenant(c *fiber.Ctx) error {
-	tenantID, err := store.ValidateTenantID(string(c.Request().URI().QueryArgs().Peek("tenant_id")))
-	if err != nil {
-		return tenantValidationError(c, err)
+func propagateGatewayPublicQueryTenant(publicTenantID string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		tenantID, err := requirePublicTenant(string(c.Request().URI().QueryArgs().Peek("tenant_id")), publicTenantID)
+		if err != nil {
+			return tenantValidationError(c, err)
+		}
+		c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+		c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
+		stripPublicCredentialHeaders(c)
+		return c.Next()
 	}
-	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
-	stripPublicCredentialHeaders(c)
-	return c.Next()
+}
+
+func requirePublicTenant(requested, configured string) (string, error) {
+	tenantID, err := store.ValidateTenantID(requested)
+	if err != nil {
+		return "", err
+	}
+	if tenantID != configured {
+		return "", store.ErrInvalidTenantID
+	}
+	return tenantID, nil
 }
 
 func tenantValidationError(c *fiber.Ctx, err error) error {
