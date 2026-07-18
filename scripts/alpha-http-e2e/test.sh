@@ -18,7 +18,7 @@ touch \
 
 bash -n "$root/scripts/alpha-http-e2e.sh"
 "$root/scripts/alpha-device-fixture-test.sh"
-python3 -B -m unittest "$root/scripts/alpha-http-e2e/capture_test.py"
+python3 -B "$root/scripts/alpha-http-e2e/capture_test.py"
 
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     COMPOSE_PROJECT_NAME=noebs-alpha-e2e-static \
