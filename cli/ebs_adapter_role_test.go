@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	gateway "github.com/adonese/noebs/apigateway"
 )
 
 type ebsAdapterRoute struct {
@@ -14,13 +16,20 @@ type ebsAdapterRoute struct {
 	path   string
 }
 
-func ebsAdapterRoutes() []ebsAdapterRoute {
+func ebsAdapterPublicConsumerRoutes() []ebsAdapterRoute {
 	return []ebsAdapterRoute{
 		{name: "consumer card info", method: http.MethodPost, path: "/consumer/card_info"},
 		{name: "consumer recovery balance", method: http.MethodPost, path: "/consumer/otp/balance"},
 		{name: "consumer register with card", method: http.MethodPost, path: "/consumer/register_with_card"},
 		{name: "consumer card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
 		{name: "consumer card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
+		{name: "consumer key", method: http.MethodPost, path: "/consumer/key"},
+		{name: "consumer ipin key", method: http.MethodPost, path: "/consumer/ipin_key"},
+	}
+}
+
+func ebsAdapterAuthenticatedConsumerRoutes() []ebsAdapterRoute {
+	return []ebsAdapterRoute{
 		{name: "consumer meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 		{name: "consumer balance", method: http.MethodPost, path: "/consumer/balance"},
 		{name: "consumer status", method: http.MethodPost, path: "/consumer/status"},
@@ -35,14 +44,12 @@ func ebsAdapterRoutes() []ebsAdapterRoute {
 		{name: "consumer account", method: http.MethodPost, path: "/consumer/account"},
 		{name: "consumer purchase", method: http.MethodPost, path: "/consumer/purchase"},
 		{name: "consumer notification status", method: http.MethodPost, path: "/consumer/n/status"},
-		{name: "consumer key", method: http.MethodPost, path: "/consumer/key"},
 		{name: "consumer ipin change", method: http.MethodPost, path: "/consumer/ipin"},
 		{name: "consumer qr registration", method: http.MethodPost, path: "/consumer/generate_qr"},
 		{name: "consumer qr payment", method: http.MethodPost, path: "/consumer/qr_payment"},
 		{name: "consumer qr status", method: http.MethodPost, path: "/consumer/qr_status"},
 		{name: "consumer qr refund", method: http.MethodPost, path: "/consumer/qr_refund"},
 		{name: "consumer qr complete", method: http.MethodPost, path: "/consumer/qr_complete"},
-		{name: "consumer ipin key", method: http.MethodPost, path: "/consumer/ipin_key"},
 		{name: "consumer generate ipin", method: http.MethodPost, path: "/consumer/generate_ipin"},
 		{name: "consumer complete ipin", method: http.MethodPost, path: "/consumer/complete_ipin"},
 		{name: "consumer voucher", method: http.MethodPost, path: "/consumer/vouchers/generate"},
@@ -50,6 +57,16 @@ func ebsAdapterRoutes() []ebsAdapterRoute {
 		{name: "consumer transactions", method: http.MethodGet, path: "/consumer/transactions"},
 		{name: "consumer mobile transfer", method: http.MethodPost, path: "/consumer/p2p_mobile"},
 		{name: "consumer quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
+	}
+}
+
+func ebsAdapterConsumerRoutes() []ebsAdapterRoute {
+	routes := append([]ebsAdapterRoute{}, ebsAdapterPublicConsumerRoutes()...)
+	return append(routes, ebsAdapterAuthenticatedConsumerRoutes()...)
+}
+
+func legacyMerchantRoutes() []ebsAdapterRoute {
+	return []ebsAdapterRoute{
 		{name: "merchant proxy", method: http.MethodPost, path: "/ebs/balance"},
 		{name: "merchant working key", method: http.MethodPost, path: "/workingKey"},
 		{name: "merchant card transfer", method: http.MethodPost, path: "/cardTransfer"},
@@ -93,7 +110,7 @@ func TestEBSAdapterRoutesAreProxiedByAPIGateway(t *testing.T) {
 	authorization := testAuthorizationHeader(t)
 	route := GetMainEngine()
 
-	for _, tt := range ebsAdapterRoutes() {
+	for _, tt := range ebsAdapterConsumerRoutes() {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			req.Header.Set("Authorization", authorization)
@@ -112,7 +129,7 @@ func TestEBSAdapterRoutesAreOwnedByEBSAdapter(t *testing.T) {
 	setServiceRoleForTest(t, serviceRoleEBSAdapter)
 	route := GetMainEngine()
 
-	for _, tt := range ebsAdapterRoutes() {
+	for _, tt := range ebsAdapterConsumerRoutes() {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			setTestGatewayUserIdentityHeaders(req)
@@ -124,6 +141,103 @@ func TestEBSAdapterRoutesAreOwnedByEBSAdapter(t *testing.T) {
 			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
 		})
 	}
+}
+
+func TestEBSAdapterConsumerAuthenticationBoundary(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleEBSAdapter)
+	route := GetMainEngine()
+
+	for _, tt := range ebsAdapterAuthenticatedConsumerRoutes() {
+		t.Run("authenticated/"+tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set(gateway.GatewayTenantIDHeader, "test-tenant")
+			resp, err := route.Test(req, routeTestTimeout)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+			}
+		})
+	}
+
+	for _, tt := range ebsAdapterPublicConsumerRoutes() {
+		t.Run("bootstrap/"+tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req.Header.Set(gateway.GatewayTenantIDHeader, "test-tenant")
+			resp, err := route.Test(req, routeTestTimeout)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusUnauthorized {
+				t.Fatal("tenant-scoped bootstrap route unexpectedly requires user identity")
+			}
+			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
+		})
+	}
+}
+
+func TestLegacyMerchantRoutesStayDisabledForAlpha(t *testing.T) {
+	disabledSpecs := make(map[string]bool, len(legacyMerchantRoutes()))
+	for _, route := range legacyMerchantRoutes() {
+		path := route.path
+		if strings.HasPrefix(path, "/ebs/") {
+			path = "/ebs/*"
+		}
+		disabledSpecs[gatewayRouteKey(route.method, path)] = true
+	}
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if disabledSpecs[gatewayRouteKey(spec.method, spec.path)] {
+			t.Fatalf("legacy merchant route %s %s must not be proxied", spec.method, spec.path)
+		}
+	}
+
+	t.Run("gateway", func(t *testing.T) {
+		ensureInit()
+		configureGatewayProxyForTest(t)
+		authorization := testAuthorizationHeader(t)
+		route := GetMainEngine()
+
+		for _, tt := range legacyMerchantRoutes() {
+			t.Run(tt.name, func(t *testing.T) {
+				req := httptest.NewRequest(tt.method, tt.path, nil)
+				req.Header.Set("Authorization", authorization)
+				req.Header.Set("X-Tenant-ID", "test-tenant")
+				resp, err := route.Test(req, routeTestTimeout)
+				if err != nil {
+					t.Fatalf("route.Test() error = %v", err)
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusNotFound {
+					t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+				}
+			})
+		}
+	})
+
+	t.Run("service", func(t *testing.T) {
+		ensureInit()
+		setServiceRoleForTest(t, serviceRoleEBSAdapter)
+		route := GetMainEngine()
+
+		for _, tt := range legacyMerchantRoutes() {
+			t.Run(tt.name, func(t *testing.T) {
+				req := httptest.NewRequest(tt.method, tt.path, nil)
+				setTestGatewayUserIdentityHeaders(req)
+				resp, err := route.Test(req, routeTestTimeout)
+				if err != nil {
+					t.Fatalf("route.Test() error = %v", err)
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != http.StatusNotFound {
+					t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+				}
+			})
+		}
+	})
 }
 
 func TestEBSAdapterDoesNotOwnIdentityCardNotificationOrWalletRoutes(t *testing.T) {

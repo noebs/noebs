@@ -224,6 +224,67 @@ func TestAPIGatewayProxyCatalogCoversPublicHTTPServiceRoles(t *testing.T) {
 	}
 }
 
+func TestConsumerEBSRouteAuthenticationBoundary(t *testing.T) {
+	expected := make(map[string]gatewayAuthMode)
+	for _, route := range ebsAdapterPublicConsumerRoutes() {
+		expected[gatewayRouteKey(route.method, route.path)] = gatewayAuthPublicTenant
+	}
+	for _, route := range ebsAdapterAuthenticatedConsumerRoutes() {
+		expected[gatewayRouteKey(route.method, route.path)] = gatewayAuthUser
+	}
+
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.role != serviceRoleEBSAdapter || !strings.HasPrefix(spec.path, "/consumer/") {
+			continue
+		}
+		key := gatewayRouteKey(spec.method, spec.path)
+		want, ok := expected[key]
+		if !ok {
+			t.Errorf("unclassified consumer EBS route %s", key)
+			continue
+		}
+		if spec.auth != want {
+			t.Errorf("%s auth = %v, want %v", key, spec.auth, want)
+		}
+		delete(expected, key)
+	}
+	for key := range expected {
+		t.Errorf("classified consumer EBS route %s is missing from gateway", key)
+	}
+}
+
+func TestAPIGatewayRejectsUnauthenticatedConsumerEBSOperationsBeforeProxy(t *testing.T) {
+	ensureInit()
+	var hits atomic.Int64
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(upstream.Close)
+
+	setGatewayDiscoveryForTest(t, upstream.URL)
+	setServiceRoleForTest(t, serviceRoleAPIGateway)
+	route := GetMainEngine()
+
+	for _, routeSpec := range ebsAdapterAuthenticatedConsumerRoutes() {
+		t.Run(routeSpec.name, func(t *testing.T) {
+			req := httptest.NewRequest(routeSpec.method, routeSpec.path, nil)
+			req.Header.Set("X-Tenant-ID", "test-tenant")
+			resp, err := route.Test(req, routeTestTimeout)
+			if err != nil {
+				t.Fatalf("route.Test() error = %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+			}
+		})
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("upstream hits = %d, want 0", hits.Load())
+	}
+}
+
 func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 	ensureInit()
 	authorization := testAuthorizationHeader(t)
@@ -236,6 +297,7 @@ func TestUserServiceRolesRejectBearerWithoutGatewayIdentity(t *testing.T) {
 		{name: "identity", role: serviceRoleIdentityAuth, method: http.MethodGet, path: "/consumer/auth/me"},
 		{name: "card vault", role: serviceRoleCardVault, method: http.MethodGet, path: "/consumer/get_cards"},
 		{name: "ebs adapter", role: serviceRoleEBSAdapter, method: http.MethodGet, path: "/consumer/transactions"},
+		{name: "ebs adapter operation", role: serviceRoleEBSAdapter, method: http.MethodPost, path: "/consumer/balance"},
 		{name: "notification", role: serviceRoleNotification, method: http.MethodGet, path: "/consumer/notifications"},
 		{name: "notification websocket", role: serviceRoleNotification, method: http.MethodGet, path: "/ws"},
 		{name: "beneficiary", role: serviceRoleBeneficiary, method: http.MethodGet, path: "/consumer/beneficiary"},

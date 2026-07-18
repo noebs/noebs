@@ -3,13 +3,19 @@ package handler
 import "github.com/gofiber/fiber/v2"
 
 func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
-	// EBS operations (public, matches legacy behavior)
+	// Registration, recovery, and cryptographic bootstrap are the only EBS
+	// adapter operations available before a user has authenticated.
 	router.Post("/otp/balance", h.BalanceStep)
 	router.Post("/register_with_card", h.RegisterWithCard)
 	router.Post("/card_info", h.EbsGetCardInfo)
 	router.Post("/cards/new", h.RegisterCard)
 	router.Post("/cards/complete", h.CompleteRegistration)
-	router.Get("/nec2name", h.NecToName)
+	router.Post("/key", h.WorkingKey)
+	router.Post("/ipin_key", h.IPINKey)
+}
+
+func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
+	// Card and account operations
 	router.Post("/balance", h.Balance)
 	router.Post("/status", h.TransactionStatus)
 	router.Post("/is_alive", h.IsAlive)
@@ -23,23 +29,28 @@ func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/account", h.AccountTransfer)
 	router.Post("/purchase", h.Purchase)
 	router.Post("/n/status", h.Status)
-	router.Post("/key", h.WorkingKey)
 	router.Post("/ipin", h.IPinChange)
+	router.Get("/nec2name", h.NecToName)
 
-	// QR (public)
+	// QR
 	router.Post("/generate_qr", h.QRMerchantRegistration)
 	router.Post("/qr_payment", h.QRPayment)
 	router.Post("/qr_status", h.QRTransactions)
 	router.Post("/qr_refund", h.QRRefund)
 	router.Post("/qr_complete", h.QRComplete)
 
-	// IPIN (public)
-	router.Post("/ipin_key", h.IPINKey)
+	// IPIN
 	router.Post("/generate_ipin", h.GenerateIpin)
 	router.Post("/complete_ipin", h.CompleteIpin)
 
-	// Vouchers (public)
+	// Vouchers
 	router.Post("/vouchers/generate", h.GenerateVoucher)
+
+	// Transactions / payment compatibility
+	router.Get("/transaction", h.TransactionByUUID)
+	router.Get("/transactions", h.GetTransactions)
+	router.Post("/p2p_mobile", h.MobileTransfer)
+	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
 }
 
 func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
@@ -66,14 +77,6 @@ func RegisterBeneficiaryRoutes(router fiber.Router, h *Handler) {
 	router.Delete("/beneficiary", h.DeleteBeneficiary)
 }
 
-func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
-	// Transactions / payment compatibility
-	router.Get("/transaction", h.TransactionByUUID)
-	router.Get("/transactions", h.GetTransactions)
-	router.Post("/p2p_mobile", h.MobileTransfer)
-	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
-}
-
 func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 	// Cards
 	router.Get("/get_cards", h.GetCards)
@@ -85,7 +88,6 @@ func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 	// Payment tokens
 	router.Get("/payment_token", h.GetPaymentToken)
 	router.Post("/payment_token", h.GeneratePaymentToken)
-	router.Post("/payment_request", h.PaymentRequest)
 }
 
 func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {

@@ -21,7 +21,6 @@ import (
 	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/internal/httpclient"
 	"github.com/adonese/noebs/merchant"
-	merchanthandler "github.com/adonese/noebs/merchant/handler"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
 	walletactivity "github.com/adonese/noebs/wallet/activity"
@@ -487,9 +486,7 @@ func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, use
 	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", adminIdentity, tenantIdentity), consumerHandler)
 }
 
-func registerEBSAdapterRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler, merchantHandler *merchanthandler.Handler) {
-	merchanthandler.RegisterRoutes(route, merchantHandler, tenantIdentity)
-
+func registerEBSAdapterRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterEBSAdapterPublicRoutes(cons.Group("", tenantIdentity), consumerHandler)
 	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
@@ -558,14 +555,6 @@ func GetMainEngine() *fiber.App {
 		}
 		return h
 	}
-	buildMerchantHandler := func() *merchanthandler.Handler {
-		h, err := merchanthandler.New(&merchantServices)
-		if err != nil {
-			logrusLogger.Fatalf("merchant handler startup: %v", err)
-		}
-		return h
-	}
-
 	if role == serviceRolePSPWebhook {
 		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(pspWebhookStore, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
 		wallethandler.RegisterWebhookRoutes(route.Group("", tenantIdentity), walletWebhookHandler)
@@ -583,8 +572,7 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleEBSAdapter {
 		consumerHandler := buildConsumerHandler()
-		merchantHandler := buildMerchantHandler()
-		registerEBSAdapterRoutes(route, tenantIdentity, userIdentity, consumerHandler, merchantHandler)
+		registerEBSAdapterRoutes(route, tenantIdentity, userIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleAdminReporting {

@@ -23,7 +23,6 @@ func cardVaultSteadyRoutes() []cardVaultRoute {
 		{name: "main card", method: http.MethodPost, path: "/consumer/cards/set_main"},
 		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
 		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
-		{name: "payment request", method: http.MethodPost, path: "/consumer/payment_request"},
 	}
 }
 
@@ -138,6 +137,46 @@ func TestCardVaultDoesNotExposePublicMobilePANLookup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPaymentRequestStaysDisabledUntilDeliveryIsAtomic(t *testing.T) {
+	for _, spec := range gatewayProxyRouteSpecs() {
+		if spec.method == http.MethodPost && spec.path == "/consumer/payment_request" {
+			t.Fatal("payment_request must not be proxied before token and notification delivery are atomic and idempotent")
+		}
+	}
+
+	t.Run("gateway", func(t *testing.T) {
+		ensureInit()
+		configureGatewayProxyForTest(t)
+		route := GetMainEngine()
+		req := httptest.NewRequest(http.MethodPost, "/consumer/payment_request", nil)
+		req.Header.Set("Authorization", testAuthorizationHeader(t))
+		resp, err := route.Test(req, routeTestTimeout)
+		if err != nil {
+			t.Fatalf("route.Test() error = %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+		}
+	})
+
+	t.Run("service", func(t *testing.T) {
+		ensureInit()
+		setServiceRoleForTest(t, serviceRoleCardVault)
+		route := GetMainEngine()
+		req := httptest.NewRequest(http.MethodPost, "/consumer/payment_request", nil)
+		setTestGatewayUserIdentityHeaders(req)
+		resp, err := route.Test(req, routeTestTimeout)
+		if err != nil {
+			t.Fatalf("route.Test() error = %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+		}
+	})
 }
 
 func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {

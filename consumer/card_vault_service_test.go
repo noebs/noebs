@@ -124,23 +124,9 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 		t.Fatalf("tokens = %+v token = %+v, want one masked token result", tokens, token)
 	}
 
-	requested, encodedRequest, paymentRequestLink, err := service.PaymentRequestForUserID(ctx, tenantID, userID, PaymentRequestData{Amount: 75})
+	openRequest, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{})
 	if err != nil {
-		t.Fatalf("create payment request with card-vault schema: %v", err)
-	}
-	if requested.UUID == "" || encodedRequest == "" {
-		t.Fatalf("payment request UUID/encoded must be set: requested=%+v encoded=%q", requested, encodedRequest)
-	}
-	if paymentRequestLink != "https://pay.example/token/"+requested.UUID {
-		t.Fatalf("payment request link = %q, want base plus token UUID", paymentRequestLink)
-	}
-	if requested.ToCard == pan {
-		t.Fatalf("payment request must not return raw PAN")
-	}
-
-	openRequest, _, _, err := service.PaymentRequestForUserID(ctx, tenantID, userID, PaymentRequestData{})
-	if err != nil {
-		t.Fatalf("create open amount payment request with card-vault schema: %v", err)
+		t.Fatalf("create open amount payment token with card-vault schema: %v", err)
 	}
 	openResolution, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
 		UUID:   openRequest.UUID,

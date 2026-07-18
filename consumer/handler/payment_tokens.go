@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
 )
@@ -25,25 +24,6 @@ func (h *Handler) GeneratePaymentToken(c *fiber.Ctx) error {
 	created, encoded, paymentLink, err := h.Service.GeneratePaymentTokenForUserID(c.UserContext(), tenantID, userID, token)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": err.Error(), "message": "Unable to save payment token"})
-	}
-	return jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": created.UUID, "payment_link": paymentLink})
-}
-
-func (h *Handler) PaymentRequest(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-
-	var data consumer.PaymentRequestData
-	if err := bindJSON(c, &data); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
-	}
-
-	created, encoded, paymentLink, err := h.Service.PaymentRequestForUserID(c.UserContext(), tenantID, userID, data)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusCreated, fiber.Map{"token": encoded, "result": encoded, "uuid": created.UUID, "payment_link": paymentLink})
 }

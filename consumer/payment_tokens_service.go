@@ -64,18 +64,6 @@ func (s *Service) generatePaymentTokenForCards(ctx context.Context, tenantID str
 	return safe, encoded, paymentLink, nil
 }
 
-type PaymentRequestData struct {
-	ToCard string `json:"toCard,omitempty"`
-	Amount int    `json:"amount,omitempty"`
-}
-
-func (s *Service) PaymentRequestForUserID(ctx context.Context, tenantID string, userID int64, data PaymentRequestData) (ebs_fields.Token, string, string, error) {
-	return s.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{
-		ToCard: data.ToCard,
-		Amount: data.Amount,
-	})
-}
-
 func (s *Service) GetPaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, uuid string) ([]ebs_fields.Token, *ebs_fields.Token, error) {
 	if s == nil || s.Store == nil {
 		return nil, nil, ErrMissingStore
