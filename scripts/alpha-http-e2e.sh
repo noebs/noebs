@@ -480,6 +480,35 @@ json_value() {
         die "response value missing"
 }
 
+change_password_with_rotation() {
+    local expected_mobile="$1"
+    local current_password="$2"
+    local replacement_password="$3"
+    local label="$4"
+    local prior_authorization="$authorization"
+    local replacement_authorization
+    local body
+
+    body="$(json_object \
+        password "$current_password" \
+        new_password "$replacement_password")"
+    request POST /consumer/change_password auth 200 "$body"
+    assert_json "$label-password-change" \
+        '.result == "ok" and (.authorization | type == "string" and length > 20)'
+    replacement_authorization="$(json_value '.authorization')"
+    [[ "$replacement_authorization" != "$prior_authorization" ]] || \
+        die "$label password change did not rotate the token"
+
+    authorization="$prior_authorization"
+    request GET /consumer/auth/me auth 401
+    assert_json "$label-password-session-revoked" '.code == "session_revoked"'
+
+    authorization="$replacement_authorization"
+    request GET /consumer/auth/me auth 200
+    assert_json "$label-password-replacement-session" \
+        '.user.mobile == $mobile' --arg mobile "$expected_mobile"
+}
+
 mobile="0990000000"
 payer_mobile="0990000001"
 pan_original="4111111111111111"
@@ -551,9 +580,7 @@ assert_json refresh-replay '.code == "refresh_replay"'
 unset original_authorization signature refresh_message
 
 printf 'alpha HTTP E2E: password change, authenticated reads, and synthetic KYC\n'
-body="$(json_object new_password "$new_password")"
-request POST /consumer/change_password auth 200 "$body"
-assert_json password-change '.result == "ok"'
+change_password_with_rotation "$mobile" "$old_password" "$new_password" creator
 
 body="$(json_object mobile "$mobile" password "$old_password")"
 request POST /consumer/login public 400 "$body"
@@ -659,9 +686,8 @@ request POST /consumer/otp/login public 400 "$body"
 assert_json payer-signed-otp-replay '.code == "wrong_otp"'
 unset payer_otp payer_signature
 
-body="$(json_object new_password "$payer_new_password")"
-request POST /consumer/change_password auth 200 "$body"
-assert_json payer-password-change '.result == "ok"'
+change_password_with_rotation \
+    "$payer_mobile" "$payer_old_password" "$payer_new_password" payer
 body="$(json_object mobile "$payer_mobile" password "$payer_old_password")"
 request POST /consumer/login public 400 "$body"
 assert_json payer-old-password-rejected '.code == "wrong_password"'

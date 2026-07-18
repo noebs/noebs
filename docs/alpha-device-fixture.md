@@ -20,12 +20,15 @@ reporting, notification, and Keycloak endpoints remain side-effect guards.
 - Do not start this fixture until the Android QA artifact has a reviewed build
   flag that disables Firebase Analytics, Sentry delivery, FCM token retrieval,
   and device-token registration. Compose guards cannot observe direct
-  device-to-third-party traffic.
+  device-to-third-party traffic. Android commit `872f12d5` is the minimum
+  accepted fixture revision; it makes telemetry-off mandatory for every
+  `alpha-device-*` tenant.
 - Confirm the deployment host has at least 2 GiB available memory. The fixture
   containers remain capped by `scripts/alpha-http-e2e/compose.yaml`; the API
   gateway is the only published service and binds to `127.0.0.1`.
-- Choose a disposable exact tenant such as `alpha-device-260718-a`. It must not
-  equal or prefix a production tenant.
+- Choose a disposable exact tenant such as `alpha-device-260718-a`. Only the
+  `alpha-device-*` namespace is accepted; it must not equal or prefix a
+  production tenant.
 
 Validate the non-secret inputs without starting anything:
 
@@ -66,22 +69,38 @@ every other path carrying that tenant is rejected before the production gateway.
 Asset links, payment fallbacks, capture reads, and every other host remain on
 their normal routes. Chat `/ws` is intentionally unsupported and fails closed.
 
-Build the QA APK with:
+From the Android app checkout, use this PowerShell build contract exactly:
 
-```text
-TUTIPAY_API_URL=https://api.noebs.sd/
-TUTIPAY_NOEBS_URL=https://api.noebs.sd/
-TUTIPAY_TENANT_ID=alpha-device-260718-a
+```powershell
+git merge-base --is-ancestor 872f12d5 HEAD
+if ($LASTEXITCODE -ne 0) { throw 'Android fixture telemetry gate is missing' }
+if (git status --porcelain) { throw 'Android fixture checkout is dirty' }
+$env:TUTIPAY_API_URL = 'https://api.noebs.sd/'
+$env:TUTIPAY_NOEBS_URL = 'https://api.noebs.sd/'
+$env:TUTIPAY_TENANT_ID = 'alpha-device-260718-a'
+$env:TUTIPAY_TELEMETRY_ENABLED = 'false'
+.\gradlew.bat :app:assembleDebug --no-daemon
+if ($LASTEXITCODE -ne 0) { throw 'telemetry-disabled QA build failed' }
+if (-not (Test-Path 'app/build/outputs/apk/debug/app-universal-debug.apk')) {
+    throw 'expected universal QA APK is missing'
+}
 ```
 
-Use the telemetry-disabled QA build command documented with that Android flag.
-Before installing it, clear all retained tenant, JWT, user, and device-key state:
+Gradle rejects a device-lab tenant unless telemetry is disabled. The expected
+artifact is `app/build/outputs/apk/debug/app-universal-debug.apk`. Before
+installing it, clear any retained tenant, JWT, user, and device-key state, and
+fail the session if clearing or installation fails:
 
-```sh
-adb shell pm clear com.tutipay.app.alpha
+```powershell
+$package = 'com.tutipay.app.alpha'
+adb shell pm path $package *> $null
+if ($LASTEXITCODE -eq 0) {
+    adb shell pm clear $package
+    if ($LASTEXITCODE -ne 0) { throw 'failed to clear existing alpha app state' }
+}
+adb install --replace --grant-all app/build/outputs/apk/debug/app-universal-debug.apk
+if ($LASTEXITCODE -ne 0) { throw 'failed to install telemetry-disabled QA APK' }
 ```
-
-Do not continue if the clear fails or the build cannot prove telemetry is off.
 
 Exercise signup with device-signed OTP verification, signed OTP login, recovery
 with a newly generated device key, old-session revocation, password login,
@@ -98,8 +117,11 @@ memory-backed runtime, and one-time secrets. If removal or verification fails,
 the command exits nonzero and retains the mode-`0700` runtime for operator
 recovery. It retains the immutable candidate image. Confirm the loopback port is
 closed and no `noebs-alpha-*` containers from the printed project remain, then
-clear the QA app again:
+clear and uninstall the QA app, failing closed if either command fails:
 
-```sh
+```powershell
 adb shell pm clear com.tutipay.app.alpha
+if ($LASTEXITCODE -ne 0) { throw 'failed to clear QA app state after testing' }
+adb uninstall com.tutipay.app.alpha
+if ($LASTEXITCODE -ne 0) { throw 'failed to uninstall QA app' }
 ```

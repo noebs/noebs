@@ -24,6 +24,9 @@ matcher="$($script matcher "$tenant" 18080)"
 grep -Fq 'label=com.docker.compose.project=$project' "$harness"
 grep -Fq 'retained runtime %s for operator recovery' "$harness"
 grep -Fq 'NOEBS_ALPHA_E2E_ALLOW_LOCAL_BUILD=true' "$harness"
+grep -Fq 'password "$current_password"' "$harness"
+grep -Fq 'password change did not rotate the token' "$harness"
+grep -Fq 'password-session-revoked' "$harness"
 if grep -Eq 'down .*\|\| true' "$harness"; then
     printf 'alpha device fixture test: Compose teardown failure is ignored\n' >&2
     exit 1
@@ -41,5 +44,12 @@ if "$script" matcher "$tenant" 80 >/dev/null 2>&1; then
     printf 'alpha device fixture test: privileged port was accepted\n' >&2
     exit 1
 fi
+
+grep -Fq "TUTIPAY_TELEMETRY_ENABLED = 'false'" "$root/docs/alpha-device-fixture.md"
+grep -Fq 'git merge-base --is-ancestor 872f12d5 HEAD' "$root/docs/alpha-device-fixture.md"
+grep -Fq 'gradlew.bat :app:assembleDebug --no-daemon' "$root/docs/alpha-device-fixture.md"
+grep -Fq 'adb shell pm clear com.tutipay.app.alpha' "$root/docs/alpha-device-fixture.md"
+grep -Fq 'adb install --replace --grant-all' "$root/docs/alpha-device-fixture.md"
+grep -Fq 'adb uninstall com.tutipay.app.alpha' "$root/docs/alpha-device-fixture.md"
 
 printf 'alpha device fixture test: PASS\n'
