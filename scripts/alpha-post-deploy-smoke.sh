@@ -156,12 +156,15 @@ for forbidden in ("jwt", "admin_key", "password", "secret", "private_key"):
 ' <<<"$app_config" || die "/app/config is malformed or exposes a private field"
 
 http_status() {
-    curl --silent --show-error --output /dev/null --max-time 15 --write-out '%{http_code}' "$1"
+    local method="$1"
+    local url="$2"
+    curl --silent --show-error --output /dev/null --max-time 15 \
+        --request "$method" --write-out '%{http_code}' "$url"
 }
 
-[[ "$(http_status "$api_origin/consumer/user")" == 401 ]] || die "protected user route did not reject an anonymous request"
-[[ "$(http_status "$api_origin/metrics")" == 401 ]] || die "gateway metrics did not reject an anonymous request"
-[[ "$(http_status "$api_origin/consumer/payment_request")" == 404 ]] || die "removed payment_request route is still exposed"
+[[ "$(http_status GET "$api_origin/consumer/user")" == 401 ]] || die "protected user route did not reject an anonymous request"
+[[ "$(http_status GET "$api_origin/metrics")" == 401 ]] || die "gateway metrics did not reject an anonymous request"
+[[ "$(http_status POST "$api_origin/consumer/payment_request")" == 404 ]] || die "removed payment_request route is still exposed"
 
 printf 'alpha post-deploy smoke: PASS revision=%s image=%s edge=%s\n' \
     "$expected_revision" "$expected_digest" "$api_origin"
