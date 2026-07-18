@@ -911,15 +911,16 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	expected := map[string]struct {
-		targetPod string
-		port      int
+		targetPod      string
+		port           int
+		allowedSources []string
 	}{
 		"postgres-ingress":             {targetPod: "postgres", port: 5432},
 		"kafka-ingress":                {targetPod: "kafka", port: 9092},
 		"temporal-postgres-ingress":    {targetPod: "temporal-postgres", port: 5432},
 		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233},
 		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432},
-		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080},
+		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
 		"card-vault-ingress":           {targetPod: "card-vault", port: 8080},
 		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080},
 		"psp-webhook-ingress":          {targetPod: "psp-webhook", port: 8080},
@@ -939,7 +940,7 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 			t.Fatalf("unexpected NetworkPolicy %q", object.Metadata.Name)
 		}
 		found[object.Metadata.Name] = true
-		requirePortScopedIngressNetworkPolicy(t, object, want.targetPod, want.port)
+		requirePortScopedIngressNetworkPolicy(t, object, want.targetPod, want.port, want.allowedSources)
 	}
 	for name := range expected {
 		if !found[name] {
@@ -3038,7 +3039,7 @@ func requireKubernetesServicePort(t *testing.T, services map[string]map[int]bool
 	}
 }
 
-func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, targetPod string, port int) {
+func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, targetPod string, port int, allowedSources []string) {
 	t.Helper()
 	if len(object.Spec.PolicyTypes) != 1 || object.Spec.PolicyTypes[0] != "Ingress" {
 		t.Fatalf("%s policyTypes = %v, want [Ingress]", object.Metadata.Name, object.Spec.PolicyTypes)
@@ -3059,8 +3060,25 @@ func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, 
 	if rule.Ports[0].Protocol != "TCP" || rule.Ports[0].Port != port {
 		t.Fatalf("%s ingress port = %+v, want TCP/%d", object.Metadata.Name, rule.Ports[0], port)
 	}
-	if len(rule.From) != 0 {
-		t.Fatalf("%s ingress peers = %d, want no source selector for current-host kube-router compatibility", object.Metadata.Name, len(rule.From))
+	if len(rule.From) != len(allowedSources) {
+		t.Fatalf("%s ingress peers = %d, want %d", object.Metadata.Name, len(rule.From), len(allowedSources))
+	}
+	wantedSources := make(map[string]bool, len(allowedSources))
+	for _, source := range allowedSources {
+		wantedSources[source] = true
+	}
+	for _, peer := range rule.From {
+		if peer.PodSelector == nil || len(peer.PodSelector.MatchLabels) != 1 {
+			t.Fatalf("%s ingress peer must use one exact pod label: %+v", object.Metadata.Name, peer)
+		}
+		source := peer.PodSelector.MatchLabels["app.kubernetes.io/name"]
+		if !wantedSources[source] {
+			t.Fatalf("%s ingress peer %q is not allowed", object.Metadata.Name, source)
+		}
+		delete(wantedSources, source)
+	}
+	if len(wantedSources) != 0 {
+		t.Fatalf("%s missing ingress peers: %v", object.Metadata.Name, wantedSources)
 	}
 }
 
