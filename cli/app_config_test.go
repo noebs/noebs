@@ -26,6 +26,10 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	noebsConfig.WalletEnabled = true
 	noebsConfig.WalletDefaultCurrency = "SDG"
 	noebsConfig.WalletPINRequired = true
+	noebsConfig.OpaqueCardManagementEnabled = true
+	noebsConfig.OpaqueBalanceEnabled = false
+	noebsConfig.ChatEnabled = true
+	noebsConfig.NotificationsEnabled = false
 	noebsConfig.AdminKey = "secret-admin-key"
 	noebsConfig.JWTKey = "secret-jwt"
 
@@ -54,6 +58,9 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	if payload.Wallet.DefaultCurrency != "SDG" {
 		t.Fatalf("wallet.default_currency = %q, want SDG", payload.Wallet.DefaultCurrency)
 	}
+	if !payload.Features.OpaqueCardManagement || payload.Features.OpaqueBalance || !payload.Features.Chat || payload.Features.Notifications {
+		t.Fatalf("features = %+v, want independently configured gates", payload.Features)
+	}
 
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -61,6 +68,16 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	}
 	if strings.Contains(string(body), "secret") {
 		t.Fatalf("app config leaked sensitive data: %s", body)
+	}
+}
+
+func TestPublicAppConfigCapabilitiesDefaultOff(t *testing.T) {
+	payload, err := publicAppConfig(ebs_fields.NoebsConfig{DefaultTenantID: "tenant_1"})
+	if err != nil {
+		t.Fatalf("publicAppConfig(): %v", err)
+	}
+	if payload.Features != (appFeatureConfig{}) {
+		t.Fatalf("features = %+v, want every capability disabled", payload.Features)
 	}
 }
 

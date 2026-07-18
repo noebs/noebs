@@ -12,9 +12,10 @@ import (
 )
 
 type appConfigResponse struct {
-	TenantID string          `json:"tenant_id"`
-	Wallet   appWalletConfig `json:"wallet"`
-	OAuth    appOAuthConfig  `json:"oauth,omitempty"`
+	TenantID string           `json:"tenant_id"`
+	Wallet   appWalletConfig  `json:"wallet"`
+	OAuth    appOAuthConfig   `json:"oauth,omitempty"`
+	Features appFeatureConfig `json:"features"`
 }
 
 type appWalletConfig struct {
@@ -25,6 +26,13 @@ type appWalletConfig struct {
 
 type appOAuthConfig struct {
 	GoogleClientID string `json:"google_client_id,omitempty"`
+}
+
+type appFeatureConfig struct {
+	OpaqueCardManagement bool `json:"opaque_card_management"`
+	OpaqueBalance        bool `json:"opaque_balance"`
+	Chat                 bool `json:"chat"`
+	Notifications        bool `json:"notifications"`
 }
 
 func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
@@ -41,6 +49,12 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 		},
 		OAuth: appOAuthConfig{
 			GoogleClientID: strings.TrimSpace(cfg.GoogleClientID),
+		},
+		Features: appFeatureConfig{
+			OpaqueCardManagement: cfg.OpaqueCardManagementEnabled,
+			OpaqueBalance:        cfg.OpaqueBalanceEnabled,
+			Chat:                 cfg.ChatEnabled,
+			Notifications:        cfg.NotificationsEnabled,
 		},
 	}, nil
 }

@@ -987,9 +987,13 @@ type NoebsConfig struct {
 	// uses a self-signed cert.
 	EBSInsecureSkipVerify bool `json:"ebs_insecure_skip_verify"`
 
-	// OpaqueBalanceEnabled gates the first opaque-card rail operation until an
-	// isolated fixture and deployment review explicitly enable it.
-	OpaqueBalanceEnabled bool `json:"opaque_balance_enabled"`
+	// Alpha capabilities are independent and default off. A deployment enables
+	// each client surface only after its own backend and end-to-end release gate
+	// has passed.
+	OpaqueCardManagementEnabled bool `json:"opaque_card_management_enabled"`
+	OpaqueBalanceEnabled        bool `json:"opaque_balance_enabled"`
+	ChatEnabled                 bool `json:"chat_enabled"`
+	NotificationsEnabled        bool `json:"notifications_enabled"`
 
 	// server config
 	Cors    []string `json:"cors"`
