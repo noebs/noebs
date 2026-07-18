@@ -29,7 +29,7 @@ func TestBufGenerate(t *testing.T) {
 		t.Fatalf("buf generate failed: %v\n%s", err, output)
 	}
 
-	generated := filepath.Join(outDir, "noebs", "wallet", "v1", "wallet.pb.go")
+	generated := filepath.Join(outDir, "proto", "noebs", "wallet", "v1", "wallet.pb.go")
 	if _, err := os.Stat(generated); err != nil {
 		t.Fatalf("expected generated file %s: %v", generated, err)
 	}
