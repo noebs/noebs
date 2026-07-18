@@ -209,7 +209,11 @@ func (s *Store) ResumeUnverifiedRegistration(ctx context.Context, tenantID, mobi
 		return err
 	}
 	stmt := s.DB.Rebind(`UPDATE users
-		SET password = ?, public_key = ?, device_id = '', device_token = '', updated_at = ?
+		SET password = ?, public_key = ?,
+			is_merchant = FALSE, is_password_otp = FALSE, is_verified = FALSE,
+			device_id = '', device_token = '', otp = '', signed_otp = '',
+			main_card = '', main_card_enc = '', main_expdate = '',
+			session_epoch = session_epoch + 1, updated_at = ?
 		WHERE tenant_id = ? AND mobile = ? AND deleted_at IS NULL AND is_verified = FALSE`)
 	_, err = db.ExecContext(ctx, stmt, passwordHash, publicKey, now.UTC(), tenantID, mobile)
 	return err

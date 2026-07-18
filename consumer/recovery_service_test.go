@@ -15,7 +15,6 @@ import (
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -171,7 +170,7 @@ func TestDuplicateRegistrationResumesOnlyUnverifiedAccount(t *testing.T) {
 	firstKey := generateTestPublicKey(t)
 	secondKey := generateTestPublicKey(t)
 	thirdKey := generateTestPublicKey(t)
-	request := ebs_fields.User{Mobile: "0990000000", Password: "First1!Password", PublicKey: firstKey}
+	request := RegisterUserCommand{Mobile: "0990000000", Password: "First1!Password", PublicKey: firstKey, Fullname: "Test User"}
 	created, err := env.Service.CreateUser(ctx, env.Tenant, request, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("initial registration: %v", err)
@@ -180,8 +179,8 @@ func TestDuplicateRegistrationResumesOnlyUnverifiedAccount(t *testing.T) {
 		t.Fatalf("initial registration result = %+v", created)
 	}
 
-	resumed, err := env.Service.CreateUser(ctx, env.Tenant, ebs_fields.User{
-		Mobile: request.Mobile, Password: "Second2@Password", PublicKey: secondKey,
+	resumed, err := env.Service.CreateUser(ctx, env.Tenant, RegisterUserCommand{
+		Mobile: request.Mobile, Password: "Second2@Password", PublicKey: secondKey, Fullname: "Test User",
 	}, authTestSource, authTestNow.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("resume registration: %v", err)
@@ -204,8 +203,8 @@ func TestDuplicateRegistrationResumesOnlyUnverifiedAccount(t *testing.T) {
 		t.Fatalf("verify resumed user: %v", err)
 	}
 
-	verifiedRepeat, err := env.Service.CreateUser(ctx, env.Tenant, ebs_fields.User{
-		Mobile: request.Mobile, Password: "Third3#Password", PublicKey: thirdKey,
+	verifiedRepeat, err := env.Service.CreateUser(ctx, env.Tenant, RegisterUserCommand{
+		Mobile: request.Mobile, Password: "Third3#Password", PublicKey: thirdKey, Fullname: "Test User",
 	}, authTestSource, authTestNow.Add(2*time.Minute))
 	if err != nil {
 		t.Fatalf("repeat verified registration: %v", err)

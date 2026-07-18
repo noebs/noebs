@@ -19,6 +19,8 @@ The sink/provider account should redact recipient numbers, restrict reads to the
 
 Use a unique ten-digit virtual mobile, a disposable test tenant, and a fresh RSA key. The password must satisfy the current password policy. Commands below assume `jq`, OpenSSL, and an authenticated TLS endpoint.
 
+Registration accepts `mobile`, `password`, `user_pubkey`, and `fullname`, plus optional `username`, `birthday`, and `email` fields. Other fields are rejected.
+
 ```sh
 export BASE_URL=https://api.noebs.sd
 export TENANT_ID=alpha-e2e
@@ -32,7 +34,7 @@ PUBLIC_KEY=$(openssl pkey -in /tmp/noebs-e2e-private.pem -pubout \
 curl --fail-with-body "$BASE_URL/consumer/register" \
   -H "X-Tenant-ID: $TENANT_ID" -H 'Content-Type: application/json' \
   --data "$(jq -n --arg mobile "$MOBILE" --arg password "$PASSWORD" --arg key "$PUBLIC_KEY" \
-    '{mobile:$mobile,username:$mobile,email:($mobile+"@example.invalid"),password:$password,user_pubkey:$key}')"
+    '{mobile:$mobile,username:$mobile,email:($mobile+"@example.invalid"),password:$password,user_pubkey:$key,fullname:"Alpha E2E User"}')"
 
 curl --fail-with-body "$BASE_URL/consumer/otp/generate" \
   -H "X-Tenant-ID: $TENANT_ID" -H 'Content-Type: application/json' \

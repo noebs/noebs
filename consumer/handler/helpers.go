@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 
@@ -18,6 +20,27 @@ func bindJSON(c *fiber.Ctx, dst interface{}) error {
 		return apperr.ErrEmptyBody
 	}
 	if err := json.Unmarshal(c.Body(), dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	}
+	if err := ebs_fields.ValidateStruct(dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrValidation, err.Error())
+	}
+	return nil
+}
+
+func bindStrictJSON(c *fiber.Ctx, dst interface{}) error {
+	if len(c.Body()) == 0 {
+		return apperr.ErrEmptyBody
+	}
+	decoder := json.NewDecoder(bytes.NewReader(c.Body()))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			err = errors.New("request body must contain one JSON value")
+		}
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	}
 	if err := ebs_fields.ValidateStruct(dst); err != nil {

@@ -84,7 +84,8 @@ func TestCreateUserRejectsMalformedPublicKey(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(`{
 		"mobile":"0990000000",
 		"password":"Valid1!Password",
-		"public_key":"not-a-public-key"
+		"fullname":"Test User",
+		"user_pubkey":"not-a-public-key"
 	}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")

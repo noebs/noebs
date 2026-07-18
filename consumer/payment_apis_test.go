@@ -128,11 +128,12 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 func TestService_CreateUser(t *testing.T) {
 	env := newTestEnv(t)
 
-	user, err := env.Service.CreateUser(context.Background(), env.Tenant, ebs_fields.User{
+	user, err := env.Service.CreateUser(context.Background(), env.Tenant, RegisterUserCommand{
 		Mobile:    "0912141660",
 		Username:  "0912141660",
 		Password:  "me@Suckit1",
 		PublicKey: refreshProofPublicKey,
+		Fullname:  "Test User",
 	}, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("create user: %v", err)

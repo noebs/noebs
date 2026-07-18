@@ -152,8 +152,8 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 }
 
 func (h *Handler) CreateUser(c *fiber.Ctx) error {
-	var req ebs_fields.User
-	if err := bindJSON(c, &req); err != nil {
+	var req consumer.RegisterUserCommand
+	if err := bindStrictJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	tenantID, err := resolveTenantID(c)

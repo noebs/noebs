@@ -57,6 +57,7 @@ var (
 
 	// Registration
 	ErrMissingMobile               = errors.New("missing mobile")
+	ErrMissingFullname             = errors.New("missing fullname")
 	ErrMissingPublicKey            = errors.New("missing public key")
 	ErrInvalidPublicKey            = errors.New("invalid public key")
 	ErrInvalidCard                 = errors.New("invalid card")

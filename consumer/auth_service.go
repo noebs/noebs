@@ -273,7 +273,19 @@ func parseUserPublicKey(value string) (*rsa.PublicKey, string, error) {
 	return publicKey, base64.StdEncoding.EncodeToString(der), nil
 }
 
-func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.User, source string, now time.Time) (ebs_fields.User, error) {
+// RegisterUserCommand is the complete public registration contract. Account
+// state such as verification and merchant status is deliberately absent.
+type RegisterUserCommand struct {
+	Mobile    string `json:"mobile" binding:"required"`
+	Password  string `json:"password" binding:"required,min=8,max=72"`
+	PublicKey string `json:"user_pubkey" binding:"required"`
+	Fullname  string `json:"fullname" binding:"required,min=1,max=100"`
+	Username  string `json:"username,omitempty" binding:"omitempty,min=1,max=100"`
+	Birthday  string `json:"birthday,omitempty" binding:"omitempty,max=32"`
+	Email     string `json:"email,omitempty" binding:"omitempty,email,max=254"`
+}
+
+func (s *Service) CreateUser(ctx context.Context, tenantID string, cmd RegisterUserCommand, source string, now time.Time) (ebs_fields.User, error) {
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
@@ -281,12 +293,32 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	if err != nil {
 		return ebs_fields.User{}, err
 	}
-	u.Mobile = strings.TrimSpace(u.Mobile)
-	if u.Mobile == "" {
+	rawUsername := cmd.Username
+	cmd.Mobile = strings.TrimSpace(cmd.Mobile)
+	cmd.Fullname = strings.TrimSpace(cmd.Fullname)
+	cmd.Username = strings.TrimSpace(cmd.Username)
+	cmd.Birthday = strings.TrimSpace(cmd.Birthday)
+	cmd.Email = strings.TrimSpace(cmd.Email)
+	if cmd.Mobile == "" {
 		return ebs_fields.User{}, ErrMissingMobile
 	}
-	u.Username = strings.TrimSpace(u.Username)
-	u.Email = strings.TrimSpace(u.Email)
+	if cmd.Fullname == "" {
+		return ebs_fields.User{}, ErrMissingFullname
+	}
+	if rawUsername != "" && cmd.Username == "" {
+		return ebs_fields.User{}, store.ErrMissingUsername
+	}
+	// Construct a fresh record so every server-managed field starts at its
+	// normal zero value instead of inheriting caller-controlled state.
+	u := ebs_fields.User{
+		Mobile:    cmd.Mobile,
+		Password:  cmd.Password,
+		PublicKey: cmd.PublicKey,
+		Fullname:  cmd.Fullname,
+		Username:  cmd.Username,
+		Birthday:  cmd.Birthday,
+		Email:     cmd.Email,
+	}
 	if !validatePassword(u.Password) {
 		return ebs_fields.User{}, ErrPasswordInvalid
 	}

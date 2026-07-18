@@ -299,7 +299,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"CreateUser", func(tenantID string) error {
-			_, err := service.CreateUser(ctx, tenantID, ebs_fields.User{Mobile: "0990000000", Password: "password"}, authTestSource, authTestNow)
+			_, err := service.CreateUser(ctx, tenantID, RegisterUserCommand{Mobile: "0990000000", Password: "password"}, authTestSource, authTestNow)
 			return err
 		}},
 		{"VerifyOTP", func(tenantID string) error {
@@ -335,9 +335,17 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 
 func TestCreateUserRequiresMobileBeforeStore(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
-	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{Mobile: " ", Password: "password"}, authTestSource, authTestNow)
+	_, err := service.CreateUser(context.Background(), "tenant", RegisterUserCommand{Mobile: " ", Password: "password", Fullname: "Test User"}, authTestSource, authTestNow)
 	if !errors.Is(err, ErrMissingMobile) {
 		t.Fatalf("CreateUser(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
+}
+
+func TestCreateUserRequiresFullnameBeforeStore(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	_, err := service.CreateUser(context.Background(), "tenant", RegisterUserCommand{Mobile: "0990000000", Password: "password", Fullname: " "}, authTestSource, authTestNow)
+	if !errors.Is(err, ErrMissingFullname) {
+		t.Fatalf("CreateUser(missing fullname) error = %v, want %v", err, ErrMissingFullname)
 	}
 }
 
@@ -400,9 +408,10 @@ func TestChangePasswordReauthenticatesAndRotatesSession(t *testing.T) {
 
 func TestCreateUserValidatesCredentialsBeforeStore(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
-	_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{
+	_, err := service.CreateUser(context.Background(), "tenant", RegisterUserCommand{
 		Mobile:   "0990000000",
 		Password: "short",
+		Fullname: "Test User",
 	}, authTestSource, authTestNow)
 	if !errors.Is(err, ErrPasswordInvalid) {
 		t.Fatalf("CreateUser(weak password) error = %v, want %v", err, ErrPasswordInvalid)
@@ -417,10 +426,11 @@ func TestCreateUserValidatesCredentialsBeforeStore(t *testing.T) {
 		{name: "malformed", publicKey: "not-a-public-key", wantErr: ErrInvalidPublicKey},
 	} {
 		t.Run(tc.name+"_public_key", func(t *testing.T) {
-			_, err := service.CreateUser(context.Background(), "tenant", ebs_fields.User{
+			_, err := service.CreateUser(context.Background(), "tenant", RegisterUserCommand{
 				Mobile:    "0990000000",
 				Password:  "Valid1!Password",
 				PublicKey: tc.publicKey,
+				Fullname:  "Test User",
 			}, authTestSource, authTestNow)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("CreateUser() error = %v, want %v", err, tc.wantErr)
@@ -432,7 +442,7 @@ func TestCreateUserValidatesCredentialsBeforeStore(t *testing.T) {
 func TestCreateUserEnforcesPersistentMobileAndSourceLimits(t *testing.T) {
 	t.Run("mobile", func(t *testing.T) {
 		env := newTestEnv(t)
-		user := ebs_fields.User{Mobile: "0990000000", Password: "Valid1!Password", PublicKey: refreshProofPublicKey}
+		user := RegisterUserCommand{Mobile: "0990000000", Password: "Valid1!Password", PublicKey: refreshProofPublicKey, Fullname: "Test User"}
 		for attempt := 1; attempt <= 4; attempt++ {
 			_, err := env.Service.CreateUser(context.Background(), env.Tenant, user, authTestSource, authTestNow)
 			if attempt < 4 && errors.Is(err, ErrRateLimited) {
@@ -447,11 +457,12 @@ func TestCreateUserEnforcesPersistentMobileAndSourceLimits(t *testing.T) {
 	t.Run("source", func(t *testing.T) {
 		env := newTestEnv(t)
 		for attempt := 1; attempt <= 11; attempt++ {
-			user := ebs_fields.User{
+			user := RegisterUserCommand{
 				Mobile:    fmt.Sprintf("099100%04d", attempt),
 				Email:     fmt.Sprintf("registration-%d@example.test", attempt),
 				Password:  "Valid1!Password",
 				PublicKey: refreshProofPublicKey,
+				Fullname:  "Test User",
 			}
 			_, err := env.Service.CreateUser(context.Background(), env.Tenant, user, authTestSource, authTestNow)
 			if attempt <= 10 && err != nil {
@@ -588,10 +599,11 @@ func TestRegisteredUserMustVerifyOTPBeforePasswordLogin(t *testing.T) {
 		code     = refreshProofMessage
 	)
 
-	created, err := env.Service.CreateUser(context.Background(), env.Tenant, ebs_fields.User{
+	created, err := env.Service.CreateUser(context.Background(), env.Tenant, RegisterUserCommand{
 		Mobile:    mobile,
 		Password:  password,
 		PublicKey: refreshProofPublicKey,
+		Fullname:  "Test User",
 	}, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("CreateUser(): %v", err)
