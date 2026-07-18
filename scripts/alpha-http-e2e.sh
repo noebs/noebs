@@ -9,7 +9,6 @@ compose_file="$harness_dir/compose.yaml"
 runtime=""
 image=""
 project=""
-api_base=""
 HTTP_BODY=""
 
 die() {
@@ -48,7 +47,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-for command in base64 curl docker git jq openssl python3 sops; do
+for command in base64 docker git jq openssl python3 sops; do
     require_command "$command"
 done
 docker compose version >/dev/null 2>&1 || die "Docker Compose is unavailable"
@@ -171,7 +170,8 @@ write_service_config consumer-beneficiary-migrate pgx
 
 encrypt_yaml() {
     local target="$1"
-    if ! sops --encrypt \
+    # The disposable recipient must not be replaced by release creation rules.
+    if ! sops --config /dev/null --encrypt \
         --age "$recipient" \
         --input-type yaml \
         --output-type yaml \
@@ -228,7 +228,6 @@ chmod 0444 \
     "$runtime"/services/*.yaml
 
 printf 'alpha HTTP E2E: starting isolated services\n'
-quiet_compose pull postgres capture
 quiet_compose config --quiet
 quiet_compose up --detach --wait --wait-timeout 120 postgres capture
 for migration in identity-auth-migrate card-vault-migrate consumer-beneficiary-migrate; do
@@ -237,11 +236,6 @@ done
 quiet_compose up --detach --wait --wait-timeout 120 \
     identity-auth card-vault consumer-beneficiary
 quiet_compose up --detach --wait --wait-timeout 120 api-gateway
-
-published="$("${compose[@]}" port api-gateway 8080 2>/dev/null)"
-port="${published##*:}"
-[[ "$port" =~ ^[0-9]+$ ]] || die "could not resolve the gateway's loopback port"
-api_base="http://127.0.0.1:$port"
 
 private_key="$runtime/user-private.pem"
 public_key_file="$runtime/user-public.pem"
@@ -286,50 +280,36 @@ request() {
     local mode="$3"
     local expected="$4"
     local body="${5-}"
-    local curl_config="$runtime/curl.conf"
-    local response="$runtime/http-response"
+    local tenant=""
+    local bearer=""
+    local relay_payload
+    local response
     local status
 
-    {
-        printf 'silent\n'
-        printf 'show-error\n'
-        printf 'connect-timeout = 3\n'
-        printf 'max-time = 15\n'
-        printf 'request = "%s"\n' "$method"
-        printf 'url = "%s%s"\n' "$api_base" "$path"
-        printf 'header = "Accept: application/json"\n'
-        if [[ -n "$body" ]]; then
-            printf 'header = "Content-Type: application/json"\n'
-        fi
-        case "$mode" in
-        public)
-            printf 'header = "X-Tenant-ID: alpha-e2e"\n'
-            ;;
-        auth)
-            [[ -n "${authorization:-}" ]] || die "internal missing authorization token"
-            printf 'header = "Authorization: Bearer %s"\n' "$authorization"
-            ;;
-        none) ;;
-        *) die "internal unknown HTTP auth mode" ;;
-        esac
-    } >"$curl_config"
+    case "$mode" in
+    public) tenant="alpha-e2e" ;;
+    auth)
+        [[ -n "${authorization:-}" ]] || die "internal missing authorization token"
+        bearer="$authorization"
+        ;;
+    none) ;;
+    *) die "internal unknown HTTP auth mode" ;;
+    esac
 
-    if [[ -n "$body" ]]; then
-        if ! status="$(printf '%s' "$body" | curl --config "$curl_config" \
-            --data-binary @- --output "$response" --write-out '%{http_code}')"; then
-            rm -f "$curl_config" "$response"
-            die "HTTP transport failure for $method $path"
-        fi
-    else
-        if ! status="$(curl --config "$curl_config" \
-            --output "$response" --write-out '%{http_code}')"; then
-            rm -f "$curl_config" "$response"
-            die "HTTP transport failure for $method $path"
-        fi
+    relay_payload="$(json_object \
+        method "$method" \
+        path "$path" \
+        tenant "$tenant" \
+        authorization "$bearer" \
+        body "$body")"
+    if ! response="$(printf '%s' "$relay_payload" | "${compose[@]}" exec -T capture \
+        python /opt/noebs-e2e/capture.py relay 2>/dev/null)"; then
+        die "HTTP transport failure for $method $path"
     fi
-    rm -f "$curl_config"
-    HTTP_BODY="$(<"$response")"
-    rm -f "$response"
+    status="$(printf '%s' "$response" | jq -er '.status' 2>/dev/null)" || \
+        die "HTTP relay returned an invalid status for $method $path"
+    HTTP_BODY="$(printf '%s' "$response" | jq -er '.body' 2>/dev/null)" || \
+        die "HTTP relay returned an invalid body for $method $path"
     [[ "$status" == "$expected" ]] || \
         die "unexpected HTTP $status for $method $path (wanted $expected)"
 }
@@ -362,6 +342,10 @@ body="$(json_object \
 request POST /consumer/register public 201 "$body"
 assert_json registration \
     '.details.mobile == "0990000000" and (.details.password // "") == "" and (.details.user_pubkey // "") == ""'
+
+body="$(json_object mobile "$mobile" password "$old_password")"
+request POST /consumer/login public 403 "$body"
+assert_json unverified-login-rejected '.code == "user_not_verified"'
 
 body="$(json_object mobile "$mobile")"
 request POST /consumer/otp/generate public 201 "$body"
@@ -465,16 +449,18 @@ payment_link="$(json_value '.payment_link')"
 if ! decoded_token="$(printf '%s' "$payment_token" | base64 --decode 2>/dev/null)"; then
     die "payment token was not valid base64"
 fi
-[[ "$decoded_token" != *"$pan_updated"* ]] || die "payment token exposed a raw PAN"
-printf '%s' "$decoded_token" | jq -e '.toCard | contains("*")' >/dev/null 2>&1 || \
-    die "payment token did not contain a masked destination"
+[[ "$decoded_token" != *"$pan_original"* && "$decoded_token" != *"$pan_updated"* ]] || \
+    die "payment token exposed a raw PAN"
+printf '%s' "$decoded_token" | \
+    jq -e '.toCard == "424242*****4242"' >/dev/null 2>&1 || \
+    die "payment token did not contain the expected masked destination"
 unset decoded_token payment_link payment_token
 
 request GET /consumer/payment_token auth 200
 assert_json payment-link-list '.count == 1 and (.token | length == 1)'
 request GET "/consumer/payment_token?uuid=$payment_uuid" auth 200
 assert_json payment-link-read \
-    '.uuid == $uuid and .amount == 0 and (.toCard | contains("*"))' \
+    '.uuid == $uuid and .amount == 0 and .toCard == "424242*****4242"' \
     --arg uuid "$payment_uuid"
 request POST /consumer/payment_request auth 404 '{}'
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import socket
 import threading
 import unittest
 import urllib.error
@@ -54,7 +55,42 @@ class CaptureServerTest(unittest.TestCase):
     def test_forbidden_side_effect_guard_counts_requests(self) -> None:
         self.assertEqual((204, ""), self.request("/assert-zero", "read-secret"))
         self.assertEqual((503, ""), self.request("/guard/ebs-adapter/consumer/balance", method="POST"))
+        self.assertEqual((503, ""), self.request("/guard/unknown", method="TRACE"))
         self.assertEqual((409, ""), self.request("/assert-zero", "read-secret"))
+
+    def test_duplicate_otp_delivery_is_rejected(self) -> None:
+        query = urllib.parse.urlencode({"api_key": "sms-secret", "sms": "Code 123456"})
+        self.assertEqual((204, ""), self.request("/sms?" + query))
+        self.assertEqual((204, ""), self.request("/sms?" + query))
+        self.assertEqual((409, ""), self.request("/otp", "read-secret"))
+        self.assertEqual((404, ""), self.request("/otp", "read-secret"))
+
+    def test_grpc_connection_is_counted_as_forbidden(self) -> None:
+        state = capture.CaptureState("sms-secret", "read-secret")
+        guard = capture.create_guard_server("127.0.0.1", 0, state)
+        thread = threading.Thread(target=guard.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with socket.create_connection(guard.server_address, timeout=2):
+                pass
+            for _ in range(20):
+                with state.lock:
+                    if state.forbidden_requests == 1:
+                        break
+                threading.Event().wait(0.01)
+            with state.lock:
+                self.assertEqual(1, state.forbidden_requests)
+        finally:
+            guard.shutdown()
+            guard.server_close()
+            thread.join(timeout=2)
+
+    def test_relay_preserves_http_status_and_body(self) -> None:
+        status, body = capture.relay_request(
+            {"method": "GET", "path": "/health"},
+            self.base_url,
+        )
+        self.assertEqual((204, ""), (status, body))
 
 
 if __name__ == "__main__":

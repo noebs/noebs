@@ -18,15 +18,18 @@ The harness builds and labels the current commit, then starts only these roles:
 - `card-vault` and its migration role
 - `consumer-beneficiary` and its migration role
 
-It creates three fresh Postgres databases in a temporary cluster, publishes the
-gateway on a random loopback-only port, and puts every container on an internal
-Docker network. EBS, wallet, PSP, reporting, notification, and Keycloak targets
-resolve to a deny-by-default capture service. Any unexpected request to one of
-those boundaries fails the run.
+It creates three fresh Postgres databases in a temporary cluster and puts every
+container on an internal Docker network with no published ports. A small client
+inside that network drives real HTTP through the gateway. The Postgres and
+capture images are pinned by manifest digest and are pulled only when missing.
+EBS, wallet, PSP, reporting, notification, and Keycloak targets resolve to a
+deny-by-default capture service. Any unexpected HTTP request or wallet-ledger
+TCP connection to those boundaries fails the run.
 
 The HTTP journey covers disposable registration; authenticated, one-time OTP
-capture; OTP replay rejection; login; authenticated identity reads; refresh
-rotation and replay rejection; password change; a tiny synthetic KYC fixture;
+capture; pre-verification login rejection; OTP replay rejection; login;
+authenticated identity reads; refresh rotation and replay rejection; password
+change; a tiny synthetic KYC fixture;
 card create/read/update/main/delete; beneficiary create/update/read/delete; and
 zero-amount payment-link create/read. The removed `/consumer/payment_request`
 route is also required to remain unavailable.

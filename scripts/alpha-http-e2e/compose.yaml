@@ -24,7 +24,8 @@ x-age-key-secret: &age-key-secret
 
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
+    pull_policy: missing
     init: true
     environment:
       POSTGRES_USER: noebs
@@ -45,7 +46,8 @@ services:
     restart: "no"
 
   capture:
-    image: python:3.12-alpine
+    image: python:3.12-alpine@sha256:6d43704baacd1bfbe7c295d7f13079d5d8104ed33568873133f8fc69980419df
+    pull_policy: missing
     init: true
     read_only: true
     user: "65534:65534"
@@ -193,8 +195,6 @@ services:
         condition: service_healthy
       capture:
         condition: service_healthy
-    ports:
-      - "127.0.0.1::8080"
     volumes:
       - ${NOEBS_ALPHA_E2E_RUNTIME}/config.yaml:/app/config.yaml:ro
       - ${NOEBS_ALPHA_E2E_RUNTIME}/services/api-gateway.yaml:/app/service.yaml:ro
