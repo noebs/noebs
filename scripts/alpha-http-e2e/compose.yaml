@@ -5,6 +5,10 @@ x-noebs-runtime: &noebs-runtime
   init: true
   read_only: true
   user: "10001:10001"
+  cpus: 0.75
+  mem_limit: 256m
+  mem_reservation: 64m
+  pids_limit: 128
   cap_drop:
     - ALL
   security_opt:
@@ -27,6 +31,10 @@ services:
     image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     pull_policy: missing
     init: true
+    cpus: 1.0
+    mem_limit: 512m
+    mem_reservation: 128m
+    pids_limit: 256
     environment:
       POSTGRES_USER: noebs
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
@@ -51,6 +59,10 @@ services:
     init: true
     read_only: true
     user: "65534:65534"
+    cpus: 0.25
+    mem_limit: 64m
+    mem_reservation: 16m
+    pids_limit: 64
     cap_drop:
       - ALL
     security_opt:
