@@ -148,6 +148,10 @@ func noConsumerTransactionContext() context.Context {
 	return WithNoConsumerTransactionParticipants(context.Background())
 }
 
+func testHTTPClient() *http.Client {
+	return &http.Client{Timeout: 2 * time.Second}
+}
+
 func seedUser(t *testing.T, storeSvc *store.Store, tenantID, mobile, password string) ebs_fields.User {
 	t.Helper()
 	user := ebs_fields.User{

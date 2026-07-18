@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/ebsipin"
 	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/store"
 	"github.com/google/uuid"
-	"github.com/noebs/ipin"
 )
 
 // Bills represents an inquiry request for EBS billers (telecoms, utilities, etc).
@@ -263,7 +263,7 @@ func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fie
 	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
 	fields.ApplicationId = s.NoebsConfig.ConsumerID
 
-	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
+	ipinBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
 	if err != nil {
 		return false, err
 	}

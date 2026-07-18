@@ -18,7 +18,6 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3
 	github.com/jackc/pgx/v5 v5.9.2
-	github.com/noebs/ipin v0.0.0-20210301180224-78c1bef582f2
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/prometheus/client_golang v1.13.0
 	github.com/segmentio/kafka-go v0.4.51

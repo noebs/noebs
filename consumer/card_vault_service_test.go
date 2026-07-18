@@ -2,158 +2,110 @@ package consumer
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"strings"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
 
-func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{
-		Store: storeSvc,
-		NoebsConfig: ebs_fields.NoebsConfig{
-			PaymentLinkBase: "https://pay.example/token/",
-		},
-	}
+func TestOpaqueCardOperationsUseOnlyCardVaultSchema(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
+	service := &Service{Store: storeSvc}
 	ctx := context.Background()
 	userID := int64(42)
-	mobile := "0912141660"
-	pan := "9222081700000000"
+	now := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
 
-	if err := service.AddCardsForUserID(ctx, tenantID, userID, mobile, []ebs_fields.Card{{
-		Pan:    pan,
-		Expiry: "2912",
-		Name:   "Primary",
-		IPIN:   "1234",
-	}}); err != nil {
-		t.Fatalf("add card with card-vault schema: %v", err)
+	first := enrollOpaqueConsumerTestCard(t, service, tenantID, userID, "4242424242424242", "Primary", now)
+	second := enrollOpaqueConsumerTestCard(t, service, tenantID, userID, "5555555555554242", "Travel", now.Add(time.Minute))
+	if first.CardID == second.CardID || first.MaskedPAN != "****4242" || second.MaskedPAN != "****4242" {
+		t.Fatalf("opaque cards = %+v and %+v", first, second)
 	}
 
-	cards, main, err := service.GetCardsByUserID(ctx, tenantID, userID)
+	cards, err := service.ListOpaqueCardsForUserID(ctx, tenantID, userID)
 	if err != nil {
-		t.Fatalf("get cards with card-vault schema: %v", err)
+		t.Fatalf("list opaque cards: %v", err)
 	}
-	if len(cards) != 1 || main == nil || main.Pan != pan {
-		t.Fatalf("cards = %+v main = %+v, want one card with pan %s", cards, main, pan)
+	if len(cards) != 2 || cards[0].CardID != first.CardID || !cards[0].IsMain || cards[1].CardID != second.CardID || cards[1].IsMain {
+		t.Fatalf("initial cards = %+v", cards)
 	}
-	byMobile, err := service.ResolveCardByMobile(ctx, tenantID, CardByMobileCommand{Mobile: mobile})
-	if err != nil {
-		t.Fatalf("resolve card by mobile with card-vault schema: %v", err)
+	assertPublicCardSummaryShape(t, cards)
+
+	for name, call := range map[string]func() error{
+		"rename": func() error {
+			return service.RenameOpaqueCardForUserID(ctx, tenantID, userID, " "+second.CardID, "Mutated")
+		},
+		"set main": func() error {
+			return service.SetOpaqueMainCardForUserID(ctx, tenantID, userID, second.CardID+" ")
+		},
+		"retire": func() error {
+			return service.RetireOpaqueCardForUserID(ctx, tenantID, userID, "\t"+second.CardID)
+		},
+	} {
+		t.Run("non-canonical "+name, func(t *testing.T) {
+			if err := call(); !errors.Is(err, store.ErrInvalidCardID) {
+				t.Fatalf("error = %v, want %v", err, store.ErrInvalidCardID)
+			}
+		})
 	}
-	if byMobile.UserID != userID || byMobile.PAN != pan || byMobile.ExpDate != "2912" {
-		t.Fatalf("card by mobile = %+v, want pan=%s exp=2912", byMobile, pan)
-	}
-	masked, err := service.ListMaskedCardsForUserID(ctx, tenantID, userID, MaskedCardsCommand{})
-	if err != nil {
-		t.Fatalf("list masked cards with card-vault schema: %v", err)
-	}
-	if len(masked.MaskedPANs) != 1 || masked.MaskedPANs[0] != "922208*****0000" {
-		t.Fatalf("masked cards = %+v", masked)
-	}
-	maskedByMobile, err := service.ResolveMaskedCardByMobile(ctx, tenantID, MaskedCardByMobileCommand{Mobile: mobile})
-	if err != nil {
-		t.Fatalf("resolve masked card by mobile with card-vault schema: %v", err)
-	}
-	if maskedByMobile.MaskedPAN != "922208*****0000" {
-		t.Fatalf("masked card by mobile = %+v", maskedByMobile)
+	cards, err = service.ListOpaqueCardsForUserID(ctx, tenantID, userID)
+	if err != nil || len(cards) != 2 || cards[0].CardID != first.CardID || !cards[0].IsMain || cards[1].Name != "Travel" || cards[1].IsMain {
+		t.Fatalf("cards changed after rejected IDs: %+v, %v", cards, err)
 	}
 
-	if err := service.SetMainCardForUserID(ctx, tenantID, userID, pan); err != nil {
-		t.Fatalf("set main card with card-vault schema: %v", err)
+	if err := service.RenameOpaqueCardForUserID(ctx, tenantID, userID, second.CardID, "Trips"); err != nil {
+		t.Fatalf("rename opaque card: %v", err)
 	}
-	if err := service.EditCardForUserID(ctx, tenantID, userID, ebs_fields.Card{
-		CardIdx: pan,
-		Pan:     pan,
-		Expiry:  "3012",
-		Name:    "Updated",
-		IPIN:    "5678",
-	}); err != nil {
-		t.Fatalf("edit card with card-vault schema: %v", err)
+	if err := service.SetOpaqueMainCardForUserID(ctx, tenantID, userID, second.CardID); err != nil {
+		t.Fatalf("set opaque main card: %v", err)
+	}
+	cards, err = service.ListOpaqueCardsForUserID(ctx, tenantID, userID)
+	if err != nil || len(cards) != 2 || cards[0].CardID != second.CardID || cards[0].Name != "Trips" || !cards[0].IsMain || cards[1].IsMain {
+		t.Fatalf("updated cards = %+v, %v", cards, err)
 	}
 
-	created, encoded, paymentLink, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{Amount: 25})
-	if err != nil {
-		t.Fatalf("generate payment token with card-vault schema: %v", err)
+	if err := service.RetireOpaqueCardForUserID(ctx, tenantID, userID, second.CardID); err != nil {
+		t.Fatalf("retire opaque card: %v", err)
 	}
-	if created.UUID == "" || encoded == "" {
-		t.Fatalf("token UUID/encoded must be set: created=%+v encoded=%q", created, encoded)
-	}
-	if paymentLink != "https://pay.example/token/"+created.UUID {
-		t.Fatalf("payment link = %q, want base plus token UUID", paymentLink)
-	}
-	if created.ToCard == pan {
-		t.Fatalf("created token must not return raw PAN")
+	cards, err = service.ListOpaqueCardsForUserID(ctx, tenantID, userID)
+	if err != nil || len(cards) != 1 || cards[0].CardID != first.CardID || !cards[0].IsMain {
+		t.Fatalf("cards after main retirement = %+v, %v", cards, err)
 	}
 
-	resolution, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
-		UUID:   created.UUID,
-		Amount: created.Amount,
-	})
-	if err != nil {
-		t.Fatalf("resolve quick-pay token with card-vault schema: %v", err)
+	if err := service.AddCardsForUserID(ctx, tenantID, userID, "0912141660", []ebs_fields.Card{{
+		Pan: "4000000000000000", Expiry: "2912", Name: "Legacy",
+	}}); !errors.Is(err, store.ErrLegacyCardOperation) {
+		t.Fatalf("legacy add error = %v, want %v", err, store.ErrLegacyCardOperation)
 	}
-	if resolution.UUID != created.UUID || resolution.RailUUID != created.RailUUID || resolution.Amount != created.Amount || resolution.ToCard != pan || resolution.RecipientUserID != userID {
-		t.Fatalf("quick-pay resolution = %+v, want uuid=%s amount=%d raw PAN", resolution, created.UUID, created.Amount)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusPaid}); err != nil {
-		t.Fatalf("finalize quick-pay token with card-vault schema: %v", err)
-	}
-	paidToken, err := storeSvc.GetTokenByUUID(ctx, tenantID, created.UUID)
-	if err != nil {
-		t.Fatalf("get paid token with card-vault schema: %v", err)
-	}
-	if !paidToken.IsPaid {
-		t.Fatalf("quick-pay token was not marked paid")
+	if _, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{Amount: 25}); !errors.Is(err, store.ErrLegacyCardOperation) {
+		t.Fatalf("legacy token error = %v, want %v", err, store.ErrLegacyCardOperation)
 	}
 
-	tokens, token, err := service.GetPaymentTokenForUserID(ctx, tenantID, userID, "")
-	if err != nil {
-		t.Fatalf("list payment tokens with card-vault schema: %v", err)
+	var cardRows, tokenRows int
+	if err := db.GetContext(ctx, &cardRows, "SELECT COUNT(*) FROM cards"); err != nil {
+		t.Fatalf("count card rows: %v", err)
 	}
-	if token != nil || len(tokens) != 1 || tokens[0].ToCard == pan {
-		t.Fatalf("tokens = %+v token = %+v, want one masked list result", tokens, token)
+	if err := db.GetContext(ctx, &tokenRows, "SELECT COUNT(*) FROM tokens"); err != nil {
+		t.Fatalf("count token rows: %v", err)
 	}
-
-	tokens, token, err = service.GetPaymentTokenForUserID(ctx, tenantID, userID, created.UUID)
-	if err != nil {
-		t.Fatalf("get payment token with card-vault schema: %v", err)
+	if cardRows != 2 || tokenRows != 0 {
+		t.Fatalf("rows after legacy calls: cards=%d tokens=%d", cardRows, tokenRows)
 	}
-	if len(tokens) != 0 || token == nil || token.UUID != created.UUID || token.ToCard == pan {
-		t.Fatalf("tokens = %+v token = %+v, want one masked token result", tokens, token)
+	var identityTableExists bool
+	if err := db.GetContext(ctx, &identityTableExists, "SELECT to_regclass('users') IS NOT NULL"); err != nil {
+		t.Fatalf("inspect identity table: %v", err)
 	}
-
-	openRequest, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{})
-	if err != nil {
-		t.Fatalf("create open amount payment token with card-vault schema: %v", err)
-	}
-	openResolution, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
-		UUID:   openRequest.UUID,
-		Amount: 125,
-	})
-	if err != nil {
-		t.Fatalf("resolve open amount quick-pay token with card-vault schema: %v", err)
-	}
-	if openResolution.Amount != 125 || openResolution.ToCard != pan {
-		t.Fatalf("open amount resolution = %+v, want amount=125 raw PAN", openResolution)
-	}
-	if _, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{UUID: openRequest.UUID}); !errors.Is(err, store.ErrInvalidAmount) {
-		t.Fatalf("resolve open amount quick-pay token without amount error = %v, want %v", err, store.ErrInvalidAmount)
-	}
-
-	if err := service.RemoveCardForUserID(ctx, tenantID, userID, pan); err != nil {
-		t.Fatalf("remove card with card-vault schema: %v", err)
-	}
-	cards, main, err = service.GetCardsByUserID(ctx, tenantID, userID)
-	if err != nil {
-		t.Fatalf("empty card list with card-vault schema: %v", err)
-	}
-	if cards == nil || len(cards) != 0 || main != nil {
-		t.Fatalf("empty cards = %#v main = %#v, want non-nil empty cards and nil main", cards, main)
+	if identityTableExists {
+		t.Fatal("card-vault scope created identity tables")
 	}
 }
 
@@ -166,207 +118,185 @@ func TestSetMainCardForUserIDRejectsMissingPAN(t *testing.T) {
 	}
 }
 
-func TestSetMainCardForUserIDRejectsUnknownCard(t *testing.T) {
+func TestSetOpaqueMainCardRejectsUnknownCard(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
 
-	err := service.SetMainCardForUserID(context.Background(), tenantID, 42, "9222081700000000")
-	if !errors.Is(err, ErrCardNotFound) {
-		t.Fatalf("expected ErrCardNotFound, got %v", err)
+	err := service.SetOpaqueMainCardForUserID(context.Background(), tenantID, 42, "0f8fad5b-d9cb-469f-a165-70867728950e")
+	if !errors.Is(err, store.ErrCardNotFound) {
+		t.Fatalf("error = %v, want %v", err, store.ErrCardNotFound)
 	}
 }
 
-func TestPaymentTokenUUIDIsTenantScopedPayerCapability(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
+func TestLegacyPaymentTokenGenerationFailsClosedWithoutMutation(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
-	ctx := context.Background()
-	creatorID := int64(42)
-	payerID := int64(84)
-	pan := "4242424242424242"
 
-	if err := service.AddCardsForUserID(ctx, tenantID, creatorID, "0990000000", []ebs_fields.Card{{
-		Pan:    pan,
-		Expiry: "3012",
-		Name:   "Creator",
-	}}); err != nil {
-		t.Fatalf("add creator card: %v", err)
+	_, _, _, err := service.GeneratePaymentTokenForUserID(context.Background(), tenantID, 42, ebs_fields.Token{Amount: 25})
+	if !errors.Is(err, store.ErrLegacyCardOperation) {
+		t.Fatalf("error = %v, want %v", err, store.ErrLegacyCardOperation)
 	}
-	created, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, creatorID, ebs_fields.Token{Amount: 25})
-	if err != nil {
-		t.Fatalf("create payment token: %v", err)
+	var tokens int
+	if err := db.GetContext(context.Background(), &tokens, "SELECT COUNT(*) FROM tokens"); err != nil {
+		t.Fatalf("count tokens: %v", err)
 	}
-
-	creatorTokens, _, err := service.GetPaymentTokenForUserID(ctx, tenantID, creatorID, "")
-	if err != nil || len(creatorTokens) != 1 {
-		t.Fatalf("creator token list = %+v, err = %v", creatorTokens, err)
-	}
-	payerTokens, _, err := service.GetPaymentTokenForUserID(ctx, tenantID, payerID, "")
-	if err != nil || len(payerTokens) != 0 {
-		t.Fatalf("payer token list = %+v, err = %v; list must remain owner-scoped", payerTokens, err)
-	}
-
-	_, detail, err := service.GetPaymentTokenForUserID(ctx, tenantID, payerID, created.UUID)
-	if err != nil {
-		t.Fatalf("payer get by UUID: %v", err)
-	}
-	if detail == nil || detail.UUID != created.UUID || detail.ToCard != "424242*****4242" {
-		t.Fatalf("payer detail = %+v, want masked capability detail", detail)
-	}
-	detailJSON, err := json.Marshal(detail)
-	if err != nil {
-		t.Fatalf("marshal payer detail: %v", err)
-	}
-	for _, privateField := range []string{"UserID", "CreatedAt", "RailUUID", "PayerUserID", "ClaimedAmount"} {
-		if strings.Contains(string(detailJSON), privateField) {
-			t.Fatalf("payer detail leaks %s: %s", privateField, detailJSON)
-		}
-	}
-	resolution, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenResolveCommand{
-		UUID:   created.UUID,
-		Amount: 25,
-	})
-	if err != nil {
-		t.Fatalf("payer resolve by UUID: %v", err)
-	}
-	if resolution.UUID != created.UUID || resolution.RailUUID != created.RailUUID || resolution.ToCard != pan || resolution.Amount != 25 || resolution.RecipientUserID != creatorID {
-		t.Fatalf("payer resolution = %+v", resolution)
-	}
-	if err := storeSvc.UpdateTokenCard(ctx, tenantID, created.UUID, "5555555555554444"); err == nil {
-		t.Fatal("claimed token destination remained mutable")
-	}
-
-	otherTenant := "other-tenant"
-	if _, _, err := service.GetPaymentTokenForUserID(ctx, otherTenant, payerID, created.UUID); !store.ErrNotFound(err) {
-		t.Fatalf("cross-tenant detail error = %v, want not found", err)
-	}
-	if _, err := service.ResolveQuickPaymentTokenForUserID(ctx, otherTenant, payerID, QuickPaymentTokenResolveCommand{UUID: created.UUID, Amount: 25}); !store.ErrNotFound(err) {
-		t.Fatalf("cross-tenant resolve error = %v, want not found", err)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, otherTenant, payerID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusPaid}); !store.ErrNotFound(err) {
-		t.Fatalf("cross-tenant finalize error = %v, want not found", err)
-	}
-
-	if _, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenResolveCommand{UUID: created.UUID, Amount: 25}); !errors.Is(err, store.ErrPaymentTokenUnavailable) {
-		t.Fatalf("sequential replay error = %v, want %v", err, store.ErrPaymentTokenUnavailable)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, creatorID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusPaid}); !errors.Is(err, store.ErrPaymentTokenUnavailable) {
-		t.Fatalf("wrong-payer finalize error = %v, want %v", err, store.ErrPaymentTokenUnavailable)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: "wrong-rail", Status: ebs_fields.PaymentTokenStatusPaid}); !errors.Is(err, store.ErrPaymentTokenUnavailable) {
-		t.Fatalf("wrong-rail finalize error = %v, want %v", err, store.ErrPaymentTokenUnavailable)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusPaid}); err != nil {
-		t.Fatalf("payer finalize by UUID: %v", err)
-	}
-	paid, err := storeSvc.GetTokenByUUID(ctx, tenantID, created.UUID)
-	if err != nil {
-		t.Fatalf("read paid token: %v", err)
-	}
-	if !paid.IsPaid {
-		t.Fatal("payer capability did not mark token paid")
-	}
-	if paid.PaymentStatus != ebs_fields.PaymentTokenStatusPaid {
-		t.Fatalf("payment status = %q, want paid", paid.PaymentStatus)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusPaid}); err != nil {
-		t.Fatalf("idempotent paid finalization: %v", err)
-	}
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusFailed}); !errors.Is(err, store.ErrPaymentTokenUnavailable) {
-		t.Fatalf("conflicting finalization error = %v, want %v", err, store.ErrPaymentTokenUnavailable)
-	}
-	if _, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, payerID, QuickPaymentTokenResolveCommand{UUID: created.UUID, Amount: 25}); !errors.Is(err, store.ErrPaymentTokenUnavailable) {
-		t.Fatalf("paid replay error = %v, want %v", err, store.ErrPaymentTokenUnavailable)
+	if tokens != 0 {
+		t.Fatalf("legacy generation created %d tokens", tokens)
 	}
 }
 
-func TestQuickPaymentTokenHasOneConcurrentClaimantAndStableRetryState(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
+func TestLegacyPaymentTokenGenerationFailsClosedConcurrently(t *testing.T) {
+	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
 	ctx := context.Background()
-	creatorID := int64(42)
-	pan := "4242424242424242"
 
-	if err := service.AddCardsForUserID(ctx, tenantID, creatorID, "0990000000", []ebs_fields.Card{{
-		Pan:    pan,
-		Expiry: "3012",
-		Name:   "Creator",
-	}}); err != nil {
-		t.Fatalf("add creator card: %v", err)
-	}
-	created, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, creatorID, ebs_fields.Token{Amount: 25})
-	if err != nil {
-		t.Fatalf("create payment token: %v", err)
-	}
-
-	const claimants = 16
-	type claimResult struct {
-		payerUserID int64
-		err         error
-	}
+	const callers = 16
 	start := make(chan struct{})
-	results := make(chan claimResult, claimants)
+	results := make(chan error, callers)
 	var ready sync.WaitGroup
-	ready.Add(claimants)
-	for i := range claimants {
-		payerUserID := int64(100 + i)
+	ready.Add(callers)
+	for range callers {
 		go func() {
 			ready.Done()
 			<-start
-			_, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, payerUserID, QuickPaymentTokenResolveCommand{
-				UUID:   created.UUID,
-				Amount: created.Amount,
-			})
-			results <- claimResult{payerUserID: payerUserID, err: err}
+			_, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, 42, ebs_fields.Token{Amount: 25})
+			results <- err
 		}()
 	}
 	ready.Wait()
 	close(start)
-
-	successes := 0
-	conflicts := 0
-	var winningPayerID int64
-	for range claimants {
-		result := <-results
-		switch {
-		case result.err == nil:
-			successes++
-			winningPayerID = result.payerUserID
-		case errors.Is(result.err, store.ErrPaymentTokenUnavailable):
-			conflicts++
-		default:
-			t.Fatalf("claim error = %v", result.err)
+	for range callers {
+		if err := <-results; !errors.Is(err, store.ErrLegacyCardOperation) {
+			t.Fatalf("concurrent generation error = %v, want %v", err, store.ErrLegacyCardOperation)
 		}
 	}
-	if successes != 1 || conflicts != claimants-1 {
-		t.Fatalf("claim results: successes=%d conflicts=%d", successes, conflicts)
+
+	var tokens int
+	if err := db.GetContext(ctx, &tokens, "SELECT COUNT(*) FROM tokens"); err != nil {
+		t.Fatalf("count tokens: %v", err)
 	}
-	processing, err := storeSvc.GetTokenByUUID(ctx, tenantID, created.UUID)
+	if tokens != 0 {
+		t.Fatalf("concurrent legacy generation created %d tokens", tokens)
+	}
+}
+
+func TestNonCanonicalEnrollmentIDsFailBeforeNetworkIO(t *testing.T) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		t.Fatalf("read processing token: %v", err)
+		t.Fatalf("generate enrollment key: %v", err)
 	}
-	if processing.PaymentStatus != ebs_fields.PaymentTokenStatusProcessing || processing.PayerUserID == nil || *processing.PayerUserID != winningPayerID || processing.ClaimedAmount == nil || *processing.ClaimedAmount != created.Amount {
-		t.Fatalf("processing token = %+v", processing)
+	der, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if err != nil {
+		t.Fatalf("marshal enrollment key: %v", err)
 	}
 
-	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, winningPayerID, QuickPaymentTokenFinalizationCommand{
-		UUID:     created.UUID,
-		RailUUID: created.RailUUID,
-		Status:   ebs_fields.PaymentTokenStatusFailed,
-	}); err != nil {
-		t.Fatalf("finalize failed payment: %v", err)
+	var requests atomic.Int64
+	service := &Service{
+		HTTPClient: &http.Client{Transport: opaqueRoundTripFunc(func(*http.Request) (*http.Response, error) {
+			requests.Add(1)
+			return nil, errors.New("unexpected network request")
+		})},
+		NoebsConfig: ebs_fields.NoebsConfig{EBSConsumerKey: base64.StdEncoding.EncodeToString(der)},
 	}
-	failed, err := storeSvc.GetTokenByUUID(ctx, tenantID, created.UUID)
-	if err != nil {
-		t.Fatalf("read failed token: %v", err)
-	}
-	if failed.IsPaid || failed.PaymentStatus != ebs_fields.PaymentTokenStatusFailed {
-		t.Fatalf("failed token = %+v", failed)
-	}
+	const (
+		enrollmentID = "0f8fad5b-d9cb-469f-a165-70867728950e"
+		railUUID     = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+	)
 
-	if _, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, winningPayerID, QuickPaymentTokenResolveCommand{
-		UUID:   created.UUID,
-		Amount: created.Amount,
-	}); !errors.Is(err, store.ErrPaymentTokenUnavailable) {
-		t.Fatalf("failed replay error = %v, want %v", err, store.ErrPaymentTokenUnavailable)
+	tests := []struct {
+		name         string
+		enrollmentID string
+		railUUID     string
+		want         error
+	}{
+		{name: "leading enrollment whitespace", enrollmentID: " " + enrollmentID, railUUID: railUUID, want: store.ErrInvalidEnrollmentIntent},
+		{name: "trailing enrollment whitespace", enrollmentID: enrollmentID + " ", railUUID: railUUID, want: store.ErrInvalidEnrollmentIntent},
+		{name: "leading rail whitespace", enrollmentID: enrollmentID, railUUID: " " + railUUID, want: store.ErrInvalidRailUUID},
+		{name: "trailing rail whitespace", enrollmentID: enrollmentID, railUUID: railUUID + " ", want: store.ErrInvalidRailUUID},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := service.ConfirmOpaqueCardEnrollment(context.Background(), "tenant", 42, tt.enrollmentID, ConfirmCardEnrollmentRequest{
+				RailUUID: tt.railUUID,
+			})
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("error = %v, want %v", err, tt.want)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Fatalf("rejected identifier issued %d network requests", got)
+			}
+		})
+	}
+}
+
+func enrollOpaqueConsumerTestCard(t *testing.T, service *Service, tenantID string, userID int64, pan, name string, now time.Time) ebs_fields.CardSummary {
+	t.Helper()
+	ctx := context.Background()
+	intent, err := service.CreateCardEnrollmentIntentForUserID(ctx, tenantID, userID, now)
+	if err != nil {
+		t.Fatalf("create enrollment intent: %v", err)
+	}
+	begin, err := service.BeginCardEnrollmentForUserID(ctx, tenantID, userID, BeginCardEnrollmentCommand{
+		EnrollmentID: intent.EnrollmentID,
+		PAN:          pan,
+		Expiry:       "2912",
+		Name:         name,
+	}, now.Add(time.Second))
+	if err != nil {
+		t.Fatalf("begin enrollment: %v", err)
+	}
+	if begin.RailUUID != intent.RailUUID {
+		t.Fatalf("begin rail UUID = %q, want %q", begin.RailUUID, intent.RailUUID)
+	}
+	claim, err := service.ClaimCardEnrollmentRailForUserID(ctx, tenantID, userID, ClaimCardEnrollmentRailCommand{
+		EnrollmentID: intent.EnrollmentID,
+	}, now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("claim enrollment rail: %v", err)
+	}
+	if !claim.Granted {
+		t.Fatal("first enrollment rail claim was not granted")
+	}
+	card, err := service.CompleteCardEnrollmentForUserID(ctx, tenantID, userID, CompleteCardEnrollmentCommand{
+		EnrollmentID: intent.EnrollmentID,
+		PAN:          pan,
+		Expiry:       "2912",
+		Name:         name,
+	}, now.Add(3*time.Second))
+	if err != nil {
+		t.Fatalf("complete enrollment: %v", err)
+	}
+	return card
+}
+
+func assertPublicCardSummaryShape(t *testing.T, cards []ebs_fields.CardSummary) {
+	t.Helper()
+	encoded, err := json.Marshal(cards)
+	if err != nil {
+		t.Fatalf("marshal card summaries: %v", err)
+	}
+	var values []map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &values); err != nil {
+		t.Fatalf("decode card summaries: %v", err)
+	}
+	allowed := map[string]bool{
+		"card_id": true, "name": true, "masked_pan": true,
+		"exp_date": true, "is_main": true, "status": true,
+	}
+	for i, value := range values {
+		if len(value) != len(allowed) {
+			t.Fatalf("card %d fields = %v", i, value)
+		}
+		for field := range value {
+			if !allowed[field] {
+				t.Fatalf("card %d exposes private field %q", i, field)
+			}
+		}
+	}
+}
+
+type opaqueRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f opaqueRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

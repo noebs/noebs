@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/ebsipin"
 	"github.com/adonese/noebs/store"
 	"github.com/google/uuid"
-	"github.com/noebs/ipin"
 )
 
 func (s *Service) BillPayment(ctx context.Context, tenantID string, fields ebs_fields.ConsumerBillPaymentFields) (ebs_fields.EBSParserFields, error) {
@@ -183,7 +183,7 @@ func (s *Service) GetBills(ctx context.Context, tenantID string, b Bills) (ebs_f
 	fields.UUID = uid.String()
 	fields.PayeeId = b.PayeeID
 
-	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
+	ipinBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, due, err
 	}

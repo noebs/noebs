@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	log "github.com/sirupsen/logrus"
 )
 
 // var key = []byte("abcdef012345678")
@@ -25,11 +24,9 @@ func TestVerifyJWT(t *testing.T) {
 		t.Fatalf("VerifyJWT error: %v", err)
 	}
 	if got.UserID != 42 {
-		log.Printf("The key is: %v", jj.Key)
 		t.Errorf("VerifyJWT() userID = %v, want = %v", got.UserID, 42)
 	}
 	if !reflect.DeepEqual(got.Mobile, "0990000000") {
-		log.Printf("The key is: %v", jj.Key)
 		t.Errorf("VerifyJWT() mobile = %v, want = %v", got.Mobile, "0990000000")
 	}
 	if got.SessionEpoch != 1 {

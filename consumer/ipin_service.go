@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/ebsipin"
 	"github.com/adonese/noebs/store"
-	"github.com/noebs/ipin"
 )
 
 func (s *Service) GenerateIpin(ctx context.Context, tenantID string, fields ebs_fields.ConsumerGenerateIPin) (ebs_fields.EBSParserFields, error) {
@@ -24,7 +24,7 @@ func (s *Service) GenerateIpin(ctx context.Context, tenantID string, fields ebs_
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid)
+	ipinBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid)
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
@@ -56,15 +56,15 @@ func (s *Service) CompleteIpin(ctx context.Context, tenantID string, fields ebs_
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-	passwordBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid)
+	passwordBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSIpinKey, s.NoebsConfig.EBSIPINPassword, uid)
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-	ipinBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid)
+	ipinBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Ipin, uid)
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
-	otpBlock, err := ipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Otp, uid)
+	otpBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSIpinKey, fields.Otp, uid)
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}

@@ -59,27 +59,26 @@ type VerifiedCardEnrollment struct {
 }
 
 func NormalizeCardID(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", ErrMissingCardID
-	}
-	return normalizeCanonicalUUID(value, ErrInvalidCardID)
+	return normalizeRequiredCanonicalUUID(value, ErrMissingCardID, ErrInvalidCardID)
 }
 
 func NormalizeEnrollmentID(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", ErrInvalidEnrollmentIntent
-	}
-	return normalizeCanonicalUUID(value, ErrInvalidEnrollmentIntent)
+	return normalizeRequiredCanonicalUUID(value, ErrInvalidEnrollmentIntent, ErrInvalidEnrollmentIntent)
 }
 
 func NormalizeRailUUID(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", ErrMissingRailUUID
+	return normalizeRequiredCanonicalUUID(value, ErrMissingRailUUID, ErrInvalidRailUUID)
+}
+
+func normalizeRequiredCanonicalUUID(value string, missingErr, invalidErr error) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", missingErr
 	}
-	return normalizeCanonicalUUID(value, ErrInvalidRailUUID)
+	if value != trimmed {
+		return "", invalidErr
+	}
+	return normalizeCanonicalUUID(value, invalidErr)
 }
 
 func normalizeCanonicalUUID(value string, invalidErr error) (string, error) {

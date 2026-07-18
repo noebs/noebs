@@ -14,6 +14,36 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+func TestOpaqueIdentifiersRequireExactCanonicalUUIDs(t *testing.T) {
+	const canonical = "0f8fad5b-d9cb-469f-a165-70867728950e"
+	tests := []struct {
+		name      string
+		normalize func(string) (string, error)
+		missing   error
+		invalid   error
+	}{
+		{name: "card ID", normalize: NormalizeCardID, missing: ErrMissingCardID, invalid: ErrInvalidCardID},
+		{name: "enrollment ID", normalize: NormalizeEnrollmentID, missing: ErrInvalidEnrollmentIntent, invalid: ErrInvalidEnrollmentIntent},
+		{name: "rail UUID", normalize: NormalizeRailUUID, missing: ErrMissingRailUUID, invalid: ErrInvalidRailUUID},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.normalize(canonical)
+			if err != nil || got != canonical {
+				t.Fatalf("canonical value = %q, %v", got, err)
+			}
+			if _, err := tt.normalize(""); !errors.Is(err, tt.missing) {
+				t.Fatalf("empty error = %v, want %v", err, tt.missing)
+			}
+			for _, value := range []string{" " + canonical, canonical + " ", "\t" + canonical, strings.ToUpper(canonical)} {
+				if _, err := tt.normalize(value); !errors.Is(err, tt.invalid) {
+					t.Fatalf("normalize(%q) error = %v, want %v", value, err, tt.invalid)
+				}
+			}
+		})
+	}
+}
+
 func TestOpaqueCardLifecycleIsTenantScopedAndPANIndependent(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)

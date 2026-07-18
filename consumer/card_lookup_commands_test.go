@@ -2,52 +2,60 @@ package consumer
 
 import (
 	"context"
-	"net/http"
+	"errors"
 	"testing"
-	"time"
 
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
 
-func TestResolveCardByMobileUsesCardVaultScope(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: testHTTPClient(),
-	}
-	if err := storeSvc.AddCards(context.Background(), tenantID, 42, []ebs_fields.Card{{Pan: "9222081700000000", Expiry: "2601", Mobile: "0912141660"}}); err != nil {
-		t.Fatalf("seed card: %v", err)
-	}
-
-	result, err := service.ResolveCardByMobile(context.Background(), tenantID, CardByMobileCommand{Mobile: "0912141660"})
-	if err != nil {
-		t.Fatalf("resolve card by mobile: %v", err)
-	}
-	if result.UserID != 42 || result.PAN != "9222081700000000" || result.ExpDate != "2601" {
-		t.Fatalf("card result = %+v", result)
-	}
-}
-
-func TestResolveCardByMobilePANUsesCardVaultScope(t *testing.T) {
+func TestLegacyCardResolversFailClosedWithoutMutation(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
-	if err := storeSvc.AddCards(context.Background(), tenantID, 42, []ebs_fields.Card{{Pan: "9222081700000000", Expiry: "2601", Mobile: "0912141660"}}); err != nil {
-		t.Fatalf("seed card: %v", err)
+	ctx := context.Background()
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{
+			name: "mobile",
+			call: func() error {
+				_, err := service.ResolveCardByMobile(ctx, tenantID, CardByMobileCommand{Mobile: "0912141660"})
+				return err
+			},
+		},
+		{
+			name: "mobile and PAN",
+			call: func() error {
+				_, err := service.ResolveCardByMobilePAN(ctx, tenantID, CardByMobilePANCommand{
+					Mobile: "0912141660",
+					PAN:    "9222081700000000",
+				})
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); !errors.Is(err, store.ErrLegacyCardOperation) {
+				t.Fatalf("error = %v, want %v", err, store.ErrLegacyCardOperation)
+			}
+
+			var cards int
+			if err := db.GetContext(ctx, &cards, "SELECT COUNT(*) FROM cards"); err != nil {
+				t.Fatalf("count cards: %v", err)
+			}
+			if cards != 0 {
+				t.Fatalf("legacy lookup mutated %d cards", cards)
+			}
+		})
 	}
 
-	result, err := service.ResolveCardByMobilePAN(context.Background(), tenantID, CardByMobilePANCommand{Mobile: "0912141660", PAN: "9222081700000000"})
-	if err != nil {
-		t.Fatalf("resolve card by mobile and pan: %v", err)
+	var identityTableExists bool
+	if err := db.GetContext(ctx, &identityTableExists, "SELECT to_regclass('users') IS NOT NULL"); err != nil {
+		t.Fatalf("inspect identity table: %v", err)
 	}
-	if result.UserID != 42 || result.ExpDate != "2601" {
-		t.Fatalf("card result = %+v", result)
+	if identityTableExists {
+		t.Fatal("card-vault scope created identity tables")
 	}
-	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil {
-		t.Fatalf("card-vault scope should not create user tables")
-	}
-}
-
-func testHTTPClient() *http.Client {
-	return &http.Client{Timeout: 2 * time.Second}
 }

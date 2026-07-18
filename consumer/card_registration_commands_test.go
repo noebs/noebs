@@ -183,26 +183,40 @@ func TestRegisterWithCardIdentityUsesIdentityScope(t *testing.T) {
 	}
 }
 
-func TestStoreCompletedRegistrationCardUsesCardVaultScope(t *testing.T) {
+func TestLegacyCompletedRegistrationCardFailsClosedInCardVault(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
-	if err := service.StoreCompletedRegistrationCard(context.Background(), tenantID, CompletedRegistrationCardCommand{
+	ctx := context.Background()
+	err := service.StoreCompletedRegistrationCard(ctx, tenantID, CompletedRegistrationCardCommand{
 		Mobile:  "0912345678",
 		UserID:  42,
 		PAN:     "9222081700000000",
 		ExpDate: "2601",
-	}); err != nil {
-		t.Fatalf("store completed registration card: %v", err)
+	})
+	if !errors.Is(err, store.ErrLegacyCardOperation) {
+		t.Fatalf("error = %v, want %v", err, store.ErrLegacyCardOperation)
 	}
-	cards, err := storeSvc.ListCardsByUserID(context.Background(), tenantID, 42)
-	if err != nil {
-		t.Fatalf("list cards: %v", err)
+
+	var cards int
+	if err := db.GetContext(ctx, &cards, "SELECT COUNT(*) FROM cards"); err != nil {
+		t.Fatalf("count cards: %v", err)
 	}
-	if len(cards) != 1 || cards[0].Mobile != "0912345678" || cards[0].Pan != "9222081700000000" || !cards[0].IsMain {
-		t.Fatalf("cards = %+v", cards)
+	if cards != 0 {
+		t.Fatalf("legacy registration mutated %d cards", cards)
 	}
-	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
-		t.Fatalf("card-vault scope should not create user tables, err=%v", err)
+	var cacheCardsAbsent bool
+	if err := db.GetContext(ctx, &cacheCardsAbsent, "SELECT to_regclass('cache_cards') IS NULL"); err != nil {
+		t.Fatalf("inspect legacy cache table: %v", err)
+	}
+	if !cacheCardsAbsent {
+		t.Fatal("legacy cache_cards table remains available")
+	}
+	var identityTableExists bool
+	if err := db.GetContext(ctx, &identityTableExists, "SELECT to_regclass('users') IS NOT NULL"); err != nil {
+		t.Fatalf("inspect identity table: %v", err)
+	}
+	if identityTableExists {
+		t.Fatal("card-vault scope created identity tables")
 	}
 }
 
