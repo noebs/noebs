@@ -3,7 +3,9 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,6 +135,65 @@ func TestRecoveryCredentialResetIsOneTimeTenantBoundAndRotatesIdentity(t *testin
 	}
 	if err := s.ValidateSessionEpoch(ctx, "tenant", user.ID, 2); err != nil {
 		t.Fatalf("current session epoch: %v", err)
+	}
+}
+
+func TestConcurrentSiblingRecoveryResetsUseDeterministicLockOrder(t *testing.T) {
+	ctx := context.Background()
+	s := newIdentityAuthTestStore(t, ctx)
+	now := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
+	user := ebs_fields.User{
+		Mobile:     "0990000000",
+		Username:   "0990000000",
+		Password:   "old-hash",
+		PublicKey:  "old-key",
+		IsVerified: true,
+	}
+	if err := s.CreateUser(ctx, "tenant", &user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	credentials := []string{strings.Repeat("a", 64), strings.Repeat("b", 64)}
+	for _, credential := range credentials {
+		if err := s.StorePasswordRecoveryCredential(ctx, "tenant", credential, user.ID, now, now.Add(10*time.Minute)); err != nil {
+			t.Fatalf("store credential: %v", err)
+		}
+	}
+
+	start := make(chan struct{})
+	results := make(chan error, len(credentials))
+	var workers sync.WaitGroup
+	for i, credential := range credentials {
+		workers.Add(1)
+		go func(index int, token string) {
+			defer workers.Done()
+			<-start
+			results <- s.ResetIdentityWithRecoveryCredential(
+				ctx,
+				"tenant",
+				token,
+				fmt.Sprintf("new-hash-%d", index),
+				fmt.Sprintf("new-key-%d", index),
+				now.Add(time.Minute),
+			)
+		}(i, credential)
+	}
+	close(start)
+	workers.Wait()
+	close(results)
+
+	var succeeded, rejected int
+	for err := range results {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, ErrInvalidRecoveryCredential):
+			rejected++
+		default:
+			t.Fatalf("concurrent reset returned %v", err)
+		}
+	}
+	if succeeded != 1 || rejected != 1 {
+		t.Fatalf("concurrent results = success:%d rejected:%d, want 1/1", succeeded, rejected)
 	}
 }
 

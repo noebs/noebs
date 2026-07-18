@@ -85,16 +85,34 @@ func (s *Store) ResetIdentityWithRecoveryCredential(ctx context.Context, tenantI
 	defer func() { _ = tx.Rollback() }()
 
 	var userID int64
+	findUserStmt := s.DB.Rebind(`SELECT user_id
+		FROM password_recovery_credentials
+		WHERE tenant_id = ? AND token_hash = ?`)
+	if err := tx.QueryRowContext(ctx, findUserStmt, tenantID, tokenHash).Scan(&userID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidRecoveryCredential
+		}
+		return err
+	}
+
 	var mobile string
+	lockUserStmt := s.DB.Rebind(`SELECT mobile FROM users
+		WHERE tenant_id = ? AND id = ? AND deleted_at IS NULL AND is_verified = TRUE
+		FOR UPDATE`)
+	if err := tx.QueryRowContext(ctx, lockUserStmt, tenantID, userID).Scan(&mobile); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrInvalidRecoveryCredential
+		}
+		return err
+	}
+
 	var expiresAt time.Time
 	var consumedAt sql.NullTime
-	selectStmt := s.DB.Rebind(`SELECT c.user_id, u.mobile, c.expires_at, c.consumed_at
-		FROM password_recovery_credentials c
-		JOIN users u ON u.tenant_id = c.tenant_id AND u.id = c.user_id
-		WHERE c.tenant_id = ? AND c.token_hash = ?
-		  AND u.deleted_at IS NULL AND u.is_verified = TRUE
-		FOR UPDATE OF c, u`)
-	if err := tx.QueryRowContext(ctx, selectStmt, tenantID, tokenHash).Scan(&userID, &mobile, &expiresAt, &consumedAt); err != nil {
+	lockCredentialStmt := s.DB.Rebind(`SELECT expires_at, consumed_at
+		FROM password_recovery_credentials
+		WHERE tenant_id = ? AND token_hash = ? AND user_id = ?
+		FOR UPDATE`)
+	if err := tx.QueryRowContext(ctx, lockCredentialStmt, tenantID, tokenHash, userID).Scan(&expiresAt, &consumedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrInvalidRecoveryCredential
 		}
