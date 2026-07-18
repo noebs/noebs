@@ -93,8 +93,15 @@ Git commits so Argo CD never deploys code merely because `master` moved:
 3. Change only the Noebs `digest:` value in `kustomization.yaml`. Render the
    overlay and confirm every Noebs runtime, preflight, and migration image uses
    `ghcr.io/noebs/noebs@sha256:<digest>`.
-4. Commit the digest pin, push it to `master`, and let the automated Argo CD
-   sync run its preflight and migration hooks before wave-20 workloads.
+4. Retain that tested digest as the rollback floor and announce a controlled
+   cutover window. Identity migration 103 and card-vault migration 104 are not
+   expand-compatible with the older binary, so the migration-hook-to-wave-20
+   interval can reject requests and the pre-alpha baseline is not a valid
+   post-migration rollback target.
+5. Commit the digest pin, push it to `master`, and let the automated Argo CD
+   sync run its preflight and migration hooks before wave-20 workloads. Do not
+   start the sync unless an operator can watch it through the post-deploy smoke
+   and forward-fix or redeploy the retained schema-aware digest if it fails.
 
 Example verification on the deployment host (the temporary credential file is
 deleted on exit and its contents must never be printed):
@@ -134,13 +141,17 @@ Argo CD to sync the previous immutable digest. Do not use `kubectl set image`:
 self-heal will overwrite it. Confirm the previous digest still resolves in
 GHCR before starting the release.
 
-Database migrations are a separate boundary. Card-vault migration 104 adds
-columns that pre-104 binaries cannot scan through their legacy `SELECT *`
-queries. Once migration 104 has run, the baseline digest above is not a safe
-application rollback target. The release must retain a tested, immutable
-schema-aware digest as its rollback floor; after payment traffic starts,
-prefer a forward fix rather than dropping payment state. There is no automatic
-down-migration in the Argo CD rollback path.
+Database migrations are a separate boundary. Identity migration 103 adds a
+`users` column and changes the OTP challenge key, while card-vault migration
+104 adds token columns. Pre-alpha binaries use strict `SELECT *` scans and the
+old OTP conflict target, so they are not compatible with either advanced
+schema. The migration Jobs run before the wave-20 workloads, which also means
+this alpha cutover has a bounded service-interruption risk between migration
+and successful rollout. Once either migration has run, the baseline digest
+above is not a safe application rollback target. The release must retain a
+tested, immutable schema-aware digest as its rollback floor; after recovery or
+payment traffic starts, prefer a forward fix rather than dropping state. There
+is no automatic down-migration in the Argo CD rollback path.
 
 Noebs images are pulled through the explicit `ghcr-credentials` image pull Secret. The release input `noebs.ghcr_dockerconfigjson` must contain a Docker config JSON with `auths.ghcr.io.auth`; the renderer emits it as a `kubernetes.io/dockerconfigjson` Secret with the `.dockerconfigjson` key.
 
