@@ -41,7 +41,7 @@ scripts/publish-alpha-image.sh \
 
 The builder uses the `docker-container` driver. Its aggregate BuildKit cgroup is
 limited to 2 GiB memory with no additional swap, two CPUs, and 512 PIDs. The same
-memory and CPU limits are applied to individual build steps. The script verifies
+limits bound the BuildKit daemon and all work it launches. The script verifies
 the effective container limits before starting the build, requests current base
 images, and emits maximum BuildKit provenance.
 
