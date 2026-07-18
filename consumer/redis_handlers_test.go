@@ -26,23 +26,25 @@ func TestResolveIdentityUserByMobileUsesIdentityScope(t *testing.T) {
 	}
 }
 
-func TestIssueRecoveryJWTUsesIdentityScope(t *testing.T) {
+func TestIssueRecoveryCredentialUsesIdentityScope(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
 	user := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
+	if err := storeSvc.SetUserVerified(context.Background(), tenantID, user.ID, true); err != nil {
+		t.Fatalf("verify user: %v", err)
+	}
 	auth := &gateway.JWTAuth{NoebsConfig: ebs_fields.NoebsConfig{JWTKey: "test-secret"}}
 	auth.Init()
 	service := &Service{Store: storeSvc, Auth: auth}
 
-	result, err := service.IssueRecoveryJWT(context.Background(), tenantID, RecoveryJWTCommand{UserID: user.ID, Mobile: user.Mobile})
+	result, err := service.IssueRecoveryCredential(context.Background(), tenantID, RecoveryCredentialCommand{UserID: user.ID, Mobile: user.Mobile}, authTestNow)
 	if err != nil {
-		t.Fatalf("issue recovery jwt: %v", err)
+		t.Fatalf("issue recovery credential: %v", err)
 	}
-	claims, err := auth.VerifyJWT(result.Token)
-	if err != nil {
-		t.Fatalf("verify recovery jwt: %v", err)
+	if result.RecoveryCredential == "" || result.ExpiresIn != 600 {
+		t.Fatalf("credential = %+v", result)
 	}
-	if claims.UserID != user.ID || claims.Mobile != user.Mobile || claims.TenantID != tenantID {
-		t.Fatalf("claims = %+v", claims)
+	if claims, err := auth.VerifyJWT(result.RecoveryCredential); err == nil || claims != nil {
+		t.Fatalf("recovery credential was a JWT: claims=%+v err=%v", claims, err)
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil {
 		t.Fatalf("identity-auth scope should not create card tables")

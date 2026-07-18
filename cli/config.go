@@ -707,6 +707,13 @@ func initConfig() {
 	// })
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 	auth.Init()
+	if role == serviceRoleAPIGateway {
+		sessionValidator, err := newIdentitySessionValidator(noebsConfig)
+		if err != nil {
+			logrusLogger.Fatalf("configure identity session validation: %v", err)
+		}
+		auth.Sessions = sessionValidator
+	}
 	if role.startsChat() && database != nil && database.DB != nil {
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000

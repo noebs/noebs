@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -16,13 +17,26 @@ var (
 	ErrInvalidTenantID     = errors.New("invalid tenant_id")
 	ErrInvalidUserIdentity = errors.New("invalid user identity")
 	ErrMissingJWTKey       = errors.New("missing jwt key")
+	ErrSessionRevoked      = errors.New("session revoked")
+	ErrSessionValidation   = errors.New("session validation unavailable")
 )
+
+type SessionValidator interface {
+	ValidateSession(context.Context, string, int64, int64) error
+}
+
+type SessionValidatorFunc func(context.Context, string, int64, int64) error
+
+func (f SessionValidatorFunc) ValidateSession(ctx context.Context, tenantID string, userID, sessionEpoch int64) error {
+	return f(ctx, tenantID, userID, sessionEpoch)
+}
 
 // JWTAuth provides an encapsulation for jwt auth
 type JWTAuth struct {
 	Key         []byte
 	NoebsConfig ebs_fields.NoebsConfig
 	Now         func() time.Time
+	Sessions    SessionValidator
 }
 
 // Init initializes jwt auth
@@ -32,6 +46,12 @@ func (j *JWTAuth) Init() {
 
 // GenerateJWT generates a JWT token for an explicit tenant.
 func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, error) {
+	return j.GenerateJWTWithSessionEpoch(userID, mobile, tenantID, 1)
+}
+
+// GenerateJWTWithSessionEpoch binds a session to the account's current
+// security epoch so a recovery reset can revoke every previously issued JWT.
+func (j *JWTAuth) GenerateJWTWithSessionEpoch(userID int64, mobile, tenantID string, sessionEpoch int64) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
 	now := time.Now().UTC()
@@ -40,6 +60,9 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 	}
 	expiresAt := now.Add(10 * time.Hour)
 	if userID <= 0 {
+		return "", ErrInvalidUserIdentity
+	}
+	if sessionEpoch <= 0 {
 		return "", ErrInvalidUserIdentity
 	}
 	tenantID, err := validateTenantID(tenantID)
@@ -54,9 +77,10 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 		return "", err
 	}
 	claims := TokenClaims{
-		UserID:   userID,
-		Mobile:   mobile,
-		TenantID: tenantID,
+		UserID:       userID,
+		Mobile:       mobile,
+		TenantID:     tenantID,
+		SessionEpoch: sessionEpoch,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID.String(),
 			Issuer:    "noebs",
@@ -122,7 +146,7 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 }
 
 func validateTokenClaims(claims *TokenClaims) error {
-	if claims == nil || claims.UserID <= 0 {
+	if claims == nil || claims.UserID <= 0 || claims.SessionEpoch <= 0 {
 		return ErrInvalidUserIdentity
 	}
 	tenantID, err := validateTenantID(claims.TenantID)
@@ -135,8 +159,9 @@ func validateTokenClaims(claims *TokenClaims) error {
 
 // TokenClaims noebs standard claim
 type TokenClaims struct {
-	UserID   int64  `json:"uid"`
-	Mobile   string `json:"mobile,omitempty"`
-	TenantID string `json:"tenant_id,omitempty"`
+	UserID       int64  `json:"uid"`
+	Mobile       string `json:"mobile,omitempty"`
+	TenantID     string `json:"tenant_id,omitempty"`
+	SessionEpoch int64  `json:"session_epoch"`
 	jwt.RegisteredClaims
 }

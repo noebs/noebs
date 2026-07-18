@@ -24,6 +24,7 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"auth_rate_limits",
 			"otp_challenges",
 			"used_refresh_tokens",
+			"password_recovery_credentials",
 			"kyc",
 			"passports",
 		},

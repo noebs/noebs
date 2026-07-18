@@ -15,33 +15,33 @@ type BalanceStepRequest struct {
 }
 
 // BalanceStep validates card credentials through card-vault and EBS, then
-// commands identity-auth to issue the account-recovery JWT.
-func (s *Service) BalanceStep(ctx context.Context, tenantID string, req BalanceStepRequest) (string, error) {
+// commands identity-auth to issue a one-time account-recovery credential.
+func (s *Service) BalanceStep(ctx context.Context, tenantID string, req BalanceStepRequest) (RecoveryCredentialResult, error) {
 	if s == nil {
-		return "", ErrMissingService
+		return RecoveryCredentialResult{}, ErrMissingService
 	}
 	if s.Store == nil {
-		return "", ErrMissingStore
+		return RecoveryCredentialResult{}, ErrMissingStore
 	}
 	if s.HTTPClient == nil {
-		return "", ErrMissingHTTPClient
+		return RecoveryCredentialResult{}, ErrMissingHTTPClient
 	}
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
-		return "", err
+		return RecoveryCredentialResult{}, err
 	}
 	mobile := strings.TrimSpace(req.Mobile)
 	if mobile == "" {
-		return "", ErrMissingMobile
+		return RecoveryCredentialResult{}, ErrMissingMobile
 	}
 	pan := strings.TrimSpace(req.Pan)
 	if pan == "" {
-		return "", store.ErrMissingPAN
+		return RecoveryCredentialResult{}, store.ErrMissingPAN
 	}
 
 	card, err := s.ResolveCardByMobilePANInCardVault(ctx, tenantID, mobile, pan)
 	if err != nil {
-		return "", err
+		return RecoveryCredentialResult{}, err
 	}
 
 	req.Mobile = ""
@@ -51,14 +51,14 @@ func (s *Service) BalanceStep(ctx context.Context, tenantID string, req BalanceS
 	if _, err := s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerBalanceEndpoint, req); err != nil {
 		var ebsErr *ebs_fields.CallError
 		if errors.As(err, &ebsErr) {
-			return "", ErrTransactionFailed
+			return RecoveryCredentialResult{}, ErrTransactionFailed
 		}
-		return "", err
+		return RecoveryCredentialResult{}, err
 	}
 
-	token, err := s.IssueRecoveryJWTInIdentityAuth(ctx, tenantID, RecoveryJWTCommand{UserID: card.UserID, Mobile: mobile})
+	credential, err := s.IssueRecoveryCredentialInIdentityAuth(ctx, tenantID, RecoveryCredentialCommand{UserID: card.UserID, Mobile: mobile})
 	if err != nil {
-		return "", err
+		return RecoveryCredentialResult{}, err
 	}
-	return token.Token, nil
+	return credential, nil
 }

@@ -33,6 +33,14 @@ func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 			}
 			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Malformed token", "code": "jwt_malformed"})
 		} else {
+			if a.Sessions != nil {
+				if err := a.Sessions.ValidateSession(c.UserContext(), claims.TenantID, claims.UserID, claims.SessionEpoch); err != nil {
+					if !errors.Is(err, ErrSessionRevoked) {
+						return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"message": "Session validation is unavailable", "code": "session_validation_unavailable"})
+					}
+					return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Session has been revoked", "code": "session_revoked"})
+				}
+			}
 			// FIXME it is better to let the endpoint explicitly Get the claim off the user
 			//  as we will assume the auth server will reside in a different domain!
 			c.Locals("user_id", claims.UserID)

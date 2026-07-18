@@ -43,6 +43,7 @@ type User struct {
 	ExpDate       string `json:"exp_date" db:"main_expdate"`
 	Language      string `json:"language"`
 	IsVerified    bool   `json:"is_verified"`
+	SessionEpoch  int64  `json:"-" db:"session_epoch"`
 	Mobile        string `json:"mobile"`
 	KYC           *KYC
 }

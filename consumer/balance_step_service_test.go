@@ -62,20 +62,20 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 
 	var sawIdentity bool
 	identityServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/internal/identity-auth/recovery-jwt" {
+		if r.URL.Path != "/internal/identity-auth/recovery-credential" {
 			t.Fatalf("identity path = %s", r.URL.Path)
 		}
 		assertAdminCommandHeaders(t, r, tenantID)
-		var cmd RecoveryJWTCommand
+		var cmd RecoveryCredentialCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-			t.Fatalf("decode recovery jwt command: %v", err)
+			t.Fatalf("decode recovery credential command: %v", err)
 		}
 		if cmd.UserID != 42 || cmd.Mobile != "0912141660" {
 			t.Fatalf("identity command = %+v", cmd)
 		}
 		sawIdentity = true
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(RecoveryJWTResult{Token: "recovery-token"})
+		_ = json.NewEncoder(w).Encode(RecoveryCredentialResult{RecoveryCredential: "recovery-token", ExpiresIn: 600})
 	}))
 	t.Cleanup(identityServer.Close)
 
@@ -93,7 +93,7 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 		},
 	}
 
-	token, err := service.BalanceStep(context.Background(), tenantID, BalanceStepRequest{
+	credential, err := service.BalanceStep(context.Background(), tenantID, BalanceStepRequest{
 		ConsumerBalanceFields: ebs_fields.ConsumerBalanceFields{
 			ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
 				Pan: "23232323",
@@ -104,8 +104,8 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("balance step: %v", err)
 	}
-	if token != "recovery-token" {
-		t.Fatalf("token = %q", token)
+	if credential.RecoveryCredential != "recovery-token" || credential.ExpiresIn != 600 {
+		t.Fatalf("credential = %+v", credential)
 	}
 	if !sawCardVault || !sawEBS || !sawIdentity {
 		t.Fatalf("sawCardVault=%v sawEBS=%v sawIdentity=%v", sawCardVault, sawEBS, sawIdentity)

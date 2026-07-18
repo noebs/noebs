@@ -338,8 +338,8 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingIssuedPAN
 	case ErrMissingCardExpiry.Error():
 		return ErrMissingCardExpiry
-	case ErrInvalidRecoveryJWT.Error():
-		return ErrInvalidRecoveryJWT
+	case ErrInvalidRecoveryCredential.Error():
+		return ErrInvalidRecoveryCredential
 	case ErrInvalidBillerHookEndpoint.Error():
 		return ErrInvalidBillerHookEndpoint
 	case ErrBillerHookPost.Error():

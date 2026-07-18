@@ -39,13 +39,26 @@ func TestIdentityAuthTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 			_, _, err := service.findOrCreateUserFromGoogle(ctx, tenantID, googleUserInfo{Sub: "google-user", Email: "user@example.test"})
 			return err
 		}},
-		{"IssueRecoveryJWT", func(tenantID string) error {
-			_, err := service.IssueRecoveryJWT(ctx, tenantID, RecoveryJWTCommand{UserID: 1, Mobile: "0990000000"})
+		{"IssueRecoveryCredential", func(tenantID string) error {
+			_, err := service.IssueRecoveryCredential(ctx, tenantID, RecoveryCredentialCommand{UserID: 1, Mobile: "0990000000"}, authTestNow)
 			return err
 		}},
-		{"IssueRecoveryJWTInIdentityAuth", func(tenantID string) error {
-			_, err := service.IssueRecoveryJWTInIdentityAuth(ctx, tenantID, RecoveryJWTCommand{UserID: 1, Mobile: "0990000000"})
+		{"IssueRecoveryCredentialInIdentityAuth", func(tenantID string) error {
+			_, err := service.IssueRecoveryCredentialInIdentityAuth(ctx, tenantID, RecoveryCredentialCommand{UserID: 1, Mobile: "0990000000"})
 			return err
+		}},
+		{"RequestPasswordRecovery", func(tenantID string) error {
+			return service.RequestPasswordRecovery(ctx, tenantID, "0990000000", authTestSource, authTestNow)
+		}},
+		{"VerifyPasswordRecoveryOTP", func(tenantID string) error {
+			_, err := service.VerifyPasswordRecoveryOTP(ctx, tenantID, "0990000000", "123456", authTestSource, authTestNow)
+			return err
+		}},
+		{"ResetPasswordWithRecoveryCredential", func(tenantID string) error {
+			return service.ResetPasswordWithRecoveryCredential(ctx, tenantID, PasswordRecoveryReset{RecoveryCredential: "token"}, authTestSource, authTestNow)
+		}},
+		{"ValidateSession", func(tenantID string) error {
+			return service.ValidateSession(ctx, tenantID, SessionValidationCommand{UserID: 1, SessionEpoch: 1})
 		}},
 		{"ResolveIdentityUserByMobile", func(tenantID string) error {
 			_, err := service.ResolveIdentityUserByMobile(ctx, tenantID, IdentityUserByMobileCommand{Mobile: "0990000000"})

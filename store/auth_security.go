@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	OTPChallengePurposeSignIn           = "signin"
+	OTPChallengePurposePasswordRecovery = "password_recovery"
+)
+
 // AuthRateLimitResult describes the fixed window after recording one attempt.
 type AuthRateLimitResult struct {
 	Count   int
@@ -76,6 +81,12 @@ func (s *Store) RecordAuthAttempt(ctx context.Context, tenantID, action, subject
 
 // StoreOTPChallenge replaces any earlier challenge for the same tenant and mobile.
 func (s *Store) StoreOTPChallenge(ctx context.Context, tenantID, mobile, codeDigest string, now, expiresAt time.Time, maxAttempts int) error {
+	return s.StoreOTPChallengeForPurpose(ctx, tenantID, mobile, OTPChallengePurposeSignIn, codeDigest, now, expiresAt, maxAttempts)
+}
+
+// StoreOTPChallengeForPurpose replaces the challenge for one tenant, mobile,
+// and purpose without invalidating a challenge from another authentication flow.
+func (s *Store) StoreOTPChallengeForPurpose(ctx context.Context, tenantID, mobile, purpose, codeDigest string, now, expiresAt time.Time, maxAttempts int) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
@@ -83,6 +94,10 @@ func (s *Store) StoreOTPChallenge(ctx context.Context, tenantID, mobile, codeDig
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {
 		return ErrMissingMobile
+	}
+	purpose, err = validateOTPChallengePurpose(purpose)
+	if err != nil {
+		return err
 	}
 	if err := validateSHA256Digest(codeDigest, ErrMissingOTPDigest); err != nil {
 		return err
@@ -103,9 +118,9 @@ func (s *Store) StoreOTPChallenge(ctx context.Context, tenantID, mobile, codeDig
 
 	now = now.UTC()
 	stmt := s.DB.Rebind(`INSERT INTO otp_challenges(
-		tenant_id, mobile, code_digest, expires_at, attempts, max_attempts, consumed_at, created_at, updated_at
-	) VALUES(?, ?, ?, ?, 0, ?, NULL, ?, ?)
-	ON CONFLICT(tenant_id, mobile) DO UPDATE SET
+		tenant_id, mobile, purpose, code_digest, expires_at, attempts, max_attempts, consumed_at, created_at, updated_at
+	) VALUES(?, ?, ?, ?, ?, 0, ?, NULL, ?, ?)
+	ON CONFLICT(tenant_id, mobile, purpose) DO UPDATE SET
 		code_digest = EXCLUDED.code_digest,
 		expires_at = EXCLUDED.expires_at,
 		attempts = 0,
@@ -113,12 +128,45 @@ func (s *Store) StoreOTPChallenge(ctx context.Context, tenantID, mobile, codeDig
 		consumed_at = NULL,
 		created_at = EXCLUDED.created_at,
 		updated_at = EXCLUDED.updated_at`)
-	_, err = db.ExecContext(ctx, stmt, tenantID, mobile, codeDigest, expiresAt.UTC(), maxAttempts, now, now)
+	_, err = db.ExecContext(ctx, stmt, tenantID, mobile, purpose, codeDigest, expiresAt.UTC(), maxAttempts, now, now)
 	return err
 }
 
 // ConsumeOTPChallenge validates and consumes a challenge under a row lock.
 func (s *Store) ConsumeOTPChallenge(ctx context.Context, tenantID, mobile, codeDigest string, now time.Time) error {
+	return s.ConsumeOTPChallengeForPurpose(ctx, tenantID, mobile, OTPChallengePurposeSignIn, codeDigest, now)
+}
+
+// ConsumeOTPChallengeForPurpose validates and consumes exactly one scoped
+// challenge under a row lock.
+func (s *Store) ConsumeOTPChallengeForPurpose(ctx context.Context, tenantID, mobile, purpose, codeDigest string, now time.Time) error {
+	return s.consumeOTPChallengeForPurpose(ctx, tenantID, mobile, purpose, codeDigest, now, nil)
+}
+
+// ConsumeSignInChallengeAndVerifyUser commits challenge consumption and the
+// verified identity transition together, before a caller can issue a session.
+func (s *Store) ConsumeSignInChallengeAndVerifyUser(ctx context.Context, tenantID, mobile, codeDigest string, userID int64, now time.Time) error {
+	var err error
+	tenantID, err = ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	mobile = strings.TrimSpace(mobile)
+	if mobile == "" {
+		return ErrMissingMobile
+	}
+	if userID <= 0 {
+		return ErrInvalidUserID
+	}
+	return s.consumeOTPChallengeForPurpose(ctx, tenantID, mobile, OTPChallengePurposeSignIn, codeDigest, now, func(tx sqlExecer) error {
+		stmt := s.DB.Rebind(`UPDATE users
+			SET is_verified = TRUE, is_password_otp = TRUE, updated_at = ?
+			WHERE tenant_id = ? AND id = ? AND mobile = ? AND deleted_at IS NULL`)
+		return execContextRequireRowsAffected(ctx, tx, stmt, now.UTC(), tenantID, userID, mobile)
+	})
+}
+
+func (s *Store) consumeOTPChallengeForPurpose(ctx context.Context, tenantID, mobile, purpose, codeDigest string, now time.Time, onSuccess func(sqlExecer) error) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
@@ -126,6 +174,10 @@ func (s *Store) ConsumeOTPChallenge(ctx context.Context, tenantID, mobile, codeD
 	mobile = strings.TrimSpace(mobile)
 	if mobile == "" {
 		return ErrMissingMobile
+	}
+	purpose, err = validateOTPChallengePurpose(purpose)
+	if err != nil {
+		return err
 	}
 	if err := validateSHA256Digest(codeDigest, ErrMissingOTPDigest); err != nil {
 		return err
@@ -150,8 +202,8 @@ func (s *Store) ConsumeOTPChallenge(ctx context.Context, tenantID, mobile, codeD
 	var attempts, maxAttempts int
 	var consumedAt sql.NullTime
 	selectStmt := s.DB.Rebind(`SELECT code_digest, expires_at, attempts, max_attempts, consumed_at
-		FROM otp_challenges WHERE tenant_id = ? AND mobile = ? FOR UPDATE`)
-	if err := tx.QueryRowContext(ctx, selectStmt, tenantID, mobile).Scan(
+		FROM otp_challenges WHERE tenant_id = ? AND mobile = ? AND purpose = ? FOR UPDATE`)
+	if err := tx.QueryRowContext(ctx, selectStmt, tenantID, mobile, purpose).Scan(
 		&storedDigest, &expiresAt, &attempts, &maxAttempts, &consumedAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -172,8 +224,8 @@ func (s *Store) ConsumeOTPChallenge(ctx context.Context, tenantID, mobile, codeD
 	if subtle.ConstantTimeCompare([]byte(storedDigest), []byte(codeDigest)) != 1 {
 		updateStmt := s.DB.Rebind(`UPDATE otp_challenges
 			SET attempts = attempts + 1, updated_at = ?
-			WHERE tenant_id = ? AND mobile = ?`)
-		if _, err := tx.ExecContext(ctx, updateStmt, now, tenantID, mobile); err != nil {
+			WHERE tenant_id = ? AND mobile = ? AND purpose = ?`)
+		if _, err := tx.ExecContext(ctx, updateStmt, now, tenantID, mobile, purpose); err != nil {
 			return err
 		}
 		if err := tx.Commit(); err != nil {
@@ -184,14 +236,23 @@ func (s *Store) ConsumeOTPChallenge(ctx context.Context, tenantID, mobile, codeD
 
 	consumeStmt := s.DB.Rebind(`UPDATE otp_challenges
 		SET consumed_at = ?, updated_at = ?
-		WHERE tenant_id = ? AND mobile = ?`)
-	if _, err := tx.ExecContext(ctx, consumeStmt, now, now, tenantID, mobile); err != nil {
+		WHERE tenant_id = ? AND mobile = ? AND purpose = ?`)
+	if _, err := tx.ExecContext(ctx, consumeStmt, now, now, tenantID, mobile, purpose); err != nil {
 		return err
+	}
+	if onSuccess != nil {
+		if err := onSuccess(tx); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
 
 func (s *Store) DeleteOTPChallenge(ctx context.Context, tenantID, mobile string) error {
+	return s.DeleteOTPChallengeForPurpose(ctx, tenantID, mobile, OTPChallengePurposeSignIn)
+}
+
+func (s *Store) DeleteOTPChallengeForPurpose(ctx context.Context, tenantID, mobile, purpose string) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
@@ -200,12 +261,16 @@ func (s *Store) DeleteOTPChallenge(ctx context.Context, tenantID, mobile string)
 	if mobile == "" {
 		return ErrMissingMobile
 	}
+	purpose, err = validateOTPChallengePurpose(purpose)
+	if err != nil {
+		return err
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind("DELETE FROM otp_challenges WHERE tenant_id = ? AND mobile = ?")
-	_, err = db.ExecContext(ctx, stmt, tenantID, mobile)
+	stmt := s.DB.Rebind("DELETE FROM otp_challenges WHERE tenant_id = ? AND mobile = ? AND purpose = ?")
+	_, err = db.ExecContext(ctx, stmt, tenantID, mobile, purpose)
 	return err
 }
 
@@ -263,4 +328,14 @@ func validateSHA256Digest(value string, missing error) error {
 		return missing
 	}
 	return nil
+}
+
+func validateOTPChallengePurpose(purpose string) (string, error) {
+	purpose = strings.TrimSpace(purpose)
+	switch purpose {
+	case OTPChallengePurposeSignIn, OTPChallengePurposePasswordRecovery:
+		return purpose, nil
+	default:
+		return "", ErrInvalidOTPChallenge
+	}
 }

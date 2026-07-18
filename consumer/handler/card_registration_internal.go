@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/adonese/noebs/consumer"
 	"github.com/gofiber/fiber/v2"
@@ -41,17 +42,17 @@ func (h *Handler) RegisterWithCardIdentity(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, result)
 }
 
-func (h *Handler) IssueRecoveryJWT(c *fiber.Ctx) error {
+func (h *Handler) IssueRecoveryCredential(c *fiber.Ctx) error {
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	var cmd consumer.RecoveryJWTCommand
+	var cmd consumer.RecoveryCredentialCommand
 	if err := parseJSON(c, &cmd); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
 	}
-	result, err := h.Service.IssueRecoveryJWT(c.UserContext(), tenantID, cmd)
+	result, err := h.Service.IssueRecoveryCredential(c.UserContext(), tenantID, cmd, time.Now().UTC())
 	if err != nil {
 		return jsonResponse(c, statusForError(err), fiber.Map{"code": err.Error(), "message": err.Error()})
 	}

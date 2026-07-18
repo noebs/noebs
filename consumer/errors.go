@@ -14,7 +14,6 @@ var (
 	ErrEmptyOTP              = errors.New("empty_otp")
 	ErrInvalidOTP            = errors.New("invalid_otp")
 	ErrMissingAuth           = errors.New("missing_auth")
-	ErrInvalidRecoveryJWT    = errors.New("invalid_recovery_jwt")
 	ErrInvalidSignature      = errors.New("invalid_signature")
 	ErrRateLimited           = errors.New("rate_limited")
 	ErrMissingRequestSource  = errors.New("missing_request_source")
@@ -23,6 +22,7 @@ var (
 	ErrRefreshExpired        = errors.New("refresh_expired")
 	ErrRefreshReplay         = errors.New("refresh_replay")
 	ErrRefreshTenantMismatch = errors.New("refresh_tenant_mismatch")
+	ErrSessionRevoked        = errors.New("session_revoked")
 
 	// Account recovery / balance step
 	ErrCardNotMatched    = errors.New("card_not_matched")

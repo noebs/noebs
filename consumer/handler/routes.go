@@ -63,6 +63,9 @@ func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
 	router.Post("/otp/generate", h.GenerateSignInCode)
 	router.Post("/otp/login", h.SingleLoginHandler)
 	router.Post("/otp/verify", h.VerifyOTP)
+	router.Post("/recovery/request", h.RequestPasswordRecovery)
+	router.Post("/recovery/verify", h.VerifyPasswordRecovery)
+	router.Post("/recovery/reset", h.ResetPasswordWithRecovery)
 
 	// Social auth (public)
 	router.Post("/auth/google", h.GoogleAuth)
@@ -106,7 +109,8 @@ func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/card-registration/users", h.CreateCompletedRegistrationIdentity)
 	router.Post("/register-with-card/users", h.RegisterWithCardIdentity)
-	router.Post("/recovery-jwt", h.IssueRecoveryJWT)
+	router.Post("/recovery-credential", h.IssueRecoveryCredential)
+	router.Post("/sessions/validate", h.ValidateSession)
 	router.Post("/users/by-mobile", h.ResolveIdentityUserByMobile)
 }
 

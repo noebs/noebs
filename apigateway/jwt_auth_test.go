@@ -32,6 +32,9 @@ func TestVerifyJWT(t *testing.T) {
 		log.Printf("The key is: %v", jj.Key)
 		t.Errorf("VerifyJWT() mobile = %v, want = %v", got.Mobile, "0990000000")
 	}
+	if got.SessionEpoch != 1 {
+		t.Errorf("VerifyJWT() session epoch = %d, want 1", got.SessionEpoch)
+	}
 }
 
 func TestJWTAuth_GenerateJWT_MissingTenantID(t *testing.T) {

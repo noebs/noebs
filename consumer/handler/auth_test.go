@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,7 +12,6 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/store"
-	"github.com/adonese/noebs/utils"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -30,18 +27,6 @@ func TestGenerateSignInCodeErrorResponse(t *testing.T) {
 			err:        consumer.ErrMissingStore,
 			wantStatus: http.StatusServiceUnavailable,
 			wantCode:   "service_unavailable",
-		},
-		{
-			name:       "not found",
-			err:        sql.ErrNoRows,
-			wantStatus: http.StatusBadRequest,
-			wantCode:   "not_found",
-		},
-		{
-			name:       "sms delivery",
-			err:        fmt.Errorf("%w: gateway returned 502 Bad Gateway", utils.ErrSMSDeliveryFailed),
-			wantStatus: http.StatusBadGateway,
-			wantCode:   "sms_delivery_failed",
 		},
 		{
 			name:       "unexpected",
@@ -70,8 +55,11 @@ func TestAuthRecoveryHandlersRejectMalformedJSONBeforeService(t *testing.T) {
 	app.Post("/balance-step", handler.BalanceStep)
 	app.Post("/signin-code", handler.GenerateSignInCode)
 	app.Post("/register", handler.CreateUser)
+	app.Post("/recovery/request", handler.RequestPasswordRecovery)
+	app.Post("/recovery/verify", handler.VerifyPasswordRecovery)
+	app.Post("/recovery/reset", handler.ResetPasswordWithRecovery)
 
-	for _, path := range []string{"/balance-step", "/signin-code", "/register"} {
+	for _, path := range []string{"/balance-step", "/signin-code", "/register", "/recovery/request", "/recovery/verify", "/recovery/reset"} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("{"))
 			req.Header.Set("Content-Type", "application/json")
@@ -135,5 +123,36 @@ func TestRateLimitResponseReturnsRetryAfter(t *testing.T) {
 	}
 	if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "3" {
 		t.Fatalf("Retry-After = %q, want 3", retryAfter)
+	}
+}
+
+func TestChangePasswordAcceptsNewPasswordPayload(t *testing.T) {
+	handler := &Handler{Service: &consumer.Service{}}
+	app := fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("tenant_id", "tenant_1")
+		c.Locals("mobile", "0990000000")
+		return c.Next()
+	})
+	app.Post("/change-password", handler.ChangePassword)
+
+	req := httptest.NewRequest(http.MethodPost, "/change-password", strings.NewReader(`{"new_password":"Valid2@Password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want service-layer %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Code != "db_error" {
+		t.Fatalf("code = %q, want db_error (request reached service)", body.Code)
 	}
 }

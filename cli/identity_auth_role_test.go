@@ -19,6 +19,9 @@ func TestIdentityRoutesAreProxiedByAPIGateway(t *testing.T) {
 		path   string
 	}{
 		{name: "login", method: http.MethodPost, path: "/consumer/login"},
+		{name: "recovery request", method: http.MethodPost, path: "/consumer/recovery/request"},
+		{name: "recovery verify", method: http.MethodPost, path: "/consumer/recovery/verify"},
+		{name: "recovery reset", method: http.MethodPost, path: "/consumer/recovery/reset"},
 		{name: "oauth", method: http.MethodPost, path: "/consumer/auth/google"},
 		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
 		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
@@ -51,6 +54,9 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 		path   string
 	}{
 		{name: "login", method: http.MethodPost, path: "/consumer/login"},
+		{name: "recovery request", method: http.MethodPost, path: "/consumer/recovery/request"},
+		{name: "recovery verify", method: http.MethodPost, path: "/consumer/recovery/verify"},
+		{name: "recovery reset", method: http.MethodPost, path: "/consumer/recovery/reset"},
 		{name: "oauth", method: http.MethodPost, path: "/consumer/auth/google"},
 		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
 		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
@@ -140,7 +146,8 @@ func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 	}{
 		{name: "completed card registration user", path: "/internal/identity-auth/card-registration/users"},
 		{name: "register with card identity", path: "/internal/identity-auth/register-with-card/users"},
-		{name: "recovery jwt", path: "/internal/identity-auth/recovery-jwt"},
+		{name: "recovery credential", path: "/internal/identity-auth/recovery-credential"},
+		{name: "session validation", path: "/internal/identity-auth/sessions/validate"},
 		{name: "user by mobile", path: "/internal/identity-auth/users/by-mobile"},
 	}
 	for _, tt := range tests {

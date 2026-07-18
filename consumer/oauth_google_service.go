@@ -83,7 +83,7 @@ func (s *Service) GoogleAuth(ctx context.Context, tenantID string, code, codeVer
 		return "", empty, false, err
 	}
 
-	jwtToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+	jwtToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, userSessionEpoch(user.SessionEpoch))
 	if err != nil {
 		return "", empty, false, err
 	}
@@ -123,7 +123,7 @@ func (s *Service) CompleteProfile(ctx context.Context, tenantID string, userID i
 		return "", empty, err
 	}
 
-	jwtToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+	jwtToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, userSessionEpoch(user.SessionEpoch))
 	if err != nil {
 		return "", empty, err
 	}

@@ -11,7 +11,6 @@ import (
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
-	"github.com/adonese/noebs/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -134,6 +133,9 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 		if errors.Is(err, consumer.ErrRefreshTenantMismatch) {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Token tenant does not match request tenant", "code": "tenant_mismatch"})
 		}
+		if errors.Is(err, consumer.ErrSessionRevoked) {
+			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Session has been revoked", "code": "session_revoked"})
+		}
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
 		}
@@ -174,7 +176,10 @@ func (h *Handler) CreateUser(c *fiber.Ctx) error {
 		}
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "duplicate_username"})
 	}
-	return jsonResponse(c, http.StatusCreated, fiber.Map{"ok": "object was successfully created", "details": user})
+	return jsonResponse(c, http.StatusCreated, fiber.Map{
+		"ok":      "object was successfully created",
+		"details": fiber.Map{"mobile": user.Mobile},
+	})
 }
 
 func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
@@ -223,7 +228,7 @@ func (h *Handler) BalanceStep(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	token, err := h.Service.BalanceStep(c.UserContext(), tenantID, req)
+	credential, err := h.Service.BalanceStep(c.UserContext(), tenantID, req)
 	if err != nil {
 		code := "bad_request"
 		msg := err.Error()
@@ -237,14 +242,16 @@ func (h *Handler) BalanceStep(c *fiber.Ctx) error {
 		}
 		return jsonResponse(c, statusForError(err), fiber.Map{"message": msg, "code": code})
 	}
-	c.Set("Authorization", token)
-	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok", "authorization": token})
+	preventCredentialCaching(c)
+	return jsonResponse(c, http.StatusOK, credential)
 }
 
 func (h *Handler) ChangePassword(c *fiber.Ctx) error {
 	mobile := getMobile(c)
-	var req ebs_fields.User
-	if err := bindJSON(c, &req); err != nil || req.NewPassword == "" {
+	var req struct {
+		NewPassword string `json:"new_password"`
+	}
+	if err := parseJSON(c, &req); err != nil || strings.TrimSpace(req.NewPassword) == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Bad request.", "code": "bad_request"})
 	}
 
@@ -296,7 +303,7 @@ func (h *Handler) generateSignInCode(c *fiber.Ctx) error {
 		status, body := generateSignInCodeErrorResponse(err)
 		return jsonResponse(c, status, body)
 	}
-	return jsonResponse(c, http.StatusCreated, fiber.Map{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
+	return jsonResponse(c, http.StatusCreated, fiber.Map{"status": "ok", "message": "If the account is awaiting verification, a code will be sent."})
 }
 
 func rateLimitResponse(c *fiber.Ctx, err error) error {
@@ -319,11 +326,7 @@ func generateSignInCodeErrorResponse(err error) (int, fiber.Map) {
 		return http.StatusServiceUnavailable, fiber.Map{"code": "service_unavailable", "message": err.Error()}
 	case errors.Is(err, store.ErrMissingTenantID), errors.Is(err, store.ErrInvalidTenantID):
 		return http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()}
-	case store.ErrNotFound(err):
-		return http.StatusBadRequest, fiber.Map{"message": "user not found", "code": "not_found"}
-	case errors.Is(err, utils.ErrSMSDeliveryFailed):
-		return http.StatusBadGateway, fiber.Map{"message": "sms delivery failed", "code": "sms_delivery_failed"}
 	default:
-		return http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "service_error"}
+		return http.StatusInternalServerError, fiber.Map{"message": "Verification is temporarily unavailable", "code": "service_error"}
 	}
 }

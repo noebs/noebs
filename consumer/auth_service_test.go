@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,8 +16,8 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
-	"github.com/adonese/noebs/utils"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/sirupsen/logrus"
 )
 
 var authTestNow = time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
@@ -38,6 +39,10 @@ func (a *refreshAuthStub) GenerateJWT(_ int64, _ string, tenantID string) (strin
 	a.generated = true
 	a.generatedTenant = tenantID
 	return "new-token", nil
+}
+
+func (a *refreshAuthStub) GenerateJWTWithSessionEpoch(_ int64, _ string, tenantID string, _ int64) (string, error) {
+	return a.GenerateJWT(0, "", tenantID)
 }
 
 type oauthRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -407,7 +412,7 @@ func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
 	}
 }
 
-func TestGenerateSignInCodeReturnsSMSError(t *testing.T) {
+func TestGenerateSignInCodeHidesSMSErrorAndRemovesChallenge(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
 	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
@@ -419,10 +424,24 @@ func TestGenerateSignInCodeReturnsSMSError(t *testing.T) {
 	}))
 	t.Cleanup(smsServer.Close)
 	env.Service.NoebsConfig.SMSGateway = smsServer.URL + "?"
+	var logs bytes.Buffer
+	env.Service.Logger.SetOutput(&logs)
+	env.Service.Logger.SetFormatter(&logrus.JSONFormatter{})
 
 	err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow)
-	if !errors.Is(err, utils.ErrSMSDeliveryFailed) {
-		t.Fatalf("GenerateSignInCode() error = %v, want %v", err, utils.ErrSMSDeliveryFailed)
+	if err != nil {
+		t.Fatalf("GenerateSignInCode() error = %v, want anti-enumerating success", err)
+	}
+	var challenges int
+	stmt := env.DB.Rebind("SELECT count(*) FROM otp_challenges WHERE tenant_id = ? AND mobile = ? AND purpose = ?")
+	if err := env.DB.QueryRowContext(context.Background(), stmt, env.Tenant, "0990000000", store.OTPChallengePurposeSignIn).Scan(&challenges); err != nil {
+		t.Fatalf("count signup challenges: %v", err)
+	}
+	if challenges != 0 {
+		t.Fatalf("signup challenges = %d, want 0 after failed delivery", challenges)
+	}
+	if !strings.Contains(logs.String(), `"event":"auth_challenge_delivery_failed"`) || !strings.Contains(logs.String(), `"flow":"signup_verification"`) {
+		t.Fatalf("structured delivery failure log missing: %s", logs.String())
 	}
 }
 
@@ -543,7 +562,7 @@ func TestGeneratedOTPCanBeConsumedOnlyOnce(t *testing.T) {
 	if err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow); err != nil {
 		t.Fatalf("GenerateSignInCode(): %v", err)
 	}
-	match := regexp.MustCompile(`access code is: ([0-9]{6})`).FindStringSubmatch(<-messages)
+	match := regexp.MustCompile(`verification code is: ([0-9]{6})`).FindStringSubmatch(<-messages)
 	if len(match) != 2 {
 		t.Fatalf("SMS did not contain a six-digit OTP")
 	}
@@ -585,8 +604,19 @@ func TestSingleLoginConsumesStoredOTP(t *testing.T) {
 		t.Fatalf("store otp challenge: %v", err)
 	}
 	req := gateway.Token{Mobile: user.Mobile, Message: refreshProofMessage, Signature: refreshProofSignature}
-	if _, _, err := env.Service.SingleLogin(context.Background(), env.Tenant, req, authTestSource, authTestNow); err != nil {
+	token, loggedIn, err := env.Service.SingleLogin(context.Background(), env.Tenant, req, authTestSource, authTestNow)
+	if err != nil {
 		t.Fatalf("SingleLogin(first use): %v", err)
+	}
+	if token == "" || !loggedIn.IsVerified || !loggedIn.IsPasswordOTP {
+		t.Fatalf("signed OTP result = token:%q verified:%v passwordOTP:%v", token, loggedIn.IsVerified, loggedIn.IsPasswordOTP)
+	}
+	stored, err := env.Store.GetUserByMobile(context.Background(), env.Tenant, user.Mobile)
+	if err != nil {
+		t.Fatalf("get signed-OTP user: %v", err)
+	}
+	if !stored.IsVerified || !stored.IsPasswordOTP {
+		t.Fatalf("stored signed-OTP flags = verified:%v passwordOTP:%v", stored.IsVerified, stored.IsPasswordOTP)
 	}
 	if _, _, err := env.Service.SingleLogin(context.Background(), env.Tenant, req, authTestSource, authTestNow.Add(time.Second)); !errors.Is(err, ErrWrongOTP) {
 		t.Fatalf("SingleLogin(replay) error = %v, want %v", err, ErrWrongOTP)

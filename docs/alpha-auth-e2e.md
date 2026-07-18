@@ -1,6 +1,10 @@
 # Alpha auth E2E runbook
 
-Run this only after the release image is pinned by immutable digest or commit tag, identity migrations (including `102_auth_hardening.sql`) have completed, and the API gateway and identity-auth rollout both report the same image digest. Do not create a disposable user in the live tenant while an older image is serving traffic.
+Run this only after the release image is pinned by immutable digest or commit tag, identity migrations (including `103_identity_recovery.sql`) have completed, and the API gateway and identity-auth rollout both report the same image digest. Do not create a disposable user in the live tenant while an older image is serving traffic.
+
+## Migration 103 rollout boundary
+
+Identity migration 103 is a coordinated cutover, not an expand-compatible migration. It adds the session epoch consumed by the new identity binary and changes the OTP challenge conflict key; an older identity binary cannot safely serve the advanced schema. Run the migration job and the identity/API-gateway rollout from one immutable release, watch the migration-to-runtime interval as a bounded service-interruption window, and retain that schema-aware digest as the rollback floor. After migration 103 has run, do not roll back only the application image to the pre-migration release. Prefer a forward fix; a database down-migration requires an explicit maintenance window and recovery-state review.
 
 ## Synthetic OTP delivery
 
@@ -36,9 +40,14 @@ curl --fail-with-body "$BASE_URL/consumer/otp/generate" \
 
 # Read the six-digit code from the protected virtual-number inbox or capture sink.
 read -rs OTP
-curl --fail-with-body "$BASE_URL/consumer/otp/verify" \
+SIGNATURE=$(printf %s "$OTP" \
+  | openssl dgst -sha256 -sign /tmp/noebs-e2e-private.pem -binary \
+  | base64 -w0)
+OTP_LOGIN=$(curl --fail-with-body "$BASE_URL/consumer/otp/login" \
   -H "X-Tenant-ID: $TENANT_ID" -H 'Content-Type: application/json' \
-  --data "$(jq -n --arg mobile "$MOBILE" --arg otp "$OTP" '{mobile:$mobile,otp:$otp}')"
+  --data "$(jq -n --arg mobile "$MOBILE" --arg otp "$OTP" --arg signature "$SIGNATURE" \
+    '{mobile:$mobile,message:$otp,signature:$signature}')")
+jq -e '.user.is_verified == true' <<<"$OTP_LOGIN"
 
 LOGIN=$(curl --fail-with-body "$BASE_URL/consumer/login" \
   -H "X-Tenant-ID: $TENANT_ID" -H 'Content-Type: application/json' \
@@ -80,4 +89,4 @@ Expected results:
 
 ## Cleanup
 
-Prefer dropping the isolated test tenant databases/namespace after retaining redacted evidence. If a shared database must be used, have the release operator run a reviewed, tenant-scoped cleanup transaction across identity tables (`auth_accounts`, `otp_challenges`, `used_refresh_tokens`, `login_metrics`, `users`, and `auth_rate_limits`) and confirm that the synthetic user never acquired cards, wallets, funding sources, KYC, beneficiaries, or transactions. Remove the capture-sink messages and virtual-number inbox contents according to the test retention policy.
+Prefer dropping the isolated test tenant databases/namespace after retaining redacted evidence. If a shared database must be used, have the release operator run a reviewed, tenant-scoped cleanup transaction across identity tables (`auth_accounts`, `password_recovery_credentials`, `otp_challenges`, `used_refresh_tokens`, `login_metrics`, `users`, and `auth_rate_limits`) and confirm that the synthetic user never acquired cards, wallets, funding sources, KYC, beneficiaries, or transactions. Remove the capture-sink messages and virtual-number inbox contents according to the test retention policy.

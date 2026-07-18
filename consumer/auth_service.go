@@ -24,6 +24,7 @@ import (
 type Auther interface {
 	VerifyJWT(token string) (*gateway.TokenClaims, error)
 	GenerateJWT(userID int64, mobile, tenantID string) (string, error)
+	GenerateJWTWithSessionEpoch(userID int64, mobile, tenantID string, sessionEpoch int64) (string, error)
 }
 
 // GenerateAPIKey creates an API key for a given email (admin-only at the HTTP layer).
@@ -82,7 +83,7 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password, 
 	if !u.IsVerified {
 		return "", empty, ErrUserNotVerified
 	}
-	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
+	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, userSessionEpoch(u.SessionEpoch))
 	if err != nil {
 		return "", empty, err
 	}
@@ -125,7 +126,7 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 	if err != nil {
 		return "", empty, err
 	}
-	if err := s.Store.ConsumeOTPChallenge(ctx, tenantID, mobile, digest, now); err != nil {
+	if err := s.Store.ConsumeSignInChallengeAndVerifyUser(ctx, tenantID, mobile, digest, u.ID, now); err != nil {
 		if !isOTPChallengeRejection(err) {
 			return "", empty, err
 		}
@@ -134,8 +135,10 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 		}
 		return "", empty, ErrWrongOTP
 	}
+	u.IsVerified = true
+	u.IsPasswordOTP = true
 
-	token, err := s.Auth.GenerateJWT(u.ID, u.Mobile, tenantID)
+	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, userSessionEpoch(u.SessionEpoch))
 	if err != nil {
 		return "", empty, err
 	}
@@ -194,6 +197,9 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 	if err != nil {
 		return "", err
 	}
+	if claims.SessionEpoch != userSessionEpoch(user.SessionEpoch) {
+		return "", ErrSessionRevoked
+	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
 		mobileLimit("refresh-mobile", user.Mobile, 20, 15*time.Minute),
 	); err != nil {
@@ -205,7 +211,7 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 	if err := verifyUserSignature(user.PublicKey, req.Signature, req.Message); err != nil {
 		return "", err
 	}
-	newToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+	newToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, userSessionEpoch(user.SessionEpoch))
 	if err != nil {
 		return "", err
 	}
@@ -217,6 +223,13 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 		return "", err
 	}
 	return newToken, nil
+}
+
+func userSessionEpoch(epoch int64) int64 {
+	if epoch <= 0 {
+		return 1
+	}
+	return epoch
 }
 
 func verifyUserSignature(publicKey, signature, message string) error {
@@ -300,9 +313,17 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 		return ebs_fields.User{}, err
 	}
 
-	// Make sure user is unique
+	// A repeated registration can safely resume an account that has not yet
+	// completed mobile verification. The conditional update is a no-op for a
+	// verified account, and both cases return the same minimal response.
 	if _, err := s.Store.GetUserByMobile(ctx, tenantID, u.Mobile); err == nil {
-		return ebs_fields.User{}, errors.New("mobile already exists")
+		if err := u.HashPassword(); err != nil {
+			return ebs_fields.User{}, err
+		}
+		if err := s.Store.ResumeUnverifiedRegistration(ctx, tenantID, u.Mobile, u.Password, u.PublicKey, now); err != nil {
+			return ebs_fields.User{}, err
+		}
+		return ebs_fields.User{Mobile: u.Mobile}, nil
 	} else if !store.ErrNotFound(err) {
 		return ebs_fields.User{}, err
 	}
@@ -430,9 +451,15 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile, sour
 	); err != nil {
 		return err
 	}
-	_, err = s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
+		if store.ErrNotFound(err) {
+			return nil
+		}
 		return err
+	}
+	if user.IsVerified {
+		return nil
 	}
 	if _, err := s.Store.RecordLoginAttempt(ctx, tenantID, mobile, true); err != nil {
 		return err
@@ -450,12 +477,14 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile, sour
 	}
 	if err := utils.SendSMS(&s.NoebsConfig, utils.SMS{
 		Mobile:  mobile,
-		Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key),
+		Message: fmt.Sprintf("Your mobile verification code is: %s. DON'T share it with anyone.", key),
 	}); err != nil {
-		if cleanupErr := s.Store.DeleteOTPChallenge(ctx, tenantID, mobile); cleanupErr != nil {
-			return errors.Join(err, cleanupErr)
+		_ = s.Store.DeleteOTPChallenge(ctx, tenantID, mobile)
+		if s.Logger != nil {
+			s.Logger.WithField("event", "auth_challenge_delivery_failed").
+				WithField("flow", "signup_verification").WithError(err).
+				Error("authentication challenge delivery failed")
 		}
-		return err
 	}
 	return nil
 }

@@ -161,8 +161,7 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrNotificationCommand),
 		errors.Is(err, consumer.ErrBillerHookPost),
 		errors.Is(err, consumer.ErrInvalidPaymentInfo),
-		errors.Is(err, consumer.ErrMissingIssuedPAN),
-		errors.Is(err, consumer.ErrInvalidRecoveryJWT):
+		errors.Is(err, consumer.ErrMissingIssuedPAN):
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrPaymentOutcomeUnknown):
 		return http.StatusBadGateway
