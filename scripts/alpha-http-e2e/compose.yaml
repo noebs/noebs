@@ -131,6 +131,19 @@ services:
         gid: "10001"
         mode: 0400
 
+  notification-chat-migrate:
+    <<: *noebs-runtime
+    volumes:
+      - ${NOEBS_ALPHA_E2E_RUNTIME}/config.yaml:/app/config.yaml:ro
+      - ${NOEBS_ALPHA_E2E_RUNTIME}/services/notification-chat-migrate.yaml:/app/service.yaml:ro
+    secrets:
+      - *age-key-secret
+      - source: notification_chat_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+
   identity-auth:
     <<: *noebs-runtime
     depends_on:
@@ -196,6 +209,29 @@ services:
       timeout: 2s
       retries: 30
 
+  notification-chat:
+    <<: *noebs-runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+      identity-auth:
+        condition: service_healthy
+    volumes:
+      - ${NOEBS_ALPHA_E2E_RUNTIME}/config.yaml:/app/config.yaml:ro
+      - ${NOEBS_ALPHA_E2E_RUNTIME}/services/notification-chat.yaml:/app/service.yaml:ro
+    secrets:
+      - *age-key-secret
+      - source: notification_chat_secrets
+        target: /app/secrets.yaml
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
   api-gateway:
     <<: *noebs-runtime
     depends_on:
@@ -204,6 +240,8 @@ services:
       card-vault:
         condition: service_healthy
       consumer-beneficiary:
+        condition: service_healthy
+      notification-chat:
         condition: service_healthy
       capture:
         condition: service_healthy
@@ -244,3 +282,5 @@ secrets:
     file: ${NOEBS_ALPHA_E2E_RUNTIME}/card-vault.secrets.yaml
   consumer_beneficiary_secrets:
     file: ${NOEBS_ALPHA_E2E_RUNTIME}/consumer-beneficiary.secrets.yaml
+  notification_chat_secrets:
+    file: ${NOEBS_ALPHA_E2E_RUNTIME}/notification-chat.secrets.yaml

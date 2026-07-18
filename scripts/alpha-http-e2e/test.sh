@@ -14,7 +14,8 @@ touch \
     "$runtime/api-gateway.secrets.yaml" \
     "$runtime/identity-auth.secrets.yaml" \
     "$runtime/card-vault.secrets.yaml" \
-    "$runtime/consumer-beneficiary.secrets.yaml"
+    "$runtime/consumer-beneficiary.secrets.yaml" \
+    "$runtime/notification-chat.secrets.yaml"
 
 bash -n "$root/scripts/alpha-http-e2e.sh"
 "$root/scripts/alpha-device-fixture-test.sh"

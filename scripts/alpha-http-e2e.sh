@@ -248,7 +248,7 @@ noebs:
     ebs-adapter: "http://capture:8080/guard/ebs-adapter"
     psp-webhook: "http://capture:8080/guard/psp-webhook"
     admin-reporting: "http://capture:8080/guard/admin-reporting"
-    notification-chat: "http://capture:8080/guard/notification-chat"
+    notification-chat: "http://notification-chat:8080"
     consumer-beneficiary: "http://consumer-beneficiary:8080"
     wallet-api: "http://capture:8080/guard/wallet-api"
   grpc_service_discovery:
@@ -275,6 +275,8 @@ write_service_config card-vault pgx
 write_service_config card-vault-migrate pgx
 write_service_config consumer-beneficiary pgx
 write_service_config consumer-beneficiary-migrate pgx
+write_service_config notification-chat pgx
+write_service_config notification-chat-migrate pgx
 
 encrypt_yaml() {
     local target="$1"
@@ -324,6 +326,12 @@ encrypt_yaml() {
     printf '    consumer-beneficiary: "postgres://noebs:%s@postgres:5432/consumer_beneficiary?sslmode=disable"\n' "$postgres_password"
 } | encrypt_yaml "$runtime/consumer-beneficiary.secrets.yaml"
 
+{
+    printf 'noebs:\n'
+    printf '  service_databases:\n'
+    printf '    notification-chat: "postgres://noebs:%s@postgres:5432/notification_chat?sslmode=disable"\n' "$postgres_password"
+} | encrypt_yaml "$runtime/notification-chat.secrets.yaml"
+
 # Compose file-backed secrets retain their source permissions on some engines.
 # The containing tmpfs directory is 0700; read-only mounts are limited per service.
 chmod 0444 \
@@ -338,11 +346,11 @@ chmod 0444 \
 printf 'alpha HTTP E2E: starting isolated services\n'
 quiet_compose config --quiet
 quiet_compose up --detach --wait --wait-timeout 120 postgres capture
-for migration in identity-auth-migrate card-vault-migrate consumer-beneficiary-migrate; do
+for migration in identity-auth-migrate card-vault-migrate consumer-beneficiary-migrate notification-chat-migrate; do
     quiet_compose run --rm --no-deps "$migration"
 done
 quiet_compose up --detach --wait --wait-timeout 120 \
-    identity-auth card-vault consumer-beneficiary
+    identity-auth card-vault consumer-beneficiary notification-chat
 quiet_compose up --detach --wait --wait-timeout 120 api-gateway
 
 if [[ "$mode" == device ]]; then

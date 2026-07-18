@@ -35,14 +35,16 @@ The harness builds and labels the current commit, then starts only these roles:
 - `identity-auth` and its migration role
 - `card-vault` and its migration role
 - `consumer-beneficiary` and its migration role
+- `notification-chat` and its migration role
 
-It creates three fresh Postgres databases in a temporary cluster and puts every
+It creates four fresh Postgres databases in a temporary cluster and puts every
 container on an internal Docker network with no published ports. A small client
 inside that network drives real HTTP through the gateway. The Postgres and
 capture images are pinned by manifest digest and are pulled only when missing.
-EBS, wallet, PSP, reporting, notification, and Keycloak targets resolve to a
-deny-by-default capture service. Any unexpected HTTP request or wallet-ledger
-TCP connection to those boundaries fails the run.
+EBS, wallet, PSP, reporting, and Keycloak targets resolve to a deny-by-default
+capture service. Any unexpected HTTP request or wallet-ledger TCP connection to
+those boundaries fails the run. WebSocket send/receive, typing, and session
+revocation are exercised only by the two-emulator device fixture.
 
 The HTTP journey covers disposable registration; authenticated, one-time OTP
 capture; pre-verification login rejection; signed signup OTP verification;
