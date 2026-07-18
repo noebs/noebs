@@ -28,6 +28,14 @@ login environment. Supplying that pre-authenticated config is a required manual
 release prerequisite; do not put a token in this repository or on the command
 line.
 
+The Dockerfile pins both Docker Hub base manifests by digest. SOPS 3.9.4 is
+checked against the SHA-256 entry in its upstream signed checksum set. age is
+updated to the compatible 1.2.1 security patch and checked against the SHA-256
+of the upstream artifact whose official Sigsum transparency proof was verified.
+The release invariant test fixes all four values so a dependency update must be
+an explicit reviewed change. A broader SOPS current-version upgrade remains a
+separate compatibility task.
+
 ## Publish
 
 Choose the exact reviewed commit and a new receipt path:

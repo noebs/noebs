@@ -3,6 +3,7 @@ set -euo pipefail
 
 test_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 script="$test_dir/../publish-alpha-image.sh"
+dockerfile="$test_dir/../../Dockerfile"
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -17,6 +18,10 @@ assert_absent() {
   if grep -Fq -- "$1" "$script"; then
     fail "forbidden release behavior is present: $1"
   fi
+}
+
+assert_dockerfile_contains() {
+  grep -Fq -- "$1" "$dockerfile" || fail "missing container supply-chain invariant: $1"
 }
 
 bash -n "$script"
@@ -52,5 +57,24 @@ assert_absent '--load'
 assert_absent '--keep-state'
 assert_absent '--resource'
 assert_absent 'set -x'
+
+[[ $(grep -c '^FROM ' "$dockerfile") -eq 2 ]] || fail "Dockerfile must have exactly two stages"
+[[ $(grep -Ec '^FROM [^ ]+@sha256:[0-9a-f]{64}( AS [a-z]+)?$' "$dockerfile") -eq 2 ]] || \
+  fail "every container stage must use an immutable manifest digest"
+assert_dockerfile_contains 'golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651'
+assert_dockerfile_contains 'debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818'
+assert_dockerfile_contains '5488e32bc471de7982ad895dd054bbab3ab91c417a118426134551e9626e4e85  /tmp/sops'
+assert_dockerfile_contains 'age-v1.2.1-linux-amd64.tar.gz'
+assert_dockerfile_contains '7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50  /tmp/age.tar.gz'
+assert_dockerfile_contains "sha256sum -c -"
+[[ $(grep -nF '5488e32bc471de7982ad895dd054bbab3ab91c417a118426134551e9626e4e85  /tmp/sops' "$dockerfile" | cut -d: -f1) -lt \
+   $(grep -nF 'install -m 0755 /tmp/sops' "$dockerfile" | cut -d: -f1) ]] || \
+  fail "SOPS must be verified before installation"
+[[ $(grep -nF '7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50  /tmp/age.tar.gz' "$dockerfile" | cut -d: -f1) -lt \
+   $(grep -nF 'tar --extract --gzip --file /tmp/age.tar.gz' "$dockerfile" | cut -d: -f1) ]] || \
+  fail "age must be verified before extraction"
+if grep -Eq 'age-v1\.2\.0|(^|[[:space:]])wget([[:space:]]|$)' "$dockerfile"; then
+  fail "known-vulnerable age or unchecked downloader remains in Dockerfile"
+fi
 
 printf 'PASS: alpha release image workflow invariants\n'
