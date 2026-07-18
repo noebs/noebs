@@ -3,6 +3,7 @@ package gateway
 import (
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -104,11 +105,11 @@ func Instrumentation() fiber.Handler {
 		if c.Path() == "/metrics" {
 			return c.Next()
 		}
-		routePath := c.Path()
+		routePath := ownMetricLabel(c.Path())
 		if r := c.Route(); r != nil && r.Path != "" {
-			routePath = r.Path
+			routePath = ownMetricLabel(r.Path)
 		}
-		method := c.Method()
+		method := ownMetricLabel(c.Method())
 		httpInFlight.WithLabelValues(method, routePath).Inc()
 		defer httpInFlight.WithLabelValues(method, routePath).Dec()
 
@@ -123,4 +124,8 @@ func Instrumentation() fiber.Handler {
 		httpResponseSize.WithLabelValues(status, method, routePath).Observe(float64(len(c.Response().Body())))
 		return err
 	}
+}
+
+func ownMetricLabel(value string) string {
+	return strings.Clone(value)
 }
