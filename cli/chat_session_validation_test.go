@@ -53,9 +53,15 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 			var unavailable atomic.Bool
 			currentEpoch.Store(initialEpoch)
 
+			identityVerifier := newTestWorkloadVerifier(t, string(serviceRoleIdentityAuth), string(serviceRoleAPIGateway), string(serviceRoleNotification))
 			identityServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if unavailable.Load() {
 					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				principal, err := identityVerifier.VerifyRequest(r)
+				if err != nil || principal.Caller != string(serviceRoleAPIGateway) && principal.Caller != string(serviceRoleNotification) {
+					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
 				var command consumer.SessionValidationCommand
@@ -75,9 +81,11 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 			}))
 			defer identityServer.Close()
 
+			gatewaySigners := newTestWorkloadSigners(t, string(serviceRoleAPIGateway), string(serviceRoleIdentityAuth), string(serviceRoleNotification))
+			notificationSigners := newTestWorkloadSigners(t, string(serviceRoleNotification), string(serviceRoleIdentityAuth))
 			identityValidator, err := newIdentitySessionValidator(ebs_fields.NoebsConfig{
 				ServiceDiscovery: map[string]string{string(serviceRoleIdentityAuth): identityServer.URL},
-			})
+			}, gatewaySigners)
 			if err != nil {
 				t.Fatalf("newIdentitySessionValidator(): %v", err)
 			}
@@ -89,32 +97,36 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 
 			gatewayListener := newFiberTestListener(t)
 			gatewayURL := "http://" + gatewayListener.Addr().String()
-			gatewayValidator, err := newGatewaySessionValidator(ebs_fields.NoebsConfig{
-				ServiceDiscovery: map[string]string{string(serviceRoleAPIGateway): gatewayURL},
-			})
+			chatValidator, err := newChatSessionValidator(ebs_fields.NoebsConfig{
+				ServiceDiscovery: map[string]string{string(serviceRoleIdentityAuth): identityServer.URL},
+			}, notificationSigners)
 			if err != nil {
-				t.Fatalf("newGatewaySessionValidator(): %v", err)
+				t.Fatalf("newChatSessionValidator(): %v", err)
 			}
 
 			chatCfg := chat.DefaultHubConfig()
 			chatCfg.PingPeriod = time.Hour
 			chatCfg.ClientIDFromRequest = chatClientIDFromGatewayIdentity
-			chatCfg.ValidateClientSession = chatSessionValidation(gatewayValidator)
+			chatCfg.ValidateClientSession = chatSessionValidation(chatValidator)
 			chatCfg.SessionValidationInterval = 10 * time.Millisecond
 			chatHub := chat.NewHubWithConfig(nil, chatCfg)
 			go chatHub.Run()
 			defer chatHub.Stop()
 
 			notificationApp := fiber.New(fiber.Config{DisableStartupMessage: true})
+			notificationApp.Use(signedWorkloadBoundary(serviceRoleNotification, newTestWorkloadVerifier(t, string(serviceRoleNotification), string(serviceRoleAPIGateway))))
 			notificationApp.Get("/ws", gateway.InternalUserIdentityMiddleware(), chatWebSocketHandler(chatHub))
 			notificationURL := startFiberTestApp(t, notificationApp, newFiberTestListener(t))
 
 			gatewayApp := fiber.New(fiber.Config{DisableStartupMessage: true})
-			registerGatewaySessionValidationRoute(gatewayApp, jwt)
+			gatewayApp.Use(gateway.RequestID())
 			discovery := map[string]string{}
 			for _, spec := range gatewayProxyRouteSpecs() {
 				discovery[string(spec.role)] = notificationURL
 			}
+			previousSigners := workloadSigners
+			workloadSigners = gatewaySigners
+			t.Cleanup(func() { workloadSigners = previousSigners })
 			if err := registerAPIGatewayProxyRoutes(gatewayApp, ebs_fields.NoebsConfig{
 				DefaultTenantID:  tenant,
 				ServiceDiscovery: discovery,
@@ -169,29 +181,36 @@ func TestChatSocketThroughGatewayTracksSessionState(t *testing.T) {
 	}
 }
 
-func TestGatewaySessionValidatorRejectsMismatchedIdentity(t *testing.T) {
-	jwt := gateway.JWTAuth{Key: []byte("test-signing-key")}
-	token, err := jwt.GenerateJWTWithSessionEpoch(42, "0990000000", "tenant_1", 3)
+func TestChatSessionValidatorCallsIdentityAuthDirectly(t *testing.T) {
+	verifier := newTestWorkloadVerifier(t, string(serviceRoleIdentityAuth), string(serviceRoleNotification))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, err := verifier.VerifyRequest(r)
+		if err != nil || principal.Caller != string(serviceRoleNotification) || r.Header.Get("Authorization") != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		var command consumer.SessionValidationCommand
+		if json.NewDecoder(r.Body).Decode(&command) != nil || command.UserID != 42 || command.SessionEpoch != 3 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	validator, err := newChatSessionValidator(ebs_fields.NoebsConfig{
+		ServiceDiscovery: map[string]string{string(serviceRoleIdentityAuth): server.URL},
+	}, newTestWorkloadSigners(t, string(serviceRoleNotification), string(serviceRoleIdentityAuth)))
 	if err != nil {
-		t.Fatalf("GenerateJWTWithSessionEpoch(): %v", err)
-	}
-	app := fiber.New(fiber.Config{DisableStartupMessage: true})
-	registerGatewaySessionValidationRoute(app, jwt)
-	endpoint := startFiberTestApp(t, app, newFiberTestListener(t))
-	validator, err := newGatewaySessionValidator(ebs_fields.NoebsConfig{
-		ServiceDiscovery: map[string]string{string(serviceRoleAPIGateway): endpoint},
-	})
-	if err != nil {
-		t.Fatalf("newGatewaySessionValidator(): %v", err)
+		t.Fatalf("newChatSessionValidator(): %v", err)
 	}
 	err = validator.ValidateSession(context.Background(), chatGatewayIdentity{
 		UserIdentity: gateway.UserIdentity{
 			TenantID:     "tenant_1",
 			UserID:       42,
-			Mobile:       "0980000000",
+			Mobile:       "0990000000",
 			SessionEpoch: 3,
 		},
-		Token: token,
+		Token: "gateway-validated-session-token",
 	})
 	if !errors.Is(err, gateway.ErrSessionRevoked) {
 		t.Fatalf("ValidateSession() error = %v, want %v", err, gateway.ErrSessionRevoked)

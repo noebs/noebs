@@ -52,7 +52,7 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 		if r.URL.Path != "/internal/identity-auth/card-registration/users" {
 			t.Fatalf("identity path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		body := readBodyForTest(t, r)
 		if bytes.Contains(body, []byte(`"pan"`)) || bytes.Contains(body, []byte(`"expDate"`)) {
 			t.Fatalf("identity command leaked card data: %s", body)
@@ -75,7 +75,7 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 		if r.URL.Path != "/internal/card-vault/card-registration/cards" {
 			t.Fatalf("card-vault path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd CompletedRegistrationCardCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode card-vault command: %v", err)
@@ -89,8 +89,9 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 	t.Cleanup(cardVaultServer.Close)
 
 	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Timeout: 2 * time.Second},
+		Store:           storeSvc,
+		HTTPClient:      &http.Client{Timeout: 2 * time.Second},
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			KafkaTransactionTopic: testKafkaTransactionTopic,
@@ -243,7 +244,7 @@ func TestCompletedRegistrationCommandsRejectMissingInputs(t *testing.T) {
 	}
 }
 
-func assertAdminCommandHeaders(t *testing.T, r *http.Request, tenantID string) {
+func assertInternalCommandHeaders(t *testing.T, r *http.Request, tenantID string) {
 	t.Helper()
 	if r.Header.Get(gateway.GatewayTenantIDHeader) != tenantID {
 		t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
@@ -251,11 +252,11 @@ func assertAdminCommandHeaders(t *testing.T, r *http.Request, tenantID string) {
 	if r.Header.Get("X-Tenant-ID") != "" {
 		t.Fatalf("public tenant header forwarded = %q", r.Header.Get("X-Tenant-ID"))
 	}
-	if r.Header.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue {
-		t.Fatalf("admin identity header = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
+	if r.Header.Get(gateway.GatewayAdminIdentityHeader) != "" {
+		t.Fatalf("static admin identity header forwarded = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
 	}
-	if r.Header.Get(gateway.GatewayAdminRoleHeader) != gateway.GatewayAdminRoleValue {
-		t.Fatalf("admin role header = %q", r.Header.Get(gateway.GatewayAdminRoleHeader))
+	if r.Header.Get(gateway.GatewayAdminRoleHeader) != "" {
+		t.Fatalf("static admin role header forwarded = %q", r.Header.Get(gateway.GatewayAdminRoleHeader))
 	}
 }
 

@@ -22,7 +22,7 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 		if r.URL.Path != "/internal/card-vault/cards/by-mobile-pan" {
 			t.Fatalf("card-vault path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd CardByMobilePANCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode card-vault command: %v", err)
@@ -65,7 +65,7 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 		if r.URL.Path != "/internal/identity-auth/recovery-credential" {
 			t.Fatalf("identity path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd RecoveryCredentialCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode recovery credential command: %v", err)
@@ -80,8 +80,9 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 	t.Cleanup(identityServer.Close)
 
 	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Timeout: 2 * time.Second},
+		Store:           storeSvc,
+		HTTPClient:      &http.Client{Timeout: 2 * time.Second},
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			ConsumerID:            "consumer-app",

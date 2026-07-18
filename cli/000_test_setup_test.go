@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,7 +71,28 @@ func TestMain(m *testing.M) {
   admin_reporting_kafka_consumer_group: "test-admin-reporting-projector"
   ebs_transaction_event_publisher_batch_size: 10
   ebs_transaction_event_publisher_poll_interval_ms: 1000
-`, dbURL, "postgres", "test-tenant", serviceRoleIdentityAuth)
+  workload_auth:
+    signing_key_id: %q
+    signing_private_key: %q
+    nonce_db_url: %q
+    trusted_keys:
+      %q:
+        caller: %q
+        public_key: %q
+      %q:
+        caller: %q
+        public_key: %q
+      %q:
+        caller: %q
+        public_key: %q
+`, dbURL, "postgres", "test-tenant", serviceRoleIdentityAuth,
+		testWorkloadKeyID(string(serviceRoleIdentityAuth)),
+		base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleIdentityAuth))),
+		dbURL,
+		testWorkloadKeyID(string(serviceRoleAPIGateway)), string(serviceRoleAPIGateway), base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleAPIGateway)).Public().(ed25519.PublicKey)),
+		testWorkloadKeyID(string(serviceRoleEBSAdapter)), string(serviceRoleEBSAdapter), base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleEBSAdapter)).Public().(ed25519.PublicKey)),
+		testWorkloadKeyID(string(serviceRoleNotification)), string(serviceRoleNotification), base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleNotification)).Public().(ed25519.PublicKey)),
+	)
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))
 	}
@@ -112,6 +135,7 @@ func migrateAllServiceScopes(ctx context.Context, db *store.DB, tenantID string)
 		store.MigrationScopeNotificationChat,
 		store.MigrationScopeConsumerBeneficiary,
 		store.MigrationScopeWalletLedger,
+		store.MigrationScopeWorkloadAuth,
 	} {
 		if err := store.MigrateScope(ctx, db, tenantID, scope); err != nil {
 			return fmt.Errorf("%s: %w", scope, err)

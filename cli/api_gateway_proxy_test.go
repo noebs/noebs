@@ -207,6 +207,7 @@ func TestAPIGatewayProxyCatalogCoversPublicHTTPServiceRoles(t *testing.T) {
 		serviceRoleEBSAdapterEvents,
 		serviceRoleAdminReportingProjector,
 		serviceRoleWalletLedger,
+		serviceRoleWorkloadAuthMigrate,
 		serviceRoleWalletWorker,
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
@@ -384,9 +385,8 @@ func TestAdminServiceRolesRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.
 	})
 }
 
-func TestServiceMetricsRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.T) {
+func TestServicesDoNotExposeMetrics(t *testing.T) {
 	ensureInit()
-	adminKey := setAdminKeyForTest(t)
 	roles := []serviceRole{
 		serviceRoleIdentityAuth,
 		serviceRoleCardVault,
@@ -400,38 +400,27 @@ func TestServiceMetricsRejectPublicAdminKeyWithoutGatewayIdentity(t *testing.T) 
 		t.Run(string(role), func(t *testing.T) {
 			setServiceRoleForTest(t, role)
 			route := GetMainEngine()
-
-			req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-			req.Header.Set("X-Admin-Key", adminKey)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusUnauthorized {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-			}
+			assertRouteAbsent(t, route, http.MethodGet, "/metrics")
 		})
 	}
 
 	t.Run("wallet api", func(t *testing.T) {
 		configureWalletRouteTest(t)
 		route := GetMainEngine()
-
-		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-		req.Header.Set("X-Admin-Key", adminKey)
-		resp, err := route.Test(req, routeTestTimeout)
-		if err != nil {
-			t.Fatalf("route.Test() error = %v", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusUnauthorized {
-			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-		}
+		assertRouteAbsent(t, route, http.MethodGet, "/metrics")
 	})
 }
 
-func TestServiceMetricsAcceptGatewayAdminIdentity(t *testing.T) {
+func assertRouteAbsent(t *testing.T, route *fiber.App, method, path string) {
+	t.Helper()
+	for _, registered := range route.GetRoutes(true) {
+		if registered.Method == method && registered.Path == path {
+			t.Fatalf("unexpected route %s %s", method, path)
+		}
+	}
+}
+
+func TestServiceMetricsAreNotReachableWithGatewayIdentity(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
 	route := GetMainEngine()
@@ -443,8 +432,8 @@ func TestServiceMetricsAcceptGatewayAdminIdentity(t *testing.T) {
 		t.Fatalf("route.Test() error = %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
 	}
 }
 

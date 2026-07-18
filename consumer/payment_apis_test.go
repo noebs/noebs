@@ -48,7 +48,7 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 		if r.URL.Path != "/internal/identity-auth/register-with-card/users" {
 			t.Fatalf("identity path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		body := readBodyForTest(t, r)
 		for _, forbidden := range [][]byte{[]byte(`"pan"`), []byte(`"expDate"`), []byte(`"exp_date"`)} {
 			if bytes.Contains(body, forbidden) {
@@ -73,7 +73,7 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 		if r.URL.Path != "/internal/card-vault/card-registration/cards" {
 			t.Fatalf("card-vault path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd CompletedRegistrationCardCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode card-vault command: %v", err)
@@ -87,8 +87,9 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 	t.Cleanup(cardVaultServer.Close)
 
 	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Timeout: 2 * time.Second},
+		Store:           storeSvc,
+		HTTPClient:      &http.Client{Timeout: 2 * time.Second},
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			ConsumerID:            "consumer-app",

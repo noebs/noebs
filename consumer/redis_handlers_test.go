@@ -57,7 +57,7 @@ func newIdentityUserByMobileServer(t *testing.T, tenantID, mobile string, userID
 		if r.URL.Path != "/internal/identity-auth/users/by-mobile" {
 			t.Fatalf("identity path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd IdentityUserByMobileCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode identity command: %v", err)

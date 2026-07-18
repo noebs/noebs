@@ -7,6 +7,7 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/eventing"
+	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/adonese/noebs/store"
 	"github.com/sirupsen/logrus"
 )
@@ -18,11 +19,12 @@ var ErrMissingStore = errors.New("missing consumer store")
 
 // Service consumer for utils.Service struct.
 type Service struct {
-	Store       *store.Store
-	NoebsConfig ebs_fields.NoebsConfig
-	Logger      *logrus.Logger
-	Auth        Auther
-	HTTPClient  *http.Client
+	Store           *store.Store
+	NoebsConfig     ebs_fields.NoebsConfig
+	Logger          *logrus.Logger
+	Auth            Auther
+	HTTPClient      *http.Client
+	WorkloadSigners *workloadauth.SignerSet
 }
 
 func (s *Service) recordTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {

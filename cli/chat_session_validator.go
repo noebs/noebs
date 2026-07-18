@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
@@ -15,15 +17,16 @@ import (
 	"github.com/adonese/noebs/internal/httpclient"
 	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/google/uuid"
+	chat "github.com/tutipay/ws"
 )
 
-type identitySessionValidator struct {
+type chatSessionValidator struct {
 	endpoint string
 	client   *http.Client
 	signers  *workloadauth.SignerSet
 }
 
-func newIdentitySessionValidator(cfg ebs_fields.NoebsConfig, signers *workloadauth.SignerSet) (*identitySessionValidator, error) {
+func newChatSessionValidator(cfg ebs_fields.NoebsConfig, signers *workloadauth.SignerSet) (*chatSessionValidator, error) {
 	if signers == nil {
 		return nil, workloadauth.ErrMissingSigner
 	}
@@ -31,7 +34,7 @@ func newIdentitySessionValidator(cfg ebs_fields.NoebsConfig, signers *workloadau
 	if err != nil {
 		return nil, err
 	}
-	return &identitySessionValidator{
+	return &chatSessionValidator{
 		endpoint: endpoint,
 		client: httpclient.New(
 			httpclient.WithTimeout(2*time.Second),
@@ -41,14 +44,17 @@ func newIdentitySessionValidator(cfg ebs_fields.NoebsConfig, signers *workloadau
 	}, nil
 }
 
-func (v *identitySessionValidator) ValidateSession(ctx context.Context, tenantID string, userID, sessionEpoch int64) error {
-	if v == nil || v.client == nil || v.endpoint == "" {
+func (v *chatSessionValidator) ValidateSession(ctx context.Context, identity chatGatewayIdentity) error {
+	if v == nil || v.client == nil || v.endpoint == "" || strings.TrimSpace(identity.Token) == "" {
 		return gateway.ErrSessionValidation
 	}
 	if v.signers == nil {
 		return fmt.Errorf("%w: %w", gateway.ErrSessionValidation, workloadauth.ErrMissingSigner)
 	}
-	payload, err := json.Marshal(consumer.SessionValidationCommand{UserID: userID, SessionEpoch: sessionEpoch})
+	payload, err := json.Marshal(consumer.SessionValidationCommand{
+		UserID:       identity.UserID,
+		SessionEpoch: identity.SessionEpoch,
+	})
 	if err != nil {
 		return fmt.Errorf("%w: %v", gateway.ErrSessionValidation, err)
 	}
@@ -58,7 +64,7 @@ func (v *identitySessionValidator) ValidateSession(ctx context.Context, tenantID
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(workloadauth.HeaderRequestID, uuid.NewString())
-	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	req.Header.Set(gateway.GatewayTenantIDHeader, identity.TenantID)
 	if err := v.signers.Sign(string(serviceRoleIdentityAuth), req, payload); err != nil {
 		return fmt.Errorf("%w: %v", gateway.ErrSessionValidation, err)
 	}
@@ -80,5 +86,24 @@ func (v *identitySessionValidator) ValidateSession(ctx context.Context, tenantID
 		return gateway.ErrSessionRevoked
 	default:
 		return fmt.Errorf("%w: identity-auth returned %s", gateway.ErrSessionValidation, resp.Status)
+	}
+}
+
+func chatSessionValidation(validator interface {
+	ValidateSession(context.Context, chatGatewayIdentity) error
+}) func(context.Context) error {
+	return func(ctx context.Context) error {
+		if validator == nil {
+			return chat.ErrSessionValidationUnavailable
+		}
+		identity, ok := ctx.Value(chatGatewayIdentityContextKey{}).(chatGatewayIdentity)
+		if !ok || identity.SessionEpoch <= 0 || strings.TrimSpace(identity.Token) == "" {
+			return chat.ErrUnauthorized
+		}
+		err := validator.ValidateSession(ctx, identity)
+		if errors.Is(err, gateway.ErrSessionValidation) {
+			return chat.ErrSessionValidationUnavailable
+		}
+		return err
 	}
 }

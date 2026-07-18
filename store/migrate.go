@@ -20,6 +20,7 @@ const (
 	MigrationScopeNotificationChat    = "notification-chat"
 	MigrationScopeConsumerBeneficiary = "consumer-beneficiary"
 	MigrationScopeWalletLedger        = "wallet-ledger"
+	MigrationScopeWorkloadAuth        = "workload-auth"
 )
 
 var migrationScopePaths = map[string]string{
@@ -31,6 +32,7 @@ var migrationScopePaths = map[string]string{
 	MigrationScopeNotificationChat:    "migrations/postgres/notification_chat",
 	MigrationScopeConsumerBeneficiary: "migrations/postgres/consumer_beneficiary",
 	MigrationScopeWalletLedger:        "migrations/postgres/wallet_ledger",
+	MigrationScopeWorkloadAuth:        "migrations/postgres/workload_auth",
 }
 
 var migrationScopeTableNames = map[string]string{
@@ -42,6 +44,7 @@ var migrationScopeTableNames = map[string]string{
 	MigrationScopeNotificationChat:    "goose_db_version_notification_chat",
 	MigrationScopeConsumerBeneficiary: "goose_db_version_consumer_beneficiary",
 	MigrationScopeWalletLedger:        "goose_db_version_wallet_ledger",
+	MigrationScopeWorkloadAuth:        "goose_db_version_workload_auth",
 }
 
 // MigrateScope applies embedded SQL migrations for one service-owned database.

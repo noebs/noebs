@@ -306,7 +306,7 @@ func initRoleServices(role serviceRole) error {
 	}
 
 	if roleNeedsConsumerService(role) {
-		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth, HTTPClient: httpclient.Default()}
+		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth, HTTPClient: httpclient.Default(), WorkloadSigners: workloadSigners}
 	}
 	if roleNeedsAdminReportingService(role) {
 		adminReportingService = adminreporting.Service{Store: storeSvc}
@@ -409,10 +409,10 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 	dashboardGet("/dashboard/stream", dashService.Stream)
 }
 
-func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, _ fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Get("/ws", userIdentity, chatWebSocketHandler(hub))
 
-	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", adminIdentity, tenantIdentity), consumerHandler)
+	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", tenantIdentity), consumerHandler)
 
 	cons := route.Group("/consumer", userIdentity)
 	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
@@ -492,18 +492,18 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 
 func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	route.Post("/generate_api_key", adminIdentity, consumerHandler.GenerateAPIKey)
-	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", adminIdentity, tenantIdentity), consumerHandler)
+	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", tenantIdentity), consumerHandler)
 
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterIdentityPublicRoutes(cons.Group("", tenantIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
-func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, _ fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
 	consumerhandler.RegisterCardVaultAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 	consumerhandler.RegisterCardVaultInternalRoutes(route.Group("/internal/card-vault", userIdentity), consumerHandler)
-	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", adminIdentity, tenantIdentity), consumerHandler)
+	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", tenantIdentity), consumerHandler)
 }
 
 func registerEBSAdapterRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
@@ -558,15 +558,15 @@ func GetMainEngine() *fiber.App {
 		Password: noebsConfig.AdminPassword,
 		Debug:    noebsConfig.IsDebug,
 	})
-	metricsGuard := adminGuard
-	if role != serviceRoleAPIGateway {
-		metricsGuard = adminIdentity
-	}
-
 	route.Get("/test", func(c *fiber.Ctx) error {
 		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 	})
-	route.Get("/metrics", metricsGuard, adaptor.HTTPHandler(promhttp.Handler()))
+	if role == serviceRoleAPIGateway {
+		route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
+	}
+	if roleReceivesSignedHTTP(role) {
+		route.Use(signedWorkloadBoundary(role, workloadVerifier))
+	}
 
 	buildConsumerHandler := func() *consumerhandler.Handler {
 		h, err := consumerhandler.New(&consumerService)
@@ -616,7 +616,6 @@ func GetMainEngine() *fiber.App {
 	if role != serviceRoleAPIGateway {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
-	registerGatewaySessionValidationRoute(route, auth)
 	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, auth, adminGuard); err != nil {
 		logrusLogger.Fatalf("error in api gateway service discovery: %v", err)
 	}
@@ -672,6 +671,9 @@ func initConfig() {
 	if err := validateRoleRuntimeConfig(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error in runtime service config: %v", err)
 	}
+	if err := validateWorkloadAuthRuntimeConfig(role, noebsConfig); err != nil {
+		logrusLogger.Fatalf("error in workload authentication config: %v", err)
+	}
 	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
 	configureLogger(noebsConfig)
 	if err := initOTel(context.Background(), role, noebsConfig, logrusLogger); err != nil {
@@ -717,6 +719,9 @@ func initConfig() {
 		dataConfigs.DB = database
 		return
 	}
+	if err := initWorkloadAuth(role, noebsConfig); err != nil {
+		logrusLogger.Fatalf("error initializing workload authentication: %v", err)
+	}
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{
@@ -729,14 +734,14 @@ func initConfig() {
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 	auth.Init()
 	if role == serviceRoleAPIGateway {
-		sessionValidator, err := newIdentitySessionValidator(noebsConfig)
+		sessionValidator, err := newIdentitySessionValidator(noebsConfig, workloadSigners)
 		if err != nil {
 			logrusLogger.Fatalf("configure identity session validation: %v", err)
 		}
 		auth.Sessions = sessionValidator
 	}
 	if role.startsChat() && database != nil && database.DB != nil {
-		sessionValidator, err := newGatewaySessionValidator(noebsConfig)
+		sessionValidator, err := newChatSessionValidator(noebsConfig, workloadSigners)
 		if err != nil {
 			logrusLogger.Fatalf("configure chat session validation: %v", err)
 		}

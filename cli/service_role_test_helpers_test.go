@@ -3,11 +3,13 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/adonese/noebs/adminreporting"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
@@ -18,14 +20,46 @@ func setServiceRoleForTest(t *testing.T, role serviceRole) {
 	t.Helper()
 	previousRole := noebsConfig.ServiceRole
 	previousServices := captureRoleServices()
+	previousSigners := workloadSigners
+	previousVerifier := workloadVerifier
 	noebsConfig.ServiceRole = string(role)
+	workloadSigners = nil
+	if audiences := workloadCallerAudiences(role); len(audiences) > 0 {
+		workloadSigners = newTestWorkloadSigners(t, string(role), audiences...)
+	}
+	workloadVerifier = nil
+	if roleReceivesSignedHTTP(role) {
+		workloadVerifier = roleTestWorkloadVerifier{}
+	}
 	if err := initRoleServices(role); err != nil {
 		t.Fatalf("initRoleServices(%s): %v", role, err)
 	}
 	t.Cleanup(func() {
 		noebsConfig.ServiceRole = previousRole
 		previousServices.restore()
+		workloadSigners = previousSigners
+		workloadVerifier = previousVerifier
 	})
+}
+
+type roleTestWorkloadVerifier struct{}
+
+func (roleTestWorkloadVerifier) Verify(req *http.Request, _ []byte) (workloadauth.Principal, error) {
+	caller := string(serviceRoleAPIGateway)
+	path := req.URL.Path
+	switch {
+	case path == "/internal/identity-auth/sessions/validate":
+		caller = string(serviceRoleAPIGateway)
+	case strings.HasPrefix(path, "/internal/identity-auth/"):
+		caller = string(serviceRoleEBSAdapter)
+	case path == "/internal/card-vault/cards/masked":
+		caller = string(serviceRoleIdentityAuth)
+	case strings.HasPrefix(path, "/internal/card-vault/"):
+		caller = string(serviceRoleEBSAdapter)
+	case strings.HasPrefix(path, "/internal/notification-chat/"):
+		caller = string(serviceRoleEBSAdapter)
+	}
+	return workloadauth.Principal{Caller: caller}, nil
 }
 
 type roleServicesSnapshot struct {

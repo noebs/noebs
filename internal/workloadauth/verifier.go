@@ -117,7 +117,7 @@ func (v *Verifier) Verify(req *http.Request, body []byte) (Principal, error) {
 	}
 
 	expiresAt := nowTime.Add(nonceRetention)
-	used, err := v.nonces.Use(req.Context(), in.keyID, in.nonce, expiresAt)
+	used, err := v.nonces.Use(req.Context(), in.keyID, v.audience, in.nonce, expiresAt)
 	if err != nil {
 		return Principal{}, fmt.Errorf("%w: %w", ErrNonceStore, err)
 	}

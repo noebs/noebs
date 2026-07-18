@@ -30,6 +30,8 @@ func ebsAdapterPublicConsumerRoutes() []ebsAdapterRoute {
 
 func ebsAdapterAuthenticatedConsumerRoutes() []ebsAdapterRoute {
 	return []ebsAdapterRoute{
+		{name: "consumer opaque enrollment intent", method: http.MethodPost, path: "/consumer/cards/enrollment-intents"},
+		{name: "consumer opaque enrollment confirmation", method: http.MethodPost, path: "/consumer/cards/enrollment-intents/:enrollment_id/confirm"},
 		{name: "consumer meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
 		{name: "consumer balance", method: http.MethodPost, path: "/consumer/balance"},
 		{name: "consumer status", method: http.MethodPost, path: "/consumer/status"},

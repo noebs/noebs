@@ -99,6 +99,9 @@ func main() {
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
 	}
+	if workloadAuthDatabase != nil {
+		defer func() { _ = workloadAuthDatabase.Close() }()
+	}
 
 	if otelShutdown != nil {
 		defer func() {

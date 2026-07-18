@@ -233,9 +233,9 @@ type countingNonceStore struct {
 	calls      atomic.Int32
 }
 
-func (s *countingNonceStore) Use(ctx context.Context, keyID, nonce string, expiresAt time.Time) (bool, error) {
+func (s *countingNonceStore) Use(ctx context.Context, keyID, audience, nonce string, expiresAt time.Time) (bool, error) {
 	s.calls.Add(1)
-	return s.underlying.Use(ctx, keyID, nonce, expiresAt)
+	return s.underlying.Use(ctx, keyID, audience, nonce, expiresAt)
 }
 
 func TestNonceStoreFailureFailsClosedAndPreservesCause(t *testing.T) {
@@ -271,17 +271,17 @@ func TestNonceRetentionIsExactlyNinetySeconds(t *testing.T) {
 	}
 
 	memory := newMemoryNonceStore(clock)
-	used, err := memory.Use(context.Background(), testKeyID, "nonce", testNow.Add(nonceRetention))
+	used, err := memory.Use(context.Background(), testKeyID, testAudience, "nonce", testNow.Add(nonceRetention))
 	if err != nil || !used {
 		t.Fatalf("initial use = %v, %v", used, err)
 	}
 	clock.now = testNow.Add(89 * time.Second)
-	used, err = memory.Use(context.Background(), testKeyID, "nonce", testNow.Add(2*nonceRetention))
+	used, err = memory.Use(context.Background(), testKeyID, testAudience, "nonce", testNow.Add(2*nonceRetention))
 	if err != nil || used {
 		t.Fatalf("use before expiry = %v, %v", used, err)
 	}
 	clock.now = testNow.Add(90 * time.Second)
-	used, err = memory.Use(context.Background(), testKeyID, "nonce", testNow.Add(2*nonceRetention))
+	used, err = memory.Use(context.Background(), testKeyID, testAudience, "nonce", testNow.Add(2*nonceRetention))
 	if err != nil || !used {
 		t.Fatalf("use at expiry = %v, %v", used, err)
 	}
@@ -291,14 +291,14 @@ type expiryNonceStore struct {
 	expiresAt time.Time
 }
 
-func (s *expiryNonceStore) Use(_ context.Context, _, _ string, expiresAt time.Time) (bool, error) {
+func (s *expiryNonceStore) Use(_ context.Context, _, _, _ string, expiresAt time.Time) (bool, error) {
 	s.expiresAt = expiresAt
 	return true, nil
 }
 
 type errorNonceStore struct{ err error }
 
-func (s errorNonceStore) Use(context.Context, string, string, time.Time) (bool, error) {
+func (s errorNonceStore) Use(context.Context, string, string, string, time.Time) (bool, error) {
 	return false, s.err
 }
 

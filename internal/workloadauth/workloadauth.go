@@ -40,6 +40,7 @@ const (
 
 var (
 	ErrInvalidConfiguration = errors.New("invalid workload authentication configuration")
+	ErrMissingSigner        = errors.New("missing workload request signer")
 	ErrInvalidRequest       = errors.New("invalid signed request")
 	ErrMissingHeader        = errors.New("missing signed header")
 	ErrDuplicateHeader      = errors.New("duplicate signed header")
@@ -64,11 +65,11 @@ type Clock interface {
 	Now() time.Time
 }
 
-// NonceStore atomically records a nonce for a key until expiresAt. Use returns
-// true only for the first claim. Production implementations must be shared by
-// every replica that accepts the same key ID.
+// NonceStore atomically records a nonce for a key and audience until expiresAt.
+// Use returns true only for the first claim. Production implementations must
+// be shared by every replica that accepts the same key ID for that audience.
 type NonceStore interface {
-	Use(ctx context.Context, keyID, nonce string, expiresAt time.Time) (bool, error)
+	Use(ctx context.Context, keyID, audience, nonce string, expiresAt time.Time) (bool, error)
 }
 
 // RegisteredKey binds a public key to the workload identity that downstream
@@ -112,4 +113,12 @@ var workloadHeaders = [...]string{
 	HeaderNonce,
 	HeaderBodySHA256,
 	HeaderSignature,
+}
+
+func WorkloadHeaderNames() []string {
+	return append([]string(nil), workloadHeaders[:]...)
+}
+
+func IdentityHeaderNames() []string {
+	return append([]string(nil), identityHeaders[:]...)
 }

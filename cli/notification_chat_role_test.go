@@ -36,11 +36,12 @@ func TestNotificationRoutesAreProxiedByAPIGateway(t *testing.T) {
 	route := GetMainEngine()
 
 	tests := []struct {
-		name   string
-		method string
-		path   string
+		name       string
+		method     string
+		path       string
+		wantStatus int
 	}{
-		{name: "websocket", method: http.MethodGet, path: "/ws"},
+		{name: "websocket requires upgrade", method: http.MethodGet, path: "/ws", wantStatus: http.StatusUpgradeRequired},
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
 		{name: "contacts", method: http.MethodPost, path: "/consumer/submit_contacts"},
 	}
@@ -51,6 +52,13 @@ func TestNotificationRoutesAreProxiedByAPIGateway(t *testing.T) {
 			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
+			}
+			if tt.wantStatus != 0 {
+				defer resp.Body.Close()
+				if resp.StatusCode != tt.wantStatus {
+					t.Fatalf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
+				}
+				return
 			}
 			assertGatewayProxied(t, resp)
 		})

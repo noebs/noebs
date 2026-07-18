@@ -276,7 +276,8 @@ func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	service := &Service{
-		HTTPClient: server.Client(),
+		HTTPClient:      server.Client(),
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ServiceDiscovery: map[string]string{
 				cardVaultServiceDiscoveryKey: server.URL,
@@ -335,7 +336,8 @@ func TestNoebsQuickPaymentLeavesMalformedOutcomeUnfinalized(t *testing.T) {
 	t.Cleanup(ebsServer.Close)
 
 	service := &Service{
-		HTTPClient: testHTTPClient(),
+		HTTPClient:      testHTTPClient(),
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			KafkaTransactionTopic: testKafkaTransactionTopic,
@@ -434,7 +436,7 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 		if r.URL.Path != "/internal/notification-chat/biller-hook" {
 			t.Fatalf("notification path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd BillerHookCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode biller hook command: %v", err)
@@ -448,8 +450,9 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 	t.Cleanup(notificationServer.Close)
 
 	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: testHTTPClient(),
+		Store:           storeSvc,
+		HTTPClient:      testHTTPClient(),
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			KafkaTransactionTopic: testKafkaTransactionTopic,

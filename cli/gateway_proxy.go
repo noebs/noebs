@@ -13,6 +13,7 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/adonese/noebs/store"
 	fastws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -92,6 +93,7 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 		if spec.websocket {
 			handlers = append(handlers, propagateGatewaySessionToken)
 		}
+		handlers = append(handlers, signGatewayWorkload(string(spec.role), workloadSigners))
 		handlers = append(handlers, handler)
 		route.Add(spec.method, spec.path, handlers...)
 	}
@@ -118,6 +120,7 @@ func gatewayWebSocketProxyHandler(endpoint string) fiber.Handler {
 
 		headers := make(http.Header)
 		for _, name := range []string{
+			workloadauth.HeaderRequestID,
 			gateway.GatewayTenantIDHeader,
 			gateway.GatewayUserIDHeader,
 			gateway.GatewayMobileHeader,
@@ -125,6 +128,11 @@ func gatewayWebSocketProxyHandler(endpoint string) fiber.Handler {
 			gateway.GatewaySessionTokenHeader,
 			gateway.GatewaySourceIPHeader,
 		} {
+			if value := strings.TrimSpace(c.Get(name)); value != "" {
+				headers.Set(name, value)
+			}
+		}
+		for _, name := range workloadauth.WorkloadHeaderNames() {
 			if value := strings.TrimSpace(c.Get(name)); value != "" {
 				headers.Set(name, value)
 			}
@@ -246,6 +254,9 @@ func gatewayProxyHandler(endpoint string) fiber.Handler {
 }
 
 func clearGatewayIdentityHeaders(c *fiber.Ctx) error {
+	for _, name := range workloadauth.WorkloadHeaderNames() {
+		c.Request().Header.Del(name)
+	}
 	c.Request().Header.Del(gateway.GatewayTenantIDHeader)
 	c.Request().Header.Del(gateway.GatewayUserIDHeader)
 	c.Request().Header.Del(gateway.GatewayMobileHeader)
@@ -256,6 +267,22 @@ func clearGatewayIdentityHeaders(c *fiber.Ctx) error {
 	c.Request().Header.Del(gateway.GatewayAdminRoleHeader)
 	c.Request().Header.Del(gateway.GatewayAdminPermissionsHeader)
 	return c.Next()
+}
+
+func signGatewayWorkload(audience string, signers *workloadauth.SignerSet) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		req, err := fiberWorkloadRequest(c)
+		if err != nil {
+			return fiber.NewError(http.StatusBadGateway, "cannot sign internal request")
+		}
+		if err := signers.Sign(audience, req, c.Body()); err != nil {
+			return fiber.NewError(http.StatusBadGateway, "cannot sign internal request")
+		}
+		for _, name := range workloadauth.WorkloadHeaderNames() {
+			c.Request().Header.Set(name, req.Header.Get(name))
+		}
+		return c.Next()
+	}
 }
 
 func clearPublicCredentialHeaders(c *fiber.Ctx) error {

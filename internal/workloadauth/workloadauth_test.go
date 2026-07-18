@@ -48,7 +48,7 @@ func newMemoryNonceStore(clock Clock) *memoryNonceStore {
 	return &memoryNonceStore{clock: clock, entries: make(map[string]time.Time)}
 }
 
-func (s *memoryNonceStore) Use(_ context.Context, keyID, nonce string, expiresAt time.Time) (bool, error) {
+func (s *memoryNonceStore) Use(_ context.Context, keyID, audience, nonce string, expiresAt time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.clock.Now()
@@ -57,7 +57,7 @@ func (s *memoryNonceStore) Use(_ context.Context, keyID, nonce string, expiresAt
 			delete(s.entries, key)
 		}
 	}
-	key := keyID + "\x00" + nonce
+	key := keyID + "\x00" + audience + "\x00" + nonce
 	if _, exists := s.entries[key]; exists {
 		return false, nil
 	}

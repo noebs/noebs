@@ -19,7 +19,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		if r.URL.Path != "/internal/card-vault/cards/by-mobile" {
 			t.Fatalf("card-vault path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd CardByMobileCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode card-vault command: %v", err)
@@ -65,7 +65,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		if r.URL.Path != "/internal/notification-chat/push-data" {
 			t.Fatalf("notification path = %s", r.URL.Path)
 		}
-		assertAdminCommandHeaders(t, r, tenantID)
+		assertInternalCommandHeaders(t, r, tenantID)
 		var cmd StorePushDataCommand
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode notification command: %v", err)
@@ -76,8 +76,9 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	t.Cleanup(notificationServer.Close)
 
 	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: testHTTPClient(),
+		Store:           storeSvc,
+		HTTPClient:      testHTTPClient(),
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			KafkaTransactionTopic: testKafkaTransactionTopic,
@@ -160,8 +161,9 @@ func TestMobileTransferFailureRetainsActorAndRecipientParticipants(t *testing.T)
 	t.Cleanup(notificationServer.Close)
 
 	service := &Service{
-		Store:      storeSvc,
-		HTTPClient: testHTTPClient(),
+		Store:           storeSvc,
+		HTTPClient:      testHTTPClient(),
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerIP:            ebsServer.URL + "/",
 			KafkaTransactionTopic: testKafkaTransactionTopic,

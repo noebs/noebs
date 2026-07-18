@@ -14,6 +14,7 @@ func RequestID() fiber.Handler {
 		requestID := strings.TrimSpace(c.Get(RequestIDHeader))
 		if requestID == "" {
 			requestID = uuid.NewString()
+			c.Request().Header.Set(RequestIDHeader, requestID)
 		}
 		c.Locals("request_id", requestID)
 		c.Set(RequestIDHeader, requestID)

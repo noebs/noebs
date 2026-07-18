@@ -74,8 +74,8 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 	vaultApp.Use(func(c *fiber.Ctx) error {
 		if c.Path() == "/internal/card-vault/funded-operations/claim" {
 			vaultClaims.Add(1)
-			if c.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue ||
-				c.Get(gateway.GatewayAdminRoleHeader) != gateway.GatewayAdminRoleValue {
+			if c.Get(gateway.GatewayAdminIdentityHeader) != "" ||
+				c.Get(gateway.GatewayAdminRoleHeader) != "" {
 				return c.SendStatus(http.StatusUnauthorized)
 			}
 		}
@@ -94,8 +94,9 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 		vaultHost: mustURLHost(t, vaultHTTP.URL),
 	}
 	ebsService := &consumer.Service{
-		Store:      storeSvc,
-		HTTPClient: &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		Store:           storeSvc,
+		HTTPClient:      &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		WorkloadSigners: testEBSAdapterWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ConsumerID:            "fixture-app",
 			ConsumerIP:            fixture.Server.URL + "/",
@@ -244,7 +245,9 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 	}{
 		{"spaced UUID", "123e4567-e89b-42d3-a456-426614174107", http.StatusBadRequest, func(value *consumer.OpaqueBalanceRequest) { value.UUID += " " }},
 		{"spaced card ID", "123e4567-e89b-42d3-a456-426614174108", http.StatusBadRequest, func(value *consumer.OpaqueBalanceRequest) { value.CardAuthorization.CardID += " " }},
-		{"different rail UUID", "123e4567-e89b-42d3-a456-426614174109", http.StatusBadRequest, func(value *consumer.OpaqueBalanceRequest) { value.CardAuthorization.RailUUID = "123e4567-e89b-42d3-a456-426614174199" }},
+		{"different rail UUID", "123e4567-e89b-42d3-a456-426614174109", http.StatusBadRequest, func(value *consumer.OpaqueBalanceRequest) {
+			value.CardAuthorization.RailUUID = "123e4567-e89b-42d3-a456-426614174199"
+		}},
 		{"forged claim", "123e4567-e89b-42d3-a456-426614174110", http.StatusConflict, func(value *consumer.OpaqueBalanceRequest) { value.RequestClaim = "v1:" + strings.Repeat("a", 64) }},
 		{"invalid IPIN block", "123e4567-e89b-42d3-a456-426614174111", http.StatusBadRequest, func(value *consumer.OpaqueBalanceRequest) { value.CardAuthorization.IPINBlock = "not-canonical-base64" }},
 	}

@@ -47,6 +47,7 @@ const (
 	serviceRoleWalletAPI               serviceRole = "wallet-api"
 	serviceRoleWalletLedger            serviceRole = "wallet-ledger"
 	serviceRoleWalletWorker            serviceRole = "wallet-worker"
+	serviceRoleWorkloadAuthMigrate     serviceRole = "workload-auth-migrate"
 
 	serviceRoleIdentityAuthMigrate   serviceRole = "identity-auth-migrate"
 	serviceRoleCardVaultMigrate      serviceRole = "card-vault-migrate"
@@ -80,6 +81,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
+		serviceRoleWorkloadAuthMigrate,
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
 		serviceRoleEBSAdapterMigrate,
@@ -442,6 +444,8 @@ func (r serviceRole) databaseOwnerRole() (serviceRole, bool) {
 		return serviceRoleBeneficiary, true
 	case serviceRoleWalletLedger, serviceRoleWalletLedgerMigrate, serviceRoleWalletWorker:
 		return serviceRoleWalletLedger, true
+	case serviceRoleWorkloadAuthMigrate:
+		return serviceRoleWorkloadAuthMigrate, true
 	default:
 		return "", false
 	}
@@ -465,6 +469,8 @@ func (r serviceRole) migrationScope() (string, bool) {
 		return store.MigrationScopeConsumerBeneficiary, true
 	case serviceRoleWalletLedgerMigrate:
 		return store.MigrationScopeWalletLedger, true
+	case serviceRoleWorkloadAuthMigrate:
+		return store.MigrationScopeWorkloadAuth, true
 	default:
 		return "", false
 	}

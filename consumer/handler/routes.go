@@ -103,6 +103,7 @@ func RegisterCardVaultAuthedRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
+	router.Post("/cards/masked", h.ListMaskedCards)
 	router.Post("/enrollment-intents", h.CreateCardEnrollmentIntentInternal)
 	router.Post("/enrollment-intents/begin", h.BeginCardEnrollmentInternal)
 	router.Post("/enrollment-intents/claim-rail", h.ClaimCardEnrollmentRailInternal)

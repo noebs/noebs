@@ -13,7 +13,9 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/adonese/noebs/store"
+	"github.com/google/uuid"
 )
 
 const (
@@ -196,10 +198,14 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(workloadauth.HeaderRequestID, uuid.NewString())
 	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	req.Header.Set(gateway.GatewayUserIDHeader, strconv.FormatInt(userID, 10))
+	if err := s.signServiceCommand(cardVaultServiceDiscoveryKey, req, payload); err != nil {
+		return err
+	}
 
-	resp, err := s.HTTPClient.Do(req)
+	resp, err := doInternalRequest(s.HTTPClient, req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrCardVaultCommand, err)
 	}
@@ -245,11 +251,13 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(workloadauth.HeaderRequestID, uuid.NewString())
 	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-	req.Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
-	req.Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
+	if err := s.signServiceCommand(target.discoveryKey, req, payload); err != nil {
+		return err
+	}
 
-	resp, err := s.HTTPClient.Do(req)
+	resp, err := doInternalRequest(s.HTTPClient, req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", target.commandErr, err)
 	}
@@ -269,6 +277,19 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 		return err
 	}
 	return nil
+}
+
+func (s *Service) signServiceCommand(audience string, req *http.Request, payload []byte) error {
+	if s.WorkloadSigners == nil {
+		return workloadauth.ErrMissingSigner
+	}
+	return s.WorkloadSigners.Sign(audience, req, payload)
+}
+
+func doInternalRequest(client *http.Client, req *http.Request) (*http.Response, error) {
+	copyClient := *client
+	copyClient.CheckRedirect = workloadauth.RejectRedirect
+	return copyClient.Do(req)
 }
 
 func (s *Service) serviceDiscoveryEndpoint(target serviceCommandTarget) (string, error) {

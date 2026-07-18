@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -23,14 +24,32 @@ func TestIdentitySessionValidatorFailsClosedAndPropagatesIdentity(t *testing.T) 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			verifier := newTestWorkloadVerifier(t, string(serviceRoleIdentityAuth), string(serviceRoleAPIGateway))
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/internal/identity-auth/sessions/validate" {
-					t.Fatalf("path = %s", r.URL.Path)
+					t.Errorf("path = %s", r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				principal, err := verifier.Verify(r, body)
+				if err != nil || principal.Caller != string(serviceRoleAPIGateway) {
+					t.Errorf("workload verification = %+v, %v", principal, err)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
 				}
 				if r.Header.Get(gateway.GatewayTenantIDHeader) != "tenant_1" ||
-					r.Header.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue ||
-					r.Header.Get(gateway.GatewayAdminRoleHeader) != gateway.GatewayAdminRoleValue {
-					t.Fatalf("identity headers = %v", r.Header)
+					r.Header.Get(gateway.GatewayAdminIdentityHeader) != "" ||
+					r.Header.Get(gateway.GatewayAdminRoleHeader) != "" ||
+					r.Header.Get("Authorization") != "" {
+					t.Errorf("identity headers = %v", r.Header)
+					w.WriteHeader(http.StatusBadRequest)
+					return
 				}
 				w.WriteHeader(tt.status)
 			}))
@@ -38,7 +57,7 @@ func TestIdentitySessionValidatorFailsClosedAndPropagatesIdentity(t *testing.T) 
 
 			validator, err := newIdentitySessionValidator(ebs_fields.NoebsConfig{
 				ServiceDiscovery: map[string]string{string(serviceRoleIdentityAuth): server.URL},
-			})
+			}, newTestWorkloadSigners(t, string(serviceRoleAPIGateway), string(serviceRoleIdentityAuth)))
 			if err != nil {
 				t.Fatalf("newIdentitySessionValidator(): %v", err)
 			}

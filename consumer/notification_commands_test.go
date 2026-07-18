@@ -216,8 +216,8 @@ func TestSubmitBillerHookInNotificationChatUsesAdminCommand(t *testing.T) {
 		if r.URL.Path != "/internal/notification-chat/biller-hook" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
-		if r.Header.Get(gateway.GatewayAdminIdentityHeader) != gateway.GatewayAdminIdentityValue {
-			t.Fatalf("admin identity header = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
+		if r.Header.Get(gateway.GatewayAdminIdentityHeader) != "" {
+			t.Fatalf("static admin identity header forwarded = %q", r.Header.Get(gateway.GatewayAdminIdentityHeader))
 		}
 		if r.Header.Get(gateway.GatewayTenantIDHeader) != "tenant-a" {
 			t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
@@ -238,7 +238,8 @@ func TestSubmitBillerHookInNotificationChatUsesAdminCommand(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	service := &Service{
-		HTTPClient: server.Client(),
+		HTTPClient:      server.Client(),
+		WorkloadSigners: testEBSWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
 			ServiceDiscovery: map[string]string{
 				notificationServiceDiscoveryKey: server.URL,
