@@ -353,6 +353,11 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 			return fmt.Errorf("%s runtime config: %w", serviceName, err)
 		}
 	}
+	if role == serviceRoleIdentityAuth {
+		if err := validateReleaseSMSGateway(cfg.SMSGateway); err != nil {
+			return fmt.Errorf("%s sms_gateway: %w", serviceName, err)
+		}
+	}
 	if role == serviceRolePSPWebhook || role == serviceRoleWalletWorker {
 		if err := validatePSPSecretMap(noebs, defaultTenantID); err != nil {
 			return fmt.Errorf("%s PSP secrets: %w", serviceName, err)
@@ -360,6 +365,54 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 	}
 	if err := rejectPlaceholders("noebs."+serviceName, noebs); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateReleaseSMSGateway(value string) error {
+	value = strings.TrimSpace(value)
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	if parsed.Scheme != "https" {
+		return errors.New("must use https")
+	}
+	if parsed.Host == "" || parsed.Hostname() == "" {
+		return errors.New("must include a host")
+	}
+	if parsed.User != nil {
+		return errors.New("must not contain user info")
+	}
+	if parsed.Fragment != "" {
+		return errors.New("must not contain a fragment")
+	}
+
+	hostname := strings.ToLower(parsed.Hostname())
+	for _, suffix := range []string{".invalid", ".example", ".test", ".localhost"} {
+		if strings.HasSuffix(hostname, suffix) {
+			return fmt.Errorf("host %q is reserved for non-production use", hostname)
+		}
+	}
+	if hostname == "localhost" {
+		return errors.New("localhost is not a release SMS gateway")
+	}
+	for _, label := range strings.FieldsFunc(hostname, func(r rune) bool { return r == '.' || r == '-' }) {
+		if label == "dummy" || label == "placeholder" {
+			return fmt.Errorf("host %q contains a placeholder label", hostname)
+		}
+	}
+	if strings.Contains(strings.ToLower(value), "replace_with_") {
+		return errors.New("contains a placeholder")
+	}
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return fmt.Errorf("parse query: %w", err)
+	}
+	for _, key := range []string{"api_key", "from", "to", "sms"} {
+		if query.Has(key) {
+			return fmt.Errorf("must not predefine dynamic %s query parameter", key)
+		}
 	}
 	return nil
 }

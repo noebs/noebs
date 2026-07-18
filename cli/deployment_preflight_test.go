@@ -109,11 +109,68 @@ func TestValidateDeploymentRootRejectsPlaceholders(t *testing.T) {
 	}
 }
 
+func TestValidateReleaseSMSGateway(t *testing.T) {
+	tests := []struct {
+		name    string
+		gateway string
+		wantErr string
+	}{
+		{name: "clean endpoint", gateway: "https://sms-gateway.noebs.sd/send"},
+		{name: "query start", gateway: "https://sms-gateway.noebs.sd/send?"},
+		{name: "existing query", gateway: "https://sms-gateway.noebs.sd/send?version=1"},
+		{name: "http", gateway: "http://sms-gateway.noebs.sd/send?", wantErr: "must use https"},
+		{name: "reserved invalid", gateway: "https://dummy-sms.invalid/send?", wantErr: "reserved for non-production use"},
+		{name: "reserved example", gateway: "https://sms.example/send?", wantErr: "reserved for non-production use"},
+		{name: "placeholder label", gateway: "https://placeholder.sms-provider.net/send?", wantErr: "placeholder label"},
+		{name: "replacement marker", gateway: "https://sms-provider.net/REPLACE_WITH_PATH?", wantErr: "contains a placeholder"},
+		{name: "malformed query", gateway: "https://sms-provider.net/send?version=%zz", wantErr: "parse"},
+		{name: "credential collision", gateway: "https://sms-provider.net/send?api_key=existing", wantErr: "must not predefine dynamic api_key"},
+		{name: "user info", gateway: "https://user@sms-provider.net/send?", wantErr: "must not contain user info"},
+		{name: "fragment", gateway: "https://sms-provider.net/send?#fragment", wantErr: "must not contain a fragment"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateReleaseSMSGateway(tt.gateway)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateReleaseSMSGateway() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validateReleaseSMSGateway() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidateKubernetesDeploymentRootAcceptsMountedInputs(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 
 	if err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsDummySMSGateway(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	path := filepath.Join(root, "secrets", "identity-auth.secrets.yaml")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read identity-auth secrets: %v", err)
+	}
+	payload = []byte(strings.ReplaceAll(
+		string(payload),
+		`https://sms-gateway.noebs.sd/send?`,
+		`https://dummy-sms.invalid/send?`,
+	))
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write identity-auth secrets: %v", err)
+	}
+
+	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "identity-auth sms_gateway") || !strings.Contains(err.Error(), "reserved for non-production use") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want dummy SMS gateway rejection", err)
 	}
 }
 

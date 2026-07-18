@@ -27,6 +27,9 @@ func TestSendSMSClosesResponseBody(t *testing.T) {
 	var sawRequest bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sawRequest = true
+		if r.URL.Query().Get("version") != "1" {
+			t.Fatalf("fixed SMS query value = %q", r.URL.Query().Get("version"))
+		}
 		if r.URL.Query().Get("to") != "249912141660" {
 			t.Fatalf("sms recipient = %q", r.URL.Query().Get("to"))
 		}
@@ -36,7 +39,7 @@ func TestSendSMSClosesResponseBody(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	err := SendSMS(&ebs_fields.NoebsConfig{
-		SMSGateway: server.URL + "?",
+		SMSGateway: server.URL + "?version=1",
 		SMSAPIKey:  "test-key",
 		SMSSender:  "NOEBS",
 		SMSMessage: "footer",
@@ -49,6 +52,12 @@ func TestSendSMSClosesResponseBody(t *testing.T) {
 	}
 	if !sawRequest {
 		t.Fatal("SMS server was not called")
+	}
+}
+
+func TestSMSRequestURLRejectsMalformedQuery(t *testing.T) {
+	if _, err := smsRequestURL("https://sms-provider.net/send?version=%zz", nil); err == nil {
+		t.Fatal("smsRequestURL() accepted a malformed query")
 	}
 }
 

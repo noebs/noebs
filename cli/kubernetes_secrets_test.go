@@ -236,7 +236,7 @@ func kubernetesSecretTestPayloads() map[string]string {
   google_redirect_url: "https://api.noebs.sd/oauth/callback"
   sms_key: sms-key
   sms_sender: noebs
-  sms_gateway: "https://sms.example"
+  sms_gateway: "https://sms-gateway.noebs.sd/send?"
   sms_message: "code"
 `,
 		"card-vault.secrets.yaml": serviceDatabaseSecret("card-vault") + `  data_key: card-vault-data-key
