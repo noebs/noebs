@@ -44,6 +44,8 @@ func (a *JWTAuth) AuthMiddleware() fiber.Handler {
 			// FIXME it is better to let the endpoint explicitly Get the claim off the user
 			//  as we will assume the auth server will reside in a different domain!
 			c.Locals("user_id", claims.UserID)
+			c.Locals("session_epoch", claims.SessionEpoch)
+			c.Locals("session_token", h)
 			if isValidMobile(claims.Mobile) {
 				c.Locals("mobile", claims.Mobile)
 				c.Locals("username", claims.Mobile)

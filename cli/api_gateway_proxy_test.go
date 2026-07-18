@@ -488,6 +488,7 @@ func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 		{name: "transaction detail", method: http.MethodGet, path: "/consumer/transaction?uuid=transaction-1"},
 		{name: "notification websocket", method: http.MethodGet, path: "/ws"},
 		{name: "kyc", method: http.MethodPost, path: "/consumer/kyc"},
+		{name: "check user", method: http.MethodPost, path: "/consumer/check_user"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -525,6 +526,8 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 		tenant       string
 		userID       string
 		mobile       string
+		sessionEpoch string
+		sessionToken string
 		publicTenant string
 		auth         string
 		adminKey     string
@@ -537,6 +540,8 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 			tenant:       r.Header.Get(gateway.GatewayTenantIDHeader),
 			userID:       r.Header.Get(gateway.GatewayUserIDHeader),
 			mobile:       r.Header.Get(gateway.GatewayMobileHeader),
+			sessionEpoch: r.Header.Get(gateway.GatewaySessionEpochHeader),
+			sessionToken: r.Header.Get(gateway.GatewaySessionTokenHeader),
 			publicTenant: r.Header.Get("X-Tenant-ID"),
 			auth:         r.Header.Get("Authorization"),
 			adminKey:     r.Header.Get("X-Admin-Key"),
@@ -557,6 +562,8 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	req.Header.Set("X-Tenant-ID", "public-tenant")
 	req.Header.Set(gateway.GatewayUserIDHeader, "999")
 	req.Header.Set(gateway.GatewayMobileHeader, "0911111111")
+	req.Header.Set(gateway.GatewaySessionEpochHeader, "999")
+	req.Header.Set(gateway.GatewaySessionTokenHeader, "spoofed-session")
 	req.Header.Set("X-Admin-Key", "public-admin")
 	req.Header.Set("X-Admin-Role", "admin")
 	req.Header.Set("X-Admin-Permissions", "config:manage")
@@ -567,10 +574,10 @@ func TestAPIGatewayPropagatesVerifiedUserIdentity(t *testing.T) {
 	assertGatewayProxied(t, resp)
 
 	got := <-observed
-	if got.tenant != "test-tenant" || got.userID != "1" || got.mobile != "0912345678" {
-		t.Fatalf("forwarded identity = %+v, want tenant=test-tenant userID=1 mobile=0912345678", got)
+	if got.tenant != "test-tenant" || got.userID != "1" || got.mobile != "0912345678" || got.sessionEpoch != "1" {
+		t.Fatalf("forwarded identity = %+v, want tenant=test-tenant userID=1 mobile=0912345678 sessionEpoch=1", got)
 	}
-	if got.publicTenant != "" || got.auth != "" || got.adminKey != "" || got.adminRole != "" || got.permissions != "" {
+	if got.sessionToken != "" || got.publicTenant != "" || got.auth != "" || got.adminKey != "" || got.adminRole != "" || got.permissions != "" {
 		t.Fatalf("gateway forwarded public credentials on user route: %+v", got)
 	}
 }
@@ -611,6 +618,8 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 		observed <- r.Header.Get(gateway.GatewayTenantIDHeader) == "" &&
 			r.Header.Get(gateway.GatewayUserIDHeader) == "" &&
 			r.Header.Get(gateway.GatewayMobileHeader) == "" &&
+			r.Header.Get(gateway.GatewaySessionEpochHeader) == "" &&
+			r.Header.Get(gateway.GatewaySessionTokenHeader) == "" &&
 			r.Header.Get(gateway.GatewaySourceIPHeader) == "" &&
 			r.Header.Get(gateway.GatewayAdminIdentityHeader) == "" &&
 			r.Header.Get(gateway.GatewayAdminRoleHeader) == "" &&

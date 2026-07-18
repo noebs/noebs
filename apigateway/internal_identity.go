@@ -13,6 +13,8 @@ const (
 	GatewayTenantIDHeader         = "X-Noebs-Tenant-ID"
 	GatewayUserIDHeader           = "X-Noebs-User-ID"
 	GatewayMobileHeader           = "X-Noebs-Mobile"
+	GatewaySessionEpochHeader     = "X-Noebs-Session-Epoch"
+	GatewaySessionTokenHeader     = "X-Noebs-Session-Token"
 	GatewaySourceIPHeader         = "X-Noebs-Source-IP"
 	GatewayAdminIdentityHeader    = "X-Noebs-Admin-Identity"
 	GatewayAdminIdentityValue     = "gateway-admin"
@@ -22,9 +24,10 @@ const (
 )
 
 type UserIdentity struct {
-	TenantID string
-	UserID   int64
-	Mobile   string
+	TenantID     string
+	UserID       int64
+	Mobile       string
+	SessionEpoch int64
 }
 
 // InternalTenantIdentityMiddleware binds a gateway-issued tenant identity header
@@ -61,6 +64,16 @@ func InternalUserIdentityMiddleware() fiber.Handler {
 		if identity.Mobile != "" {
 			c.Locals("mobile", identity.Mobile)
 			c.Locals("username", identity.Mobile)
+		}
+		if rawEpoch := strings.TrimSpace(c.Get(GatewaySessionEpochHeader)); rawEpoch != "" {
+			epoch, err := parseGatewaySessionEpoch(rawEpoch)
+			if err != nil {
+				return unauthorizedGatewayIdentity(c)
+			}
+			c.Locals("session_epoch", epoch)
+		}
+		if token := strings.TrimSpace(c.Get(GatewaySessionTokenHeader)); token != "" {
+			c.Locals("session_token", token)
 		}
 		if err := bindGatewayRequestSource(c); err != nil {
 			return unauthorizedGatewayIdentity(c)
@@ -122,6 +135,15 @@ func parseGatewayUserID(raw string) (int64, error) {
 		return 0, ErrInvalidUserIdentity
 	}
 	return userID, nil
+}
+
+func parseGatewaySessionEpoch(raw string) (int64, error) {
+	raw = strings.TrimSpace(raw)
+	epoch, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || epoch <= 0 {
+		return 0, ErrInvalidUserIdentity
+	}
+	return epoch, nil
 }
 
 func unauthorizedGatewayIdentity(c *fiber.Ctx) error {

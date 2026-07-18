@@ -120,7 +120,14 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - ports:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ebs-adapter
+      ports:
         - protocol: TCP
           port: 8080
 ---
@@ -188,7 +195,14 @@ spec:
   policyTypes:
     - Ingress
   ingress:
-    - ports:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: api-gateway
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ebs-adapter
+      ports:
         - protocol: TCP
           port: 8080
 ---

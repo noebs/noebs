@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: notification-chat
   annotations:
-    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/sync-wave: "21"
   labels:
     app.kubernetes.io/name: notification-chat
 spec:

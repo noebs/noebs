@@ -46,6 +46,13 @@ import (
 
 type chatGatewayIdentityContextKey struct{}
 
+type chatGatewayIdentity struct {
+	gateway.UserIdentity
+	Token string
+}
+
+const chatSessionValidationInterval = 5 * time.Second
+
 func isTestRun() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
 }
@@ -403,16 +410,7 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 }
 
 func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	route.Get("/ws", userIdentity, func(c *fiber.Ctx) error {
-		identity, err := chatGatewayIdentityFromFiber(c)
-		if err != nil {
-			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "missing_gateway_identity", "message": "missing gateway identity"})
-		}
-		return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r = r.WithContext(context.WithValue(r.Context(), chatGatewayIdentityContextKey{}, identity))
-			chat.ServeWs(hub, w, r)
-		})(c)
-	})
+	route.Get("/ws", userIdentity, chatWebSocketHandler(hub))
 
 	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", adminIdentity, tenantIdentity), consumerHandler)
 
@@ -429,6 +427,19 @@ func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handl
 	})
 }
 
+func chatWebSocketHandler(chatHub *chat.Hub) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		identity, err := chatGatewayIdentityFromFiber(c)
+		if err != nil {
+			return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"code": "missing_gateway_identity", "message": "missing gateway identity"})
+		}
+		return adaptor.HTTPHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r = r.WithContext(context.WithValue(context.Background(), chatGatewayIdentityContextKey{}, identity))
+			chat.ServeWs(chatHub, w, r)
+		})(c)
+	}
+}
+
 func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
@@ -437,7 +448,7 @@ func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
 	if r == nil {
 		return "", chat.ErrUnauthorized
 	}
-	identity, ok := r.Context().Value(chatGatewayIdentityContextKey{}).(gateway.UserIdentity)
+	identity, ok := r.Context().Value(chatGatewayIdentityContextKey{}).(chatGatewayIdentity)
 	if !ok {
 		return "", chat.ErrUnauthorized
 	}
@@ -447,27 +458,36 @@ func chatClientIDFromGatewayIdentity(r *http.Request) (string, error) {
 	return identity.Mobile, nil
 }
 
-func chatGatewayIdentityFromFiber(c *fiber.Ctx) (gateway.UserIdentity, error) {
+func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 	if c == nil {
-		return gateway.UserIdentity{}, chat.ErrUnauthorized
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
 	tenantID, ok := c.Locals("tenant_id").(string)
 	if !ok {
-		return gateway.UserIdentity{}, chat.ErrUnauthorized
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
 	userID, ok := c.Locals("user_id").(int64)
 	if !ok {
-		return gateway.UserIdentity{}, chat.ErrUnauthorized
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
+	}
+	sessionEpoch, ok := c.Locals("session_epoch").(int64)
+	if !ok || sessionEpoch <= 0 {
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
+	}
+	token, ok := c.Locals("session_token").(string)
+	if !ok || strings.TrimSpace(token) == "" {
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
 	mobile, ok := c.Locals("mobile").(string)
 	if !ok || strings.TrimSpace(mobile) == "" {
-		return gateway.UserIdentity{}, chat.ErrUnauthorized
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
 	identity, err := gateway.ParseInternalUserIdentity(tenantID, strconv.FormatInt(userID, 10), mobile)
 	if err != nil {
-		return gateway.UserIdentity{}, chat.ErrUnauthorized
+		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
-	return identity, nil
+	identity.SessionEpoch = sessionEpoch
+	return chatGatewayIdentity{UserIdentity: identity, Token: token}, nil
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
@@ -596,6 +616,7 @@ func GetMainEngine() *fiber.App {
 	if role != serviceRoleAPIGateway {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
+	registerGatewaySessionValidationRoute(route, auth)
 	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, auth, adminGuard); err != nil {
 		logrusLogger.Fatalf("error in api gateway service discovery: %v", err)
 	}
@@ -715,12 +736,18 @@ func initConfig() {
 		auth.Sessions = sessionValidator
 	}
 	if role.startsChat() && database != nil && database.DB != nil {
+		sessionValidator, err := newGatewaySessionValidator(noebsConfig)
+		if err != nil {
+			logrusLogger.Fatalf("configure chat session validation: %v", err)
+		}
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000
 		chatCfg.UnreadBatchSize = 200
 		chatCfg.PersistBatchSize = 128
 		chatCfg.PersistFlushInterval = 10 * time.Millisecond
 		chatCfg.ClientIDFromRequest = chatClientIDFromGatewayIdentity
+		chatCfg.ValidateClientSession = chatSessionValidation(sessionValidator)
+		chatCfg.SessionValidationInterval = chatSessionValidationInterval
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
 	}
 	if role.startsChat() && (database == nil || database.DB == nil) {

@@ -3,17 +3,21 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
+	fastws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/proxy"
+	"github.com/valyala/fasthttp"
 )
 
 type gatewayAuthMode int
@@ -30,11 +34,14 @@ const (
 )
 
 type gatewayRouteSpec struct {
-	method string
-	path   string
-	role   serviceRole
-	auth   gatewayAuthMode
+	method    string
+	path      string
+	role      serviceRole
+	auth      gatewayAuthMode
+	websocket bool
 }
+
+const gatewayWebSocketHandshakeTimeout = 10 * time.Second
 
 func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig, jwt gateway.JWTAuth, adminGuard fiber.Handler) error {
 	publicTenantID, err := store.ValidateTenantID(cfg.DefaultTenantID)
@@ -51,6 +58,13 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			}
 			handler = gatewayProxyHandler(target)
 			proxies[spec.role] = handler
+		}
+		if spec.websocket {
+			target, err := serviceDiscoveryEndpoint(cfg, spec.role)
+			if err != nil {
+				return err
+			}
+			handler = gatewayWebSocketProxyHandler(target)
 		}
 
 		handlers := make([]fiber.Handler, 0, 3)
@@ -75,10 +89,132 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 		default:
 			return fmt.Errorf("unknown gateway auth mode %d for %s %s", spec.auth, spec.method, spec.path)
 		}
+		if spec.websocket {
+			handlers = append(handlers, propagateGatewaySessionToken)
+		}
 		handlers = append(handlers, handler)
 		route.Add(spec.method, spec.path, handlers...)
 	}
 	return nil
+}
+
+func gatewayWebSocketProxyHandler(endpoint string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if !fastws.FastHTTPIsWebSocketUpgrade(c.Context()) {
+			return fiber.ErrUpgradeRequired
+		}
+		target, err := url.Parse(strings.TrimRight(endpoint, "/") + c.OriginalURL())
+		if err != nil {
+			return fiber.NewError(http.StatusBadGateway, "invalid websocket upstream")
+		}
+		switch target.Scheme {
+		case "http":
+			target.Scheme = "ws"
+		case "https":
+			target.Scheme = "wss"
+		default:
+			return fiber.NewError(http.StatusBadGateway, "invalid websocket upstream")
+		}
+
+		headers := make(http.Header)
+		for _, name := range []string{
+			gateway.GatewayTenantIDHeader,
+			gateway.GatewayUserIDHeader,
+			gateway.GatewayMobileHeader,
+			gateway.GatewaySessionEpochHeader,
+			gateway.GatewaySessionTokenHeader,
+			gateway.GatewaySourceIPHeader,
+		} {
+			if value := strings.TrimSpace(c.Get(name)); value != "" {
+				headers.Set(name, value)
+			}
+		}
+		dialer := fastws.Dialer{
+			HandshakeTimeout: gatewayWebSocketHandshakeTimeout,
+			Subprotocols:     splitWebSocketSubprotocols(c.Get("Sec-WebSocket-Protocol")),
+		}
+		upstream, response, err := dialer.DialContext(c.UserContext(), target.String(), headers)
+		if response != nil && response.Body != nil {
+			defer response.Body.Close()
+		}
+		if err != nil {
+			status := http.StatusBadGateway
+			if response != nil && response.StatusCode >= 400 && response.StatusCode < 500 {
+				status = response.StatusCode
+			}
+			return fiber.NewError(status, "websocket upstream rejected handshake")
+		}
+
+		if protocol := upstream.Subprotocol(); protocol != "" {
+			c.Response().Header.Set("Sec-WebSocket-Protocol", protocol)
+		}
+		upgrader := fastws.FastHTTPUpgrader{
+			HandshakeTimeout: gatewayWebSocketHandshakeTimeout,
+			CheckOrigin:      func(*fasthttp.RequestCtx) bool { return true },
+		}
+		if err := upgrader.Upgrade(c.Context(), func(client *fastws.Conn) {
+			proxyWebSocketConnections(client, upstream)
+		}); err != nil {
+			_ = upstream.Close()
+			return err
+		}
+		return nil
+	}
+}
+
+func splitWebSocketSubprotocols(raw string) []string {
+	var protocols []string
+	for _, protocol := range strings.Split(raw, ",") {
+		if protocol = strings.TrimSpace(protocol); protocol != "" {
+			protocols = append(protocols, protocol)
+		}
+	}
+	return protocols
+}
+
+func proxyWebSocketConnections(client, upstream *fastws.Conn) {
+	done := make(chan error, 2)
+	go func() { done <- relayWebSocket(upstream, client) }()
+	go func() { done <- relayWebSocket(client, upstream) }()
+	<-done
+	_ = client.Close()
+	_ = upstream.Close()
+	<-done
+}
+
+func relayWebSocket(destination, source *fastws.Conn) error {
+	for {
+		messageType, reader, err := source.NextReader()
+		if err != nil {
+			forwardWebSocketClose(destination, err)
+			return err
+		}
+		writer, err := destination.NextWriter(messageType)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(writer, reader)
+		closeErr := writer.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+}
+
+func forwardWebSocketClose(destination *fastws.Conn, err error) {
+	var closeErr *fastws.CloseError
+	if !errors.As(err, &closeErr) {
+		return
+	}
+	deadline := time.Now().Add(time.Second)
+	_ = destination.WriteControl(
+		fastws.CloseMessage,
+		fastws.FormatCloseMessage(closeErr.Code, closeErr.Text),
+		deadline,
+	)
 }
 
 func serviceDiscoveryEndpoint(cfg ebs_fields.NoebsConfig, role serviceRole) (string, error) {
@@ -113,6 +249,8 @@ func clearGatewayIdentityHeaders(c *fiber.Ctx) error {
 	c.Request().Header.Del(gateway.GatewayTenantIDHeader)
 	c.Request().Header.Del(gateway.GatewayUserIDHeader)
 	c.Request().Header.Del(gateway.GatewayMobileHeader)
+	c.Request().Header.Del(gateway.GatewaySessionEpochHeader)
+	c.Request().Header.Del(gateway.GatewaySessionTokenHeader)
 	c.Request().Header.Del(gateway.GatewaySourceIPHeader)
 	c.Request().Header.Del(gateway.GatewayAdminIdentityHeader)
 	c.Request().Header.Del(gateway.GatewayAdminRoleHeader)
@@ -190,13 +328,27 @@ func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 	if !ok || userID <= 0 {
 		return fiber.NewError(http.StatusUnauthorized, "missing gateway user identity")
 	}
+	sessionEpoch, ok := c.Locals("session_epoch").(int64)
+	if !ok || sessionEpoch <= 0 {
+		return fiber.NewError(http.StatusUnauthorized, "missing gateway session identity")
+	}
 	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	c.Request().Header.Set(gateway.GatewayUserIDHeader, strconv.FormatInt(userID, 10))
+	c.Request().Header.Set(gateway.GatewaySessionEpochHeader, strconv.FormatInt(sessionEpoch, 10))
 	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
 	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
 		c.Request().Header.Set(gateway.GatewayMobileHeader, mobile)
 	}
 	stripPublicCredentialHeaders(c)
+	return c.Next()
+}
+
+func propagateGatewaySessionToken(c *fiber.Ctx) error {
+	token, ok := c.Locals("session_token").(string)
+	if !ok || strings.TrimSpace(token) == "" {
+		return fiber.NewError(http.StatusUnauthorized, "missing gateway session token")
+	}
+	c.Request().Header.Set(gateway.GatewaySessionTokenHeader, token)
 	return c.Next()
 }
 
@@ -272,7 +424,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/recovery/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
 		{method: fiber.MethodPost, path: "/consumer/recovery/reset", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
 		{method: fiber.MethodPost, path: "/consumer/auth/google", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/check_user", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/check_user", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/auth/complete_profile", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/auth/me", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
@@ -330,7 +482,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodGet, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
 		{method: fiber.MethodDelete, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
 
-		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthUser},
+		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthUser, websocket: true},
 		{method: fiber.MethodGet, path: "/consumer/notifications", role: serviceRoleNotification, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/submit_contacts", role: serviceRoleNotification, auth: gatewayAuthUser},
 

@@ -138,10 +138,14 @@ func TestChatClientIDUsesGatewayIdentity(t *testing.T) {
 	if _, err := chatClientIDFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
 		t.Fatalf("header-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
 	}
-	req = req.WithContext(context.WithValue(req.Context(), chatGatewayIdentityContextKey{}, gateway.UserIdentity{
-		TenantID: "test-tenant",
-		UserID:   1,
-		Mobile:   "0912345678",
+	req = req.WithContext(context.WithValue(req.Context(), chatGatewayIdentityContextKey{}, chatGatewayIdentity{
+		UserIdentity: gateway.UserIdentity{
+			TenantID:     "test-tenant",
+			UserID:       1,
+			Mobile:       "0912345678",
+			SessionEpoch: 1,
+		},
+		Token: "signed-session",
 	}))
 	got, err := chatClientIDFromGatewayIdentity(req)
 	if err != nil {

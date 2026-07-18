@@ -921,11 +921,11 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233},
 		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432},
 		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
-		"card-vault-ingress":           {targetPod: "card-vault", port: 8080},
+		"card-vault-ingress":           {targetPod: "card-vault", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
 		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080},
 		"psp-webhook-ingress":          {targetPod: "psp-webhook", port: 8080},
 		"admin-reporting-ingress":      {targetPod: "admin-reporting", port: 8080},
-		"notification-chat-ingress":    {targetPod: "notification-chat", port: 8080},
+		"notification-chat-ingress":    {targetPod: "notification-chat", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
 		"consumer-beneficiary-ingress": {targetPod: "consumer-beneficiary", port: 8080},
 		"wallet-api-ingress":           {targetPod: "wallet-api", port: 8080},
 		"wallet-ledger-grpc-ingress":   {targetPod: "wallet-ledger", port: 9090},
@@ -2275,8 +2275,12 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 				t.Fatalf("unexpected noebs runtime Deployment %q", object.Metadata.Name)
 			}
 			expectedRuntimeDeployments[object.Metadata.Name] = true
-			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "20" {
-				t.Fatalf("%s runtime sync-wave = %q, want 20", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			wantWave := "20"
+			if object.Metadata.Name == "notification-chat" {
+				wantWave = "21"
+			}
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != wantWave {
+				t.Fatalf("%s runtime sync-wave = %q, want %s", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"], wantWave)
 			}
 			if object.Metadata.Annotations["argocd.argoproj.io/hook"] != "" {
 				t.Fatalf("%s runtime must not be an Argo hook", object.Metadata.Name)

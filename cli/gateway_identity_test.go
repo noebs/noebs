@@ -17,6 +17,8 @@ func setTestGatewayUserIdentityHeaders(req *http.Request) {
 func setGatewayUserIdentityHeaders(req *http.Request, userID int64, tenantID, mobile string) {
 	req.Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	req.Header.Set(gateway.GatewayUserIDHeader, strconv.FormatInt(userID, 10))
+	req.Header.Set(gateway.GatewaySessionEpochHeader, "1")
+	req.Header.Set(gateway.GatewaySessionTokenHeader, "test-session-token")
 	if mobile != "" {
 		req.Header.Set(gateway.GatewayMobileHeader, mobile)
 	}
