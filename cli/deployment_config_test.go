@@ -1809,6 +1809,27 @@ func TestCaddyEdgeProxyTargetsOnlyAPIGateway(t *testing.T) {
 	}
 }
 
+func TestCaddyServesAlphaAppLinksWithoutProxyingPaymentCapabilityURLs(t *testing.T) {
+	path := filepath.Join("..", "Caddyfile")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	config := string(data)
+	for _, required := range []string{
+		`path /.well-known/assetlinks.json`,
+		`"package_name":"com.tutipay.app.alpha"`,
+		`B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE`,
+		`path_regexp payment_link ^/pay/`,
+		`Cache-Control "no-store"`,
+		`Strict-Transport-Security "max-age=31536000; includeSubDomains"`,
+	} {
+		if !strings.Contains(config, required) {
+			t.Errorf("%s missing %q", path, required)
+		}
+	}
+}
+
 func TestDockerfileDoesNotDefineRoleAgnosticRuntimeMetadata(t *testing.T) {
 	path := filepath.Join("..", "Dockerfile")
 	data, err := os.ReadFile(path)

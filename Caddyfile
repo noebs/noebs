@@ -1,16 +1,45 @@
-api.noebs.sd, dsa.adonese.sd {
-    reverse_proxy api-gateway:8080
+(noebs_headers) {
+	encode gzip zstd
 
-    encode gzip zstd
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}
 
-    header {
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-    }
+api.noebs.sd {
+	import noebs_headers
 
-    log {
-        output stdout
-        format json
-    }
+	@assetlinks path /.well-known/assetlinks.json
+	header @assetlinks Content-Type application/json
+	header @assetlinks Cache-Control "public, max-age=3600"
+	respond @assetlinks `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.tutipay.app.alpha","sha256_cert_fingerprints":["B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE"]}}]` 200
+
+	@payment_link {
+		method GET HEAD
+		path_regexp payment_link ^/pay/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+	}
+	header @payment_link Content-Type "text/html; charset=utf-8"
+	header @payment_link Cache-Control "no-store"
+	header @payment_link Content-Security-Policy "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+	respond @payment_link `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutiPay payment link</title><h1>Open this link with TutiPay Alpha</h1><p>The TutiPay app completes payment securely. Never enter card or PIN details in a browser.</p></html>` 200
+
+	reverse_proxy api-gateway:8080
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+dsa.adonese.sd {
+	import noebs_headers
+	reverse_proxy api-gateway:8080
+
+	log {
+		output stdout
+		format json
+	}
 }
