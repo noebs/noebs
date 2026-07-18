@@ -25,7 +25,7 @@ func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID 
 		return nil, nil, err
 	}
 	if len(cards) == 0 {
-		return nil, nil, errors.New("no cards found")
+		return []ebs_fields.Card{}, nil, nil
 	}
 	main := cards[0]
 	return cards, &main, nil

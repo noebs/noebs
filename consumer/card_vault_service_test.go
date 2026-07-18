@@ -148,8 +148,12 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	if err := service.RemoveCardForUserID(ctx, tenantID, userID, pan); err != nil {
 		t.Fatalf("remove card with card-vault schema: %v", err)
 	}
-	if _, _, err := service.GetCardsByUserID(ctx, tenantID, userID); err == nil {
-		t.Fatalf("expected no cards after removal")
+	cards, main, err = service.GetCardsByUserID(ctx, tenantID, userID)
+	if err != nil {
+		t.Fatalf("empty card list with card-vault schema: %v", err)
+	}
+	if cards == nil || len(cards) != 0 || main != nil {
+		t.Fatalf("empty cards = %#v main = %#v, want non-nil empty cards and nil main", cards, main)
 	}
 }
 

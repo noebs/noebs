@@ -54,6 +54,7 @@ change with current-password proof, token replacement, and old-session
 revocation; signed OTP login that verifies a new no-card identity; opaque
 lost-device recovery with one-time credential replay rejection, session
 revocation, and old/new device-key proof; a tiny synthetic KYC fixture;
+empty-card HTTP shape before creation and after deletion;
 card create/read/update/main/delete; beneficiary create/update/read/delete; and
 zero-amount payment-link create/read. A second no-card identity proves that token
 lists remain creator-owned while the UUID grants only masked, same-tenant payer

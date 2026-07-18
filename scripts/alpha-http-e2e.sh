@@ -614,6 +614,8 @@ request POST /consumer/kyc auth 200 "$body"
 assert_json kyc '.code == "ok"'
 
 printf 'alpha HTTP E2E: card and zero-fund payment-link lifecycle\n'
+request GET /consumer/get_cards auth 200
+assert_json card-empty-read '.cards == [] and .main_card == null'
 body='[{"pan":"4111111111111111","exp_date":"3012","name":"Alpha E2E","ipin":"1234","is_main":true}]'
 request POST /consumer/add_card auth 200 "$body"
 assert_json card-create '.code == "ok"'
@@ -802,8 +804,8 @@ request POST /consumer/payment_request auth 404 '{}'
 body='{"card_index":"4242424242424242"}'
 request DELETE /consumer/delete_card auth 200 "$body"
 assert_json card-delete '.result == "ok"'
-request GET /consumer/get_cards auth 404
-assert_json card-delete-read '.cards == null and .main_card == null'
+request GET /consumer/get_cards auth 200
+assert_json card-delete-read '.cards == [] and .main_card == null'
 
 printf 'alpha HTTP E2E: beneficiary create, update, read, and delete\n'
 body='{"data":"0991111111","bill_type":"p2p","name":"Alpha beneficiary"}'

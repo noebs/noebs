@@ -23,7 +23,10 @@ func (h *Handler) GetCards(c *fiber.Ctx) error {
 	}
 	cards, main, err := h.Service.GetCardsByUserID(c.UserContext(), tenantID, userID)
 	if err != nil {
-		return jsonResponse(c, http.StatusNotFound, fiber.Map{"cards": nil, "main_card": nil})
+		return jsonResponse(c, statusForError(err), fiber.Map{
+			"code":    "database_error",
+			"message": "Unable to load cards",
+		})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"cards": cards, "main_card": main})
 }

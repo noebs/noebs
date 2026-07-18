@@ -57,7 +57,9 @@ OLD_TOKEN=$(jq -er .authorization <<<"$LOGIN")
 curl --fail-with-body "$BASE_URL/consumer/auth/me" -H "Authorization: Bearer $OLD_TOKEN"
 curl --fail-with-body "$BASE_URL/consumer/user" -H "Authorization: Bearer $OLD_TOKEN"
 curl --fail-with-body "$BASE_URL/consumer/user/lang" -H "Authorization: Bearer $OLD_TOKEN"
-curl --fail-with-body "$BASE_URL/consumer/get_cards" -H "Authorization: Bearer $OLD_TOKEN"
+CARDS=$(curl --fail-with-body "$BASE_URL/consumer/get_cards" \
+  -H "Authorization: Bearer $OLD_TOKEN")
+jq -e '.cards == [] and .main_card == null' <<<"$CARDS"
 curl --fail-with-body "$BASE_URL/consumer/transactions" -H "Authorization: Bearer $OLD_TOKEN"
 
 SIGNATURE=$(printf %s "$MOBILE" \
@@ -76,13 +78,16 @@ curl -i "$BASE_URL/consumer/refresh" \
 
 curl --fail-with-body "$BASE_URL/consumer/auth/me" -H "Authorization: Bearer $NEW_TOKEN"
 rm -f /tmp/noebs-e2e-private.pem
-unset OTP SIGNATURE PASSWORD OLD_TOKEN NEW_TOKEN LOGIN REFRESH REFRESH_BODY PUBLIC_KEY
+unset OTP SIGNATURE PASSWORD OLD_TOKEN NEW_TOKEN LOGIN REFRESH REFRESH_BODY PUBLIC_KEY CARDS
 ```
 
 Expected results:
 
 - registration returns 201; OTP generation returns 201; verification and password login succeed;
 - the OTP succeeds once and the same OTP is rejected on reuse;
+- the empty card read returns HTTP 200 with exactly `cards: []` and
+  `main_card: null`; a storage failure is a 5xx response, never an empty-wallet
+  response;
 - read-only profile, empty card, and empty transaction calls complete without invoking EBS, PSP payout, card registration, wallet creation, or any money-moving endpoint;
 - refresh returns a different JWT, the old JWT refresh replay returns `401 refresh_replay`, and the rotated JWT authenticates normally;
 - `429 rate_limited` includes `Retry-After`; do not deliberately exhaust live limits during the smoke run.
