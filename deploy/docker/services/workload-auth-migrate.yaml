@@ -1,0 +1,4 @@
+noebs:
+  service_role: workload-auth-migrate
+  otel_service_name: workload-auth-migrate
+  db_driver: pgx

@@ -93,7 +93,6 @@ func exactServiceDiscoveryConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
 		ServiceDiscovery: map[string]string{
 			string(serviceRoleIdentityAuth):   "http://identity-auth:8080",
-			"keycloak":                        "http://keycloak:8080",
 			string(serviceRoleCardVault):      "http://card-vault:8080",
 			string(serviceRoleEBSAdapter):     "http://ebs-adapter:8080",
 			string(serviceRolePSPWebhook):     "http://psp-webhook:8080",

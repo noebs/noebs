@@ -57,7 +57,7 @@ spec:
               mountPath: /app/service.yaml
               subPath: ebs-adapter-events.service.yaml
               readOnly: true
-            - name: ebs-adapter-secrets
+            - name: ebs-adapter-events-secrets
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
               readOnly: true
@@ -69,9 +69,9 @@ spec:
         - name: config
           configMap:
             name: noebs-config
-        - name: ebs-adapter-secrets
+        - name: ebs-adapter-events-secrets
           secret:
-            secretName: ebs-adapter-secrets
+            secretName: ebs-adapter-events-secrets
         - name: sops-age-key
           secret:
             secretName: sops-age-key

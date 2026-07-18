@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -57,7 +58,7 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			if err != nil {
 				return err
 			}
-			handler = gatewayProxyHandler(target)
+			handler = gatewayProxyHandler(target, internalTransportClientTLS)
 			proxies[spec.role] = handler
 		}
 		if spec.websocket {
@@ -65,7 +66,7 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			if err != nil {
 				return err
 			}
-			handler = gatewayWebSocketProxyHandler(target)
+			handler = gatewayWebSocketProxyHandler(target, internalTransportClientTLS)
 		}
 
 		handlers := make([]fiber.Handler, 0, 3)
@@ -97,7 +98,7 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 	return nil
 }
 
-func gatewayWebSocketProxyHandler(endpoint string) fiber.Handler {
+func gatewayWebSocketProxyHandler(endpoint string, tlsConfig *tls.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if !fastws.FastHTTPIsWebSocketUpgrade(c.Context()) {
 			return fiber.ErrUpgradeRequired
@@ -136,6 +137,7 @@ func gatewayWebSocketProxyHandler(endpoint string) fiber.Handler {
 		dialer := fastws.Dialer{
 			HandshakeTimeout: gatewayWebSocketHandshakeTimeout,
 			Subprotocols:     splitWebSocketSubprotocols(c.Get("Sec-WebSocket-Protocol")),
+			TLSClientConfig:  cloneTLSConfig(tlsConfig),
 		}
 		upstream, response, err := dialer.DialContext(c.UserContext(), target.String(), headers)
 		if response != nil && response.Body != nil {
@@ -239,14 +241,26 @@ func serviceDiscoveryEndpoint(cfg ebs_fields.NoebsConfig, role serviceRole) (str
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
-func gatewayProxyHandler(endpoint string) fiber.Handler {
+func gatewayProxyHandler(endpoint string, tlsConfig *tls.Config) fiber.Handler {
+	client := &fasthttp.Client{
+		NoDefaultUserAgentHeader: true,
+		DisablePathNormalizing:   true,
+		TLSConfig:                cloneTLSConfig(tlsConfig),
+	}
 	return func(c *fiber.Ctx) error {
 		target := endpoint + c.OriginalURL()
-		if err := proxy.Do(c, target); err != nil {
+		if err := proxy.Do(c, target, client); err != nil {
 			return fiber.NewError(http.StatusBadGateway, err.Error())
 		}
 		return nil
 	}
+}
+
+func cloneTLSConfig(config *tls.Config) *tls.Config {
+	if config == nil {
+		return nil
+	}
+	return config.Clone()
 }
 
 func clearGatewayIdentityHeaders(c *fiber.Ctx) error {

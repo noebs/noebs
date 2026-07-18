@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/transportauth"
 	"github.com/adonese/noebs/store"
 	"gopkg.in/yaml.v3"
 )
@@ -134,7 +135,7 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
 		return err
 	}
-	if err := validateKubernetesPlatformInputs(root); err != nil {
+	if err := validateKubernetesPlatformInputs(root, ageKeyPath, decrypt); err != nil {
 		return err
 	}
 
@@ -148,7 +149,7 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	return nil
 }
 
-func validateKubernetesPlatformInputs(root string) error {
+func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymentDecryptFunc) error {
 	for _, requiredFile := range []struct {
 		label string
 		path  string
@@ -167,7 +168,87 @@ func validateKubernetesPlatformInputs(root string) error {
 	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf")); err != nil {
 		return err
 	}
+	if _, err := readWorkloadAuthDatabaseCredentials(root, ageKeyPath, decrypt); err != nil {
+		return err
+	}
+	if _, err := readInternalTransportPlatformCredentials(root, ageKeyPath, decrypt); err != nil {
+		return err
+	}
 	return nil
+}
+
+type internalTransportPlatformCredentials struct {
+	CACertificate       string `yaml:"ca_certificate"`
+	PostgresCertificate string `yaml:"postgres_certificate"`
+	PostgresPrivateKey  string `yaml:"postgres_private_key"`
+}
+
+func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (internalTransportPlatformCredentials, error) {
+	path := filepath.Join(root, "platform", "internal-transport.secrets.yaml")
+	if err := requireReadableFile("internal transport platform credentials", path); err != nil {
+		return internalTransportPlatformCredentials{}, err
+	}
+	payload, err := decrypt(path, ageKeyPath)
+	if err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("decrypt internal transport platform credentials: %w", err)
+	}
+	var values internalTransportPlatformCredentials
+	decoder := yaml.NewDecoder(strings.NewReader(string(payload)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&values); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("parse internal transport platform credentials: %w", err)
+	}
+	postgres := transportauth.Config{
+		CACertificate: strings.TrimSpace(values.CACertificate),
+		Certificate:   values.PostgresCertificate,
+		PrivateKey:    values.PostgresPrivateKey,
+	}
+	if _, err := postgres.ServerTLSConfig("postgres"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Postgres transport identity: %w", err)
+	}
+	values.CACertificate = postgres.CACertificate
+	return values, nil
+}
+
+func readWorkloadAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (preparedWorkloadDatabase, error) {
+	path := filepath.Join(root, "platform", "workload-auth-postgres-roles.secrets.yaml")
+	if err := requireReadableFile("workload authentication Postgres role credentials", path); err != nil {
+		return preparedWorkloadDatabase{}, err
+	}
+	payload, err := decrypt(path, ageKeyPath)
+	if err != nil {
+		return preparedWorkloadDatabase{}, fmt.Errorf("decrypt workload authentication Postgres role credentials: %w", err)
+	}
+	var values struct {
+		MigratePassword string `yaml:"migrate_password"`
+		RuntimePassword string `yaml:"runtime_password"`
+		CleanupPassword string `yaml:"cleanup_password"`
+	}
+	decoder := yaml.NewDecoder(strings.NewReader(string(payload)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&values); err != nil {
+		return preparedWorkloadDatabase{}, fmt.Errorf("parse workload authentication Postgres role credentials: %w", err)
+	}
+	credentials := preparedWorkloadDatabase{
+		migratePassword: strings.TrimSpace(values.MigratePassword),
+		runtimePassword: strings.TrimSpace(values.RuntimePassword),
+		cleanupPassword: strings.TrimSpace(values.CleanupPassword),
+	}
+	for label, value := range map[string]string{
+		"migrate_password": credentials.migratePassword,
+		"runtime_password": credentials.runtimePassword,
+		"cleanup_password": credentials.cleanupPassword,
+	} {
+		if _, err := prepareWorkloadDatabasePassword(label, value, strings.NewReader("unused")); err != nil {
+			return preparedWorkloadDatabase{}, err
+		}
+	}
+	if credentials.migratePassword == credentials.runtimePassword ||
+		credentials.migratePassword == credentials.cleanupPassword ||
+		credentials.runtimePassword == credentials.cleanupPassword {
+		return preparedWorkloadDatabase{}, errors.New("workload authentication database passwords must be distinct")
+	}
+	return credentials, nil
 }
 
 func validateKubernetesReleaseServices(root string, configMap map[string]interface{}, ageKeyPath string, decrypt deploymentDecryptFunc) error {
@@ -204,11 +285,13 @@ func validateExactKubernetesReleaseFiles(root string) error {
 	}
 
 	expectedPlatformFiles := map[string]bool{
-		"postgres-password.txt":          true,
-		"temporal-postgres-password.txt": true,
-		"keycloak-postgres-password.txt": true,
-		"ghcr-dockerconfigjson":          true,
-		"keycloak.conf":                  true,
+		"postgres-password.txt":                     true,
+		"temporal-postgres-password.txt":            true,
+		"keycloak-postgres-password.txt":            true,
+		"ghcr-dockerconfigjson":                     true,
+		"keycloak.conf":                             true,
+		"workload-auth-postgres-roles.secrets.yaml": true,
+		"internal-transport.secrets.yaml":           true,
 	}
 	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
 		return err
@@ -344,6 +427,12 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 	}
 	if err := validateServiceDiscoveryCatalog(serviceName, cfg); err != nil {
 		return err
+	}
+	if err := validateWorkloadAuthRuntimeConfig(role, cfg); err != nil {
+		return fmt.Errorf("%s workload authentication config: %w", serviceName, err)
+	}
+	if err := validateDatabaseTransportRuntimeConfig(role, cfg); err != nil {
+		return fmt.Errorf("%s database transport config: %w", serviceName, err)
 	}
 	if roleRequiresDataKey(role) && strings.TrimSpace(cfg.DataKey) == "" {
 		return fmt.Errorf("%s data_key: %w", serviceName, store.ErrMissingDataKey)
@@ -637,30 +726,7 @@ func requireReadableFile(label, path string) error {
 }
 
 func serviceSecretFileName(serviceName string) string {
-	switch serviceName {
-	case "identity-auth-migrate":
-		return "identity-auth.secrets.yaml"
-	case "card-vault-migrate":
-		return "card-vault.secrets.yaml"
-	case "ebs-adapter-migrate":
-		return "ebs-adapter.secrets.yaml"
-	case "ebs-adapter-events":
-		return "ebs-adapter.secrets.yaml"
-	case "psp-webhook-migrate":
-		return "psp-webhook.secrets.yaml"
-	case "admin-reporting-migrate":
-		return "admin-reporting.secrets.yaml"
-	case "admin-reporting-projector":
-		return "admin-reporting.secrets.yaml"
-	case "notification-chat-migrate":
-		return "notification-chat.secrets.yaml"
-	case "consumer-beneficiary-migrate":
-		return "consumer-beneficiary.secrets.yaml"
-	case "wallet-ledger-migrate":
-		return "wallet-ledger.secrets.yaml"
-	default:
-		return serviceName + ".secrets.yaml"
-	}
+	return serviceName + ".secrets.yaml"
 }
 
 func rejectPlaceholders(path string, value interface{}) error {

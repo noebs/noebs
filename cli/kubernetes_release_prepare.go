@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,25 +23,27 @@ type kubernetesReleaseInputs struct {
 }
 
 type kubernetesReleaseNoebsInputs struct {
-	DefaultTenantID                string                          `yaml:"default_tenant_id"`
-	AdminKey                       string                          `yaml:"admin_key"`
-	AdminUser                      string                          `yaml:"admin_user"`
-	AdminPassword                  string                          `yaml:"admin_password"`
-	SMSKey                         string                          `yaml:"sms_key"`
-	SMSSender                      string                          `yaml:"sms_sender"`
-	SMSGateway                     string                          `yaml:"sms_gateway"`
-	SMSMessage                     string                          `yaml:"sms_message"`
-	GoogleClientID                 string                          `yaml:"google_client_id"`
-	GoogleClientSecret             string                          `yaml:"google_client_secret"`
-	GoogleRedirectURL              string                          `yaml:"google_redirect_url"`
-	CardVaultDataKey               string                          `yaml:"card_vault_data_key"`
-	TemporalPostgresPassword       string                          `yaml:"temporal_postgres_password"`
-	KeycloakPostgresPassword       string                          `yaml:"keycloak_postgres_password"`
-	KeycloakBootstrapAdminUsername string                          `yaml:"keycloak_bootstrap_admin_username"`
-	KeycloakBootstrapAdminPassword string                          `yaml:"keycloak_bootstrap_admin_password"`
-	GHCRDockerConfigJSON           string                          `yaml:"ghcr_dockerconfigjson"`
-	EBS                            kubernetesReleaseEBSInputs      `yaml:"ebs"`
-	PSP                            map[string]map[string]pspSecret `yaml:"psp"`
+	DefaultTenantID                string                                   `yaml:"default_tenant_id"`
+	AdminKey                       string                                   `yaml:"admin_key"`
+	AdminUser                      string                                   `yaml:"admin_user"`
+	AdminPassword                  string                                   `yaml:"admin_password"`
+	SMSKey                         string                                   `yaml:"sms_key"`
+	SMSSender                      string                                   `yaml:"sms_sender"`
+	SMSGateway                     string                                   `yaml:"sms_gateway"`
+	SMSMessage                     string                                   `yaml:"sms_message"`
+	GoogleClientID                 string                                   `yaml:"google_client_id"`
+	GoogleClientSecret             string                                   `yaml:"google_client_secret"`
+	GoogleRedirectURL              string                                   `yaml:"google_redirect_url"`
+	CardVaultDataKey               string                                   `yaml:"card_vault_data_key"`
+	TemporalPostgresPassword       string                                   `yaml:"temporal_postgres_password"`
+	KeycloakPostgresPassword       string                                   `yaml:"keycloak_postgres_password"`
+	KeycloakBootstrapAdminUsername string                                   `yaml:"keycloak_bootstrap_admin_username"`
+	KeycloakBootstrapAdminPassword string                                   `yaml:"keycloak_bootstrap_admin_password"`
+	GHCRDockerConfigJSON           string                                   `yaml:"ghcr_dockerconfigjson"`
+	EBS                            kubernetesReleaseEBSInputs               `yaml:"ebs"`
+	PSP                            map[string]map[string]pspSecret          `yaml:"psp"`
+	WorkloadAuth                   kubernetesReleaseWorkloadAuthInputs      `yaml:"workload_auth"`
+	InternalTransport              kubernetesReleaseInternalTransportInputs `yaml:"internal_transport"`
 }
 
 type kubernetesReleaseEBSInputs struct {
@@ -66,10 +70,12 @@ type pspSecret struct {
 }
 
 type preparedKubernetesRelease struct {
-	configData map[string]string
-	legacy     map[string]interface{}
-	inputs     kubernetesReleaseInputs
-	ageKeyPath string
+	configData        map[string]string
+	legacy            map[string]interface{}
+	inputs            kubernetesReleaseInputs
+	ageKeyPath        string
+	workloadAuth      preparedWorkloadAuthRelease
+	internalTransport preparedInternalTransportRelease
 }
 
 type cutoverStringField struct {
@@ -132,11 +138,21 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 		return err
 	}
 
+	preparedWorkloadAuth, err := generatePreparedWorkloadAuth(inputs.Noebs.WorkloadAuth)
+	if err != nil {
+		return err
+	}
+	preparedInternalTransport, err := prepareInternalTransportRelease(inputs.Noebs.InternalTransport, rand.Reader, time.Now().UTC())
+	if err != nil {
+		return err
+	}
 	release := preparedKubernetesRelease{
-		configData: configData,
-		legacy:     legacy,
-		inputs:     inputs,
-		ageKeyPath: ageKeyPath,
+		configData:        configData,
+		legacy:            legacy,
+		inputs:            inputs,
+		ageKeyPath:        ageKeyPath,
+		workloadAuth:      preparedWorkloadAuth,
+		internalTransport: preparedInternalTransport,
 	}
 	if err := release.validate(); err != nil {
 		return err
@@ -335,6 +351,28 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 	if err := writeReleaseFile(outputRoot, "platform/ghcr-dockerconfigjson", ghcrDockerConfig+"\n"); err != nil {
 		return err
 	}
+	workloadDatabasePayload, err := yaml.Marshal(r.workloadAuth.databaseCredentialSecret())
+	if err != nil {
+		return fmt.Errorf("marshal workload authentication database credentials: %w", err)
+	}
+	encryptedWorkloadDatabase, err := encrypt("workload-auth-postgres-roles.secrets.yaml", workloadDatabasePayload, r.ageKeyPath)
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/workload-auth-postgres-roles.secrets.yaml", string(encryptedWorkloadDatabase)); err != nil {
+		return err
+	}
+	internalTransportPayload, err := yaml.Marshal(r.internalTransport.platformSecret())
+	if err != nil {
+		return fmt.Errorf("marshal internal transport platform credentials: %w", err)
+	}
+	encryptedInternalTransport, err := encrypt("internal-transport.secrets.yaml", internalTransportPayload, r.ageKeyPath)
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/internal-transport.secrets.yaml", string(encryptedInternalTransport)); err != nil {
+		return err
+	}
 
 	serviceSecrets, err := r.serviceSecrets()
 	if err != nil {
@@ -364,14 +402,31 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	base := func() map[string]interface{} {
 		return map[string]interface{}{"default_tenant_id": tenantID}
 	}
-	withDB := func(serviceName string) (map[string]interface{}, error) {
-		dbURL, err := r.serviceDatabaseURL(serviceName)
+	withDB := func(ownerName string) (map[string]interface{}, error) {
+		dbURL, err := r.serviceDatabaseURL(ownerName)
 		if err != nil {
 			return nil, err
 		}
 		secret := base()
-		secret["service_databases"] = map[string]interface{}{serviceName: dbURL}
+		secret["service_databases"] = map[string]interface{}{ownerName: dbURL}
+		secret["database_ca_certificate"] = r.internalTransport.caCertificate
 		return secret, nil
+	}
+	result := make(map[string]map[string]interface{}, len(kubernetesSecretReleaseServiceNames))
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		result[serviceName+".secrets.yaml"] = base()
+	}
+	setSecret := func(serviceName string, secret map[string]interface{}) {
+		if workloadConfig := r.workloadAuth.configForRole(serviceRole(serviceName)); len(workloadConfig) != 0 {
+			secret["workload_auth"] = workloadConfig
+			if _, receiver := workloadConfig["nonce_db_url"]; receiver {
+				secret["database_ca_certificate"] = r.internalTransport.caCertificate
+			}
+		}
+		if transportConfig := r.internalTransport.configForRole(serviceRole(serviceName)); len(transportConfig) != 0 {
+			secret["internal_transport"] = transportConfig
+		}
+		result[serviceName+".secrets.yaml"] = secret
 	}
 
 	apiGateway := base()
@@ -392,6 +447,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
+	setSecret("api-gateway", apiGateway)
 
 	identityAuth, err := withDB("identity-auth")
 	if err != nil {
@@ -428,6 +484,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
+	setSecret("identity-auth", identityAuth)
 
 	cardVault, err := withDB("card-vault")
 	if err != nil {
@@ -437,6 +494,13 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
+	setSecret("card-vault", cardVault)
+	cardVaultMigrate, err := withDB("card-vault")
+	if err != nil {
+		return nil, err
+	}
+	cardVaultMigrate["data_key"] = cardVault["data_key"]
+	setSecret("card-vault-migrate", cardVaultMigrate)
 
 	ebsAdapter, err := withDB("ebs-adapter")
 	if err != nil {
@@ -449,6 +513,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 			return nil, err
 		}
 	}
+	setSecret("ebs-adapter", ebsAdapter)
 
 	pspWebhook, err := withDB("psp-webhook")
 	if err != nil {
@@ -459,22 +524,15 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 		return nil, err
 	}
 	pspWebhook["psp"] = psp
+	setSecret("psp-webhook", pspWebhook)
 
 	walletWorker, err := withDB("wallet-ledger")
 	if err != nil {
 		return nil, err
 	}
 	walletWorker["psp"] = psp
-
-	result := map[string]map[string]interface{}{
-		"api-gateway.secrets.yaml":   apiGateway,
-		"identity-auth.secrets.yaml": identityAuth,
-		"card-vault.secrets.yaml":    cardVault,
-		"ebs-adapter.secrets.yaml":   ebsAdapter,
-		"psp-webhook.secrets.yaml":   pspWebhook,
-		"wallet-api.secrets.yaml":    base(),
-		"wallet-worker.secrets.yaml": walletWorker,
-	}
+	setSecret("wallet-worker", walletWorker)
+	setSecret("wallet-api", base())
 	for _, serviceName := range []string{
 		"admin-reporting",
 		"notification-chat",
@@ -485,8 +543,39 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 		if err != nil {
 			return nil, err
 		}
-		result[serviceName+".secrets.yaml"] = secret
+		setSecret(serviceName, secret)
 	}
+	for roleName, ownerName := range map[string]string{
+		"identity-auth-migrate":        "identity-auth",
+		"ebs-adapter-migrate":          "ebs-adapter",
+		"ebs-adapter-events":           "ebs-adapter",
+		"psp-webhook-migrate":          "psp-webhook",
+		"admin-reporting-migrate":      "admin-reporting",
+		"admin-reporting-projector":    "admin-reporting",
+		"notification-chat-migrate":    "notification-chat",
+		"consumer-beneficiary-migrate": "consumer-beneficiary",
+		"wallet-ledger-migrate":        "wallet-ledger",
+	} {
+		secret, err := withDB(ownerName)
+		if err != nil {
+			return nil, err
+		}
+		setSecret(roleName, secret)
+	}
+	setSecret("workload-auth-migrate", map[string]interface{}{
+		"default_tenant_id":       tenantID,
+		"database_ca_certificate": r.internalTransport.caCertificate,
+		"service_databases": map[string]interface{}{
+			"workload-auth-migrate": workloadAuthDatabaseURL("workload_auth_migrate", r.workloadAuth.database.migratePassword),
+		},
+	})
+	setSecret("workload-auth-cleanup", map[string]interface{}{
+		"default_tenant_id":       tenantID,
+		"database_ca_certificate": r.internalTransport.caCertificate,
+		"service_databases": map[string]interface{}{
+			"workload-auth-migrate": workloadAuthDatabaseURL("workload_auth_cleanup", r.workloadAuth.database.cleanupPassword),
+		},
+	})
 	return result, nil
 }
 
@@ -512,7 +601,7 @@ func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (strin
 		User:     url.UserPassword(parsed.User.Username(), password),
 		Host:     "postgres:5432",
 		Path:     "/" + databaseName,
-		RawQuery: "sslmode=disable",
+		RawQuery: "sslmode=verify-full",
 	}
 	return result.String(), nil
 }

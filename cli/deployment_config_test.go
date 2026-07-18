@@ -52,17 +52,26 @@ type manifestObject struct {
 			} `yaml:"automated"`
 			SyncOptions []string `yaml:"syncOptions"`
 		} `yaml:"syncPolicy"`
-		Template struct {
+		Template    manifestPodTemplate `yaml:"template"`
+		JobTemplate struct {
 			Spec struct {
-				ServiceAccountName           string              `yaml:"serviceAccountName"`
-				AutomountServiceAccountToken *bool               `yaml:"automountServiceAccountToken"`
-				RestartPolicy                string              `yaml:"restartPolicy"`
-				Containers                   []manifestContainer `yaml:"containers"`
-				InitContainers               []manifestContainer `yaml:"initContainers"`
-				Volumes                      []manifestVolume    `yaml:"volumes"`
+				Template manifestPodTemplate `yaml:"template"`
 			} `yaml:"spec"`
-		} `yaml:"template"`
+		} `yaml:"jobTemplate"`
 	} `yaml:"spec"`
+}
+
+type manifestPodTemplate struct {
+	Spec manifestPodSpec `yaml:"spec"`
+}
+
+type manifestPodSpec struct {
+	ServiceAccountName           string              `yaml:"serviceAccountName"`
+	AutomountServiceAccountToken *bool               `yaml:"automountServiceAccountToken"`
+	RestartPolicy                string              `yaml:"restartPolicy"`
+	Containers                   []manifestContainer `yaml:"containers"`
+	InitContainers               []manifestContainer `yaml:"initContainers"`
+	Volumes                      []manifestVolume    `yaml:"volumes"`
 }
 
 type manifestLabelSelector struct {
@@ -289,7 +298,8 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 				}
 				t.Fatalf("decode %s: %v", path, err)
 			}
-			for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+			podSpec := manifestPodSpecForObject(object)
+			for _, container := range append(podSpec.Containers, podSpec.InitContainers...) {
 				if !strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
 					continue
 				}
@@ -306,7 +316,7 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 				requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
 				requireMount(t, object.Metadata.Name, container, "/app/service.yaml", "")
 				requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
-				requireNoebsSecretVolume(t, object.Metadata.Name, container, object.Spec.Template.Spec.Volumes)
+				requireNoebsSecretVolume(t, object.Metadata.Name, container, podSpec.Volumes)
 			}
 		}
 	}
@@ -319,7 +329,8 @@ func TestNoebsKubernetesImagesUseNodeCache(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	checked := 0
 	for _, object := range objects {
-		for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+		podSpec := manifestPodSpecForObject(object)
+		for _, container := range append(podSpec.Containers, podSpec.InitContainers...) {
 			if !strings.Contains(container.Image, "ghcr.io/noebs/noebs:") {
 				continue
 			}
@@ -392,7 +403,8 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		}
 		resourceOperations := make([]resourceOperation, 0, 1)
 		for _, operation := range operations {
-			if operation.Op == "add" && operation.Path == "/spec/template/spec/containers/0/resources" {
+			if operation.Op == "add" && (operation.Path == "/spec/template/spec/containers/0/resources" ||
+				operation.Path == "/spec/jobTemplate/spec/template/spec/containers/0/resources") {
 				resourceOperations = append(resourceOperations, operation)
 			}
 			if operation.Op == "add" && operation.Path == "/spec/strategy" && operation.Value.Type == "Recreate" {
@@ -426,7 +438,8 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		if !isKubernetesWorkloadKind(object.Kind) {
 			continue
 		}
-		containers := append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...)
+		podSpec := manifestPodSpecForObject(object)
+		containers := append(podSpec.Containers, podSpec.InitContainers...)
 		if len(containers) == 0 {
 			continue
 		}
@@ -488,7 +501,8 @@ func TestCIWorkflowPublishesKubernetesNoebsImage(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	images := map[string]bool{}
 	for _, object := range objects {
-		for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+		podSpec := manifestPodSpecForObject(object)
+		for _, container := range append(podSpec.Containers, podSpec.InitContainers...) {
 			if strings.HasPrefix(container.Image, "ghcr.io/noebs/noebs:") {
 				images[container.Image] = true
 			}
@@ -521,7 +535,7 @@ func TestNoebsServiceAccountsUseGHCRPullSecret(t *testing.T) {
 		if !isKubernetesWorkloadKind(object.Kind) || !workloadUsesNoebsImage(object) {
 			continue
 		}
-		serviceAccountName := object.Spec.Template.Spec.ServiceAccountName
+		serviceAccountName := manifestPodSpecForObject(object).ServiceAccountName
 		if serviceAccountName == "" {
 			t.Fatalf("%s/%s does not declare serviceAccountName", object.Kind, object.Metadata.Name)
 		}
@@ -835,13 +849,14 @@ func TestKubernetesWorkloadsUseExplicitServiceAccounts(t *testing.T) {
 			continue
 		}
 		workload := object.Kind + "/" + object.Metadata.Name
-		if len(object.Spec.Template.Spec.Containers)+len(object.Spec.Template.Spec.InitContainers) == 0 {
+		podSpec := manifestPodSpecForObject(object)
+		if len(podSpec.Containers)+len(podSpec.InitContainers) == 0 {
 			t.Fatalf("%s has no pod containers", workload)
 		}
 		checked++
 
 		expectedServiceAccount := expectedServiceAccountForWorkload(t, object)
-		serviceAccount := object.Spec.Template.Spec.ServiceAccountName
+		serviceAccount := podSpec.ServiceAccountName
 		if serviceAccount != expectedServiceAccount {
 			t.Fatalf("%s serviceAccountName = %q, want %q", workload, serviceAccount, expectedServiceAccount)
 		}
@@ -849,7 +864,7 @@ func TestKubernetesWorkloadsUseExplicitServiceAccounts(t *testing.T) {
 			t.Fatalf("%s references missing ServiceAccount %q", workload, serviceAccount)
 		}
 		usedServiceAccounts[serviceAccount] = true
-		if object.Spec.Template.Spec.AutomountServiceAccountToken == nil || *object.Spec.Template.Spec.AutomountServiceAccountToken {
+		if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken {
 			t.Fatalf("%s must set automountServiceAccountToken: false", workload)
 		}
 	}
@@ -897,9 +912,6 @@ func TestKubernetesServiceDiscoveryTargetsDeclaredServices(t *testing.T) {
 	if len(config.Noebs.ServiceDiscovery) == 0 {
 		t.Fatalf("noebs.service_discovery is empty")
 	}
-	if config.Noebs.ServiceDiscovery["keycloak"] == "" {
-		t.Fatalf("noebs.service_discovery must include keycloak")
-	}
 	if len(config.Noebs.GRPCServiceDiscovery) == 0 {
 		t.Fatalf("noebs.grpc_service_discovery is empty")
 	}
@@ -936,21 +948,23 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 		port           int
 		allowedSources []string
 	}{
+		"api-gateway-ingress":          {targetPod: "api-gateway", port: 8080},
 		"postgres-ingress":             {targetPod: "postgres", port: 5432},
-		"kafka-ingress":                {targetPod: "kafka", port: 9092},
-		"temporal-postgres-ingress":    {targetPod: "temporal-postgres", port: 5432},
-		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233},
-		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432},
-		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
+		"kafka-ingress":                {targetPod: "kafka", port: 9092, allowedSources: []string{"ebs-adapter-events", "admin-reporting-projector", "kafka-topics"}},
+		"temporal-postgres-ingress":    {targetPod: "temporal-postgres", port: 5432, allowedSources: []string{"temporal", "temporal-schema-migrate"}},
+		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233, allowedSources: []string{"psp-webhook", "wallet-ledger", "wallet-worker", "temporal-namespace-bootstrap", "temporal-ui"}},
+		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432, allowedSources: []string{"keycloak"}},
+		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "notification-chat"}},
 		"card-vault-ingress":           {targetPod: "card-vault", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
-		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080},
-		"psp-webhook-ingress":          {targetPod: "psp-webhook", port: 8080},
-		"admin-reporting-ingress":      {targetPod: "admin-reporting", port: 8080},
+		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080, allowedSources: []string{"api-gateway"}},
+		"psp-webhook-ingress":          {targetPod: "psp-webhook", port: 8080, allowedSources: []string{"api-gateway"}},
+		"admin-reporting-ingress":      {targetPod: "admin-reporting", port: 8080, allowedSources: []string{"api-gateway"}},
 		"notification-chat-ingress":    {targetPod: "notification-chat", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
-		"consumer-beneficiary-ingress": {targetPod: "consumer-beneficiary", port: 8080},
-		"wallet-api-ingress":           {targetPod: "wallet-api", port: 8080},
-		"wallet-ledger-grpc-ingress":   {targetPod: "wallet-ledger", port: 9090},
+		"consumer-beneficiary-ingress": {targetPod: "consumer-beneficiary", port: 8080, allowedSources: []string{"api-gateway"}},
+		"wallet-api-ingress":           {targetPod: "wallet-api", port: 8080, allowedSources: []string{"api-gateway"}},
+		"wallet-ledger-grpc-ingress":   {targetPod: "wallet-ledger", port: 9090, allowedSources: []string{"wallet-api"}},
 	}
+	defaultDenyFound := false
 	found := map[string]bool{}
 	for _, object := range objects {
 		if object.Kind != "NetworkPolicy" {
@@ -958,10 +972,20 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 		}
 		want, ok := expected[object.Metadata.Name]
 		if !ok {
-			t.Fatalf("unexpected NetworkPolicy %q", object.Metadata.Name)
+			if object.Metadata.Name == "default-deny" {
+				defaultDenyFound = true
+				continue
+			}
+			if containsString(object.Spec.PolicyTypes, "Egress") && !containsString(object.Spec.PolicyTypes, "Ingress") {
+				continue
+			}
+			t.Fatalf("unexpected ingress NetworkPolicy %q", object.Metadata.Name)
 		}
 		found[object.Metadata.Name] = true
 		requirePortScopedIngressNetworkPolicy(t, object, want.targetPod, want.port, want.allowedSources)
+	}
+	if !defaultDenyFound {
+		t.Fatalf("missing default-deny NetworkPolicy")
 	}
 	for name := range expected {
 		if !found[name] {
@@ -1029,7 +1053,11 @@ func TestFoundationServiceCatalogMatchesKubernetesDiscovery(t *testing.T) {
 	}
 	for role, endpoint := range config.Noebs.ServiceDiscovery {
 		name, port := parseHTTPDiscoveryEndpoint(t, role, endpoint)
-		requireTerraformServiceCatalogEntry(t, catalog, name, port, "http")
+		parsed, err := url.Parse(endpoint)
+		if err != nil {
+			t.Fatalf("service_discovery.%s = %q: %v", role, endpoint, err)
+		}
+		requireTerraformServiceCatalogEntry(t, catalog, name, port, parsed.Scheme)
 	}
 	for role, endpoint := range config.Noebs.GRPCServiceDiscovery {
 		name, port := parseHostPortDiscoveryEndpoint(t, role, endpoint)
@@ -1052,6 +1080,14 @@ func TestFoundationDatabaseCatalogDeclaresOwnedDatabases(t *testing.T) {
 
 	for _, database := range serviceDatabases {
 		serviceName := strings.ReplaceAll(database, "_", "-")
+		if serviceName == "workload-auth" {
+			requireTerraformDatabaseCatalogEntry(t, catalog, serviceName, terraformDatabaseCatalogEntry{
+				Database:      database,
+				SecretName:    "workload-auth-migrate-secrets",
+				MigrationRole: "workload-auth-migrate",
+			})
+			continue
+		}
 		requireTerraformDatabaseCatalogEntry(t, catalog, serviceName, terraformDatabaseCatalogEntry{
 			Database:      database,
 			SecretName:    serviceName + "-secrets",
@@ -1235,6 +1271,15 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 	}
 	if bootstrapScript == "" {
 		t.Fatalf("postgres-bootstrap ConfigMap missing start.sh")
+	}
+	for _, required := range []string{
+		"hostssl all all all scram-sha-256",
+		"hostnossl all all all reject",
+		"ssl_min_protocol_version=TLSv1.3",
+	} {
+		if !strings.Contains(bootstrapScript, required) {
+			t.Fatalf("Postgres bootstrap script missing %q", required)
+		}
 	}
 	if serviceDatabaseSQL == "" {
 		t.Fatalf("postgres-bootstrap ConfigMap missing 001-service-databases.sql")
@@ -2059,7 +2104,6 @@ func TestDockerfileDoesNotDefineRoleAgnosticRuntimeMetadata(t *testing.T) {
 
 func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
-	config := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
 
 	keycloak, ok := compose.Services["keycloak"]
 	if !ok {
@@ -2088,13 +2132,6 @@ func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	requireComposeVolume(t, "keycloak-postgres", keycloakPostgres.Volumes, "./deploy/docker/keycloak/postgres-start.sh", "/opt/keycloak-postgres/bin/start.sh")
 	requireComposeSecret(t, "keycloak-postgres", keycloakPostgres.Secrets, "keycloak_postgres_password", "/opt/keycloak-postgres/secrets/password")
 	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_postgres_password", "./deploy/docker/keycloak/postgres-password.txt")
-	if config.Noebs.ServiceDiscovery["keycloak"] == "" {
-		t.Fatalf("config.docker.yaml must include noebs.service_discovery.keycloak")
-	}
-	serviceName, port := parseHTTPDiscoveryEndpoint(t, "keycloak", config.Noebs.ServiceDiscovery["keycloak"])
-	if serviceName != "keycloak" || port != 8080 {
-		t.Fatalf("keycloak service discovery = %s:%d, want keycloak:8080", serviceName, port)
-	}
 }
 
 func TestDockerComposePublishesOnlyAPIGatewayByDefault(t *testing.T) {
@@ -2246,6 +2283,7 @@ func TestArgoCDApplicationIsOwnedByFoundationOnly(t *testing.T) {
 func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	expectedJobs := map[string]bool{
+		"noebs-workload-auth-migrate":        false,
 		"noebs-identity-auth-migrate":        false,
 		"noebs-card-vault-migrate":           false,
 		"noebs-ebs-adapter-migrate":          false,
@@ -2256,6 +2294,7 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"noebs-wallet-ledger-migrate":        false,
 	}
 	expectedMigrationWaves := map[string]string{
+		"noebs-workload-auth-migrate":        "9",
 		"noebs-identity-auth-migrate":        "10",
 		"noebs-card-vault-migrate":           "11",
 		"noebs-ebs-adapter-migrate":          "12",
@@ -2285,6 +2324,7 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"admin-reporting-projector": true,
 		"wallet-worker":             true,
 	}
+	cleanupFound := false
 
 	for _, object := range objects {
 		switch object.Kind {
@@ -2363,6 +2403,14 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			}
 			requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
 			requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
+		case "CronJob":
+			if object.Metadata.Name != "noebs-workload-auth-cleanup" {
+				continue
+			}
+			cleanupFound = true
+			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "19" {
+				t.Fatalf("workload auth cleanup sync-wave = %q, want 19", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+			}
 		}
 	}
 
@@ -2375,6 +2423,9 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		if !found {
 			t.Fatalf("runtime Deployment %q not found", deployment)
 		}
+	}
+	if !cleanupFound {
+		t.Fatal("workload authentication cleanup CronJob not found")
 	}
 }
 
@@ -2394,6 +2445,8 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 		"wallet-api":                   "wallet-api.service.yaml",
 		"wallet-ledger":                "wallet-ledger.service.yaml",
 		"wallet-worker":                "wallet-worker.service.yaml",
+		"workload-auth-migrate":        "workload-auth-migrate.service.yaml",
+		"workload-auth-cleanup":        "workload-auth-cleanup.service.yaml",
 		"identity-auth-migrate":        "identity-auth-migrate.service.yaml",
 		"card-vault-migrate":           "card-vault-migrate.service.yaml",
 		"ebs-adapter-migrate":          "ebs-adapter-migrate.service.yaml",
@@ -2417,18 +2470,9 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 			t.Fatalf("render-kubernetes-secrets release validation expects service config %s but preflight does not mount it", serviceName)
 		}
 	}
-	serviceSecrets := map[string]string{
-		"api-gateway":          "api-gateway-secrets",
-		"identity-auth":        "identity-auth-secrets",
-		"card-vault":           "card-vault-secrets",
-		"ebs-adapter":          "ebs-adapter-secrets",
-		"psp-webhook":          "psp-webhook-secrets",
-		"admin-reporting":      "admin-reporting-secrets",
-		"notification-chat":    "notification-chat-secrets",
-		"consumer-beneficiary": "consumer-beneficiary-secrets",
-		"wallet-api":           "wallet-api-secrets",
-		"wallet-ledger":        "wallet-ledger-secrets",
-		"wallet-worker":        "wallet-worker-secrets",
+	serviceSecrets := make(map[string]string, len(kubernetesServiceSecretSources))
+	for _, source := range kubernetesServiceSecretSources {
+		serviceSecrets[source.serviceName] = source.secretName
 	}
 
 	var found bool
@@ -2478,6 +2522,7 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak-postgres-password.txt", "password")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/ghcr-dockerconfigjson", ".dockerconfigjson")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak.conf", "keycloak.conf")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/workload-auth-postgres-roles.secrets.yaml", "roles.yaml")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "postgres-credentials", "postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "temporal-postgres-credentials", "temporal-postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-postgres-credentials", "keycloak-postgres-credentials")
@@ -2510,7 +2555,7 @@ func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
 				}
 			}
 		}
-		for _, volume := range object.Spec.Template.Spec.Volumes {
+		for _, volume := range manifestPodSpecForObject(object).Volumes {
 			if volume.Secret != nil && volume.Secret.SecretName != "" {
 				referencedSecrets[volume.Secret.SecretName] = true
 			}
@@ -2660,6 +2705,8 @@ func renderedKubernetesSecretNames() map[string]bool {
 	secrets := map[string]bool{
 		"sops-age-key":                  true,
 		"postgres-credentials":          true,
+		"workload-auth-postgres-roles":  true,
+		"internal-transport-platform":   true,
 		"temporal-postgres-credentials": true,
 		"keycloak-postgres-credentials": true,
 		"keycloak-secrets":              true,
@@ -2675,7 +2722,9 @@ func renderedKubernetesSecretNames() map[string]bool {
 func renderedKubernetesSecretKeys() map[string]map[string]bool {
 	secrets := map[string]map[string]bool{
 		"sops-age-key":                  {"age-key.txt": true},
-		"postgres-credentials":          {"password": true},
+		"postgres-credentials":          {"password": true, "tls.crt": true, "tls.key": true},
+		"workload-auth-postgres-roles":  {"migrate-password": true, "runtime-password": true, "cleanup-password": true, "roles.yaml": true},
+		"internal-transport-platform":   {"credentials.yaml": true},
 		"temporal-postgres-credentials": {"password": true},
 		"keycloak-postgres-credentials": {"password": true},
 		"keycloak-secrets":              {"keycloak.conf": true},
@@ -2817,7 +2866,7 @@ func requireServiceIdentityConfig(t *testing.T, label string, config mountedNoeb
 
 func isKubernetesWorkloadKind(kind string) bool {
 	switch kind {
-	case "Deployment", "StatefulSet", "Job":
+	case "Deployment", "StatefulSet", "Job", "CronJob":
 		return true
 	default:
 		return false
@@ -2825,7 +2874,8 @@ func isKubernetesWorkloadKind(kind string) bool {
 }
 
 func workloadUsesNoebsImage(object manifestObject) bool {
-	for _, container := range append(object.Spec.Template.Spec.Containers, object.Spec.Template.Spec.InitContainers...) {
+	podSpec := manifestPodSpecForObject(object)
+	for _, container := range append(podSpec.Containers, podSpec.InitContainers...) {
 		if strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
 			return true
 		}
@@ -2844,13 +2894,20 @@ func manifestRefsContain(refs []manifestRef, name string) bool {
 
 func expectedServiceAccountForWorkload(t *testing.T, object manifestObject) string {
 	t.Helper()
-	if object.Kind != "Job" {
+	if object.Kind != "Job" && object.Kind != "CronJob" {
 		return object.Metadata.Name
 	}
 	if strings.HasPrefix(object.Metadata.Name, "noebs-") {
 		return strings.TrimPrefix(object.Metadata.Name, "noebs-")
 	}
 	return object.Metadata.Name
+}
+
+func manifestPodSpecForObject(object manifestObject) manifestPodSpec {
+	if object.Kind == "CronJob" {
+		return object.Spec.JobTemplate.Spec.Template.Spec
+	}
+	return object.Spec.Template.Spec
 }
 
 func requireMount(t *testing.T, workload string, container manifestContainer, mountPath, subPath string) {
@@ -3085,6 +3142,12 @@ func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, 
 	if rule.Ports[0].Protocol != "TCP" || rule.Ports[0].Port != port {
 		t.Fatalf("%s ingress port = %+v, want TCP/%d", object.Metadata.Name, rule.Ports[0], port)
 	}
+	if allowedSources == nil {
+		if len(rule.From) == 0 {
+			t.Fatalf("%s ingress rule has no source selector", object.Metadata.Name)
+		}
+		return
+	}
 	if len(rule.From) != len(allowedSources) {
 		t.Fatalf("%s ingress peers = %d, want %d", object.Metadata.Name, len(rule.From), len(allowedSources))
 	}
@@ -3113,6 +3176,9 @@ func networkPoliciesByTargetPod(objects []manifestObject) map[string]manifestObj
 		if object.Kind != "NetworkPolicy" {
 			continue
 		}
+		if !containsString(object.Spec.PolicyTypes, "Ingress") {
+			continue
+		}
 		target := object.Spec.PodSelector.MatchLabels["app.kubernetes.io/name"]
 		if target == "" {
 			continue
@@ -3125,9 +3191,6 @@ func networkPoliciesByTargetPod(objects []manifestObject) map[string]manifestObj
 func requireIngressNetworkPolicyAllows(t *testing.T, object manifestObject, allowedPod string) {
 	t.Helper()
 	for _, rule := range object.Spec.Ingress {
-		if len(rule.From) == 0 {
-			return
-		}
 		for _, peer := range rule.From {
 			if peer.PodSelector == nil {
 				continue
@@ -3221,32 +3284,7 @@ func requireComposeTopLevelSecret(t *testing.T, secrets map[string]composeSecret
 }
 
 func composeSecretSourceForService(serviceName string) string {
-	switch serviceName {
-	case "identity-auth-migrate":
-		return "identity-auth-secrets"
-	case "card-vault-migrate":
-		return "card-vault-secrets"
-	case "ebs-adapter-migrate":
-		return "ebs-adapter-secrets"
-	case "ebs-adapter-events":
-		return "ebs-adapter-secrets"
-	case "psp-webhook-migrate":
-		return "psp-webhook-secrets"
-	case "admin-reporting-migrate":
-		return "admin-reporting-secrets"
-	case "admin-reporting-projector":
-		return "admin-reporting-secrets"
-	case "notification-chat-migrate":
-		return "notification-chat-secrets"
-	case "consumer-beneficiary-migrate":
-		return "consumer-beneficiary-secrets"
-	case "wallet-ledger-migrate":
-		return "wallet-ledger-secrets"
-	case "wallet-worker":
-		return "wallet-worker-secrets"
-	default:
-		return serviceName + "-secrets"
-	}
+	return serviceName + "-secrets"
 }
 
 func requirePlaceholderStrings(t *testing.T, path string, value any) {

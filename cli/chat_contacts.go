@@ -58,7 +58,7 @@ func newIdentityContactResolver(cfg ebs_fields.NoebsConfig, signers *workloadaut
 	}
 	return &identityContactResolver{
 		endpoint: endpoint,
-		client: httpclient.New(
+		client: newInternalHTTPClient(
 			httpclient.WithTimeout(3*time.Second),
 			httpclient.WithResponseHeaderTimeout(2*time.Second),
 		),

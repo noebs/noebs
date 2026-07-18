@@ -14,6 +14,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -56,7 +57,13 @@ func initGRPCServers() error {
 		if err != nil {
 			return err
 		}
-		server := grpc.NewServer(grpc.UnaryInterceptor(requireAuthForWalletMethods))
+		if internalTransportServerTLS == nil {
+			return errors.New("wallet-ledger grpc requires internal transport TLS")
+		}
+		server := grpc.NewServer(
+			grpc.Creds(credentials.NewTLS(internalTransportServerTLS.Clone())),
+			grpc.UnaryInterceptor(requireAuthForWalletMethods),
+		)
 		walletv1.RegisterWalletInternalServiceServer(server, walletSrv)
 		walletv1.RegisterWalletPublicServiceServer(server, walletSrv)
 		walletv1.RegisterWalletAdminServiceServer(server, walletSrv)

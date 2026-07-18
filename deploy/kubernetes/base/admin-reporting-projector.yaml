@@ -57,7 +57,7 @@ spec:
               mountPath: /app/service.yaml
               subPath: admin-reporting-projector.service.yaml
               readOnly: true
-            - name: admin-reporting-secrets
+            - name: admin-reporting-projector-secrets
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
               readOnly: true
@@ -69,9 +69,9 @@ spec:
         - name: config
           configMap:
             name: noebs-config
-        - name: admin-reporting-secrets
+        - name: admin-reporting-projector-secrets
           secret:
-            secretName: admin-reporting-secrets
+            secretName: admin-reporting-projector-secrets
         - name: sops-age-key
           secret:
             secretName: sops-age-key

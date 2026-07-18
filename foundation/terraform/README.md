@@ -37,8 +37,12 @@ Runtime secrets are not stored in OpenTofu. Bootstrap the foundation with `creat
 - `wallet-api-secrets` with key `secrets.yaml`
 - `wallet-ledger-secrets` with key `secrets.yaml`
 - `wallet-worker-secrets` with key `secrets.yaml`
+- `ebs-adapter-events-secrets`, `admin-reporting-projector-secrets`, `workload-auth-migrate-secrets`, and `workload-auth-cleanup-secrets`, each with key `secrets.yaml`
+- `identity-auth-migrate-secrets`, `card-vault-migrate-secrets`, `ebs-adapter-migrate-secrets`, `psp-webhook-migrate-secrets`, `admin-reporting-migrate-secrets`, `notification-chat-migrate-secrets`, `consumer-beneficiary-migrate-secrets`, and `wallet-ledger-migrate-secrets`, each with key `secrets.yaml`
+- `workload-auth-postgres-roles` with keys `migrate-password`, `runtime-password`, `cleanup-password`, and `roles.yaml`
+- `internal-transport-platform` with key `credentials.yaml`
 - `sops-age-key` with key `age-key.txt`
-- `postgres-credentials` with key `password`
+- `postgres-credentials` with keys `password`, `tls.crt`, and `tls.key`
 - `temporal-postgres-credentials` with key `password`
 - `ghcr-credentials` with key `.dockerconfigjson`
 - `noebs-tls` for `api.noebs.sd` and `dsa.adonese.sd`

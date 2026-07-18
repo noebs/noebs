@@ -14,5 +14,20 @@ CREATE TABLE workload_request_nonces (
 CREATE INDEX workload_request_nonces_expiry_idx
     ON workload_request_nonces(expires_at);
 
+-- +goose StatementBegin
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'workload_auth_runtime') THEN
+        GRANT USAGE ON SCHEMA public TO workload_auth_runtime;
+        GRANT INSERT ON workload_request_nonces TO workload_auth_runtime;
+    END IF;
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'workload_auth_cleanup') THEN
+        GRANT USAGE ON SCHEMA public TO workload_auth_cleanup;
+        GRANT DELETE ON workload_request_nonces TO workload_auth_cleanup;
+    END IF;
+END
+$$;
+-- +goose StatementEnd
+
 -- +goose Down
 DROP TABLE workload_request_nonces;

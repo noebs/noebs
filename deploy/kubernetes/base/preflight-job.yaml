@@ -97,6 +97,14 @@ spec:
               subPath: wallet-worker.service.yaml
               readOnly: true
             - name: config
+              mountPath: /preflight/services/workload-auth-migrate.yaml
+              subPath: workload-auth-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/workload-auth-cleanup.yaml
+              subPath: workload-auth-cleanup.service.yaml
+              readOnly: true
+            - name: config
               mountPath: /preflight/services/identity-auth-migrate.yaml
               subPath: identity-auth-migrate.service.yaml
               readOnly: true
@@ -172,6 +180,54 @@ spec:
               mountPath: /preflight/secrets/wallet-worker.secrets.yaml
               subPath: secrets.yaml
               readOnly: true
+            - name: ebs-adapter-events-secrets
+              mountPath: /preflight/secrets/ebs-adapter-events.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: admin-reporting-projector-secrets
+              mountPath: /preflight/secrets/admin-reporting-projector.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: workload-auth-migrate-secrets
+              mountPath: /preflight/secrets/workload-auth-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: workload-auth-cleanup-secrets
+              mountPath: /preflight/secrets/workload-auth-cleanup.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: identity-auth-migrate-secrets
+              mountPath: /preflight/secrets/identity-auth-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: card-vault-migrate-secrets
+              mountPath: /preflight/secrets/card-vault-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: ebs-adapter-migrate-secrets
+              mountPath: /preflight/secrets/ebs-adapter-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: psp-webhook-migrate-secrets
+              mountPath: /preflight/secrets/psp-webhook-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: admin-reporting-migrate-secrets
+              mountPath: /preflight/secrets/admin-reporting-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: notification-chat-migrate-secrets
+              mountPath: /preflight/secrets/notification-chat-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: consumer-beneficiary-migrate-secrets
+              mountPath: /preflight/secrets/consumer-beneficiary-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: wallet-ledger-migrate-secrets
+              mountPath: /preflight/secrets/wallet-ledger-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
             - name: sops-age-key
               mountPath: /preflight/.sops/age-key.txt
               subPath: age-key.txt
@@ -195,6 +251,14 @@ spec:
             - name: keycloak-secrets
               mountPath: /preflight/platform/keycloak.conf
               subPath: keycloak.conf
+              readOnly: true
+            - name: workload-auth-postgres-roles
+              mountPath: /preflight/platform/workload-auth-postgres-roles.secrets.yaml
+              subPath: roles.yaml
+              readOnly: true
+            - name: internal-transport-platform
+              mountPath: /preflight/platform/internal-transport.secrets.yaml
+              subPath: credentials.yaml
               readOnly: true
       volumes:
         - name: config
@@ -233,6 +297,42 @@ spec:
         - name: wallet-worker-secrets
           secret:
             secretName: wallet-worker-secrets
+        - name: ebs-adapter-events-secrets
+          secret:
+            secretName: ebs-adapter-events-secrets
+        - name: admin-reporting-projector-secrets
+          secret:
+            secretName: admin-reporting-projector-secrets
+        - name: workload-auth-migrate-secrets
+          secret:
+            secretName: workload-auth-migrate-secrets
+        - name: workload-auth-cleanup-secrets
+          secret:
+            secretName: workload-auth-cleanup-secrets
+        - name: identity-auth-migrate-secrets
+          secret:
+            secretName: identity-auth-migrate-secrets
+        - name: card-vault-migrate-secrets
+          secret:
+            secretName: card-vault-migrate-secrets
+        - name: ebs-adapter-migrate-secrets
+          secret:
+            secretName: ebs-adapter-migrate-secrets
+        - name: psp-webhook-migrate-secrets
+          secret:
+            secretName: psp-webhook-migrate-secrets
+        - name: admin-reporting-migrate-secrets
+          secret:
+            secretName: admin-reporting-migrate-secrets
+        - name: notification-chat-migrate-secrets
+          secret:
+            secretName: notification-chat-migrate-secrets
+        - name: consumer-beneficiary-migrate-secrets
+          secret:
+            secretName: consumer-beneficiary-migrate-secrets
+        - name: wallet-ledger-migrate-secrets
+          secret:
+            secretName: wallet-ledger-migrate-secrets
         - name: sops-age-key
           secret:
             secretName: sops-age-key
@@ -251,3 +351,9 @@ spec:
         - name: keycloak-secrets
           secret:
             secretName: keycloak-secrets
+        - name: workload-auth-postgres-roles
+          secret:
+            secretName: workload-auth-postgres-roles
+        - name: internal-transport-platform
+          secret:
+            secretName: internal-transport-platform

@@ -55,7 +55,6 @@ func TestMain(m *testing.M) {
   google_redirect_url: "https://app.example/auth/google/callback"
   service_discovery:
     identity-auth: "http://127.0.0.1:1"
-    keycloak: "http://127.0.0.1:1"
     card-vault: "http://127.0.0.1:1"
     ebs-adapter: "http://127.0.0.1:1"
     psp-webhook: "http://127.0.0.1:1"

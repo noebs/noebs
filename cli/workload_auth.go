@@ -140,7 +140,7 @@ func initWorkloadAuth(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 		return nil
 	}
 
-	db, err := store.OpenFromConfig(cfg.WorkloadAuth.NonceDatabaseURL, store.DriverPostgres)
+	db, err := store.OpenFromConfigWithCACertificate(cfg.WorkloadAuth.NonceDatabaseURL, store.DriverPostgres, cfg.DatabaseCACertificate)
 	if err != nil {
 		return fmt.Errorf("open workload nonce database: %w", err)
 	}

@@ -19,12 +19,23 @@ var ErrMissingStore = errors.New("missing consumer store")
 
 // Service consumer for utils.Service struct.
 type Service struct {
-	Store           *store.Store
-	NoebsConfig     ebs_fields.NoebsConfig
-	Logger          *logrus.Logger
-	Auth            Auther
-	HTTPClient      *http.Client
-	WorkloadSigners *workloadauth.SignerSet
+	Store              *store.Store
+	NoebsConfig        ebs_fields.NoebsConfig
+	Logger             *logrus.Logger
+	Auth               Auther
+	HTTPClient         *http.Client
+	InternalHTTPClient *http.Client
+	WorkloadSigners    *workloadauth.SignerSet
+}
+
+func (s *Service) internalHTTPClient() *http.Client {
+	if s == nil {
+		return nil
+	}
+	if s.InternalHTTPClient != nil {
+		return s.InternalHTTPClient
+	}
+	return s.HTTPClient
 }
 
 func (s *Service) recordTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {

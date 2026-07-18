@@ -38,24 +38,18 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 
 	secrets := decodeRenderedKubernetesSecrets(t, output.Bytes())
 	expectedNames := map[string]bool{
-		"api-gateway-secrets":           false,
-		"identity-auth-secrets":         false,
-		"card-vault-secrets":            false,
-		"ebs-adapter-secrets":           false,
-		"psp-webhook-secrets":           false,
-		"admin-reporting-secrets":       false,
-		"notification-chat-secrets":     false,
-		"consumer-beneficiary-secrets":  false,
-		"wallet-api-secrets":            false,
-		"wallet-ledger-secrets":         false,
-		"wallet-worker-secrets":         false,
 		"sops-age-key":                  false,
 		"postgres-credentials":          false,
+		"workload-auth-postgres-roles":  false,
+		"internal-transport-platform":   false,
 		"temporal-postgres-credentials": false,
 		"keycloak-postgres-credentials": false,
 		"keycloak-secrets":              false,
 		"ghcr-credentials":              false,
 		"noebs-tls":                     false,
+	}
+	for _, source := range kubernetesServiceSecretSources {
+		expectedNames[source.secretName] = false
 	}
 	for _, secret := range secrets {
 		if secret.APIVersion != "v1" || secret.Kind != "Secret" {
@@ -79,7 +73,9 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 		}
 	}
 
-	requireRenderedSecretValue(t, secrets, "postgres-credentials", "password", "postgres-password")
+	requireRenderedSecretValue(t, secrets, "postgres-credentials", "password", "legacy-pass")
+	requireRenderedSecretContains(t, secrets, "postgres-credentials", "tls.crt", "BEGIN CERTIFICATE")
+	requireRenderedSecretContains(t, secrets, "postgres-credentials", "tls.key", "BEGIN EC PRIVATE KEY")
 	requireRenderedSecretValue(t, secrets, "temporal-postgres-credentials", "password", "temporal-postgres-password")
 	requireRenderedSecretValue(t, secrets, "keycloak-postgres-credentials", "password", "keycloak-postgres-password")
 	requireRenderedSecretContains(t, secrets, "ghcr-credentials", ".dockerconfigjson", `"ghcr.io"`)
@@ -88,6 +84,11 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	requireRenderedSecretContains(t, secrets, "keycloak-secrets", "keycloak.conf", "bootstrap-admin-password")
 	requireRenderedSecretContains(t, secrets, "noebs-tls", "tls.crt", "BEGIN CERTIFICATE")
 	requireRenderedSecretContains(t, secrets, "noebs-tls", "tls.key", "BEGIN RSA PRIVATE KEY")
+	requireRenderedSecretContains(t, secrets, "workload-auth-postgres-roles", "roles.yaml", "migrate_password")
+	internalTransportPlatform := secretByName(t, secrets, "internal-transport-platform").StringData["credentials.yaml"]
+	if strings.Contains(internalTransportPlatform, "ca_private_key") {
+		t.Fatal("rendered internal transport platform Secret contains the signing CA private key")
+	}
 	if secretByName(t, secrets, "noebs-tls").Type != "kubernetes.io/tls" {
 		t.Fatalf("noebs-tls type = %q, want kubernetes.io/tls", secretByName(t, secrets, "noebs-tls").Type)
 	}
@@ -182,47 +183,17 @@ func TestRenderKubernetesSecretsRejectsInvalidTLSPair(t *testing.T) {
 
 func writeKubernetesSecretReleaseRoot(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
-	writePreflightFile(t, root, ".sops/age-key.txt", "AGE-SECRET-KEY-1LOCAL\n")
-	configMapData := decodeKubernetesNoebsConfigMapData(t)
-	writePreflightFile(t, root, "config.yaml", configMapData["config.yaml"])
-
-	for _, serviceName := range kubernetesSecretReleaseServiceNames {
-		configKey := serviceName + ".service.yaml"
-		payload := configMapData[configKey]
-		if payload == "" {
-			t.Fatalf("noebs-config missing %s", configKey)
-		}
-		writePreflightFile(t, root, filepath.Join("services", serviceName+".yaml"), payload)
-	}
-
-	writePreflightFile(t, root, "platform/postgres-password.txt", "postgres-password\n")
-	writePreflightFile(t, root, "platform/temporal-postgres-password.txt", "temporal-postgres-password\n")
-	writePreflightFile(t, root, "platform/keycloak-postgres-password.txt", "keycloak-postgres-password\n")
-	writePreflightFile(t, root, "platform/ghcr-dockerconfigjson", `{"auths":{"ghcr.io":{"auth":"bm9lYnM6dG9rZW4="}}}`+"\n")
-	writePreflightFile(t, root, "platform/keycloak.conf", `http-enabled=true
-http-port=8080
-hostname-strict=false
-proxy-headers=xforwarded
-health-enabled=true
-metrics-enabled=true
-
-db=postgres
-db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
-db-username=keycloak
-db-password=keycloak-postgres-password
-
-bootstrap-admin-username=admin
-bootstrap-admin-password=admin-password
-`)
-	for fileName, payload := range kubernetesSecretTestPayloads() {
-		writePreflightFile(t, root, filepath.Join("secrets", fileName), payload)
+	legacyRoot := writeLegacyReleaseRoot(t)
+	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	root := filepath.Join(t.TempDir(), "release")
+	if err := prepareKubernetesRelease("..", legacyRoot, inputsPath, root, readPlainPreflightSecret, plainKubernetesSecretEncrypt); err != nil {
+		t.Fatalf("prepare test Kubernetes release: %v", err)
 	}
 	return root
 }
 
 func kubernetesSecretTestPayloads() map[string]string {
-	return map[string]string{
+	payloads := map[string]string{
 		"api-gateway.secrets.yaml": `noebs:
   default_tenant_id: tenant_1
   jwt_secret: jwt-secret
@@ -265,6 +236,92 @@ func kubernetesSecretTestPayloads() map[string]string {
 		"wallet-ledger.secrets.yaml": serviceDatabaseSecret("wallet-ledger"),
 		"wallet-worker.secrets.yaml": serviceDatabaseSecret("wallet-ledger") + pspSecretMap(),
 	}
+	payloads["ebs-adapter-events.secrets.yaml"] = serviceDatabaseSecret("ebs-adapter")
+	payloads["admin-reporting-projector.secrets.yaml"] = serviceDatabaseSecret("admin-reporting")
+	for role, owner := range map[string]string{
+		"identity-auth-migrate":        "identity-auth",
+		"ebs-adapter-migrate":          "ebs-adapter",
+		"psp-webhook-migrate":          "psp-webhook",
+		"admin-reporting-migrate":      "admin-reporting",
+		"notification-chat-migrate":    "notification-chat",
+		"consumer-beneficiary-migrate": "consumer-beneficiary",
+		"wallet-ledger-migrate":        "wallet-ledger",
+	} {
+		payloads[role+".secrets.yaml"] = serviceDatabaseSecret(owner)
+	}
+	payloads["card-vault-migrate.secrets.yaml"] = serviceDatabaseSecret("card-vault") + "  data_key: card-vault-data-key\n"
+
+	random := make([]byte, 2048)
+	for index := range random {
+		random[index] = byte(index)
+	}
+	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{}, bytes.NewReader(random))
+	if err != nil {
+		panic(err)
+	}
+	preparedTransport, err := prepareInternalTransportRelease(kubernetesReleaseInternalTransportInputs{}, rand.Reader, time.Now().UTC())
+	if err != nil {
+		panic(err)
+	}
+	payloads["workload-auth-migrate.secrets.yaml"] = `noebs:
+  default_tenant_id: tenant_1
+  database_ca_certificate: |-
+` + indentYAMLBlock(preparedTransport.caCertificate, 4) + `
+  service_databases:
+    workload-auth-migrate: "` + workloadAuthDatabaseURL("workload_auth_migrate", prepared.database.migratePassword) + `"
+`
+	payloads["workload-auth-cleanup.secrets.yaml"] = `noebs:
+  default_tenant_id: tenant_1
+  database_ca_certificate: |-
+` + indentYAMLBlock(preparedTransport.caCertificate, 4) + `
+  service_databases:
+    workload-auth-migrate: "` + workloadAuthDatabaseURL("workload_auth_cleanup", prepared.database.cleanupPassword) + `"
+`
+	for _, role := range []serviceRole{
+		serviceRoleAPIGateway,
+		serviceRoleIdentityAuth,
+		serviceRoleCardVault,
+		serviceRoleEBSAdapter,
+		serviceRolePSPWebhook,
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleBeneficiary,
+		serviceRoleWalletAPI,
+		serviceRoleWalletLedger,
+	} {
+		fileName := string(role) + ".secrets.yaml"
+		var document map[string]interface{}
+		if err := yaml.Unmarshal([]byte(payloads[fileName]), &document); err != nil {
+			panic(err)
+		}
+		getMap(document, "noebs")["workload_auth"] = prepared.configForRole(role)
+		getMap(document, "noebs")["internal_transport"] = preparedTransport.configForRole(role)
+		if len(getMap(getMap(document, "noebs"), "service_databases")) != 0 || roleReceivesSignedHTTP(role) {
+			getMap(document, "noebs")["database_ca_certificate"] = preparedTransport.caCertificate
+		}
+		encoded, err := yaml.Marshal(document)
+		if err != nil {
+			panic(err)
+		}
+		payloads[fileName] = string(encoded)
+	}
+	for fileName, payload := range payloads {
+		var document map[string]interface{}
+		if err := yaml.Unmarshal([]byte(payload), &document); err != nil {
+			panic(err)
+		}
+		noebs := getMap(document, "noebs")
+		if len(getMap(noebs, "service_databases")) == 0 {
+			continue
+		}
+		noebs["database_ca_certificate"] = preparedTransport.caCertificate
+		encoded, err := yaml.Marshal(document)
+		if err != nil {
+			panic(err)
+		}
+		payloads[fileName] = string(encoded)
+	}
+	return payloads
 }
 
 func serviceDatabaseSecret(serviceName string) string {
@@ -272,8 +329,13 @@ func serviceDatabaseSecret(serviceName string) string {
 	return `noebs:
   default_tenant_id: tenant_1
   service_databases:
-    ` + serviceName + `: "postgres://noebs:service-password@postgres:5432/` + databaseName + `?sslmode=disable"
+    ` + serviceName + `: "postgres://noebs:service-password@postgres:5432/` + databaseName + `?sslmode=verify-full"
 `
+}
+
+func indentYAMLBlock(value string, spaces int) string {
+	prefix := strings.Repeat(" ", spaces)
+	return prefix + strings.ReplaceAll(strings.TrimSuffix(value, "\n"), "\n", "\n"+prefix)
 }
 
 func pspSecretMap() string {

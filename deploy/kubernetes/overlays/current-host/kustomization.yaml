@@ -186,3 +186,18 @@ patches:
           limits:
             cpu: 500m
             memory: 512Mi
+  - target:
+      group: batch
+      version: v1
+      kind: CronJob
+      name: noebs-workload-auth-cleanup
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi

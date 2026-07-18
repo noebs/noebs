@@ -175,7 +175,8 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 	if s == nil {
 		return ErrMissingService
 	}
-	if s.HTTPClient == nil {
+	client := s.internalHTTPClient()
+	if client == nil {
 		return ErrMissingHTTPClient
 	}
 	tenantID, err := store.ValidateTenantID(tenantID)
@@ -205,7 +206,7 @@ func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userI
 		return err
 	}
 
-	resp, err := doInternalRequest(s.HTTPClient, req)
+	resp, err := doInternalRequest(client, req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrCardVaultCommand, err)
 	}
@@ -231,7 +232,8 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 	if s == nil {
 		return ErrMissingService
 	}
-	if s.HTTPClient == nil {
+	client := s.internalHTTPClient()
+	if client == nil {
 		return ErrMissingHTTPClient
 	}
 	tenantID, err := store.ValidateTenantID(tenantID)
@@ -257,7 +259,7 @@ func (s *Service) doAdminServiceCommand(ctx context.Context, tenantID string, ta
 		return err
 	}
 
-	resp, err := doInternalRequest(s.HTTPClient, req)
+	resp, err := doInternalRequest(client, req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", target.commandErr, err)
 	}

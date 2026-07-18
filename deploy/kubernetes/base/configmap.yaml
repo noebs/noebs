@@ -39,15 +39,14 @@ data:
       grpc_gateway_enabled: false
       grpc_gateway_port: ":9091"
       service_discovery:
-        identity-auth: "http://identity-auth:8080"
-        keycloak: "http://keycloak:8080"
-        card-vault: "http://card-vault:8080"
-        ebs-adapter: "http://ebs-adapter:8080"
-        psp-webhook: "http://psp-webhook:8080"
-        admin-reporting: "http://admin-reporting:8080"
-        notification-chat: "http://notification-chat:8080"
-        consumer-beneficiary: "http://consumer-beneficiary:8080"
-        wallet-api: "http://wallet-api:8080"
+        identity-auth: "https://identity-auth:8080"
+        card-vault: "https://card-vault:8080"
+        ebs-adapter: "https://ebs-adapter:8080"
+        psp-webhook: "https://psp-webhook:8080"
+        admin-reporting: "https://admin-reporting:8080"
+        notification-chat: "https://notification-chat:8080"
+        consumer-beneficiary: "https://consumer-beneficiary:8080"
+        wallet-api: "https://wallet-api:8080"
       grpc_service_discovery:
         wallet-ledger: "wallet-ledger:9090"
       kafka_brokers:
@@ -122,6 +121,16 @@ data:
     noebs:
       service_role: wallet-worker
       otel_service_name: wallet-worker
+      db_driver: pgx
+  workload-auth-migrate.service.yaml: |
+    noebs:
+      service_role: workload-auth-migrate
+      otel_service_name: workload-auth-migrate
+      db_driver: pgx
+  workload-auth-cleanup.service.yaml: |
+    noebs:
+      service_role: workload-auth-cleanup
+      otel_service_name: workload-auth-cleanup
       db_driver: pgx
   identity-auth-migrate.service.yaml: |
     noebs:

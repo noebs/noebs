@@ -8,7 +8,7 @@ locals {
     }
     "identity-auth" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     keycloak = {
       port     = 8080
@@ -16,31 +16,31 @@ locals {
     }
     "card-vault" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "ebs-adapter" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "psp-webhook" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "admin-reporting" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "notification-chat" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "consumer-beneficiary" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "wallet-api" = {
       port     = 8080
-      protocol = "http"
+      protocol = "https"
     }
     "wallet-ledger" = {
       port     = 9090
@@ -117,6 +117,11 @@ locals {
       database    = "wallet_ledger"
       secret_name = "wallet-worker-secrets"
     }
+    "workload-auth" = {
+      database       = "workload_auth"
+      secret_name    = "workload-auth-migrate-secrets"
+      migration_role = "workload-auth-migrate"
+    }
     keycloak = {
       database    = "keycloak"
       secret_name = "keycloak-secrets"
@@ -141,15 +146,29 @@ locals {
     "identity-auth-secrets",
     "card-vault-secrets",
     "ebs-adapter-secrets",
+    "ebs-adapter-events-secrets",
     "psp-webhook-secrets",
     "admin-reporting-secrets",
+    "admin-reporting-projector-secrets",
     "notification-chat-secrets",
     "consumer-beneficiary-secrets",
     "wallet-api-secrets",
     "wallet-ledger-secrets",
     "wallet-worker-secrets",
+    "workload-auth-migrate-secrets",
+    "workload-auth-cleanup-secrets",
+    "identity-auth-migrate-secrets",
+    "card-vault-migrate-secrets",
+    "ebs-adapter-migrate-secrets",
+    "psp-webhook-migrate-secrets",
+    "admin-reporting-migrate-secrets",
+    "notification-chat-migrate-secrets",
+    "consumer-beneficiary-migrate-secrets",
+    "wallet-ledger-migrate-secrets",
     "sops-age-key",
     "postgres-credentials",
+    "workload-auth-postgres-roles",
+    "internal-transport-platform",
     "temporal-postgres-credentials",
     "keycloak-postgres-credentials",
     "keycloak-secrets",
@@ -170,10 +189,16 @@ locals {
     "ebs-adapter-secrets" = [
       "secrets.yaml",
     ]
+    "ebs-adapter-events-secrets" = [
+      "secrets.yaml",
+    ]
     "psp-webhook-secrets" = [
       "secrets.yaml",
     ]
     "admin-reporting-secrets" = [
+      "secrets.yaml",
+    ]
+    "admin-reporting-projector-secrets" = [
       "secrets.yaml",
     ]
     "notification-chat-secrets" = [
@@ -191,11 +216,52 @@ locals {
     "wallet-worker-secrets" = [
       "secrets.yaml",
     ]
+    "workload-auth-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "workload-auth-cleanup-secrets" = [
+      "secrets.yaml",
+    ]
+    "identity-auth-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "card-vault-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "ebs-adapter-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "psp-webhook-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "admin-reporting-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "notification-chat-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "consumer-beneficiary-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "wallet-ledger-migrate-secrets" = [
+      "secrets.yaml",
+    ]
     "sops-age-key" = [
       "age-key.txt",
     ]
     "postgres-credentials" = [
       "password",
+      "tls.crt",
+      "tls.key",
+    ]
+    "workload-auth-postgres-roles" = [
+      "migrate-password",
+      "runtime-password",
+      "cleanup-password",
+      "roles.yaml",
+    ]
+    "internal-transport-platform" = [
+      "credentials.yaml",
     ]
     "temporal-postgres-credentials" = [
       "password",

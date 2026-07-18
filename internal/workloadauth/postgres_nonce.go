@@ -48,3 +48,24 @@ func (s *PostgresNonceStore) Use(ctx context.Context, keyID, audience, nonce str
 	}
 	return rows == 1, nil
 }
+
+// CleanupExpired removes nonce audit rows only after their verifier-enforced
+// replay window has elapsed. It is intended for the separately credentialed
+// cleanup role, never request handling.
+func CleanupExpired(ctx context.Context, db postgresExecer, before time.Time) (int64, error) {
+	if ctx == nil || db == nil || before.IsZero() {
+		return 0, ErrInvalidNonceClaim
+	}
+	result, err := db.ExecContext(ctx, `DELETE FROM workload_request_nonces WHERE expires_at < $1`, before.UTC())
+	if err != nil {
+		return 0, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil || rows < 0 {
+		if err != nil {
+			return 0, err
+		}
+		return 0, ErrInvalidNonceClaim
+	}
+	return rows, nil
+}

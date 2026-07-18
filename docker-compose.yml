@@ -161,6 +161,13 @@ services:
       - noebs-runtime:/opt/noebs-postgres/secrets:ro
       - ./deploy/docker/postgres/postgres-start.sh:/opt/noebs-postgres/bin/start.sh:ro
       - ./deploy/docker/postgres/001-service-databases.sql:/opt/noebs-postgres/init/001-service-databases.sql:ro
+    secrets:
+      - source: workload-auth-migrate-password
+        target: workload-auth-migrate-password
+      - source: workload-auth-runtime-password
+        target: workload-auth-runtime-password
+      - source: workload-auth-cleanup-password
+        target: workload-auth-cleanup-password
     networks:
       - backend
     healthcheck:
@@ -330,13 +337,37 @@ services:
     stop_grace_period: 30s
     user: "1000:1000"
 
+  workload-auth-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/workload-auth-migrate.yaml:/app/service.yaml:ro"
+    secrets:
+      - source: workload-auth-migrate-secrets
+        target: /app/secrets.yaml
+      - *sops-age-key-secret
+
+  workload-auth-cleanup:
+    <<: *migrate-defaults
+    depends_on:
+      workload-auth-migrate:
+        condition: service_completed_successfully
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/workload-auth-cleanup.yaml:/app/service.yaml:ro"
+    secrets:
+      - source: workload-auth-cleanup-secrets
+        target: /app/secrets.yaml
+      - *sops-age-key-secret
+
   identity-auth-migrate:
     <<: *migrate-defaults
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *identity-auth-secret
+      - source: identity-auth-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   card-vault-migrate:
@@ -345,7 +376,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/card-vault-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *card-vault-secret
+      - source: card-vault-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   ebs-adapter-migrate:
@@ -354,7 +386,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *ebs-adapter-secret
+      - source: ebs-adapter-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   psp-webhook-migrate:
@@ -363,7 +396,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/psp-webhook-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *psp-webhook-secret
+      - source: psp-webhook-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   admin-reporting-migrate:
@@ -372,7 +406,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *admin-reporting-secret
+      - source: admin-reporting-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   notification-chat-migrate:
@@ -381,7 +416,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *notification-chat-secret
+      - source: notification-chat-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   consumer-beneficiary-migrate:
@@ -390,7 +426,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/consumer-beneficiary-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *consumer-beneficiary-secret
+      - source: consumer-beneficiary-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   wallet-ledger-migrate:
@@ -399,7 +436,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-ledger-migrate.yaml:/app/service.yaml:ro"
     secrets:
-      - *wallet-ledger-secret
+      - source: wallet-ledger-migrate-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
 
   api-gateway:
@@ -518,7 +556,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter-events.yaml:/app/service.yaml:ro"
     secrets:
-      - *ebs-adapter-secret
+      - source: ebs-adapter-events-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
     networks:
       - backend
@@ -624,7 +663,8 @@ services:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting-projector.yaml:/app/service.yaml:ro"
     secrets:
-      - *admin-reporting-secret
+      - source: admin-reporting-projector-secrets
+        target: /app/secrets.yaml
       - *sops-age-key-secret
     networks:
       - backend
@@ -787,6 +827,12 @@ volumes:
 secrets:
   postgres-bootstrap-secrets:
     file: ./deploy/docker/postgres/bootstrap.secrets.yaml
+  workload-auth-migrate-password:
+    file: ./deploy/docker/postgres/workload-auth-migrate-password.txt
+  workload-auth-runtime-password:
+    file: ./deploy/docker/postgres/workload-auth-runtime-password.txt
+  workload-auth-cleanup-password:
+    file: ./deploy/docker/postgres/workload-auth-cleanup-password.txt
   api-gateway-secrets:
     file: ./deploy/docker/secrets/api-gateway.secrets.yaml
   identity-auth-secrets:
@@ -809,6 +855,30 @@ secrets:
     file: ./deploy/docker/secrets/wallet-ledger.secrets.yaml
   wallet-worker-secrets:
     file: ./deploy/docker/secrets/wallet-worker.secrets.yaml
+  ebs-adapter-events-secrets:
+    file: ./deploy/docker/secrets/ebs-adapter-events.secrets.yaml
+  admin-reporting-projector-secrets:
+    file: ./deploy/docker/secrets/admin-reporting-projector.secrets.yaml
+  workload-auth-migrate-secrets:
+    file: ./deploy/docker/secrets/workload-auth-migrate.secrets.yaml
+  workload-auth-cleanup-secrets:
+    file: ./deploy/docker/secrets/workload-auth-cleanup.secrets.yaml
+  identity-auth-migrate-secrets:
+    file: ./deploy/docker/secrets/identity-auth-migrate.secrets.yaml
+  card-vault-migrate-secrets:
+    file: ./deploy/docker/secrets/card-vault-migrate.secrets.yaml
+  ebs-adapter-migrate-secrets:
+    file: ./deploy/docker/secrets/ebs-adapter-migrate.secrets.yaml
+  psp-webhook-migrate-secrets:
+    file: ./deploy/docker/secrets/psp-webhook-migrate.secrets.yaml
+  admin-reporting-migrate-secrets:
+    file: ./deploy/docker/secrets/admin-reporting-migrate.secrets.yaml
+  notification-chat-migrate-secrets:
+    file: ./deploy/docker/secrets/notification-chat-migrate.secrets.yaml
+  consumer-beneficiary-migrate-secrets:
+    file: ./deploy/docker/secrets/consumer-beneficiary-migrate.secrets.yaml
+  wallet-ledger-migrate-secrets:
+    file: ./deploy/docker/secrets/wallet-ledger-migrate.secrets.yaml
   sops_age_key:
     file: ./.sops/age-key.txt
   keycloak_config:

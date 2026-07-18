@@ -305,7 +305,10 @@ func initRoleServices(role serviceRole) error {
 	}
 
 	if roleNeedsConsumerService(role) {
-		consumerService = consumer.Service{Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth, HTTPClient: httpclient.Default(), WorkloadSigners: workloadSigners}
+		consumerService = consumer.Service{
+			Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth,
+			HTTPClient: httpclient.Default(), InternalHTTPClient: newInternalHTTPClient(), WorkloadSigners: workloadSigners,
+		}
 	}
 	if roleNeedsAdminReportingService(role) {
 		adminReportingService = adminreporting.Service{Store: storeSvc}
@@ -540,6 +543,11 @@ func GetMainEngine() *fiber.App {
 	route.Use(gateway.Instrumentation())
 	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
+	if roleReceivesSignedHTTP(role) {
+		route.Get(internalHealthPath, func(c *fiber.Ctx) error {
+			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
+		})
+	}
 
 	adminGuard := gateway.RequireAdmin(gateway.AdminAuthConfig{
 		Key:      noebsConfig.AdminKey,
@@ -663,13 +671,16 @@ func initConfig() {
 	if err := validateWorkloadAuthRuntimeConfig(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error in workload authentication config: %v", err)
 	}
+	if err := initInternalTransport(role, noebsConfig); err != nil {
+		logrusLogger.Fatalf("error initializing internal transport: %v", err)
+	}
 	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
 	configureLogger(noebsConfig)
 	if err := initOTel(context.Background(), role, noebsConfig, logrusLogger); err != nil {
 		logrusLogger.Fatalf("error initializing otel: %v", err)
 	}
 	if role.opensDatabase() {
-		database, err = store.OpenFromConfig(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver)
+		database, err = store.OpenFromConfigWithCACertificate(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver, noebsConfig.DatabaseCACertificate)
 		if err != nil {
 			logrusLogger.Fatalf("error in connecting to db: %v", err)
 		}
@@ -680,11 +691,13 @@ func initConfig() {
 			if err := store.MigrateScope(migrateCtx, database, tenantID, migrationScope); err != nil {
 				logrusLogger.Fatalf("error in migrations: %v", err)
 			}
-			if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
-				logrusLogger.Fatalf("error ensuring tenant: %v", err)
-			}
-			if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
-				logrusLogger.Fatalf("error validating tenants: %v", err)
+			if migrationScope != store.MigrationScopeWorkloadAuth {
+				if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
+					logrusLogger.Fatalf("error ensuring tenant: %v", err)
+				}
+				if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
+					logrusLogger.Fatalf("error validating tenants: %v", err)
+				}
 			}
 		} else {
 			logrusLogger.Printf("Migrations are owned by service-specific migration roles; current role is %s", role)

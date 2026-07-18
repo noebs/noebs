@@ -9,7 +9,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -49,7 +49,13 @@ func initWalletLedgerPublicClient(cfg ebs_fields.NoebsConfig) error {
 	if err != nil {
 		return err
 	}
-	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if internalTransportClientTLS == nil {
+		return errors.New("wallet-api grpc requires internal transport TLS")
+	}
+	clientTLS := internalTransportClientTLS.Clone()
+	host, _, _ := net.SplitHostPort(endpoint)
+	clientTLS.ServerName = host
+	conn, err := grpc.NewClient(endpoint, grpc.WithTransportCredentials(credentials.NewTLS(clientTLS)))
 	if err != nil {
 		return fmt.Errorf("create wallet-ledger grpc client: %w", err)
 	}

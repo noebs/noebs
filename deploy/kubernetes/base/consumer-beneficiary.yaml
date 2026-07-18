@@ -31,15 +31,13 @@ spec:
             - name: http
               containerPort: 8080
           readinessProbe:
-            httpGet:
-              path: /test
-              port: http
+            exec:
+              command: [/usr/local/bin/noebs, internal-healthcheck]
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet:
-              path: /test
-              port: http
+            exec:
+              command: [/usr/local/bin/noebs, internal-healthcheck]
             periodSeconds: 30
             failureThreshold: 3
           securityContext:

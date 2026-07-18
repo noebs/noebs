@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -95,6 +98,12 @@ func main() {
 		}
 		return
 	}
+	if isInternalHealthcheckCommand() {
+		if err := checkInternalHealth(); err != nil {
+			logrusLogger.Fatalf("internal healthcheck failed: %v", err)
+		}
+		return
+	}
 	role, err := currentServiceRole()
 	if err != nil {
 		logrusLogger.Fatalf("error in runtime service role: %v", err)
@@ -114,6 +123,12 @@ func main() {
 	}
 	if role.runsMigrations() {
 		logrusLogger.Print("migration service role completed")
+		return
+	}
+	if role.cleansWorkloadAuthNonces() {
+		if err := cleanupExpiredWorkloadNonces(context.Background()); err != nil {
+			logrusLogger.Fatalf("workload nonce cleanup failed: %v", err)
+		}
 		return
 	}
 
@@ -191,5 +206,12 @@ func main() {
 	if noebsConfig.Port == "" {
 		logrusLogger.Fatalf("%s role requires port", role)
 	}
-	logrusLogger.Fatal(GetMainEngine().Listen(noebsConfig.Port))
+	listener, err := net.Listen("tcp", noebsConfig.Port)
+	if err != nil {
+		logrusLogger.Fatal(fmt.Errorf("listen on %s: %w", noebsConfig.Port, err))
+	}
+	if internalTransportServerTLS != nil {
+		listener = tls.NewListener(listener, internalTransportServerTLS.Clone())
+	}
+	logrusLogger.Fatal(GetMainEngine().Listener(listener))
 }

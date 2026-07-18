@@ -39,13 +39,25 @@ var kubernetesServiceSecretSources = []kubernetesServiceSecretSource{
 	{serviceName: "identity-auth", secretName: "identity-auth-secrets", fileName: "identity-auth.secrets.yaml"},
 	{serviceName: "card-vault", secretName: "card-vault-secrets", fileName: "card-vault.secrets.yaml"},
 	{serviceName: "ebs-adapter", secretName: "ebs-adapter-secrets", fileName: "ebs-adapter.secrets.yaml"},
+	{serviceName: "ebs-adapter-events", secretName: "ebs-adapter-events-secrets", fileName: "ebs-adapter-events.secrets.yaml"},
 	{serviceName: "psp-webhook", secretName: "psp-webhook-secrets", fileName: "psp-webhook.secrets.yaml"},
 	{serviceName: "admin-reporting", secretName: "admin-reporting-secrets", fileName: "admin-reporting.secrets.yaml"},
+	{serviceName: "admin-reporting-projector", secretName: "admin-reporting-projector-secrets", fileName: "admin-reporting-projector.secrets.yaml"},
 	{serviceName: "notification-chat", secretName: "notification-chat-secrets", fileName: "notification-chat.secrets.yaml"},
 	{serviceName: "consumer-beneficiary", secretName: "consumer-beneficiary-secrets", fileName: "consumer-beneficiary.secrets.yaml"},
 	{serviceName: "wallet-api", secretName: "wallet-api-secrets", fileName: "wallet-api.secrets.yaml"},
 	{serviceName: "wallet-ledger", secretName: "wallet-ledger-secrets", fileName: "wallet-ledger.secrets.yaml"},
 	{serviceName: "wallet-worker", secretName: "wallet-worker-secrets", fileName: "wallet-worker.secrets.yaml"},
+	{serviceName: "workload-auth-migrate", secretName: "workload-auth-migrate-secrets", fileName: "workload-auth-migrate.secrets.yaml"},
+	{serviceName: "workload-auth-cleanup", secretName: "workload-auth-cleanup-secrets", fileName: "workload-auth-cleanup.secrets.yaml"},
+	{serviceName: "identity-auth-migrate", secretName: "identity-auth-migrate-secrets", fileName: "identity-auth-migrate.secrets.yaml"},
+	{serviceName: "card-vault-migrate", secretName: "card-vault-migrate-secrets", fileName: "card-vault-migrate.secrets.yaml"},
+	{serviceName: "ebs-adapter-migrate", secretName: "ebs-adapter-migrate-secrets", fileName: "ebs-adapter-migrate.secrets.yaml"},
+	{serviceName: "psp-webhook-migrate", secretName: "psp-webhook-migrate-secrets", fileName: "psp-webhook-migrate.secrets.yaml"},
+	{serviceName: "admin-reporting-migrate", secretName: "admin-reporting-migrate-secrets", fileName: "admin-reporting-migrate.secrets.yaml"},
+	{serviceName: "notification-chat-migrate", secretName: "notification-chat-migrate-secrets", fileName: "notification-chat-migrate.secrets.yaml"},
+	{serviceName: "consumer-beneficiary-migrate", secretName: "consumer-beneficiary-migrate-secrets", fileName: "consumer-beneficiary-migrate.secrets.yaml"},
+	{serviceName: "wallet-ledger-migrate", secretName: "wallet-ledger-migrate-secrets", fileName: "wallet-ledger-migrate.secrets.yaml"},
 }
 
 var kubernetesSecretReleaseServiceNames = []string{
@@ -62,6 +74,8 @@ var kubernetesSecretReleaseServiceNames = []string{
 	"wallet-api",
 	"wallet-ledger",
 	"wallet-worker",
+	"workload-auth-migrate",
+	"workload-auth-cleanup",
 	"identity-auth-migrate",
 	"card-vault-migrate",
 	"ebs-adapter-migrate",
@@ -123,6 +137,28 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 	if err != nil {
 		return err
 	}
+	workloadDatabase, err := readWorkloadAuthDatabaseCredentials(root, ageKeyPath, decrypt)
+	if err != nil {
+		return err
+	}
+	workloadDatabaseEncrypted, err := readRequiredSecretText(
+		"encrypted workload authentication Postgres role credentials",
+		filepath.Join(root, "platform", "workload-auth-postgres-roles.secrets.yaml"),
+	)
+	if err != nil {
+		return err
+	}
+	internalTransportPlatform, err := readInternalTransportPlatformCredentials(root, ageKeyPath, decrypt)
+	if err != nil {
+		return err
+	}
+	internalTransportEncrypted, err := readRequiredSecretText(
+		"encrypted internal transport platform credentials",
+		filepath.Join(root, "platform", "internal-transport.secrets.yaml"),
+	)
+	if err != nil {
+		return err
+	}
 	tlsCert, tlsKey, err := readTLSSecretPair(tlsCertPath, tlsKeyPath)
 	if err != nil {
 		return err
@@ -140,7 +176,20 @@ func renderKubernetesSecrets(w io.Writer, root, namespace, tlsCertPath, tlsKeyPa
 	}
 	manifests = append(manifests,
 		newOpaqueSecret(namespace, "sops-age-key", map[string]string{"age-key.txt": ageKey}),
-		newOpaqueSecret(namespace, "postgres-credentials", map[string]string{"password": postgresPassword}),
+		newOpaqueSecret(namespace, "postgres-credentials", map[string]string{
+			"password": postgresPassword,
+			"tls.crt":  internalTransportPlatform.PostgresCertificate,
+			"tls.key":  internalTransportPlatform.PostgresPrivateKey,
+		}),
+		newOpaqueSecret(namespace, "workload-auth-postgres-roles", map[string]string{
+			"migrate-password": workloadDatabase.migratePassword,
+			"runtime-password": workloadDatabase.runtimePassword,
+			"cleanup-password": workloadDatabase.cleanupPassword,
+			"roles.yaml":       workloadDatabaseEncrypted,
+		}),
+		newOpaqueSecret(namespace, "internal-transport-platform", map[string]string{
+			"credentials.yaml": internalTransportEncrypted,
+		}),
 		newOpaqueSecret(namespace, "temporal-postgres-credentials", map[string]string{"password": temporalPostgresPassword}),
 		newOpaqueSecret(namespace, "keycloak-postgres-credentials", map[string]string{"password": keycloakPostgresPassword}),
 		newOpaqueSecret(namespace, "keycloak-secrets", map[string]string{"keycloak.conf": keycloakConfig}),
@@ -189,7 +238,7 @@ func validateKubernetesSecretReleaseRootWithDecrypt(root string, decrypt deploym
 	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
 		return err
 	}
-	if err := validateKubernetesPlatformInputs(root); err != nil {
+	if err := validateKubernetesPlatformInputs(root, ageKeyPath, decrypt); err != nil {
 		return err
 	}
 

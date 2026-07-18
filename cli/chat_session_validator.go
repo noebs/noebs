@@ -35,7 +35,7 @@ func newChatSessionValidator(cfg ebs_fields.NoebsConfig, signers *workloadauth.S
 	}
 	return &chatSessionValidator{
 		endpoint: endpoint,
-		client: httpclient.New(
+		client: newInternalHTTPClient(
 			httpclient.WithTimeout(2*time.Second),
 			httpclient.WithResponseHeaderTimeout(1500*time.Millisecond),
 		),

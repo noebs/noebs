@@ -1,258 +1,515 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: postgres-ingress
-  labels:
-    app.kubernetes.io/name: postgres
+  name: default-deny
 spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: postgres
-  policyTypes:
-    - Ingress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 5432
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: kafka-ingress
-  labels:
-    app.kubernetes.io/name: kafka
+  name: dns-egress
 spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: kafka
-  policyTypes:
-    - Ingress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 9092
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: temporal-postgres-ingress
-  labels:
-    app.kubernetes.io/name: temporal-postgres
+  name: api-gateway-ingress
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: temporal-postgres
-  policyTypes:
-    - Ingress
+      app.kubernetes.io/name: api-gateway
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 5432
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: temporal-frontend-ingress
-  labels:
-    app.kubernetes.io/name: temporal
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: temporal
-  policyTypes:
-    - Ingress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 7233
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: keycloak-postgres-ingress
-  labels:
-    app.kubernetes.io/name: keycloak-postgres
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: keycloak-postgres
-  policyTypes:
-    - Ingress
-  ingress:
-    - ports:
-        - protocol: TCP
-          port: 5432
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: edge
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: identity-auth-ingress
-  labels:
-    app.kubernetes.io/name: identity-auth
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: identity-auth
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: api-gateway
+            matchLabels: {app.kubernetes.io/name: api-gateway}
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ebs-adapter
+            matchLabels: {app.kubernetes.io/name: notification-chat}
       ports:
-        - protocol: TCP
-          port: 8080
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: card-vault-ingress
-  labels:
-    app.kubernetes.io/name: card-vault
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: card-vault
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: api-gateway
+            matchLabels: {app.kubernetes.io/name: api-gateway}
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ebs-adapter
+            matchLabels: {app.kubernetes.io/name: ebs-adapter}
       ports:
-        - protocol: TCP
-          port: 8080
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: ebs-adapter-ingress
-  labels:
-    app.kubernetes.io/name: ebs-adapter
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: ebs-adapter
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: api-gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: psp-webhook-ingress
-  labels:
-    app.kubernetes.io/name: psp-webhook
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: psp-webhook
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: api-gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: admin-reporting-ingress
-  labels:
-    app.kubernetes.io/name: admin-reporting
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: admin-reporting
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: api-gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: notification-chat-ingress
-  labels:
-    app.kubernetes.io/name: notification-chat
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: notification-chat
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: api-gateway
+            matchLabels: {app.kubernetes.io/name: api-gateway}
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ebs-adapter
+            matchLabels: {app.kubernetes.io/name: ebs-adapter}
       ports:
-        - protocol: TCP
-          port: 8080
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: consumer-beneficiary-ingress
-  labels:
-    app.kubernetes.io/name: consumer-beneficiary
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: consumer-beneficiary
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: api-gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: wallet-api-ingress
-  labels:
-    app.kubernetes.io/name: wallet-api
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: wallet-api
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 8080
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: api-gateway}
+      ports:
+        - {protocol: TCP, port: 8080}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: wallet-ledger-grpc-ingress
-  labels:
-    app.kubernetes.io/name: wallet-ledger
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: wallet-ledger
-  policyTypes:
-    - Ingress
+  policyTypes: [Ingress]
   ingress:
-    - ports:
-        - protocol: TCP
-          port: 9090
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-api}
+      ports:
+        - {protocol: TCP, port: 9090}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - identity-auth
+                  - card-vault
+                  - ebs-adapter
+                  - ebs-adapter-events
+                  - psp-webhook
+                  - admin-reporting
+                  - admin-reporting-projector
+                  - notification-chat
+                  - consumer-beneficiary
+                  - wallet-api
+                  - wallet-ledger
+                  - wallet-worker
+                  - noebs-workload-auth-migrate
+                  - noebs-workload-auth-cleanup
+                  - noebs-identity-auth-migrate
+                  - noebs-card-vault-migrate
+                  - noebs-ebs-adapter-migrate
+                  - noebs-psp-webhook-migrate
+                  - noebs-admin-reporting-migrate
+                  - noebs-notification-chat-migrate
+                  - noebs-consumer-beneficiary-migrate
+                  - noebs-wallet-ledger-migrate
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: ebs-adapter-events}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: admin-reporting-projector}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: kafka-topics}
+      ports:
+        - {protocol: TCP, port: 9092}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-postgres-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: temporal-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal-schema-migrate}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-frontend-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: temporal
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: psp-webhook}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-ledger}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-worker}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal-namespace-bootstrap}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal-ui}
+      ports:
+        - {protocol: TCP, port: 7233}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-postgres-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - identity-auth
+          - card-vault
+          - ebs-adapter
+          - ebs-adapter-events
+          - psp-webhook
+          - admin-reporting
+          - admin-reporting-projector
+          - notification-chat
+          - consumer-beneficiary
+          - wallet-api
+          - wallet-ledger
+          - wallet-worker
+          - noebs-workload-auth-migrate
+          - noebs-workload-auth-cleanup
+          - noebs-identity-auth-migrate
+          - noebs-card-vault-migrate
+          - noebs-ebs-adapter-migrate
+          - noebs-psp-webhook-migrate
+          - noebs-admin-reporting-migrate
+          - noebs-notification-chat-migrate
+          - noebs-consumer-beneficiary-migrate
+          - noebs-wallet-ledger-migrate
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: postgres}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [ebs-adapter-events, admin-reporting-projector, kafka-topics]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: kafka}
+      ports:
+        - {protocol: TCP, port: 9092}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-postgres-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [temporal, temporal-schema-migrate]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal-postgres}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-frontend-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [psp-webhook, wallet-ledger, wallet-worker, temporal-namespace-bootstrap, temporal-ui]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal}
+      ports:
+        - {protocol: TCP, port: 7233}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-postgres-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak-postgres}
+      ports:
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-http-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: api-gateway}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [identity-auth, card-vault, ebs-adapter, psp-webhook, admin-reporting, notification-chat, consumer-beneficiary, wallet-api]
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ebs-http-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: ebs-adapter}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [card-vault, notification-chat]
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-http-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: notification-chat}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: identity-auth}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wallet-grpc-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: wallet-api}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-ledger}
+      ports:
+        - {protocol: TCP, port: 9090}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: external-https-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [identity-auth, ebs-adapter, psp-webhook, notification-chat, wallet-worker]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - {protocol: TCP, port: 443}

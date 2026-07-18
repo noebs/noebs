@@ -1,0 +1,4 @@
+noebs:
+  service_role: workload-auth-cleanup
+  otel_service_name: workload-auth-cleanup
+  db_driver: pgx

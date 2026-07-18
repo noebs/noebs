@@ -48,6 +48,7 @@ const (
 	serviceRoleWalletLedger            serviceRole = "wallet-ledger"
 	serviceRoleWalletWorker            serviceRole = "wallet-worker"
 	serviceRoleWorkloadAuthMigrate     serviceRole = "workload-auth-migrate"
+	serviceRoleWorkloadAuthCleanup     serviceRole = "workload-auth-cleanup"
 
 	serviceRoleIdentityAuthMigrate   serviceRole = "identity-auth-migrate"
 	serviceRoleCardVaultMigrate      serviceRole = "card-vault-migrate"
@@ -82,6 +83,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleWorkloadAuthMigrate,
+		serviceRoleWorkloadAuthCleanup,
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
 		serviceRoleEBSAdapterMigrate,
@@ -124,6 +126,10 @@ func (r serviceRole) startsChat() bool {
 	return r == serviceRoleNotification
 }
 
+func (r serviceRole) cleansWorkloadAuthNonces() bool {
+	return r == serviceRoleWorkloadAuthCleanup
+}
+
 func (r serviceRole) opensDatabase() bool {
 	_, ok := r.databaseOwnerRole()
 	return ok
@@ -154,6 +160,12 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
 }
 
 func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	if err := validateDatabaseTransportRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
+	if err := validateInternalTransportRuntimeConfig(role, cfg); err != nil {
+		return err
+	}
 	if err := validateOTelRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
@@ -225,6 +237,35 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	}
 	if role == serviceRoleWalletWorker {
 		return validateWalletWorkerSchedules(cfg)
+	}
+	return nil
+}
+
+func validateDatabaseTransportRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
+	urls := make([]string, 0, 2)
+	if role.opensDatabase() {
+		urls = append(urls, cfg.DatabaseURL)
+	}
+	if roleReceivesSignedHTTP(role) {
+		urls = append(urls, cfg.WorkloadAuth.NonceDatabaseURL)
+	}
+	if len(urls) == 0 {
+		if strings.TrimSpace(cfg.DatabaseCACertificate) != "" {
+			return errors.New("noebs.database_ca_certificate is not allowed for this role")
+		}
+		return nil
+	}
+	ca := strings.TrimSpace(cfg.DatabaseCACertificate)
+	if cfg.InternalTransport.Present() && ca == "" {
+		return errors.New("noebs.database_ca_certificate is required for the release transport boundary")
+	}
+	if ca == "" {
+		return nil
+	}
+	for _, databaseURL := range urls {
+		if err := store.ValidateDatabaseTLSConfig(databaseURL, ca); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -444,7 +485,7 @@ func (r serviceRole) databaseOwnerRole() (serviceRole, bool) {
 		return serviceRoleBeneficiary, true
 	case serviceRoleWalletLedger, serviceRoleWalletLedgerMigrate, serviceRoleWalletWorker:
 		return serviceRoleWalletLedger, true
-	case serviceRoleWorkloadAuthMigrate:
+	case serviceRoleWorkloadAuthMigrate, serviceRoleWorkloadAuthCleanup:
 		return serviceRoleWorkloadAuthMigrate, true
 	default:
 		return "", false

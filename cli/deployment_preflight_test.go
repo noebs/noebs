@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/adonese/noebs/store"
+	"gopkg.in/yaml.v3"
 )
 
 func TestValidateDeploymentRootAcceptsExplicitMicroserviceInputs(t *testing.T) {
@@ -177,16 +178,9 @@ func TestValidateKubernetesDeploymentRootRejectsDummySMSGateway(t *testing.T) {
 func TestValidateKubernetesDeploymentRootRejectsMissingCardVaultDataKey(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	path := filepath.Join(root, "secrets", "card-vault.secrets.yaml")
-	payload, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read card-vault secrets: %v", err)
-	}
-	payload = []byte(strings.ReplaceAll(string(payload), "  data_key: card-vault-data-key\n", ""))
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		t.Fatalf("write card-vault secrets: %v", err)
-	}
+	removeNoebsSecretField(t, path, "data_key")
 
-	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
 	if !errors.Is(err, store.ErrMissingDataKey) {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want %v", err, store.ErrMissingDataKey)
 	}
@@ -195,16 +189,9 @@ func TestValidateKubernetesDeploymentRootRejectsMissingCardVaultDataKey(t *testi
 func TestValidateKubernetesDeploymentRootRejectsMissingEBSCredentialInput(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	path := filepath.Join(root, "secrets", "ebs-adapter.secrets.yaml")
-	payload, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read ebs-adapter secrets: %v", err)
-	}
-	payload = []byte(strings.ReplaceAll(string(payload), "  ipin_key: ipin-public-key\n", ""))
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		t.Fatalf("write ebs-adapter secrets: %v", err)
-	}
+	removeNoebsSecretField(t, path, "ipin_key")
 
-	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
 	if !errors.Is(err, errMissingEBSConfig) {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want %v", err, errMissingEBSConfig)
 	}
@@ -325,17 +312,26 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 	}
 
 	for fileName, payload := range kubernetesSecretTestPayloads() {
-		payload = strings.ReplaceAll(payload, "tenant_1", defaultTenantID)
+		var document map[string]interface{}
+		if err := yaml.Unmarshal([]byte(payload), &document); err != nil {
+			t.Fatalf("parse %s fixture: %v", fileName, err)
+		}
+		noebs := getMap(document, "noebs")
+		noebs["default_tenant_id"] = defaultTenantID
 		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSConsumerEndpoint {
-			payload = strings.ReplaceAll(payload, `  consumer_endpoint: "https://consumer.ebs.example"`+"\n", "")
+			delete(noebs, "consumer_endpoint")
 		}
 		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSIPINKey {
-			payload = strings.ReplaceAll(payload, "  ipin_key: ipin-public-key\n", "")
+			delete(noebs, "ipin_key")
 		}
 		if fileName == "card-vault.secrets.yaml" && opts.omitCardVaultDataKey {
-			payload = strings.ReplaceAll(payload, "  data_key: card-vault-data-key\n", "")
+			delete(noebs, "data_key")
 		}
-		writePreflightFile(t, root, filepath.Join("deploy", "docker", "secrets", fileName), payload)
+		encoded, err := yaml.Marshal(document)
+		if err != nil {
+			t.Fatalf("marshal %s fixture: %v", fileName, err)
+		}
+		writePreflightFile(t, root, filepath.Join("deploy", "docker", "secrets", fileName), string(encoded))
 	}
 	writePreflightFile(t, root, "deploy/docker/postgres/bootstrap.secrets.yaml", `noebs:
   db_url: "postgres://noebs:postgres-password@db:5432/noebs?sslmode=disable"
@@ -358,6 +354,26 @@ bootstrap-admin-username=admin
 bootstrap-admin-password=admin-password
 `)
 	return root
+}
+
+func removeNoebsSecretField(t *testing.T, path, field string) {
+	t.Helper()
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var document map[string]interface{}
+	if err := yaml.Unmarshal(payload, &document); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	delete(getMap(document, "noebs"), field)
+	payload, err = yaml.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
 }
 
 func writePreflightFile(t *testing.T, root, name, payload string) {

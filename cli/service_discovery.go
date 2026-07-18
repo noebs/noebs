@@ -58,7 +58,6 @@ func validateExactGRPCServiceDiscoveryCatalog(discovery map[string]string) error
 func expectedHTTPServiceDiscoveryKeys() []string {
 	return []string{
 		string(serviceRoleIdentityAuth),
-		"keycloak",
 		string(serviceRoleCardVault),
 		string(serviceRoleEBSAdapter),
 		string(serviceRolePSPWebhook),
