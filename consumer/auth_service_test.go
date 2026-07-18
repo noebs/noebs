@@ -153,6 +153,9 @@ func TestFindOrCreateUserFromGoogleCreatesUserAndAuthAccount(t *testing.T) {
 	if user.ID <= 0 {
 		t.Fatalf("user id = %d, want persisted id", user.ID)
 	}
+	if user.SessionEpoch != 1 {
+		t.Fatalf("session epoch = %d, want database invariant 1", user.SessionEpoch)
+	}
 	account, err := storeSvc.FindAuthAccount(ctx, tenantID, googleProvider, "google-sub-1")
 	if err != nil {
 		t.Fatalf("FindAuthAccount(): %v", err)

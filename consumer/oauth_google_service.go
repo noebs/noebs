@@ -83,7 +83,7 @@ func (s *Service) GoogleAuth(ctx context.Context, tenantID string, code, codeVer
 		return "", empty, false, err
 	}
 
-	jwtToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, userSessionEpoch(user.SessionEpoch))
+	jwtToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, user.SessionEpoch)
 	if err != nil {
 		return "", empty, false, err
 	}
@@ -123,7 +123,7 @@ func (s *Service) CompleteProfile(ctx context.Context, tenantID string, userID i
 		return "", empty, err
 	}
 
-	jwtToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, userSessionEpoch(user.SessionEpoch))
+	jwtToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, user.SessionEpoch)
 	if err != nil {
 		return "", empty, err
 	}
@@ -227,7 +227,6 @@ func (s *Service) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 
 func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID string, info googleUserInfo) (ebs_fields.User, bool, error) {
 	var user ebs_fields.User
-	isNew := false
 	tenantID, err := store.ValidateTenantID(tenantID)
 	if err != nil {
 		return user, false, err
@@ -288,6 +287,9 @@ func (s *Service) findOrCreateUserFromGoogle(ctx context.Context, tenantID strin
 	if err := s.Store.CreateUserWithAuthAccount(ctx, tenantID, &user, &newAccount); err != nil {
 		return ebs_fields.User{}, false, err
 	}
-	isNew = true
-	return user, isNew, nil
+	created, err := s.Store.FindUserByID(ctx, tenantID, user.ID)
+	if err != nil {
+		return ebs_fields.User{}, false, err
+	}
+	return *created, true, nil
 }

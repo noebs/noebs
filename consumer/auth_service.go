@@ -83,7 +83,7 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password, 
 	if !u.IsVerified {
 		return "", empty, ErrUserNotVerified
 	}
-	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, userSessionEpoch(u.SessionEpoch))
+	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, u.SessionEpoch)
 	if err != nil {
 		return "", empty, err
 	}
@@ -138,7 +138,7 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 	u.IsVerified = true
 	u.IsPasswordOTP = true
 
-	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, userSessionEpoch(u.SessionEpoch))
+	token, err := s.Auth.GenerateJWTWithSessionEpoch(u.ID, u.Mobile, tenantID, u.SessionEpoch)
 	if err != nil {
 		return "", empty, err
 	}
@@ -197,7 +197,7 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 	if err != nil {
 		return "", err
 	}
-	if claims.SessionEpoch != userSessionEpoch(user.SessionEpoch) {
+	if claims.SessionEpoch != user.SessionEpoch {
 		return "", ErrSessionRevoked
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
@@ -211,7 +211,7 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 	if err := verifyUserSignature(user.PublicKey, req.Signature, req.Message); err != nil {
 		return "", err
 	}
-	newToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, userSessionEpoch(user.SessionEpoch))
+	newToken, err := s.Auth.GenerateJWTWithSessionEpoch(user.ID, user.Mobile, tenantID, user.SessionEpoch)
 	if err != nil {
 		return "", err
 	}
@@ -223,13 +223,6 @@ func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.T
 		return "", err
 	}
 	return newToken, nil
-}
-
-func userSessionEpoch(epoch int64) int64 {
-	if epoch <= 0 {
-		return 1
-	}
-	return epoch
 }
 
 func verifyUserSignature(publicKey, signature, message string) error {
