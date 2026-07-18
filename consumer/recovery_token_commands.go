@@ -93,9 +93,9 @@ func (s *Service) RequestPasswordRecovery(ctx context.Context, tenantID, mobile,
 		return err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		sourceLimit("recovery-request-source", source, 20, 15*time.Minute),
 		mobileLimit("recovery-request-cooldown", mobile, 1, time.Minute),
 		mobileLimit("recovery-request-mobile", mobile, 3, 15*time.Minute),
-		sourceLimit("recovery-request-source", source, 20, 15*time.Minute),
 	); err != nil {
 		return err
 	}
@@ -156,8 +156,8 @@ func (s *Service) VerifyPasswordRecoveryOTP(ctx context.Context, tenantID, mobil
 		return RecoveryCredentialResult{}, err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
-		mobileLimit("recovery-verify-mobile", mobile, 5, 15*time.Minute),
 		sourceLimit("recovery-verify-source", source, 30, 15*time.Minute),
+		mobileLimit("recovery-verify-mobile", mobile, 5, 15*time.Minute),
 	); err != nil {
 		return RecoveryCredentialResult{}, err
 	}
@@ -211,13 +211,13 @@ func (s *Service) ResetPasswordWithRecoveryCredential(ctx context.Context, tenan
 		return err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		sourceLimit("recovery-reset-source", source, 30, 15*time.Minute),
 		authLimitRule{
 			action:  "recovery-reset-credential",
 			subject: authSubjectHash("recovery_credential", credential),
 			limit:   5,
 			window:  15 * time.Minute,
 		},
-		sourceLimit("recovery-reset-source", source, 30, 15*time.Minute),
 	); err != nil {
 		return err
 	}

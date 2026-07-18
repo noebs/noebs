@@ -39,7 +39,6 @@ func sourceLimit(action, source string, limit int, window time.Duration) authLim
 }
 
 func (s *Service) enforceAuthLimits(ctx context.Context, tenantID string, now time.Time, rules ...authLimitRule) error {
-	var retryAfter time.Duration
 	for _, rule := range rules {
 		result, err := s.Store.RecordAuthAttempt(ctx, tenantID, rule.action, rule.subject, now, rule.window)
 		if err != nil {
@@ -48,12 +47,7 @@ func (s *Service) enforceAuthLimits(ctx context.Context, tenantID string, now ti
 		if result.Count <= rule.limit {
 			continue
 		}
-		if retry := result.ResetAt.Sub(now); retry > retryAfter {
-			retryAfter = retry
-		}
-	}
-	if retryAfter > 0 {
-		return &RateLimitError{RetryAfter: retryAfter}
+		return &RateLimitError{RetryAfter: result.ResetAt.Sub(now)}
 	}
 	return nil
 }

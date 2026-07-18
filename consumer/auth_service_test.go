@@ -422,6 +422,32 @@ func TestCreateUserEnforcesPersistentMobileAndSourceLimits(t *testing.T) {
 	})
 }
 
+func TestAuthLimitStopsBeforeRecordingAttackerControlledSubjects(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	for attempt := 1; attempt <= 50; attempt++ {
+		err := env.Service.enforceAuthLimits(ctx, env.Tenant, authTestNow,
+			sourceLimit("bounded-source", authTestSource, 2, 15*time.Minute),
+			mobileLimit("untrusted-mobile", fmt.Sprintf("099%07d", attempt), 5, 15*time.Minute),
+		)
+		if attempt <= 2 && err != nil {
+			t.Fatalf("attempt %d: %v", attempt, err)
+		}
+		if attempt > 2 && !errors.Is(err, ErrRateLimited) {
+			t.Fatalf("attempt %d error = %v, want %v", attempt, err, ErrRateLimited)
+		}
+	}
+
+	var rows int
+	stmt := env.DB.Rebind("SELECT count(*) FROM auth_rate_limits WHERE tenant_id = ?")
+	if err := env.DB.QueryRowContext(ctx, stmt, env.Tenant).Scan(&rows); err != nil {
+		t.Fatalf("count rate-limit rows: %v", err)
+	}
+	if rows != 3 {
+		t.Fatalf("rate-limit rows = %d, want one source and two bounded subjects", rows)
+	}
+}
+
 func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
 	env := newTestEnv(t)
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")

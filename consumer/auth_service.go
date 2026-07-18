@@ -68,8 +68,8 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password, 
 		return "", empty, err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
-		mobileLimit("password-login-identifier", emailOrMobile, 10, 15*time.Minute),
 		sourceLimit("password-login-source", source, 30, 15*time.Minute),
+		mobileLimit("password-login-identifier", emailOrMobile, 10, 15*time.Minute),
 	); err != nil {
 		return "", empty, err
 	}
@@ -108,8 +108,8 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 		return "", empty, err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
-		mobileLimit("otp-login-mobile", mobile, 5, 15*time.Minute),
 		sourceLimit("otp-login-source", source, 30, 15*time.Minute),
+		mobileLimit("otp-login-mobile", mobile, 5, 15*time.Minute),
 	); err != nil {
 		return "", empty, err
 	}
@@ -300,8 +300,8 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 		return ebs_fields.User{}, err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
-		mobileLimit("registration-mobile", u.Mobile, 3, time.Hour),
 		sourceLimit("registration-source", source, 10, 15*time.Minute),
+		mobileLimit("registration-mobile", u.Mobile, 3, time.Hour),
 	); err != nil {
 		return ebs_fields.User{}, err
 	}
@@ -357,8 +357,8 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, signatur
 		return ebs_fields.User{}, err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
-		mobileLimit("otp-verify-mobile", mobile, 5, 15*time.Minute),
 		sourceLimit("otp-verify-source", source, 30, 15*time.Minute),
+		mobileLimit("otp-verify-mobile", mobile, 5, 15*time.Minute),
 	); err != nil {
 		return ebs_fields.User{}, err
 	}
@@ -438,9 +438,9 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile, sour
 		return err
 	}
 	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		sourceLimit("otp-generate-source", source, 20, 15*time.Minute),
 		mobileLimit("otp-generate-cooldown", mobile, 1, time.Minute),
 		mobileLimit("otp-generate-mobile", mobile, 3, 15*time.Minute),
-		sourceLimit("otp-generate-source", source, 20, 15*time.Minute),
 	); err != nil {
 		return err
 	}
