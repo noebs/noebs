@@ -3,7 +3,9 @@ package consumer
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -12,6 +14,8 @@ import (
 )
 
 var ErrMissingUUID = errors.New("missing uuid")
+
+const paymentTokenFinalizationTimeout = 5 * time.Second
 
 func (s *Service) GeneratePaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, token ebs_fields.Token) (ebs_fields.Token, string, string, error) {
 	if s == nil || s.Store == nil {
@@ -52,6 +56,8 @@ func (s *Service) generatePaymentTokenForCards(ctx context.Context, tenantID str
 	token.ToCard = fullPan
 	token.UUID = uuid.New().String()
 	token.UserID = userID
+	token.IsPaid = false
+	token.PaymentStatus = ebs_fields.PaymentTokenStatusAvailable
 	if err := s.Store.CreateToken(ctx, tenantID, &token); err != nil {
 		return ebs_fields.Token{}, "", "", err
 	}
@@ -91,9 +97,6 @@ func (s *Service) GetPaymentTokenForUserID(ctx context.Context, tenantID string,
 	if err != nil {
 		return nil, nil, err
 	}
-	if result.UserID != userID {
-		return nil, nil, store.ErrInvalidUserID
-	}
 	result.ToCard = utils.MaskPAN(result.ToCard)
 	return nil, result, nil
 }
@@ -111,6 +114,9 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 	if userID <= 0 {
 		return ebs_fields.EBSParserFields{}, store.ErrInvalidUserID
 	}
+	if err := validateQuickPaymentRequest(req); err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
 	resolution, err := s.ResolveQuickPaymentTokenFromCardVault(ctx, tenantID, userID, QuickPaymentTokenResolveCommand{
 		BodyToken:  req.EncodedPaymentToken,
 		QueryToken: tokenQuery,
@@ -123,6 +129,7 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 
 	// Force the destination PAN + amount from the stored token.
 	req.ApplicationId = s.NoebsConfig.ConsumerID
+	req.ConsumerCommonFields.UUID = resolution.RailUUID
 	req.ToCard = resolution.ToCard
 	req.TranAmount = float32(resolution.Amount)
 	req.DynamicFees = s.NoebsConfig.EBSDynamicFees.CardTransferfees
@@ -142,18 +149,48 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 			p.EBSResponse.ReceiverPAN = receiverPan
 		},
 	)
-	if err == nil {
-		if markErr := s.MarkQuickPaymentTokenPaidInCardVault(ctx, tenantID, userID, QuickPaymentTokenPaidCommand{UUID: resolution.UUID}); markErr != nil {
-			return res, markErr
+	status := quickPaymentTerminalStatus(res, err, resolution.RailUUID)
+	if status == "" {
+		return res, errors.Join(err, ErrPaymentOutcomeUnknown)
+	}
+	finalizeCtx, cancelFinalize := context.WithTimeout(context.WithoutCancel(ctx), paymentTokenFinalizationTimeout)
+	defer cancelFinalize()
+	finalizeErr := s.FinalizeQuickPaymentTokenInCardVault(finalizeCtx, tenantID, userID, QuickPaymentTokenFinalizationCommand{
+		UUID:     resolution.UUID,
+		RailUUID: resolution.RailUUID,
+		Status:   status,
+	})
+
+	hookErr := s.SubmitBillerHookInNotificationChat(ctx, tenantID, BillerHookCommand{
+		EBS:          res.EBSResponse,
+		IsSuccessful: status == ebs_fields.PaymentTokenStatusPaid,
+		Token:        resolution.UUID,
+	})
+
+	return res, errors.Join(err, finalizeErr, hookErr)
+}
+
+func validateQuickPaymentRequest(req ebs_fields.QuickPaymentFields) error {
+	for _, value := range []string{req.TranDateTime, req.Pan, req.Ipin, req.ExpDate} {
+		if strings.TrimSpace(value) == "" {
+			return ErrInvalidQuickPaymentRequest
 		}
 	}
+	return nil
+}
 
-	hookErr := s.SubmitBillerHookInNotificationChat(ctx, tenantID, BillerHookCommand{EBS: res.EBSResponse, IsSuccessful: err == nil, Token: resolution.UUID})
-	if hookErr != nil {
-		return res, errors.Join(err, hookErr)
+func quickPaymentTerminalStatus(res ebs_fields.EBSParserFields, err error, railUUID string) string {
+	if strings.TrimSpace(railUUID) == "" || strings.TrimSpace(res.UUID) != strings.TrimSpace(railUUID) || strings.TrimSpace(res.ResponseMessage) == "" {
+		return ""
 	}
-
-	return res, err
+	var callErr *ebs_fields.CallError
+	if !errors.As(err, &callErr) && res.ResponseCode == 0 {
+		return ebs_fields.PaymentTokenStatusPaid
+	}
+	if callErr != nil && callErr.Status == http.StatusBadGateway && res.ResponseCode != 0 {
+		return ebs_fields.PaymentTokenStatusFailed
+	}
+	return ""
 }
 
 func quickPaymentTokenUUID(req ebs_fields.QuickPaymentFields, uuidQuery, tokenQuery string) (string, error) {

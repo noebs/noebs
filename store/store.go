@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -1061,6 +1062,9 @@ func (s *Store) CreateToken(ctx context.Context, tenantID string, token *ebs_fie
 	if token.Amount < 0 {
 		return ErrInvalidAmount
 	}
+	token.IsPaid = false
+	token.PaymentStatus = ebs_fields.PaymentTokenStatusAvailable
+	token.RailUUID = uuid.NewString()
 	if s == nil {
 		return fmt.Errorf("nil db")
 	}
@@ -1081,9 +1085,9 @@ func (s *Store) CreateToken(ctx context.Context, tenantID string, token *ebs_fie
 		return err
 	}
 	now := time.Now().UTC()
-	stmt := `INSERT INTO tokens(tenant_id, user_id, amount, cart_id, uuid, note, to_card, to_card_enc, is_paid, created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	args := []any{tenantID, token.UserID, token.Amount, token.CartID, token.UUID, token.Note, toCardValue, toCardEnc, token.IsPaid, now, now}
+	stmt := `INSERT INTO tokens(tenant_id, user_id, amount, cart_id, uuid, note, to_card, to_card_enc, is_paid, payment_status, rail_uuid, created_at, updated_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	args := []any{tenantID, token.UserID, token.Amount, token.CartID, token.UUID, token.Note, toCardValue, toCardEnc, token.IsPaid, token.PaymentStatus, token.RailUUID, now, now}
 	if s.DB.Driver == DriverPostgres {
 		stmt = stmt + " RETURNING id"
 		stmt = s.DB.Rebind(stmt)
@@ -1125,7 +1129,7 @@ func (s *Store) GetTokenByUUID(ctx context.Context, tenantID, uuid string) (*ebs
 	return &token, nil
 }
 
-func (s *Store) MarkTokenPaid(ctx context.Context, tenantID, uuid string) error {
+func (s *Store) ClaimTokenForPayment(ctx context.Context, tenantID, uuid string, payerUserID int64, amount int) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
@@ -1133,12 +1137,97 @@ func (s *Store) MarkTokenPaid(ctx context.Context, tenantID, uuid string) error 
 	if uuid == "" {
 		return ErrMissingUUID
 	}
+	if payerUserID <= 0 {
+		return ErrInvalidUserID
+	}
+	if amount <= 0 {
+		return ErrInvalidAmount
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind("UPDATE tokens SET is_paid = TRUE, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	return execContextRequireRowsAffected(ctx, db, stmt, time.Now().UTC(), tenantID, uuid)
+	stmt := s.DB.Rebind(`UPDATE tokens
+		SET payment_status = ?, payer_user_id = ?, claimed_amount = ?, processing_at = ?, finalized_at = NULL, updated_at = ?
+		WHERE tenant_id = ? AND uuid = ? AND is_paid = FALSE AND payment_status = ?`)
+	now := time.Now().UTC()
+	err = execContextRequireRowsAffected(ctx, db, stmt,
+		ebs_fields.PaymentTokenStatusProcessing,
+		payerUserID,
+		amount,
+		now,
+		now,
+		tenantID,
+		uuid,
+		ebs_fields.PaymentTokenStatusAvailable,
+	)
+	if !ErrNotFound(err) {
+		return err
+	}
+	return s.paymentTokenStateError(ctx, db, tenantID, uuid)
+}
+
+func (s *Store) FinalizeTokenPayment(ctx context.Context, tenantID, uuid, railUUID string, payerUserID int64, status string) error {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return err
+	}
+	if uuid == "" {
+		return ErrMissingUUID
+	}
+	if railUUID == "" {
+		return ErrMissingUUID
+	}
+	if payerUserID <= 0 {
+		return ErrInvalidUserID
+	}
+	if status != ebs_fields.PaymentTokenStatusPaid && status != ebs_fields.PaymentTokenStatusFailed {
+		return ErrInvalidPaymentTokenStatus
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+	stmt := s.DB.Rebind(`UPDATE tokens
+		SET payment_status = ?, is_paid = ?, finalized_at = COALESCE(finalized_at, ?), updated_at = ?
+		WHERE tenant_id = ? AND uuid = ? AND rail_uuid = ? AND payer_user_id = ? AND payment_status IN (?, ?)`)
+	now := time.Now().UTC()
+	err = execContextRequireRowsAffected(ctx, db, stmt,
+		status,
+		status == ebs_fields.PaymentTokenStatusPaid,
+		now,
+		now,
+		tenantID,
+		uuid,
+		railUUID,
+		payerUserID,
+		ebs_fields.PaymentTokenStatusProcessing,
+		status,
+	)
+	if !ErrNotFound(err) {
+		return err
+	}
+	return s.paymentTokenStateError(ctx, db, tenantID, uuid)
+}
+
+func (s *Store) MarkTokenPaid(ctx context.Context, tenantID, uuid, railUUID string, payerUserID int64) error {
+	return s.FinalizeTokenPayment(ctx, tenantID, uuid, railUUID, payerUserID, ebs_fields.PaymentTokenStatusPaid)
+}
+
+func (s *Store) MarkTokenFailed(ctx context.Context, tenantID, uuid, railUUID string, payerUserID int64) error {
+	return s.FinalizeTokenPayment(ctx, tenantID, uuid, railUUID, payerUserID, ebs_fields.PaymentTokenStatusFailed)
+}
+
+func (s *Store) paymentTokenStateError(ctx context.Context, db *sqlx.DB, tenantID, uuid string) error {
+	stmt := s.DB.Rebind("SELECT EXISTS(SELECT 1 FROM tokens WHERE tenant_id = ? AND uuid = ?)")
+	var exists bool
+	if err := db.GetContext(ctx, &exists, stmt, tenantID, uuid); err != nil {
+		return err
+	}
+	if !exists {
+		return sql.ErrNoRows
+	}
+	return ErrPaymentTokenUnavailable
 }
 
 func (s *Store) CreateTransaction(ctx context.Context, tenantID string, res ebs_fields.EBSResponse) error {
@@ -2058,8 +2147,8 @@ func (s *Store) UpdateTokenCard(ctx context.Context, tenantID string, uuid, toCa
 	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind("UPDATE tokens SET to_card = ?, to_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	return execContextRequireRowsAffected(ctx, db, stmt, toCardValue, toCardEnc, time.Now().UTC(), tenantID, uuid)
+	stmt := s.DB.Rebind("UPDATE tokens SET to_card = ?, to_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ? AND payment_status = ?")
+	return execContextRequireRowsAffected(ctx, db, stmt, toCardValue, toCardEnc, time.Now().UTC(), tenantID, uuid, ebs_fields.PaymentTokenStatusAvailable)
 }
 
 func (s *Store) SaveEBSUUID(ctx context.Context, tenantID string, originalUUID string, res ebs_fields.EBSResponse) error {

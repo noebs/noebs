@@ -377,7 +377,7 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"MarkTokenPaid", func(tenantID string) error {
-			return s.MarkTokenPaid(ctx, tenantID, "token-uuid")
+			return s.MarkTokenPaid(ctx, tenantID, "token-uuid", "rail-uuid", 1)
 		}},
 		{"CreateTransaction", func(tenantID string) error {
 			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{UUID: "transaction-uuid"})
@@ -603,7 +603,7 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 			return s.SetMainCard(ctx, tenantID, 999, "9222081700000000")
 		}},
 		{"MarkTokenPaid", func() error {
-			return s.MarkTokenPaid(ctx, tenantID, "missing-token")
+			return s.MarkTokenPaid(ctx, tenantID, "missing-token", "rail-uuid", 1)
 		}},
 		{"UpdateTokenCard", func() error {
 			return s.UpdateTokenCard(ctx, tenantID, "missing-token", "")

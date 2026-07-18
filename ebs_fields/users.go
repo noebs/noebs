@@ -220,20 +220,33 @@ func NewBeneficiary(number string, billType int, carrier, operator int) Benefici
 //  5. Mobile: the receipient of the payment mobile. This is an optional field
 //  6. Note: an optional text note to be sent to the recipient.
 type Token struct {
-	Model
+	Model    `json:"-"`
 	TenantID string `json:"-"`
-	UserID   int64
+	UserID   int64  `json:"-"`
 
-	User         User          `json:"-"`
-	Amount       int           `json:"amount,omitempty"`
-	CartID       string        `json:"cart_id,omitempty"`
-	UUID         string        `json:"uuid,omitempty"`
-	Note         string        `json:"note,omitempty"`
-	ToCard       string        `json:"toCard,omitempty"`
-	ToCardEnc    string        `json:"-" db:"to_card_enc"`
-	EBSResponses []EBSResponse `json:"transaction,omitempty"`
-	IsPaid       bool          `json:"is_paid"`
+	User          User          `json:"-"`
+	Amount        int           `json:"amount,omitempty"`
+	CartID        string        `json:"cart_id,omitempty"`
+	UUID          string        `json:"uuid,omitempty"`
+	Note          string        `json:"note,omitempty"`
+	ToCard        string        `json:"toCard,omitempty"`
+	ToCardEnc     string        `json:"-" db:"to_card_enc"`
+	EBSResponses  []EBSResponse `json:"transaction,omitempty"`
+	IsPaid        bool          `json:"is_paid"`
+	PaymentStatus string        `json:"payment_status"`
+	RailUUID      string        `json:"-"`
+	PayerUserID   *int64        `json:"-"`
+	ClaimedAmount *int          `json:"-"`
+	ProcessingAt  *time.Time    `json:"-"`
+	FinalizedAt   *time.Time    `json:"-"`
 }
+
+const (
+	PaymentTokenStatusAvailable  = "available"
+	PaymentTokenStatusProcessing = "processing"
+	PaymentTokenStatusPaid       = "paid"
+	PaymentTokenStatusFailed     = "failed"
+)
 
 type QrData struct {
 	UUID   string `json:"uuid"`

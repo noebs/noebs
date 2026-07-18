@@ -170,6 +170,67 @@ func TestResolveQuickPaymentAmount(t *testing.T) {
 	}
 }
 
+func TestNoebsQuickPaymentRejectsIncompletePayerFieldsBeforeClaim(t *testing.T) {
+	called := false
+	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(cardVaultServer.Close)
+	service := &Service{
+		HTTPClient: cardVaultServer.Client(),
+		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
+			cardVaultServiceDiscoveryKey: cardVaultServer.URL,
+		}},
+	}
+
+	_, err := service.NoebsQuickPayment(t.Context(), "tenant-a", 42, ebs_fields.QuickPaymentFields{}, "token-1", "")
+	if !errors.Is(err, ErrInvalidQuickPaymentRequest) {
+		t.Fatalf("NoebsQuickPayment() error = %v, want %v", err, ErrInvalidQuickPaymentRequest)
+	}
+	if called {
+		t.Fatal("incomplete payer request reached card-vault claim")
+	}
+}
+
+func TestQuickPaymentTerminalStatusFailsClosed(t *testing.T) {
+	approved := ebs_fields.EBSParserFields{EBSResponse: ebs_fields.EBSResponse{
+		UUID:            "rail-1",
+		ResponseCode:    0,
+		ResponseMessage: "Approved",
+	}}
+	rejected := ebs_fields.EBSParserFields{EBSResponse: ebs_fields.EBSResponse{
+		UUID:            "rail-1",
+		ResponseCode:    72,
+		ResponseMessage: "Declined",
+	}}
+	tests := []struct {
+		name string
+		res  ebs_fields.EBSParserFields
+		err  error
+		want string
+	}{
+		{name: "authoritative success", res: approved, want: ebs_fields.PaymentTokenStatusPaid},
+		{name: "success with local record failure", res: approved, err: store.ErrMissingUUID, want: ebs_fields.PaymentTokenStatusPaid},
+		{name: "explicit rail rejection", res: rejected, err: &ebs_fields.CallError{Status: http.StatusBadGateway, Response: rejected, Err: errors.New("declined")}, want: ebs_fields.PaymentTokenStatusFailed},
+		{name: "empty response", res: ebs_fields.EBSParserFields{}},
+		{name: "transport timeout", err: &ebs_fields.CallError{Status: http.StatusGatewayTimeout, Err: errors.New("timeout")}},
+		{name: "malformed rejection", res: rejected, err: &ebs_fields.CallError{Status: http.StatusInternalServerError, Response: rejected, Err: errors.New("decode")}},
+		{name: "uncorrelated success", res: approved, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			railUUID := "rail-1"
+			if tt.name == "uncorrelated success" {
+				railUUID = "rail-2"
+			}
+			if got := quickPaymentTerminalStatus(tt.res, tt.err, railUUID); got != tt.want {
+				t.Fatalf("quickPaymentTerminalStatus() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestServiceCommandErrorMapsInvalidAmount(t *testing.T) {
 	if err := errorForServiceCommandCode(store.ErrInvalidAmount.Error()); !errors.Is(err, store.ErrInvalidAmount) {
 		t.Fatalf("errorForServiceCommandCode(invalid amount) = %v, want %v", err, store.ErrInvalidAmount)
@@ -178,7 +239,7 @@ func TestServiceCommandErrorMapsInvalidAmount(t *testing.T) {
 
 func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 	var sawResolve bool
-	var sawMarkPaid bool
+	var sawFinalize bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(gateway.GatewayTenantIDHeader) != "tenant-a" {
 			t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
@@ -197,15 +258,15 @@ func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 			if cmd.UUID != "token-1" || cmd.Amount != 10 {
 				t.Fatalf("resolve command = %+v", cmd)
 			}
-			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", ToCard: "9222081700000000", Amount: 10})
-		case "/internal/card-vault/quick-pay/mark-paid":
-			sawMarkPaid = true
-			var cmd QuickPaymentTokenPaidCommand
+			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", RailUUID: "rail-1", ToCard: "9222081700000000", Amount: 10})
+		case "/internal/card-vault/quick-pay/finalize":
+			sawFinalize = true
+			var cmd QuickPaymentTokenFinalizationCommand
 			if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-				t.Fatalf("decode mark-paid command: %v", err)
+				t.Fatalf("decode finalize command: %v", err)
 			}
-			if cmd.UUID != "token-1" {
-				t.Fatalf("mark-paid command = %+v", cmd)
+			if cmd.UUID != "token-1" || cmd.RailUUID != "rail-1" || cmd.Status != ebs_fields.PaymentTokenStatusPaid {
+				t.Fatalf("finalize command = %+v", cmd)
 			}
 			w.WriteHeader(http.StatusNoContent)
 		default:
@@ -230,14 +291,74 @@ func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve quick-pay token through card-vault client: %v", err)
 	}
-	if resolution.UUID != "token-1" || resolution.ToCard != "9222081700000000" || resolution.Amount != 10 {
+	if resolution.UUID != "token-1" || resolution.RailUUID != "rail-1" || resolution.ToCard != "9222081700000000" || resolution.Amount != 10 {
 		t.Fatalf("resolution = %+v", resolution)
 	}
-	if err := service.MarkQuickPaymentTokenPaidInCardVault(t.Context(), "tenant-a", 42, QuickPaymentTokenPaidCommand{UUID: "token-1"}); err != nil {
-		t.Fatalf("mark quick-pay token through card-vault client: %v", err)
+	if err := service.FinalizeQuickPaymentTokenInCardVault(t.Context(), "tenant-a", 42, QuickPaymentTokenFinalizationCommand{UUID: "token-1", RailUUID: "rail-1", Status: ebs_fields.PaymentTokenStatusPaid}); err != nil {
+		t.Fatalf("finalize quick-pay token through card-vault client: %v", err)
 	}
-	if !sawResolve || !sawMarkPaid {
-		t.Fatalf("sawResolve=%v sawMarkPaid=%v", sawResolve, sawMarkPaid)
+	if !sawResolve || !sawFinalize {
+		t.Fatalf("sawResolve=%v sawFinalize=%v", sawResolve, sawFinalize)
+	}
+}
+
+func TestNoebsQuickPaymentLeavesMalformedOutcomeUnfinalized(t *testing.T) {
+	var sawResolve bool
+	var sawFinalize bool
+	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/internal/card-vault/quick-pay/resolve":
+			sawResolve = true
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{
+				UUID:     "token-1",
+				RailUUID: "rail-1",
+				ToCard:   "9222081700000000",
+				Amount:   25,
+			})
+		case "/internal/card-vault/quick-pay/finalize":
+			sawFinalize = true
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected card-vault path %s", r.URL.Path)
+		}
+	}))
+	t.Cleanup(cardVaultServer.Close)
+
+	var sawEBS bool
+	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawEBS = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(ebsServer.Close)
+
+	service := &Service{
+		HTTPClient: testHTTPClient(),
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerIP:            ebsServer.URL + "/",
+			KafkaTransactionTopic: testKafkaTransactionTopic,
+			ServiceDiscovery: map[string]string{
+				cardVaultServiceDiscoveryKey: cardVaultServer.URL,
+			},
+		},
+	}
+	req := ebs_fields.QuickPaymentFields{ConsumerCardTransferFields: ebs_fields.ConsumerCardTransferFields{
+		ConsumerCommonFields: ebs_fields.ConsumerCommonFields{TranDateTime: "270526205500"},
+		ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
+			Pan:     "9222081700009999",
+			Ipin:    "encrypted-ipin",
+			ExpDate: "2601",
+		},
+		AmountFields: ebs_fields.AmountFields{TranAmount: 25},
+	}}
+
+	_, err := service.NoebsQuickPayment(t.Context(), "tenant-a", 42, req, "token-1", "")
+	if !errors.Is(err, ErrPaymentOutcomeUnknown) {
+		t.Fatalf("NoebsQuickPayment() error = %v, want %v", err, ErrPaymentOutcomeUnknown)
+	}
+	if !sawResolve || !sawEBS || sawFinalize {
+		t.Fatalf("sawResolve=%v sawEBS=%v sawFinalize=%v", sawResolve, sawEBS, sawFinalize)
 	}
 }
 
@@ -245,7 +366,7 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeEBSAdapter})
 
 	var sawResolve bool
-	var sawMarkPaid bool
+	var sawFinalize bool
 	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/internal/card-vault/quick-pay/resolve":
@@ -259,17 +380,17 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 			}
 			sawResolve = true
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", ToCard: "9222081700000000", Amount: 25})
-		case "/internal/card-vault/quick-pay/mark-paid":
+			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", RailUUID: "rail-1", ToCard: "9222081700000000", Amount: 25})
+		case "/internal/card-vault/quick-pay/finalize":
 			assertCardVaultUserCommandHeaders(t, r, tenantID, 42)
-			var cmd QuickPaymentTokenPaidCommand
+			var cmd QuickPaymentTokenFinalizationCommand
 			if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
-				t.Fatalf("decode mark-paid command: %v", err)
+				t.Fatalf("decode finalize command: %v", err)
 			}
-			if cmd.UUID != "token-1" {
-				t.Fatalf("mark-paid command = %+v", cmd)
+			if cmd.UUID != "token-1" || cmd.RailUUID != "rail-1" || cmd.Status != ebs_fields.PaymentTokenStatusPaid {
+				t.Fatalf("finalize command = %+v", cmd)
 			}
-			sawMarkPaid = true
+			sawFinalize = true
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			t.Fatalf("unexpected card-vault path %s", r.URL.Path)
@@ -289,11 +410,14 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 		if !bytes.Contains(body, []byte(`"dynamicFees":17`)) {
 			t.Fatalf("EBS request missing configured quick-pay dynamic fee: %s", body)
 		}
+		if !bytes.Contains(body, []byte(`"UUID":"rail-1"`)) || bytes.Contains(body, []byte(`"UUID":"token-1"`)) || bytes.Contains(body, []byte(`"UUID":"quickpay-request-uuid"`)) {
+			t.Fatalf("EBS request must use the payment token as its stable identity: %s", body)
+		}
 		sawEBS = true
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{
 			EBSResponse: ebs_fields.EBSResponse{
-				UUID:            "quickpay-ebs-uuid",
+				UUID:            "rail-1",
 				ResponseCode:    0,
 				ResponseMessage: "Approved",
 				PAN:             "9222081700009999",
@@ -314,7 +438,7 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 			t.Fatalf("decode biller hook command: %v", err)
 		}
-		if cmd.Token != "token-1" || cmd.EBS.UUID != "quickpay-ebs-uuid" || !cmd.IsSuccessful {
+		if cmd.Token != "token-1" || cmd.EBS.UUID != "rail-1" || !cmd.IsSuccessful {
 			t.Fatalf("biller hook command = %+v", cmd)
 		}
 		sawNotification = true
@@ -357,11 +481,11 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 	if err != nil {
 		t.Fatalf("quick pay: %v", err)
 	}
-	if res.UUID != "quickpay-ebs-uuid" {
+	if res.UUID != "rail-1" {
 		t.Fatalf("EBS response = %+v", res)
 	}
-	if !sawResolve || !sawMarkPaid || !sawEBS || !sawNotification {
-		t.Fatalf("sawResolve=%v sawMarkPaid=%v sawEBS=%v sawNotification=%v", sawResolve, sawMarkPaid, sawEBS, sawNotification)
+	if !sawResolve || !sawFinalize || !sawEBS || !sawNotification {
+		t.Fatalf("sawResolve=%v sawFinalize=%v sawEBS=%v sawNotification=%v", sawResolve, sawFinalize, sawEBS, sawNotification)
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("ebs-adapter scope should not create user tables, err=%v", err)

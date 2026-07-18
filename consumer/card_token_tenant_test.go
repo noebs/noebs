@@ -63,8 +63,8 @@ func TestCardTokenTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 			_, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, 1, QuickPaymentTokenResolveCommand{UUID: "token-uuid"})
 			return err
 		}},
-		{"MarkQuickPaymentTokenPaidForUserID", func(tenantID string) error {
-			return service.MarkQuickPaymentTokenPaidForUserID(ctx, tenantID, 1, QuickPaymentTokenPaidCommand{UUID: "token-uuid"})
+		{"FinalizeQuickPaymentTokenForUserID", func(tenantID string) error {
+			return service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, 1, QuickPaymentTokenFinalizationCommand{UUID: "token-uuid", RailUUID: "rail-uuid", Status: ebs_fields.PaymentTokenStatusPaid})
 		}},
 		{"ListMaskedCardsInCardVault", func(tenantID string) error {
 			_, err := service.ListMaskedCardsInCardVault(ctx, tenantID, 1)
@@ -86,8 +86,8 @@ func TestCardTokenTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 			_, err := service.ResolveQuickPaymentTokenFromCardVault(ctx, tenantID, 1, QuickPaymentTokenResolveCommand{UUID: "token-uuid"})
 			return err
 		}},
-		{"MarkQuickPaymentTokenPaidInCardVault", func(tenantID string) error {
-			return service.MarkQuickPaymentTokenPaidInCardVault(ctx, tenantID, 1, QuickPaymentTokenPaidCommand{UUID: "token-uuid"})
+		{"FinalizeQuickPaymentTokenInCardVault", func(tenantID string) error {
+			return service.FinalizeQuickPaymentTokenInCardVault(ctx, tenantID, 1, QuickPaymentTokenFinalizationCommand{UUID: "token-uuid", RailUUID: "rail-uuid", Status: ebs_fields.PaymentTokenStatusPaid})
 		}},
 		{"CreateCompletedRegistrationIdentityInIdentityAuth", func(tenantID string) error {
 			_, err := service.CreateCompletedRegistrationIdentityInIdentityAuth(ctx, tenantID, CompletedRegistrationIdentityCommand{Mobile: "0990000000", Password: "password"})

@@ -321,8 +321,8 @@ func (s *Store) updateTokenCard(ctx context.Context, tenantID, uuid, hash, enc s
 	if err != nil {
 		return err
 	}
-	stmt := s.DB.Rebind("UPDATE tokens SET to_card = ?, to_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ?")
-	return execContextRequireRowsAffected(ctx, db, stmt, hash, enc, time.Now().UTC(), tenantID, uuid)
+	stmt := s.DB.Rebind("UPDATE tokens SET to_card = ?, to_card_enc = ?, updated_at = ? WHERE tenant_id = ? AND uuid = ? AND payment_status = ?")
+	return execContextRequireRowsAffected(ctx, db, stmt, hash, enc, time.Now().UTC(), tenantID, uuid, ebs_fields.PaymentTokenStatusAvailable)
 }
 
 func (s *Store) panLookupArgs(pan string) []any {

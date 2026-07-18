@@ -25,18 +25,18 @@ func (h *Handler) ResolveQuickPaymentToken(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, resolution)
 }
 
-func (h *Handler) MarkQuickPaymentTokenPaid(c *fiber.Ctx) error {
+func (h *Handler) FinalizeQuickPaymentToken(c *fiber.Ctx) error {
 	userID := getUserID(c)
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	var cmd consumer.QuickPaymentTokenPaidCommand
+	var cmd consumer.QuickPaymentTokenFinalizationCommand
 	if err := bindJSON(c, &cmd); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "binding_error", "message": err.Error()})
 	}
-	if err := h.Service.MarkQuickPaymentTokenPaidForUserID(c.UserContext(), tenantID, userID, cmd); err != nil {
+	if err := h.Service.FinalizeQuickPaymentTokenForUserID(c.UserContext(), tenantID, userID, cmd); err != nil {
 		return jsonResponse(c, statusForError(err), fiber.Map{"code": err.Error(), "message": err.Error()})
 	}
 	return c.SendStatus(http.StatusNoContent)

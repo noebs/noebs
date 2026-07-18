@@ -58,13 +58,16 @@ type QuickPaymentTokenResolveCommand struct {
 }
 
 type QuickPaymentTokenResolution struct {
-	UUID   string `json:"uuid"`
-	ToCard string `json:"to_card"`
-	Amount int    `json:"amount"`
+	UUID     string `json:"uuid"`
+	RailUUID string `json:"rail_uuid"`
+	ToCard   string `json:"to_card"`
+	Amount   int    `json:"amount"`
 }
 
-type QuickPaymentTokenPaidCommand struct {
-	UUID string `json:"uuid"`
+type QuickPaymentTokenFinalizationCommand struct {
+	UUID     string `json:"uuid"`
+	RailUUID string `json:"rail_uuid"`
+	Status   string `json:"status"`
 }
 
 type serviceCommandErrorPayload struct {
@@ -92,17 +95,22 @@ func (s *Service) ResolveQuickPaymentTokenForUserID(ctx context.Context, tenantI
 	if err != nil {
 		return QuickPaymentTokenResolution{}, err
 	}
-	if storedToken.UserID != userID {
-		return QuickPaymentTokenResolution{}, store.ErrInvalidUserID
-	}
 	amount, err := resolveQuickPaymentAmount(storedToken.Amount, cmd.Amount)
 	if err != nil {
 		return QuickPaymentTokenResolution{}, err
 	}
+	if err := s.Store.ClaimTokenForPayment(ctx, tenantID, tokenUUID, userID, amount); err != nil {
+		return QuickPaymentTokenResolution{}, err
+	}
+	claimedToken, err := s.Store.GetTokenByUUID(ctx, tenantID, tokenUUID)
+	if err != nil {
+		return QuickPaymentTokenResolution{}, err
+	}
 	return QuickPaymentTokenResolution{
-		UUID:   storedToken.UUID,
-		ToCard: storedToken.ToCard,
-		Amount: amount,
+		UUID:     claimedToken.UUID,
+		RailUUID: claimedToken.RailUUID,
+		ToCard:   claimedToken.ToCard,
+		Amount:   amount,
 	}, nil
 }
 
@@ -122,7 +130,7 @@ func resolveQuickPaymentAmount(storedAmount, requestedAmount int) (int, error) {
 	return storedAmount, nil
 }
 
-func (s *Service) MarkQuickPaymentTokenPaidForUserID(ctx context.Context, tenantID string, userID int64, cmd QuickPaymentTokenPaidCommand) error {
+func (s *Service) FinalizeQuickPaymentTokenForUserID(ctx context.Context, tenantID string, userID int64, cmd QuickPaymentTokenFinalizationCommand) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
@@ -137,14 +145,11 @@ func (s *Service) MarkQuickPaymentTokenPaidForUserID(ctx context.Context, tenant
 	if tokenUUID == "" {
 		return ErrMissingUUID
 	}
-	storedToken, err := s.Store.GetTokenByUUID(ctx, tenantID, tokenUUID)
-	if err != nil {
-		return err
+	railUUID := strings.TrimSpace(cmd.RailUUID)
+	if railUUID == "" {
+		return ErrMissingUUID
 	}
-	if storedToken.UserID != userID {
-		return store.ErrInvalidUserID
-	}
-	return s.Store.MarkTokenPaid(ctx, tenantID, tokenUUID)
+	return s.Store.FinalizeTokenPayment(ctx, tenantID, tokenUUID, railUUID, userID, strings.TrimSpace(cmd.Status))
 }
 
 func (s *Service) ResolveQuickPaymentTokenFromCardVault(ctx context.Context, tenantID string, userID int64, cmd QuickPaymentTokenResolveCommand) (QuickPaymentTokenResolution, error) {
@@ -155,8 +160,8 @@ func (s *Service) ResolveQuickPaymentTokenFromCardVault(ctx context.Context, ten
 	return resolution, nil
 }
 
-func (s *Service) MarkQuickPaymentTokenPaidInCardVault(ctx context.Context, tenantID string, userID int64, cmd QuickPaymentTokenPaidCommand) error {
-	return s.doCardVaultCommand(ctx, tenantID, userID, "/internal/card-vault/quick-pay/mark-paid", cmd, nil)
+func (s *Service) FinalizeQuickPaymentTokenInCardVault(ctx context.Context, tenantID string, userID int64, cmd QuickPaymentTokenFinalizationCommand) error {
+	return s.doCardVaultCommand(ctx, tenantID, userID, "/internal/card-vault/quick-pay/finalize", cmd, nil)
 }
 
 func (s *Service) doCardVaultCommand(ctx context.Context, tenantID string, userID int64, path string, command any, out any) error {
@@ -301,6 +306,10 @@ func errorForServiceCommandCode(code string) error {
 		return ErrMissingUUID
 	case ErrAmountMismatch.Error():
 		return ErrAmountMismatch
+	case store.ErrPaymentTokenUnavailable.Error():
+		return store.ErrPaymentTokenUnavailable
+	case store.ErrInvalidPaymentTokenStatus.Error():
+		return store.ErrInvalidPaymentTokenStatus
 	case ErrCardNotMatched.Error():
 		return ErrCardNotMatched
 	case ErrTransactionFailed.Error():
@@ -309,6 +318,10 @@ func errorForServiceCommandCode(code string) error {
 		return ErrInvalidPaymentToken
 	case ErrAmbiguousPaymentToken.Error():
 		return ErrAmbiguousPaymentToken
+	case ErrInvalidQuickPaymentRequest.Error():
+		return ErrInvalidQuickPaymentRequest
+	case ErrPaymentOutcomeUnknown.Error():
+		return ErrPaymentOutcomeUnknown
 	case ErrInvalidPaymentInfo.Error():
 		return ErrInvalidPaymentInfo
 	case ErrMissingBillerID.Error():

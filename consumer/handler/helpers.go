@@ -111,6 +111,8 @@ func statusForError(err error) int {
 	switch {
 	case errors.Is(err, store.ErrDuplicateTransaction):
 		return http.StatusConflict
+	case errors.Is(err, store.ErrPaymentTokenUnavailable):
+		return http.StatusConflict
 	case errors.Is(err, store.ErrMissingTenantID),
 		errors.Is(err, store.ErrInvalidTenantID),
 		errors.Is(err, store.ErrMissingUser),
@@ -118,6 +120,7 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrMissingUUID),
 		errors.Is(err, store.ErrInvalidUserID),
 		errors.Is(err, store.ErrInvalidAmount),
+		errors.Is(err, store.ErrInvalidPaymentTokenStatus),
 		errors.Is(err, store.ErrMissingMobile),
 		errors.Is(err, store.ErrInvalidMobile),
 		errors.Is(err, store.ErrMissingEmail),
@@ -137,6 +140,7 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrCardNotMatched),
 		errors.Is(err, consumer.ErrInvalidPaymentToken),
 		errors.Is(err, consumer.ErrAmbiguousPaymentToken),
+		errors.Is(err, consumer.ErrInvalidQuickPaymentRequest),
 		errors.Is(err, consumer.ErrReceiverHasNoCard),
 		errors.Is(err, consumer.ErrMissingBillerID),
 		errors.Is(err, consumer.ErrMissingMerchantID),
@@ -159,6 +163,8 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidPaymentInfo),
 		errors.Is(err, consumer.ErrMissingIssuedPAN),
 		errors.Is(err, consumer.ErrInvalidRecoveryJWT):
+		return http.StatusBadGateway
+	case errors.Is(err, consumer.ErrPaymentOutcomeUnknown):
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
