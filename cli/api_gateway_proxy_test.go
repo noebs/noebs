@@ -418,11 +418,14 @@ func TestAPIGatewayDoesNotExposeLegacyConsumerTestRoute(t *testing.T) {
 func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 	ensureInit()
 	tests := []struct {
-		name string
-		path string
+		name   string
+		method string
+		path   string
 	}{
-		{name: "card vault", path: "/consumer/get_cards"},
-		{name: "notification websocket", path: "/ws"},
+		{name: "card vault", method: http.MethodGet, path: "/consumer/get_cards"},
+		{name: "transaction detail", method: http.MethodGet, path: "/consumer/transaction?uuid=transaction-1"},
+		{name: "notification websocket", method: http.MethodGet, path: "/ws"},
+		{name: "kyc", method: http.MethodPost, path: "/consumer/kyc"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -437,7 +440,7 @@ func TestAPIGatewayEnforcesUserAuthBeforeProxy(t *testing.T) {
 			setServiceRoleForTest(t, serviceRoleAPIGateway)
 			route := GetMainEngine()
 
-			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			req := httptest.NewRequest(tt.method, tt.path, nil)
 			resp, err := route.Test(req, routeTestTimeout)
 			if err != nil {
 				t.Fatalf("route.Test() error = %v", err)
@@ -546,6 +549,7 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 		observed <- r.Header.Get(gateway.GatewayTenantIDHeader) == "" &&
 			r.Header.Get(gateway.GatewayUserIDHeader) == "" &&
 			r.Header.Get(gateway.GatewayMobileHeader) == "" &&
+			r.Header.Get(gateway.GatewaySourceIPHeader) == "" &&
 			r.Header.Get(gateway.GatewayAdminIdentityHeader) == "" &&
 			r.Header.Get(gateway.GatewayAdminRoleHeader) == "" &&
 			r.Header.Get(gateway.GatewayAdminPermissionsHeader) == "" &&
@@ -566,6 +570,7 @@ func TestAPIGatewayClearsIdentityAndCredentialHeadersOnPublicRoutes(t *testing.T
 	setTestGatewayUserIdentityHeaders(req)
 	setGatewayAdminIdentityHeader(req)
 	req.Header.Set(gateway.GatewayAdminPermissionsHeader, "config:manage")
+	req.Header.Set(gateway.GatewaySourceIPHeader, "203.0.113.200")
 	req.Header.Set("Authorization", "Bearer public-token")
 	req.Header.Set("X-Tenant-ID", "public-tenant")
 	req.Header.Set("X-Admin-Key", "public-admin")
@@ -585,6 +590,7 @@ func TestAPIGatewayPropagatesValidatedPublicTenant(t *testing.T) {
 	ensureInit()
 	type observedHeaders struct {
 		internalTenant string
+		sourceIP       string
 		publicTenant   string
 		auth           string
 		adminKey       string
@@ -593,6 +599,7 @@ func TestAPIGatewayPropagatesValidatedPublicTenant(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		observed <- observedHeaders{
 			internalTenant: r.Header.Get(gateway.GatewayTenantIDHeader),
+			sourceIP:       r.Header.Get(gateway.GatewaySourceIPHeader),
 			publicTenant:   r.Header.Get("X-Tenant-ID"),
 			auth:           r.Header.Get("Authorization"),
 			adminKey:       r.Header.Get("X-Admin-Key"),
@@ -608,6 +615,8 @@ func TestAPIGatewayPropagatesValidatedPublicTenant(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/consumer/login", nil)
 	req.Header.Set("X-Tenant-ID", " test-tenant ")
 	req.Header.Set(gateway.GatewayTenantIDHeader, "spoofed-tenant")
+	req.Header.Set(gateway.GatewaySourceIPHeader, "203.0.113.200")
+	req.Header.Set("X-Forwarded-For", "198.51.100.4, 203.0.113.8")
 	req.Header.Set("Authorization", "Bearer public-token")
 	req.Header.Set("X-Admin-Key", "public-admin")
 	resp, err := route.Test(req, routeTestTimeout)
@@ -619,6 +628,9 @@ func TestAPIGatewayPropagatesValidatedPublicTenant(t *testing.T) {
 	got := <-observed
 	if got.internalTenant != "test-tenant" {
 		t.Fatalf("forwarded tenant = %q, want test-tenant", got.internalTenant)
+	}
+	if got.sourceIP != "203.0.113.8" {
+		t.Fatalf("forwarded source IP = %q, want right-most ingress value 203.0.113.8", got.sourceIP)
 	}
 	if got.publicTenant != "" || got.auth != "" || got.adminKey != "" {
 		t.Fatalf("gateway forwarded public tenant or credentials: %+v", got)

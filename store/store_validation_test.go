@@ -390,6 +390,10 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 			_, err := s.GetTransactionByUUID(ctx, tenantID, "transaction-uuid")
 			return err
 		}},
+		{"GetTransactionByUUIDForMaskedPANs", func(tenantID string) error {
+			_, err := s.GetTransactionByUUIDForMaskedPANs(ctx, tenantID, "transaction-uuid", []string{"922208*****0000"})
+			return err
+		}},
 		{"CreatePushData", func(tenantID string) error {
 			return s.CreatePushData(ctx, tenantID, &ebs_fields.PushDataRecord{UUID: "push-uuid"})
 		}},
@@ -852,6 +856,20 @@ func TestStore_GetTransactionsByMaskedPan_RequiresPAN(t *testing.T) {
 	s := newTestStore(t)
 	if _, err := s.GetTransactionsByMaskedPan(context.Background(), "t1", " "); !errors.Is(err, ErrMissingPAN) {
 		t.Fatalf("expected ErrMissingPAN, got %v", err)
+	}
+}
+
+func TestStore_GetTransactionByUUIDForMaskedPANsRequiresExplicitInputs(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	if _, err := s.GetTransactionByUUIDForMaskedPANs(ctx, "t1", " ", []string{"922208*****0000"}); !errors.Is(err, ErrMissingUUID) {
+		t.Fatalf("missing uuid error = %v, want %v", err, ErrMissingUUID)
+	}
+	if _, err := s.GetTransactionByUUIDForMaskedPANs(ctx, "t1", "transaction-uuid", nil); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("missing pans error = %v, want %v", err, ErrMissingPAN)
+	}
+	if _, err := s.GetTransactionByUUIDForMaskedPANs(ctx, "t1", "transaction-uuid", []string{" "}); !errors.Is(err, ErrMissingPAN) {
+		t.Fatalf("blank pan error = %v, want %v", err, ErrMissingPAN)
 	}
 }
 

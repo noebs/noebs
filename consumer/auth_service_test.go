@@ -7,8 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
@@ -16,6 +18,10 @@ import (
 	"github.com/adonese/noebs/utils"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+var authTestNow = time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
+
+const authTestSource = "192.0.2.10"
 
 type refreshAuthStub struct {
 	claims          *gateway.TokenClaims
@@ -209,7 +215,7 @@ func TestServiceRefreshJWTRequiresTenantClaim(t *testing.T) {
 			}
 			service := &Service{Store: &store.Store{}, Auth: auth}
 
-			_, err := service.RefreshJWT(context.Background(), gateway.Token{JWT: "old-token"})
+			_, err := service.RefreshJWT(context.Background(), "tenant-a", gateway.Token{JWT: "old-token"}, authTestSource, authTestNow)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("RefreshJWT() error = %v, want %v", err, tt.wantErr)
 			}
@@ -226,7 +232,7 @@ func TestServiceRefreshJWTRequiresUserIDClaimBeforeStore(t *testing.T) {
 	}
 	service := &Service{Store: &store.Store{}, Auth: auth}
 
-	_, err := service.RefreshJWT(context.Background(), gateway.Token{JWT: "old-token"})
+	_, err := service.RefreshJWT(context.Background(), "tenant-a", gateway.Token{JWT: "old-token"}, authTestSource, authTestNow)
 	if !errors.Is(err, store.ErrInvalidUserID) {
 		t.Fatalf("RefreshJWT() error = %v, want %v", err, store.ErrInvalidUserID)
 	}
@@ -250,11 +256,11 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"Login", func(tenantID string) error {
-			_, _, err := service.Login(ctx, tenantID, "0990000000", "password")
+			_, _, err := service.Login(ctx, tenantID, "0990000000", "password", authTestSource, authTestNow)
 			return err
 		}},
 		{"SingleLogin", func(tenantID string) error {
-			_, _, err := service.SingleLogin(ctx, tenantID, gateway.Token{Mobile: "0990000000"})
+			_, _, err := service.SingleLogin(ctx, tenantID, gateway.Token{Mobile: "0990000000"}, authTestSource, authTestNow)
 			return err
 		}},
 		{"CreateUser", func(tenantID string) error {
@@ -262,7 +268,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"VerifyOTP", func(tenantID string) error {
-			_, err := service.VerifyOTP(ctx, tenantID, "0990000000", "123456")
+			_, err := service.VerifyOTP(ctx, tenantID, "0990000000", "123456", authTestSource, authTestNow)
 			return err
 		}},
 		{"ChangePassword", func(tenantID string) error {
@@ -270,7 +276,7 @@ func TestAuthServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"GenerateSignInCode", func(tenantID string) error {
-			return service.GenerateSignInCode(ctx, tenantID, "0990000000")
+			return service.GenerateSignInCode(ctx, tenantID, "0990000000", authTestSource, authTestNow)
 		}},
 	}
 	tenantCases := []struct {
@@ -336,7 +342,7 @@ func TestGenerateSignInCodeRecordsLoginAttempt(t *testing.T) {
 		t.Fatalf("set public key: %v", err)
 	}
 
-	if err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000"); err != nil {
+	if err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow); err != nil {
 		t.Fatalf("GenerateSignInCode(): %v", err)
 	}
 
@@ -362,7 +368,7 @@ func TestGenerateSignInCodeReturnsSMSError(t *testing.T) {
 	t.Cleanup(smsServer.Close)
 	env.Service.NoebsConfig.SMSGateway = smsServer.URL + "?"
 
-	err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000")
+	err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow)
 	if !errors.Is(err, utils.ErrSMSDeliveryFailed) {
 		t.Fatalf("GenerateSignInCode() error = %v, want %v", err, utils.ErrSMSDeliveryFailed)
 	}
@@ -374,16 +380,16 @@ func TestVerifyOTPMarksUserVerified(t *testing.T) {
 	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": "otp-public-key"}); err != nil {
 		t.Fatalf("set public key: %v", err)
 	}
-	stored, err := env.Store.GetUserByMobile(context.Background(), env.Tenant, "0990000000")
+	code := "123456"
+	digest, err := env.Service.otpDigest(env.Tenant, "0990000000", code)
 	if err != nil {
-		t.Fatalf("get user: %v", err)
+		t.Fatalf("otp digest: %v", err)
 	}
-	code, err := stored.GenerateOtp()
-	if err != nil {
-		t.Fatalf("generate otp: %v", err)
+	if err := env.Store.StoreOTPChallenge(context.Background(), env.Tenant, "0990000000", digest, authTestNow, authTestNow.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
+		t.Fatalf("store otp challenge: %v", err)
 	}
 
-	verified, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", code)
+	verified, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", code, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("VerifyOTP(): %v", err)
 	}
@@ -409,7 +415,15 @@ func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
 		t.Fatalf("set public key: %v", err)
 	}
 
-	_, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", "not-otp")
+	digest, err := env.Service.otpDigest(env.Tenant, "0990000000", "123456")
+	if err != nil {
+		t.Fatalf("otp digest: %v", err)
+	}
+	if err := env.Store.StoreOTPChallenge(context.Background(), env.Tenant, "0990000000", digest, authTestNow, authTestNow.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
+		t.Fatalf("store otp challenge: %v", err)
+	}
+
+	_, err = env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", "not-otp", authTestSource, authTestNow)
 	if !errors.Is(err, ErrInvalidOTP) {
 		t.Fatalf("VerifyOTP() error = %v, want %v", err, ErrInvalidOTP)
 	}
@@ -420,6 +434,70 @@ func TestVerifyOTPInvalidCodeIncrementsSuspiciousMetric(t *testing.T) {
 	}
 	if suspiciousCount != 1 {
 		t.Fatalf("suspicious count = %d, want 1", suspiciousCount)
+	}
+}
+
+func TestGeneratedOTPCanBeConsumedOnlyOnce(t *testing.T) {
+	env := newTestEnv(t)
+	seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	messages := make(chan string, 1)
+	smsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		messages <- r.URL.Query().Get("sms")
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(smsServer.Close)
+	env.Service.NoebsConfig.SMSGateway = smsServer.URL + "?"
+
+	if err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow); err != nil {
+		t.Fatalf("GenerateSignInCode(): %v", err)
+	}
+	match := regexp.MustCompile(`access code is: ([0-9]{6})`).FindStringSubmatch(<-messages)
+	if len(match) != 2 {
+		t.Fatalf("SMS did not contain a six-digit OTP")
+	}
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", match[1], authTestSource, authTestNow.Add(time.Second)); err != nil {
+		t.Fatalf("VerifyOTP(first use): %v", err)
+	}
+	if _, err := env.Service.VerifyOTP(context.Background(), env.Tenant, "0990000000", match[1], authTestSource, authTestNow.Add(2*time.Second)); !errors.Is(err, ErrInvalidOTP) {
+		t.Fatalf("VerifyOTP(replay) error = %v, want %v", err, ErrInvalidOTP)
+	}
+}
+
+func TestGenerateSignInCodeEnforcesMobileCooldown(t *testing.T) {
+	env := newTestEnv(t)
+	seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow); err != nil {
+		t.Fatalf("first GenerateSignInCode(): %v", err)
+	}
+	err := env.Service.GenerateSignInCode(context.Background(), env.Tenant, "0990000000", authTestSource, authTestNow.Add(10*time.Second))
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("second GenerateSignInCode() error = %v, want %v", err, ErrRateLimited)
+	}
+	var limitErr *RateLimitError
+	if !errors.As(err, &limitErr) || limitErr.RetryAfter != 50*time.Second {
+		t.Fatalf("rate limit = %#v, want retry after 50s", limitErr)
+	}
+}
+
+func TestSingleLoginConsumesStoredOTP(t *testing.T) {
+	env := newTestEnv(t)
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+	digest, err := env.Service.otpDigest(env.Tenant, user.Mobile, refreshProofMessage)
+	if err != nil {
+		t.Fatalf("otp digest: %v", err)
+	}
+	if err := env.Store.StoreOTPChallenge(context.Background(), env.Tenant, user.Mobile, digest, authTestNow, authTestNow.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
+		t.Fatalf("store otp challenge: %v", err)
+	}
+	req := gateway.Token{Mobile: user.Mobile, Message: refreshProofMessage, Signature: refreshProofSignature}
+	if _, _, err := env.Service.SingleLogin(context.Background(), env.Tenant, req, authTestSource, authTestNow); err != nil {
+		t.Fatalf("SingleLogin(first use): %v", err)
+	}
+	if _, _, err := env.Service.SingleLogin(context.Background(), env.Tenant, req, authTestSource, authTestNow.Add(time.Second)); !errors.Is(err, ErrWrongOTP) {
+		t.Fatalf("SingleLogin(replay) error = %v, want %v", err, ErrWrongOTP)
 	}
 }
 
@@ -436,6 +514,7 @@ func readLoginMetric(t *testing.T, env *testEnv, mobile string) (int, int) {
 
 func TestServiceRefreshJWTRequiresSignatureProofForValidToken(t *testing.T) {
 	env := newTestEnv(t)
+	env.Auth.Now = func() time.Time { return authTestNow }
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
 	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
 		t.Fatalf("set public key: %v", err)
@@ -445,7 +524,7 @@ func TestServiceRefreshJWTRequiresSignatureProofForValidToken(t *testing.T) {
 		t.Fatalf("generate jwt: %v", err)
 	}
 
-	_, err = env.Service.RefreshJWT(context.Background(), gateway.Token{JWT: token})
+	_, err = env.Service.RefreshJWT(context.Background(), env.Tenant, gateway.Token{JWT: token}, authTestSource, authTestNow)
 	if !errors.Is(err, ErrInvalidSignature) {
 		t.Fatalf("RefreshJWT() error = %v, want %v", err, ErrInvalidSignature)
 	}
@@ -453,6 +532,7 @@ func TestServiceRefreshJWTRequiresSignatureProofForValidToken(t *testing.T) {
 
 func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 	env := newTestEnv(t)
+	env.Auth.Now = func() time.Time { return authTestNow }
 	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
 	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
 		t.Fatalf("set public key: %v", err)
@@ -462,11 +542,12 @@ func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 		t.Fatalf("generate jwt: %v", err)
 	}
 
-	token, err := env.Service.RefreshJWT(context.Background(), gateway.Token{
+	token, err := env.Service.RefreshJWT(context.Background(), env.Tenant, gateway.Token{
 		JWT:       oldToken,
 		Signature: refreshProofSignature,
 		Message:   refreshProofMessage,
-	})
+		Mobile:    user.Mobile,
+	}, authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("RefreshJWT() error = %v", err)
 	}
@@ -482,5 +563,48 @@ func TestServiceRefreshJWTUsesClaimTenant(t *testing.T) {
 	}
 	if claims.UserID != user.ID || claims.Mobile != user.Mobile {
 		t.Fatalf("RefreshJWT() claims = %+v, want user id %d mobile %q", claims, user.ID, user.Mobile)
+	}
+}
+
+func TestServiceRefreshJWTRotatesAndRejectsReplay(t *testing.T) {
+	env := newTestEnv(t)
+	env.Auth.Now = func() time.Time { return authTestNow }
+	user := seedUser(t, env.Store, env.Tenant, "0990000000", "password")
+	if err := env.Store.UpdateUserColumns(context.Background(), env.Tenant, user.ID, map[string]any{"public_key": refreshProofPublicKey}); err != nil {
+		t.Fatalf("set public key: %v", err)
+	}
+	oldToken, err := env.Auth.GenerateJWT(user.ID, user.Mobile, env.Tenant)
+	if err != nil {
+		t.Fatalf("generate jwt: %v", err)
+	}
+	req := gateway.Token{JWT: oldToken, Signature: refreshProofSignature, Message: refreshProofMessage, Mobile: user.Mobile}
+	newToken, err := env.Service.RefreshJWT(context.Background(), env.Tenant, req, authTestSource, authTestNow)
+	if err != nil {
+		t.Fatalf("RefreshJWT(first use): %v", err)
+	}
+	if newToken == oldToken {
+		t.Fatal("RefreshJWT() returned the presented token")
+	}
+	if _, err := env.Service.RefreshJWT(context.Background(), env.Tenant, req, authTestSource, authTestNow.Add(time.Second)); !errors.Is(err, ErrRefreshReplay) {
+		t.Fatalf("RefreshJWT(replay) error = %v, want %v", err, ErrRefreshReplay)
+	}
+}
+
+func TestServiceRefreshJWTRejectsExpiredRefreshWindowBeforeStore(t *testing.T) {
+	auth := &refreshAuthStub{claims: &gateway.TokenClaims{
+		UserID:   42,
+		Mobile:   "0990000000",
+		TenantID: "tenant-a",
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt: jwt.NewNumericDate(authTestNow.Add(-refreshMaxAge)),
+		},
+	}}
+	service := &Service{Store: &store.Store{}, Auth: auth}
+	_, err := service.RefreshJWT(context.Background(), "tenant-a", gateway.Token{JWT: "old-token"}, authTestSource, authTestNow)
+	if !errors.Is(err, ErrRefreshExpired) {
+		t.Fatalf("RefreshJWT() error = %v, want %v", err, ErrRefreshExpired)
+	}
+	if auth.generated {
+		t.Fatal("RefreshJWT() generated a token outside the refresh window")
 	}
 }

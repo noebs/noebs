@@ -1,17 +1,27 @@
 package consumer
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	// Auth / OTP
-	ErrWrongPassword      = errors.New("wrong_password")
-	ErrWrongOTP           = errors.New("wrong_otp")
-	ErrPasswordInvalid    = errors.New("password_invalid")
-	ErrEmptyOTP           = errors.New("empty_otp")
-	ErrInvalidOTP         = errors.New("invalid_otp")
-	ErrMissingAuth        = errors.New("missing_auth")
-	ErrInvalidRecoveryJWT = errors.New("invalid_recovery_jwt")
-	ErrInvalidSignature   = errors.New("invalid_signature")
+	ErrWrongPassword         = errors.New("wrong_password")
+	ErrWrongOTP              = errors.New("wrong_otp")
+	ErrPasswordInvalid       = errors.New("password_invalid")
+	ErrEmptyOTP              = errors.New("empty_otp")
+	ErrInvalidOTP            = errors.New("invalid_otp")
+	ErrMissingAuth           = errors.New("missing_auth")
+	ErrInvalidRecoveryJWT    = errors.New("invalid_recovery_jwt")
+	ErrInvalidSignature      = errors.New("invalid_signature")
+	ErrRateLimited           = errors.New("rate_limited")
+	ErrMissingRequestSource  = errors.New("missing_request_source")
+	ErrInvalidRequestSource  = errors.New("invalid_request_source")
+	ErrMissingOTPSecret      = errors.New("missing_otp_secret")
+	ErrRefreshExpired        = errors.New("refresh_expired")
+	ErrRefreshReplay         = errors.New("refresh_replay")
+	ErrRefreshTenantMismatch = errors.New("refresh_tenant_mismatch")
 
 	// Account recovery / balance step
 	ErrCardNotMatched    = errors.New("card_not_matched")
@@ -39,6 +49,7 @@ var (
 	ErrBillerHookPost            = errors.New("biller_hook_post_failed")
 	ErrMissingMerchantID         = errors.New("missing merchant_id")
 	ErrInvalidMerchantID         = errors.New("invalid merchant_id")
+	ErrTransactionNotFound       = errors.New("transaction not found")
 
 	// Registration
 	ErrMissingMobile     = errors.New("missing mobile")
@@ -49,3 +60,15 @@ var (
 	ErrMissingCardExpiry = errors.New("missing_card_expiry")
 	ErrUserAlreadyExists = errors.New("user_already_exists")
 )
+
+type RateLimitError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitError) Error() string {
+	return ErrRateLimited.Error()
+}
+
+func (e *RateLimitError) Unwrap() error {
+	return ErrRateLimited
+}

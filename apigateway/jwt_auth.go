@@ -8,6 +8,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	basestore "github.com/adonese/noebs/store"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var (
@@ -21,6 +22,7 @@ var (
 type JWTAuth struct {
 	Key         []byte
 	NoebsConfig ebs_fields.NoebsConfig
+	Now         func() time.Time
 }
 
 // Init initializes jwt auth
@@ -32,11 +34,22 @@ func (j *JWTAuth) Init() {
 func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
 	// you would like it to contain.
-	expiresAt := time.Now().Add(10 * time.Hour).UTC()
+	now := time.Now().UTC()
+	if j.Now != nil {
+		now = j.Now().UTC()
+	}
+	expiresAt := now.Add(10 * time.Hour)
 	if userID <= 0 {
 		return "", ErrInvalidUserIdentity
 	}
 	tenantID, err := validateTenantID(tenantID)
+	if err != nil {
+		return "", err
+	}
+	if len(j.Key) == 0 {
+		return "", ErrMissingJWTKey
+	}
+	tokenID, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
@@ -45,17 +58,15 @@ func (j *JWTAuth) GenerateJWT(userID int64, mobile, tenantID string) (string, er
 		Mobile:   mobile,
 		TenantID: tenantID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        tokenID.String(),
 			Issuer:    "noebs",
 			Subject:   fmt.Sprintf("%d", userID),
-			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	// Sign and get the complete encoded token as a string using the secret
-	if len(j.Key) == 0 {
-		return "", ErrMissingJWTKey
-	}
 	if tokenString, err := token.SignedString(j.Key); err == nil {
 		return tokenString, nil
 	} else {
@@ -82,7 +93,11 @@ func (j *JWTAuth) VerifyJWT(tokenString string) (*TokenClaims, error) {
 	if len(j.Key) == 0 {
 		return nil, ErrMissingJWTKey
 	}
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	options := []jwt.ParserOption{jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()})}
+	if j.Now != nil {
+		options = append(options, jwt.WithTimeFunc(func() time.Time { return j.Now().UTC() }))
+	}
+	parser := jwt.NewParser(options...)
 	token, err := parser.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return j.Key, nil
 	})

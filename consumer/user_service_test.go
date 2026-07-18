@@ -65,10 +65,10 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return service.SetUserLanguage(ctx, tenantID, "0990000000", "en")
 		}},
 		{"UpdateKYC", func(tenantID string) error {
-			return service.UpdateKYC(ctx, tenantID, ebs_fields.KYCPassport{Passport: ebs_fields.Passport{Mobile: "0990000000"}})
+			return service.UpdateKYC(ctx, tenantID, "0990000000", ebs_fields.KYCPassport{})
 		}},
-		{"GetTransactionByUUID", func(tenantID string) error {
-			_, err := service.GetTransactionByUUID(ctx, tenantID, "uuid")
+		{"GetTransactionByUUIDForUser", func(tenantID string) error {
+			_, err := service.GetTransactionByUUIDForUser(ctx, tenantID, 1, "0990000000", "uuid")
 			return err
 		}},
 	}
@@ -142,6 +142,9 @@ func TestUserServiceIdentityInputsFailBeforeStore(t *testing.T) {
 	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Email: " "}); !errors.Is(err, store.ErrMissingEmail) {
 		t.Fatalf("UpdateUserProfile(missing email) error = %v, want %v", err, store.ErrMissingEmail)
 	}
+	if err := service.UpdateKYC(ctx, "tenant", " ", ebs_fields.KYCPassport{}); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("UpdateKYC(missing authenticated mobile) error = %v, want %v", err, ErrMissingMobile)
+	}
 }
 
 func TestUpdateKYCRequiresExistingUser(t *testing.T) {
@@ -149,27 +152,29 @@ func TestUpdateKYCRequiresExistingUser(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
 	service := &Service{Store: storeSvc}
 
-	err := service.UpdateKYC(ctx, tenantID, ebs_fields.KYCPassport{
+	err := service.UpdateKYC(ctx, tenantID, "0990000000", ebs_fields.KYCPassport{
 		Selfie:      "selfie",
 		PassportImg: "passport-image",
-		Passport:    ebs_fields.Passport{Mobile: "0990000000", PassportNumber: "P123"},
+		Passport:    ebs_fields.Passport{PassportNumber: "P123"},
 	})
 	if !store.ErrNotFound(err) {
 		t.Fatalf("error = %v, want not found", err)
 	}
 }
 
-func TestUpdateKYCPersistsForExistingUser(t *testing.T) {
+func TestUpdateKYCIgnoresSpoofedBodyMobile(t *testing.T) {
 	ctx := context.Background()
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
 	service := &Service{Store: storeSvc}
 	mobile := "0990000000"
+	spoofedMobile := "0990000001"
 	seedUser(t, storeSvc, tenantID, mobile, "password")
+	seedUser(t, storeSvc, tenantID, spoofedMobile, "password")
 
-	if err := service.UpdateKYC(ctx, tenantID, ebs_fields.KYCPassport{
+	if err := service.UpdateKYC(ctx, tenantID, mobile, ebs_fields.KYCPassport{
 		Selfie:      "selfie",
 		PassportImg: "passport-image",
-		Passport:    ebs_fields.Passport{Mobile: " " + mobile + " ", PassportNumber: "P123"},
+		Passport:    ebs_fields.Passport{Mobile: spoofedMobile, PassportNumber: "P123"},
 	}); err != nil {
 		t.Fatalf("UpdateKYC(): %v", err)
 	}
@@ -192,5 +197,12 @@ func TestUpdateKYCPersistsForExistingUser(t *testing.T) {
 	}
 	if passport.PassportNumber != "P123" {
 		t.Fatalf("passport number = %q, want P123", passport.PassportNumber)
+	}
+	_, spoofedKYC, spoofedPassport, err := storeSvc.GetUserWithKYC(ctx, tenantID, spoofedMobile)
+	if err != nil {
+		t.Fatalf("GetUserWithKYC(spoofed mobile): %v", err)
+	}
+	if spoofedKYC != nil || spoofedPassport != nil {
+		t.Fatalf("spoofed user KYC = (%+v, %+v), want no records", spoofedKYC, spoofedPassport)
 	}
 }

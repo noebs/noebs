@@ -51,6 +51,29 @@ func TestResolveTenantIDUsesGatewayTenantMiddleware(t *testing.T) {
 	_ = resp.Body.Close()
 }
 
+func TestResolveRequestSourceUsesGatewayIdentityLocal(t *testing.T) {
+	app := fiber.New()
+	app.Use(gateway.InternalTenantIdentityMiddleware())
+	app.Get("/", func(c *fiber.Ctx) error {
+		source, err := resolveRequestSource(c)
+		if err != nil {
+			t.Fatalf("resolveRequestSource() error = %v", err)
+		}
+		if source != "203.0.113.8" {
+			t.Fatalf("source = %q, want 203.0.113.8", source)
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
+	req.Header.Set(gateway.GatewaySourceIPHeader, "203.0.113.8")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	_ = resp.Body.Close()
+}
+
 func TestResolveTenantIDDoesNotReadGatewayTenantHeaderDirectly(t *testing.T) {
 	app := fiber.New()
 	app.Get("/", func(c *fiber.Ctx) error {

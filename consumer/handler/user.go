@@ -1,11 +1,18 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
+)
+
+const (
+	maxKYCRequestBodyBytes = 4 * 1024 * 1024
+	maxKYCImageBytes       = 2 * 1024 * 1024
 )
 
 func (h *Handler) GetCards(c *fiber.Ctx) error {
@@ -228,29 +235,47 @@ func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) KYC(c *fiber.Ctx) error {
+	mobile := strings.TrimSpace(getMobile(c))
+	if mobile == "" {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated mobile", "code": "unauthorized"})
+	}
+	if len(c.Body()) > maxKYCRequestBodyBytes {
+		return jsonResponse(c, http.StatusRequestEntityTooLarge, fiber.Map{"message": "KYC request body is too large", "code": "payload_too_large"})
+	}
 	var req ebs_fields.KYCPassport
 	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
+	if len(req.Selfie) > maxKYCImageBytes || len(req.PassportImg) > maxKYCImageBytes {
+		return jsonResponse(c, http.StatusRequestEntityTooLarge, fiber.Map{"message": "KYC image is too large", "code": "image_too_large"})
 	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.UpdateKYC(c.UserContext(), tenantID, req); err != nil {
+	if err := h.Service.UpdateKYC(c.UserContext(), tenantID, mobile, req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"message": "KYC created successfully", "code": "ok"})
 }
 
 func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
+	mobile := strings.TrimSpace(getMobile(c))
+	userID := getUserID(c)
+	if mobile == "" || userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
+	}
 	id := strings.TrimSpace(c.Query("uuid"))
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	response, err := h.Service.GetTransactionByUUID(c.UserContext(), tenantID, id)
+	response, err := h.Service.GetTransactionByUUIDForUser(c.UserContext(), tenantID, userID, mobile, id)
 	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "not_found", "message": err.Error()})
+		if errors.Is(err, consumer.ErrTransactionNotFound) {
+			return jsonResponse(c, http.StatusNotFound, fiber.Map{"code": "not_found", "message": consumer.ErrTransactionNotFound.Error()})
+		}
+		return jsonResponse(c, statusForError(err), fiber.Map{"code": err.Error(), "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, response)
 }

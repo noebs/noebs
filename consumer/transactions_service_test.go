@@ -83,3 +83,67 @@ func TestGetTransactionsRejectsMissingUserID(t *testing.T) {
 		t.Fatalf("missing user_id error = %v", err)
 	}
 }
+
+func TestGetTransactionByUUIDForUserEnforcesCardOwnership(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeEBSAdapter})
+	ctx := context.Background()
+	for _, transaction := range []ebs_fields.EBSResponse{
+		{UUID: "owned-transaction", PAN: "9222081700000000", ResponseCode: 0},
+		{UUID: "other-transaction", PAN: "9222999900000000", ResponseCode: 0},
+	} {
+		if err := storeSvc.CreateTransaction(ctx, tenantID, transaction); err != nil {
+			t.Fatalf("seed transaction %s: %v", transaction.UUID, err)
+		}
+	}
+
+	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/internal/card-vault/cards/masked" {
+			t.Fatalf("card-vault path = %s", r.URL.Path)
+		}
+		if r.Header.Get(gateway.GatewayTenantIDHeader) != tenantID {
+			t.Fatalf("tenant header = %q", r.Header.Get(gateway.GatewayTenantIDHeader))
+		}
+		if r.Header.Get(gateway.GatewayUserIDHeader) != "42" {
+			t.Fatalf("user header = %q", r.Header.Get(gateway.GatewayUserIDHeader))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(MaskedCardsResult{MaskedPANs: []string{"922208*****0000"}})
+	}))
+	t.Cleanup(cardVaultServer.Close)
+
+	service := &Service{
+		Store:      storeSvc,
+		HTTPClient: cardVaultServer.Client(),
+		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
+			cardVaultServiceDiscoveryKey: cardVaultServer.URL,
+		}},
+	}
+
+	owned, err := service.GetTransactionByUUIDForUser(ctx, tenantID, 42, "0990000000", "owned-transaction")
+	if err != nil {
+		t.Fatalf("owned transaction: %v", err)
+	}
+	if owned.UUID != "owned-transaction" {
+		t.Fatalf("owned UUID = %q, want owned-transaction", owned.UUID)
+	}
+
+	for _, uuid := range []string{"other-transaction", "missing-transaction"} {
+		if _, err := service.GetTransactionByUUIDForUser(ctx, tenantID, 42, "0990000000", uuid); !errors.Is(err, ErrTransactionNotFound) {
+			t.Fatalf("lookup %s error = %v, want %v", uuid, err, ErrTransactionNotFound)
+		}
+	}
+}
+
+func TestGetTransactionByUUIDForUserRequiresAuthenticatedIdentity(t *testing.T) {
+	service := &Service{Store: &store.Store{}}
+	ctx := context.Background()
+	if _, err := service.GetTransactionByUUIDForUser(ctx, "tenant", 0, "0990000000", "transaction-uuid"); !errors.Is(err, store.ErrInvalidUserID) {
+		t.Fatalf("missing user id error = %v, want %v", err, store.ErrInvalidUserID)
+	}
+	if _, err := service.GetTransactionByUUIDForUser(ctx, "tenant", 42, " ", "transaction-uuid"); !errors.Is(err, ErrMissingMobile) {
+		t.Fatalf("missing mobile error = %v, want %v", err, ErrMissingMobile)
+	}
+	if _, err := service.GetTransactionByUUIDForUser(ctx, "tenant", 42, "0990000000", " "); !errors.Is(err, store.ErrMissingUUID) {
+		t.Fatalf("missing uuid error = %v, want %v", err, store.ErrMissingUUID)
+	}
+}

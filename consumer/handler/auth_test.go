@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/utils"
@@ -79,5 +80,23 @@ func TestAuthRecoveryHandlersRejectMalformedJSONBeforeService(t *testing.T) {
 				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 			}
 		})
+	}
+}
+
+func TestRateLimitResponseReturnsRetryAfter(t *testing.T) {
+	app := fiber.New()
+	app.Get("/", func(c *fiber.Ctx) error {
+		return rateLimitResponse(c, &consumer.RateLimitError{RetryAfter: 2500 * time.Millisecond})
+	})
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil))
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusTooManyRequests)
+	}
+	if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "3" {
+		t.Fatalf("Retry-After = %q, want 3", retryAfter)
 	}
 }

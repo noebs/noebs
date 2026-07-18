@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ const (
 	GatewayTenantIDHeader         = "X-Noebs-Tenant-ID"
 	GatewayUserIDHeader           = "X-Noebs-User-ID"
 	GatewayMobileHeader           = "X-Noebs-Mobile"
+	GatewaySourceIPHeader         = "X-Noebs-Source-IP"
 	GatewayAdminIdentityHeader    = "X-Noebs-Admin-Identity"
 	GatewayAdminIdentityValue     = "gateway-admin"
 	GatewayAdminRoleHeader        = "X-Noebs-Admin-Role"
@@ -34,6 +36,9 @@ func InternalTenantIdentityMiddleware() fiber.Handler {
 			return unauthorizedGatewayIdentity(c)
 		}
 		c.Locals("tenant_id", tenantID)
+		if err := bindGatewayRequestSource(c); err != nil {
+			return unauthorizedGatewayIdentity(c)
+		}
 		return c.Next()
 	}
 }
@@ -57,8 +62,24 @@ func InternalUserIdentityMiddleware() fiber.Handler {
 			c.Locals("mobile", identity.Mobile)
 			c.Locals("username", identity.Mobile)
 		}
+		if err := bindGatewayRequestSource(c); err != nil {
+			return unauthorizedGatewayIdentity(c)
+		}
 		return c.Next()
 	}
+}
+
+func bindGatewayRequestSource(c *fiber.Ctx) error {
+	sourceIP := strings.TrimSpace(c.Get(GatewaySourceIPHeader))
+	if sourceIP == "" {
+		return nil
+	}
+	parsed := net.ParseIP(sourceIP)
+	if parsed == nil {
+		return ErrInvalidUserIdentity
+	}
+	c.Locals("request_source", parsed.String())
+	return nil
 }
 
 func InternalAdminIdentityMiddleware() fiber.Handler {

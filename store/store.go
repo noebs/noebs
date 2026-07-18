@@ -1303,6 +1303,49 @@ func (s *Store) GetTransactionByUUID(ctx context.Context, tenantID, uuid string)
 	return &res, nil
 }
 
+func (s *Store) GetTransactionByUUIDForMaskedPANs(ctx context.Context, tenantID, uuid string, maskedPANs []string) (*ebs_fields.EBSResponse, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	uuid = strings.TrimSpace(uuid)
+	if uuid == "" {
+		return nil, ErrMissingUUID
+	}
+	ownedPANs := make([]string, 0, len(maskedPANs))
+	for _, pan := range maskedPANs {
+		pan = strings.TrimSpace(pan)
+		if pan == "" {
+			return nil, ErrMissingPAN
+		}
+		ownedPANs = append(ownedPANs, pan)
+	}
+	if len(ownedPANs) == 0 {
+		return nil, ErrMissingPAN
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt, args, err := sqlx.In(`SELECT payload FROM transactions
+		WHERE tenant_id = ? AND uuid = ?
+		AND (pan IN (?) OR sender_pan IN (?) OR receiver_pan IN (?))
+		ORDER BY id DESC LIMIT 1`, tenantID, uuid, ownedPANs, ownedPANs, ownedPANs)
+	if err != nil {
+		return nil, err
+	}
+	stmt = s.DB.Rebind(stmt)
+	var payload string
+	if err := db.GetContext(ctx, &payload, stmt, args...); err != nil {
+		return nil, err
+	}
+	res, err := decodeStoredTransactionPayload(payload, fmt.Sprintf("uuid %q", uuid))
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
 func decodeStoredTransactionPayload(payload, label string) (ebs_fields.EBSResponse, error) {
 	var res ebs_fields.EBSResponse
 	if payload == "" {

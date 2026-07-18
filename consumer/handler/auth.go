@@ -3,7 +3,9 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/consumer"
@@ -46,8 +48,15 @@ func (h *Handler) LoginHandler(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	token, user, err := h.Service.Login(c.UserContext(), tenantID, req.Mobile, req.Password)
+	source, err := resolveRequestSource(c)
 	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+	token, user, err := h.Service.Login(c.UserContext(), tenantID, req.Mobile, req.Password, source, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
 		if store.ErrNotFound(err) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "not_found"})
 		}
@@ -71,8 +80,16 @@ func (h *Handler) SingleLoginHandler(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	token, user, err := h.Service.SingleLogin(c.UserContext(), tenantID, req)
+	source, err := resolveRequestSource(c)
 	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+
+	token, user, err := h.Service.SingleLogin(c.UserContext(), tenantID, req, source, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
 		if store.ErrNotFound(err) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "not_found"})
 		}
@@ -91,8 +108,29 @@ func (h *Handler) RefreshHandler(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 
-	token, err := h.Service.RefreshJWT(c.UserContext(), req)
+	tenantID, err := resolveTenantID(c)
 	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
+	}
+	source, err := resolveRequestSource(c)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+
+	token, err := h.Service.RefreshJWT(c.UserContext(), tenantID, req, source, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
+		if errors.Is(err, consumer.ErrRefreshReplay) {
+			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Refresh token has already been used", "code": "refresh_replay"})
+		}
+		if errors.Is(err, consumer.ErrRefreshExpired) {
+			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Refresh window has expired", "code": "refresh_expired"})
+		}
+		if errors.Is(err, consumer.ErrRefreshTenantMismatch) {
+			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Token tenant does not match request tenant", "code": "tenant_mismatch"})
+		}
 		if errors.Is(err, jwt.ErrTokenExpired) {
 			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "Token has expired", "code": "jwt_expired"})
 		}
@@ -139,8 +177,16 @@ func (h *Handler) VerifyOTP(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	user, err := h.Service.VerifyOTP(c.UserContext(), tenantID, req.Mobile, req.OTP)
+	source, err := resolveRequestSource(c)
 	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+
+	user, err := h.Service.VerifyOTP(c.UserContext(), tenantID, req.Mobile, req.OTP, source, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
 		if store.ErrNotFound(err) {
 			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "not_found"})
 		}
@@ -221,11 +267,33 @@ func (h *Handler) generateSignInCode(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
 
-	if err := h.Service.GenerateSignInCode(c.UserContext(), tenantID, req.Mobile); err != nil {
+	source, err := resolveRequestSource(c)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "invalid_request_source"})
+	}
+
+	if err := h.Service.GenerateSignInCode(c.UserContext(), tenantID, req.Mobile, source, time.Now().UTC()); err != nil {
+		if errors.Is(err, consumer.ErrRateLimited) {
+			return rateLimitResponse(c, err)
+		}
 		status, body := generateSignInCodeErrorResponse(err)
 		return jsonResponse(c, status, body)
 	}
 	return jsonResponse(c, http.StatusCreated, fiber.Map{"status": "ok", "message": "Password reset link has been sent to your mobile number. Use the info to login in to your account."})
+}
+
+func rateLimitResponse(c *fiber.Ctx, err error) error {
+	retryAfter := time.Second
+	var limitErr *consumer.RateLimitError
+	if errors.As(err, &limitErr) && limitErr.RetryAfter > 0 {
+		retryAfter = limitErr.RetryAfter
+	}
+	seconds := int64((retryAfter + time.Second - 1) / time.Second)
+	c.Set(fiber.HeaderRetryAfter, strconv.FormatInt(seconds, 10))
+	return jsonResponse(c, http.StatusTooManyRequests, fiber.Map{
+		"message": "Too many authentication attempts. Try again later.",
+		"code":    "rate_limited",
+	})
 }
 
 func generateSignInCodeErrorResponse(err error) (int, fiber.Map) {

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -108,6 +109,7 @@ func clearGatewayIdentityHeaders(c *fiber.Ctx) error {
 	c.Request().Header.Del(gateway.GatewayTenantIDHeader)
 	c.Request().Header.Del(gateway.GatewayUserIDHeader)
 	c.Request().Header.Del(gateway.GatewayMobileHeader)
+	c.Request().Header.Del(gateway.GatewaySourceIPHeader)
 	c.Request().Header.Del(gateway.GatewayAdminIdentityHeader)
 	c.Request().Header.Del(gateway.GatewayAdminRoleHeader)
 	c.Request().Header.Del(gateway.GatewayAdminPermissionsHeader)
@@ -133,6 +135,7 @@ func propagateGatewayPublicTenant(c *fiber.Ctx) error {
 		return tenantValidationError(c, err)
 	}
 	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
 	stripPublicCredentialHeaders(c)
 	return c.Next()
 }
@@ -143,6 +146,7 @@ func propagateGatewayPublicQueryTenant(c *fiber.Ctx) error {
 		return tenantValidationError(c, err)
 	}
 	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
+	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
 	stripPublicCredentialHeaders(c)
 	return c.Next()
 }
@@ -169,11 +173,25 @@ func propagateGatewayUserIdentity(c *fiber.Ctx) error {
 	}
 	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
 	c.Request().Header.Set(gateway.GatewayUserIDHeader, strconv.FormatInt(userID, 10))
+	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
 	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
 		c.Request().Header.Set(gateway.GatewayMobileHeader, mobile)
 	}
 	stripPublicCredentialHeaders(c)
 	return c.Next()
+}
+
+func gatewayRequestSource(c *fiber.Ctx) string {
+	forwarded := strings.Split(c.Get(fiber.HeaderXForwardedFor), ",")
+	for i := len(forwarded) - 1; i >= 0; i-- {
+		if ip := net.ParseIP(strings.TrimSpace(forwarded[i])); ip != nil {
+			return ip.String()
+		}
+	}
+	if ip := net.ParseIP(strings.TrimSpace(c.IP())); ip != nil {
+		return ip.String()
+	}
+	return net.IPv4zero.String()
 }
 
 func unexpectedTenantIDError(c *fiber.Ctx) error {
@@ -233,7 +251,7 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/consumer/otp/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
 		{method: fiber.MethodPost, path: "/consumer/auth/google", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
 		{method: fiber.MethodPost, path: "/consumer/check_user", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
+		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodPost, path: "/consumer/auth/complete_profile", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/auth/me", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
 		{method: fiber.MethodGet, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},

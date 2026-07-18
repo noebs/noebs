@@ -144,7 +144,7 @@ func TestService_LoginHandler(t *testing.T) {
 	env := newTestEnv(t)
 	seedUser(t, env.Store, env.Tenant, "0912141660", "me@Suckit1")
 
-	token, _, err := env.Service.Login(context.Background(), env.Tenant, "0912141660", "me@Suckit1")
+	token, _, err := env.Service.Login(context.Background(), env.Tenant, "0912141660", "me@Suckit1", authTestSource, authTestNow)
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}

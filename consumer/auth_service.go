@@ -11,13 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/utils"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -49,7 +49,7 @@ func (s *Service) GenerateAPIKey(ctx context.Context, tenantID, email string) (s
 	return k, nil
 }
 
-func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password string) (string, ebs_fields.User, error) {
+func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password, source string, now time.Time) (string, ebs_fields.User, error) {
 	var empty ebs_fields.User
 	if s == nil || s.Store == nil {
 		return "", empty, ErrMissingStore
@@ -58,9 +58,19 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password s
 	if err != nil {
 		return "", empty, err
 	}
-	emailOrMobile = strings.TrimSpace(emailOrMobile)
+	emailOrMobile = strings.ToLower(strings.TrimSpace(emailOrMobile))
 	if emailOrMobile == "" {
 		return "", empty, errors.New("missing mobile/email")
+	}
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return "", empty, err
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		mobileLimit("password-login-identifier", emailOrMobile, 10, 15*time.Minute),
+		sourceLimit("password-login-source", source, 30, 15*time.Minute),
+	); err != nil {
+		return "", empty, err
 	}
 	u, err := s.Store.GetUserByEmailOrMobile(ctx, tenantID, emailOrMobile)
 	if err != nil {
@@ -76,7 +86,7 @@ func (s *Service) Login(ctx context.Context, tenantID, emailOrMobile, password s
 	return token, sanitizeUser(*u), nil
 }
 
-func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.Token) (string, ebs_fields.User, error) {
+func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.Token, source string, now time.Time) (string, ebs_fields.User, error) {
 	var empty ebs_fields.User
 	if s == nil || s.Store == nil {
 		return "", empty, ErrMissingStore
@@ -85,12 +95,22 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 	if err != nil {
 		return "", empty, err
 	}
-	mobile := strings.TrimSpace(req.Mobile)
+	mobile := strings.ToLower(strings.TrimSpace(req.Mobile))
 	if mobile == "" {
 		return "", empty, errors.New("missing mobile")
 	}
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return "", empty, err
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		mobileLimit("otp-login-mobile", mobile, 5, 15*time.Minute),
+		sourceLimit("otp-login-source", source, 30, 15*time.Minute),
+	); err != nil {
+		return "", empty, err
+	}
 
-	u, err := s.Store.GetUserByUsernameEmailOrMobile(ctx, tenantID, mobile)
+	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return "", empty, err
 	}
@@ -98,7 +118,17 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 	if err := verifyUserSignature(u.PublicKey, req.Signature, req.Message); err != nil {
 		return "", empty, err
 	}
-	if !totp.Validate(req.Message, u.EncodePublickey32()) {
+	digest, err := s.otpDigest(tenantID, mobile, strings.TrimSpace(req.Message))
+	if err != nil {
+		return "", empty, err
+	}
+	if err := s.Store.ConsumeOTPChallenge(ctx, tenantID, mobile, digest, now); err != nil {
+		if !isOTPChallengeRejection(err) {
+			return "", empty, err
+		}
+		if metricErr := s.Store.IncrementSuspicious(ctx, tenantID, mobile); metricErr != nil {
+			return "", empty, metricErr
+		}
 		return "", empty, ErrWrongOTP
 	}
 
@@ -110,11 +140,24 @@ func (s *Service) SingleLogin(ctx context.Context, tenantID string, req gateway.
 }
 
 // RefreshJWT generates a new access token using the provided JWT + signature.
-func (s *Service) RefreshJWT(ctx context.Context, req gateway.Token) (string, error) {
+func (s *Service) RefreshJWT(ctx context.Context, tenantID string, req gateway.Token, source string, now time.Time) (string, error) {
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
-	claims, err := s.Auth.VerifyJWT(req.JWT)
+	if s.Auth == nil {
+		return "", ErrMissingAuth
+	}
+	tenantID, err := store.ValidateTenantID(tenantID)
+	if err != nil {
+		return "", err
+	}
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return "", err
+	}
+
+	oldToken := strings.TrimSpace(req.JWT)
+	claims, err := s.Auth.VerifyJWT(oldToken)
 	if err != nil {
 		if !errors.Is(err, jwt.ErrTokenExpired) || claims == nil {
 			return "", err
@@ -123,8 +166,24 @@ func (s *Service) RefreshJWT(ctx context.Context, req gateway.Token) (string, er
 	if claims == nil || claims.UserID <= 0 {
 		return "", store.ErrInvalidUserID
 	}
-	tenantID, err := store.ValidateTenantID(claims.TenantID)
+	claimTenantID, err := store.ValidateTenantID(claims.TenantID)
 	if err != nil {
+		return "", err
+	}
+	if claimTenantID != tenantID {
+		return "", ErrRefreshTenantMismatch
+	}
+	if claims.IssuedAt == nil {
+		return "", ErrRefreshExpired
+	}
+	issuedAt := claims.IssuedAt.Time.UTC()
+	refreshExpiresAt := issuedAt.Add(refreshMaxAge)
+	if issuedAt.After(now.Add(refreshClockSkew)) || !now.Before(refreshExpiresAt) {
+		return "", ErrRefreshExpired
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		sourceLimit("refresh-source", source, 120, 15*time.Minute),
+	); err != nil {
 		return "", err
 	}
 
@@ -132,10 +191,29 @@ func (s *Service) RefreshJWT(ctx context.Context, req gateway.Token) (string, er
 	if err != nil {
 		return "", err
 	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		mobileLimit("refresh-mobile", user.Mobile, 20, 15*time.Minute),
+	); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(req.Mobile) != user.Mobile {
+		return "", ErrInvalidSignature
+	}
 	if err := verifyUserSignature(user.PublicKey, req.Signature, req.Message); err != nil {
 		return "", err
 	}
-	return s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+	newToken, err := s.Auth.GenerateJWT(user.ID, user.Mobile, tenantID)
+	if err != nil {
+		return "", err
+	}
+	tokenHash := sha256.Sum256([]byte(oldToken))
+	if err := s.Store.ConsumeRefreshToken(ctx, tenantID, user.ID, fmt.Sprintf("%x", tokenHash), now, refreshExpiresAt); err != nil {
+		if errors.Is(err, store.ErrRefreshTokenReplay) {
+			return "", ErrRefreshReplay
+		}
+		return "", err
+	}
+	return newToken, nil
 }
 
 func verifyUserSignature(publicKey, signature, message string) error {
@@ -211,7 +289,7 @@ func (s *Service) CreateUser(ctx context.Context, tenantID string, u ebs_fields.
 	return sanitizeUser(u), nil
 }
 
-func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (ebs_fields.User, error) {
+func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp, source string, now time.Time) (ebs_fields.User, error) {
 	if s == nil || s.Store == nil {
 		return ebs_fields.User{}, ErrMissingStore
 	}
@@ -223,12 +301,29 @@ func (s *Service) VerifyOTP(ctx context.Context, tenantID, mobile, otp string) (
 	if mobile == "" || strings.TrimSpace(otp) == "" {
 		return ebs_fields.User{}, ErrEmptyOTP
 	}
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		mobileLimit("otp-verify-mobile", mobile, 5, 15*time.Minute),
+		sourceLimit("otp-verify-source", source, 30, 15*time.Minute),
+	); err != nil {
+		return ebs_fields.User{}, err
+	}
 
 	u, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return ebs_fields.User{}, err
 	}
-	if !u.VerifyOtp(otp) {
+	digest, err := s.otpDigest(tenantID, mobile, strings.TrimSpace(otp))
+	if err != nil {
+		return ebs_fields.User{}, err
+	}
+	if err := s.Store.ConsumeOTPChallenge(ctx, tenantID, mobile, digest, now); err != nil {
+		if !isOTPChallengeRejection(err) {
+			return ebs_fields.User{}, err
+		}
 		if err := s.Store.IncrementSuspicious(ctx, tenantID, mobile); err != nil {
 			return ebs_fields.User{}, err
 		}
@@ -272,7 +367,7 @@ func (s *Service) ChangePassword(ctx context.Context, tenantID, mobile, newPassw
 	return sanitizeUser(*u), nil
 }
 
-func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile string) error {
+func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile, source string, now time.Time) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
@@ -284,21 +379,42 @@ func (s *Service) GenerateSignInCode(ctx context.Context, tenantID, mobile strin
 	if mobile == "" {
 		return ErrMissingMobile
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	source, err = normalizeRequestSource(source)
+	if err != nil {
+		return err
+	}
+	if err := s.enforceAuthLimits(ctx, tenantID, now,
+		mobileLimit("otp-generate-cooldown", mobile, 1, time.Minute),
+		mobileLimit("otp-generate-mobile", mobile, 3, 15*time.Minute),
+		sourceLimit("otp-generate-source", source, 20, 15*time.Minute),
+	); err != nil {
+		return err
+	}
+	_, err = s.Store.GetUserByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return err
 	}
 	if _, err := s.Store.RecordLoginAttempt(ctx, tenantID, mobile, true); err != nil {
 		return err
 	}
-	key, err := user.GenerateOtp()
+	key, err := generateOTPCode()
 	if err != nil {
+		return err
+	}
+	digest, err := s.otpDigest(tenantID, mobile, key)
+	if err != nil {
+		return err
+	}
+	if err := s.Store.StoreOTPChallenge(ctx, tenantID, mobile, digest, now, now.Add(otpChallengeTTL), otpMaxAttempts); err != nil {
 		return err
 	}
 	if err := utils.SendSMS(&s.NoebsConfig, utils.SMS{
 		Mobile:  mobile,
 		Message: fmt.Sprintf("Your one-time access code is: %s. DON'T share it with anyone.", key),
 	}); err != nil {
+		if cleanupErr := s.Store.DeleteOTPChallenge(ctx, tenantID, mobile); cleanupErr != nil {
+			return errors.Join(err, cleanupErr)
+		}
 		return err
 	}
 	return nil

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 
 	"github.com/adonese/noebs/apperr"
@@ -87,6 +88,18 @@ func resolveTenantID(c *fiber.Ctx) (string, error) {
 	return store.ValidateTenantID(getTenantID(c))
 }
 
+func resolveRequestSource(c *fiber.Ctx) (string, error) {
+	if value, ok := c.Locals("request_source").(string); ok {
+		if ip := net.ParseIP(value); ip != nil {
+			return ip.String(), nil
+		}
+	}
+	if ip := net.ParseIP(c.IP()); ip != nil {
+		return ip.String(), nil
+	}
+	return "", consumer.ErrInvalidRequestSource
+}
+
 func statusForError(err error) int {
 	if err == nil {
 		return http.StatusOK
@@ -132,7 +145,8 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidCard),
 		errors.Is(err, consumer.ErrUserAlreadyExists):
 		return http.StatusBadRequest
-	case errors.Is(err, consumer.ErrCardNotFound):
+	case errors.Is(err, consumer.ErrCardNotFound),
+		errors.Is(err, consumer.ErrTransactionNotFound):
 		return http.StatusNotFound
 	case store.ErrNotFound(err):
 		return http.StatusNotFound

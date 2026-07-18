@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	log "github.com/sirupsen/logrus"
@@ -78,5 +79,36 @@ func TestJWTAuth_VerifyJWT_MissingKey(t *testing.T) {
 	_, err := j.VerifyJWT("token")
 	if !errors.Is(err, ErrMissingJWTKey) {
 		t.Fatalf("expected ErrMissingJWTKey, got %v", err)
+	}
+}
+
+func TestJWTAuthGenerateJWTUsesExplicitClockAndUniqueTokenID(t *testing.T) {
+	now := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
+	j := &JWTAuth{Key: []byte("test-key"), Now: func() time.Time { return now }}
+
+	first, err := j.GenerateJWT(42, "0990000000", "tenant")
+	if err != nil {
+		t.Fatalf("first GenerateJWT(): %v", err)
+	}
+	second, err := j.GenerateJWT(42, "0990000000", "tenant")
+	if err != nil {
+		t.Fatalf("second GenerateJWT(): %v", err)
+	}
+	if first == second {
+		t.Fatal("same-clock GenerateJWT() returned identical tokens")
+	}
+	firstClaims, err := j.VerifyJWT(first)
+	if err != nil {
+		t.Fatalf("VerifyJWT(first): %v", err)
+	}
+	secondClaims, err := j.VerifyJWT(second)
+	if err != nil {
+		t.Fatalf("VerifyJWT(second): %v", err)
+	}
+	if firstClaims.ID == "" || secondClaims.ID == "" || firstClaims.ID == secondClaims.ID {
+		t.Fatalf("token IDs = %q and %q, want distinct non-empty values", firstClaims.ID, secondClaims.ID)
+	}
+	if !firstClaims.IssuedAt.Time.Equal(now) || !firstClaims.ExpiresAt.Time.Equal(now.Add(10*time.Hour)) {
+		t.Fatalf("token times = issued %s expires %s", firstClaims.IssuedAt.Time, firstClaims.ExpiresAt.Time)
 	}
 }

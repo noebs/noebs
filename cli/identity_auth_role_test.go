@@ -22,6 +22,7 @@ func TestIdentityRoutesAreProxiedByAPIGateway(t *testing.T) {
 		{name: "oauth", method: http.MethodPost, path: "/consumer/auth/google"},
 		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
 		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
+		{name: "kyc", method: http.MethodPost, path: "/consumer/kyc"},
 		{name: "api key", method: http.MethodPost, path: "/generate_api_key"},
 	}
 	for _, tt := range tests {
@@ -53,6 +54,7 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 		{name: "oauth", method: http.MethodPost, path: "/consumer/auth/google"},
 		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
 		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
+		{name: "kyc", method: http.MethodPost, path: "/consumer/kyc"},
 		{name: "api key", method: http.MethodPost, path: "/generate_api_key"},
 	}
 	for _, tt := range tests {
@@ -68,6 +70,22 @@ func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
 				t.Fatalf("identity-auth did not register %s", tt.path)
 			}
 		})
+	}
+}
+
+func TestIdentityAuthKYCRejectsMissingGatewayIdentity(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleIdentityAuth)
+	route := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/kyc", nil)
+	resp, err := route.Test(req, routeTestTimeout)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
 

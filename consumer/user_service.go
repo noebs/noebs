@@ -320,7 +320,7 @@ func normalizeUserProfileInput(profile ebs_fields.UserProfile) (ebs_fields.UserP
 	return profile, nil
 }
 
-func (s *Service) UpdateKYC(ctx context.Context, tenantID string, req ebs_fields.KYCPassport) error {
+func (s *Service) UpdateKYC(ctx context.Context, tenantID, authenticatedMobile string, req ebs_fields.KYCPassport) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
@@ -328,10 +328,11 @@ func (s *Service) UpdateKYC(ctx context.Context, tenantID string, req ebs_fields
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(req.Mobile) == "" {
+	authenticatedMobile = strings.TrimSpace(authenticatedMobile)
+	if authenticatedMobile == "" {
 		return ErrMissingMobile
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, strings.TrimSpace(req.Mobile))
+	user, err := s.Store.GetUserByMobile(ctx, tenantID, authenticatedMobile)
 	if err != nil {
 		return err
 	}
@@ -347,7 +348,7 @@ func (s *Service) UpdateKYC(ctx context.Context, tenantID string, req ebs_fields
 	return s.Store.UpdateKYC(ctx, tenantID, kyc, &passport)
 }
 
-func (s *Service) GetTransactionByUUID(ctx context.Context, tenantID, uuid string) (*ebs_fields.EBSResponse, error) {
+func (s *Service) GetTransactionByUUIDForUser(ctx context.Context, tenantID string, userID int64, authenticatedMobile, uuid string) (*ebs_fields.EBSResponse, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
@@ -355,9 +356,30 @@ func (s *Service) GetTransactionByUUID(ctx context.Context, tenantID, uuid strin
 	if err != nil {
 		return nil, err
 	}
+	if userID <= 0 {
+		return nil, store.ErrInvalidUserID
+	}
+	authenticatedMobile = strings.TrimSpace(authenticatedMobile)
+	if authenticatedMobile == "" {
+		return nil, ErrMissingMobile
+	}
 	uuid = strings.TrimSpace(uuid)
 	if uuid == "" {
-		return nil, errors.New("missing uuid")
+		return nil, store.ErrMissingUUID
 	}
-	return s.Store.GetTransactionByUUID(ctx, tenantID, uuid)
+	cards, err := s.ListMaskedCardsInCardVault(ctx, tenantID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(cards.MaskedPANs) == 0 {
+		return nil, ErrTransactionNotFound
+	}
+	transaction, err := s.Store.GetTransactionByUUIDForMaskedPANs(ctx, tenantID, uuid, cards.MaskedPANs)
+	if store.ErrNotFound(err) {
+		return nil, ErrTransactionNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return transaction, nil
 }
