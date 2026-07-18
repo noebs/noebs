@@ -45,7 +45,7 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve card by mobile with card-vault schema: %v", err)
 	}
-	if byMobile.PAN != pan || byMobile.ExpDate != "2912" {
+	if byMobile.UserID != userID || byMobile.PAN != pan || byMobile.ExpDate != "2912" {
 		t.Fatalf("card by mobile = %+v, want pan=%s exp=2912", byMobile, pan)
 	}
 	masked, err := service.ListMaskedCardsForUserID(ctx, tenantID, userID, MaskedCardsCommand{})
@@ -97,7 +97,7 @@ func TestCardVaultOwnedOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve quick-pay token with card-vault schema: %v", err)
 	}
-	if resolution.UUID != created.UUID || resolution.RailUUID != created.RailUUID || resolution.Amount != created.Amount || resolution.ToCard != pan {
+	if resolution.UUID != created.UUID || resolution.RailUUID != created.RailUUID || resolution.Amount != created.Amount || resolution.ToCard != pan || resolution.RecipientUserID != userID {
 		t.Fatalf("quick-pay resolution = %+v, want uuid=%s amount=%d raw PAN", resolution, created.UUID, created.Amount)
 	}
 	if err := service.FinalizeQuickPaymentTokenForUserID(ctx, tenantID, userID, QuickPaymentTokenFinalizationCommand{UUID: created.UUID, RailUUID: created.RailUUID, Status: ebs_fields.PaymentTokenStatusPaid}); err != nil {
@@ -228,7 +228,7 @@ func TestPaymentTokenUUIDIsTenantScopedPayerCapability(t *testing.T) {
 	if err != nil {
 		t.Fatalf("payer resolve by UUID: %v", err)
 	}
-	if resolution.UUID != created.UUID || resolution.RailUUID != created.RailUUID || resolution.ToCard != pan || resolution.Amount != 25 {
+	if resolution.UUID != created.UUID || resolution.RailUUID != created.RailUUID || resolution.ToCard != pan || resolution.Amount != 25 || resolution.RecipientUserID != creatorID {
 		t.Fatalf("payer resolution = %+v", resolution)
 	}
 	if err := storeSvc.UpdateTokenCard(ctx, tenantID, created.UUID, "5555555555554444"); err == nil {

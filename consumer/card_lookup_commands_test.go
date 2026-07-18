@@ -24,7 +24,7 @@ func TestResolveCardByMobileUsesCardVaultScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve card by mobile: %v", err)
 	}
-	if result.PAN != "9222081700000000" || result.ExpDate != "2601" {
+	if result.UserID != 42 || result.PAN != "9222081700000000" || result.ExpDate != "2601" {
 		t.Fatalf("card result = %+v", result)
 	}
 }

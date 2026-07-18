@@ -13,6 +13,7 @@ type CardByMobileCommand struct {
 }
 
 type CardByMobileResult struct {
+	UserID  int64  `json:"user_id"`
 	PAN     string `json:"pan"`
 	ExpDate string `json:"expDate,omitempty"`
 }
@@ -64,7 +65,10 @@ func (s *Service) ResolveCardByMobile(ctx context.Context, tenantID string, cmd 
 	if pan == "" {
 		return CardByMobileResult{}, ErrReceiverHasNoCard
 	}
-	return CardByMobileResult{PAN: pan, ExpDate: strings.TrimSpace(cards[0].Expiry)}, nil
+	if cards[0].UserID <= 0 {
+		return CardByMobileResult{}, store.ErrInvalidUserID
+	}
+	return CardByMobileResult{UserID: cards[0].UserID, PAN: pan, ExpDate: strings.TrimSpace(cards[0].Expiry)}, nil
 }
 
 func (s *Service) ResolveCardByMobilePAN(ctx context.Context, tenantID string, cmd CardByMobilePANCommand) (CardByMobilePANResult, error) {
@@ -181,6 +185,9 @@ func (s *Service) ResolveCardByMobileInCardVault(ctx context.Context, tenantID, 
 	}
 	if strings.TrimSpace(result.PAN) == "" {
 		return CardByMobileResult{}, ErrReceiverHasNoCard
+	}
+	if result.UserID <= 0 {
+		return CardByMobileResult{}, store.ErrInvalidUserID
 	}
 	return result, nil
 }

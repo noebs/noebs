@@ -57,7 +57,7 @@ func TestService_isValidCard(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := service.isValidCard(context.Background(), tenantID, tt.args.card)
+			got, err := service.isValidCard(noConsumerTransactionContext(), tenantID, tt.args.card)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Service.isValidCard() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -97,7 +97,7 @@ func TestGetIpinPubKeyReturnsTypedEBSCallError(t *testing.T) {
 		},
 	}
 
-	err := service.GetIpinPubKey(context.Background(), "tenant-a")
+	err := service.GetIpinPubKey(noConsumerTransactionContext(), "tenant-a")
 	var callErr *ebs_fields.CallError
 	if !errors.As(err, &callErr) {
 		t.Fatalf("GetIpinPubKey() error = %v, want CallError", err)

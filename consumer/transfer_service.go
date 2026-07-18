@@ -30,18 +30,34 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 		return ebs_fields.EBSParserFields{}, err
 	}
 
+	transactionCtx := ctx
+	receiverMobile := strings.TrimSpace(fields.Mobile)
+	if receiverMobile != "" {
+		receiverCard, err := s.ResolveCardByMobileInCardVault(ctx, tenantID, receiverMobile)
+		if err != nil {
+			return ebs_fields.EBSParserFields{}, err
+		}
+		if strings.TrimSpace(receiverCard.PAN) != strings.TrimSpace(fields.ToCard) {
+			return ebs_fields.EBSParserFields{}, ErrCardNotMatched
+		}
+		transactionCtx, err = withTransactionRecipient(ctx, receiverCard.UserID)
+		if err != nil {
+			return ebs_fields.EBSParserFields{}, err
+		}
+	}
+
 	req := fields
 	deviceID := req.DeviceID
 	req.ConsumerCommonFields.DelDeviceID()
 
 	res, err := s.callEBSJSONWithMutate(
-		ctx,
+		transactionCtx,
 		tenantID,
 		s.NoebsConfig.ConsumerIP,
 		ebs_fields.ConsumerCardTransferEndpoint,
 		req,
 		func(p *ebs_fields.EBSParserFields) {
-			// Persist sender/receiver to support history queries.
+			// Retain masked rail references for display; ownership uses participant IDs.
 			p.EBSResponse.SenderPAN = fields.Pan
 			p.EBSResponse.ReceiverPAN = fields.ToCard
 		},
@@ -71,7 +87,6 @@ func (s *Service) CardTransfer(ctx context.Context, tenantID string, fields ebs_
 	receiver := data
 	receiver.EBSData.PAN = fields.ToCard
 	receiver.Body = fmt.Sprintf("You have received %v %v from %v.", fields.TranAmount, res.AccountCurrency, res.PAN)
-	receiverMobile := strings.TrimSpace(fields.Mobile)
 	if receiverMobile != "" {
 		receiver.Phone = receiverMobile
 		receiver.UserMobile = receiverMobile
@@ -122,6 +137,10 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 	if toCard == "" {
 		return ebs_fields.EBSParserFields{}, ErrReceiverHasNoCard
 	}
+	transactionCtx, err := withTransactionRecipient(ctx, card.UserID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
 
 	req := fields
 	req.ToCard = toCard
@@ -129,7 +148,7 @@ func (s *Service) MobileTransfer(ctx context.Context, tenantID string, fields eb
 	req.ConsumerCommonFields.DelDeviceID()
 
 	res, err := s.callEBSJSONWithMutate(
-		ctx,
+		transactionCtx,
 		tenantID,
 		s.NoebsConfig.ConsumerIP,
 		ebs_fields.ConsumerCardTransferEndpoint,

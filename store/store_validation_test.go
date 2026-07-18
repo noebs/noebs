@@ -382,16 +382,16 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		{"CreateTransaction", func(tenantID string) error {
 			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{UUID: "transaction-uuid"})
 		}},
-		{"GetTransactionsByMaskedPan", func(tenantID string) error {
-			_, err := s.GetTransactionsByMaskedPan(ctx, tenantID, "922208******0000")
+		{"GetTransactionsByParticipantUserID", func(tenantID string) error {
+			_, err := s.GetTransactionsByParticipantUserID(ctx, tenantID, 1)
 			return err
 		}},
 		{"GetTransactionByUUID", func(tenantID string) error {
 			_, err := s.GetTransactionByUUID(ctx, tenantID, "transaction-uuid")
 			return err
 		}},
-		{"GetTransactionByUUIDForMaskedPANs", func(tenantID string) error {
-			_, err := s.GetTransactionByUUIDForMaskedPANs(ctx, tenantID, "transaction-uuid", []string{"922208*****0000"})
+		{"GetTransactionByUUIDForParticipantUserID", func(tenantID string) error {
+			_, err := s.GetTransactionByUUIDForParticipantUserID(ctx, tenantID, 1, "transaction-uuid")
 			return err
 		}},
 		{"CreatePushData", func(tenantID string) error {
@@ -852,24 +852,17 @@ func TestStore_DeleteBeneficiaryReportsMissingRows(t *testing.T) {
 	}
 }
 
-func TestStore_GetTransactionsByMaskedPan_RequiresPAN(t *testing.T) {
-	s := newTestStore(t)
-	if _, err := s.GetTransactionsByMaskedPan(context.Background(), "t1", " "); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("expected ErrMissingPAN, got %v", err)
-	}
-}
-
-func TestStore_GetTransactionByUUIDForMaskedPANsRequiresExplicitInputs(t *testing.T) {
+func TestStore_TransactionParticipantQueriesRequireExplicitInputs(t *testing.T) {
 	s := &Store{}
 	ctx := context.Background()
-	if _, err := s.GetTransactionByUUIDForMaskedPANs(ctx, "t1", " ", []string{"922208*****0000"}); !errors.Is(err, ErrMissingUUID) {
+	if _, err := s.GetTransactionsByParticipantUserID(ctx, "t1", 0); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("missing user id error = %v, want %v", err, ErrInvalidUserID)
+	}
+	if _, err := s.GetTransactionByUUIDForParticipantUserID(ctx, "t1", 0, "transaction-uuid"); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("missing user id error = %v, want %v", err, ErrInvalidUserID)
+	}
+	if _, err := s.GetTransactionByUUIDForParticipantUserID(ctx, "t1", 1, " "); !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("missing uuid error = %v, want %v", err, ErrMissingUUID)
-	}
-	if _, err := s.GetTransactionByUUIDForMaskedPANs(ctx, "t1", "transaction-uuid", nil); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("missing pans error = %v, want %v", err, ErrMissingPAN)
-	}
-	if _, err := s.GetTransactionByUUIDForMaskedPANs(ctx, "t1", "transaction-uuid", []string{" "}); !errors.Is(err, ErrMissingPAN) {
-		t.Fatalf("blank pan error = %v, want %v", err, ErrMissingPAN)
 	}
 }
 

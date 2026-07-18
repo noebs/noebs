@@ -258,7 +258,7 @@ func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 			if cmd.UUID != "token-1" || cmd.Amount != 10 {
 				t.Fatalf("resolve command = %+v", cmd)
 			}
-			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", RailUUID: "rail-1", ToCard: "9222081700000000", Amount: 10})
+			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", RailUUID: "rail-1", ToCard: "9222081700000000", Amount: 10, RecipientUserID: 84})
 		case "/internal/card-vault/quick-pay/finalize":
 			sawFinalize = true
 			var cmd QuickPaymentTokenFinalizationCommand
@@ -291,7 +291,7 @@ func TestQuickPaymentCardVaultClientSendsGatewayIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve quick-pay token through card-vault client: %v", err)
 	}
-	if resolution.UUID != "token-1" || resolution.RailUUID != "rail-1" || resolution.ToCard != "9222081700000000" || resolution.Amount != 10 {
+	if resolution.UUID != "token-1" || resolution.RailUUID != "rail-1" || resolution.ToCard != "9222081700000000" || resolution.Amount != 10 || resolution.RecipientUserID != 84 {
 		t.Fatalf("resolution = %+v", resolution)
 	}
 	if err := service.FinalizeQuickPaymentTokenInCardVault(t.Context(), "tenant-a", 42, QuickPaymentTokenFinalizationCommand{UUID: "token-1", RailUUID: "rail-1", Status: ebs_fields.PaymentTokenStatusPaid}); err != nil {
@@ -311,10 +311,11 @@ func TestNoebsQuickPaymentLeavesMalformedOutcomeUnfinalized(t *testing.T) {
 			sawResolve = true
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{
-				UUID:     "token-1",
-				RailUUID: "rail-1",
-				ToCard:   "9222081700000000",
-				Amount:   25,
+				UUID:            "token-1",
+				RailUUID:        "rail-1",
+				ToCard:          "9222081700000000",
+				Amount:          25,
+				RecipientUserID: 84,
 			})
 		case "/internal/card-vault/quick-pay/finalize":
 			sawFinalize = true
@@ -353,7 +354,7 @@ func TestNoebsQuickPaymentLeavesMalformedOutcomeUnfinalized(t *testing.T) {
 		AmountFields: ebs_fields.AmountFields{TranAmount: 25},
 	}}
 
-	_, err := service.NoebsQuickPayment(t.Context(), "tenant-a", 42, req, "token-1", "")
+	_, err := service.NoebsQuickPayment(transactionActorContext(t, 42), "tenant-a", 42, req, "token-1", "")
 	if !errors.Is(err, ErrPaymentOutcomeUnknown) {
 		t.Fatalf("NoebsQuickPayment() error = %v, want %v", err, ErrPaymentOutcomeUnknown)
 	}
@@ -380,7 +381,7 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 			}
 			sawResolve = true
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", RailUUID: "rail-1", ToCard: "9222081700000000", Amount: 25})
+			_ = json.NewEncoder(w).Encode(QuickPaymentTokenResolution{UUID: "token-1", RailUUID: "rail-1", ToCard: "9222081700000000", Amount: 25, RecipientUserID: 84})
 		case "/internal/card-vault/quick-pay/finalize":
 			assertCardVaultUserCommandHeaders(t, r, tenantID, 42)
 			var cmd QuickPaymentTokenFinalizationCommand
@@ -462,7 +463,7 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 		},
 	}
 
-	res, err := service.NoebsQuickPayment(context.Background(), tenantID, 42, ebs_fields.QuickPaymentFields{
+	res, err := service.NoebsQuickPayment(transactionActorContext(t, 42), tenantID, 42, ebs_fields.QuickPaymentFields{
 		ConsumerCardTransferFields: ebs_fields.ConsumerCardTransferFields{
 			ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
 				UUID:         "quickpay-request-uuid",
@@ -486,6 +487,15 @@ func TestNoebsQuickPaymentSubmitsBillerHookThroughNotificationChat(t *testing.T)
 	}
 	if !sawResolve || !sawFinalize || !sawEBS || !sawNotification {
 		t.Fatalf("sawResolve=%v sawFinalize=%v sawEBS=%v sawNotification=%v", sawResolve, sawFinalize, sawEBS, sawNotification)
+	}
+	for _, userID := range []int64{42, 84} {
+		history, err := service.GetTransactionsForUserID(t.Context(), tenantID, userID)
+		if err != nil {
+			t.Fatalf("get quick-pay participant %d history: %v", userID, err)
+		}
+		if len(history) != 1 || history[0].UUID != "rail-1" {
+			t.Fatalf("quick-pay participant %d history = %+v", userID, history)
+		}
 	}
 	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM users LIMIT 1"); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("ebs-adapter scope should not create user tables, err=%v", err)

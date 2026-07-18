@@ -5,11 +5,30 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/gofiber/fiber/v2"
 )
 
 type ebsCall[Req any] func(ctx context.Context, tenantID string, req Req) (ebs_fields.EBSParserFields, error)
+
+func authenticatedEBS(next fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, err := consumer.WithTransactionActor(c.UserContext(), getUserID(c))
+		if err != nil {
+			return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
+		}
+		c.SetUserContext(ctx)
+		return next(c)
+	}
+}
+
+func publicEBS(next fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		c.SetUserContext(consumer.WithNoConsumerTransactionParticipants(c.UserContext()))
+		return next(c)
+	}
+}
 
 func ebsErrorDetails(res ebs_fields.EBSParserFields) ebs_fields.ErrorDetails {
 	return ebs_fields.ErrorDetails{

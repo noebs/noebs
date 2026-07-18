@@ -2,8 +2,8 @@ package consumer
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,7 +29,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 		}
 		sawCardVault = true
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(CardByMobileResult{PAN: "9222081700000000", ExpDate: "2601"})
+		_ = json.NewEncoder(w).Encode(CardByMobileResult{UserID: 84, PAN: "9222081700000000", ExpDate: "2601"})
 	}))
 	t.Cleanup(cardVaultServer.Close)
 
@@ -87,7 +87,7 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 			},
 		},
 	}
-	res, err := service.MobileTransfer(context.Background(), tenantID, ebs_fields.ConsumerMobileTransferFields{
+	res, err := service.MobileTransfer(transactionActorContext(t, 42), tenantID, ebs_fields.ConsumerMobileTransferFields{
 		ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
 			ApplicationId: "consumer-app",
 			TranDateTime:  "270526205500",
@@ -128,5 +128,69 @@ func TestMobileTransferResolvesReceiverThroughCardVault(t *testing.T) {
 	}
 	if got, want := notifications[1].Data.To, "sender-device"; got != want {
 		t.Fatalf("sender notification to = %q, want %q", got, want)
+	}
+	for _, userID := range []int64{42, 84} {
+		history, err := service.GetTransactionsForUserID(t.Context(), tenantID, userID)
+		if err != nil {
+			t.Fatalf("get participant %d history: %v", userID, err)
+		}
+		if len(history) != 1 || history[0].UUID != "transfer-uuid" {
+			t.Fatalf("participant %d history = %+v", userID, history)
+		}
+	}
+}
+
+func TestMobileTransferFailureRetainsActorAndRecipientParticipants(t *testing.T) {
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeEBSAdapter})
+	cardVaultServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(CardByMobileResult{UserID: 84, PAN: "9222081700000000", ExpDate: "2601"})
+	}))
+	t.Cleanup(cardVaultServer.Close)
+	ebsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ebs_fields.EBSParserFields{EBSResponse: ebs_fields.EBSResponse{
+			UUID: "declined-transfer", ResponseCode: 51, ResponseMessage: "Declined",
+		}})
+	}))
+	t.Cleanup(ebsServer.Close)
+	notificationServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(notificationServer.Close)
+
+	service := &Service{
+		Store:      storeSvc,
+		HTTPClient: testHTTPClient(),
+		NoebsConfig: ebs_fields.NoebsConfig{
+			ConsumerIP:            ebsServer.URL + "/",
+			KafkaTransactionTopic: testKafkaTransactionTopic,
+			ServiceDiscovery: map[string]string{
+				cardVaultServiceDiscoveryKey:    cardVaultServer.URL,
+				notificationServiceDiscoveryKey: notificationServer.URL,
+			},
+		},
+	}
+	_, err := service.MobileTransfer(transactionActorContext(t, 42), tenantID, ebs_fields.ConsumerMobileTransferFields{
+		ConsumerCommonFields:     ebs_fields.ConsumerCommonFields{UUID: "declined-transfer", TranDateTime: "270526205500", DeviceID: "sender-device"},
+		ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{Pan: "9222081700009999", Ipin: "encrypted-ipin", ExpDate: "2601"},
+		AmountFields:             ebs_fields.AmountFields{TranAmount: 50, TranCurrencyCode: "SDG"},
+		Mobile:                   "0912141660",
+	})
+	if err == nil {
+		t.Fatal("declined mobile transfer error = nil")
+	}
+	var callErr *ebs_fields.CallError
+	if !errors.As(err, &callErr) {
+		t.Fatalf("declined mobile transfer error = %v, want EBS call error", err)
+	}
+	for _, userID := range []int64{42, 84} {
+		history, historyErr := service.GetTransactionsForUserID(t.Context(), tenantID, userID)
+		if historyErr != nil {
+			t.Fatalf("get failed-transfer participant %d history: %v", userID, historyErr)
+		}
+		if len(history) != 1 || history[0].UUID != "declined-transfer" || history[0].ResponseCode != 51 {
+			t.Fatalf("failed-transfer participant %d history = %+v", userID, history)
+		}
 	}
 }

@@ -126,6 +126,10 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 	if err != nil {
 		return ebs_fields.EBSParserFields{}, err
 	}
+	transactionCtx, err := withTransactionRecipient(ctx, resolution.RecipientUserID)
+	if err != nil {
+		return ebs_fields.EBSParserFields{}, err
+	}
 
 	// Force the destination PAN + amount from the stored token.
 	req.ApplicationId = s.NoebsConfig.ConsumerID
@@ -139,7 +143,7 @@ func (s *Service) NoebsQuickPayment(ctx context.Context, tenantID string, userID
 	payload := req.MarshallP2pFields()
 
 	res, err := s.callEBSRawWithMutate(
-		ctx,
+		transactionCtx,
 		tenantID,
 		s.NoebsConfig.ConsumerIP,
 		ebs_fields.ConsumerCardTransferEndpoint,

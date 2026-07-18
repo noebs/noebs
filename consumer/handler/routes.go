@@ -5,52 +5,52 @@ import "github.com/gofiber/fiber/v2"
 func RegisterEBSAdapterPublicRoutes(router fiber.Router, h *Handler) {
 	// Registration, recovery, and cryptographic bootstrap are the only EBS
 	// adapter operations available before a user has authenticated.
-	router.Post("/otp/balance", h.BalanceStep)
-	router.Post("/register_with_card", h.RegisterWithCard)
-	router.Post("/card_info", h.EbsGetCardInfo)
-	router.Post("/cards/new", h.RegisterCard)
-	router.Post("/cards/complete", h.CompleteRegistration)
-	router.Post("/key", h.WorkingKey)
-	router.Post("/ipin_key", h.IPINKey)
+	router.Post("/otp/balance", publicEBS(h.BalanceStep))
+	router.Post("/register_with_card", publicEBS(h.RegisterWithCard))
+	router.Post("/card_info", publicEBS(h.EbsGetCardInfo))
+	router.Post("/cards/new", publicEBS(h.RegisterCard))
+	router.Post("/cards/complete", publicEBS(h.CompleteRegistration))
+	router.Post("/key", publicEBS(h.WorkingKey))
+	router.Post("/ipin_key", publicEBS(h.IPINKey))
 }
 
 func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
 	// Card and account operations
-	router.Post("/balance", h.Balance)
-	router.Post("/status", h.TransactionStatus)
-	router.Post("/is_alive", h.IsAlive)
-	router.Post("/bill_payment", h.BillPayment)
-	router.Post("/bills", h.GetBills)
-	router.Get("/biller", h.GetBiller)
-	router.Post("/bill_inquiry", h.BillInquiry)
-	router.Post("/p2p", h.CardTransfer)
-	router.Post("/cashIn", h.CashIn)
-	router.Post("/cashOut", h.CashOut)
-	router.Post("/account", h.AccountTransfer)
-	router.Post("/purchase", h.Purchase)
-	router.Post("/n/status", h.Status)
-	router.Post("/ipin", h.IPinChange)
-	router.Get("/nec2name", h.NecToName)
+	router.Post("/balance", authenticatedEBS(h.Balance))
+	router.Post("/status", authenticatedEBS(h.TransactionStatus))
+	router.Post("/is_alive", authenticatedEBS(h.IsAlive))
+	router.Post("/bill_payment", authenticatedEBS(h.BillPayment))
+	router.Post("/bills", authenticatedEBS(h.GetBills))
+	router.Get("/biller", authenticatedEBS(h.GetBiller))
+	router.Post("/bill_inquiry", authenticatedEBS(h.BillInquiry))
+	router.Post("/p2p", authenticatedEBS(h.CardTransfer))
+	router.Post("/cashIn", authenticatedEBS(h.CashIn))
+	router.Post("/cashOut", authenticatedEBS(h.CashOut))
+	router.Post("/account", authenticatedEBS(h.AccountTransfer))
+	router.Post("/purchase", authenticatedEBS(h.Purchase))
+	router.Post("/n/status", authenticatedEBS(h.Status))
+	router.Post("/ipin", authenticatedEBS(h.IPinChange))
+	router.Get("/nec2name", authenticatedEBS(h.NecToName))
 
 	// QR
-	router.Post("/generate_qr", h.QRMerchantRegistration)
-	router.Post("/qr_payment", h.QRPayment)
-	router.Post("/qr_status", h.QRTransactions)
-	router.Post("/qr_refund", h.QRRefund)
-	router.Post("/qr_complete", h.QRComplete)
+	router.Post("/generate_qr", authenticatedEBS(h.QRMerchantRegistration))
+	router.Post("/qr_payment", authenticatedEBS(h.QRPayment))
+	router.Post("/qr_status", authenticatedEBS(h.QRTransactions))
+	router.Post("/qr_refund", authenticatedEBS(h.QRRefund))
+	router.Post("/qr_complete", authenticatedEBS(h.QRComplete))
 
 	// IPIN
-	router.Post("/generate_ipin", h.GenerateIpin)
-	router.Post("/complete_ipin", h.CompleteIpin)
+	router.Post("/generate_ipin", authenticatedEBS(h.GenerateIpin))
+	router.Post("/complete_ipin", authenticatedEBS(h.CompleteIpin))
 
 	// Vouchers
-	router.Post("/vouchers/generate", h.GenerateVoucher)
+	router.Post("/vouchers/generate", authenticatedEBS(h.GenerateVoucher))
 
 	// Transactions / payment compatibility
-	router.Get("/transaction", h.TransactionByUUID)
-	router.Get("/transactions", h.GetTransactions)
-	router.Post("/p2p_mobile", h.MobileTransfer)
-	router.Post("/payment_token/quick_pay", h.NoebsQuickPayment)
+	router.Get("/transaction", authenticatedEBS(h.TransactionByUUID))
+	router.Get("/transactions", authenticatedEBS(h.GetTransactions))
+	router.Post("/p2p_mobile", authenticatedEBS(h.MobileTransfer))
+	router.Post("/payment_token/quick_pay", authenticatedEBS(h.NoebsQuickPayment))
 }
 
 func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {

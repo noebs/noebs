@@ -93,7 +93,7 @@ func TestQRTransactionsRecordsLastTransactions(t *testing.T) {
 		},
 	}
 
-	res, err := service.QRTransactions(ctx, tenantID, ebs_fields.ConsumerQRStatus{
+	res, err := service.QRTransactions(transactionActorContext(t, 42), tenantID, ebs_fields.ConsumerQRStatus{
 		ConsumerCommonFields: ebs_fields.ConsumerCommonFields{
 			ApplicationId: "consumer-app",
 			TranDateTime:  "20260531115959",

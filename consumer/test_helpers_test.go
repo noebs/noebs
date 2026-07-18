@@ -135,6 +135,19 @@ func newTestEnv(t *testing.T) *testEnv {
 	return &testEnv{Service: service, Auth: auth, Store: storeSvc, DB: db, Tenant: tenantID}
 }
 
+func transactionActorContext(t *testing.T, userID int64) context.Context {
+	t.Helper()
+	ctx, err := WithTransactionActor(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("bind transaction actor %d: %v", userID, err)
+	}
+	return ctx
+}
+
+func noConsumerTransactionContext() context.Context {
+	return WithNoConsumerTransactionParticipants(context.Background())
+}
+
 func seedUser(t *testing.T, storeSvc *store.Store, tenantID, mobile, password string) ebs_fields.User {
 	t.Helper()
 	user := ebs_fields.User{

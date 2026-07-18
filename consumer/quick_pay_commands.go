@@ -58,10 +58,11 @@ type QuickPaymentTokenResolveCommand struct {
 }
 
 type QuickPaymentTokenResolution struct {
-	UUID     string `json:"uuid"`
-	RailUUID string `json:"rail_uuid"`
-	ToCard   string `json:"to_card"`
-	Amount   int    `json:"amount"`
+	UUID            string `json:"uuid"`
+	RailUUID        string `json:"rail_uuid"`
+	ToCard          string `json:"to_card"`
+	Amount          int    `json:"amount"`
+	RecipientUserID int64  `json:"recipient_user_id"`
 }
 
 type QuickPaymentTokenFinalizationCommand struct {
@@ -106,11 +107,15 @@ func (s *Service) ResolveQuickPaymentTokenForUserID(ctx context.Context, tenantI
 	if err != nil {
 		return QuickPaymentTokenResolution{}, err
 	}
+	if claimedToken.UserID <= 0 {
+		return QuickPaymentTokenResolution{}, store.ErrInvalidUserID
+	}
 	return QuickPaymentTokenResolution{
-		UUID:     claimedToken.UUID,
-		RailUUID: claimedToken.RailUUID,
-		ToCard:   claimedToken.ToCard,
-		Amount:   amount,
+		UUID:            claimedToken.UUID,
+		RailUUID:        claimedToken.RailUUID,
+		ToCard:          claimedToken.ToCard,
+		Amount:          amount,
+		RecipientUserID: claimedToken.UserID,
 	}, nil
 }
 

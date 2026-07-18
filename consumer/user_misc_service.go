@@ -123,18 +123,5 @@ func (s *Service) GetTransactionsForUserID(ctx context.Context, tenantID string,
 		return nil, store.ErrInvalidUserID
 	}
 
-	cards, err := s.ListMaskedCardsInCardVault(ctx, tenantID, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	var trans []ebs_fields.EBSResponse
-	for _, masked := range cards.MaskedPANs {
-		cardTrans, err := s.Store.GetTransactionsByMaskedPan(ctx, tenantID, masked)
-		if err != nil {
-			return nil, err
-		}
-		trans = append(trans, cardTrans...)
-	}
-	return trans, nil
+	return s.Store.GetTransactionsByParticipantUserID(ctx, tenantID, userID)
 }

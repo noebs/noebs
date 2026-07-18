@@ -68,7 +68,7 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return service.UpdateKYC(ctx, tenantID, "0990000000", ebs_fields.KYCPassport{})
 		}},
 		{"GetTransactionByUUIDForUser", func(tenantID string) error {
-			_, err := service.GetTransactionByUUIDForUser(ctx, tenantID, 1, "0990000000", "uuid")
+			_, err := service.GetTransactionByUUIDForUser(ctx, tenantID, 1, "uuid")
 			return err
 		}},
 	}

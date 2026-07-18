@@ -20,7 +20,8 @@ func (s *Service) recordTransaction(ctx context.Context, tenantID string, res eb
 	if err != nil {
 		return err
 	}
-	if err := s.Store.CreateTransactionWithEvent(ctx, tenantID, res, event); err != nil {
+	// Merchant transactions do not carry a consumer gateway identity.
+	if err := s.Store.CreateTransactionWithEvent(ctx, tenantID, res, event, nil); err != nil {
 		return err
 	}
 	return nil

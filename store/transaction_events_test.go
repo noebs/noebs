@@ -27,13 +27,20 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 		EventType: "ebs.transaction.recorded.v1",
 		Payload:   []byte(`{"type":"ebs.transaction.recorded.v1"}`),
 	}
-	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event); err != nil {
+	participants := []TransactionParticipant{
+		{UserID: 42, Role: TransactionParticipantActor},
+		{UserID: 84, Role: TransactionParticipantRecipient},
+	}
+	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event, participants); err != nil {
 		t.Fatalf("create transaction with event: %v", err)
 	}
-	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event); err != nil {
+	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event, []TransactionParticipant{participants[1], participants[0]}); err != nil {
 		t.Fatalf("replay transaction with event: %v", err)
 	}
-	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", TerminalID: "terminal-mismatch"}, event); !errors.Is(err, ErrDuplicateTransaction) {
+	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", PAN: "9222081700009999"}, event, participants[:1]); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("mismatched participant replay error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	if err := storeSvc.CreateTransactionWithEvent(ctx, tenantID, ebs_fields.EBSResponse{UUID: "tx-1", TerminalID: "terminal-mismatch"}, event, participants); !errors.Is(err, ErrDuplicateTransaction) {
 		t.Fatalf("mismatched transaction replay error = %v, want %v", err, ErrDuplicateTransaction)
 	}
 
@@ -54,6 +61,13 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	if transactions != 1 {
 		t.Fatalf("transactions = %d, want 1", transactions)
 	}
+	var storedParticipantCount int
+	if err := db.DB.GetContext(ctx, &storedParticipantCount, db.DB.Rebind(`SELECT COUNT(*) FROM transaction_participants WHERE tenant_id = ?`), tenantID); err != nil {
+		t.Fatalf("count participants: %v", err)
+	}
+	if storedParticipantCount != 2 {
+		t.Fatalf("participants = %d, want 2", storedParticipantCount)
+	}
 	if err := storeSvc.MarkTransactionEventPublished(ctx, events[0].ID); err != nil {
 		t.Fatalf("mark published: %v", err)
 	}
@@ -72,14 +86,23 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 func TestStoreCreateTransactionWithEventRejectsMissingInputs(t *testing.T) {
 	storeSvc := &Store{}
 	event := TransactionEventCreate{Topic: "topic", EventKey: "key", EventType: "type", Payload: []byte(`{}`)}
-	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "", ebs_fields.EBSResponse{}, event); !errors.Is(err, ErrMissingTenantID) {
+	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "", ebs_fields.EBSResponse{}, event, nil); !errors.Is(err, ErrMissingTenantID) {
 		t.Fatalf("missing tenant error = %v, want %v", err, ErrMissingTenantID)
 	}
-	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{}, event); !errors.Is(err, ErrMissingUUID) {
+	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{}, event, nil); !errors.Is(err, ErrMissingUUID) {
 		t.Fatalf("missing transaction uuid error = %v, want %v", err, ErrMissingUUID)
 	}
-	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{UUID: "tx-1"}, TransactionEventCreate{}); !errors.Is(err, ErrMissingEventTopic) {
+	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{UUID: "tx-1"}, TransactionEventCreate{}, nil); !errors.Is(err, ErrMissingEventTopic) {
 		t.Fatalf("missing topic error = %v, want %v", err, ErrMissingEventTopic)
+	}
+	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{UUID: "tx-1"}, event, []TransactionParticipant{{UserID: 0, Role: TransactionParticipantActor}}); !errors.Is(err, ErrInvalidUserID) {
+		t.Fatalf("invalid participant error = %v, want %v", err, ErrInvalidUserID)
+	}
+	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{UUID: "tx-1"}, event, []TransactionParticipant{{UserID: 42, Role: TransactionParticipantActor}, {UserID: 42, Role: TransactionParticipantActor}}); !errors.Is(err, ErrDuplicateParticipant) {
+		t.Fatalf("duplicate participant error = %v, want %v", err, ErrDuplicateParticipant)
+	}
+	if err := storeSvc.CreateTransactionWithEvent(context.Background(), "tenant-a", ebs_fields.EBSResponse{UUID: "tx-1"}, event, []TransactionParticipant{{UserID: 42, Role: "viewer"}}); !errors.Is(err, ErrInvalidParticipantRole) {
+		t.Fatalf("invalid participant role error = %v, want %v", err, ErrInvalidParticipantRole)
 	}
 	if _, err := storeSvc.ClaimPendingTransactionEvents(context.Background(), 0); !errors.Is(err, ErrMissingData) {
 		t.Fatalf("invalid claim limit error = %v, want %v", err, ErrMissingData)

@@ -102,7 +102,7 @@ func TestService_RegisterWithCardUsesEBSIdentityAndCardVaultScopes(t *testing.T)
 		},
 	}
 
-	err := service.RegisterWithCard(context.Background(), tenantID, ebs_fields.CacheCards{
+	err := service.RegisterWithCard(noConsumerTransactionContext(), tenantID, ebs_fields.CacheCards{
 		Pan:       "23232323",
 		Expiry:    "2901",
 		Mobile:    "0912141660",

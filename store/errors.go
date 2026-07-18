@@ -37,6 +37,8 @@ var (
 	ErrInvalidPaymentTokenStatus = errors.New("invalid_payment_token_status")
 	ErrDuplicateAuthAccount      = errors.New("duplicate auth account")
 	ErrDuplicateTransaction      = errors.New("duplicate transaction")
+	ErrDuplicateParticipant      = errors.New("duplicate transaction participant")
+	ErrInvalidParticipantRole    = errors.New("invalid transaction participant role")
 	ErrInvalidCardID             = errors.New("invalid card_id")
 	ErrInvalidUserColumn         = errors.New("invalid user column")
 	ErrMissingDataKey            = errors.New("missing data_key")

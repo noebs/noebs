@@ -89,3 +89,39 @@ func TestCompleteRegistrationAppliesMountedConfigBeforeValidation(t *testing.T) 
 		t.Fatalf("code = %q, want %q", payload["code"], consumer.ErrMissingPassword.Error())
 	}
 }
+
+func TestAuthenticatedEBSRequiresGatewayUserIdentity(t *testing.T) {
+	var called bool
+	app := fiber.New()
+	app.Post("/", authenticatedEBS(func(c *fiber.Ctx) error {
+		called = true
+		return c.SendStatus(http.StatusNoContent)
+	}))
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+	if err != nil {
+		t.Fatalf("request without user identity: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized || called {
+		t.Fatalf("missing identity status/called = %d/%v, want %d/false", resp.StatusCode, called, http.StatusUnauthorized)
+	}
+
+	app = fiber.New()
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("user_id", int64(42))
+		return c.Next()
+	})
+	app.Post("/", authenticatedEBS(func(c *fiber.Ctx) error {
+		called = true
+		return c.SendStatus(http.StatusNoContent)
+	}))
+	resp, err = app.Test(httptest.NewRequest(http.MethodPost, "/", nil))
+	if err != nil {
+		t.Fatalf("request with user identity: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent || !called {
+		t.Fatalf("authenticated status/called = %d/%v, want %d/true", resp.StatusCode, called, http.StatusNoContent)
+	}
+}

@@ -100,7 +100,7 @@ func TestCompleteRegistrationCallsEBSThenIdentityAndCardVaultCommands(t *testing
 			},
 		},
 	}
-	res, err := service.CompleteRegistration(context.Background(), tenantID, ebs_fields.ConsumerCompleteRegistrationFields{
+	res, err := service.CompleteRegistration(noConsumerTransactionContext(), tenantID, ebs_fields.ConsumerCompleteRegistrationFields{
 		OTP:              "123456",
 		IPIN:             "1111",
 		OriginalTranUUID: "original-uuid",

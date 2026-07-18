@@ -33,11 +33,15 @@ func (s *Service) recordTransaction(ctx context.Context, tenantID string, res eb
 	if err != nil {
 		return err
 	}
+	participants, err := transactionParticipantsForRecord(ctx)
+	if err != nil {
+		return err
+	}
 	event, err := eventing.NewTransactionRecordedStoreEvent(s.NoebsConfig.KafkaTransactionTopic, tenantID, res)
 	if err != nil {
 		return err
 	}
-	if err := s.Store.CreateTransactionWithEvent(ctx, tenantID, res, event); err != nil {
+	if err := s.Store.CreateTransactionWithEvent(ctx, tenantID, res, event, participants); err != nil {
 		return err
 	}
 	return nil

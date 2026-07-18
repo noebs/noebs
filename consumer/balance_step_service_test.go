@@ -93,7 +93,7 @@ func TestBalanceStepUsesCardVaultEBSAndIdentityScopes(t *testing.T) {
 		},
 	}
 
-	credential, err := service.BalanceStep(context.Background(), tenantID, BalanceStepRequest{
+	credential, err := service.BalanceStep(noConsumerTransactionContext(), tenantID, BalanceStepRequest{
 		ConsumerBalanceFields: ebs_fields.ConsumerBalanceFields{
 			ConsumerCardHolderFields: ebs_fields.ConsumerCardHolderFields{
 				Pan: "23232323",

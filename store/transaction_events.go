@@ -30,7 +30,7 @@ type TransactionEvent struct {
 	UpdatedAt       time.Time       `db:"updated_at"`
 }
 
-func (s *Store) CreateTransactionWithEvent(ctx context.Context, tenantID string, res ebs_fields.EBSResponse, event TransactionEventCreate) error {
+func (s *Store) CreateTransactionWithEvent(ctx context.Context, tenantID string, res ebs_fields.EBSResponse, event TransactionEventCreate, participants []TransactionParticipant) error {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return err
@@ -39,6 +39,9 @@ func (s *Store) CreateTransactionWithEvent(ctx context.Context, tenantID string,
 		return ErrMissingUUID
 	}
 	if err := validateTransactionEventCreate(event); err != nil {
+		return err
+	}
+	if err := validateTransactionParticipants(participants); err != nil {
 		return err
 	}
 	res.MaskPAN()
@@ -63,7 +66,13 @@ func (s *Store) CreateTransactionWithEvent(ctx context.Context, tenantID string,
 		return err
 	}
 	if existingTransaction {
-		return s.validateExistingTransactionEvent(ctx, tx, transactionID, tenantID, event)
+		if err := s.validateExistingTransactionEvent(ctx, tx, transactionID, tenantID, event); err != nil {
+			return err
+		}
+		return s.validateExistingTransactionParticipants(ctx, tx, tenantID, transactionID, participants)
+	}
+	if err := s.insertTransactionParticipants(ctx, tx, tenantID, transactionID, participants, now); err != nil {
+		return err
 	}
 	stmt := s.DB.Rebind(`INSERT INTO transaction_events(
 		transaction_id, tenant_id, topic, event_key, event_type, payload, publish_attempts, created_at, updated_at

@@ -348,7 +348,7 @@ func (s *Service) UpdateKYC(ctx context.Context, tenantID, authenticatedMobile s
 	return s.Store.UpdateKYC(ctx, tenantID, kyc, &passport)
 }
 
-func (s *Service) GetTransactionByUUIDForUser(ctx context.Context, tenantID string, userID int64, authenticatedMobile, uuid string) (*ebs_fields.EBSResponse, error) {
+func (s *Service) GetTransactionByUUIDForUser(ctx context.Context, tenantID string, userID int64, uuid string) (*ebs_fields.EBSResponse, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
@@ -359,22 +359,11 @@ func (s *Service) GetTransactionByUUIDForUser(ctx context.Context, tenantID stri
 	if userID <= 0 {
 		return nil, store.ErrInvalidUserID
 	}
-	authenticatedMobile = strings.TrimSpace(authenticatedMobile)
-	if authenticatedMobile == "" {
-		return nil, ErrMissingMobile
-	}
 	uuid = strings.TrimSpace(uuid)
 	if uuid == "" {
 		return nil, store.ErrMissingUUID
 	}
-	cards, err := s.ListMaskedCardsInCardVault(ctx, tenantID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if len(cards.MaskedPANs) == 0 {
-		return nil, ErrTransactionNotFound
-	}
-	transaction, err := s.Store.GetTransactionByUUIDForMaskedPANs(ctx, tenantID, uuid, cards.MaskedPANs)
+	transaction, err := s.Store.GetTransactionByUUIDForParticipantUserID(ctx, tenantID, userID, uuid)
 	if store.ErrNotFound(err) {
 		return nil, ErrTransactionNotFound
 	}

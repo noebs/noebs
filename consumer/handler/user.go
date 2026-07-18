@@ -263,9 +263,8 @@ func (h *Handler) KYC(c *fiber.Ctx) error {
 }
 
 func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
-	mobile := strings.TrimSpace(getMobile(c))
 	userID := getUserID(c)
-	if mobile == "" || userID <= 0 {
+	if userID <= 0 {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "unauthorized", "message": "missing authenticated user identity"})
 	}
 	id := strings.TrimSpace(c.Query("uuid"))
@@ -273,7 +272,7 @@ func (h *Handler) TransactionByUUID(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	response, err := h.Service.GetTransactionByUUIDForUser(c.UserContext(), tenantID, userID, mobile, id)
+	response, err := h.Service.GetTransactionByUUIDForUser(c.UserContext(), tenantID, userID, id)
 	if err != nil {
 		if errors.Is(err, consumer.ErrTransactionNotFound) {
 			return jsonResponse(c, http.StatusNotFound, fiber.Map{"code": "not_found", "message": consumer.ErrTransactionNotFound.Error()})
