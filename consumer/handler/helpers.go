@@ -114,7 +114,8 @@ func statusForError(err error) int {
 	case errors.Is(err, store.ErrCardEnrollmentConflict),
 		errors.Is(err, store.ErrEnrollmentIntentOpen),
 		errors.Is(err, store.ErrEnrollmentIntentConsumed),
-		errors.Is(err, store.ErrEnrollmentClaimMismatch):
+		errors.Is(err, store.ErrEnrollmentClaimMismatch),
+		errors.Is(err, store.ErrFundedClaimMismatch):
 		return http.StatusConflict
 	case errors.Is(err, store.ErrEnrollmentIntentExpired),
 		errors.Is(err, consumer.ErrUpgradeRequired):
@@ -141,6 +142,9 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrInvalidCardExpiry),
 		errors.Is(err, store.ErrMissingRailUUID),
 		errors.Is(err, store.ErrInvalidRailUUID),
+		errors.Is(err, store.ErrInvalidFundedPurpose),
+		errors.Is(err, store.ErrInvalidFundedBodyClaim),
+		errors.Is(err, store.ErrInvalidRailTranDateTime),
 		errors.Is(err, store.ErrMissingData),
 		errors.Is(err, store.ErrMissingLanguage),
 		errors.Is(err, store.ErrMissingPassword),
@@ -164,6 +168,7 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrMissingIPINBlock),
 		errors.Is(err, consumer.ErrInvalidIPINBlock),
 		errors.Is(err, consumer.ErrEnrollmentRailUUIDMismatch),
+		errors.Is(err, consumer.ErrOperationRailUUIDMismatch),
 		errors.Is(err, consumer.ErrPasswordInvalid),
 		errors.Is(err, consumer.ErrInvalidCard),
 		errors.Is(err, consumer.ErrUserAlreadyExists):
@@ -186,6 +191,10 @@ func statusForError(err error) int {
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrEnrollmentOutcomeUnknown):
 		return http.StatusBadGateway
+	case errors.Is(err, consumer.ErrFundedOutcomeUnknown),
+		errors.Is(err, consumer.ErrFundedRailRejected),
+		errors.Is(err, consumer.ErrUnsafeBalanceResponse):
+		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
 		errors.Is(err, consumer.ErrMissingAuth),
@@ -200,6 +209,7 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrMissingDataKey),
 		errors.Is(err, consumer.ErrMissingEnrollmentPublicKey),
 		errors.Is(err, consumer.ErrInvalidEnrollmentPublicKey),
+		errors.Is(err, consumer.ErrFundedOperationsUnavailable),
 		errors.Is(err, apperr.ErrUnavailable):
 		return http.StatusServiceUnavailable
 	default:

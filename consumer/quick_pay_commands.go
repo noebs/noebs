@@ -391,6 +391,14 @@ func errorForServiceCommandCode(code string) error {
 		return store.ErrMissingRailUUID
 	case store.ErrInvalidRailUUID.Error():
 		return store.ErrInvalidRailUUID
+	case store.ErrInvalidFundedPurpose.Error():
+		return store.ErrInvalidFundedPurpose
+	case store.ErrInvalidFundedBodyClaim.Error():
+		return store.ErrInvalidFundedBodyClaim
+	case store.ErrFundedClaimMismatch.Error():
+		return store.ErrFundedClaimMismatch
+	case store.ErrInvalidRailTranDateTime.Error():
+		return store.ErrInvalidRailTranDateTime
 	default:
 		return nil
 	}

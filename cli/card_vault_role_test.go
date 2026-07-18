@@ -264,3 +264,29 @@ func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestCardVaultFundedOperationClaimRequiresAdminIdentity(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	route := GetMainEngine()
+	const path = "/internal/card-vault/funded-operations/claim"
+
+	unauthorized := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+	resp, err := route.Test(unauthorized, routeTestTimeout)
+	if err != nil {
+		t.Fatalf("unauthorized claim: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+
+	authorized := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+	setGatewayAdminTenantIdentityHeaders(authorized, "test-tenant")
+	resp, err = route.Test(authorized, routeTestTimeout)
+	if err != nil {
+		t.Fatalf("authorized claim: %v", err)
+	}
+	defer resp.Body.Close()
+	assertFiberRouteRegistered(t, resp, http.MethodPost, path)
+}

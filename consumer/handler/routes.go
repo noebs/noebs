@@ -20,7 +20,7 @@ func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Post("/cards/enrollment-intents/:enrollment_id/confirm", h.ConfirmOpaqueCardEnrollment)
 
 	// Card and account operations
-	router.Post("/balance", h.LegacyCardUpgradeRequired)
+	router.Post("/balance", authenticatedEBS(h.OpaqueBalance))
 	router.Post("/status", authenticatedEBS(h.TransactionStatus))
 	router.Post("/is_alive", authenticatedEBS(h.IsAlive))
 	router.Post("/bill_payment", h.LegacyCardUpgradeRequired)
@@ -111,8 +111,7 @@ func RegisterCardVaultInternalRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
-	// Funded rail resolution is intentionally absent until each request is
-	// authorized by a durable, one-use operation claim.
+	router.Post("/funded-operations/claim", h.ClaimFundedCardOperationInternal)
 }
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
