@@ -713,6 +713,9 @@ func initConfig() {
 	if err := initWorkloadAuth(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error initializing workload authentication: %v", err)
 	}
+	if err := initOIDCVerifier(role, noebsConfig); err != nil {
+		logrusLogger.Fatalf("error initializing OIDC authentication: %v", err)
+	}
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{
