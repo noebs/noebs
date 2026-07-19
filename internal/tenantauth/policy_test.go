@@ -69,6 +69,20 @@ func TestAuthorizeRequiresExplicitTenantAndExactRole(t *testing.T) {
 	}
 }
 
+func TestPolicyCopiesConfiguredRoles(t *testing.T) {
+	allowed := []Role{RoleUser}
+	policy, err := NewPolicy(allowed...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed[0] = RoleTenantAdmin
+
+	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleUser}}, false)
+	if _, err := policy.Authorize(claims, "tenant-a"); err != nil {
+		t.Fatalf("policy changed with caller-owned slice: %v", err)
+	}
+}
+
 func TestClaimsCopyMemberships(t *testing.T) {
 	organization, err := NewOrganization("org-a", []Role{RoleUser})
 	if err != nil {

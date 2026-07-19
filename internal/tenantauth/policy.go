@@ -18,6 +18,26 @@ type Principal struct {
 	platformAdmin bool
 }
 
+// Policy is an immutable any-of role policy. Roles are validated once when the
+// owning route or middleware is constructed.
+type Policy struct {
+	allowed []Role
+}
+
+func NewPolicy(allowed ...Role) (Policy, error) {
+	if len(allowed) == 0 {
+		return Policy{}, ErrInvalidPolicy
+	}
+	copyAllowed := make([]Role, len(allowed))
+	copy(copyAllowed, allowed)
+	for _, role := range copyAllowed {
+		if !validAuthorizationRole(role) {
+			return Policy{}, ErrInvalidPolicy
+		}
+	}
+	return Policy{allowed: copyAllowed}, nil
+}
+
 func SelectTenant(claims Claims, activeTenant string) (Principal, error) {
 	if activeTenant == "" {
 		return Principal{}, ErrMissingTenant
@@ -35,19 +55,22 @@ func SelectTenant(claims Claims, activeTenant string) (Principal, error) {
 }
 
 func Authorize(claims Claims, activeTenant string, allowed ...Role) (Principal, error) {
+	policy, err := NewPolicy(allowed...)
+	if err != nil {
+		return Principal{}, err
+	}
+	return policy.Authorize(claims, activeTenant)
+}
+
+func (p Policy) Authorize(claims Claims, activeTenant string) (Principal, error) {
+	if len(p.allowed) == 0 {
+		return Principal{}, ErrInvalidPolicy
+	}
 	principal, err := SelectTenant(claims, activeTenant)
 	if err != nil {
 		return Principal{}, err
 	}
-	if len(allowed) == 0 {
-		return Principal{}, ErrInvalidPolicy
-	}
-	for _, role := range allowed {
-		if !validAuthorizationRole(role) {
-			return Principal{}, ErrInvalidPolicy
-		}
-	}
-	for _, role := range allowed {
+	for _, role := range p.allowed {
 		if principal.HasRole(role) {
 			return principal, nil
 		}
