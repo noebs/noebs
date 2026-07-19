@@ -18,6 +18,7 @@ type ActiveTenantSelector func(*fiber.Ctx) (string, error)
 type OIDCAuthConfig struct {
 	Verifier           *oidcauth.Verifier
 	SelectTenant       ActiveTenantSelector
+	AllowedClients     []string
 	AllowedRoles       []tenantauth.Role
 	RequiredPermission tenantauth.Permission
 }
@@ -28,6 +29,19 @@ var principalLocalKey oidcPrincipalLocalKey
 
 func NewOIDCAuthMiddleware(config OIDCAuthConfig) (fiber.Handler, error) {
 	if config.Verifier == nil || config.SelectTenant == nil {
+		return nil, ErrInvalidOIDCAuthConfiguration
+	}
+	allowedClients := make(map[string]struct{}, len(config.AllowedClients))
+	for _, clientID := range config.AllowedClients {
+		if clientID == "" {
+			return nil, ErrInvalidOIDCAuthConfiguration
+		}
+		if _, duplicate := allowedClients[clientID]; duplicate {
+			return nil, ErrInvalidOIDCAuthConfiguration
+		}
+		allowedClients[clientID] = struct{}{}
+	}
+	if len(allowedClients) == 0 {
 		return nil, ErrInvalidOIDCAuthConfiguration
 	}
 	var policy tenantauth.Policy
@@ -48,6 +62,9 @@ func NewOIDCAuthMiddleware(config OIDCAuthConfig) (fiber.Handler, error) {
 		claims, err := config.Verifier.VerifyBearer(c.UserContext(), string(authorizationValues[0]))
 		if err != nil {
 			return oidcAuthenticationFailure(c)
+		}
+		if _, allowed := allowedClients[claims.Identity().AuthorizedParty]; !allowed {
+			return oidcAuthorizationFailure(c)
 		}
 		activeTenant, err := config.SelectTenant(c)
 		if err != nil {

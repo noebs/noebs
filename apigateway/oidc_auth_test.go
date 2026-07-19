@@ -36,9 +36,10 @@ var (
 func TestNewOIDCAuthMiddlewareRejectsInvalidConfiguration(t *testing.T) {
 	verifier, _ := gatewayOIDCTestVerifier(t)
 	valid := OIDCAuthConfig{
-		Verifier:     verifier,
-		SelectTenant: gatewayOIDCTestTenantSelector,
-		AllowedRoles: []tenantauth.Role{tenantauth.RoleUser},
+		Verifier:       verifier,
+		SelectTenant:   gatewayOIDCTestTenantSelector,
+		AllowedClients: []string{gatewayOIDCTestClient},
+		AllowedRoles:   []tenantauth.Role{tenantauth.RoleUser},
 	}
 	tests := []struct {
 		name   string
@@ -46,6 +47,9 @@ func TestNewOIDCAuthMiddlewareRejectsInvalidConfiguration(t *testing.T) {
 	}{
 		{"verifier", func(c *OIDCAuthConfig) { c.Verifier = nil }},
 		{"tenant selector", func(c *OIDCAuthConfig) { c.SelectTenant = nil }},
+		{"allowed clients", func(c *OIDCAuthConfig) { c.AllowedClients = nil }},
+		{"empty client", func(c *OIDCAuthConfig) { c.AllowedClients = []string{""} }},
+		{"duplicate client", func(c *OIDCAuthConfig) { c.AllowedClients = []string{gatewayOIDCTestClient, gatewayOIDCTestClient} }},
 		{"allowed roles", func(c *OIDCAuthConfig) { c.AllowedRoles = nil }},
 		{"invalid role", func(c *OIDCAuthConfig) { c.AllowedRoles = []tenantauth.Role{"administrator"} }},
 		{"invalid permission", func(c *OIDCAuthConfig) { c.RequiredPermission = "wallet:all" }},
@@ -66,6 +70,7 @@ func TestOIDCAuthMiddlewareRequiresPermissionFromSelectedOrganization(t *testing
 	middleware, err := NewOIDCAuthMiddleware(OIDCAuthConfig{
 		Verifier:           verifier,
 		SelectTenant:       gatewayOIDCTestTenantSelector,
+		AllowedClients:     []string{gatewayOIDCTestClient},
 		AllowedRoles:       []tenantauth.Role{tenantauth.RoleTenantAdmin},
 		RequiredPermission: tenantauth.PermissionWalletWorkflowApprove,
 	})
@@ -99,6 +104,31 @@ func TestOIDCAuthMiddlewareRequiresPermissionFromSelectedOrganization(t *testing
 		}
 		response.Body.Close()
 	}
+}
+
+func TestOIDCAuthMiddlewareRejectsAuthorizedPartyOutsideRoute(t *testing.T) {
+	verifier, key := gatewayOIDCTestVerifier(t)
+	middleware, err := NewOIDCAuthMiddleware(OIDCAuthConfig{
+		Verifier:       verifier,
+		SelectTenant:   gatewayOIDCTestTenantSelector,
+		AllowedClients: []string{"noebs-backoffice"},
+		AllowedRoles:   []tenantauth.Role{tenantauth.RoleUser},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app.Get("/", middleware, func(c *fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
+	req := httptestOIDCRequest(gatewayOIDCTestToken(t, key, gatewayOIDCTestOrganizations(
+		[]string{"user"}, []string{"user"},
+	), nil))
+	req.Header.Set(activeTenantHeader, "tenant-a")
+	response, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	assertOIDCFailure(t, response, http.StatusForbidden, "authorization_denied", req.Header.Get(fiber.HeaderAuthorization))
 }
 
 func TestOIDCAuthMiddlewareStoresTypedTenantPrincipal(t *testing.T) {
@@ -248,9 +278,10 @@ func TestOIDCAuthMiddlewareRequiresSelectorResultToMatchMembership(t *testing.T)
 func gatewayOIDCTestMiddleware(tb testing.TB, verifier *oidcauth.Verifier, roles ...tenantauth.Role) fiber.Handler {
 	tb.Helper()
 	middleware, err := NewOIDCAuthMiddleware(OIDCAuthConfig{
-		Verifier:     verifier,
-		SelectTenant: gatewayOIDCTestTenantSelector,
-		AllowedRoles: roles,
+		Verifier:       verifier,
+		SelectTenant:   gatewayOIDCTestTenantSelector,
+		AllowedClients: []string{gatewayOIDCTestClient},
+		AllowedRoles:   roles,
 	})
 	if err != nil {
 		tb.Fatal(err)
