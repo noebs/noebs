@@ -1,0 +1,9 @@
+disable:
+  - traefik
+  - servicelb
+write-kubeconfig-mode: "0600"
+tls-san:
+  - 100.102.164.34
+  - vmi2993153.tail09832.ts.net
+secrets-encryption: true
+secrets-encryption-provider: secretbox

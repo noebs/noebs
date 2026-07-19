@@ -102,6 +102,22 @@ authority, or request-supplied audit actor fallback.
 - The live K3s cluster-admin kubeconfig, OpenTofu state and backup, tfvars, and
   saved plan files are now mode `0600`; the node remained Ready after the
   change. Secret encryption and credential rotation are still outstanding.
+- The node runs K3s v1.35.4+k3s1, new enough for the supported
+  existing-cluster encryption transition. Its install-time systemd arguments
+  still specify `write-kubeconfig-mode=644`, so a restart would undo the manual
+  permission fix. Repository-owned K3s config now replaces those arguments,
+  keeps mode `0600`, and selects the `secretbox` provider; it has not yet been
+  installed or activated.
+
+### Server test evidence
+
+- Commit `2d4d508` was checked out as an isolated detached worktree on
+  `100.102.164.34` and tested with Go 1.26.5. CLI tests and race-enabled OIDC,
+  tenant-policy, and gateway tests passed.
+- On the server's four-vCPU test allocation, warm token verification measured
+  about 92.6 microseconds per operation and tenant policy about 121 nanoseconds
+  with zero policy allocations. Two Ryuk helpers left by the test process were
+  removed; no Testcontainers resources remain.
 
 ## Work streams
 
