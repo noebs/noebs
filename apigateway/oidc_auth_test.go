@@ -48,6 +48,7 @@ func TestNewOIDCAuthMiddlewareRejectsInvalidConfiguration(t *testing.T) {
 		{"tenant selector", func(c *OIDCAuthConfig) { c.SelectTenant = nil }},
 		{"allowed roles", func(c *OIDCAuthConfig) { c.AllowedRoles = nil }},
 		{"invalid role", func(c *OIDCAuthConfig) { c.AllowedRoles = []tenantauth.Role{"administrator"} }},
+		{"invalid permission", func(c *OIDCAuthConfig) { c.RequiredPermission = "wallet:all" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -57,6 +58,46 @@ func TestNewOIDCAuthMiddlewareRejectsInvalidConfiguration(t *testing.T) {
 				t.Fatalf("error = %v, want invalid configuration", err)
 			}
 		})
+	}
+}
+
+func TestOIDCAuthMiddlewareRequiresPermissionFromSelectedOrganization(t *testing.T) {
+	verifier, key := gatewayOIDCTestVerifier(t)
+	middleware, err := NewOIDCAuthMiddleware(OIDCAuthConfig{
+		Verifier:           verifier,
+		SelectTenant:       gatewayOIDCTestTenantSelector,
+		AllowedRoles:       []tenantauth.Role{tenantauth.RoleTenantAdmin},
+		RequiredPermission: tenantauth.PermissionWalletWorkflowApprove,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	app.Post("/", middleware, func(c *fiber.Ctx) error { return c.SendStatus(http.StatusNoContent) })
+	token := gatewayOIDCTestToken(t, key, gatewayOIDCTestOrganizations(
+		[]string{"tenant-admin", "wallet:workflow:approve"},
+		[]string{"tenant-admin", "wallet:workflow:reject"},
+	), nil)
+	for _, test := range []struct {
+		tenant string
+		status int
+	}{
+		{tenant: "tenant-a", status: http.StatusNoContent},
+		{tenant: "tenant-b", status: http.StatusForbidden},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "http://gateway.test/", nil)
+		req.Header.Set(fiber.HeaderAuthorization, "Bearer "+token)
+		req.Header.Set(activeTenantHeader, test.tenant)
+		response, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != test.status {
+			body, _ := io.ReadAll(response.Body)
+			response.Body.Close()
+			t.Fatalf("tenant %s status = %d, want %d: %s", test.tenant, response.StatusCode, test.status, body)
+		}
+		response.Body.Close()
 	}
 }
 

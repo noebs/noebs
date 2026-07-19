@@ -16,9 +16,10 @@ var ErrInvalidOIDCAuthConfiguration = errors.New("invalid API gateway OIDC authe
 type ActiveTenantSelector func(*fiber.Ctx) (string, error)
 
 type OIDCAuthConfig struct {
-	Verifier     *oidcauth.Verifier
-	SelectTenant ActiveTenantSelector
-	AllowedRoles []tenantauth.Role
+	Verifier           *oidcauth.Verifier
+	SelectTenant       ActiveTenantSelector
+	AllowedRoles       []tenantauth.Role
+	RequiredPermission tenantauth.Permission
 }
 
 type oidcPrincipalLocalKey struct{}
@@ -29,7 +30,13 @@ func NewOIDCAuthMiddleware(config OIDCAuthConfig) (fiber.Handler, error) {
 	if config.Verifier == nil || config.SelectTenant == nil {
 		return nil, ErrInvalidOIDCAuthConfiguration
 	}
-	policy, err := tenantauth.NewPolicy(config.AllowedRoles...)
+	var policy tenantauth.Policy
+	var err error
+	if config.RequiredPermission == "" {
+		policy, err = tenantauth.NewPolicy(config.AllowedRoles...)
+	} else {
+		policy, err = tenantauth.NewPermissionPolicy(config.RequiredPermission, config.AllowedRoles...)
+	}
 	if err != nil {
 		return nil, ErrInvalidOIDCAuthConfiguration
 	}
