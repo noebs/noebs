@@ -43,6 +43,16 @@ authority, or request-supplied audit actor fallback.
 - Back-office reporting requires `backoffice` or stronger membership. Wallet
   mutation and approval routes require `tenant-admin` or `platform-admin` plus
   exact route permissions. Actor identity is always the verified subject.
+- Browser back-office authentication is an in-process API-gateway BFF, not an
+  identity-aware proxy. It uses Authorization Code with PKCE S256, a
+  confidential Keycloak client, one-time flow state, and opaque shared
+  PostgreSQL sessions; OAuth tokens never enter the browser or downstream
+  services.
+- Back-office tenant context is part of the canonical path
+  `/backoffice/t/:tenant/...` and is re-authorized against the current token on
+  every request. There is no session-global active tenant and no tenant query,
+  form, header, or default fallback. Unsafe forms also require a per-session
+  synchronizer token and same-origin evidence.
 - Keycloak realm, clients, scopes/mappers, organizations, groups, and role
   mappings are reconciled idempotently from repository-owned desired state.
   Startup import alone is insufficient because it skips an existing realm.
@@ -127,6 +137,7 @@ authority, or request-supplied audit actor fallback.
 | Gateway/runtime cutover | main agent | pending | no static/HS auth routes; route policy matrix passes |
 | Keycloak desired state and reconciler | IaC reviewer | pending | empty-state and idempotent reconcile tests |
 | Principal projection and actor propagation | auth reviewer | pending | `(issuer, sub)` uniqueness and spoof tests |
+| Back-office OAuth BFF | quality reviewer | active | flow replay, refresh locking, CSRF, tenant-tab isolation, and hot-path benchmark |
 | Host hardening and release path | main agent | active | local build, immutable server deploy, live negative/positive smoke |
 
 ## Release gates
