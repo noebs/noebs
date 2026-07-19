@@ -5,11 +5,13 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/adonese/noebs/internal/transportauth"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,7 +66,10 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverTLS, err := prepared.services[serviceRoleIdentityAuth].ServerTLSConfig(string(serviceRoleIdentityAuth))
+	serverTLS, err := prepared.services[serviceRoleWalletLedger].ServerTLSConfig(
+		string(serviceRoleWalletLedger),
+		internalTransportServerPeers(serviceRoleWalletLedger)...,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +80,11 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 	server.StartTLS()
 	defer server.Close()
 
-	clientTLS, err := prepared.services[serviceRoleAPIGateway].ClientTLSConfig(string(serviceRoleAPIGateway))
+	clientTLS, err := prepared.services[serviceRoleWalletAPI].ClientTLSConfig(string(serviceRoleWalletAPI))
 	if err != nil {
 		t.Fatal(err)
 	}
-	clientTLS.ServerName = string(serviceRoleIdentityAuth)
+	clientTLS.ServerName = string(serviceRoleWalletLedger)
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}}
 	response, err := client.Get(server.URL)
 	if err != nil {
@@ -90,12 +95,41 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 		t.Fatalf("mTLS response = %s, want 204", response.Status)
 	}
 
+	otherServiceTLS, err := prepared.services[serviceRoleIdentityAuth].ClientTLSConfig(string(serviceRoleIdentityAuth))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherServiceTLS.ServerName = string(serviceRoleWalletLedger)
+	otherService := &http.Client{Transport: &http.Transport{TLSClientConfig: otherServiceTLS}}
+	if response, err := otherService.Get(server.URL); err == nil {
+		response.Body.Close()
+		t.Fatal("wallet-ledger accepted a CA-issued certificate for identity-auth")
+	}
+
 	unauthenticatedTLS := clientTLS.Clone()
 	unauthenticatedTLS.Certificates = nil
 	unauthenticated := &http.Client{Transport: &http.Transport{TLSClientConfig: unauthenticatedTLS}}
 	if response, err := unauthenticated.Get(server.URL); err == nil {
 		response.Body.Close()
 		t.Fatal("server accepted a client without a workload certificate")
+	}
+}
+
+func TestWalletLedgerTransportAllowsOnlyWalletAPI(t *testing.T) {
+	peers := internalTransportServerPeers(serviceRoleWalletLedger)
+	if len(peers) != 1 || peers[0] != string(serviceRoleWalletAPI) {
+		t.Fatalf("wallet-ledger peers = %v, want [wallet-api]", peers)
+	}
+}
+
+func TestInternalTransportServerRequiresPeerAllowlist(t *testing.T) {
+	prepared, err := prepareInternalTransportRelease(kubernetesReleaseInternalTransportInputs{}, rand.Reader, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = prepared.services[serviceRoleWalletLedger].ServerTLSConfig(string(serviceRoleWalletLedger))
+	if !errors.Is(err, transportauth.ErrInvalidConfiguration) {
+		t.Fatalf("empty server peer allowlist error = %v, want ErrInvalidConfiguration", err)
 	}
 }
 

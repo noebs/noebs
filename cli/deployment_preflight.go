@@ -203,7 +203,7 @@ func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt d
 		Certificate:   values.PostgresCertificate,
 		PrivateKey:    values.PostgresPrivateKey,
 	}
-	if _, err := postgres.ServerTLSConfig("postgres"); err != nil {
+	if err := postgres.ValidateIdentity("postgres"); err != nil {
 		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Postgres transport identity: %w", err)
 	}
 	values.CACertificate = postgres.CACertificate

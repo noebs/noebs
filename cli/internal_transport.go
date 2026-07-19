@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -55,7 +56,7 @@ func validateInternalTransportRuntimeConfig(role serviceRole, cfg ebs_fields.Noe
 		return fmt.Errorf("noebs.internal_transport client: %w", err)
 	}
 	if roleReceivesSignedHTTP(role) || role == serviceRoleWalletLedger {
-		if _, err := cfg.InternalTransport.ServerTLSConfig(string(role)); err != nil {
+		if _, err := cfg.InternalTransport.ServerTLSConfig(string(role), internalTransportServerPeers(role)...); err != nil {
 			return fmt.Errorf("noebs.internal_transport server: %w", err)
 		}
 	}
@@ -74,13 +75,32 @@ func initInternalTransport(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 	}
 	internalTransportClientTLS = clientTLS
 	if roleReceivesSignedHTTP(role) || role == serviceRoleWalletLedger {
-		serverTLS, err := cfg.InternalTransport.ServerTLSConfig(string(role))
+		serverTLS, err := cfg.InternalTransport.ServerTLSConfig(string(role), internalTransportServerPeers(role)...)
 		if err != nil {
 			return err
 		}
 		internalTransportServerTLS = serverTLS
 	}
 	return nil
+}
+
+func internalTransportServerPeers(role serviceRole) []string {
+	if role == serviceRoleWalletLedger {
+		return []string{string(serviceRoleWalletAPI)}
+	}
+	if !roleReceivesSignedHTTP(role) {
+		return nil
+	}
+	callers := expectedWorkloadCallers(role)
+	peers := make([]string, 0, len(callers)+1)
+	for caller := range callers {
+		peers = append(peers, caller)
+	}
+	// HTTP readiness probes connect over loopback with the receiver's own
+	// workload identity.
+	peers = append(peers, string(role))
+	sort.Strings(peers)
+	return peers
 }
 
 func roleUsesInternalTransportIdentity(role serviceRole) bool {

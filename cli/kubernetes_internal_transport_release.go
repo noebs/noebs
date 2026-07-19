@@ -62,7 +62,7 @@ func prepareInternalTransportRelease(inputs kubernetesReleaseInternalTransportIn
 			return preparedInternalTransportRelease{}, err
 		}
 		config := transportauth.Config{CACertificate: caPEM, Certificate: certificate, PrivateKey: privateKey}
-		if _, err := config.ServerTLSConfig(identity); err != nil {
+		if err := config.ValidateIdentity(identity); err != nil {
 			return preparedInternalTransportRelease{}, fmt.Errorf("validate internal transport identity %s: %w", identity, err)
 		}
 		prepared.platform[identity] = config

@@ -11,7 +11,10 @@ import (
 	"strings"
 )
 
-var ErrInvalidConfiguration = errors.New("invalid internal transport configuration")
+var (
+	ErrInvalidConfiguration = errors.New("invalid internal transport configuration")
+	ErrUnauthorizedPeer     = errors.New("unauthorized internal transport peer")
+)
 
 type Config struct {
 	CACertificate string `json:"ca_certificate"`
@@ -35,17 +38,49 @@ func (c Config) ClientTLSConfig(identity string) (*tls.Config, error) {
 	}, nil
 }
 
-func (c Config) ServerTLSConfig(identity string) (*tls.Config, error) {
+func (c Config) ServerTLSConfig(identity string, allowedPeers ...string) (*tls.Config, error) {
 	certificate, roots, _, err := c.material(identity)
 	if err != nil {
 		return nil, err
+	}
+	allowed := make(map[string]struct{}, len(allowedPeers))
+	for _, peer := range allowedPeers {
+		if peer == "" || peer != strings.TrimSpace(peer) {
+			return nil, fmt.Errorf("%w: allowed peer identity", ErrInvalidConfiguration)
+		}
+		allowed[peer] = struct{}{}
+	}
+	if len(allowed) == 0 {
+		return nil, fmt.Errorf("%w: allowed peer identities", ErrInvalidConfiguration)
 	}
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{certificate},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    roots,
+		VerifyConnection: func(state tls.ConnectionState) error {
+			if len(state.VerifiedChains) == 0 || len(state.VerifiedChains[0]) == 0 {
+				return ErrUnauthorizedPeer
+			}
+			peer := state.VerifiedChains[0][0]
+			for _, name := range peer.DNSNames {
+				if _, ok := allowed[name]; ok {
+					return nil
+				}
+			}
+			for _, uri := range peer.URIs {
+				if _, ok := allowed[uri.String()]; ok {
+					return nil
+				}
+			}
+			return ErrUnauthorizedPeer
+		},
 	}, nil
+}
+
+func (c Config) ValidateIdentity(identity string) error {
+	_, _, _, err := c.material(identity)
+	return err
 }
 
 func (c Config) material(identity string) (tls.Certificate, *x509.CertPool, *x509.Certificate, error) {
