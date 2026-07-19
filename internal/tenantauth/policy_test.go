@@ -9,10 +9,10 @@ import (
 var policyTestNow = time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 
 func TestClaimsConstructorsRejectMissingIdentityAndRealmRoleInTenant(t *testing.T) {
-	if _, err := NewOrganization("", []Role{RoleUser}); !errors.Is(err, ErrInvalidClaims) {
+	if _, err := NewOrganization("", []Role{RoleUser}, nil); !errors.Is(err, ErrInvalidClaims) {
 		t.Fatalf("empty organization error = %v, want invalid claims", err)
 	}
-	if _, err := NewOrganization("org-a", []Role{RolePlatformAdmin}); !errors.Is(err, ErrInvalidRole) {
+	if _, err := NewOrganization("org-a", []Role{RolePlatformAdmin}, nil); !errors.Is(err, ErrInvalidRole) {
 		t.Fatalf("tenant platform-admin error = %v, want invalid role", err)
 	}
 	if _, err := NewClaims(Identity{}, nil, false); !errors.Is(err, ErrInvalidClaims) {
@@ -84,7 +84,7 @@ func TestPolicyCopiesConfiguredRoles(t *testing.T) {
 }
 
 func TestClaimsCopyMemberships(t *testing.T) {
-	organization, err := NewOrganization("org-a", []Role{RoleUser})
+	organization, err := NewOrganization("org-a", []Role{RoleUser}, []Permission{PermissionWalletRead})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +103,41 @@ func TestClaimsCopyMemberships(t *testing.T) {
 	roles[0] = RoleTenantAdmin
 	if principal.HasRole(RoleTenantAdmin) || !principal.HasRole(RoleUser) {
 		t.Fatalf("principal roles were mutable: %v", principal.Roles())
+	}
+	permissions := principal.Permissions()
+	permissions[0] = PermissionWalletFeesWrite
+	if principal.HasPermission(PermissionWalletFeesWrite) || !principal.HasPermission(PermissionWalletRead) {
+		t.Fatalf("principal permissions were mutable: %v", principal.Permissions())
+	}
+}
+
+func TestPermissionPolicyNeverUnionsCapabilitiesAcrossTenants(t *testing.T) {
+	organizations := map[string]Organization{}
+	var err error
+	organizations["tenant-a"], err = NewOrganization("org-a", []Role{RoleTenantAdmin}, []Permission{PermissionWalletWorkflowApprove})
+	if err != nil {
+		t.Fatal(err)
+	}
+	organizations["tenant-b"], err = NewOrganization("org-b", []Role{RoleTenantAdmin}, []Permission{PermissionWalletWorkflowReject})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := NewClaims(policyTestIdentity(), organizations, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approve, err := NewPermissionPolicy(PermissionWalletWorkflowApprove, RoleTenantAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := approve.Authorize(claims, "tenant-a"); err != nil {
+		t.Fatalf("tenant-a approval: %v", err)
+	}
+	if _, err := approve.Authorize(claims, "tenant-b"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("tenant-b approval error = %v, want forbidden", err)
+	}
+	if _, err := NewPermissionPolicy(Permission("wallet:all"), RoleTenantAdmin); !errors.Is(err, ErrInvalidPolicy) {
+		t.Fatalf("unknown permission error = %v, want invalid policy", err)
 	}
 }
 
@@ -124,7 +159,7 @@ func policyTestClaims(tb testing.TB, memberships map[string][]Role, platformAdmi
 	tb.Helper()
 	organizations := make(map[string]Organization, len(memberships))
 	for tenant, roles := range memberships {
-		organization, err := NewOrganization("org-"+tenant, roles)
+		organization, err := NewOrganization("org-"+tenant, roles, nil)
 		if err != nil {
 			tb.Fatal(err)
 		}

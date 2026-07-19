@@ -131,6 +131,10 @@ func TestVerifierUsesOnlySelectedOrganizationRoles(t *testing.T) {
 	clock := &fakeClock{now: oidcTestNow}
 	verifier := newTestVerifier(t, clock, staticTestKeys(t, map[string]*rsa.PrivateKey{"key-1": keys[0]}))
 	claims := validTokenClaims(oidcTestNow)
+	claims["organization"] = organizationClaims(
+		"org-a", []string{"user", "tenant-admin", "wallet:workflow:approve"},
+		"org-b", []string{"user", "wallet:workflow:reject"},
+	)
 	// Top-level resource_access is deliberately privileged. Keycloak can emit
 	// roles aggregated from every organization there; it is never a tenant role
 	// source for this verifier.
@@ -155,6 +159,16 @@ func TestVerifierUsesOnlySelectedOrganizationRoles(t *testing.T) {
 	}
 	if _, err := tenantauth.Authorize(verified, "tenant-b", tenantauth.RoleUser); err != nil {
 		t.Fatalf("tenant-b user: %v", err)
+	}
+	approve, err := tenantauth.NewPermissionPolicy(tenantauth.PermissionWalletWorkflowApprove, tenantauth.RoleTenantAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := approve.Authorize(verified, "tenant-a"); err != nil {
+		t.Fatalf("tenant-a approval permission: %v", err)
+	}
+	if _, err := approve.Authorize(verified, "tenant-b"); !errors.Is(err, tenantauth.ErrForbidden) {
+		t.Fatalf("tenant-b approval permission error = %v, want forbidden", err)
 	}
 }
 

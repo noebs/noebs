@@ -21,7 +21,8 @@ type Principal struct {
 // Policy is an immutable any-of role policy. Roles are validated once when the
 // owning route or middleware is constructed.
 type Policy struct {
-	allowed []Role
+	allowed            []Role
+	requiredPermission Permission
 }
 
 func NewPolicy(allowed ...Role) (Policy, error) {
@@ -36,6 +37,18 @@ func NewPolicy(allowed ...Role) (Policy, error) {
 		}
 	}
 	return Policy{allowed: copyAllowed}, nil
+}
+
+func NewPermissionPolicy(required Permission, allowed ...Role) (Policy, error) {
+	if _, err := ParsePermission(string(required)); err != nil {
+		return Policy{}, ErrInvalidPolicy
+	}
+	policy, err := NewPolicy(allowed...)
+	if err != nil {
+		return Policy{}, err
+	}
+	policy.requiredPermission = required
+	return policy, nil
 }
 
 func SelectTenant(claims Claims, activeTenant string) (Principal, error) {
@@ -70,12 +83,17 @@ func (p Policy) Authorize(claims Claims, activeTenant string) (Principal, error)
 	if err != nil {
 		return Principal{}, err
 	}
+	roleAllowed := false
 	for _, role := range p.allowed {
 		if principal.HasRole(role) {
-			return principal, nil
+			roleAllowed = true
+			break
 		}
 	}
-	return Principal{}, ErrForbidden
+	if !roleAllowed || p.requiredPermission != "" && !principal.HasPermission(p.requiredPermission) {
+		return Principal{}, ErrForbidden
+	}
+	return principal, nil
 }
 
 func (p Principal) Identity() Identity { return p.identity }
@@ -86,11 +104,17 @@ func (p Principal) OrganizationID() string { return p.organization.id }
 
 func (p Principal) Roles() []Role { return p.organization.Roles() }
 
+func (p Principal) Permissions() []Permission { return p.organization.Permissions() }
+
 func (p Principal) HasRole(role Role) bool {
 	if role == RolePlatformAdmin {
 		return p.platformAdmin
 	}
 	return p.organization.has(role)
+}
+
+func (p Principal) HasPermission(permission Permission) bool {
+	return p.organization.permits(permission)
 }
 
 func validAuthorizationRole(role Role) bool {

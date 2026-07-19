@@ -171,13 +171,19 @@ func (v *Verifier) domainClaims(claims *wireClaims) (tenantauth.Claims, error) {
 	organizations := make(map[string]tenantauth.Organization, len(claims.Organization))
 	for tenant, wireOrganization := range claims.Organization {
 		roles := make([]tenantauth.Role, 0)
+		permissions := make([]tenantauth.Permission, 0)
 		for _, rawRole := range wireOrganization.ResourceAccess[v.audience].Roles {
 			role, err := tenantauth.ParseTenantRole(rawRole)
 			if err == nil {
 				roles = append(roles, role)
+				continue
+			}
+			permission, err := tenantauth.ParsePermission(rawRole)
+			if err == nil {
+				permissions = append(permissions, permission)
 			}
 		}
-		organization, err := tenantauth.NewOrganization(wireOrganization.ID, roles)
+		organization, err := tenantauth.NewOrganization(wireOrganization.ID, roles, permissions)
 		if err != nil || tenant == "" {
 			return tenantauth.Claims{}, ErrInvalidToken
 		}
