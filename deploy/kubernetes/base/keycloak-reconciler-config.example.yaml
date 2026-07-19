@@ -1,0 +1,13 @@
+base_url: http://keycloak:8080/auth
+admin_realm: noebs
+client_id: noebs-keycloak-reconciler
+client_secret: REPLACE_WITH_RECONCILER_CLIENT_SECRET
+client_credentials:
+  noebs-keycloak-reconciler:
+    client_secret: REPLACE_WITH_RECONCILER_CLIENT_SECRET
+  noebs-backoffice:
+    client_secret: REPLACE_WITH_BACKOFFICE_CLIENT_SECRET
+identity_providers:
+  google:
+    client_id: REPLACE_WITH_GOOGLE_CLIENT_ID
+    client_secret: REPLACE_WITH_GOOGLE_CLIENT_SECRET

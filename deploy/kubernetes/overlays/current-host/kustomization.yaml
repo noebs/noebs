@@ -17,7 +17,7 @@ images:
     digest: sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
   - name: quay.io/keycloak/keycloak
     newName: quay.io/keycloak/keycloak
-    digest: sha256:dea26401d06341095cc4ea9d66896200b55de5ca1daa1d2fcbe58493afa6e0ad
+    digest: sha256:2eb3cd316835c990e69e26ade292ffa78f6fb0db7d5fc6377463c162e1979ac0
   - name: temporalio/auto-setup
     newName: docker.io/temporalio/auto-setup
     digest: sha256:5b3502a3b685f9eff1b925af90c57c9e3dbeccbef367cc28a2a9712c63379312
@@ -132,6 +132,17 @@ patches:
       kind: Deployment
       name: keycloak
     patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value:
+          - start
+          - --http-relative-path=/auth
+          - --http-management-relative-path=/
+          - --hostname=https://api.noebs.sd/auth
+          - --hostname-strict=true
+          - --hostname-backchannel-dynamic=false
+          - --proxy-headers=xforwarded
+          - --proxy-trusted-addresses=10.42.0.0/16
       - op: add
         path: /spec/template/spec/containers/0/resources
         value:

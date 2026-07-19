@@ -81,7 +81,12 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	requireRenderedSecretContains(t, secrets, "ghcr-credentials", ".dockerconfigjson", `"ghcr.io"`)
 	requireRenderedSecretContains(t, secrets, "ebs-adapter-secrets", "secrets.yaml", "consumer_endpoint")
 	requireRenderedSecretContains(t, secrets, "sops-age-key", "age-key.txt", "AGE-SECRET-KEY-1LOCAL")
-	requireRenderedSecretContains(t, secrets, "keycloak-secrets", "keycloak.conf", "bootstrap-admin-password")
+	keycloakConfig := secretByName(t, secrets, "keycloak-secrets").StringData["keycloak.conf"]
+	for _, forbidden := range []string{"bootstrap-admin-username", "bootstrap-admin-password", "bootstrap-admin-client-id", "bootstrap-admin-client-secret"} {
+		if strings.Contains(keycloakConfig, forbidden) {
+			t.Fatalf("rendered steady Keycloak Secret contains %s", forbidden)
+		}
+	}
 	requireRenderedSecretContains(t, secrets, "noebs-tls", "tls.crt", "BEGIN CERTIFICATE")
 	requireRenderedSecretContains(t, secrets, "noebs-tls", "tls.key", "BEGIN RSA PRIVATE KEY")
 	requireRenderedSecretContains(t, secrets, "workload-auth-postgres-roles", "roles.yaml", "migrate_password")

@@ -22,7 +22,9 @@ tofu -chdir=foundation/terraform apply
 
 The Kubernetes cluster itself must already be reachable through `kubeconfig_path`. Cluster bootstrap for the host happens before applying this root so OpenTofu can manage Argo CD through the Kubernetes API.
 
-Runtime secrets are not stored in OpenTofu. Bootstrap the foundation with `create_noebs_application = false` while preparing release Secrets; this still creates Argo CD, the Noebs namespace, and the Noebs AppProject. After the explicit release Secrets have been applied, set `create_noebs_application = true` and apply again to create the Noebs Argo CD application. The foundation root reads this exact Secret name set as Kubernetes data sources before creating the Argo CD application, so missing release Secrets fail the OpenTofu run instead of starting an Argo CD sync with incomplete inputs:
+Runtime secrets must not enter OpenTofu state. Bootstrap the foundation with `create_noebs_application = false` while preparing release Secrets; this still creates Argo CD, the Noebs namespace, and the Noebs AppProject. After the renderer has validated and applied the explicit release Secrets, set `create_noebs_application = true` and apply again to create the Noebs Argo CD application. OpenTofu deliberately does not read Kubernetes Secret objects: provider data sources persist their full `.data` maps in state. Secret key, value, and type validation belongs to the local renderer and the wave-0 deployment preflight.
+
+The static outputs document the release Secret names and keys expected by those boundary validators:
 
 - `api-gateway-secrets` with key `secrets.yaml`
 - `identity-auth-secrets` with key `secrets.yaml`
@@ -47,7 +49,7 @@ Runtime secrets are not stored in OpenTofu. Bootstrap the foundation with `creat
 - `ghcr-credentials` with key `.dockerconfigjson`
 - `noebs-tls` for `api.noebs.sd` and `dsa.adonese.sd`
 
-The foundation root also checks each required Secret's expected data keys and rejects empty required values before it creates the Argo CD `Application`; `noebs-tls` must be a `kubernetes.io/tls` Secret and `ghcr-credentials` must be a `kubernetes.io/dockerconfigjson` Secret. The `noebs_required_kubernetes_secrets` and `noebs_required_kubernetes_secret_keys` outputs expose this required shape for deployment checks without storing any secret values in OpenTofu state.
+The `noebs_required_kubernetes_secrets` and `noebs_required_kubernetes_secret_keys` outputs expose names and key shape only. They do not cause OpenTofu to read live Secret values.
 
 `api-gateway-secrets` carries edge auth/admin material only; it must not include `noebs.db_url`.
 `wallet-api-secrets` carries wallet HTTP facade auth/admin material only; it must not include `noebs.db_url`.

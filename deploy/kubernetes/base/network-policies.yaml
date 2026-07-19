@@ -317,6 +317,28 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: keycloak-http-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: edge
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: caddy}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: api-gateway}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak-reconciler}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: postgres-egress
 spec:
   podSelector:
@@ -426,6 +448,28 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: keycloak-identity-provider-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: gateway-http-egress
 spec:
   podSelector:
@@ -438,6 +482,36 @@ spec:
               - key: app.kubernetes.io/name
                 operator: In
                 values: [identity-auth, card-vault, ebs-adapter, psp-webhook, admin-reporting, notification-chat, consumer-beneficiary, wallet-api]
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-keycloak-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: api-gateway}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-reconciler-egress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak-reconciler}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
       ports:
         - {protocol: TCP, port: 8080}
 ---

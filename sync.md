@@ -31,9 +31,12 @@ authority, or request-supplied audit actor fallback.
 - A request selects an active tenant explicitly. Authorization uses only the
   selected entry in the Keycloak `organization` claim; roles from different
   organizations are never combined.
-- Organization-scoped roles are exactly `user`, `backoffice`, and
-  `tenant-admin`. The realm-level `platform-admin` role is reserved for
-  genuinely cross-tenant platform operations.
+- Organization membership roles are exactly `user`, `backoffice`, and
+  `tenant-admin`. Route permissions are `reporting:read`, `wallet:read`,
+  `wallet:audit:read`, `wallet:manual:create`, `wallet:fees:write`,
+  `wallet:rates:write`, `wallet:workflow:approve`, and
+  `wallet:workflow:reject`. The realm-level `platform-admin` role is reserved
+  for genuinely cross-tenant platform operations.
 - The immutable human identity is `(issuer, subject)`. Numeric local user IDs
   may remain only as a domain projection. Credentials never return to the
   application database.
@@ -128,6 +131,25 @@ authority, or request-supplied audit actor fallback.
   about 92.6 microseconds per operation and tenant policy about 121 nanoseconds
   with zero policy allocations. Two Ryuk helpers left by the test process were
   removed; no Testcontainers resources remain.
+- An isolated Keycloak 26.7.0 instance using the pinned image digest was
+  bootstrapped on the target host. The first reconcile created 25 resources
+  and applied nine mappings. After matching Keycloak's canonical
+  representations, the next reconcile made zero changes.
+- The temporary `master` client was deleted, its next token request returned
+  401, and two subsequent reconciles authenticated only as the realm-local
+  `noebs-keycloak-reconciler`; both made zero changes. Its token carried the
+  direct `realm-management/realm-admin` scope, while the confidential
+  back-office client had no web origins and only the exact login and logout
+  callbacks.
+- Both steady and one-time bootstrap Kustomize overlays passed K3s
+  server-side dry-run. The steady rendering contains no bootstrap credential,
+  the bootstrap rendering contains no temporary user/password path, Caddy
+  validates the public-only realm route, and OpenTofu validates without
+  reading Kubernetes Secret data into state.
+- Edge Caddy now uses ordinary pod networking with explicit host ports instead
+  of `hostNetwork`. K3s accepted the rendered Deployment in server-side
+  dry-run; Keycloak will see a `10.42.0.0/16` proxy source and the Caddy
+  namespace/pod NetworkPolicy selector is no longer implementation-dependent.
 
 ## Work streams
 
@@ -135,7 +157,7 @@ authority, or request-supplied audit actor fallback.
 |---|---|---|---|
 | OIDC verification and tenant policy | quality reviewer | complete | race tests; rotation/adversarial matrix; 26.4 us verification and 23 ns policy benchmarks |
 | Gateway/runtime cutover | main agent | pending | no static/HS auth routes; route policy matrix passes |
-| Keycloak desired state and reconciler | IaC reviewer | pending | empty-state and idempotent reconcile tests |
+| Keycloak desired state and reconciler | IaC reviewer | complete | fake empty-state/second-pass tests; real 26.7 bootstrap deletion and steady zero-drift reconciles |
 | Principal projection and actor propagation | auth reviewer | pending | `(issuer, sub)` uniqueness and spoof tests |
 | Back-office OAuth BFF | quality reviewer | active | flow replay, refresh locking, CSRF, tenant-tab isolation, and hot-path benchmark |
 | Host hardening and release path | main agent | active | local build, immutable server deploy, live negative/positive smoke |

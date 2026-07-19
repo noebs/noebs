@@ -23,27 +23,25 @@ type kubernetesReleaseInputs struct {
 }
 
 type kubernetesReleaseNoebsInputs struct {
-	DefaultTenantID                string                                   `yaml:"default_tenant_id"`
-	AdminKey                       string                                   `yaml:"admin_key"`
-	AdminUser                      string                                   `yaml:"admin_user"`
-	AdminPassword                  string                                   `yaml:"admin_password"`
-	SMSKey                         string                                   `yaml:"sms_key"`
-	SMSSender                      string                                   `yaml:"sms_sender"`
-	SMSGateway                     string                                   `yaml:"sms_gateway"`
-	SMSMessage                     string                                   `yaml:"sms_message"`
-	GoogleClientID                 string                                   `yaml:"google_client_id"`
-	GoogleClientSecret             string                                   `yaml:"google_client_secret"`
-	GoogleRedirectURL              string                                   `yaml:"google_redirect_url"`
-	CardVaultDataKey               string                                   `yaml:"card_vault_data_key"`
-	TemporalPostgresPassword       string                                   `yaml:"temporal_postgres_password"`
-	KeycloakPostgresPassword       string                                   `yaml:"keycloak_postgres_password"`
-	KeycloakBootstrapAdminUsername string                                   `yaml:"keycloak_bootstrap_admin_username"`
-	KeycloakBootstrapAdminPassword string                                   `yaml:"keycloak_bootstrap_admin_password"`
-	GHCRDockerConfigJSON           string                                   `yaml:"ghcr_dockerconfigjson"`
-	EBS                            kubernetesReleaseEBSInputs               `yaml:"ebs"`
-	PSP                            map[string]map[string]pspSecret          `yaml:"psp"`
-	WorkloadAuth                   kubernetesReleaseWorkloadAuthInputs      `yaml:"workload_auth"`
-	InternalTransport              kubernetesReleaseInternalTransportInputs `yaml:"internal_transport"`
+	DefaultTenantID          string                                   `yaml:"default_tenant_id"`
+	AdminKey                 string                                   `yaml:"admin_key"`
+	AdminUser                string                                   `yaml:"admin_user"`
+	AdminPassword            string                                   `yaml:"admin_password"`
+	SMSKey                   string                                   `yaml:"sms_key"`
+	SMSSender                string                                   `yaml:"sms_sender"`
+	SMSGateway               string                                   `yaml:"sms_gateway"`
+	SMSMessage               string                                   `yaml:"sms_message"`
+	GoogleClientID           string                                   `yaml:"google_client_id"`
+	GoogleClientSecret       string                                   `yaml:"google_client_secret"`
+	GoogleRedirectURL        string                                   `yaml:"google_redirect_url"`
+	CardVaultDataKey         string                                   `yaml:"card_vault_data_key"`
+	TemporalPostgresPassword string                                   `yaml:"temporal_postgres_password"`
+	KeycloakPostgresPassword string                                   `yaml:"keycloak_postgres_password"`
+	GHCRDockerConfigJSON     string                                   `yaml:"ghcr_dockerconfigjson"`
+	EBS                      kubernetesReleaseEBSInputs               `yaml:"ebs"`
+	PSP                      map[string]map[string]pspSecret          `yaml:"psp"`
+	WorkloadAuth             kubernetesReleaseWorkloadAuthInputs      `yaml:"workload_auth"`
+	InternalTransport        kubernetesReleaseInternalTransportInputs `yaml:"internal_transport"`
 }
 
 type kubernetesReleaseEBSInputs struct {
@@ -625,8 +623,6 @@ func (r preparedKubernetesRelease) cutoverStringFields() []cutoverStringField {
 		{label: "noebs.card_vault_data_key", legacyKeys: []string{"data_key", "card_vault_data_key"}, input: r.inputs.Noebs.CardVaultDataKey},
 		{label: "noebs.temporal_postgres_password", legacyKeys: []string{"temporal_postgres_password"}, input: r.inputs.Noebs.TemporalPostgresPassword},
 		{label: "noebs.keycloak_postgres_password", legacyKeys: []string{"keycloak_postgres_password"}, input: r.inputs.Noebs.KeycloakPostgresPassword},
-		{label: "noebs.keycloak_bootstrap_admin_username", legacyKeys: []string{"keycloak_bootstrap_admin_username"}, input: r.inputs.Noebs.KeycloakBootstrapAdminUsername},
-		{label: "noebs.keycloak_bootstrap_admin_password", legacyKeys: []string{"keycloak_bootstrap_admin_password"}, input: r.inputs.Noebs.KeycloakBootstrapAdminPassword},
 		{label: "noebs.ghcr_dockerconfigjson", legacyKeys: []string{"ghcr_dockerconfigjson"}, input: r.inputs.Noebs.GHCRDockerConfigJSON},
 	}
 	return append(fields, r.ebsCutoverStringFields()...)
@@ -755,18 +751,15 @@ func (r preparedKubernetesRelease) keycloakConfig() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	adminUsername, err := r.cutoverString("noebs.keycloak_bootstrap_admin_username", []string{"keycloak_bootstrap_admin_username"}, r.inputs.Noebs.KeycloakBootstrapAdminUsername)
-	if err != nil {
-		return "", err
-	}
-	adminPassword, err := r.cutoverString("noebs.keycloak_bootstrap_admin_password", []string{"keycloak_bootstrap_admin_password"}, r.inputs.Noebs.KeycloakBootstrapAdminPassword)
-	if err != nil {
-		return "", err
-	}
 	return fmt.Sprintf(`http-enabled=true
 http-port=8080
-hostname-strict=false
+http-relative-path=/auth
+http-management-relative-path=/
+hostname=https://api.noebs.sd/auth
+hostname-strict=true
+hostname-backchannel-dynamic=false
 proxy-headers=xforwarded
+proxy-trusted-addresses=10.42.0.0/16
 health-enabled=true
 metrics-enabled=true
 
@@ -774,13 +767,8 @@ db=postgres
 db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
 db-username=keycloak
 db-password=%s
-
-bootstrap-admin-username=%s
-bootstrap-admin-password=%s
 `,
 		postgresPassword,
-		adminUsername,
-		adminPassword,
 	), nil
 }
 

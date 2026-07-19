@@ -13,8 +13,6 @@ noebs:
   card_vault_data_key: REPLACE_WITH_CARD_VAULT_DATA_KEY
   temporal_postgres_password: REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD
   keycloak_postgres_password: REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD
-  keycloak_bootstrap_admin_username: REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME
-  keycloak_bootstrap_admin_password: REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD
   ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"REPLACE_WITH_GHCR_AUTH_BASE64"}}}'
   ebs:
     consumer_endpoint: REPLACE_WITH_EBS_CONSUMER_ENDPOINT

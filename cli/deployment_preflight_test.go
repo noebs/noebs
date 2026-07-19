@@ -349,9 +349,6 @@ db=postgres
 db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
 db-username=keycloak
 db-password=`+keycloakPassword+`
-
-bootstrap-admin-username=admin
-bootstrap-admin-password=admin-password
 `)
 	return root
 }

@@ -74,7 +74,7 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	if err := validatePlainSecretFile("Keycloak Postgres password", filepath.Join(root, "deploy", "docker", "keycloak", "postgres-password.txt")); err != nil {
 		return err
 	}
-	if err := validateKeycloakConfig(filepath.Join(root, "deploy", "docker", "keycloak", "keycloak.conf")); err != nil {
+	if err := validateKeycloakConfig(filepath.Join(root, "deploy", "docker", "keycloak", "keycloak.conf"), false); err != nil {
 		return err
 	}
 	if err := validateExactDockerReleaseFiles(root); err != nil {
@@ -165,7 +165,7 @@ func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymen
 	if err := validateDockerConfigJSONFile("GHCR Docker config JSON", filepath.Join(root, "platform", "ghcr-dockerconfigjson")); err != nil {
 		return err
 	}
-	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf")); err != nil {
+	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf"), true); err != nil {
 		return err
 	}
 	if _, err := readWorkloadAuthDatabaseCredentials(root, ageKeyPath, decrypt); err != nil {
@@ -645,7 +645,7 @@ func validateDockerConfigJSONPayload(label, payload string) error {
 	return nil
 }
 
-func validateKeycloakConfig(path string) error {
+func validateKeycloakConfig(path string, requirePublicContract bool) error {
 	if err := requireReadableFile("Keycloak config", path); err != nil {
 		return err
 	}
@@ -682,11 +682,35 @@ func validateKeycloakConfig(path string) error {
 		"db-url",
 		"db-username",
 		"db-password",
-		"bootstrap-admin-username",
-		"bootstrap-admin-password",
 	} {
 		if strings.TrimSpace(values[key]) == "" {
 			return fmt.Errorf("keycloak config missing %s", key)
+		}
+	}
+	for _, key := range []string{
+		"bootstrap-admin-username",
+		"bootstrap-admin-password",
+		"bootstrap-admin-client-id",
+		"bootstrap-admin-client-secret",
+	} {
+		if _, exists := values[key]; exists {
+			return fmt.Errorf("steady Keycloak config must not contain %s", key)
+		}
+	}
+	if !requirePublicContract {
+		return nil
+	}
+	for key, expected := range map[string]string{
+		"http-relative-path":            "/auth",
+		"http-management-relative-path": "/",
+		"hostname":                      "https://api.noebs.sd/auth",
+		"hostname-strict":               "true",
+		"hostname-backchannel-dynamic":  "false",
+		"proxy-headers":                 "xforwarded",
+		"proxy-trusted-addresses":       "10.42.0.0/16",
+	} {
+		if values[key] != expected {
+			return fmt.Errorf("keycloak config %s must be %q", key, expected)
 		}
 	}
 	return nil

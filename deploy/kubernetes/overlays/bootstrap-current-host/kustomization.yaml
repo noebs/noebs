@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# This overlay is for the first sync of an empty Keycloak database only. The
+# steady current-host overlay contains no temporary master-realm credential.
+resources:
+  - ../current-host
+  - delete-bootstrap-client-job.yaml
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: keycloak
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: KC_BOOTSTRAP_ADMIN_CLIENT_ID
+            value: noebs-keycloak-bootstrap
+          - name: KC_BOOTSTRAP_ADMIN_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: keycloak-bootstrap-admin
+                key: client-secret
+  - target:
+      group: batch
+      version: v1
+      kind: Job
+      name: noebs-keycloak-reconcile
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/1/secret/secretName
+        value: keycloak-bootstrap-reconciler-credentials

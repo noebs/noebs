@@ -98,6 +98,18 @@ func main() {
 		}
 		return
 	}
+	if isReconcileKeycloakCommand() {
+		if err := reconcileKeycloakCommand(); err != nil {
+			logrusLogger.Fatalf("reconcile Keycloak failed: %v", err)
+		}
+		return
+	}
+	if isDeleteKeycloakBootstrapCommand() {
+		if err := deleteKeycloakBootstrapCommand(); err != nil {
+			logrusLogger.Fatalf("delete Keycloak bootstrap client failed: %v", err)
+		}
+		return
+	}
 	if isInternalHealthcheckCommand() {
 		if err := checkInternalHealth(); err != nil {
 			logrusLogger.Fatalf("internal healthcheck failed: %v", err)

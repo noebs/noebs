@@ -303,8 +303,6 @@ var kubernetesReleaseTemplateFields = []kubernetesReleaseTemplateField{
 	{label: "noebs.card_vault_data_key", key: "card_vault_data_key", placeholder: "REPLACE_WITH_CARD_VAULT_DATA_KEY"},
 	{label: "noebs.temporal_postgres_password", key: "temporal_postgres_password", placeholder: "REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD"},
 	{label: "noebs.keycloak_postgres_password", key: "keycloak_postgres_password", placeholder: "REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD"},
-	{label: "noebs.keycloak_bootstrap_admin_username", key: "keycloak_bootstrap_admin_username", placeholder: "REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME"},
-	{label: "noebs.keycloak_bootstrap_admin_password", key: "keycloak_bootstrap_admin_password", placeholder: "REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD"},
 	{label: "noebs.ghcr_dockerconfigjson", key: "ghcr_dockerconfigjson", placeholder: `{"auths":{"ghcr.io":{"auth":"REPLACE_WITH_GHCR_AUTH_BASE64"}}}`},
 	{label: "noebs.ebs.consumer_endpoint", key: "consumer_endpoint", placeholder: "REPLACE_WITH_EBS_CONSUMER_ENDPOINT", section: "ebs"},
 	{label: "noebs.ebs.merchant_endpoint", key: "merchant_endpoint", placeholder: "REPLACE_WITH_EBS_MERCHANT_ENDPOINT", section: "ebs"},

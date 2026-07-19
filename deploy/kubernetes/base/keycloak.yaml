@@ -219,7 +219,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: keycloak
-          image: quay.io/keycloak/keycloak:26.6.1
+          image: quay.io/keycloak/keycloak:26.7.0
           imagePullPolicy: IfNotPresent
           args:
             - start

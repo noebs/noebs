@@ -190,8 +190,20 @@ func TestPrepareKubernetesReleaseTransformsCurrentSecretValues(t *testing.T) {
 		t.Fatalf("temporal postgres password = %q, want current secret value", got)
 	}
 	keycloakConfig := readPreparedFile(t, outputRoot, "platform/keycloak.conf")
-	if !strings.Contains(keycloakConfig, "bootstrap-admin-username=legacy-keycloak-admin") {
-		t.Fatalf("keycloak config did not use current secret bootstrap admin username:\n%s", keycloakConfig)
+	for _, forbidden := range []string{"bootstrap-admin-username", "bootstrap-admin-password", "bootstrap-admin-client-id", "bootstrap-admin-client-secret"} {
+		if strings.Contains(keycloakConfig, forbidden) {
+			t.Fatalf("steady keycloak config contains %s:\n%s", forbidden, keycloakConfig)
+		}
+	}
+	for _, required := range []string{
+		"http-relative-path=/auth",
+		"hostname=https://api.noebs.sd/auth",
+		"hostname-strict=true",
+		"proxy-trusted-addresses=10.42.0.0/16",
+	} {
+		if !strings.Contains(keycloakConfig, required) {
+			t.Fatalf("steady keycloak config missing %s:\n%s", required, keycloakConfig)
+		}
 	}
 }
 
@@ -550,8 +562,6 @@ func writeCompleteLegacyReleaseRoot(t *testing.T) string {
   data_key: legacy-card-vault-data-key
   temporal_postgres_password: legacy-temporal-postgres-password
   keycloak_postgres_password: legacy-keycloak-postgres-password
-  keycloak_bootstrap_admin_username: legacy-keycloak-admin
-  keycloak_bootstrap_admin_password: legacy-keycloak-admin-password
   ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"bGVnYWN5OnRva2Vu"}}}'
   consumer_endpoint: "https://legacy-consumer.example"
   merchant_endpoint: "https://legacy-merchant.example"
@@ -592,8 +602,6 @@ func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) strin
   card_vault_data_key: card-vault-data-key
   temporal_postgres_password: temporal-postgres-password
   keycloak_postgres_password: keycloak-postgres-password
-  keycloak_bootstrap_admin_username: keycloak-admin
-  keycloak_bootstrap_admin_password: keycloak-admin-password
   ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"bm9lYnM6dG9rZW4="}}}'
   ebs:
     consumer_endpoint: "https://consumer.input.example"

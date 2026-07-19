@@ -10,6 +10,7 @@ resources:
   - kafka.yaml
   - temporal.yaml
   - keycloak.yaml
+  - keycloak-reconcile-job.yaml
   - network-policies.yaml
   - preflight-job.yaml
   - migrate-job.yaml
@@ -31,3 +32,8 @@ resources:
 labels:
   - pairs:
       app.kubernetes.io/part-of: noebs
+
+configMapGenerator:
+  - name: keycloak-desired-state
+    files:
+      - keycloak-desired-state.yaml

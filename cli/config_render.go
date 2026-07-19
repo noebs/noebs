@@ -55,6 +55,8 @@ func isConfigUtilityCommand() bool {
 		isValidateKubernetesDeploymentCommand() ||
 		isRenderKubernetesSecretsCommand() ||
 		isPrepareKubernetesReleaseCommand() ||
+		isReconcileKeycloakCommand() ||
+		isDeleteKeycloakBootstrapCommand() ||
 		isInternalHealthcheckCommand() ||
 		isRenderKubernetesReleaseInputTemplateCommand() ||
 		isAuditKubernetesReleaseInputsCommand()

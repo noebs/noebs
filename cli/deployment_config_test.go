@@ -954,6 +954,7 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 		"temporal-postgres-ingress":    {targetPod: "temporal-postgres", port: 5432, allowedSources: []string{"temporal", "temporal-schema-migrate"}},
 		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233, allowedSources: []string{"psp-webhook", "wallet-ledger", "wallet-worker", "temporal-namespace-bootstrap", "temporal-ui"}},
 		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432, allowedSources: []string{"keycloak"}},
+		"keycloak-http-ingress":        {targetPod: "keycloak", port: 8080, allowedSources: []string{"caddy", "api-gateway", "keycloak-reconciler"}},
 		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "notification-chat"}},
 		"card-vault-ingress":           {targetPod: "card-vault", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
 		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080, allowedSources: []string{"api-gateway"}},
@@ -1199,8 +1200,8 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 			t.Fatalf("keycloak containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
 		}
 		container := object.Spec.Template.Spec.Containers[0]
-		if container.Image != "quay.io/keycloak/keycloak:26.6.1" {
-			t.Fatalf("keycloak image = %q, want quay.io/keycloak/keycloak:26.6.1", container.Image)
+		if container.Image != "quay.io/keycloak/keycloak:26.7.0" {
+			t.Fatalf("keycloak image = %q, want quay.io/keycloak/keycloak:26.7.0", container.Image)
 		}
 		if !containsString(container.Args, "start") {
 			t.Fatalf("keycloak args = %v, want start", container.Args)
@@ -1229,6 +1230,93 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 	}
 	if keycloakPostgresBootstrap != string(dockerBootstrap) {
 		t.Fatalf("Kubernetes and Docker Keycloak Postgres bootstrap scripts differ")
+	}
+}
+
+func TestKeycloakBootstrapCredentialsAreIsolatedFromSteadyDeployment(t *testing.T) {
+	steadyPaths := []string{
+		filepath.Join("..", "deploy", "kubernetes", "base", "keycloak.yaml"),
+		filepath.Join("..", "deploy", "kubernetes", "base", "keycloak.conf.example"),
+		filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml"),
+		filepath.Join("..", "deploy", "docker", "keycloak", "keycloak.conf.example"),
+	}
+	for _, path := range steadyPaths {
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for _, forbidden := range []string{
+			"bootstrap-admin-username",
+			"bootstrap-admin-password",
+			"bootstrap-admin-client-id",
+			"bootstrap-admin-client-secret",
+			"KC_BOOTSTRAP_ADMIN_USERNAME",
+			"KC_BOOTSTRAP_ADMIN_PASSWORD",
+			"KC_BOOTSTRAP_ADMIN_CLIENT_ID",
+			"KC_BOOTSTRAP_ADMIN_CLIENT_SECRET",
+		} {
+			if strings.Contains(string(payload), forbidden) {
+				t.Fatalf("steady deployment file %s contains %s", path, forbidden)
+			}
+		}
+	}
+
+	for _, root := range []string{
+		filepath.Join("..", "deploy", "kubernetes"),
+		filepath.Join("..", "deploy", "docker", "keycloak"),
+	} {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if info.IsDir() {
+				return nil
+			}
+			payload, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, forbidden := range []string{
+				"bootstrap-admin-username",
+				"bootstrap-admin-password",
+				"KC_BOOTSTRAP_ADMIN_USERNAME",
+				"KC_BOOTSTRAP_ADMIN_PASSWORD",
+			} {
+				if strings.Contains(string(payload), forbidden) {
+					return fmt.Errorf("%s contains forbidden temporary user option %s", path, forbidden)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	bootstrapPath := filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "kustomization.yaml")
+	bootstrap, err := os.ReadFile(bootstrapPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", bootstrapPath, err)
+	}
+	for _, required := range []string{"KC_BOOTSTRAP_ADMIN_CLIENT_ID", "KC_BOOTSTRAP_ADMIN_CLIENT_SECRET"} {
+		if !strings.Contains(string(bootstrap), required) {
+			t.Fatalf("bootstrap overlay missing %s", required)
+		}
+	}
+}
+
+func TestCurrentHostKeycloakTrustsOnlyTheClusterPodNetworkProxy(t *testing.T) {
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(payload)
+	if !strings.Contains(text, "--proxy-trusted-addresses=10.42.0.0/16") {
+		t.Fatalf("%s must trust the K3s pod CIDR seen from the Caddy pod", path)
+	}
+	if strings.Contains(text, "--proxy-trusted-addresses=213.199.63.78/32") {
+		t.Fatalf("%s trusts the host public address instead of the proxy pod source", path)
 	}
 }
 
@@ -2059,6 +2147,9 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 		`iptv.2t.sd`,
 		`path /.well-known/assetlinks.json`,
 		`path_regexp payment_link ^/pay/`,
+		`@keycloak_public path /auth/realms/noebs`,
+		`reverse_proxy @keycloak_public keycloak.noebs.svc.cluster.local:8080`,
+		`respond @keycloak_private 404`,
 		`Strict-Transport-Security "max-age=31536000; includeSubDomains"`,
 	} {
 		if !strings.Contains(caddyfile, required) {
@@ -2077,6 +2168,14 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 	}
 	if strings.Contains(deployment, "image: caddy:2-alpine") {
 		t.Error("edge deployment must not use a mutable Caddy tag")
+	}
+	if strings.Contains(deployment, "hostNetwork: true") || strings.Contains(deployment, "ClusterFirstWithHostNet") {
+		t.Error("edge deployment must use ordinary pod networking so NetworkPolicy can identify Caddy")
+	}
+	for _, required := range []string{"hostNetwork: false", "dnsPolicy: ClusterFirst", "hostPort: 80", "hostPort: 443"} {
+		if !strings.Contains(deployment, required) {
+			t.Errorf("edge deployment missing %q", required)
+		}
 	}
 }
 
@@ -2642,15 +2741,13 @@ func TestFoundationRequiredKubernetesSecretsMatchRenderer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read foundation/terraform/main.tf: %v", err)
 	}
-	for _, required := range []string{
-		`precondition {`,
-		`contains(keys(data.kubernetes_secret_v1.noebs_required[secret_name].data), required_key)`,
-		`length(trimspace(lookup(data.kubernetes_secret_v1.noebs_required[secret_name].data, required_key, ""))) > 0`,
-		`data.kubernetes_secret_v1.noebs_required["noebs-tls"].type == "kubernetes.io/tls"`,
-		`data.kubernetes_secret_v1.noebs_required["ghcr-credentials"].type == "kubernetes.io/dockerconfigjson"`,
+	for _, forbidden := range []string{
+		`data "kubernetes_secret_v1"`,
+		`data.kubernetes_secret_v1`,
+		`.data), required_key`,
 	} {
-		if !strings.Contains(string(main), required) {
-			t.Fatalf("foundation/terraform/main.tf must contain %q", required)
+		if strings.Contains(string(main), forbidden) {
+			t.Fatalf("foundation/terraform/main.tf must not read Kubernetes Secret values through %q", forbidden)
 		}
 	}
 }

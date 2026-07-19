@@ -35,6 +35,14 @@ api.noebs.sd {
 	header @payment_link Content-Security-Policy "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
 	respond @payment_link `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutiPay payment link</title><h1>Open this link with TutiPay Alpha</h1><p>The TutiPay app completes payment securely. Never enter card or PIN details in a browser.</p></html>` 200
 
+	@keycloak_public path /auth/realms/noebs /auth/realms/noebs/* /auth/resources/* /auth/robots.txt
+	reverse_proxy @keycloak_public keycloak.noebs.svc.cluster.local:8080 {
+		header_up X-Forwarded-Proto https
+	}
+
+	@keycloak_private path /auth /auth/*
+	respond @keycloak_private 404
+
 	reverse_proxy api-gateway.noebs.svc.cluster.local:8080
 
 	log {

@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: noebs-keycloak-delete-bootstrap-client
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "6"
+  labels:
+    app.kubernetes.io/name: keycloak-reconciler
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak-reconciler
+    spec:
+      serviceAccountName: keycloak-reconciler
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: delete-bootstrap-client
+          image: ghcr.io/noebs/noebs:master
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/noebs
+          args:
+            - delete-keycloak-bootstrap-client
+            - --config
+            - /etc/noebs-keycloak-bootstrap/config.yaml
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: credentials
+              mountPath: /etc/noebs-keycloak-bootstrap/config.yaml
+              subPath: config.yaml
+              readOnly: true
+      volumes:
+        - name: credentials
+          secret:
+            secretName: keycloak-bootstrap-reconciler-credentials
