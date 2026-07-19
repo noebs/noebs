@@ -64,6 +64,13 @@ authority, or request-supplied audit actor fallback.
 - `wallet_ledger/008_wallet_admin_audit.sql` stores a second administrator
   password/TOTP authority.
 - `/generate_api_key` creates credentials that no incoming auth path consumes.
+- The strict verifier and gateway adapter are now committed in `c498bb8` and
+  `563fe0b`. They reject duplicate/bare credentials, non-RS256 tokens, invalid
+  issuer/audience/client/type/time claims, and organization role union before
+  producing a tenant-scoped principal.
+- Internal TLS peer authorization is committed in `fa1cb40`. Wallet-ledger now
+  accepts only the `wallet-api` certificate identity rather than every client
+  certificate issued by the Noebs CA.
 
 ### IaC and live-host review
 
@@ -92,12 +99,15 @@ authority, or request-supplied audit actor fallback.
 - From outside the server, ports 3100, 9100, 18081, and the orphaned 33001 no
   longer connect. Port 9100 remains reachable through Tailscale and on the host,
   and the public HTTPS edge still responds.
+- The live K3s cluster-admin kubeconfig, OpenTofu state and backup, tfvars, and
+  saved plan files are now mode `0600`; the node remained Ready after the
+  change. Secret encryption and credential rotation are still outstanding.
 
 ## Work streams
 
 | Stream | Owner | State | Exit evidence |
 |---|---|---|---|
-| OIDC verification and tenant policy | quality reviewer | active | unit, adversarial, rotation, and benchmark results |
+| OIDC verification and tenant policy | quality reviewer | complete | race tests; rotation/adversarial matrix; 26.4 us verification and 23 ns policy benchmarks |
 | Gateway/runtime cutover | main agent | pending | no static/HS auth routes; route policy matrix passes |
 | Keycloak desired state and reconciler | IaC reviewer | pending | empty-state and idempotent reconcile tests |
 | Principal projection and actor propagation | auth reviewer | pending | `(issuer, sub)` uniqueness and spoof tests |
