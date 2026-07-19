@@ -24,7 +24,7 @@ const (
 )
 
 func TestCreateProfileProjectionRequiresTrustedPrincipalBoundary(t *testing.T) {
-	validBody := []byte(`{"fullname":"Profile Owner","mobile":"0990000000"}`)
+	validBody := []byte(`{"fullname":"Profile Owner"}`)
 
 	t.Run("raw identity headers are not a typed principal", func(t *testing.T) {
 		app := fiber.New()
@@ -42,9 +42,21 @@ func TestCreateProfileProjectionRequiresTrustedPrincipalBoundary(t *testing.T) {
 		app := fiber.New()
 		h := &Handler{Service: &consumer.Service{Store: &store.Store{}}}
 		app.Post("/consumer/auth/profile", gateway.InternalPrincipalIdentityMiddleware(), h.CreateProfileProjection)
-		body := []byte(`{"issuer":"https://attacker.example","subject":"attacker","fullname":"Profile Owner","mobile":"0990000000"}`)
+		body := []byte(`{"issuer":"https://attacker.example","subject":"attacker","fullname":"Profile Owner"}`)
 
 		resp := performProfileCreateRequest(t, app, body)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
+		}
+	})
+
+	t.Run("mobile is rejected as an application-owned profile field", func(t *testing.T) {
+		app := fiber.New()
+		h := &Handler{Service: &consumer.Service{Store: &store.Store{}}}
+		app.Post("/consumer/auth/profile", gateway.InternalPrincipalIdentityMiddleware(), h.CreateProfileProjection)
+
+		resp := performProfileCreateRequest(t, app, []byte(`{"fullname":"Profile Owner","mobile":"0990000000"}`))
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
@@ -102,7 +114,7 @@ func TestCreateProfileProjectionRequiresTrustedPrincipalBoundary(t *testing.T) {
 			t.Fatalf("created profile authority = %+v", payload.User)
 		}
 
-		duplicate := performProfileCreateRequest(t, app, []byte(`{"fullname":"Replay","mobile":"0990000001"}`))
+		duplicate := performProfileCreateRequest(t, app, []byte(`{"fullname":"Replay"}`))
 		defer duplicate.Body.Close()
 		if duplicate.StatusCode != http.StatusConflict {
 			t.Fatalf("duplicate status = %d, want %d", duplicate.StatusCode, http.StatusConflict)

@@ -6,27 +6,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func (h *Handler) CheckUser(c *fiber.Ctx) error {
-	type checkUserRequest struct {
-		Phones []string `json:"phones"`
-	}
-	var req checkUserRequest
-	if err := bindJSON(c, &req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "Bad request.", "code": "bad_request"})
-	}
-
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	requesterID := getUserID(c)
-	out, err := h.Service.CheckUser(c.UserContext(), tenantID, requesterID, req.Phones)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
-	}
-	return jsonResponse(c, http.StatusOK, out)
-}
-
 func (h *Handler) SetMainCard(c *fiber.Ctx) error {
 	type cardRequest struct {
 		Pan string `json:"PAN"`

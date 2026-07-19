@@ -125,9 +125,9 @@ func TestWorkloadAuthRuntimeConfigRejectsMissingAndExcessAuthority(t *testing.T)
 			name: "receiver missing expected caller",
 			role: serviceRoleIdentityAuth,
 			mutate: func(cfg *ebs_fields.NoebsConfig) {
-				delete(cfg.WorkloadAuth.TrustedKeys, testWorkloadKeyID(string(serviceRoleNotification)))
+				delete(cfg.WorkloadAuth.TrustedKeys, testWorkloadKeyID(string(serviceRoleAPIGateway)))
 			},
-			want: "missing trusted key for notification-chat",
+			want: "missing trusted key for api-gateway",
 		},
 		{
 			name: "receiver trusts unexpected caller",

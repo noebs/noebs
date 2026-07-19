@@ -53,12 +53,9 @@ func workloadCallerAudiences(role serviceRole) []string {
 		return []string{string(serviceRoleCardVault)}
 	case serviceRoleEBSAdapter:
 		return []string{
-			string(serviceRoleIdentityAuth),
 			string(serviceRoleCardVault),
 			string(serviceRoleNotification),
 		}
-	case serviceRoleNotification:
-		return []string{string(serviceRoleIdentityAuth)}
 	default:
 		return nil
 	}
@@ -67,9 +64,6 @@ func workloadCallerAudiences(role serviceRole) []string {
 func expectedWorkloadCallers(role serviceRole) map[string]bool {
 	callers := map[string]bool{"api-gateway": true}
 	switch role {
-	case serviceRoleIdentityAuth:
-		callers["ebs-adapter"] = true
-		callers["notification-chat"] = true
 	case serviceRoleCardVault:
 		callers["identity-auth"] = true
 		callers["ebs-adapter"] = true
@@ -282,8 +276,6 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 	switch role {
 	case serviceRoleIdentityAuth:
 		add(string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
-		add(string(serviceRoleNotification), http.MethodPost, "/internal/identity-auth/users/resolve-batch")
-		add(string(serviceRoleEBSAdapter), http.MethodPost, "/internal/identity-auth/users/by-mobile")
 	case serviceRoleCardVault:
 		add(string(serviceRoleIdentityAuth), http.MethodPost, "/internal/card-vault/cards/masked")
 		for _, path := range []string{

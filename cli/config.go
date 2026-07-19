@@ -416,9 +416,6 @@ func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handl
 
 	cons := route.Group("/consumer", userIdentity)
 	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
-	cons.Post("/submit_contacts", func(c *fiber.Ctx) error {
-		return submitChatContacts(c, chatContactsResolver, database.DB)
-	})
 }
 
 func chatWebSocketHandler(chatHub *chat.Hub) fiber.Handler {
@@ -733,10 +730,6 @@ func initConfig() {
 		chatCfg.UnreadBatchSize = 200
 		chatCfg.ClientIdentityFromRequest = chatClientIdentityFromGatewayIdentity
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
-		chatContactsResolver, err = newIdentityContactResolver(noebsConfig, workloadSigners)
-		if err != nil {
-			logrusLogger.Fatalf("configure chat contact resolution: %v", err)
-		}
 	}
 	if role.startsChat() && (database == nil || database.DB == nil) {
 		logrusLogger.Fatalf("%s role requires an initialized database", role)

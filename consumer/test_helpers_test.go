@@ -133,18 +133,17 @@ func readBodyForTest(t *testing.T, request *http.Request) []byte {
 	return body.Bytes()
 }
 
-func seedProfile(t *testing.T, storeSvc *store.Store, tenantID, mobile string) store.ProfileProjection {
+func seedProfile(t *testing.T, storeSvc *store.Store, tenantID, identitySeed string) store.ProfileProjection {
 	t.Helper()
 	profile, err := storeSvc.CreateProfileProjection(context.Background(), store.CreateProfileProjectionParams{
 		PrincipalIdentity: store.PrincipalIdentity{
 			TenantID: tenantID,
 			Issuer:   "https://identity.example/realms/noebs",
-			Subject:  "mobile:" + mobile,
+			Subject:  "test:" + identitySeed,
 		},
 		Fullname: "Test User",
-		Username: mobile,
-		Email:    mobile + "@example.com",
-		Mobile:   mobile,
+		Username: identitySeed,
+		Email:    identitySeed + "@example.com",
 	})
 	if err != nil {
 		t.Fatalf("create profile: %v", err)

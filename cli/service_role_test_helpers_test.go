@@ -48,7 +48,7 @@ func (roleTestWorkloadVerifier) Verify(req *http.Request, _ []byte) (workloadaut
 	caller := string(serviceRoleAPIGateway)
 	path := req.URL.Path
 	switch {
-	case path == "/internal/identity-auth/sessions/validate":
+	case path == "/internal/identity-auth/principals/resolve":
 		caller = string(serviceRoleAPIGateway)
 	case strings.HasPrefix(path, "/internal/identity-auth/"):
 		caller = string(serviceRoleEBSAdapter)

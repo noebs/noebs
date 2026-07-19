@@ -29,7 +29,6 @@ func TestProfileProjectionServiceCreateAndResolveAreSeparate(t *testing.T) {
 	}
 	created, err := service.CreateProfileProjection(ctx, tenantID, reference, CreateProfileProjectionCommand{
 		Fullname: "Profile Owner",
-		Mobile:   "0990000000",
 	})
 	if err != nil {
 		t.Fatal(err)

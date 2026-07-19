@@ -58,14 +58,14 @@ func TestService_Notifications(t *testing.T) {
 
 	env := newTestEnv(t)
 
-	user := seedProfile(t, env.Store, env.Tenant, "0129751986")
-	seed := PushData{UUID: "uuid-1", Body: "test me", UserMobile: user.Mobile, Phone: user.Mobile}
+	const mobile = "0129751986"
+	seed := PushData{UUID: "uuid-1", Body: "test me", UserMobile: mobile, Phone: mobile}
 	if err := env.Store.CreatePushData(context.Background(), env.Tenant, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
 		t.Fatalf("seed notification: %v", err)
 	}
 
 	var data []PushData
-	records, err := env.Service.Notifications(context.Background(), env.Tenant, user.Mobile)
+	records, err := env.Service.Notifications(context.Background(), env.Tenant, mobile)
 	if err != nil {
 		t.Fatalf("notifications: %v", err)
 	}

@@ -180,7 +180,6 @@ func statusForError(err error) int {
 	case store.ErrNotFound(err):
 		return http.StatusNotFound
 	case errors.Is(err, consumer.ErrCardVaultCommand),
-		errors.Is(err, consumer.ErrIdentityAuthCommand),
 		errors.Is(err, consumer.ErrNotificationCommand),
 		errors.Is(err, consumer.ErrBillerHookPost),
 		errors.Is(err, consumer.ErrInvalidPaymentInfo),
@@ -199,8 +198,6 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrMissingHTTPClient),
 		errors.Is(err, consumer.ErrMissingCardVault),
 		errors.Is(err, consumer.ErrInvalidCardVault),
-		errors.Is(err, consumer.ErrMissingIdentityAuth),
-		errors.Is(err, consumer.ErrInvalidIdentityAuth),
 		errors.Is(err, consumer.ErrMissingNotification),
 		errors.Is(err, consumer.ErrInvalidNotification),
 		errors.Is(err, consumer.ErrInvalidBillerHookEndpoint),

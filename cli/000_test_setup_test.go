@@ -78,19 +78,11 @@ func TestMain(m *testing.M) {
       %q:
         caller: %q
         public_key: %q
-      %q:
-        caller: %q
-        public_key: %q
-      %q:
-        caller: %q
-        public_key: %q
 `, dbURL, "postgres", "test-tenant", serviceRoleIdentityAuth,
 		testWorkloadKeyID(string(serviceRoleIdentityAuth)),
 		base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleIdentityAuth))),
 		dbURL,
 		testWorkloadKeyID(string(serviceRoleAPIGateway)), string(serviceRoleAPIGateway), base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleAPIGateway)).Public().(ed25519.PublicKey)),
-		testWorkloadKeyID(string(serviceRoleEBSAdapter)), string(serviceRoleEBSAdapter), base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleEBSAdapter)).Public().(ed25519.PublicKey)),
-		testWorkloadKeyID(string(serviceRoleNotification)), string(serviceRoleNotification), base64.StdEncoding.EncodeToString(testWorkloadPrivateKey(string(serviceRoleNotification)).Public().(ed25519.PublicKey)),
 	)
 	if err := os.WriteFile(testConfigPath, []byte(configPayload), 0o644); err != nil {
 		panic(fmt.Sprintf("write test config: %v", err))

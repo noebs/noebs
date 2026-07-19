@@ -20,7 +20,6 @@ import (
 
 const (
 	cardVaultServiceDiscoveryKey    = "card-vault"
-	identityAuthServiceDiscoveryKey = "identity-auth"
 	notificationServiceDiscoveryKey = "notification-chat"
 )
 
@@ -37,12 +36,6 @@ var (
 		missingErr:   ErrMissingCardVault,
 		invalidErr:   ErrInvalidCardVault,
 		commandErr:   ErrCardVaultCommand,
-	}
-	identityAuthCommandTarget = serviceCommandTarget{
-		discoveryKey: identityAuthServiceDiscoveryKey,
-		missingErr:   ErrMissingIdentityAuth,
-		invalidErr:   ErrInvalidIdentityAuth,
-		commandErr:   ErrIdentityAuthCommand,
 	}
 	notificationCommandTarget = serviceCommandTarget{
 		discoveryKey: notificationServiceDiscoveryKey,

@@ -24,7 +24,6 @@ func TestProfileProjectionUsesPrincipalCompositeAuthority(t *testing.T) {
 		Fullname:          "Profile Owner",
 		Username:          "profile-owner",
 		Email:             "owner@example.test",
-		Mobile:            "0990000000",
 		Language:          "en",
 	})
 	if err != nil {
@@ -51,7 +50,6 @@ func TestProfileProjectionUsesPrincipalCompositeAuthority(t *testing.T) {
 	if _, err := store.CreateProfileProjection(ctx, CreateProfileProjectionParams{
 		PrincipalIdentity: created.PrincipalIdentity,
 		Fullname:          "Replay",
-		Mobile:            "0990000001",
 	}); !errors.Is(err, ErrProfileAlreadyExists) {
 		t.Fatalf("duplicate principal error = %v, want ErrProfileAlreadyExists", err)
 	}
@@ -82,7 +80,6 @@ func TestProfileProjectionRejectsInvalidAuthorityBeforeDatabaseAccess(t *testing
 	valid := CreateProfileProjectionParams{
 		PrincipalIdentity: PrincipalIdentity{TenantID: "tenant", Issuer: testProfileIssuer, Subject: testProfileSubject},
 		Fullname:          "Profile Owner",
-		Mobile:            "0990000000",
 	}
 	tests := []struct {
 		name    string
@@ -96,7 +93,6 @@ func TestProfileProjectionRejectsInvalidAuthorityBeforeDatabaseAccess(t *testing
 		{"subject missing", func(p *CreateProfileProjectionParams) { p.Subject = "" }, ErrMissingSubject},
 		{"subject not exact", func(p *CreateProfileProjectionParams) { p.Subject = " subject " }, ErrInvalidSubject},
 		{"fullname missing", func(p *CreateProfileProjectionParams) { p.Fullname = "" }, ErrMissingProfileName},
-		{"mobile invalid", func(p *CreateProfileProjectionParams) { p.Mobile = "990000000" }, ErrInvalidMobile},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -130,7 +126,7 @@ func TestIdentitySchemaContainsNoLocalCredentialAuthority(t *testing.T) {
 	}
 	want := []string{
 		"tenant_id", "issuer", "subject", "id", "fullname", "username", "gender", "birthday",
-		"email", "mobile", "device_token", "language", "created_at", "updated_at",
+		"email", "device_token", "language", "created_at", "updated_at",
 	}
 	if !reflect.DeepEqual(columns, want) {
 		t.Fatalf("users columns = %v, want %v", columns, want)

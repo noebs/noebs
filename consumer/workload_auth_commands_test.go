@@ -32,7 +32,7 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 		"identity-auth-test": {Caller: "identity-auth", PublicKey: identityPublic},
 	}
 	verifiers := make(map[string]*workloadauth.Verifier)
-	for _, audience := range []string{identityAuthServiceDiscoveryKey, cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey} {
+	for _, audience := range []string{cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey} {
 		verifier, err := workloadauth.NewVerifier(audience, registry, workloadauth.SystemClock{}, commandNonceStore{})
 		if err != nil {
 			t.Fatal(err)
@@ -45,7 +45,6 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 		caller   string
 	}
 	expected := map[string]expectedCommand{
-		"/internal/identity-auth/users/by-mobile":      {audience: identityAuthServiceDiscoveryKey, caller: "ebs-adapter"},
 		"/internal/card-vault/funded-operations/claim": {audience: cardVaultServiceDiscoveryKey, caller: "ebs-adapter"},
 		"/internal/notification-chat/biller-hook":      {audience: notificationServiceDiscoveryKey, caller: "ebs-adapter"},
 		"/internal/card-vault/cards/masked":            {audience: cardVaultServiceDiscoveryKey, caller: "identity-auth"},
@@ -82,7 +81,6 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	discovery := map[string]string{
-		identityAuthServiceDiscoveryKey: server.URL,
 		cardVaultServiceDiscoveryKey:    server.URL,
 		notificationServiceDiscoveryKey: server.URL,
 	}
@@ -90,7 +88,7 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 		HTTPClient:  server.Client(),
 		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: discovery},
 		WorkloadSigners: commandSignerSet(t, "ebs-adapter-test", ebsPrivate,
-			identityAuthServiceDiscoveryKey, cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey),
+			cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey),
 	}
 	identity := &Service{
 		HTTPClient:  server.Client(),
@@ -100,9 +98,6 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 	}
 
 	commands := []func() error{
-		func() error {
-			return ebs.doAdminServiceCommand(context.Background(), "tenant_1", identityAuthCommandTarget, "/internal/identity-auth/users/by-mobile", map[string]string{"mobile": "0990000000"}, nil)
-		},
 		func() error {
 			return ebs.doAdminServiceCommand(context.Background(), "tenant_1", cardVaultCommandTarget, "/internal/card-vault/funded-operations/claim", map[string]string{"operation_id": "operation-1"}, nil)
 		},
@@ -139,7 +134,7 @@ func testEBSWorkloadSigners(t *testing.T) *workloadauth.SignerSet {
 		t.Fatal(err)
 	}
 	return commandSignerSet(t, "ebs-adapter-test", privateKey,
-		identityAuthServiceDiscoveryKey, cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey)
+		cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey)
 }
 
 type commandNonceStore struct{}
@@ -158,10 +153,10 @@ func TestInternalServiceCommandDoesNotSendWithoutSigner(t *testing.T) {
 	service := &Service{
 		HTTPClient: server.Client(),
 		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: map[string]string{
-			identityAuthServiceDiscoveryKey: server.URL,
+			notificationServiceDiscoveryKey: server.URL,
 		}},
 	}
-	err := service.doAdminServiceCommand(context.Background(), "tenant_1", identityAuthCommandTarget, "/internal/identity-auth/users/by-mobile", struct{}{}, nil)
+	err := service.doAdminServiceCommand(context.Background(), "tenant_1", notificationCommandTarget, "/internal/notification-chat/biller-hook", struct{}{}, nil)
 	if !errors.Is(err, workloadauth.ErrMissingSigner) {
 		t.Fatalf("error = %v", err)
 	}

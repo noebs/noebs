@@ -148,7 +148,6 @@ func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 		{name: "register with card identity", path: "/internal/identity-auth/register-with-card/users"},
 		{name: "recovery credential", path: "/internal/identity-auth/recovery-credential"},
 		{name: "session validation", path: "/internal/identity-auth/sessions/validate"},
-		{name: "user by mobile", path: "/internal/identity-auth/users/by-mobile"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,6 +160,22 @@ func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
 			defer func() { _ = resp.Body.Close() }()
 			assertFiberRouteRegistered(t, resp, http.MethodPost, tt.path)
 		})
+	}
+}
+
+func TestIdentityAuthDoesNotExposeMobileIdentityContracts(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleIdentityAuth)
+	route := GetMainEngine()
+	retired := map[string]bool{
+		"/consumer/check_user":                        true,
+		"/internal/identity-auth/users/by-mobile":     true,
+		"/internal/identity-auth/users/resolve-batch": true,
+	}
+	for _, registered := range route.GetRoutes(true) {
+		if registered.Method == http.MethodPost && retired[registered.Path] {
+			t.Fatalf("identity-auth registered retired mobile identity route %s", registered.Path)
+		}
 	}
 }
 

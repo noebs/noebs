@@ -53,7 +53,6 @@ func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
 	// Transactions / payment compatibility
 	router.Get("/transaction", authenticatedEBS(h.TransactionByUUID))
 	router.Get("/transactions", authenticatedEBS(h.GetTransactions))
-	router.Post("/p2p_mobile", h.LegacyCardUpgradeRequired)
 	router.Post("/payment_token/quick_pay", h.LegacyCardUpgradeRequired)
 }
 
@@ -98,8 +97,6 @@ func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
 	router.Post("/principals/resolve", h.ResolveProfileProjection)
-	router.Post("/users/by-mobile", h.ResolveIdentityUserByMobile)
-	router.Post("/users/resolve-batch", h.ResolveIdentityUsersBatch)
 }
 
 // RegisterIdentityPrincipalRoutes contains bootstrap operations that have a
@@ -115,7 +112,6 @@ func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Get("/user/lang", h.GetUserLanguage)
 	router.Put("/user/lang", h.SetUserLanguage)
 	router.Post("/user/device", h.AddDeviceToken)
-	router.Post("/check_user", h.CheckUser)
 	router.Post("/kyc", h.KYC)
 }
 

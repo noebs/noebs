@@ -18,7 +18,6 @@ type createProfileProjectionRequest struct {
 	Gender      string `json:"gender,omitempty"`
 	Birthday    string `json:"birthday,omitempty"`
 	Email       string `json:"email,omitempty"`
-	Mobile      string `json:"mobile" binding:"required,len=10,numeric"`
 	DeviceToken string `json:"device_token,omitempty"`
 	Language    string `json:"language,omitempty"`
 }
@@ -37,7 +36,6 @@ func (h *Handler) CreateProfileProjection(c *fiber.Ctx) error {
 	request.Gender = strings.TrimSpace(request.Gender)
 	request.Birthday = strings.TrimSpace(request.Birthday)
 	request.Email = strings.ToLower(strings.TrimSpace(request.Email))
-	request.Mobile = strings.TrimSpace(request.Mobile)
 	request.DeviceToken = strings.TrimSpace(request.DeviceToken)
 	request.Language = strings.TrimSpace(request.Language)
 	if err := ebs_fields.ValidateStruct(request); err != nil {
@@ -45,7 +43,7 @@ func (h *Handler) CreateProfileProjection(c *fiber.Ctx) error {
 	}
 	command := consumer.CreateProfileProjectionCommand{
 		Fullname: request.Fullname, Username: request.Username, Gender: request.Gender,
-		Birthday: request.Birthday, Email: request.Email, Mobile: request.Mobile,
+		Birthday: request.Birthday, Email: request.Email,
 		DeviceToken: request.DeviceToken, Language: request.Language,
 	}
 	profile, err := h.Service.CreateProfileProjection(c.UserContext(), principal.TenantID, consumer.PrincipalProjectionReference{
@@ -67,7 +65,7 @@ func profileProjectionError(c *fiber.Ctx, err error) error {
 		errors.Is(err, store.ErrMissingIssuer), errors.Is(err, store.ErrInvalidIssuer),
 		errors.Is(err, store.ErrMissingSubject), errors.Is(err, store.ErrInvalidSubject),
 		errors.Is(err, store.ErrMissingProfileName), errors.Is(err, store.ErrInvalidProfileName),
-		errors.Is(err, store.ErrInvalidMobile), errors.Is(err, store.ErrMissingData):
+		errors.Is(err, store.ErrMissingData):
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "invalid_profile", "message": "profile data is invalid"})
 	case errors.Is(err, consumer.ErrMissingStore):
 		return jsonResponse(c, http.StatusServiceUnavailable, fiber.Map{"code": "profile_service_unavailable", "message": "profile service is unavailable"})

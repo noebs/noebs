@@ -57,8 +57,18 @@ func ebsAdapterAuthenticatedConsumerRoutes() []ebsAdapterRoute {
 		{name: "consumer voucher", method: http.MethodPost, path: "/consumer/vouchers/generate"},
 		{name: "consumer transaction", method: http.MethodGet, path: "/consumer/transaction"},
 		{name: "consumer transactions", method: http.MethodGet, path: "/consumer/transactions"},
-		{name: "consumer mobile transfer", method: http.MethodPost, path: "/consumer/p2p_mobile"},
 		{name: "consumer quick pay token", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
+	}
+}
+
+func TestEBSAdapterDoesNotExposeMobileTransferCompatibilityRoute(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleEBSAdapter)
+	route := GetMainEngine()
+	for _, registered := range route.GetRoutes(true) {
+		if registered.Method == http.MethodPost && registered.Path == "/consumer/p2p_mobile" {
+			t.Fatalf("ebs-adapter registered retired route %s", registered.Path)
+		}
 	}
 }
 

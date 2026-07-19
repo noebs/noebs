@@ -12,7 +12,6 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jmoiron/sqlx"
 )
 
 const maxOIDCSubjectBytes = 255
@@ -34,7 +33,6 @@ type ProfileProjection struct {
 	Gender      string
 	Birthday    string
 	Email       string
-	Mobile      string
 	DeviceToken string
 	Language    string
 	CreatedAt   time.Time
@@ -48,7 +46,6 @@ type CreateProfileProjectionParams struct {
 	Gender      string
 	Birthday    string
 	Email       string
-	Mobile      string
 	DeviceToken string
 	Language    string
 }
@@ -75,16 +72,16 @@ func (s *Store) CreateProfileProjection(ctx context.Context, params CreateProfil
 	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO users(
 		tenant_id, issuer, subject, fullname, username, gender, birthday, email,
-		mobile, device_token, language, created_at, updated_at
+		device_token, language, created_at, updated_at
 	) VALUES(?, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''),
-		?, NULLIF(?, ''), NULLIF(?, ''), ?, ?)
+		NULLIF(?, ''), NULLIF(?, ''), ?, ?)
 	ON CONFLICT (tenant_id, issuer, subject) DO NOTHING
 	RETURNING id, created_at, updated_at`)
 	projection := profileProjectionFromCreate(params)
 	err = db.QueryRowContext(ctx, stmt,
 		params.TenantID, params.Issuer, params.Subject, params.Fullname,
 		params.Username, params.Gender, params.Birthday, params.Email,
-		params.Mobile, params.DeviceToken, params.Language, now, now,
+		params.DeviceToken, params.Language, now, now,
 	).Scan(&projection.UserID, &projection.CreatedAt, &projection.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ProfileProjection{}, ErrProfileAlreadyExists
@@ -119,60 +116,6 @@ func (s *Store) FindProfileProjectionByUserID(ctx context.Context, tenantID stri
 	return scanProfileProjection(db.QueryRowContext(ctx, stmt, tenantID, userID))
 }
 
-func (s *Store) FindProfileProjectionByMobile(ctx context.Context, tenantID, mobile string) (ProfileProjection, error) {
-	if _, err := validateExactTenantID(tenantID); err != nil {
-		return ProfileProjection{}, err
-	}
-	if !validProfileMobile(mobile) {
-		return ProfileProjection{}, ErrInvalidMobile
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return ProfileProjection{}, err
-	}
-	stmt := s.DB.Rebind(profileProjectionSelect + ` WHERE tenant_id = ? AND mobile = ?`)
-	return scanProfileProjection(db.QueryRowContext(ctx, stmt, tenantID, mobile))
-}
-
-func (s *Store) ListProfileProjectionsByMobile(ctx context.Context, tenantID string, mobiles []string) ([]ProfileProjection, error) {
-	if _, err := validateExactTenantID(tenantID); err != nil {
-		return nil, err
-	}
-	if len(mobiles) == 0 || len(mobiles) > 50 {
-		return nil, ErrInvalidMobile
-	}
-	for _, mobile := range mobiles {
-		if !validProfileMobile(mobile) {
-			return nil, ErrInvalidMobile
-		}
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	query, args, err := sqlx.In(profileProjectionSelect+` WHERE tenant_id = ? AND mobile IN (?) ORDER BY id`, tenantID, mobiles)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := db.QueryContext(ctx, s.DB.Rebind(query), args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	profiles := make([]ProfileProjection, 0, len(mobiles))
-	for rows.Next() {
-		profile, err := scanProfileProjection(rows)
-		if err != nil {
-			return nil, err
-		}
-		profiles = append(profiles, profile)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return profiles, nil
-}
-
 func (s *Store) UpdateProfileProjection(ctx context.Context, tenantID string, userID int64, update ProfileProjectionUpdate) error {
 	if err := validateProjectionUserID(tenantID, userID); err != nil {
 		return err
@@ -188,24 +131,6 @@ func (s *Store) UpdateProfileProjection(ctx context.Context, tenantID string, us
 	args = append(args, time.Now().UTC(), tenantID, userID)
 	stmt := s.DB.Rebind(`UPDATE users SET ` + strings.Join(set, ", ") + `, updated_at = ? WHERE tenant_id = ? AND id = ?`)
 	return profileMutationError(execContextRequireRowsAffected(ctx, db, stmt, args...))
-}
-
-func (s *Store) UpdateProfileContact(ctx context.Context, tenantID string, userID int64, mobile, fullname string) error {
-	if err := validateProjectionUserID(tenantID, userID); err != nil {
-		return err
-	}
-	if !validProfileMobile(mobile) {
-		return ErrInvalidMobile
-	}
-	if err := validateRequiredProfileName(fullname); err != nil {
-		return err
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	stmt := s.DB.Rebind(`UPDATE users SET mobile = ?, fullname = ?, updated_at = ? WHERE tenant_id = ? AND id = ?`)
-	return profileMutationError(execContextRequireRowsAffected(ctx, db, stmt, mobile, fullname, time.Now().UTC(), tenantID, userID))
 }
 
 func (s *Store) SetProfileLanguage(ctx context.Context, tenantID string, userID int64, language string) error {
@@ -336,7 +261,7 @@ func (s *Store) GetProfileKYC(ctx context.Context, tenantID string, userID int64
 const profileProjectionSelect = `SELECT
 	id, tenant_id, issuer, subject, fullname,
 	COALESCE(username, ''), COALESCE(gender, ''), COALESCE(birthday, ''),
-	COALESCE(email, ''), mobile, COALESCE(device_token, ''), COALESCE(language, ''),
+	COALESCE(email, ''), COALESCE(device_token, ''), COALESCE(language, ''),
 	created_at, updated_at
 	FROM users`
 
@@ -349,7 +274,7 @@ func scanProfileProjection(row rowScanner) (ProfileProjection, error) {
 	err := row.Scan(
 		&profile.UserID, &profile.TenantID, &profile.Issuer, &profile.Subject,
 		&profile.Fullname, &profile.Username, &profile.Gender, &profile.Birthday,
-		&profile.Email, &profile.Mobile, &profile.DeviceToken, &profile.Language,
+		&profile.Email, &profile.DeviceToken, &profile.Language,
 		&profile.CreatedAt, &profile.UpdatedAt,
 	)
 	return profile, err
@@ -371,7 +296,6 @@ func profileProjectionFromCreate(params CreateProfileProjectionParams) ProfilePr
 		Gender:            params.Gender,
 		Birthday:          params.Birthday,
 		Email:             params.Email,
-		Mobile:            params.Mobile,
 		DeviceToken:       params.DeviceToken,
 		Language:          params.Language,
 	}
@@ -414,9 +338,6 @@ func validateProfileCreate(params CreateProfileProjectionParams) error {
 	if err := validateRequiredProfileName(params.Fullname); err != nil {
 		return err
 	}
-	if !validProfileMobile(params.Mobile) {
-		return ErrInvalidMobile
-	}
 	for _, value := range []string{params.Username, params.Gender, params.Birthday, params.Email, params.DeviceToken, params.Language} {
 		if !validOptionalProfileValue(value) {
 			return ErrMissingData
@@ -437,18 +358,6 @@ func validateRequiredProfileName(value string) error {
 
 func validOptionalProfileValue(value string) bool {
 	return value == "" || value == strings.TrimSpace(value)
-}
-
-func validProfileMobile(value string) bool {
-	if len(value) != 10 {
-		return false
-	}
-	for _, digit := range value {
-		if digit < '0' || digit > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 func validateProjectionUserID(tenantID string, userID int64) error {

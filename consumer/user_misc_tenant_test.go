@@ -18,10 +18,6 @@ func TestUserMiscTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 		name string
 		run  func(string) error
 	}{
-		{"CheckUser", func(tenantID string) error {
-			_, err := service.CheckUser(ctx, tenantID, 1, []string{"0990000000"})
-			return err
-		}},
 		{"SetMainCardForUserID", func(tenantID string) error {
 			return service.SetMainCardForUserID(ctx, tenantID, 1, "9222081700000000")
 		}},

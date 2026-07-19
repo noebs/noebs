@@ -25,8 +25,6 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 		add(spec.role, string(serviceRoleAPIGateway), spec.method, spec.path)
 	}
 	add(serviceRoleIdentityAuth, string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
-	add(serviceRoleIdentityAuth, string(serviceRoleNotification), http.MethodPost, "/internal/identity-auth/users/resolve-batch")
-	add(serviceRoleIdentityAuth, string(serviceRoleEBSAdapter), http.MethodPost, "/internal/identity-auth/users/by-mobile")
 	add(serviceRoleCardVault, string(serviceRoleIdentityAuth), http.MethodPost, "/internal/card-vault/cards/masked")
 	for _, path := range []string{
 		"/internal/card-vault/enrollment-intents",
@@ -69,6 +67,20 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 	for key := range actual {
 		if !expected[key] {
 			t.Errorf("unreviewed capability %s", key)
+		}
+	}
+}
+
+func TestMobileIdentityCapabilitiesAreAbsent(t *testing.T) {
+	for _, capability := range []struct {
+		caller string
+		path   string
+	}{
+		{caller: string(serviceRoleEBSAdapter), path: "/internal/identity-auth/users/by-mobile"},
+		{caller: string(serviceRoleNotification), path: "/internal/identity-auth/users/resolve-batch"},
+	} {
+		if authorizeWorkload(serviceRoleIdentityAuth, capability.caller, http.MethodPost, capability.path) {
+			t.Fatalf("obsolete capability remains authorized: %s %s", capability.caller, capability.path)
 		}
 	}
 }

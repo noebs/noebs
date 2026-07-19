@@ -5,8 +5,6 @@ import (
 )
 
 var (
-	ErrCheckUserBatchTooLarge = errors.New("check_user_batch_too_large")
-
 	// Account recovery / balance step
 	ErrCardNotMatched    = errors.New("card_not_matched")
 	ErrCardNotFound      = errors.New("card_not_found")
@@ -25,9 +23,6 @@ var (
 	ErrMissingCardVault           = errors.New("missing_card_vault_service_discovery")
 	ErrInvalidCardVault           = errors.New("invalid_card_vault_service_discovery")
 	ErrCardVaultCommand           = errors.New("card_vault_command_failed")
-	ErrMissingIdentityAuth        = errors.New("missing_identity_auth_service_discovery")
-	ErrInvalidIdentityAuth        = errors.New("invalid_identity_auth_service_discovery")
-	ErrIdentityAuthCommand        = errors.New("identity_auth_command_failed")
 	ErrMissingNotification        = errors.New("missing_notification_chat_service_discovery")
 	ErrInvalidNotification        = errors.New("invalid_notification_chat_service_discovery")
 	ErrNotificationCommand        = errors.New("notification_chat_command_failed")

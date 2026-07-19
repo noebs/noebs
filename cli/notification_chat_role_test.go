@@ -43,7 +43,6 @@ func TestNotificationRoutesAreProxiedByAPIGateway(t *testing.T) {
 	}{
 		{name: "websocket requires upgrade", method: http.MethodGet, path: "/ws", wantStatus: http.StatusUpgradeRequired},
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-		{name: "contacts", method: http.MethodPost, path: "/consumer/submit_contacts"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -76,7 +75,6 @@ func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 		path   string
 	}{
 		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-		{name: "contacts", method: http.MethodPost, path: "/consumer/submit_contacts"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -91,6 +89,17 @@ func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
 				t.Fatalf("notification-chat did not register %s", tt.path)
 			}
 		})
+	}
+}
+
+func TestNotificationChatDoesNotExposeMobileContactDiscovery(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleNotification)
+	route := GetMainEngine()
+	for _, registered := range route.GetRoutes(true) {
+		if registered.Method == http.MethodPost && registered.Path == "/consumer/submit_contacts" {
+			t.Fatalf("notification-chat registered retired route %s", registered.Path)
+		}
 	}
 }
 

@@ -17,7 +17,6 @@ type CreateProfileProjectionCommand struct {
 	Gender      string `json:"gender,omitempty"`
 	Birthday    string `json:"birthday,omitempty"`
 	Email       string `json:"email,omitempty"`
-	Mobile      string `json:"mobile"`
 	DeviceToken string `json:"device_token,omitempty"`
 	Language    string `json:"language,omitempty"`
 }
@@ -32,7 +31,6 @@ type ProfileProjection struct {
 	Gender      string `json:"gender,omitempty"`
 	Birthday    string `json:"birthday,omitempty"`
 	Email       string `json:"email,omitempty"`
-	Mobile      string `json:"mobile"`
 	DeviceToken string `json:"device_token,omitempty"`
 	Language    string `json:"language,omitempty"`
 }
@@ -75,7 +73,6 @@ func (s *Service) CreateProfileProjection(ctx context.Context, tenantID string, 
 		Gender:      command.Gender,
 		Birthday:    command.Birthday,
 		Email:       command.Email,
-		Mobile:      command.Mobile,
 		DeviceToken: command.DeviceToken,
 		Language:    command.Language,
 	})
@@ -96,7 +93,6 @@ func profileProjectionFromStore(profile store.ProfileProjection) ProfileProjecti
 		Gender:      profile.Gender,
 		Birthday:    profile.Birthday,
 		Email:       profile.Email,
-		Mobile:      profile.Mobile,
 		DeviceToken: profile.DeviceToken,
 		Language:    profile.Language,
 	}
