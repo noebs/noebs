@@ -175,7 +175,7 @@ func TestVerifierRejectsMalformedFields(t *testing.T) {
 		{"invalid raw path escape", func(r *http.Request) { r.URL.RawPath = "/v1/payments/a%ZZ" }, ErrInvalidRequest},
 		{"raw path disagrees with path", func(r *http.Request) { r.URL.RawPath = "/v1/payments/different" }, ErrInvalidRequest},
 		{"malformed content type", func(r *http.Request) { r.Header.Set("Content-Type", "not a media type") }, ErrInvalidRequest},
-		{"header newline", func(r *http.Request) { r.Header[HeaderSessionToken] = []string{"token\r\nInjected: yes"} }, ErrInvalidRequest},
+		{"header newline", func(r *http.Request) { r.Header[HeaderSubject] = []string{"subject\r\nInjected: yes"} }, ErrInvalidRequest},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -442,7 +442,7 @@ func TestRejectRedirectPreventsCredentialForwarding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set(HeaderSessionToken, "must-not-leave")
+	req.Header.Set(HeaderSubject, "must-not-leave")
 	req.Header.Set(HeaderSignature, "must-not-leave")
 	response, err := client.Do(req)
 	if err != nil {

@@ -11,12 +11,12 @@ import (
 	"strings"
 )
 
-// V1 is a fixed sequence of nineteen UTF-8 fields. Each field is framed as a
+// V2 is a fixed sequence of twenty UTF-8 fields. Each field is framed as a
 // four-byte unsigned big-endian byte length followed by those bytes:
 //
-//	NOEBS-WORKLOAD-V1, key_id, audience, unix_seconds, nonce, method,
+//	NOEBS-WORKLOAD-V2, key_id, audience, unix_seconds, nonce, method,
 //	escaped_path_and_raw_query, normalized_content_type, body_sha256,
-//	X-Request-ID, then the nine X-Noebs identity/admin/session/source values
+//	X-Request-ID, then the ten X-Noebs OIDC principal values
 //	in identityHeaders order.
 //
 // Empty identity values are zero-length fields; fields are never omitted.
@@ -34,7 +34,8 @@ type canonicalInput struct {
 }
 
 func canonicalRecord(in canonicalInput) ([]byte, error) {
-	fields := [...]string{
+	fields := make([]string, 0, 10+len(identityHeaders))
+	fields = append(fields,
 		VersionMagic,
 		in.keyID,
 		in.audience,
@@ -45,16 +46,8 @@ func canonicalRecord(in canonicalInput) ([]byte, error) {
 		in.contentType,
 		in.bodyDigest,
 		in.requestID,
-		in.identity[0],
-		in.identity[1],
-		in.identity[2],
-		in.identity[3],
-		in.identity[4],
-		in.identity[5],
-		in.identity[6],
-		in.identity[7],
-		in.identity[8],
-	}
+	)
+	fields = append(fields, in.identity[:]...)
 
 	var size uint64
 	for _, field := range fields {

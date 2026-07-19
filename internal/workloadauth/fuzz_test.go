@@ -72,7 +72,7 @@ func FuzzCanonicalization(f *testing.F) {
 		}
 		req.Header["Content-Type"] = []string{contentType}
 		req.Header[HeaderRequestID] = []string{requestID}
-		req.Header[HeaderSessionToken] = []string{sessionToken}
+		req.Header[HeaderSubject] = []string{sessionToken}
 
 		first, err := requestInput(req)
 		if err != nil {
@@ -99,10 +99,10 @@ func FuzzCanonicalization(f *testing.F) {
 			t.Fatal("canonicalization is not deterministic")
 		}
 		fields := decodeCanonicalFields(t, firstRecord)
-		if len(fields) != 19 {
+		if len(fields) != 20 {
 			t.Fatalf("canonical field count = %d", len(fields))
 		}
-		if fields[5] != method || fields[6] != first.target || fields[7] != first.contentType || fields[9] != requestID || fields[14] != sessionToken {
+		if fields[5] != method || fields[6] != first.target || fields[7] != first.contentType || fields[9] != requestID || fields[12] != sessionToken {
 			t.Fatal("canonical record changed a bound request value")
 		}
 	})

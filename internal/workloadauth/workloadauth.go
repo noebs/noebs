@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	VersionMagic = "NOEBS-WORKLOAD-V1"
+	VersionMagic = "NOEBS-WORKLOAD-V2"
 
 	HeaderKeyID      = "X-Noebs-Workload-Key-ID"
 	HeaderAudience   = "X-Noebs-Workload-Audience"
@@ -20,16 +20,17 @@ const (
 	HeaderBodySHA256 = "X-Noebs-Workload-Body-SHA256"
 	HeaderSignature  = "X-Noebs-Workload-Signature"
 
-	HeaderRequestID        = "X-Request-ID"
-	HeaderTenantID         = "X-Noebs-Tenant-ID"
-	HeaderUserID           = "X-Noebs-User-ID"
-	HeaderMobile           = "X-Noebs-Mobile"
-	HeaderSessionEpoch     = "X-Noebs-Session-Epoch"
-	HeaderSessionToken     = "X-Noebs-Session-Token"
-	HeaderSourceIP         = "X-Noebs-Source-IP"
-	HeaderAdminIdentity    = "X-Noebs-Admin-Identity"
-	HeaderAdminRole        = "X-Noebs-Admin-Role"
-	HeaderAdminPermissions = "X-Noebs-Admin-Permissions"
+	HeaderRequestID       = "X-Request-ID"
+	HeaderTenantID        = "X-Noebs-Tenant-ID"
+	HeaderIssuer          = "X-Noebs-Issuer"
+	HeaderSubject         = "X-Noebs-Subject"
+	HeaderOrganizationID  = "X-Noebs-Organization-ID"
+	HeaderAuthorizedParty = "X-Noebs-Authorized-Party"
+	HeaderRoles           = "X-Noebs-Roles"
+	HeaderPermission      = "X-Noebs-Permission"
+	HeaderUserID          = "X-Noebs-User-ID"
+	HeaderSourceIP        = "X-Noebs-Source-IP"
+	HeaderTokenExpiresAt  = "X-Noebs-Token-Expires-At"
 )
 
 const (
@@ -96,14 +97,15 @@ type Principal struct {
 
 var identityHeaders = [...]string{
 	HeaderTenantID,
+	HeaderIssuer,
+	HeaderSubject,
+	HeaderOrganizationID,
+	HeaderAuthorizedParty,
+	HeaderRoles,
+	HeaderPermission,
 	HeaderUserID,
-	HeaderMobile,
-	HeaderSessionEpoch,
-	HeaderSessionToken,
 	HeaderSourceIP,
-	HeaderAdminIdentity,
-	HeaderAdminRole,
-	HeaderAdminPermissions,
+	HeaderTokenExpiresAt,
 }
 
 var workloadHeaders = [...]string{

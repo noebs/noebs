@@ -98,14 +98,15 @@ func fixedRequest(t *testing.T, body []byte) *http.Request {
 	req.Header.Set("Content-Type", `Application/JSON; profile="urn:noebs:v1"; Charset="UTF-8"`)
 	req.Header.Set(HeaderRequestID, "req-01J2Y7K8V9M0N1P2Q3R4S5T6U7")
 	req.Header.Set(HeaderTenantID, "tenant-alpha")
+	req.Header.Set(HeaderIssuer, "https://api.noebs.sd/auth/realms/noebs")
+	req.Header.Set(HeaderSubject, "operator-01J2Y7K8V9M0N1P2Q3R4S5T6U7")
+	req.Header.Set(HeaderOrganizationID, "org-alpha")
+	req.Header.Set(HeaderAuthorizedParty, "noebs-mobile")
+	req.Header.Set(HeaderRoles, "tenant-admin,user")
+	req.Header.Set(HeaderPermission, "wallet:manual:create")
 	req.Header.Set(HeaderUserID, "42")
-	req.Header.Set(HeaderMobile, "+249912345678")
-	req.Header.Set(HeaderSessionEpoch, "7")
-	req.Header.Set(HeaderSessionToken, "session-token-secret")
 	req.Header.Set(HeaderSourceIP, "100.64.0.10")
-	req.Header.Set(HeaderAdminIdentity, "gateway-admin")
-	req.Header.Set(HeaderAdminRole, "admin")
-	req.Header.Set(HeaderAdminPermissions, "cards:read,cards:write")
+	req.Header.Set(HeaderTokenExpiresAt, fmt.Sprint(testNow.Add(5*time.Minute).Unix()))
 	return req
 }
 
@@ -138,7 +139,7 @@ func bodyDigest(body []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func TestV1FixedVector(t *testing.T) {
+func TestV2FixedVector(t *testing.T) {
 	clock := &fixedClock{now: testNow}
 	body := []byte(`{"amount":12345,"currency":"SDG"}`)
 	req := signFixedRequest(t, clock, body)
@@ -160,10 +161,10 @@ func TestV1FixedVector(t *testing.T) {
 	privateKey, _ := testKeys()
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
-	const wantRecordSHA256 = "1bf50794bbb89e211f8fa1ba66a25fc94c9d7320a89ac8bb7d01575472893e39"
+	const wantRecordSHA256 = "5ff9c9595ca02c5d3ce2ae70477d826f690c66b66ae3f3f139daa83d318b8fa9"
 	const wantBodySHA256 = "c3c7a11dd4e24ad697b72fc5b10c42f8f22bba8ff085c00c9b6bc8c180c834f1"
 	const wantPublicKey = "f8c480a47989235e722e0acadf3e6d3a7116046af4614ee209cb5334b3a7ba64"
-	const wantSignature = "IFZzeXvStclPaq9w7nEyL5fnoZkBSkyQ12t3k4bQm96raTZKrydx3JsPsJJvNUHW5vM2DpC-U6iQpZ2p8GniAA"
+	const wantSignature = "jbmHT3ojNxagr41Z54nlXVwHQD_rasoTChpICaoRnfyFo7oGfBBKukePV9RuR5vuxKxb9A-uwP8S-mnfYTGCAg"
 	if got := hex.EncodeToString(recordHash[:]); got != wantRecordSHA256 {
 		t.Fatalf("canonical record SHA-256 = %q", got)
 	}
@@ -190,14 +191,15 @@ func TestV1FixedVector(t *testing.T) {
 		wantBodySHA256,
 		"req-01J2Y7K8V9M0N1P2Q3R4S5T6U7",
 		"tenant-alpha",
+		"https://api.noebs.sd/auth/realms/noebs",
+		"operator-01J2Y7K8V9M0N1P2Q3R4S5T6U7",
+		"org-alpha",
+		"noebs-mobile",
+		"tenant-admin,user",
+		"wallet:manual:create",
 		"42",
-		"+249912345678",
-		"7",
-		"session-token-secret",
 		"100.64.0.10",
-		"gateway-admin",
-		"admin",
-		"cards:read,cards:write",
+		fmt.Sprint(testNow.Add(5 * time.Minute).Unix()),
 	}
 	if len(fields) != len(wantFields) {
 		t.Fatalf("field count = %d, want %d", len(fields), len(wantFields))
@@ -255,10 +257,10 @@ func TestEmptyIdentityValuesRemainExplicitFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields := decodeCanonicalFields(t, record)
-	if len(fields) != 19 {
-		t.Fatalf("field count = %d, want 19", len(fields))
+	if len(fields) != 20 {
+		t.Fatalf("field count = %d, want 20", len(fields))
 	}
-	for i := 10; i < 19; i++ {
+	for i := 10; i < 20; i++ {
 		if fields[i] != "" {
 			t.Fatalf("identity field %d = %q, want explicit empty value", i, fields[i])
 		}
@@ -293,14 +295,21 @@ func TestEveryCanonicalFieldIsBound(t *testing.T) {
 		{"body digest", func(r *http.Request) []byte { r.Header.Set(HeaderBodySHA256, otherDigest); return otherBody }},
 		{"request ID", func(r *http.Request) []byte { r.Header.Set(HeaderRequestID, "req-other"); return body }},
 		{"tenant", func(r *http.Request) []byte { r.Header.Set(HeaderTenantID, "tenant-beta"); return body }},
+		{"issuer", func(r *http.Request) []byte {
+			r.Header.Set(HeaderIssuer, "https://issuer.example/realms/noebs")
+			return body
+		}},
+		{"subject", func(r *http.Request) []byte { r.Header.Set(HeaderSubject, "other-subject"); return body }},
+		{"organization", func(r *http.Request) []byte { r.Header.Set(HeaderOrganizationID, "org-beta"); return body }},
+		{"authorized party", func(r *http.Request) []byte { r.Header.Set(HeaderAuthorizedParty, "noebs-backoffice"); return body }},
+		{"roles", func(r *http.Request) []byte { r.Header.Set(HeaderRoles, "user"); return body }},
+		{"permission", func(r *http.Request) []byte { r.Header.Set(HeaderPermission, "wallet:read"); return body }},
 		{"user", func(r *http.Request) []byte { r.Header.Set(HeaderUserID, "43"); return body }},
-		{"mobile", func(r *http.Request) []byte { r.Header.Set(HeaderMobile, "+249912345679"); return body }},
-		{"session epoch", func(r *http.Request) []byte { r.Header.Set(HeaderSessionEpoch, "8"); return body }},
-		{"session token", func(r *http.Request) []byte { r.Header.Set(HeaderSessionToken, "other-session"); return body }},
 		{"source IP", func(r *http.Request) []byte { r.Header.Set(HeaderSourceIP, "100.64.0.11"); return body }},
-		{"admin identity", func(r *http.Request) []byte { r.Header.Set(HeaderAdminIdentity, "other-admin"); return body }},
-		{"admin role", func(r *http.Request) []byte { r.Header.Set(HeaderAdminRole, "viewer"); return body }},
-		{"admin permissions", func(r *http.Request) []byte { r.Header.Set(HeaderAdminPermissions, "cards:read"); return body }},
+		{"token expiry", func(r *http.Request) []byte {
+			r.Header.Set(HeaderTokenExpiresAt, fmt.Sprint(testNow.Add(10*time.Minute).Unix()))
+			return body
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
