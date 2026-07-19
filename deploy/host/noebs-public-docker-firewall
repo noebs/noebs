@@ -1,0 +1,87 @@
+#!/bin/sh
+set -eu
+
+public_interface="${PUBLIC_INTERFACE:-eth0}"
+deny_comment="noebs-public-docker-default-deny"
+established_comment="noebs-public-docker-established"
+legacy_comment="noebs-alpha-public-management-block"
+legacy_ports="3000,3001,7233,8080,8233,9090"
+
+remove_rule() {
+    firewall="$1"
+    shift
+
+    while "$firewall" -w 10 -C DOCKER-USER "$@" >/dev/null 2>&1; do
+        "$firewall" -w 10 -D DOCKER-USER "$@"
+    done
+}
+
+remove_legacy_rule() {
+    firewall="$1"
+
+    remove_rule "$firewall" -i "$public_interface" -p tcp \
+        -m multiport --dports "$legacy_ports" \
+        -m comment --comment "$legacy_comment" -j DROP
+}
+
+apply_family() {
+    firewall="$1"
+
+    "$firewall" -w 10 -n -L DOCKER-USER >/dev/null
+    remove_legacy_rule "$firewall"
+
+    for docker_interface in 'docker+' 'br+'; do
+        if ! "$firewall" -w 10 -C DOCKER-USER \
+            -i "$public_interface" -o "$docker_interface" \
+            -m conntrack --ctstate RELATED,ESTABLISHED \
+            -m comment --comment "$established_comment" -j RETURN \
+            >/dev/null 2>&1; then
+            "$firewall" -w 10 -I DOCKER-USER 1 \
+                -i "$public_interface" -o "$docker_interface" \
+                -m conntrack --ctstate RELATED,ESTABLISHED \
+                -m comment --comment "$established_comment" -j RETURN
+        fi
+
+        if ! "$firewall" -w 10 -C DOCKER-USER \
+            -i "$public_interface" -o "$docker_interface" \
+            -m comment --comment "$deny_comment" -j DROP \
+            >/dev/null 2>&1; then
+            "$firewall" -w 10 -A DOCKER-USER \
+                -i "$public_interface" -o "$docker_interface" \
+                -m comment --comment "$deny_comment" -j DROP
+        fi
+    done
+}
+
+remove_family() {
+    firewall="$1"
+
+    "$firewall" -w 10 -n -L DOCKER-USER >/dev/null
+
+    for docker_interface in 'docker+' 'br+'; do
+        remove_rule "$firewall" \
+            -i "$public_interface" -o "$docker_interface" \
+            -m conntrack --ctstate RELATED,ESTABLISHED \
+            -m comment --comment "$established_comment" -j RETURN
+        remove_rule "$firewall" \
+            -i "$public_interface" -o "$docker_interface" \
+            -m comment --comment "$deny_comment" -j DROP
+    done
+
+    remove_legacy_rule "$firewall"
+}
+
+case "${1:-}" in
+    apply)
+        apply_family /usr/sbin/iptables
+        apply_family /usr/sbin/ip6tables
+        ;;
+    remove)
+        remove_family /usr/sbin/iptables
+        remove_family /usr/sbin/ip6tables
+        ;;
+    *)
+        echo "usage: $0 {apply|remove}" >&2
+        exit 2
+        ;;
+esac

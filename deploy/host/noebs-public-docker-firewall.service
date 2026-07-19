@@ -1,0 +1,15 @@
+[Unit]
+Description=Block public forwarding to Docker bridge networks
+Requires=docker.service
+After=docker.service network-online.target
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+Environment=PUBLIC_INTERFACE=eth0
+ExecStart=/usr/local/sbin/noebs-public-docker-firewall apply
+ExecStop=/usr/local/sbin/noebs-public-docker-firewall remove
+RemainAfterExit=yes
+
+[Install]
+WantedBy=docker.service
