@@ -82,6 +82,15 @@ func (v *Verifier) VerifyBearer(ctx context.Context, authorization string) (tena
 	return v.verify(ctx, raw)
 }
 
+// VerifyAccessToken verifies an access token already extracted from trusted
+// server-side storage. It never accepts an authorization scheme or whitespace.
+func (v *Verifier) VerifyAccessToken(ctx context.Context, raw string) (tenantauth.Claims, error) {
+	if raw == "" || strings.IndexAny(raw, " \t\r\n") >= 0 {
+		return tenantauth.Claims{}, ErrInvalidToken
+	}
+	return v.verify(ctx, raw)
+}
+
 func parseBearer(authorization string) (string, error) {
 	if authorization == "" {
 		return "", ErrMissingAuthorization

@@ -111,6 +111,33 @@ func TestClaimsCopyMemberships(t *testing.T) {
 	}
 }
 
+func TestClaimsMembershipsAreSortedAndImmutable(t *testing.T) {
+	organizations := make(map[string]Organization)
+	var err error
+	organizations["tenant-b"], err = NewOrganization("org-b", []Role{RoleUser}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	organizations["tenant-a"], err = NewOrganization("org-a", []Role{RoleBackoffice}, []Permission{PermissionReportingRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := NewClaims(policyTestIdentity(), organizations, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	memberships := claims.Memberships()
+	if len(memberships) != 2 || memberships[0].TenantID != "tenant-a" || memberships[1].TenantID != "tenant-b" {
+		t.Fatalf("memberships = %+v", memberships)
+	}
+	memberships[0].Roles[0] = RoleTenantAdmin
+	memberships[0].Permissions[0] = PermissionWalletFeesWrite
+	again := claims.Memberships()
+	if again[0].Roles[0] != RoleBackoffice || again[0].Permissions[0] != PermissionReportingRead {
+		t.Fatalf("claims changed through membership result: %+v", again[0])
+	}
+}
+
 func TestPermissionPolicyNeverUnionsCapabilitiesAcrossTenants(t *testing.T) {
 	organizations := map[string]Organization{}
 	var err error

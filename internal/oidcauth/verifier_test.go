@@ -126,6 +126,20 @@ func TestParseBearerIsExact(t *testing.T) {
 	}
 }
 
+func TestVerifyAccessTokenAcceptsOnlyRawServerSideToken(t *testing.T) {
+	keys := oidcTestKeys(t)
+	verifier := newTestVerifier(t, &fakeClock{now: oidcTestNow}, staticTestKeys(t, map[string]*rsa.PrivateKey{"key-1": keys[0]}))
+	raw := signRS256(t, keys[0], "key-1", validTokenClaims(oidcTestNow), joseTokenType)
+	if _, err := verifier.VerifyAccessToken(context.Background(), raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []string{"", "Bearer " + raw, raw + "\n"} {
+		if _, err := verifier.VerifyAccessToken(context.Background(), invalid); !errors.Is(err, ErrInvalidToken) {
+			t.Fatalf("VerifyAccessToken(%q) error = %v, want invalid token", invalid, err)
+		}
+	}
+}
+
 func TestVerifierUsesOnlySelectedOrganizationRoles(t *testing.T) {
 	keys := oidcTestKeys(t)
 	clock := &fakeClock{now: oidcTestNow}

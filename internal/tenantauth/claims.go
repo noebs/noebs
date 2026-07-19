@@ -139,6 +139,13 @@ type Claims struct {
 	platformAdmin bool
 }
 
+type Membership struct {
+	TenantID       string
+	OrganizationID string
+	Roles          []Role
+	Permissions    []Permission
+}
+
 func NewClaims(identity Identity, organizations map[string]Organization, platformAdmin bool) (Claims, error) {
 	if identity.Issuer == "" || identity.Subject == "" || identity.AuthorizedParty == "" ||
 		identity.IssuedAt.IsZero() || identity.ExpiresAt.IsZero() || !identity.ExpiresAt.After(identity.IssuedAt) {
@@ -165,3 +172,22 @@ func NewClaims(identity Identity, organizations map[string]Organization, platfor
 func (c Claims) Identity() Identity { return c.identity }
 
 func (c Claims) PlatformAdmin() bool { return c.platformAdmin }
+
+func (c Claims) Memberships() []Membership {
+	tenants := make([]string, 0, len(c.organizations))
+	for tenant := range c.organizations {
+		tenants = append(tenants, tenant)
+	}
+	slices.Sort(tenants)
+	memberships := make([]Membership, 0, len(tenants))
+	for _, tenant := range tenants {
+		organization := c.organizations[tenant]
+		memberships = append(memberships, Membership{
+			TenantID:       tenant,
+			OrganizationID: organization.id,
+			Roles:          slices.Clone(organization.roles),
+			Permissions:    slices.Clone(organization.permissions),
+		})
+	}
+	return memberships
+}
