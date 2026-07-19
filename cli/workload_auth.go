@@ -281,18 +281,9 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 	}
 	switch role {
 	case serviceRoleIdentityAuth:
-		for _, caller := range []string{string(serviceRoleAPIGateway), string(serviceRoleNotification)} {
-			add(caller, http.MethodPost, "/internal/identity-auth/sessions/validate")
-		}
+		add(string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
 		add(string(serviceRoleNotification), http.MethodPost, "/internal/identity-auth/users/resolve-batch")
-		for _, path := range []string{
-			"/internal/identity-auth/card-registration/users",
-			"/internal/identity-auth/register-with-card/users",
-			"/internal/identity-auth/recovery-credential",
-			"/internal/identity-auth/users/by-mobile",
-		} {
-			add(string(serviceRoleEBSAdapter), http.MethodPost, path)
-		}
+		add(string(serviceRoleEBSAdapter), http.MethodPost, "/internal/identity-auth/users/by-mobile")
 	case serviceRoleCardVault:
 		add(string(serviceRoleIdentityAuth), http.MethodPost, "/internal/card-vault/cards/masked")
 		for _, path := range []string{

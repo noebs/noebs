@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,7 +46,10 @@ func TestGetBillsUsesExplicitPayeeIDAndDoesNotChangeCacheOnEBSError(t *testing.T
 		if r.URL.Path != "/"+ebs_fields.ConsumerBillInquiryEndpoint {
 			t.Fatalf("EBS path = %s", r.URL.Path)
 		}
-		body := readBodyForTest(t, r)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read EBS request: %v", err)
+		}
 		if !bytes.Contains(body, []byte(`"payeeId":"0010010002"`)) {
 			t.Fatalf("EBS request did not use explicit payee_id: %s", body)
 		}

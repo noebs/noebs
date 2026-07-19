@@ -1,26 +1,22 @@
 package consumer
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/testdb"
 	"github.com/adonese/noebs/store"
-	"github.com/sirupsen/logrus"
 )
 
 type testEnv struct {
 	Service *Service
-	Auth    *gateway.JWTAuth
 	Store   *store.Store
-	DB      *store.DB
 	Tenant  string
 }
 
@@ -46,17 +42,6 @@ func ensurePostgresContainer(t *testing.T) *testdb.PostgresContainer {
 		t.Fatalf("start postgres container: %v", postgresErr)
 	}
 	return postgresContainer
-}
-
-func newTestDB(t *testing.T) (*store.DB, *store.Store, string) {
-	t.Helper()
-	return newTestDBWithScopes(t, []string{
-		store.MigrationScopeIdentityAuth,
-		store.MigrationScopeCardVault,
-		store.MigrationScopeEBSAdapter,
-		store.MigrationScopeNotificationChat,
-		store.MigrationScopeConsumerBeneficiary,
-	})
 }
 
 func newTestDBWithScopes(t *testing.T, scopes []string) (*store.DB, *store.Store, string) {
@@ -102,37 +87,11 @@ func migrateConsumerTestScopes(ctx context.Context, db *store.DB, tenantID strin
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	db, storeSvc, tenantID := newTestDB(t)
-
-	smsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(smsServer.Close)
-
-	cfg := ebs_fields.NoebsConfig{
-		JWTKey:                "test-secret",
-		BillInquiryIPIN:       "0000",
-		EBSConsumerKey:        "test-key",
-		SMSGateway:            smsServer.URL + "?",
-		SMSAPIKey:             "test-key",
-		SMSSender:             "noebs",
-		SMSMessage:            "test",
-		DefaultTenantID:       tenantID,
-		KafkaTransactionTopic: testKafkaTransactionTopic,
-	}
-
-	auth := &gateway.JWTAuth{NoebsConfig: cfg}
-	auth.Init()
-
-	logger := logrus.New()
-	service := &Service{
-		Store:       storeSvc,
-		NoebsConfig: cfg,
-		Logger:      logger,
-		Auth:        auth,
-	}
-
-	return &testEnv{Service: service, Auth: auth, Store: storeSvc, DB: db, Tenant: tenantID}
+	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{
+		store.MigrationScopeIdentityAuth,
+		store.MigrationScopeNotificationChat,
+	})
+	return &testEnv{Service: &Service{Store: storeSvc}, Store: storeSvc, Tenant: tenantID}
 }
 
 func transactionActorContext(t *testing.T, userID int64) context.Context {
@@ -152,19 +111,43 @@ func testHTTPClient() *http.Client {
 	return &http.Client{Timeout: 2 * time.Second}
 }
 
-func seedUser(t *testing.T, storeSvc *store.Store, tenantID, mobile, password string) ebs_fields.User {
+func assertInternalCommandHeaders(t *testing.T, request *http.Request, tenantID string) {
 	t.Helper()
-	user := ebs_fields.User{
-		Mobile:   mobile,
+	if request.Header.Get(gateway.GatewayTenantIDHeader) != tenantID {
+		t.Fatalf("tenant header = %q, want %q", request.Header.Get(gateway.GatewayTenantIDHeader), tenantID)
+	}
+	if request.Header.Get("X-Tenant-ID") != "" {
+		t.Fatalf("public tenant header forwarded = %q", request.Header.Get("X-Tenant-ID"))
+	}
+	if request.Header.Get(gateway.GatewayAdminIdentityHeader) != "" || request.Header.Get(gateway.GatewayAdminRoleHeader) != "" {
+		t.Fatal("static admin identity headers were forwarded")
+	}
+}
+
+func readBodyForTest(t *testing.T, request *http.Request) []byte {
+	t.Helper()
+	body := new(bytes.Buffer)
+	if _, err := body.ReadFrom(request.Body); err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	return body.Bytes()
+}
+
+func seedProfile(t *testing.T, storeSvc *store.Store, tenantID, mobile string) store.ProfileProjection {
+	t.Helper()
+	profile, err := storeSvc.CreateProfileProjection(context.Background(), store.CreateProfileProjectionParams{
+		PrincipalIdentity: store.PrincipalIdentity{
+			TenantID: tenantID,
+			Issuer:   "https://identity.example/realms/noebs",
+			Subject:  "mobile:" + mobile,
+		},
+		Fullname: "Test User",
 		Username: mobile,
-		Password: password,
 		Email:    mobile + "@example.com",
+		Mobile:   mobile,
+	})
+	if err != nil {
+		t.Fatalf("create profile: %v", err)
 	}
-	if err := user.HashPassword(); err != nil {
-		t.Fatalf("hash password: %v", err)
-	}
-	if err := storeSvc.CreateUser(context.Background(), tenantID, &user); err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	return user
+	return profile
 }

@@ -4,7 +4,6 @@ package gateway
 import (
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -94,12 +93,6 @@ func NoebsCors(headers []string) fiber.Handler {
 		ExposeHeaders: "Authorization",
 		MaxAge:        600,
 	})
-}
-
-func GenerateAPIKey() (string, error) {
-	apiKey := make([]byte, 16)
-	_, err := rand.Read(apiKey)
-	return fmt.Sprintf("%x", apiKey), err
 }
 
 var (

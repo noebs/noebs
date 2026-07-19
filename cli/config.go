@@ -50,8 +50,6 @@ type chatGatewayIdentity struct {
 	gateway.UserIdentity
 }
 
-const chatSessionValidationInterval = 5 * time.Second
-
 func isTestRun() bool {
 	return strings.HasSuffix(os.Args[0], ".test")
 }
@@ -306,7 +304,7 @@ func initRoleServices(role serviceRole) error {
 
 	if roleNeedsConsumerService(role) {
 		consumerService = consumer.Service{
-			Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger, Auth: &auth,
+			Store: storeSvc, NoebsConfig: noebsConfig, Logger: logrusLogger,
 			HTTPClient: httpclient.Default(), InternalHTTPClient: newInternalHTTPClient(), WorkloadSigners: workloadSigners,
 		}
 	}
@@ -466,10 +464,6 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 	if !ok {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
-	sessionEpoch, ok := c.Locals("session_epoch").(int64)
-	if !ok || sessionEpoch <= 0 {
-		return chatGatewayIdentity{}, chat.ErrUnauthorized
-	}
 	mobile, ok := c.Locals("mobile").(string)
 	if !ok || strings.TrimSpace(mobile) == "" {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
@@ -478,17 +472,12 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 	if err != nil {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
-	identity.SessionEpoch = sessionEpoch
 	return chatGatewayIdentity{UserIdentity: identity}, nil
 }
 
 func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	route.Post("/generate_api_key", adminIdentity, consumerHandler.GenerateAPIKey)
 	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", tenantIdentity), consumerHandler)
-
-	cons := route.Group("/consumer")
-	consumerhandler.RegisterIdentityPublicRoutes(cons.Group("", tenantIdentity), consumerHandler)
-	consumerhandler.RegisterIdentityAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
+	consumerhandler.RegisterIdentityAuthedRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
 func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, _ fiber.Handler, consumerHandler *consumerhandler.Handler) {
@@ -735,24 +724,11 @@ func initConfig() {
 	// })
 	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
 	auth.Init()
-	if role == serviceRoleAPIGateway {
-		sessionValidator, err := newIdentitySessionValidator(noebsConfig, workloadSigners)
-		if err != nil {
-			logrusLogger.Fatalf("configure identity session validation: %v", err)
-		}
-		auth.Sessions = sessionValidator
-	}
 	if role.startsChat() && database != nil && database.DB != nil {
-		sessionValidator, err := newChatSessionValidator(noebsConfig, workloadSigners)
-		if err != nil {
-			logrusLogger.Fatalf("configure chat session validation: %v", err)
-		}
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000
 		chatCfg.UnreadBatchSize = 200
 		chatCfg.ClientIdentityFromRequest = chatClientIdentityFromGatewayIdentity
-		chatCfg.ValidateClientSession = chatSessionValidation(sessionValidator)
-		chatCfg.SessionValidationInterval = chatSessionValidationInterval
 		hub = chat.NewHubWithConfig(database.DB, chatCfg)
 		chatContactsResolver, err = newIdentityContactResolver(noebsConfig, workloadSigners)
 		if err != nil {

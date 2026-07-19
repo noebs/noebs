@@ -57,25 +57,6 @@ func RegisterEBSAdapterAuthedRoutes(router fiber.Router, h *Handler) {
 	router.Post("/payment_token/quick_pay", h.LegacyCardUpgradeRequired)
 }
 
-func RegisterIdentityPublicRoutes(router fiber.Router, h *Handler) {
-	// Registration / auth (public)
-	router.Post("/register", h.CreateUser)
-	router.Post("/login", h.LoginHandler)
-	router.Post("/refresh", h.RefreshHandler)
-
-	// OTP (public)
-	router.Post("/otp/generate", h.GenerateSignInCode)
-	router.Post("/otp/login", h.SingleLoginHandler)
-	router.Post("/otp/verify", h.VerifyOTP)
-	router.Post("/recovery/request", h.RequestPasswordRecovery)
-	router.Post("/recovery/verify", h.VerifyPasswordRecovery)
-	router.Post("/recovery/reset", h.ResetPasswordWithRecovery)
-
-	// Social auth (public)
-	router.Post("/auth/google", h.GoogleAuth)
-
-}
-
 func RegisterBeneficiaryRoutes(router fiber.Router, h *Handler) {
 	router.Post("/beneficiary", h.RetiredBeneficiaryContract)
 	router.Get("/beneficiary", h.RetiredBeneficiaryContract)
@@ -116,26 +97,24 @@ func RegisterCardVaultAdminInternalRoutes(router fiber.Router, h *Handler) {
 }
 
 func RegisterIdentityInternalRoutes(router fiber.Router, h *Handler) {
-	router.Post("/card-registration/users", h.CreateCompletedRegistrationIdentity)
-	router.Post("/register-with-card/users", h.RegisterWithCardIdentity)
-	router.Post("/recovery-credential", h.IssueRecoveryCredential)
-	router.Post("/sessions/validate", h.ValidateSession)
+	router.Post("/principals/resolve", h.ResolveProfileProjection)
 	router.Post("/users/by-mobile", h.ResolveIdentityUserByMobile)
 	router.Post("/users/resolve-batch", h.ResolveIdentityUsersBatch)
 }
 
-func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
-	// Authenticated auth/profile endpoints
-	router.Post("/auth/complete_profile", h.CompleteProfile)
-	router.Get("/auth/me", h.AuthMe)
+// RegisterIdentityPrincipalRoutes contains bootstrap operations that have a
+// verified OIDC principal but deliberately do not yet have a numeric profile ID.
+func RegisterIdentityPrincipalRoutes(router fiber.Router, h *Handler) {
+	router.Post("/auth/profile", h.CreateProfileProjection)
+}
 
+func RegisterIdentityAuthedRoutes(router fiber.Router, h *Handler) {
 	// User profile
 	router.Get("/user", h.GetUser)
 	router.Put("/user", h.UpdateUser)
 	router.Get("/user/lang", h.GetUserLanguage)
 	router.Put("/user/lang", h.SetUserLanguage)
 	router.Post("/user/device", h.AddDeviceToken)
-	router.Post("/change_password", h.ChangePassword)
 	router.Post("/check_user", h.CheckUser)
 	router.Post("/kyc", h.KYC)
 }

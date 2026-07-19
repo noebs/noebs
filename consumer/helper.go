@@ -12,12 +12,8 @@ package consumer
 
 import (
 	"errors"
-	"strings"
-	"time"
-	"unicode"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/pquerna/otp/totp"
 )
 
 var (
@@ -26,45 +22,6 @@ var (
 	errNoServiceID    = errors.New("empty Service ID was entered")
 	errObjectNotFound = errors.New("object not found")
 )
-
-const (
-	minPasswordBytes = 8
-	maxPasswordBytes = 72
-)
-
-// validatePassword to include at least one capital letter, one symbol and one number
-// within bcrypt's supported byte-length boundary.
-func validatePassword(password string) bool {
-	if len(password) < minPasswordBytes || len(password) > maxPasswordBytes {
-		return false
-	}
-	var hasUpper, hasSymbol, hasNumber bool
-	// check if password contains @, &, #, $, %, ^, *, (, ), _, -, +, =, !, ?, ., /, <, >, [, ], {, }, |, \, ;, :, "
-	if strings.ContainsAny(password, "@&#$%^*()_-+=!.?/<>[]:{}|\\;:\"") {
-		hasSymbol = true
-	}
-	for _, c := range password {
-		if unicode.IsUpper(c) {
-			hasUpper = true
-		}
-		if unicode.IsSymbol(c) {
-			hasSymbol = true
-		}
-
-		if unicode.IsNumber(c) {
-			hasNumber = true
-		}
-	}
-	return hasUpper && hasSymbol && hasNumber
-}
-
-func generateOtp(secret string) (string, error) {
-	passcode, err := totp.GenerateCode(secret, time.Now())
-	if err != nil {
-		return "", err
-	}
-	return passcode, nil
-}
 
 func (s *Service) ToDatabasename(url string) string {
 	data := map[string]string{

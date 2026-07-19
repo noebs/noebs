@@ -360,20 +360,14 @@ func errorForServiceCommandCode(code string) error {
 		return ErrNotificationCommand
 	case ErrMissingMobile.Error():
 		return ErrMissingMobile
-	case ErrMissingPassword.Error():
-		return ErrMissingPassword
 	case ErrMissingIssuedPAN.Error():
 		return ErrMissingIssuedPAN
 	case ErrMissingCardExpiry.Error():
 		return ErrMissingCardExpiry
-	case ErrInvalidRecoveryCredential.Error():
-		return ErrInvalidRecoveryCredential
 	case ErrInvalidBillerHookEndpoint.Error():
 		return ErrInvalidBillerHookEndpoint
 	case ErrBillerHookPost.Error():
 		return ErrBillerHookPost
-	case ErrUserAlreadyExists.Error():
-		return ErrUserAlreadyExists
 	case ErrInvalidCard.Error():
 		return ErrInvalidCard
 	case ErrReceiverHasNoCard.Error():

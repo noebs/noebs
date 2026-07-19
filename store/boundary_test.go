@@ -35,9 +35,9 @@ func TestOpaqueCardStoreHasNoGenericRailSecretResolver(t *testing.T) {
 }
 
 func TestLegacyPANAndIPINPersistenceHelpersStayRemoved(t *testing.T) {
-	data, err := os.ReadFile("sensitive.go")
+	data, err := os.ReadFile("token_sensitive.go")
 	if err != nil {
-		t.Fatalf("read sensitive.go: %v", err)
+		t.Fatalf("read token_sensitive.go: %v", err)
 	}
 	source := string(data)
 	for _, token := range []string{
@@ -49,7 +49,7 @@ func TestLegacyPANAndIPINPersistenceHelpersStayRemoved(t *testing.T) {
 		"encryptCacheCardFields",
 	} {
 		if strings.Contains(source, token) {
-			t.Fatalf("sensitive.go contains retired helper %q", token)
+			t.Fatalf("token_sensitive.go contains retired helper %q", token)
 		}
 	}
 }

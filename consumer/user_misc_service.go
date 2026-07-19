@@ -2,9 +2,7 @@ package consumer
 
 import (
 	"context"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
@@ -17,7 +15,7 @@ type CheckUserResult struct {
 
 const maxCheckUserPhones = 50
 
-func (s *Service) CheckUser(ctx context.Context, tenantID string, requesterID int64, phones []string, source string, now time.Time) ([]CheckUserResult, error) {
+func (s *Service) CheckUser(ctx context.Context, tenantID string, requesterID int64, phones []string) ([]CheckUserResult, error) {
 	if s == nil || s.Store == nil {
 		return nil, ErrMissingStore
 	}
@@ -32,34 +30,18 @@ func (s *Service) CheckUser(ctx context.Context, tenantID string, requesterID in
 	if err != nil {
 		return nil, err
 	}
-	source, err = normalizeRequestSource(source)
+	profiles, err := s.Store.ListProfileProjectionsByMobile(ctx, tenantID, phones)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.enforceAuthLimits(ctx, tenantID, now,
-		sourceLimit("check-user-source", source, 60, 15*time.Minute),
-		authLimitRule{
-			action:  "check-user-account",
-			subject: authSubjectHash("user_id", strconv.FormatInt(requesterID, 10)),
-			limit:   20,
-			window:  15 * time.Minute,
-		},
-	); err != nil {
-		return nil, err
+	members := make(map[string]struct{}, len(profiles))
+	for _, profile := range profiles {
+		members[profile.Mobile] = struct{}{}
 	}
-
 	out := make([]CheckUserResult, 0, len(phones))
 	for _, phone := range phones {
-		_, err := s.Store.GetUserByMobile(ctx, tenantID, phone)
-		if err != nil {
-			if !store.ErrNotFound(err) {
-				return nil, err
-			}
-			out = append(out, CheckUserResult{Phone: phone, IsUser: false})
-			continue
-		}
-
-		out = append(out, CheckUserResult{Phone: phone, IsUser: true})
+		_, exists := members[phone]
+		out = append(out, CheckUserResult{Phone: phone, IsUser: exists})
 	}
 	return out, nil
 }

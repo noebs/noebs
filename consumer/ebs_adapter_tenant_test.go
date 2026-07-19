@@ -55,23 +55,8 @@ func TestEBSAdapterTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 			_, err := service.IPINKey(ctx, tenantID, ebs_fields.ConsumerGenerateIPINFields{})
 			return err
 		}},
-		{"BalanceStep", func(tenantID string) error {
-			_, err := service.BalanceStep(ctx, tenantID, BalanceStepRequest{Mobile: "0990000000", ConsumerBalanceFields: ebs_fields.ConsumerBalanceFields{}})
-			return err
-		}},
-		{"isValidCard", func(tenantID string) error {
-			_, err := service.isValidCard(ctx, tenantID, ebs_fields.CacheCards{Pan: "9222081700000000", Expiry: "2601"})
-			return err
-		}},
 		{"GetIpinPubKey", func(tenantID string) error {
 			return service.GetIpinPubKey(ctx, tenantID)
-		}},
-		{"RegisterWithCard", func(tenantID string) error {
-			return service.RegisterWithCard(ctx, tenantID, ebs_fields.CacheCards{Mobile: "0990000000", PublicKey: "public-key", Pan: "9222081700000000", Expiry: "2601", Password: "password"})
-		}},
-		{"CompleteRegistration", func(tenantID string) error {
-			_, err := service.CompleteRegistration(ctx, tenantID, ebs_fields.ConsumerCompleteRegistrationFields{Mobile: "0990000000", NoebsPassword: "password"})
-			return err
 		}},
 	}
 	tenantCases := []struct {

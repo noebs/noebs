@@ -48,17 +48,6 @@ func TestCardTokenTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 			_, err := service.NoebsQuickPayment(ctx, tenantID, 1, ebs_fields.QuickPaymentFields{}, "token-uuid", "")
 			return err
 		}},
-		{"CreateCompletedRegistrationIdentity", func(tenantID string) error {
-			_, err := service.CreateCompletedRegistrationIdentity(ctx, tenantID, CompletedRegistrationIdentityCommand{Mobile: "0990000000", Password: "password"})
-			return err
-		}},
-		{"RegisterWithCardIdentity", func(tenantID string) error {
-			_, err := service.RegisterWithCardIdentity(ctx, tenantID, RegisterWithCardIdentityCommand{Mobile: "0990000000", Password: "password", PublicKey: "public-key"})
-			return err
-		}},
-		{"StoreCompletedRegistrationCard", func(tenantID string) error {
-			return service.StoreCompletedRegistrationCard(ctx, tenantID, CompletedRegistrationCardCommand{Mobile: "0990000000", UserID: 1, PAN: "9222081700000000"})
-		}},
 		{"ResolveQuickPaymentTokenForUserID", func(tenantID string) error {
 			_, err := service.ResolveQuickPaymentTokenForUserID(ctx, tenantID, 1, QuickPaymentTokenResolveCommand{UUID: "token-uuid"})
 			return err
@@ -88,17 +77,6 @@ func TestCardTokenTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 		}},
 		{"FinalizeQuickPaymentTokenInCardVault", func(tenantID string) error {
 			return service.FinalizeQuickPaymentTokenInCardVault(ctx, tenantID, 1, QuickPaymentTokenFinalizationCommand{UUID: "token-uuid", RailUUID: "rail-uuid", Status: ebs_fields.PaymentTokenStatusPaid})
-		}},
-		{"CreateCompletedRegistrationIdentityInIdentityAuth", func(tenantID string) error {
-			_, err := service.CreateCompletedRegistrationIdentityInIdentityAuth(ctx, tenantID, CompletedRegistrationIdentityCommand{Mobile: "0990000000", Password: "password"})
-			return err
-		}},
-		{"RegisterWithCardIdentityInIdentityAuth", func(tenantID string) error {
-			_, err := service.RegisterWithCardIdentityInIdentityAuth(ctx, tenantID, RegisterWithCardIdentityCommand{Mobile: "0990000000", Password: "password", PublicKey: "public-key"})
-			return err
-		}},
-		{"StoreCompletedRegistrationCardInCardVault", func(tenantID string) error {
-			return service.StoreCompletedRegistrationCardInCardVault(ctx, tenantID, CompletedRegistrationCardCommand{Mobile: "0990000000", UserID: 1, PAN: "9222081700000000"})
 		}},
 	}
 	tenantCases := []struct {

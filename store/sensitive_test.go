@@ -24,39 +24,8 @@ func withFailingRandomReader(t *testing.T) {
 	})
 }
 
-func TestSensitiveEncryptionHelpersReturnEncryptionErrors(t *testing.T) {
-	withFailingRandomReader(t)
+func TestHydrateTokenFieldsReturnsDecryptErrors(t *testing.T) {
 	s := New(nil, WithDataKey("test-data-key"))
-
-	user := &ebs_fields.User{MainCard: "4242424242424242"}
-	if err := s.encryptUserFields(user); err == nil {
-		t.Fatal("encryptUserFields() error = nil, want encryption error")
-	}
-	if user.MainCard != "4242424242424242" || user.MainCardEnc != "" {
-		t.Fatalf("encryptUserFields() mutated user after failure: %+v", user)
-	}
-
-}
-
-func TestUpdateUserColumnsReturnsMainCardEncryptionErrors(t *testing.T) {
-	withFailingRandomReader(t)
-	s := New(nil, WithDataKey("test-data-key"))
-
-	err := s.UpdateUserColumns(context.Background(), "tenant", 1, map[string]any{
-		"main_card": "4242424242424242",
-	})
-	if err == nil {
-		t.Fatal("UpdateUserColumns() error = nil, want encryption error")
-	}
-}
-
-func TestHydrateSensitiveFieldsReturnsDecryptErrors(t *testing.T) {
-	s := New(nil, WithDataKey("test-data-key"))
-
-	user := &ebs_fields.User{MainCardEnc: "enc:invalid"}
-	if err := s.hydrateUserFields(context.Background(), "tenant", user); err == nil {
-		t.Fatal("hydrateUserFields() error = nil, want decrypt error")
-	}
 
 	token := &ebs_fields.Token{ToCardEnc: "enc:invalid"}
 	if err := s.hydrateTokenFields(context.Background(), "tenant", token); err == nil {
@@ -64,14 +33,9 @@ func TestHydrateSensitiveFieldsReturnsDecryptErrors(t *testing.T) {
 	}
 }
 
-func TestHydrateSensitiveFieldsReturnsBackfillEncryptionErrors(t *testing.T) {
+func TestHydrateTokenFieldsReturnsBackfillEncryptionErrors(t *testing.T) {
 	withFailingRandomReader(t)
 	s := New(nil, WithDataKey("test-data-key"))
-
-	user := &ebs_fields.User{Model: ebs_fields.Model{ID: 1}, MainCard: "4242424242424242"}
-	if err := s.hydrateUserFields(context.Background(), "tenant", user); err == nil {
-		t.Fatal("hydrateUserFields() error = nil, want backfill encryption error")
-	}
 
 	token := &ebs_fields.Token{Model: ebs_fields.Model{ID: 1}, ToCard: "4242424242424242"}
 	if err := s.hydrateTokenFields(context.Background(), "tenant", token); err == nil {
@@ -88,16 +52,6 @@ func TestSensitiveBackfillUpdatesValidateTargetsBeforeDB(t *testing.T) {
 		run  func() error
 		want error
 	}{
-		{
-			name: "missing tenant",
-			run:  func() error { return s.updateUserMainCard(ctx, " ", 1, "hash", "enc") },
-			want: ErrMissingTenantID,
-		},
-		{
-			name: "invalid user id",
-			run:  func() error { return s.updateUserMainCard(ctx, "tenant", 0, "hash", "enc") },
-			want: ErrInvalidUserID,
-		},
 		{
 			name: "missing token uuid",
 			run:  func() error { return s.updateTokenCard(ctx, "tenant", " ", "hash", "enc") },

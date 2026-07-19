@@ -1,58 +1,18 @@
 package ebs_fields
 
 import (
-	"encoding/base32"
 	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/pquerna/otp"
-	"github.com/pquerna/otp/totp"
-	"golang.org/x/crypto/bcrypt"
 )
-
-// User contains User table in noebs. It should be kept simple and only contain the fields that are needed.
-type User struct {
-	Model
-	TenantID string `json:"-"`
-	Created  int64
-	Password string `binding:"required,min=8,max=72" json:"password"`
-	Fullname string `json:"fullname"`
-	Username string `json:"username"`
-	Gender   string `json:"gender"`
-	Birthday string `json:"birthday"`
-
-	Email         string `json:"email"`
-	Password2     string `json:"password2" db:"-"`
-	IsMerchant    bool   `json:"is_merchant"`
-	PublicKey     string `json:"user_pubkey"`
-	DeviceID      string `json:"device_id"`
-	OTP           string `json:"otp"`
-	SignedOTP     string `json:"signed_otp"`
-	Tokens        []Token
-	Beneficiaries []Beneficiary
-	Cards         []Card
-	// DeviceToken stores a push token for notifications.
-	DeviceToken   string `json:"device_token" db:"device_token"`
-	NewPassword   string `json:"new_password" db:"-"`
-	IsPasswordOTP bool   `json:"is_password_otp"`
-	MainCard      string `json:"main_card"`
-	MainCardEnc   string `json:"-" db:"main_card_enc"`
-	ExpDate       string `json:"exp_date" db:"main_expdate"`
-	Language      string `json:"language"`
-	IsVerified    bool   `json:"is_verified"`
-	SessionEpoch  int64  `json:"-" db:"session_epoch"`
-	Mobile        string `json:"mobile"`
-	KYC           *KYC
-}
 
 type KYC struct {
 	Model
 	TenantID    string `json:"-"`
-	UserMobile  string
-	Mobile      string
+	UserID      int64  `json:"-"`
 	Passport    Passport
 	Selfie      string
 	PassportImg string
@@ -61,7 +21,7 @@ type KYC struct {
 type Passport struct {
 	Model
 	TenantID       string    `json:"-"`
-	Mobile         string    `json:"mobile,omitempty"`
+	UserID         int64     `json:"-"`
 	BirthDate      time.Time `json:"birth_date,omitempty"`
 	IssueDate      time.Time `json:"issue_date,omitempty"`
 	ExpirationDate time.Time `json:"expiration_date,omitempty"`
@@ -90,68 +50,6 @@ type UserProfile struct {
 
 type QRMerchant struct {
 	Mobile string
-}
-
-// GenerateOtp for a noebs user
-func (u User) GenerateOtp() (string, error) {
-	if u.PublicKey == "" {
-		return "", errors.New("no publickey")
-	}
-	code, err := totp.GenerateCodeCustom(u.EncodePublickey32(), time.Now(), totp.ValidateOpts{
-		Period:    900,
-		Skew:      1,
-		Digits:    otp.DigitsSix,
-		Algorithm: otp.AlgorithmSHA1,
-	})
-
-	if err != nil {
-		return "", err
-	}
-	return code, nil
-}
-
-// GenerateOTP for a noebs user
-func (u User) VerifyOtp(code string) bool {
-	if u.PublicKey == "" {
-		return false
-	}
-	// using custom validator to increase OTP validation period
-	isValid, _ := totp.ValidateCustom(
-		code,
-		u.EncodePublickey32(),
-		time.Now().UTC(),
-		totp.ValidateOpts{
-			Period:    900,
-			Skew:      1,
-			Digits:    otp.DigitsSix,
-			Algorithm: otp.AlgorithmSHA1,
-		},
-	)
-	return isValid
-}
-
-// EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
-func (u User) EncodePublickey() string {
-	return base64.StdEncoding.EncodeToString([]byte(u.PublicKey))
-}
-
-// EncodePublickey a helper function to encode publickey since it has ---BEGIN and new lines
-func (u User) EncodePublickey32() string {
-	return base32.StdEncoding.EncodeToString([]byte(u.PublicKey))
-}
-
-func (u *User) SanitizeName() {
-	u.Mobile = strings.ToLower(u.Mobile)
-}
-
-func (u *User) HashPassword() error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), 8)
-	if err != nil {
-		return err
-	}
-	u.Password = string(hashedPassword)
-	u.Password2 = string(hashedPassword)
-	return nil
 }
 
 type Beneficiary struct {
@@ -225,7 +123,6 @@ type Token struct {
 	TenantID string `json:"-"`
 	UserID   int64  `json:"-"`
 
-	User          User          `json:"-"`
 	Amount        int           `json:"amount,omitempty"`
 	CartID        string        `json:"cart_id,omitempty"`
 	UUID          string        `json:"uuid,omitempty"`
@@ -253,17 +150,6 @@ type QrData struct {
 	UUID   string `json:"uuid"`
 	ToCard string `json:"toCard,omitempty"`
 	Amount int    `json:"amount,omitempty"`
-}
-
-// NewPaymentToken creates a new payment token and assign it to a user
-func (u *User) NewPaymentToken(amount int, note string, cartID string) (*Token, error) {
-	token := &Token{
-
-		Amount: amount,
-		Note:   note,
-		CartID: cartID,
-	}
-	return token, nil
 }
 
 // Encode PaymentToken to a URL safe link that can be used for online purchases
@@ -329,36 +215,6 @@ var (
 	ErrCardQueryNotFound  = errors.New("card query not found")
 	ErrAmbiguousCardQuery = errors.New("ambiguous card query")
 )
-
-type CacheCards struct {
-	Model
-	TenantID  string `json:"-"`
-	Pan       string `json:"pan"`
-	PanEnc    string `json:"-" db:"pan_enc"`
-	Expiry    string `json:"exp_date"`
-	Name      string `json:"name"`
-	Mobile    string `json:"mobile" db:"-"`
-	Password  string `json:"password" db:"-"`
-	PublicKey string `json:"user_pubkey" db:"-"`
-	IsValid   *bool  `json:"is_valid"`
-}
-
-func (c CacheCards) OverrideField() string {
-	return "is_valid"
-}
-
-func (c CacheCards) GetPk() string {
-	return "pan"
-}
-
-func (c CacheCards) NewCardFromCached(id int) Card {
-	return Card{
-		Pan:    c.Pan,
-		Expiry: c.Expiry,
-		UserID: int64(id),
-		Mobile: c.Mobile,
-	}
-}
 
 // ExpandCard resolves a masked or full PAN selector by matching the first and last 4 digits.
 func ExpandCard(card string, userCards []Card) (string, error) {

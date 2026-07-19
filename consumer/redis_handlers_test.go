@@ -8,14 +8,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	gateway "github.com/adonese/noebs/apigateway"
-	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/store"
 )
 
 func TestResolveIdentityUserByMobileUsesIdentityScope(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
-	seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
+	seedProfile(t, storeSvc, tenantID, "0912141660")
 	service := &Service{Store: storeSvc}
 
 	result, err := service.ResolveIdentityUserByMobile(context.Background(), tenantID, IdentityUserByMobileCommand{Mobile: "0912141660"})
@@ -33,9 +31,9 @@ func TestResolveIdentityUsersBatchIsTenantScopedAndBounded(t *testing.T) {
 	if err := storeSvc.EnsureTenant(context.Background(), otherTenant); err != nil {
 		t.Fatalf("ensure other tenant: %v", err)
 	}
-	first := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
-	second := seedUser(t, storeSvc, tenantID, "0912141661", "My$Passw0rd!")
-	foreign := seedUser(t, storeSvc, otherTenant, "0912141660", "My$Passw0rd!")
+	first := seedProfile(t, storeSvc, tenantID, "0912141660")
+	second := seedProfile(t, storeSvc, tenantID, "0912141661")
+	foreign := seedProfile(t, storeSvc, otherTenant, "0912141660")
 	service := &Service{Store: storeSvc}
 
 	result, err := service.ResolveIdentityUsersBatch(context.Background(), tenantID, IdentityUsersBatchCommand{
@@ -51,11 +49,11 @@ func TestResolveIdentityUsersBatchIsTenantScopedAndBounded(t *testing.T) {
 	for _, user := range result.Users {
 		resolved[user.Mobile] = user.UserID
 	}
-	if resolved[first.Mobile] != first.ID || resolved[second.Mobile] != second.ID {
-		t.Fatalf("resolved = %+v, want local IDs %d and %d", resolved, first.ID, second.ID)
+	if resolved[first.Mobile] != first.UserID || resolved[second.Mobile] != second.UserID {
+		t.Fatalf("resolved = %+v, want local IDs %d and %d", resolved, first.UserID, second.UserID)
 	}
-	if resolved[first.Mobile] == foreign.ID {
-		t.Fatalf("foreign tenant ID %d leaked into result %+v", foreign.ID, resolved)
+	if resolved[first.Mobile] == foreign.UserID {
+		t.Fatalf("foreign tenant ID %d leaked into result %+v", foreign.UserID, resolved)
 	}
 }
 
@@ -71,31 +69,6 @@ func TestResolveIdentityUsersBatchRejectsInvalidInputBeforeStore(t *testing.T) {
 		if _, err := service.ResolveIdentityUsersBatch(context.Background(), "tenant", command); !errors.Is(err, store.ErrInvalidMobile) {
 			t.Fatalf("case %d error = %v, want %v", index, err, store.ErrInvalidMobile)
 		}
-	}
-}
-
-func TestIssueRecoveryCredentialUsesIdentityScope(t *testing.T) {
-	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
-	user := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
-	if err := storeSvc.SetUserVerified(context.Background(), tenantID, user.ID, true); err != nil {
-		t.Fatalf("verify user: %v", err)
-	}
-	auth := &gateway.JWTAuth{NoebsConfig: ebs_fields.NoebsConfig{JWTKey: "test-secret"}}
-	auth.Init()
-	service := &Service{Store: storeSvc, Auth: auth}
-
-	result, err := service.IssueRecoveryCredential(context.Background(), tenantID, RecoveryCredentialCommand{UserID: user.ID, Mobile: user.Mobile}, authTestNow)
-	if err != nil {
-		t.Fatalf("issue recovery credential: %v", err)
-	}
-	if result.RecoveryCredential == "" || result.ExpiresIn != 600 {
-		t.Fatalf("credential = %+v", result)
-	}
-	if claims, err := auth.VerifyJWT(result.RecoveryCredential); err == nil || claims != nil {
-		t.Fatalf("recovery credential was a JWT: claims=%+v err=%v", claims, err)
-	}
-	if _, err := db.ExecContext(context.Background(), "SELECT 1 FROM cards LIMIT 1"); err == nil {
-		t.Fatalf("identity-auth scope should not create card tables")
 	}
 }
 

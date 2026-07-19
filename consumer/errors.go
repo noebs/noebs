@@ -2,27 +2,9 @@ package consumer
 
 import (
 	"errors"
-	"time"
 )
 
 var (
-	// Auth / OTP
-	ErrWrongPassword          = errors.New("wrong_password")
-	ErrWrongOTP               = errors.New("wrong_otp")
-	ErrPasswordInvalid        = errors.New("password_invalid")
-	ErrUserNotVerified        = errors.New("user_not_verified")
-	ErrEmptyOTP               = errors.New("empty_otp")
-	ErrInvalidOTP             = errors.New("invalid_otp")
-	ErrMissingAuth            = errors.New("missing_auth")
-	ErrInvalidSignature       = errors.New("invalid_signature")
-	ErrRateLimited            = errors.New("rate_limited")
-	ErrMissingRequestSource   = errors.New("missing_request_source")
-	ErrInvalidRequestSource   = errors.New("invalid_request_source")
-	ErrMissingOTPSecret       = errors.New("missing_otp_secret")
-	ErrRefreshExpired         = errors.New("refresh_expired")
-	ErrRefreshReplay          = errors.New("refresh_replay")
-	ErrRefreshTenantMismatch  = errors.New("refresh_tenant_mismatch")
-	ErrSessionRevoked         = errors.New("session_revoked")
 	ErrCheckUserBatchTooLarge = errors.New("check_user_batch_too_large")
 
 	// Account recovery / balance step
@@ -57,14 +39,9 @@ var (
 
 	// Registration
 	ErrMissingMobile               = errors.New("missing mobile")
-	ErrMissingFullname             = errors.New("missing fullname")
-	ErrMissingPublicKey            = errors.New("missing public key")
-	ErrInvalidPublicKey            = errors.New("invalid public key")
 	ErrInvalidCard                 = errors.New("invalid card")
-	ErrMissingPassword             = errors.New("missing password")
 	ErrMissingIssuedPAN            = errors.New("missing_issued_pan")
 	ErrMissingCardExpiry           = errors.New("missing_card_expiry")
-	ErrUserAlreadyExists           = errors.New("user_already_exists")
 	ErrMissingEnrollmentPublicKey  = errors.New("missing_enrollment_public_key")
 	ErrInvalidEnrollmentPublicKey  = errors.New("invalid_enrollment_public_key")
 	ErrMissingIPINBlock            = errors.New("missing_ipin_block")
@@ -78,15 +55,3 @@ var (
 	ErrEnrollmentOutcomeUnknown    = errors.New("enrollment_outcome_unknown")
 	ErrUpgradeRequired             = errors.New("upgrade_required")
 )
-
-type RateLimitError struct {
-	RetryAfter time.Duration
-}
-
-func (e *RateLimitError) Error() string {
-	return ErrRateLimited.Error()
-}
-
-func (e *RateLimitError) Unwrap() error {
-	return ErrRateLimited
-}

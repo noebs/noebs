@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/testdb"
@@ -106,330 +105,6 @@ func TestValidateTenantID(t *testing.T) {
 	}
 }
 
-func TestStore_CreateUser_MissingTenantID(t *testing.T) {
-	s := newTestStore(t)
-	err := s.CreateUser(context.Background(), "", &ebs_fields.User{Mobile: "0990000000"})
-	if !errors.Is(err, ErrMissingTenantID) {
-		t.Fatalf("expected ErrMissingTenantID, got %v", err)
-	}
-}
-
-func TestStore_APIKeyRequiresExplicitFields(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	if err := s.CreateAPIKey(ctx, "tenant", " ", "api-key"); !errors.Is(err, ErrMissingEmail) {
-		t.Fatalf("CreateAPIKey(missing email) error = %v, want %v", err, ErrMissingEmail)
-	}
-	if err := s.CreateAPIKey(ctx, "tenant", "user@example.test", " "); !errors.Is(err, ErrMissingAPIKey) {
-		t.Fatalf("CreateAPIKey(missing api key) error = %v, want %v", err, ErrMissingAPIKey)
-	}
-	if _, err := s.ValidateAPIKey(ctx, "tenant", " ", "api-key"); !errors.Is(err, ErrMissingEmail) {
-		t.Fatalf("ValidateAPIKey(missing email) error = %v, want %v", err, ErrMissingEmail)
-	}
-	if _, err := s.ValidateAPIKey(ctx, "tenant", "user@example.test", " "); !errors.Is(err, ErrMissingAPIKey) {
-		t.Fatalf("ValidateAPIKey(missing api key) error = %v, want %v", err, ErrMissingAPIKey)
-	}
-	if _, err := s.ValidateAPIKeyValue(ctx, "tenant", " "); !errors.Is(err, ErrMissingAPIKey) {
-		t.Fatalf("ValidateAPIKeyValue(missing api key) error = %v, want %v", err, ErrMissingAPIKey)
-	}
-}
-
-func TestStore_UserIdentityRequiresExplicitFields(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	account := &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "provider-user"}
-
-	if err := s.CreateUser(ctx, "tenant", &ebs_fields.User{Mobile: " "}); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("CreateUser(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := s.CreateUserWithAuthAccount(ctx, "tenant", &ebs_fields.User{Mobile: " "}, account); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("CreateUserWithAuthAccount(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if _, err := s.GetUserByMobile(ctx, "tenant", " "); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("GetUserByMobile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if _, err := s.GetUserByEmailOrMobile(ctx, "tenant", " "); !errors.Is(err, ErrMissingUserIdentifier) {
-		t.Fatalf("GetUserByEmailOrMobile(missing query) error = %v, want %v", err, ErrMissingUserIdentifier)
-	}
-	if _, err := s.FindUserByUsername(ctx, "tenant", " "); !errors.Is(err, ErrMissingUsername) {
-		t.Fatalf("FindUserByUsername(missing username) error = %v, want %v", err, ErrMissingUsername)
-	}
-	if _, err := s.GetUserByUsernameEmailOrMobile(ctx, "tenant", " "); !errors.Is(err, ErrMissingUserIdentifier) {
-		t.Fatalf("GetUserByUsernameEmailOrMobile(missing query) error = %v, want %v", err, ErrMissingUserIdentifier)
-	}
-	if _, err := s.FindUserByEmail(ctx, "tenant", " "); !errors.Is(err, ErrMissingEmail) {
-		t.Fatalf("FindUserByEmail(missing email) error = %v, want %v", err, ErrMissingEmail)
-	}
-	if err := s.UpdateUserMobile(ctx, "tenant", 1, " ", "User"); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("UpdateUserMobile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Username: " "}); !errors.Is(err, ErrMissingUsername) {
-		t.Fatalf("UpdateUserProfile(missing username) error = %v, want %v", err, ErrMissingUsername)
-	}
-	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Email: " "}); !errors.Is(err, ErrMissingEmail) {
-		t.Fatalf("UpdateUserProfile(missing email) error = %v, want %v", err, ErrMissingEmail)
-	}
-	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{}); !errors.Is(err, ErrMissingData) {
-		t.Fatalf("UpdateUserProfile(empty profile) error = %v, want %v", err, ErrMissingData)
-	}
-	if err := s.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Fullname: " "}); !errors.Is(err, ErrMissingData) {
-		t.Fatalf("UpdateUserProfile(blank profile) error = %v, want %v", err, ErrMissingData)
-	}
-	if err := s.UpdateUserColumns(ctx, "tenant", 1, nil); !errors.Is(err, ErrMissingData) {
-		t.Fatalf("UpdateUserColumns(nil updates) error = %v, want %v", err, ErrMissingData)
-	}
-	if err := s.UpdateUserColumns(ctx, "tenant", 1, map[string]any{}); !errors.Is(err, ErrMissingData) {
-		t.Fatalf("UpdateUserColumns(empty updates) error = %v, want %v", err, ErrMissingData)
-	}
-	if err := s.UpdateUserLanguage(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingLanguage) {
-		t.Fatalf("UpdateUserLanguage(missing language) error = %v, want %v", err, ErrMissingLanguage)
-	}
-	if err := s.UpdateUserPassword(ctx, "tenant", 1, " "); !errors.Is(err, ErrMissingPassword) {
-		t.Fatalf("UpdateUserPassword(missing hash) error = %v, want %v", err, ErrMissingPassword)
-	}
-}
-
-func TestStore_UserWritesDoNotPersistMainExpDate(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	user := &ebs_fields.User{
-		Mobile:   "0990000000",
-		Username: "0990000000",
-		Email:    "user@example.test",
-		ExpDate:  "2601",
-	}
-	if err := s.CreateUser(ctx, "tenant", user); err != nil {
-		t.Fatalf("CreateUser(): %v", err)
-	}
-	assertUserMainExpDateEmpty(t, s, user.ID)
-
-	user.Fullname = "Updated User"
-	user.ExpDate = "3001"
-	if err := s.UpdateUser(ctx, "tenant", user); err != nil {
-		t.Fatalf("UpdateUser(): %v", err)
-	}
-	assertUserMainExpDateEmpty(t, s, user.ID)
-}
-
-func assertUserMainExpDateEmpty(t *testing.T, s *Store, userID int64) {
-	t.Helper()
-	var mainExpDate sql.NullString
-	stmt := s.DB.Rebind("SELECT main_expdate FROM users WHERE tenant_id = ? AND id = ?")
-	if err := s.DB.QueryRowContext(context.Background(), stmt, "tenant", userID).Scan(&mainExpDate); err != nil {
-		t.Fatalf("read main_expdate: %v", err)
-	}
-	if mainExpDate.Valid && mainExpDate.String != "" {
-		t.Fatalf("main_expdate = %q, want empty", mainExpDate.String)
-	}
-}
-
-func TestStore_IdentityTenantValidationFailsBeforeDB(t *testing.T) {
-	ctx := context.Background()
-	s := &Store{}
-	user := &ebs_fields.User{Mobile: "0990000000"}
-	cases := []struct {
-		name string
-		run  func(string) error
-	}{
-		{"CreateAPIKey", func(tenantID string) error {
-			return s.CreateAPIKey(ctx, tenantID, "user@example.test", "api-key")
-		}},
-		{"ValidateAPIKey", func(tenantID string) error {
-			_, err := s.ValidateAPIKey(ctx, tenantID, "user@example.test", "api-key")
-			return err
-		}},
-		{"ValidateAPIKeyValue", func(tenantID string) error {
-			_, err := s.ValidateAPIKeyValue(ctx, tenantID, "api-key")
-			return err
-		}},
-		{"CreateUser", func(tenantID string) error {
-			return s.CreateUser(ctx, tenantID, &ebs_fields.User{Mobile: "0990000000"})
-		}},
-		{"GetUserByMobile", func(tenantID string) error {
-			_, err := s.GetUserByMobile(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"GetUserByEmailOrMobile", func(tenantID string) error {
-			_, err := s.GetUserByEmailOrMobile(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"FindUserByUsername", func(tenantID string) error {
-			_, err := s.FindUserByUsername(ctx, tenantID, "user")
-			return err
-		}},
-		{"GetUserByUsernameEmailOrMobile", func(tenantID string) error {
-			_, err := s.GetUserByUsernameEmailOrMobile(ctx, tenantID, "user")
-			return err
-		}},
-		{"UpdateUser", func(tenantID string) error {
-			return s.UpdateUser(ctx, tenantID, user)
-		}},
-		{"UpdateUserColumns", func(tenantID string) error {
-			return s.UpdateUserColumns(ctx, tenantID, 1, map[string]any{"fullname": "User"})
-		}},
-		{"UpsertDeviceToken", func(tenantID string) error {
-			return s.UpsertDeviceToken(ctx, tenantID, "0990000000", "device-token")
-		}},
-	}
-	tenantCases := []struct {
-		tenantID string
-		wantErr  error
-	}{
-		{"", ErrMissingTenantID},
-		{"default", ErrInvalidTenantID},
-	}
-	for _, tc := range cases {
-		for _, tenantCase := range tenantCases {
-			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
-				err := tc.run(tenantCase.tenantID)
-				if !errors.Is(err, tenantCase.wantErr) {
-					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
-				}
-			})
-		}
-	}
-}
-
-func TestStore_UpdateUserColumnsRejectsUnsafeColumns(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	for _, column := range []string{"main_expdate", "main_card_enc", "fullname = 'x'"} {
-		t.Run(column, func(t *testing.T) {
-			err := s.UpdateUserColumns(ctx, "tenant", 1, map[string]any{column: "value"})
-			if !errors.Is(err, ErrInvalidUserColumn) {
-				t.Fatalf("UpdateUserColumns() error = %v, want %v", err, ErrInvalidUserColumn)
-			}
-		})
-	}
-}
-
-func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
-	ctx := context.Background()
-	s := &Store{}
-	cases := []struct {
-		name string
-		run  func(string) error
-	}{
-		{"UpsertCacheBiller", func(tenantID string) error {
-			return s.UpsertCacheBiller(ctx, tenantID, "0990000000", "biller")
-		}},
-		{"GetCacheBiller", func(tenantID string) error {
-			_, err := s.GetCacheBiller(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"RecordLoginAttempt", func(tenantID string) error {
-			_, err := s.RecordLoginAttempt(ctx, tenantID, "0990000000", true)
-			return err
-		}},
-		{"IncrementSuspicious", func(tenantID string) error {
-			return s.IncrementSuspicious(ctx, tenantID, "0990000000")
-		}},
-		{"CreateToken", func(tenantID string) error {
-			return s.CreateToken(ctx, tenantID, &ebs_fields.Token{UUID: "token-uuid"})
-		}},
-		{"GetTokenByUUID", func(tenantID string) error {
-			_, err := s.GetTokenByUUID(ctx, tenantID, "token-uuid")
-			return err
-		}},
-		{"MarkTokenPaid", func(tenantID string) error {
-			return s.MarkTokenPaid(ctx, tenantID, "token-uuid", "rail-uuid", 1)
-		}},
-		{"CreateTransaction", func(tenantID string) error {
-			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{UUID: "transaction-uuid"})
-		}},
-		{"GetTransactionsByParticipantUserID", func(tenantID string) error {
-			_, err := s.GetTransactionsByParticipantUserID(ctx, tenantID, 1)
-			return err
-		}},
-		{"GetTransactionByUUID", func(tenantID string) error {
-			_, err := s.GetTransactionByUUID(ctx, tenantID, "transaction-uuid")
-			return err
-		}},
-		{"GetTransactionByUUIDForParticipantUserID", func(tenantID string) error {
-			_, err := s.GetTransactionByUUIDForParticipantUserID(ctx, tenantID, 1, "transaction-uuid")
-			return err
-		}},
-		{"CreatePushData", func(tenantID string) error {
-			return s.CreatePushData(ctx, tenantID, &ebs_fields.PushDataRecord{UUID: "push-uuid"})
-		}},
-		{"GetNotifications", func(tenantID string) error {
-			_, err := s.GetNotifications(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"MarkNotificationsRead", func(tenantID string) error {
-			return s.MarkNotificationsRead(ctx, tenantID, "0990000000")
-		}},
-		{"GetMeterName", func(tenantID string) error {
-			_, err := s.GetMeterName(ctx, tenantID, "nec")
-			return err
-		}},
-		{"UpdateKYC", func(tenantID string) error {
-			return s.UpdateKYC(ctx, tenantID, &ebs_fields.KYC{}, nil)
-		}},
-		{"GetUserWithKYC", func(tenantID string) error {
-			_, _, _, err := s.GetUserWithKYC(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"LinkAuthAccount", func(tenantID string) error {
-			return s.LinkAuthAccount(ctx, tenantID, &ebs_fields.AuthAccount{})
-		}},
-		{"CreateUserWithAuthAccount", func(tenantID string) error {
-			return s.CreateUserWithAuthAccount(ctx, tenantID, &ebs_fields.User{}, &ebs_fields.AuthAccount{})
-		}},
-		{"FindAuthAccount", func(tenantID string) error {
-			_, err := s.FindAuthAccount(ctx, tenantID, "provider", "provider-user")
-			return err
-		}},
-		{"FindUserByEmail", func(tenantID string) error {
-			_, err := s.FindUserByEmail(ctx, tenantID, "user@example.test")
-			return err
-		}},
-		{"FindUserByID", func(tenantID string) error {
-			_, err := s.FindUserByID(ctx, tenantID, 1)
-			return err
-		}},
-		{"GetAllTokensByUserID", func(tenantID string) error {
-			_, err := s.GetAllTokensByUserID(ctx, tenantID, 1)
-			return err
-		}},
-		{"GetAllTokensByUserIDAndCartID", func(tenantID string) error {
-			_, err := s.GetAllTokensByUserIDAndCartID(ctx, tenantID, 1, "cart")
-			return err
-		}},
-		{"UpdateTokenCard", func(tenantID string) error {
-			return s.UpdateTokenCard(ctx, tenantID, "token-uuid", "9222081700000000")
-		}},
-		{"UpdatePaymentRequest", func(tenantID string) error {
-			return s.UpdatePaymentRequest(ctx, tenantID, "push-uuid", ebs_fields.QrData{})
-		}},
-	}
-	tenantCases := []struct {
-		tenantID string
-		wantErr  error
-	}{
-		{"", ErrMissingTenantID},
-		{"default", ErrInvalidTenantID},
-	}
-	for _, tc := range cases {
-		for _, tenantCase := range tenantCases {
-			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
-				err := tc.run(tenantCase.tenantID)
-				if !errors.Is(err, tenantCase.wantErr) {
-					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
-				}
-			})
-		}
-	}
-}
-
-func TestStore_CreateUser_MissingUser(t *testing.T) {
-	s := newTestStore(t)
-	err := s.CreateUser(context.Background(), "t1", nil)
-	if !errors.Is(err, ErrMissingUser) {
-		t.Fatalf("expected ErrMissingUser, got %v", err)
-	}
-}
-
 func TestStore_CreateToken_MissingTenantID(t *testing.T) {
 	s := &Store{}
 	err := s.CreateToken(context.Background(), "", &ebs_fields.Token{UUID: "u1"})
@@ -520,102 +195,6 @@ func TestErrNotFoundOnlyMatchesNoRows(t *testing.T) {
 	}
 }
 
-func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
-	ctx := context.Background()
-	db := newValidationDB(t)
-	tenantID := "tenant-targeted-updates"
-	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeCardVault, MigrationScopeNotificationChat} {
-		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
-			t.Fatalf("migrate %s: %v", scope, err)
-		}
-	}
-	s := New(db, WithDataKey("test-data-key"))
-	if err := s.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
-
-	tests := []struct {
-		name string
-		run  func() error
-	}{
-		{"UpdateUserColumns", func() error {
-			return s.UpdateUserColumns(ctx, tenantID, 999, map[string]any{"fullname": "Missing User"})
-		}},
-		{"UpdateUser", func() error {
-			return s.UpdateUser(ctx, tenantID, &ebs_fields.User{Model: ebs_fields.Model{ID: 999}, Mobile: "0990000000"})
-		}},
-		{"MarkTokenPaid", func() error {
-			return s.MarkTokenPaid(ctx, tenantID, "missing-token", "rail-uuid", 1)
-		}},
-		{"UpdateTokenCard", func() error {
-			return s.UpdateTokenCard(ctx, tenantID, "missing-token", "")
-		}},
-		{"UpsertDeviceToken", func() error {
-			return s.UpsertDeviceToken(ctx, tenantID, "0990000000", "device-token")
-		}},
-		{"UpdatePaymentRequest", func() error {
-			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
-		}},
-		{"updateUserMainCard", func() error {
-			return s.updateUserMainCard(ctx, tenantID, 999, "hash:missing-user-card", "enc:missing-user-card")
-		}},
-		{"updateTokenCard", func() error {
-			return s.updateTokenCard(ctx, tenantID, "missing-token", "hash:missing-token-card", "enc:missing-token-card")
-		}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.run(); !errors.Is(err, sql.ErrNoRows) {
-				t.Fatalf("%s error = %v, want %v", tt.name, err, sql.ErrNoRows)
-			}
-		})
-	}
-}
-
-func TestStore_UpdateUserRequiresExplicitTarget(t *testing.T) {
-	s := &Store{}
-	if err := s.UpdateUser(context.Background(), "tenant", nil); !errors.Is(err, ErrMissingUser) {
-		t.Fatalf("UpdateUser(nil) error = %v, want %v", err, ErrMissingUser)
-	}
-	if err := s.UpdateUser(context.Background(), "tenant", &ebs_fields.User{}); !errors.Is(err, ErrInvalidUserID) {
-		t.Fatalf("UpdateUser(invalid id) error = %v, want %v", err, ErrInvalidUserID)
-	}
-}
-
-func TestStore_UpsertDeviceTokenRequiresExplicitFields(t *testing.T) {
-	s := &Store{}
-	if err := s.UpsertDeviceToken(context.Background(), "tenant", " ", "device-token"); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("UpsertDeviceToken(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := s.UpsertDeviceToken(context.Background(), "tenant", "0990000000", " "); !errors.Is(err, ErrMissingToken) {
-		t.Fatalf("UpsertDeviceToken(missing token) error = %v, want %v", err, ErrMissingToken)
-	}
-}
-
-func TestLegacyCardStoreOperationsAreTerminal(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	operations := []func() error{
-		func() error { _, err := s.GetUserByCard(ctx, "tenant", "9222081700000000"); return err },
-		func() error { _, err := s.ListCardsByUserID(ctx, "tenant", 1); return err },
-		func() error { _, err := s.ListCardsByMobile(ctx, "tenant", "0912141660"); return err },
-		func() error { return s.AddCards(ctx, "tenant", 1, nil) },
-		func() error { return s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{}) },
-		func() error { return s.DeleteCard(ctx, "tenant", 1, "9222081700000000") },
-		func() error { return s.SetMainCard(ctx, "tenant", 1, "9222081700000000") },
-		func() error { _, err := s.GetPanByMobile(ctx, "tenant", "0912141660"); return err },
-		func() error { return s.UpsertCacheCard(ctx, "tenant", ebs_fields.CacheCards{}) },
-		func() error { _, err := s.GetCacheCard(ctx, "tenant", "9222081700000000"); return err },
-		func() error { _, err := s.CardExists(ctx, "tenant", "9222081700000000"); return err },
-		func() error { _, err := s.GetDeviceIDsByPan(ctx, "tenant", "9222081700000000"); return err },
-	}
-	for index, operation := range operations {
-		if err := operation(); !errors.Is(err, ErrLegacyCardOperation) {
-			t.Fatalf("legacy operation %d error = %v, want %v", index, err, ErrLegacyCardOperation)
-		}
-	}
-}
-
 func TestStore_GenericBeneficiaryOperationsAreTerminal(t *testing.T) {
 	s := &Store{}
 	ctx := context.Background()
@@ -684,373 +263,6 @@ func TestStore_MarkNotificationsRead_MissingMobile(t *testing.T) {
 	}
 }
 
-func TestStore_LoginMetricsRequireMobileBeforeDB(t *testing.T) {
-	s := &Store{}
-	if _, err := s.RecordLoginAttempt(context.Background(), "tenant", " ", true); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("RecordLoginAttempt() error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := s.IncrementSuspicious(context.Background(), "tenant", " "); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("IncrementSuspicious() error = %v, want %v", err, ErrMissingMobile)
-	}
-}
-
-func TestStore_RecordLoginAttemptCountsFirstAttemptAndResetsWindow(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-
-	count, err := s.RecordLoginAttempt(ctx, "tenant", "0990000000", true)
-	if err != nil {
-		t.Fatalf("first RecordLoginAttempt(): %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("first login count = %d, want 1", count)
-	}
-
-	count, err = s.RecordLoginAttempt(ctx, "tenant", "0990000000", true)
-	if err != nil {
-		t.Fatalf("second RecordLoginAttempt(): %v", err)
-	}
-	if count != 2 {
-		t.Fatalf("second login count = %d, want 2", count)
-	}
-
-	expiredWindow := time.Now().UTC().Add(-loginAttemptWindow - time.Second)
-	stmt := s.DB.Rebind("UPDATE login_metrics SET window_started_at = ? WHERE tenant_id = ? AND mobile = ?")
-	if _, err := s.DB.ExecContext(ctx, stmt, expiredWindow, "tenant", "0990000000"); err != nil {
-		t.Fatalf("expire login window: %v", err)
-	}
-
-	count, err = s.RecordLoginAttempt(ctx, "tenant", "0990000000", true)
-	if err != nil {
-		t.Fatalf("expired-window RecordLoginAttempt(): %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("expired-window login count = %d, want 1", count)
-	}
-}
-
-func TestStore_IncrementSuspiciousCreatesAndUpdatesMetric(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-
-	if err := s.IncrementSuspicious(ctx, "tenant", "0990000000"); err != nil {
-		t.Fatalf("first IncrementSuspicious(): %v", err)
-	}
-	if err := s.IncrementSuspicious(ctx, "tenant", "0990000000"); err != nil {
-		t.Fatalf("second IncrementSuspicious(): %v", err)
-	}
-
-	var suspiciousCount int
-	var loginCount int
-	var updatedAt sql.NullTime
-	stmt := s.DB.Rebind("SELECT suspicious_count, login_count, updated_at FROM login_metrics WHERE tenant_id = ? AND mobile = ?")
-	if err := s.DB.QueryRowContext(ctx, stmt, "tenant", "0990000000").Scan(&suspiciousCount, &loginCount, &updatedAt); err != nil {
-		t.Fatalf("read login metric: %v", err)
-	}
-	if suspiciousCount != 2 {
-		t.Fatalf("suspicious count = %d, want 2", suspiciousCount)
-	}
-	if loginCount != 0 {
-		t.Fatalf("login count = %d, want 0", loginCount)
-	}
-	if !updatedAt.Valid {
-		t.Fatal("updated_at is NULL, want timestamp")
-	}
-}
-
-func TestStore_AuthAccountValidationFailsBeforeDB(t *testing.T) {
-	ctx := context.Background()
-	s := &Store{}
-	tests := []struct {
-		name string
-		run  func() error
-		want error
-	}{
-		{
-			name: "link missing account",
-			run: func() error {
-				return s.LinkAuthAccount(ctx, "tenant", nil)
-			},
-			want: ErrMissingAccount,
-		},
-		{
-			name: "link missing user",
-			run: func() error {
-				return s.LinkAuthAccount(ctx, "tenant", &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "sub"})
-			},
-			want: ErrInvalidUserID,
-		},
-		{
-			name: "link missing provider",
-			run: func() error {
-				return s.LinkAuthAccount(ctx, "tenant", &ebs_fields.AuthAccount{UserID: 1, ProviderUserID: "sub"})
-			},
-			want: ErrMissingProvider,
-		},
-		{
-			name: "find missing provider user",
-			run: func() error {
-				_, err := s.FindAuthAccount(ctx, "tenant", "google", "")
-				return err
-			},
-			want: ErrMissingProviderUserID,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.run(); !errors.Is(err, tt.want) {
-				t.Fatalf("error = %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
-
-func TestStore_UpdateKYCValidationFailsBeforeDB(t *testing.T) {
-	ctx := context.Background()
-	s := &Store{}
-	tests := []struct {
-		name     string
-		kyc      *ebs_fields.KYC
-		passport *ebs_fields.Passport
-		want     error
-	}{
-		{
-			name: "missing kyc",
-			want: ErrMissingKYC,
-		},
-		{
-			name: "missing user mobile",
-			kyc:  &ebs_fields.KYC{Mobile: "0990000000"},
-			want: ErrMissingMobile,
-		},
-		{
-			name: "missing kyc mobile",
-			kyc:  &ebs_fields.KYC{UserMobile: "0990000000"},
-			want: ErrMissingMobile,
-		},
-		{
-			name: "mismatched kyc mobile",
-			kyc:  &ebs_fields.KYC{UserMobile: "0990000000", Mobile: "0991111111"},
-			want: ErrInvalidMobile,
-		},
-		{
-			name:     "missing passport mobile",
-			kyc:      &ebs_fields.KYC{UserMobile: "0990000000", Mobile: "0990000000"},
-			passport: &ebs_fields.Passport{},
-			want:     ErrMissingMobile,
-		},
-		{
-			name:     "mismatched passport mobile",
-			kyc:      &ebs_fields.KYC{UserMobile: "0990000000", Mobile: "0990000000"},
-			passport: &ebs_fields.Passport{Mobile: "0991111111"},
-			want:     ErrInvalidMobile,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := s.UpdateKYC(ctx, "tenant", tt.kyc, tt.passport)
-			if !errors.Is(err, tt.want) {
-				t.Fatalf("error = %v, want %v", err, tt.want)
-			}
-		})
-	}
-}
-
-func TestStore_UpdateKYCRequiresExistingUser(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	mobile := "0990000000"
-
-	err := s.UpdateKYC(
-		ctx,
-		"tenant",
-		&ebs_fields.KYC{UserMobile: mobile, Mobile: mobile, Selfie: "selfie"},
-		&ebs_fields.Passport{Mobile: mobile, PassportNumber: "P123"},
-	)
-	if !ErrNotFound(err) {
-		t.Fatalf("error = %v, want not found", err)
-	}
-
-	var kycRows int
-	stmt := s.DB.Rebind("SELECT COUNT(*) FROM kyc WHERE tenant_id = ? AND mobile = ?")
-	if err := s.DB.GetContext(ctx, &kycRows, stmt, "tenant", mobile); err != nil {
-		t.Fatalf("count kyc rows: %v", err)
-	}
-	if kycRows != 0 {
-		t.Fatalf("kyc rows = %d, want 0", kycRows)
-	}
-}
-
-func TestStore_GetUserWithKYCReturnsKYCQueryErrors(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	user := &ebs_fields.User{Mobile: "0990000000", Username: "0990000000"}
-	if err := s.CreateUser(ctx, "tenant", user); err != nil {
-		t.Fatalf("CreateUser(): %v", err)
-	}
-	if _, err := s.DB.ExecContext(ctx, "DROP TABLE kyc"); err != nil {
-		t.Fatalf("drop kyc table: %v", err)
-	}
-	if _, _, _, err := s.GetUserWithKYC(ctx, "tenant", "0990000000"); err == nil {
-		t.Fatal("GetUserWithKYC() error = nil, want KYC query error")
-	}
-}
-
-func TestStore_GetUserWithKYCReturnsPassportQueryErrors(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	mobile := "0990000000"
-	user := &ebs_fields.User{Mobile: mobile, Username: mobile}
-	if err := s.CreateUser(ctx, "tenant", user); err != nil {
-		t.Fatalf("CreateUser(): %v", err)
-	}
-	if err := s.UpdateKYC(ctx, "tenant", &ebs_fields.KYC{UserMobile: mobile, Mobile: mobile}, nil); err != nil {
-		t.Fatalf("UpdateKYC(): %v", err)
-	}
-	if _, err := s.DB.ExecContext(ctx, "DROP TABLE passports"); err != nil {
-		t.Fatalf("drop passports table: %v", err)
-	}
-	if _, _, _, err := s.GetUserWithKYC(ctx, "tenant", mobile); err == nil {
-		t.Fatal("GetUserWithKYC() error = nil, want passport query error")
-	}
-}
-
-func TestStore_CreateUserWithAuthAccountPersistsUserAndAccount(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	user := &ebs_fields.User{
-		Mobile:     "google:sub-1",
-		Username:   "google:sub-1",
-		Email:      "google-user@example.test",
-		Password:   "hashed-password",
-		IsVerified: true,
-	}
-	account := &ebs_fields.AuthAccount{
-		Provider:       "google",
-		ProviderUserID: "sub-1",
-		Email:          "google-user@example.test",
-		EmailVerified:  true,
-	}
-
-	if err := s.CreateUserWithAuthAccount(ctx, "tenant", user, account); err != nil {
-		t.Fatalf("CreateUserWithAuthAccount(): %v", err)
-	}
-	if user.ID <= 0 {
-		t.Fatalf("user id = %d, want persisted id", user.ID)
-	}
-	if account.UserID != user.ID {
-		t.Fatalf("account user id = %d, want %d", account.UserID, user.ID)
-	}
-	storedAccount, err := s.FindAuthAccount(ctx, "tenant", "google", "sub-1")
-	if err != nil {
-		t.Fatalf("FindAuthAccount(): %v", err)
-	}
-	if storedAccount.UserID != user.ID {
-		t.Fatalf("stored account user id = %d, want %d", storedAccount.UserID, user.ID)
-	}
-}
-
-func TestStore_LinkAuthAccountRequiresTenantUserAndExactReplay(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	user := &ebs_fields.User{
-		Mobile:   "google:tenant-user",
-		Username: "google:tenant-user",
-		Email:    "tenant-user@example.test",
-		Password: "hashed-password",
-	}
-	if err := s.CreateUser(ctx, "tenant", user); err != nil {
-		t.Fatalf("create tenant user: %v", err)
-	}
-	foreignUser := &ebs_fields.User{
-		Mobile:   "google:foreign-user",
-		Username: "google:foreign-user",
-		Email:    "foreign-user@example.test",
-		Password: "hashed-password",
-	}
-	if err := s.CreateUser(ctx, "other-tenant", foreignUser); err != nil {
-		t.Fatalf("create foreign user: %v", err)
-	}
-
-	foreignAccount := &ebs_fields.AuthAccount{
-		UserID:         foreignUser.ID,
-		Provider:       "google",
-		ProviderUserID: "foreign-sub",
-		Email:          "foreign-user@example.test",
-	}
-	if err := s.LinkAuthAccount(ctx, "tenant", foreignAccount); !ErrNotFound(err) {
-		t.Fatalf("foreign auth account link error = %v, want not found", err)
-	}
-
-	account := &ebs_fields.AuthAccount{
-		UserID:         user.ID,
-		Provider:       "google",
-		ProviderUserID: "sub-1",
-		Email:          "Tenant-User@Example.Test",
-		EmailVerified:  true,
-	}
-	if err := s.LinkAuthAccount(ctx, "tenant", account); err != nil {
-		t.Fatalf("link auth account: %v", err)
-	}
-	replay := *account
-	if err := s.LinkAuthAccount(ctx, "tenant", &replay); err != nil {
-		t.Fatalf("replay auth account: %v", err)
-	}
-
-	emailMismatch := *account
-	emailMismatch.Email = "changed@example.test"
-	if err := s.LinkAuthAccount(ctx, "tenant", &emailMismatch); !errors.Is(err, ErrDuplicateAuthAccount) {
-		t.Fatalf("auth account email mismatch error = %v, want %v", err, ErrDuplicateAuthAccount)
-	}
-
-	otherUser := &ebs_fields.User{
-		Mobile:   "google:other-user",
-		Username: "google:other-user",
-		Email:    "other-user@example.test",
-		Password: "hashed-password",
-	}
-	if err := s.CreateUser(ctx, "tenant", otherUser); err != nil {
-		t.Fatalf("create other user: %v", err)
-	}
-	userMismatch := *account
-	userMismatch.UserID = otherUser.ID
-	if err := s.LinkAuthAccount(ctx, "tenant", &userMismatch); !errors.Is(err, ErrDuplicateAuthAccount) {
-		t.Fatalf("auth account user mismatch error = %v, want %v", err, ErrDuplicateAuthAccount)
-	}
-}
-
-func TestStore_CreateUserWithAuthAccountRollsBackWhenLinkFails(t *testing.T) {
-	ctx := context.Background()
-	s := newIdentityAuthTestStore(t, ctx)
-	existingUser := &ebs_fields.User{
-		Mobile:   "google:existing",
-		Username: "google:existing",
-		Email:    "existing-google@example.test",
-		Password: "hashed-password",
-	}
-	existingAccount := &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "existing-sub"}
-	if err := s.CreateUserWithAuthAccount(ctx, "tenant", existingUser, existingAccount); err != nil {
-		t.Fatalf("seed auth account: %v", err)
-	}
-	if _, err := s.DB.ExecContext(ctx, "CREATE UNIQUE INDEX auth_accounts_single_row_test_idx ON auth_accounts((true))"); err != nil {
-		t.Fatalf("create failing auth_accounts index: %v", err)
-	}
-
-	newUser := &ebs_fields.User{
-		Mobile:   "google:new-sub",
-		Username: "google:new-sub",
-		Email:    "new-google@example.test",
-		Password: "hashed-password",
-	}
-	newAccount := &ebs_fields.AuthAccount{Provider: "google", ProviderUserID: "new-sub"}
-	if err := s.CreateUserWithAuthAccount(ctx, "tenant", newUser, newAccount); err == nil {
-		t.Fatal("CreateUserWithAuthAccount() error = nil, want auth link failure")
-	}
-	if _, err := s.FindUserByEmail(ctx, "tenant", "new-google@example.test"); !ErrNotFound(err) {
-		t.Fatalf("FindUserByEmail() error = %v, want not found after rollback", err)
-	}
-}
-
 func newIdentityAuthTestStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
 	db := newValidationDB(t)
@@ -1058,4 +270,158 @@ func newIdentityAuthTestStore(t *testing.T, ctx context.Context) *Store {
 		t.Fatalf("migrate identity-auth scope: %v", err)
 	}
 	return New(db)
+}
+
+func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
+	ctx := context.Background()
+	s := &Store{}
+	cases := []struct {
+		name string
+		run  func(string) error
+	}{
+		{"UpsertCacheBiller", func(tenantID string) error {
+			return s.UpsertCacheBiller(ctx, tenantID, "0990000000", "biller")
+		}},
+		{"GetCacheBiller", func(tenantID string) error {
+			_, err := s.GetCacheBiller(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"CreateToken", func(tenantID string) error {
+			return s.CreateToken(ctx, tenantID, &ebs_fields.Token{UUID: "token-uuid"})
+		}},
+		{"GetTokenByUUID", func(tenantID string) error {
+			_, err := s.GetTokenByUUID(ctx, tenantID, "token-uuid")
+			return err
+		}},
+		{"MarkTokenPaid", func(tenantID string) error {
+			return s.MarkTokenPaid(ctx, tenantID, "token-uuid", "rail-uuid", 1)
+		}},
+		{"CreateTransaction", func(tenantID string) error {
+			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{UUID: "transaction-uuid"})
+		}},
+		{"GetTransactionsByParticipantUserID", func(tenantID string) error {
+			_, err := s.GetTransactionsByParticipantUserID(ctx, tenantID, 1)
+			return err
+		}},
+		{"GetTransactionByUUID", func(tenantID string) error {
+			_, err := s.GetTransactionByUUID(ctx, tenantID, "transaction-uuid")
+			return err
+		}},
+		{"GetTransactionByUUIDForParticipantUserID", func(tenantID string) error {
+			_, err := s.GetTransactionByUUIDForParticipantUserID(ctx, tenantID, 1, "transaction-uuid")
+			return err
+		}},
+		{"CreatePushData", func(tenantID string) error {
+			return s.CreatePushData(ctx, tenantID, &ebs_fields.PushDataRecord{UUID: "push-uuid"})
+		}},
+		{"GetNotifications", func(tenantID string) error {
+			_, err := s.GetNotifications(ctx, tenantID, "0990000000")
+			return err
+		}},
+		{"MarkNotificationsRead", func(tenantID string) error {
+			return s.MarkNotificationsRead(ctx, tenantID, "0990000000")
+		}},
+		{"GetMeterName", func(tenantID string) error {
+			_, err := s.GetMeterName(ctx, tenantID, "nec")
+			return err
+		}},
+		{"GetAllTokensByUserID", func(tenantID string) error {
+			_, err := s.GetAllTokensByUserID(ctx, tenantID, 1)
+			return err
+		}},
+		{"GetAllTokensByUserIDAndCartID", func(tenantID string) error {
+			_, err := s.GetAllTokensByUserIDAndCartID(ctx, tenantID, 1, "cart")
+			return err
+		}},
+		{"UpdateTokenCard", func(tenantID string) error {
+			return s.UpdateTokenCard(ctx, tenantID, "token-uuid", "9222081700000000")
+		}},
+		{"UpdatePaymentRequest", func(tenantID string) error {
+			return s.UpdatePaymentRequest(ctx, tenantID, "push-uuid", ebs_fields.QrData{})
+		}},
+	}
+	tenantCases := []struct {
+		tenantID string
+		wantErr  error
+	}{
+		{"", ErrMissingTenantID},
+		{"default", ErrInvalidTenantID},
+	}
+	for _, tc := range cases {
+		for _, tenantCase := range tenantCases {
+			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
+				err := tc.run(tenantCase.tenantID)
+				if !errors.Is(err, tenantCase.wantErr) {
+					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
+				}
+			})
+		}
+	}
+}
+
+func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	tenantID := "tenant-targeted-updates"
+	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeCardVault, MigrationScopeNotificationChat} {
+		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
+			t.Fatalf("migrate %s: %v", scope, err)
+		}
+	}
+	s := New(db, WithDataKey("test-data-key"))
+	if err := s.EnsureTenant(ctx, tenantID); err != nil {
+		t.Fatalf("ensure tenant: %v", err)
+	}
+	fullname := "Missing User"
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{"UpdateProfileProjection", func() error {
+			return s.UpdateProfileProjection(ctx, tenantID, 999, ProfileProjectionUpdate{Fullname: &fullname})
+		}},
+		{"SetProfileDeviceToken", func() error {
+			return s.SetProfileDeviceToken(ctx, tenantID, 999, "device-token")
+		}},
+		{"MarkTokenPaid", func() error {
+			return s.MarkTokenPaid(ctx, tenantID, "missing-token", "rail-uuid", 1)
+		}},
+		{"UpdateTokenCard", func() error {
+			return s.UpdateTokenCard(ctx, tenantID, "missing-token", "")
+		}},
+		{"UpdatePaymentRequest", func() error {
+			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
+		}},
+		{"updateTokenCard", func() error {
+			return s.updateTokenCard(ctx, tenantID, "missing-token", "hash:missing-token-card", "enc:missing-token-card")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("%s error = %v, want %v", tt.name, err, sql.ErrNoRows)
+			}
+		})
+	}
+}
+
+func TestLegacyCardStoreOperationsAreTerminal(t *testing.T) {
+	s := &Store{}
+	ctx := context.Background()
+	operations := []func() error{
+		func() error { _, err := s.ListCardsByUserID(ctx, "tenant", 1); return err },
+		func() error { _, err := s.ListCardsByMobile(ctx, "tenant", "0912141660"); return err },
+		func() error { return s.AddCards(ctx, "tenant", 1, nil) },
+		func() error { return s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{}) },
+		func() error { return s.DeleteCard(ctx, "tenant", 1, "9222081700000000") },
+		func() error { return s.SetMainCard(ctx, "tenant", 1, "9222081700000000") },
+		func() error { _, err := s.GetPanByMobile(ctx, "tenant", "0912141660"); return err },
+		func() error { _, err := s.CardExists(ctx, "tenant", "9222081700000000"); return err },
+		func() error { _, err := s.GetDeviceIDsByPan(ctx, "tenant", "9222081700000000"); return err },
+	}
+	for index, operation := range operations {
+		if err := operation(); !errors.Is(err, ErrLegacyCardOperation) {
+			t.Fatalf("legacy operation %d error = %v, want %v", index, err, ErrLegacyCardOperation)
+		}
+	}
 }

@@ -39,7 +39,7 @@ func (s *Service) ResolveIdentityUsersBatch(ctx context.Context, tenantID string
 	if err != nil {
 		return IdentityUsersBatchResult{}, err
 	}
-	users, err := s.Store.ListIdentityUsersByMobile(ctx, tenantID, mobiles)
+	users, err := s.Store.ListProfileProjectionsByMobile(ctx, tenantID, mobiles)
 	if err != nil {
 		return IdentityUsersBatchResult{}, err
 	}
@@ -85,11 +85,11 @@ func (s *Service) ResolveIdentityUserByMobile(ctx context.Context, tenantID stri
 	if mobile == "" {
 		return IdentityUserByMobileResult{}, ErrMissingMobile
 	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	user, err := s.Store.FindProfileProjectionByMobile(ctx, tenantID, mobile)
 	if err != nil {
 		return IdentityUserByMobileResult{}, err
 	}
-	return IdentityUserByMobileResult{UserID: user.ID, Mobile: user.Mobile}, nil
+	return IdentityUserByMobileResult{UserID: user.UserID, Mobile: user.Mobile}, nil
 }
 
 func (s *Service) ResolveIdentityUserByMobileInIdentityAuth(ctx context.Context, tenantID, mobile string) (IdentityUserByMobileResult, error) {

@@ -8,10 +8,8 @@ import (
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/adonese/noebs/internal/ebsipin"
 	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/store"
-	"github.com/google/uuid"
 )
 
 // Bills represents an inquiry request for EBS billers (telecoms, utilities, etc).
@@ -232,65 +230,6 @@ func requiredPaymentInfoString(paymentInfo map[string]any, key string) (string, 
 		return "", fmt.Errorf("%w: paymentInfo.%s", ErrInvalidPaymentInfo, key)
 	}
 	return text, nil
-}
-
-// isValidCard verifies card credentials with EBS.
-func (s *Service) isValidCard(ctx context.Context, tenantID string, card ebs_fields.CacheCards) (bool, error) {
-	if s == nil {
-		return false, ErrMissingService
-	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return false, err
-	}
-	if s.HTTPClient == nil {
-		return false, ErrMissingHTTPClient
-	}
-	if strings.TrimSpace(card.Pan) == "" {
-		return false, store.ErrMissingPAN
-	}
-	if strings.TrimSpace(card.Expiry) == "" {
-		return false, ErrMissingCardExpiry
-	}
-
-	url := s.NoebsConfig.ConsumerIP + ebs_fields.ConsumerBalanceEndpoint
-	var fields ebs_fields.ConsumerBalanceFields
-	uid, err := uuid.NewRandom()
-	if err != nil {
-		return false, err
-	}
-	fields.UUID = uid.String()
-	fields.ConsumerCommonFields.TranDateTime = ebs_fields.EbsDate()
-	fields.ApplicationId = s.NoebsConfig.ConsumerID
-
-	ipinBlock, err := ebsipin.Encrypt(s.NoebsConfig.EBSConsumerKey, s.NoebsConfig.BillInquiryIPIN, uid.String())
-	if err != nil {
-		return false, err
-	}
-	fields.ConsumerCardHolderFields.Ipin = ipinBlock
-	fields.ConsumerCardHolderFields.Pan = card.Pan
-	fields.ConsumerCardHolderFields.ExpDate = card.Expiry
-
-	jsonBuffer, err := json.Marshal(fields)
-	if err != nil {
-		return false, err
-	}
-
-	_, res, ebsErr := ebs_fields.EBSHttpClientWithClient(s.HTTPClient, url, jsonBuffer)
-	res.MaskPAN()
-	res.Name = s.ToDatabasename(url)
-	recordErr := s.recordTransaction(ctx, tenantID, res.EBSResponse)
-
-	if res.ResponseCode == ebs_fields.INVALIDCARD {
-		return false, errors.Join(ErrInvalidCard, ebsErr, recordErr)
-	}
-	if ebsErr != nil {
-		return false, errors.Join(ebsErr, recordErr)
-	}
-	if recordErr != nil {
-		return false, recordErr
-	}
-	return true, nil
 }
 
 func (s *Service) GetIpinPubKey(ctx context.Context, tenantID string) error {

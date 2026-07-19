@@ -22,7 +22,6 @@ type Service struct {
 	Store              *store.Store
 	NoebsConfig        ebs_fields.NoebsConfig
 	Logger             *logrus.Logger
-	Auth               Auther
 	HTTPClient         *http.Client
 	InternalHTTPClient *http.Client
 	WorkloadSigners    *workloadauth.SignerSet

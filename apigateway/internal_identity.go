@@ -3,14 +3,19 @@ package gateway
 import (
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 )
 
 const (
 	GatewayTenantIDHeader         = "X-Noebs-Tenant-ID"
+	GatewayIssuerHeader           = "X-Noebs-Issuer"
+	GatewaySubjectHeader          = "X-Noebs-Subject"
 	GatewayUserIDHeader           = "X-Noebs-User-ID"
 	GatewayMobileHeader           = "X-Noebs-Mobile"
 	GatewaySessionEpochHeader     = "X-Noebs-Session-Epoch"
@@ -30,6 +35,18 @@ type UserIdentity struct {
 	SessionEpoch int64
 }
 
+// PrincipalIdentity is the verified external identity forwarded by the API
+// gateway. Services must only construct it after the signed workload boundary.
+type PrincipalIdentity struct {
+	TenantID string
+	Issuer   string
+	Subject  string
+}
+
+type principalIdentityLocalKey struct{}
+
+var internalPrincipalIdentityLocal principalIdentityLocalKey
+
 // InternalTenantIdentityMiddleware binds a gateway-issued tenant identity header
 // to Fiber locals for public service routes that still require tenant scope.
 func InternalTenantIdentityMiddleware() fiber.Handler {
@@ -44,6 +61,32 @@ func InternalTenantIdentityMiddleware() fiber.Handler {
 		}
 		return c.Next()
 	}
+}
+
+// InternalPrincipalIdentityMiddleware binds a gateway-verified OIDC principal
+// to a typed local. Mount it only behind signedWorkloadBoundary.
+func InternalPrincipalIdentityMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		identity, err := ParseInternalPrincipalIdentity(
+			c.Get(GatewayTenantIDHeader),
+			c.Get(GatewayIssuerHeader),
+			c.Get(GatewaySubjectHeader),
+		)
+		if err != nil {
+			return unauthorizedGatewayIdentity(c)
+		}
+		c.Locals(internalPrincipalIdentityLocal, identity)
+		c.Locals("tenant_id", identity.TenantID)
+		if err := bindGatewayRequestSource(c); err != nil {
+			return unauthorizedGatewayIdentity(c)
+		}
+		return c.Next()
+	}
+}
+
+func InternalPrincipalIdentity(c *fiber.Ctx) (PrincipalIdentity, bool) {
+	identity, ok := c.Locals(internalPrincipalIdentityLocal).(PrincipalIdentity)
+	return identity, ok
 }
 
 // InternalUserIdentityMiddleware binds the gateway-issued user identity headers
@@ -107,6 +150,23 @@ func InternalAdminIdentityMiddleware() fiber.Handler {
 
 func ParseInternalTenantIdentity(rawTenantID string) (string, error) {
 	return validateTenantID(rawTenantID)
+}
+
+func ParseInternalPrincipalIdentity(rawTenantID, rawIssuer, rawSubject string) (PrincipalIdentity, error) {
+	tenantID, err := validateTenantID(rawTenantID)
+	if err != nil || tenantID != rawTenantID {
+		return PrincipalIdentity{}, ErrInvalidUserIdentity
+	}
+	issuer, err := url.Parse(rawIssuer)
+	if err != nil || issuer.Scheme != "https" || issuer.Host == "" || issuer.User != nil ||
+		issuer.RawQuery != "" || issuer.Fragment != "" || rawIssuer != strings.TrimSpace(rawIssuer) {
+		return PrincipalIdentity{}, ErrInvalidUserIdentity
+	}
+	if rawSubject == "" || len(rawSubject) > 255 || !utf8.ValidString(rawSubject) ||
+		rawSubject != strings.TrimSpace(rawSubject) || strings.IndexFunc(rawSubject, unicode.IsControl) >= 0 {
+		return PrincipalIdentity{}, ErrInvalidUserIdentity
+	}
+	return PrincipalIdentity{TenantID: tenantID, Issuer: rawIssuer, Subject: rawSubject}, nil
 }
 
 func ParseInternalUserIdentity(rawTenantID, rawUserID, rawMobile string) (UserIdentity, error) {

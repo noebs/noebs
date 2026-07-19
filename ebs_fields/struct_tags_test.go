@@ -10,12 +10,10 @@ func TestStructsHaveNoGormTags(t *testing.T) {
 		name string
 		typ  reflect.Type
 	}{
-		{"User", reflect.TypeOf(User{})},
 		{"KYC", reflect.TypeOf(KYC{})},
 		{"Passport", reflect.TypeOf(Passport{})},
 		{"Token", reflect.TypeOf(Token{})},
 		{"Card", reflect.TypeOf(Card{})},
-		{"CacheCards", reflect.TypeOf(CacheCards{})},
 		{"EBSResponse", reflect.TypeOf(EBSResponse{})},
 		{"Merchant", reflect.TypeOf(Merchant{})},
 	}
@@ -41,17 +39,8 @@ func TestDBTagOverrides(t *testing.T) {
 	assertFieldTag(t, merchantType, "Hooks", "db", "hooks")
 	assertFieldTag(t, merchantType, "URL", "db", "url")
 
-	userType := reflect.TypeOf(User{})
-	assertFieldTag(t, userType, "Password2", "db", "-")
-	assertFieldTag(t, userType, "NewPassword", "db", "-")
-
 	cardType := reflect.TypeOf(Card{})
 	assertFieldTag(t, cardType, "CardIdx", "db", "-")
-
-	cacheCardsType := reflect.TypeOf(CacheCards{})
-	assertFieldTag(t, cacheCardsType, "Mobile", "db", "-")
-	assertFieldTag(t, cacheCardsType, "Password", "db", "-")
-	assertFieldTag(t, cacheCardsType, "PublicKey", "db", "-")
 
 	ebsResponseType := reflect.TypeOf(EBSResponse{})
 	assertFieldTag(t, ebsResponseType, "WorkingKey", "db", "-")

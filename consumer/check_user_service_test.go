@@ -12,10 +12,10 @@ import (
 
 func TestCheckUserReturnsOnlyIdentityMembership(t *testing.T) {
 	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
-	user := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
+	user := seedProfile(t, storeSvc, tenantID, "0912141660")
 	service := &Service{Store: storeSvc}
 
-	result, err := service.CheckUser(context.Background(), tenantID, user.ID, []string{"0912141660", "0999999999"}, authTestSource, authTestNow)
+	result, err := service.CheckUser(context.Background(), tenantID, user.UserID, []string{"0912141660", "0999999999"})
 	if err != nil {
 		t.Fatalf("check user: %v", err)
 	}
@@ -35,10 +35,10 @@ func TestCheckUserReturnsOnlyIdentityMembership(t *testing.T) {
 
 func TestCheckUserIncludesUsersWithoutCards(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
-	user := seedUser(t, storeSvc, tenantID, "0912141660", "My$Passw0rd!")
+	user := seedProfile(t, storeSvc, tenantID, "0912141660")
 	service := &Service{Store: storeSvc}
 
-	result, err := service.CheckUser(context.Background(), tenantID, user.ID, []string{"0912141660"}, authTestSource, authTestNow)
+	result, err := service.CheckUser(context.Background(), tenantID, user.UserID, []string{"0912141660"})
 	if err != nil {
 		t.Fatalf("check user: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestCheckUserIncludesUsersWithoutCards(t *testing.T) {
 
 func TestCheckUserRequiresStore(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
-	if _, err := service.CheckUser(context.Background(), "tenant-a", 1, []string{"0912141660"}, authTestSource, authTestNow); err == nil {
+	if _, err := service.CheckUser(context.Background(), "tenant-a", 1, []string{"0912141660"}); err == nil {
 		t.Fatal("CheckUser() error = nil, want store error")
 	}
 }
@@ -62,7 +62,7 @@ func TestCheckUserRejectsBlankPhonesBeforeCardVault(t *testing.T) {
 		{" "},
 		{"0912141660", " "},
 	} {
-		if _, err := service.CheckUser(context.Background(), "tenant-a", 1, phones, authTestSource, authTestNow); !errors.Is(err, ErrMissingMobile) {
+		if _, err := service.CheckUser(context.Background(), "tenant-a", 1, phones); !errors.Is(err, ErrMissingMobile) {
 			t.Fatalf("CheckUser(%q) error = %v, want %v", phones, err, ErrMissingMobile)
 		}
 	}
@@ -96,7 +96,7 @@ func TestNormalizeCheckUserPhonesRejectsOversizedBatch(t *testing.T) {
 
 func TestCheckUserPropagatesIdentityLookupErrors(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
-	_, err := service.CheckUser(context.Background(), "tenant-a", 1, []string{"0912141660"}, authTestSource, authTestNow)
+	_, err := service.CheckUser(context.Background(), "tenant-a", 1, []string{"0912141660"})
 	if err == nil {
 		t.Fatal("CheckUser() error = nil, want identity lookup error")
 	}

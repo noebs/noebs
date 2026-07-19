@@ -7,6 +7,7 @@ import (
 
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -32,19 +33,26 @@ func (h *Handler) GetCards(c *fiber.Ctx) error {
 }
 
 func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
-	username := getMobile(c)
+	userID := getUserID(c)
+	if userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
+	}
 	type data struct {
 		Token string `json:"token"`
 	}
 	var req data
-	if err := bindJSON(c, &req); err != nil {
+	if err := bindStrictJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "device token is required", "code": "invalid_device_token"})
 	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.AddDeviceToken(c.UserContext(), tenantID, username, req.Token); err != nil {
+	if err := h.Service.AddDeviceToken(c.UserContext(), tenantID, userID, req.Token); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "db_error"})
 	}
 	return jsonResponse(c, http.StatusOK, nil)
@@ -136,12 +144,15 @@ func (h *Handler) Notifications(c *fiber.Ctx) error {
 }
 
 func (h *Handler) GetUser(c *fiber.Ctx) error {
-	mobile := getMobile(c)
+	userID := getUserID(c)
+	if userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
+	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	profile, err := h.Service.GetUserProfile(c.UserContext(), tenantID, mobile)
+	profile, err := h.Service.GetUserProfile(c.UserContext(), tenantID, userID)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
@@ -153,27 +164,50 @@ func (h *Handler) UpdateUser(c *fiber.Ctx) error {
 	if err := bindJSON(c, &profile); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "binding_error"})
 	}
-	mobile := getMobile(c)
+	var err error
+	profile, err = normalizeUserProfileInput(profile)
+	if err != nil {
+		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "profile data is invalid", "code": "invalid_profile"})
+	}
+	userID := getUserID(c)
+	if userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
+	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.UpdateUserProfile(c.UserContext(), tenantID, mobile, profile); err != nil {
-		if err.Error() == "username already exists" {
-			return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "duplication_error", "message": "username already exists"})
+	if err := h.Service.UpdateUserProfile(c.UserContext(), tenantID, userID, profile); err != nil {
+		if errors.Is(err, store.ErrProfileContactConflict) {
+			return jsonResponse(c, http.StatusConflict, fiber.Map{"code": "profile_contact_conflict", "message": "profile contact is already in use"})
 		}
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 }
 
+func normalizeUserProfileInput(profile ebs_fields.UserProfile) (ebs_fields.UserProfile, error) {
+	profile.Fullname = strings.TrimSpace(profile.Fullname)
+	profile.Username = strings.TrimSpace(profile.Username)
+	profile.Email = strings.ToLower(strings.TrimSpace(profile.Email))
+	profile.Birthday = strings.TrimSpace(profile.Birthday)
+	profile.Gender = strings.TrimSpace(profile.Gender)
+	if profile.Fullname == "" && profile.Username == "" && profile.Email == "" && profile.Birthday == "" && profile.Gender == "" {
+		return profile, store.ErrMissingData
+	}
+	return profile, nil
+}
+
 func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
-	mobile := getMobile(c)
+	userID := getUserID(c)
+	if userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
+	}
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	lang, err := h.Service.GetUserLanguage(c.UserContext(), tenantID, mobile)
+	lang, err := h.Service.GetUserLanguage(c.UserContext(), tenantID, userID)
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
@@ -181,7 +215,10 @@ func (h *Handler) GetUserLanguage(c *fiber.Ctx) error {
 }
 
 func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
-	mobile := getMobile(c)
+	userID := getUserID(c)
+	if userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
+	}
 	language := strings.TrimSpace(c.Query("language"))
 	tenantID, err := resolveTenantID(c)
 	if err != nil {
@@ -190,22 +227,22 @@ func (h *Handler) SetUserLanguage(c *fiber.Ctx) error {
 	if language == "" {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "You must set a language", "code": "client_error"})
 	}
-	if err := h.Service.SetUserLanguage(c.UserContext(), tenantID, mobile, language); err != nil {
+	if err := h.Service.SetUserLanguage(c.UserContext(), tenantID, userID, language); err != nil {
 		return jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error(), "code": "database_error"})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
 }
 
 func (h *Handler) KYC(c *fiber.Ctx) error {
-	mobile := strings.TrimSpace(getMobile(c))
-	if mobile == "" {
-		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated mobile", "code": "unauthorized"})
+	userID := getUserID(c)
+	if userID <= 0 {
+		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"message": "missing authenticated user", "code": "unauthorized"})
 	}
 	if len(c.Body()) > maxKYCRequestBodyBytes {
 		return jsonResponse(c, http.StatusRequestEntityTooLarge, fiber.Map{"message": "KYC request body is too large", "code": "payload_too_large"})
 	}
 	var req ebs_fields.KYCPassport
-	if err := bindJSON(c, &req); err != nil {
+	if err := bindStrictJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	if len(req.Selfie) > maxKYCImageBytes || len(req.PassportImg) > maxKYCImageBytes {
@@ -215,7 +252,7 @@ func (h *Handler) KYC(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
 	}
-	if err := h.Service.UpdateKYC(c.UserContext(), tenantID, mobile, req); err != nil {
+	if err := h.Service.UpdateKYC(c.UserContext(), tenantID, userID, req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"message": "KYC created successfully", "code": "ok"})

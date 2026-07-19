@@ -31,23 +31,11 @@ func (s *Service) GetCardsByUserID(ctx context.Context, tenantID string, userID 
 	return cards, &main, nil
 }
 
-func (s *Service) AddDeviceToken(ctx context.Context, tenantID, mobile, token string) error {
+func (s *Service) AddDeviceToken(ctx context.Context, tenantID string, userID int64, token string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return store.ErrMissingToken
-	}
-	return s.Store.UpsertDeviceToken(ctx, tenantID, mobile, token)
+	return s.Store.SetProfileDeviceToken(ctx, tenantID, userID, token)
 }
 
 func (s *Service) ListBeneficiariesForUserID(ctx context.Context, tenantID string, userID int64) ([]ebs_fields.Beneficiary, error) {
@@ -162,159 +150,73 @@ func (s *Service) Notifications(ctx context.Context, tenantID, mobile string) ([
 	return records, nil
 }
 
-func (s *Service) GetUserProfile(ctx context.Context, tenantID, mobile string) (ebs_fields.UserProfile, error) {
+func (s *Service) GetUserProfile(ctx context.Context, tenantID string, userID int64) (ebs_fields.UserProfile, error) {
 	if s == nil || s.Store == nil {
 		return ebs_fields.UserProfile{}, ErrMissingStore
 	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return ebs_fields.UserProfile{}, err
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ebs_fields.UserProfile{}, ErrMissingMobile
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
+	profile, err := s.Store.FindProfileProjectionByUserID(ctx, tenantID, userID)
 	if err != nil {
 		return ebs_fields.UserProfile{}, err
 	}
 	return ebs_fields.UserProfile{
-		Fullname: user.Fullname,
-		Username: user.Username,
-		Email:    user.Email,
-		Birthday: user.Birthday,
-		Gender:   user.Gender,
+		Fullname: profile.Fullname,
+		Username: profile.Username,
+		Email:    profile.Email,
+		Birthday: profile.Birthday,
+		Gender:   profile.Gender,
 	}, nil
 }
 
-func (s *Service) UpdateUserProfile(ctx context.Context, tenantID, mobile string, profile ebs_fields.UserProfile) error {
+func (s *Service) UpdateUserProfile(ctx context.Context, tenantID string, userID int64, profile ebs_fields.UserProfile) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	profile, err = normalizeUserProfileInput(profile)
-	if err != nil {
-		return err
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	if profile.Username != "" {
-		if other, err := s.Store.FindUserByUsername(ctx, tenantID, profile.Username); err == nil {
-			if other.ID != user.ID {
-				return errors.New("username already exists")
-			}
-		} else if !store.ErrNotFound(err) {
-			return err
-		}
-	}
-	return s.Store.UpdateUserProfile(ctx, tenantID, user.ID, profile)
+	return s.Store.UpdateProfileProjection(ctx, tenantID, userID, profileUpdate(profile))
 }
 
-func (s *Service) GetUserLanguage(ctx context.Context, tenantID, mobile string) (string, error) {
+func (s *Service) GetUserLanguage(ctx context.Context, tenantID string, userID int64) (string, error) {
 	if s == nil || s.Store == nil {
 		return "", ErrMissingStore
 	}
-	tenantID, err := store.ValidateTenantID(tenantID)
+	profile, err := s.Store.FindProfileProjectionByUserID(ctx, tenantID, userID)
 	if err != nil {
 		return "", err
 	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return "", ErrMissingMobile
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return "", err
-	}
-	return user.Language, nil
+	return profile.Language, nil
 }
 
-func (s *Service) SetUserLanguage(ctx context.Context, tenantID, mobile, language string) error {
+func (s *Service) SetUserLanguage(ctx context.Context, tenantID string, userID int64, language string) error {
 	if s == nil || s.Store == nil {
 		return ErrMissingStore
 	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	mobile = strings.TrimSpace(mobile)
-	if mobile == "" {
-		return ErrMissingMobile
-	}
-	language = strings.TrimSpace(language)
-	if language == "" {
-		return store.ErrMissingLanguage
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, mobile)
-	if err != nil {
-		return err
-	}
-	return s.Store.UpdateUserLanguage(ctx, tenantID, user.ID, language)
+	return s.Store.SetProfileLanguage(ctx, tenantID, userID, language)
 }
 
-func normalizeUserProfileInput(profile ebs_fields.UserProfile) (ebs_fields.UserProfile, error) {
+func (s *Service) UpdateKYC(ctx context.Context, tenantID string, userID int64, req ebs_fields.KYCPassport) error {
+	if s == nil || s.Store == nil {
+		return ErrMissingStore
+	}
+	return s.Store.UpdateProfileKYC(ctx, tenantID, userID, req)
+}
+
+func profileUpdate(profile ebs_fields.UserProfile) store.ProfileProjectionUpdate {
+	update := store.ProfileProjectionUpdate{}
 	if profile.Fullname != "" {
-		profile.Fullname = strings.TrimSpace(profile.Fullname)
+		update.Fullname = &profile.Fullname
 	}
 	if profile.Username != "" {
-		profile.Username = strings.TrimSpace(profile.Username)
-		if profile.Username == "" {
-			return profile, store.ErrMissingUsername
-		}
+		update.Username = &profile.Username
 	}
 	if profile.Email != "" {
-		profile.Email = strings.ToLower(strings.TrimSpace(profile.Email))
-		if profile.Email == "" {
-			return profile, store.ErrMissingEmail
-		}
+		update.Email = &profile.Email
 	}
 	if profile.Birthday != "" {
-		profile.Birthday = strings.TrimSpace(profile.Birthday)
+		update.Birthday = &profile.Birthday
 	}
 	if profile.Gender != "" {
-		profile.Gender = strings.TrimSpace(profile.Gender)
+		update.Gender = &profile.Gender
 	}
-	if profile.Fullname == "" && profile.Username == "" && profile.Email == "" && profile.Birthday == "" && profile.Gender == "" {
-		return profile, store.ErrMissingData
-	}
-	return profile, nil
-}
-
-func (s *Service) UpdateKYC(ctx context.Context, tenantID, authenticatedMobile string, req ebs_fields.KYCPassport) error {
-	if s == nil || s.Store == nil {
-		return ErrMissingStore
-	}
-	tenantID, err := store.ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	authenticatedMobile = strings.TrimSpace(authenticatedMobile)
-	if authenticatedMobile == "" {
-		return ErrMissingMobile
-	}
-	user, err := s.Store.GetUserByMobile(ctx, tenantID, authenticatedMobile)
-	if err != nil {
-		return err
-	}
-
-	kyc := &ebs_fields.KYC{
-		UserMobile:  user.Mobile,
-		Mobile:      user.Mobile,
-		Selfie:      req.Selfie,
-		PassportImg: req.PassportImg,
-	}
-	passport := req.Passport
-	passport.Mobile = user.Mobile
-	return s.Store.UpdateKYC(ctx, tenantID, kyc, &passport)
+	return update
 }
 
 func (s *Service) GetTransactionByUUIDForUser(ctx context.Context, tenantID string, userID int64, uuid string) (*ebs_fields.EBSResponse, error) {

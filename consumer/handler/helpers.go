@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 
 	"github.com/adonese/noebs/apperr"
@@ -111,18 +110,6 @@ func resolveTenantID(c *fiber.Ctx) (string, error) {
 	return store.ValidateTenantID(getTenantID(c))
 }
 
-func resolveRequestSource(c *fiber.Ctx) (string, error) {
-	if value, ok := c.Locals("request_source").(string); ok {
-		if ip := net.ParseIP(value); ip != nil {
-			return ip.String(), nil
-		}
-	}
-	if ip := net.ParseIP(c.IP()); ip != nil {
-		return ip.String(), nil
-	}
-	return "", consumer.ErrInvalidRequestSource
-}
-
 func statusForError(err error) int {
 	if err == nil {
 		return http.StatusOK
@@ -147,7 +134,6 @@ func statusForError(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, store.ErrMissingTenantID),
 		errors.Is(err, store.ErrInvalidTenantID),
-		errors.Is(err, store.ErrMissingUser),
 		errors.Is(err, store.ErrMissingToken),
 		errors.Is(err, store.ErrMissingUUID),
 		errors.Is(err, store.ErrInvalidUserID),
@@ -155,9 +141,6 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrInvalidPaymentTokenStatus),
 		errors.Is(err, store.ErrMissingMobile),
 		errors.Is(err, store.ErrInvalidMobile),
-		errors.Is(err, store.ErrMissingEmail),
-		errors.Is(err, store.ErrMissingUsername),
-		errors.Is(err, store.ErrMissingUserIdentifier),
 		errors.Is(err, store.ErrMissingPAN),
 		errors.Is(err, store.ErrMissingCardID),
 		errors.Is(err, store.ErrInvalidCardID),
@@ -170,11 +153,8 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrInvalidRailTranDateTime),
 		errors.Is(err, store.ErrMissingData),
 		errors.Is(err, store.ErrMissingLanguage),
-		errors.Is(err, store.ErrMissingPassword),
 		errors.Is(err, store.ErrMissingBillType),
-		errors.Is(err, store.ErrDuplicateAuthAccount),
 		errors.Is(err, consumer.ErrMissingMobile),
-		errors.Is(err, consumer.ErrMissingPassword),
 		errors.Is(err, consumer.ErrMissingCardExpiry),
 		errors.Is(err, consumer.ErrMissingUUID),
 		errors.Is(err, consumer.ErrAmountMismatch),
@@ -186,15 +166,11 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrMissingBillerID),
 		errors.Is(err, consumer.ErrMissingMerchantID),
 		errors.Is(err, consumer.ErrInvalidMerchantID),
-		errors.Is(err, consumer.ErrMissingPublicKey),
-		errors.Is(err, consumer.ErrInvalidPublicKey),
 		errors.Is(err, consumer.ErrMissingIPINBlock),
 		errors.Is(err, consumer.ErrInvalidIPINBlock),
 		errors.Is(err, consumer.ErrEnrollmentRailUUIDMismatch),
 		errors.Is(err, consumer.ErrOperationRailUUIDMismatch),
-		errors.Is(err, consumer.ErrPasswordInvalid),
-		errors.Is(err, consumer.ErrInvalidCard),
-		errors.Is(err, consumer.ErrUserAlreadyExists):
+		errors.Is(err, consumer.ErrInvalidCard):
 		return http.StatusBadRequest
 	case errors.Is(err, consumer.ErrCardNotFound),
 		errors.Is(err, store.ErrCardNotFound),
@@ -220,7 +196,6 @@ func statusForError(err error) int {
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrMissingStore),
 		errors.Is(err, consumer.ErrMissingService),
-		errors.Is(err, consumer.ErrMissingAuth),
 		errors.Is(err, consumer.ErrMissingHTTPClient),
 		errors.Is(err, consumer.ErrMissingCardVault),
 		errors.Is(err, consumer.ErrInvalidCardVault),

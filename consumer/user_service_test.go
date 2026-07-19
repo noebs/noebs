@@ -21,60 +21,38 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 			return err
 		}},
 		{"AddDeviceToken", func(tenantID string) error {
-			return service.AddDeviceToken(ctx, tenantID, "0990000000", "device-token")
-		}},
-		{"AddCardsForUserID", func(tenantID string) error {
-			return service.AddCardsForUserID(ctx, tenantID, 1, "0990000000", []ebs_fields.Card{{Pan: "9222081700000000"}})
-		}},
-		{"EditCardForUserID", func(tenantID string) error {
-			return service.EditCardForUserID(ctx, tenantID, 1, ebs_fields.Card{CardIdx: "9222081700000000"})
-		}},
-		{"RemoveCardForUserID", func(tenantID string) error {
-			return service.RemoveCardForUserID(ctx, tenantID, 1, "9222081700000000")
-		}},
-		{"NecToName", func(tenantID string) error {
-			_, err := service.NecToName(ctx, tenantID, "nec")
-			return err
-		}},
-		{"Notifications", func(tenantID string) error {
-			_, err := service.Notifications(ctx, tenantID, "0990000000")
-			return err
+			return service.AddDeviceToken(ctx, tenantID, 1, "device-token")
 		}},
 		{"GetUserProfile", func(tenantID string) error {
-			_, err := service.GetUserProfile(ctx, tenantID, "0990000000")
+			_, err := service.GetUserProfile(ctx, tenantID, 1)
 			return err
 		}},
 		{"UpdateUserProfile", func(tenantID string) error {
-			return service.UpdateUserProfile(ctx, tenantID, "0990000000", ebs_fields.UserProfile{Fullname: "User"})
+			return service.UpdateUserProfile(ctx, tenantID, 1, ebs_fields.UserProfile{Fullname: "User"})
 		}},
 		{"GetUserLanguage", func(tenantID string) error {
-			_, err := service.GetUserLanguage(ctx, tenantID, "0990000000")
+			_, err := service.GetUserLanguage(ctx, tenantID, 1)
 			return err
 		}},
 		{"SetUserLanguage", func(tenantID string) error {
-			return service.SetUserLanguage(ctx, tenantID, "0990000000", "en")
+			return service.SetUserLanguage(ctx, tenantID, 1, "en")
 		}},
 		{"UpdateKYC", func(tenantID string) error {
-			return service.UpdateKYC(ctx, tenantID, "0990000000", ebs_fields.KYCPassport{})
+			return service.UpdateKYC(ctx, tenantID, 1, ebs_fields.KYCPassport{})
 		}},
 		{"GetTransactionByUUIDForUser", func(tenantID string) error {
 			_, err := service.GetTransactionByUUIDForUser(ctx, tenantID, 1, "uuid")
 			return err
 		}},
 	}
-	tenantCases := []struct {
-		tenantID string
-		wantErr  error
-	}{
-		{"", store.ErrMissingTenantID},
-		{"default", store.ErrInvalidTenantID},
-	}
-	for _, tc := range cases {
-		for _, tenantCase := range tenantCases {
-			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
-				err := tc.run(tenantCase.tenantID)
-				if !errors.Is(err, tenantCase.wantErr) {
-					t.Fatalf("expected %v, got %v", tenantCase.wantErr, err)
+	for _, test := range cases {
+		for _, tenant := range []struct {
+			id   string
+			want error
+		}{{"", store.ErrMissingTenantID}, {"default", store.ErrInvalidTenantID}} {
+			t.Run(test.name+"/"+tenant.id, func(t *testing.T) {
+				if err := test.run(tenant.id); !errors.Is(err, tenant.want) {
+					t.Fatalf("error = %v, want %v", err, tenant.want)
 				}
 			})
 		}
@@ -92,107 +70,64 @@ func TestLegacyUserServiceCardWritesAreTerminal(t *testing.T) {
 	}
 }
 
-func TestAddDeviceTokenRequiresExplicitInputs(t *testing.T) {
+func TestUserServiceRequiresExactProfileInputs(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
 	ctx := context.Background()
-
-	if err := service.AddDeviceToken(ctx, "tenant", " ", "device-token"); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("AddDeviceToken(missing mobile) error = %v, want %v", err, ErrMissingMobile)
+	if err := service.AddDeviceToken(ctx, "tenant", 0, "device-token"); !errors.Is(err, store.ErrInvalidUserID) {
+		t.Fatalf("invalid device-token user error = %v, want %v", err, store.ErrInvalidUserID)
 	}
-	if err := service.AddDeviceToken(ctx, "tenant", "0990000000", " "); !errors.Is(err, store.ErrMissingToken) {
-		t.Fatalf("AddDeviceToken(missing token) error = %v, want %v", err, store.ErrMissingToken)
+	if err := service.AddDeviceToken(ctx, "tenant", 1, " "); !errors.Is(err, store.ErrMissingToken) {
+		t.Fatalf("blank device token error = %v, want %v", err, store.ErrMissingToken)
+	}
+	if err := service.SetUserLanguage(ctx, "tenant", 1, " "); !errors.Is(err, store.ErrMissingLanguage) {
+		t.Fatalf("blank language error = %v, want %v", err, store.ErrMissingLanguage)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{}); !errors.Is(err, store.ErrMissingData) {
+		t.Fatalf("empty profile error = %v, want %v", err, store.ErrMissingData)
+	}
+	if err := service.UpdateUserProfile(ctx, "tenant", 1, ebs_fields.UserProfile{Fullname: " User "}); !errors.Is(err, store.ErrInvalidProfileName) {
+		t.Fatalf("non-exact fullname error = %v, want %v", err, store.ErrInvalidProfileName)
 	}
 }
 
-func TestUserServiceIdentityInputsFailBeforeStore(t *testing.T) {
-	service := &Service{Store: &store.Store{}}
-	ctx := context.Background()
-
-	if _, err := service.GetUserLanguage(ctx, "tenant", " "); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("GetUserLanguage(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := service.SetUserLanguage(ctx, "tenant", " ", "en"); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("SetUserLanguage(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := service.SetUserLanguage(ctx, "tenant", "0990000000", " "); !errors.Is(err, store.ErrMissingLanguage) {
-		t.Fatalf("SetUserLanguage(missing language) error = %v, want %v", err, store.ErrMissingLanguage)
-	}
-	if err := service.UpdateUserProfile(ctx, "tenant", " ", ebs_fields.UserProfile{Fullname: "User"}); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("UpdateUserProfile(missing mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{}); !errors.Is(err, store.ErrMissingData) {
-		t.Fatalf("UpdateUserProfile(empty profile) error = %v, want %v", err, store.ErrMissingData)
-	}
-	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Fullname: " "}); !errors.Is(err, store.ErrMissingData) {
-		t.Fatalf("UpdateUserProfile(blank profile) error = %v, want %v", err, store.ErrMissingData)
-	}
-	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Username: " "}); !errors.Is(err, store.ErrMissingUsername) {
-		t.Fatalf("UpdateUserProfile(missing username) error = %v, want %v", err, store.ErrMissingUsername)
-	}
-	if err := service.UpdateUserProfile(ctx, "tenant", "0990000000", ebs_fields.UserProfile{Email: " "}); !errors.Is(err, store.ErrMissingEmail) {
-		t.Fatalf("UpdateUserProfile(missing email) error = %v, want %v", err, store.ErrMissingEmail)
-	}
-	if err := service.UpdateKYC(ctx, "tenant", " ", ebs_fields.KYCPassport{}); !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("UpdateKYC(missing authenticated mobile) error = %v, want %v", err, ErrMissingMobile)
-	}
-}
-
-func TestUpdateKYCRequiresExistingUser(t *testing.T) {
+func TestUserServiceProfileAndKYCUseNumericProjection(t *testing.T) {
 	ctx := context.Background()
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
 	service := &Service{Store: storeSvc}
+	profile := seedProfile(t, storeSvc, tenantID, "0990000000")
 
-	err := service.UpdateKYC(ctx, tenantID, "0990000000", ebs_fields.KYCPassport{
+	if err := service.UpdateUserProfile(ctx, tenantID, profile.UserID, ebs_fields.UserProfile{
+		Fullname: "Updated Owner",
+		Email:    "updated@example.test",
+	}); err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+	if err := service.SetUserLanguage(ctx, tenantID, profile.UserID, "en"); err != nil {
+		t.Fatalf("set language: %v", err)
+	}
+	if err := service.AddDeviceToken(ctx, tenantID, profile.UserID, "device-token"); err != nil {
+		t.Fatalf("set device token: %v", err)
+	}
+	if err := service.UpdateKYC(ctx, tenantID, profile.UserID, ebs_fields.KYCPassport{
 		Selfie:      "selfie",
 		PassportImg: "passport-image",
 		Passport:    ebs_fields.Passport{PassportNumber: "P123"},
-	})
-	if !store.ErrNotFound(err) {
-		t.Fatalf("error = %v, want not found", err)
-	}
-}
-
-func TestUpdateKYCIgnoresSpoofedBodyMobile(t *testing.T) {
-	ctx := context.Background()
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeIdentityAuth})
-	service := &Service{Store: storeSvc}
-	mobile := "0990000000"
-	spoofedMobile := "0990000001"
-	seedUser(t, storeSvc, tenantID, mobile, "password")
-	seedUser(t, storeSvc, tenantID, spoofedMobile, "password")
-
-	if err := service.UpdateKYC(ctx, tenantID, mobile, ebs_fields.KYCPassport{
-		Selfie:      "selfie",
-		PassportImg: "passport-image",
-		Passport:    ebs_fields.Passport{Mobile: spoofedMobile, PassportNumber: "P123"},
 	}); err != nil {
-		t.Fatalf("UpdateKYC(): %v", err)
+		t.Fatalf("update KYC: %v", err)
 	}
 
-	_, kyc, passport, err := storeSvc.GetUserWithKYC(ctx, tenantID, mobile)
+	stored, err := storeSvc.FindProfileProjectionByUserID(ctx, tenantID, profile.UserID)
 	if err != nil {
-		t.Fatalf("GetUserWithKYC(): %v", err)
+		t.Fatalf("find projection: %v", err)
 	}
-	if kyc == nil {
-		t.Fatal("kyc is nil, want persisted record")
+	if stored.Fullname != "Updated Owner" || stored.Email != "updated@example.test" || stored.Language != "en" || stored.DeviceToken != "device-token" {
+		t.Fatalf("stored projection = %+v", stored)
 	}
-	if kyc.UserMobile != mobile || kyc.Mobile != mobile {
-		t.Fatalf("kyc mobile = (%q, %q), want %q", kyc.UserMobile, kyc.Mobile, mobile)
-	}
-	if passport == nil {
-		t.Fatal("passport is nil, want persisted record")
-	}
-	if passport.Mobile != mobile {
-		t.Fatalf("passport mobile = %q, want %q", passport.Mobile, mobile)
-	}
-	if passport.PassportNumber != "P123" {
-		t.Fatalf("passport number = %q, want P123", passport.PassportNumber)
-	}
-	_, spoofedKYC, spoofedPassport, err := storeSvc.GetUserWithKYC(ctx, tenantID, spoofedMobile)
+	kyc, passport, err := storeSvc.GetProfileKYC(ctx, tenantID, profile.UserID)
 	if err != nil {
-		t.Fatalf("GetUserWithKYC(spoofed mobile): %v", err)
+		t.Fatalf("get KYC: %v", err)
 	}
-	if spoofedKYC != nil || spoofedPassport != nil {
-		t.Fatalf("spoofed user KYC = (%+v, %+v), want no records", spoofedKYC, spoofedPassport)
+	if kyc == nil || kyc.UserID != profile.UserID || passport == nil || passport.UserID != profile.UserID || passport.PassportNumber != "P123" {
+		t.Fatalf("KYC/passport = %+v / %+v", kyc, passport)
 	}
 }
