@@ -54,13 +54,9 @@ func initOTel(ctx context.Context, role serviceRole, cfg ebs_fields.NoebsConfig,
 		return err
 	}
 
-	opts := []otlptracegrpc.Option{}
-	opts = append(opts, otlptracegrpc.WithEndpoint(strings.TrimSpace(cfg.OtelEndpoint)))
-	if cfg.OtelInsecure {
-		opts = append(opts, otlptracegrpc.WithInsecure())
-	}
-
-	exporter, err := otlptracegrpc.New(ctx, opts...)
+	exporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(strings.TrimSpace(cfg.OtelEndpoint)),
+	)
 	if err != nil {
 		return fmt.Errorf("otel trace exporter init failed: %w", err)
 	}
@@ -90,7 +86,6 @@ func initOTel(ctx context.Context, role serviceRole, cfg ebs_fields.NoebsConfig,
 		"endpoint":    cfg.OtelEndpoint,
 		"sample_rate": cfg.OtelSampleRate,
 		"service":     serviceName,
-		"insecure":    cfg.OtelInsecure,
 	}).Info("otel tracing enabled")
 	return nil
 }

@@ -29,14 +29,22 @@ func (e *FeeEngine) Calculate(ctx context.Context, tenantID, txType, currency st
 	if err != nil {
 		return nil, err
 	}
+	return calculateFee(config, amount)
+}
 
-	percentageFee := decimal.NewFromInt(amount).
+func calculateFee(config *walletstore.FeeConfig, amount int64) (*FeeResult, error) {
+	percentageFee, err := decimalToInt64(decimal.NewFromInt(amount).
 		Mul(config.PercentageFee).
 		Div(decimal.NewFromInt(100)).
-		Round(0).
-		IntPart()
+		Round(0))
+	if err != nil {
+		return nil, err
+	}
 
-	totalFee := percentageFee + config.FlatFee
+	totalFee, err := checkedAddInt64(percentageFee, config.FlatFee)
+	if err != nil {
+		return nil, err
+	}
 	if totalFee < config.MinFee {
 		totalFee = config.MinFee
 	}

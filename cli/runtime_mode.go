@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -52,11 +54,35 @@ const (
 	serviceRoleIdentityAuthMigrate   serviceRole = "identity-auth-migrate"
 	serviceRoleCardVaultMigrate      serviceRole = "card-vault-migrate"
 	serviceRoleEBSAdapterMigrate     serviceRole = "ebs-adapter-migrate"
-	serviceRolePSPWebhookMigrate     serviceRole = "psp-webhook-migrate"
 	serviceRoleAdminReportingMigrate serviceRole = "admin-reporting-migrate"
 	serviceRoleNotificationMigrate   serviceRole = "notification-chat-migrate"
 	serviceRoleWalletLedgerMigrate   serviceRole = "wallet-ledger-migrate"
 )
+
+var serviceRoleCatalog = [...]serviceRole{
+	serviceRoleAPIGateway,
+	serviceRoleIdentityAuth,
+	serviceRoleCardVault,
+	serviceRoleEBSAdapter,
+	serviceRoleEBSAdapterEvents,
+	serviceRolePSPWebhook,
+	serviceRoleAdminReporting,
+	serviceRoleAdminReportingProjector,
+	serviceRoleNotification,
+	serviceRoleWalletAPI,
+	serviceRoleWalletLedger,
+	serviceRoleWalletWorker,
+	serviceRoleWorkloadAuthMigrate,
+	serviceRoleWorkloadAuthCleanup,
+	serviceRoleGatewayAuthMigrate,
+	serviceRoleGatewayAuthCleanup,
+	serviceRoleIdentityAuthMigrate,
+	serviceRoleCardVaultMigrate,
+	serviceRoleEBSAdapterMigrate,
+	serviceRoleAdminReportingMigrate,
+	serviceRoleNotificationMigrate,
+	serviceRoleWalletLedgerMigrate,
+}
 
 func currentServiceRole() (serviceRole, error) {
 	return parseServiceRole(noebsConfig.ServiceRole)
@@ -64,36 +90,15 @@ func currentServiceRole() (serviceRole, error) {
 
 func parseServiceRole(value string) (serviceRole, error) {
 	role := serviceRole(strings.TrimSpace(value))
-	switch role {
-	case "":
+	if role == "" {
 		return "", errMissingServiceRole
-	case serviceRoleAPIGateway,
-		serviceRoleIdentityAuth,
-		serviceRoleCardVault,
-		serviceRoleEBSAdapter,
-		serviceRoleEBSAdapterEvents,
-		serviceRolePSPWebhook,
-		serviceRoleAdminReporting,
-		serviceRoleAdminReportingProjector,
-		serviceRoleNotification,
-		serviceRoleWalletAPI,
-		serviceRoleWalletLedger,
-		serviceRoleWalletWorker,
-		serviceRoleWorkloadAuthMigrate,
-		serviceRoleWorkloadAuthCleanup,
-		serviceRoleGatewayAuthMigrate,
-		serviceRoleGatewayAuthCleanup,
-		serviceRoleIdentityAuthMigrate,
-		serviceRoleCardVaultMigrate,
-		serviceRoleEBSAdapterMigrate,
-		serviceRolePSPWebhookMigrate,
-		serviceRoleAdminReportingMigrate,
-		serviceRoleNotificationMigrate,
-		serviceRoleWalletLedgerMigrate:
-		return role, nil
-	default:
-		return "", fmt.Errorf("%w: %q", errInvalidServiceRole, value)
 	}
+	for _, known := range serviceRoleCatalog {
+		if role == known {
+			return role, nil
+		}
+	}
+	return "", fmt.Errorf("%w: %q", errInvalidServiceRole, value)
 }
 
 func (r serviceRole) startsHTTP() bool {
@@ -138,7 +143,7 @@ func (r serviceRole) opensDatabase() bool {
 }
 
 func (r serviceRole) requiresTemporal() bool {
-	return r == serviceRolePSPWebhook || r == serviceRoleWalletLedger || r == serviceRoleWalletWorker
+	return r == serviceRoleWalletLedger || r == serviceRoleWalletWorker
 }
 
 func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
@@ -155,7 +160,11 @@ func validateRoleDatabaseConfig(role serviceRole, dbURL, driver string) error {
 		if strings.TrimSpace(dbURL) == "" {
 			return fmt.Errorf("%w: %s requires noebs.db_url", errMissingDatabaseURL, role)
 		}
-		return nil
+		spec, present := postgresRoleSpecForService(role)
+		if !present {
+			return fmt.Errorf("%w: no Postgres role is assigned to %s", errPostgresDatabaseIdentity, role)
+		}
+		return validatePostgresDatabaseIdentity(dbURL, spec)
 	default:
 		return fmt.Errorf("%w: %s noebs.db_driver %q", store.ErrUnsupportedDatabaseDriver, role, driver)
 	}
@@ -175,6 +184,9 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 		if err := validateBackofficeRuntimeConfig(cfg); err != nil {
 			return fmt.Errorf("back-office OIDC runtime: %w", err)
 		}
+		if err := validateWalletAuthorizationRuntimeConfig(cfg); err != nil {
+			return fmt.Errorf("wallet transaction authorization runtime: %w", err)
+		}
 		if err := validatePSPWebhookRoutes(cfg.PSPWebhookRoutes); err != nil {
 			return err
 		}
@@ -193,16 +205,8 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	if role.startsBackgroundHealth() && strings.TrimSpace(cfg.Port) == "" {
 		return fmt.Errorf("%w: %s requires noebs.port", errMissingHealthPort, role)
 	}
-	if role == serviceRoleIdentityAuth {
-		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleCardVault); err != nil {
-			return err
-		}
-	}
 	if role == serviceRoleEBSAdapter {
 		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleCardVault); err != nil {
-			return err
-		}
-		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleIdentityAuth); err != nil {
 			return err
 		}
 		if _, err := serviceDiscoveryEndpoint(cfg, serviceRoleNotification); err != nil {
@@ -221,12 +225,11 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 		if !cfg.TemporalEnabled {
 			return fmt.Errorf("%w: %s", errTemporalNotEnabled, role)
 		}
-		if err := (walletworker.Options{
-			Host:      strings.TrimSpace(cfg.TemporalHost),
-			Port:      strings.TrimSpace(cfg.TemporalPort),
-			Namespace: strings.TrimSpace(cfg.TemporalNamespace),
-			TaskQueue: walletworker.TaskQueueMain,
-		}).Validate(); err != nil {
+		expectedClientID := temporalLedgerClientID
+		if role == serviceRoleWalletWorker {
+			expectedClientID = temporalWorkerClientID
+		}
+		if _, err := buildTemporalOptions(context.Background(), cfg, walletworker.TaskQueueMain, expectedClientID); err != nil {
 			return fmt.Errorf("%s temporal config: %w", role, err)
 		}
 	}
@@ -277,7 +280,8 @@ func validateDatabaseTransportRuntimeConfig(role serviceRole, cfg ebs_fields.Noe
 }
 
 func roleUsesWalletFeature(role serviceRole) bool {
-	return role == serviceRolePSPWebhook ||
+	return role == serviceRoleAPIGateway ||
+		role == serviceRolePSPWebhook ||
 		role == serviceRoleWalletAPI ||
 		role == serviceRoleWalletLedger ||
 		role == serviceRoleWalletWorker
@@ -376,17 +380,17 @@ func validateWalletRuntimeSettings(cfg ebs_fields.NoebsConfig) error {
 	if strings.TrimSpace(cfg.WalletDefaultCurrency) == "" {
 		return fmt.Errorf("%w: wallet_default_currency", errInvalidWalletConfig)
 	}
-	if cfg.WalletHoldExpirySeconds <= 0 {
+	if cfg.WalletHoldExpirySeconds <= 0 || cfg.WalletHoldExpirySeconds > math.MaxInt32 {
 		return fmt.Errorf("%w: wallet_hold_expiry_seconds", errInvalidWalletConfig)
 	}
-	if cfg.WalletApprovalTimeoutSeconds <= 0 {
+	if cfg.WalletApprovalTimeoutSeconds <= 0 || cfg.WalletApprovalTimeoutSeconds > math.MaxInt32 {
 		return fmt.Errorf("%w: wallet_approval_timeout_seconds", errInvalidWalletConfig)
-	}
-	if cfg.WalletVerificationTimeoutSeconds <= 0 {
-		return fmt.Errorf("%w: wallet_verification_timeout_seconds", errInvalidWalletConfig)
 	}
 	if cfg.WalletManualTransferApprovalTimeoutSeconds <= 0 {
 		return fmt.Errorf("%w: wallet_manual_approval_timeout_seconds", errInvalidWalletConfig)
+	}
+	if cfg.WalletApprovalThreshold < 0 {
+		return fmt.Errorf("%w: wallet_approval_threshold", errInvalidWalletConfig)
 	}
 	return nil
 }
@@ -426,8 +430,8 @@ func (r serviceRole) databaseOwnerRole() (serviceRole, bool) {
 		return serviceRoleCardVault, true
 	case serviceRoleEBSAdapter, serviceRoleEBSAdapterEvents, serviceRoleEBSAdapterMigrate:
 		return serviceRoleEBSAdapter, true
-	case serviceRolePSPWebhook, serviceRolePSPWebhookMigrate:
-		return serviceRolePSPWebhook, true
+	case serviceRolePSPWebhook:
+		return serviceRoleWalletLedger, true
 	case serviceRoleAdminReporting, serviceRoleAdminReportingProjector, serviceRoleAdminReportingMigrate:
 		return serviceRoleAdminReporting, true
 	case serviceRoleNotification, serviceRoleNotificationMigrate:
@@ -451,8 +455,6 @@ func (r serviceRole) migrationScope() (string, bool) {
 		return store.MigrationScopeCardVault, true
 	case serviceRoleEBSAdapterMigrate:
 		return store.MigrationScopeEBSAdapter, true
-	case serviceRolePSPWebhookMigrate:
-		return store.MigrationScopePSPWebhook, true
 	case serviceRoleAdminReportingMigrate:
 		return store.MigrationScopeAdminReporting, true
 	case serviceRoleNotificationMigrate:

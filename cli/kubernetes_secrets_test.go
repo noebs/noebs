@@ -33,18 +33,20 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 
 	secrets := decodeRenderedKubernetesSecrets(t, output.Bytes())
 	expectedNames := map[string]bool{
-		"noebs-release-manifest":          false,
-		"sops-age-key":                    false,
-		"postgres-credentials":            false,
-		"workload-auth-postgres-roles":    false,
-		"gateway-auth-postgres-roles":     false,
-		"internal-transport-platform":     false,
-		"temporal-postgres-credentials":   false,
-		"keycloak-postgres-credentials":   false,
-		"keycloak-secrets":                false,
-		"keycloak-transport-ca":           false,
-		"keycloak-reconciler-credentials": false,
-		"ghcr-credentials":                false,
+		"noebs-release-manifest":                   false,
+		"postgres-credentials":                     false,
+		"workload-auth-postgres-roles":             false,
+		"gateway-auth-postgres-roles":              false,
+		"service-postgres-roles":                   false,
+		"internal-transport-platform":              false,
+		"temporal-postgres-credentials":            false,
+		"temporal-server-credentials":              false,
+		"temporal-namespace-bootstrap-credentials": false,
+		"keycloak-postgres-credentials":            false,
+		"keycloak-secrets":                         false,
+		"keycloak-transport-ca":                    false,
+		"keycloak-reconciler-credentials":          false,
+		"ghcr-credentials":                         false,
 	}
 	for _, source := range kubernetesServiceSecretSources {
 		expectedNames[source.secretName] = false
@@ -71,10 +73,20 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 		}
 	}
 
-	requireRenderedSecretValue(t, secrets, "postgres-credentials", "password", "noebs-postgres-password")
+	if _, present := secretByName(t, secrets, "postgres-credentials").StringData["password"]; present {
+		t.Fatal("Postgres credentials contain retired bootstrap password authority")
+	}
+	requireRenderedSecretContains(t, secrets, "postgres-credentials", "ca.pem", "BEGIN CERTIFICATE")
 	requireRenderedSecretContains(t, secrets, "postgres-credentials", "tls.crt", "BEGIN CERTIFICATE")
 	requireRenderedSecretContains(t, secrets, "postgres-credentials", "tls.key", "BEGIN EC PRIVATE KEY")
 	requireRenderedSecretValue(t, secrets, "temporal-postgres-credentials", "password", "temporal-postgres-password")
+	requireRenderedSecretContains(t, secrets, "temporal-postgres-credentials", "ca.pem", "BEGIN CERTIFICATE")
+	requireRenderedSecretContains(t, secrets, "temporal-postgres-credentials", "tls.crt", "BEGIN CERTIFICATE")
+	requireRenderedSecretContains(t, secrets, "temporal-postgres-credentials", "tls.key", "BEGIN EC PRIVATE KEY")
+	requireRenderedSecretContains(t, secrets, "temporal-server-credentials", "ca.pem", "BEGIN CERTIFICATE")
+	requireRenderedSecretContains(t, secrets, "temporal-server-credentials", "tls.crt", "BEGIN CERTIFICATE")
+	requireRenderedSecretContains(t, secrets, "temporal-server-credentials", "tls.key", "BEGIN EC PRIVATE KEY")
+	requireRenderedSecretValue(t, secrets, "temporal-namespace-bootstrap-credentials", "client-secret", testCanonicalReleaseSecret(15))
 	requireRenderedSecretValue(t, secrets, "keycloak-postgres-credentials", "password", "keycloak-postgres-password")
 	requireRenderedSecretContains(t, secrets, "keycloak-postgres-credentials", "tls.crt", "BEGIN CERTIFICATE")
 	requireRenderedSecretContains(t, secrets, "keycloak-postgres-credentials", "tls.key", "BEGIN EC PRIVATE KEY")
@@ -87,7 +99,9 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	}
 	requireRenderedSecretContains(t, secrets, "ghcr-credentials", ".dockerconfigjson", `"ghcr.io"`)
 	requireRenderedSecretContains(t, secrets, "ebs-adapter-secrets", "secrets.yaml", "consumer_endpoint")
-	requireRenderedSecretContains(t, secrets, "sops-age-key", "age-key.txt", "AGE-SECRET-KEY-1LOCAL")
+	if strings.Contains(output.String(), "AGE-SECRET-KEY-") || strings.Contains(output.String(), "sops-age-key") {
+		t.Fatal("rendered Kubernetes Secrets expose the SOPS age identity")
+	}
 	keycloakConfig := secretByName(t, secrets, "keycloak-secrets").StringData["keycloak.conf"]
 	for _, forbidden := range []string{"bootstrap-admin-username", "bootstrap-admin-password", "bootstrap-admin-client-id", "bootstrap-admin-client-secret"} {
 		if strings.Contains(keycloakConfig, forbidden) {
@@ -96,8 +110,11 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	}
 	requireRenderedSecretContains(t, secrets, "workload-auth-postgres-roles", "roles.yaml", "migrate_password")
 	requireRenderedSecretContains(t, secrets, "gateway-auth-postgres-roles", "roles.yaml", "migrate_password")
+	requireRenderedSecretContains(t, secrets, "service-postgres-roles", "roles.yaml", "identity_auth_runtime")
+	requireRenderedSecretContains(t, secrets, "service-postgres-roles", "passwords.env", "identity_auth_runtime=")
+	requireRenderedSecretContains(t, secrets, "service-postgres-roles", "bootstrap.sql", "CREATE DATABASE identity_auth OWNER identity_auth_migrate")
 	reconcilerConfig := secretByName(t, secrets, "keycloak-reconciler-credentials").StringData["config.yaml"]
-	for _, required := range []string{"admin_realm: noebs", "client_id: noebs-keycloak-reconciler", "noebs-backoffice:", "google:"} {
+	for _, required := range []string{"admin_realm: noebs", "client_id: noebs-keycloak-reconciler", "noebs-backoffice:", "noebs-wallet-authorizer:", temporalLedgerClientID + ":", temporalWorkerClientID + ":", temporalBootstrapClientID + ":", "google:"} {
 		if !strings.Contains(reconcilerConfig, required) {
 			t.Fatalf("rendered Keycloak reconciler config missing %q", required)
 		}
@@ -111,10 +128,10 @@ func TestRenderKubernetesSecretsFromExplicitRelease(t *testing.T) {
 	}
 }
 
-func TestRenderKeycloakTransportCAContainsOnlyPublicTrustMaterial(t *testing.T) {
+func TestRenderEdgeInternalTransportContainsDedicatedClientIdentity(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 	var output bytes.Buffer
-	if err := renderKeycloakTransportCA(&output, root, "edge", readPlainPreflightSecret); err != nil {
+	if err := renderEdgeInternalTransport(&output, root, "edge", readPlainPreflightSecret); err != nil {
 		t.Fatal(err)
 	}
 	secrets := decodeRenderedKubernetesSecrets(t, output.Bytes())
@@ -122,11 +139,16 @@ func TestRenderKeycloakTransportCAContainsOnlyPublicTrustMaterial(t *testing.T) 
 		t.Fatalf("rendered Secrets = %d, want 1", len(secrets))
 	}
 	secret := secrets[0]
-	if secret.Metadata.Name != "keycloak-transport-ca" || secret.Metadata.Namespace != "edge" || len(secret.StringData) != 1 {
-		t.Fatalf("rendered Keycloak transport CA = %#v", secret)
+	if secret.Metadata.Name != "edge-internal-transport" || secret.Metadata.Namespace != "edge" || len(secret.StringData) != 3 {
+		t.Fatalf("rendered edge internal transport = %#v", secret)
 	}
-	if !strings.Contains(secret.StringData["ca.pem"], "BEGIN CERTIFICATE") || strings.Contains(output.String(), "PRIVATE KEY") {
-		t.Fatal("edge Keycloak trust render is not CA-only")
+	for _, key := range []string{"ca.pem", "tls.crt", "tls.key"} {
+		if strings.TrimSpace(secret.StringData[key]) == "" {
+			t.Fatalf("edge internal transport missing %s", key)
+		}
+	}
+	if !strings.Contains(secret.StringData["tls.key"], "BEGIN EC PRIVATE KEY") || strings.Contains(output.String(), "ca_private_key") {
+		t.Fatal("edge internal transport does not contain only leaf private authority")
 	}
 	if secret.Metadata.Labels["app.kubernetes.io/managed-by"] != "noebs-release-renderer" {
 		t.Fatalf("renderer ownership label = %q", secret.Metadata.Labels["app.kubernetes.io/managed-by"])
@@ -199,7 +221,11 @@ func TestRenderKubernetesSecretsRejectsUnexpectedRootEntry(t *testing.T) {
 }
 
 func TestPreparedWorkloadAuthDoesNotGrantNotificationCallerAuthority(t *testing.T) {
-	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{}, rand.Reader)
+	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{Database: kubernetesReleaseWorkloadDatabaseInput{
+		MigratePassword: testCanonicalReleaseSecret(6),
+		RuntimePassword: testCanonicalReleaseSecret(7),
+		CleanupPassword: testCanonicalReleaseSecret(8),
+	}}, rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,8 +271,9 @@ func kubernetesSecretTestPayloads() map[string]string {
 		"api-gateway.secrets.yaml": `noebs:
   default_tenant_id: tenant-cutover
   backoffice_client_secret: backoffice-client-secret
-  backoffice_encryption_key_id: ` + gatewayAuth.encryptionKeyID + `
-  backoffice_encryption_keys:
+  wallet_authorizer_client_secret: wallet-authorizer-client-secret
+  gateway_auth_encryption_key_id: ` + gatewayAuth.encryptionKeyID + `
+  gateway_auth_encryption_keys:
     ` + gatewayAuth.encryptionKeyID + `: ` + gatewayAuth.encryptionKeys[gatewayAuth.encryptionKeyID] + `
   psp_webhook_routes:
     ` + testCanonicalReleaseSecret(11) + `:
@@ -272,7 +299,7 @@ func kubernetesSecretTestPayloads() map[string]string {
   ipin: "123456"
   exp_date: "0129"
 `,
-		"psp-webhook.secrets.yaml":       serviceDatabaseSecret("psp-webhook") + pspSecretMap(),
+		"psp-webhook.secrets.yaml":       serviceDatabaseSecret("wallet-ledger") + pspSecretMap(),
 		"admin-reporting.secrets.yaml":   serviceDatabaseSecret("admin-reporting"),
 		"notification-chat.secrets.yaml": serviceDatabaseSecret("notification-chat"),
 		"wallet-api.secrets.yaml": `noebs:
@@ -286,7 +313,6 @@ func kubernetesSecretTestPayloads() map[string]string {
 	for role, owner := range map[string]string{
 		"identity-auth-migrate":     "identity-auth",
 		"ebs-adapter-migrate":       "ebs-adapter",
-		"psp-webhook-migrate":       "psp-webhook",
 		"admin-reporting-migrate":   "admin-reporting",
 		"notification-chat-migrate": "notification-chat",
 		"wallet-ledger-migrate":     "wallet-ledger",
@@ -295,7 +321,11 @@ func kubernetesSecretTestPayloads() map[string]string {
 	}
 	payloads["card-vault-migrate.secrets.yaml"] = serviceDatabaseSecret("card-vault") + "  data_key: card-vault-data-key\n"
 
-	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{}, randomReader)
+	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{Database: kubernetesReleaseWorkloadDatabaseInput{
+		MigratePassword: testCanonicalReleaseSecret(6),
+		RuntimePassword: testCanonicalReleaseSecret(7),
+		CleanupPassword: testCanonicalReleaseSecret(8),
+	}}, randomReader)
 	if err != nil {
 		panic(err)
 	}

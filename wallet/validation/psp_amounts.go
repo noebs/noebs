@@ -65,7 +65,10 @@ func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountRes
 		return nil, err
 	}
 
-	variance := walletCredit - requestedInWallet
+	variance, err := checkedSubtractInt64(walletCredit, requestedInWallet)
+	if err != nil {
+		return nil, err
+	}
 	varianceKind := walletstore.PSPAmountKind("")
 	if variance > 0 {
 		varianceKind = walletstore.PSPAmountOverpayment
@@ -137,7 +140,10 @@ func convertPositiveAmount(amount int64, rate decimal.Decimal) (int64, error) {
 	if rate.Cmp(decimal.Zero) <= 0 {
 		return 0, walletstore.ErrInvalidRate
 	}
-	converted := decimal.NewFromInt(amount).Mul(rate).Round(0).IntPart()
+	converted, err := decimalToInt64(decimal.NewFromInt(amount).Mul(rate).Round(0))
+	if err != nil {
+		return 0, err
+	}
 	if converted <= 0 {
 		return 0, walletstore.ErrInvalidAmount
 	}

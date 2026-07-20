@@ -14,13 +14,6 @@ func NewManualTransferActivities(store *walletstore.Store) *ManualTransferActivi
 	return &ManualTransferActivities{Store: store}
 }
 
-func (a *ManualTransferActivities) CreateManualTransfer(ctx context.Context, transfer walletstore.ManualTransfer) (*walletstore.ManualTransfer, error) {
-	if a == nil || a.Store == nil {
-		return nil, ErrMissingStore
-	}
-	return a.Store.CreateManualTransfer(ctx, transfer)
-}
-
 func (a *ManualTransferActivities) AddManualTransferApproval(ctx context.Context, approval walletstore.ManualTransferApproval) (*walletstore.ManualTransferApproval, error) {
 	if a == nil || a.Store == nil {
 		return nil, ErrMissingStore

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -275,7 +276,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, state DesiredState) (Result,
 	if err := reconcileInteractiveRoleScopeMappings(ctx, session, state, interactiveClients, &result); err != nil {
 		return Result{}, err
 	}
-	if err := reconcileExactClients(ctx, session, state, interactiveClients, client, reconcilerClient, &result); err != nil {
+	serviceClients, err := reconcileServiceClients(ctx, session, state, r.config.ClientCredentials, &result)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := reconcileExactClients(ctx, session, state, interactiveClients, serviceClients, client, reconcilerClient, &result); err != nil {
 		return Result{}, err
 	}
 	if err := reconcileOrganizationMapper(ctx, session, state, &result); err != nil {
@@ -805,6 +810,80 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 	return clients, nil
 }
 
+func reconcileServiceClients(ctx context.Context, session *adminSession, state DesiredState, credentials map[string]ClientCredential, result *Result) ([]clientRepresentation, error) {
+	base := realmPath(state.Realm.Name)
+	clients := make([]clientRepresentation, 0, len(state.ServiceClients))
+	for _, desired := range state.ServiceClients {
+		credential := credentials[desired.Credential]
+		attributes := managedClientAttributes()
+		attributes[managedClientSecretHash] = secretHash(credential.ClientSecret)
+		wanted := clientRepresentation{
+			ClientID:                           desired.ClientID,
+			Name:                               desired.Name,
+			Enabled:                            true,
+			Protocol:                           "openid-connect",
+			ClientAuthenticatorType:            "client-secret",
+			Secret:                             credential.ClientSecret,
+			ServiceAccountsEnabled:             true,
+			Attributes:                         attributes,
+			RedirectURIs:                       []string{},
+			WebOrigins:                         []string{},
+			NodeReRegistrationTimeout:          -1,
+			AuthenticationFlowBindingOverrides: map[string]string{},
+		}
+		existing, found, err := findClient(ctx, session, base, desired.ClientID)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			if err := session.post(ctx, base+"/clients", wanted); err != nil {
+				return nil, fmt.Errorf("create service client %s: %w", desired.ClientID, err)
+			}
+			result.Created++
+			existing, found, err = findClient(ctx, session, base, desired.ClientID)
+			if err != nil {
+				return nil, err
+			}
+			if !found {
+				return nil, fmt.Errorf("%w: created service client %s was not returned by Keycloak", ErrUnexpectedResponse, desired.ClientID)
+			}
+		}
+		secretMatches, err := clientSecretMatches(ctx, session, base, existing, credential.ClientSecret)
+		if err != nil {
+			return nil, err
+		}
+		if !clientMatches(existing, wanted) || !secretMatches {
+			update := clientUpdate(existing, wanted)
+			if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
+				return nil, fmt.Errorf("update service client %s: %w", desired.ClientID, err)
+			}
+			result.Updated++
+			existing = update
+		}
+		if !secretMatches {
+			if err := verifyClientSecret(ctx, session, base, existing, credential.ClientSecret); err != nil {
+				return nil, err
+			}
+		}
+		if err := reconcileExactClientProtocolMappers(ctx, session, state.Realm.Name, existing, []protocolMapperRepresentation{
+			audienceMapper(desired.Audience), permissionsMapper(desired.Permissions),
+		}, result); err != nil {
+			return nil, err
+		}
+		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, existing, "default", nil, result); err != nil {
+			return nil, err
+		}
+		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, existing, "optional", nil, result); err != nil {
+			return nil, err
+		}
+		if err := reconcileEmptyClientRoleScopeMappings(ctx, session, state.Realm.Name, existing, result); err != nil {
+			return nil, err
+		}
+		clients = append(clients, existing)
+	}
+	return clients, nil
+}
+
 func clientSecretMatches(ctx context.Context, session *adminSession, realmBase string, client clientRepresentation, wanted string) (bool, error) {
 	var credential credentialRepresentation
 	found, err := session.get(ctx, realmBase+"/clients/"+url.PathEscape(client.ID)+"/client-secret", &credential)
@@ -836,6 +915,26 @@ func audienceMapper(audience string) protocolMapperRepresentation {
 		ConsentRequired: false,
 		Config: map[string]string{
 			"included.client.audience":  audience,
+			"id.token.claim":            "false",
+			"access.token.claim":        "true",
+			"introspection.token.claim": "false",
+			"userinfo.token.claim":      "false",
+			managedAttribute:            "true",
+		},
+	}
+}
+
+func permissionsMapper(permissions []string) protocolMapperRepresentation {
+	value, _ := json.Marshal(permissions)
+	return protocolMapperRepresentation{
+		Name:            "temporal-permissions",
+		Protocol:        "openid-connect",
+		ProtocolMapper:  "oidc-hardcoded-claim-mapper",
+		ConsentRequired: false,
+		Config: map[string]string{
+			"claim.name":                "permissions",
+			"claim.value":               string(value),
+			"jsonType.label":            "JSON",
 			"id.token.claim":            "false",
 			"access.token.claim":        "true",
 			"introspection.token.claim": "false",
@@ -956,9 +1055,12 @@ func reconcileExactClientScopes(ctx context.Context, session *adminSession, real
 	return nil
 }
 
-func reconcileExactClients(ctx context.Context, session *adminSession, state DesiredState, interactive []clientRepresentation, resource, reconciler clientRepresentation, result *Result) error {
+func reconcileExactClients(ctx context.Context, session *adminSession, state DesiredState, interactive, service []clientRepresentation, resource, reconciler clientRepresentation, result *Result) error {
 	keep := map[string]struct{}{resource.ClientID: {}, reconciler.ClientID: {}}
 	for _, client := range interactive {
+		keep[client.ClientID] = struct{}{}
+	}
+	for _, client := range service {
 		keep[client.ClientID] = struct{}{}
 	}
 	base := realmPath(state.Realm.Name)

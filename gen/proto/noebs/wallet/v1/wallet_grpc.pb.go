@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             (unknown)
-// source: proto/noebs/wallet/v1/wallet.proto
+// source: noebs/wallet/v1/wallet.proto
 
 package walletv1
 
@@ -11,7 +11,6 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -31,27 +30,23 @@ const (
 	WalletPublicService_CreateWithdrawalDestination_FullMethodName     = "/noebs.wallet.v1.WalletPublicService/CreateWithdrawalDestination"
 	WalletPublicService_ListWithdrawalDestinations_FullMethodName      = "/noebs.wallet.v1.WalletPublicService/ListWithdrawalDestinations"
 	WalletPublicService_DeactivateWithdrawalDestination_FullMethodName = "/noebs.wallet.v1.WalletPublicService/DeactivateWithdrawalDestination"
-	WalletPublicService_RequestOwnershipVerification_FullMethodName    = "/noebs.wallet.v1.WalletPublicService/RequestOwnershipVerification"
-	WalletPublicService_CompleteOwnershipVerification_FullMethodName   = "/noebs.wallet.v1.WalletPublicService/CompleteOwnershipVerification"
 )
 
 // WalletPublicServiceClient is the client API for WalletPublicService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WalletPublicServiceClient interface {
-	GetWalletPublic(ctx context.Context, in *GetWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
-	EnsureWalletPublic(ctx context.Context, in *EnsureWalletRequest, opts ...grpc.CallOption) (*Wallet, error)
-	ListPaymentMethodsPublic(ctx context.Context, in *ListPaymentMethodsRequest, opts ...grpc.CallOption) (*PaymentMethodList, error)
-	ListWalletTransactionsPublic(ctx context.Context, in *ListWalletTransactionsRequest, opts ...grpc.CallOption) (*WalletLedgerEntryList, error)
-	RequestP2PTransfer(ctx context.Context, in *P2PTransferRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
-	RequestDeposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
-	RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error)
-	ListFundingSources(ctx context.Context, in *ListFundingSourcesRequest, opts ...grpc.CallOption) (*FundingSourceList, error)
-	CreateWithdrawalDestination(ctx context.Context, in *CreateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*WithdrawalDestination, error)
-	ListWithdrawalDestinations(ctx context.Context, in *ListWithdrawalDestinationsRequest, opts ...grpc.CallOption) (*WithdrawalDestinationList, error)
-	DeactivateWithdrawalDestination(ctx context.Context, in *DeactivateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	RequestOwnershipVerification(ctx context.Context, in *RequestOwnershipVerificationRequest, opts ...grpc.CallOption) (*OwnershipVerification, error)
-	CompleteOwnershipVerification(ctx context.Context, in *CompleteOwnershipVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	GetWalletPublic(ctx context.Context, in *GetWalletPublicRequest, opts ...grpc.CallOption) (*GetWalletPublicResponse, error)
+	EnsureWalletPublic(ctx context.Context, in *EnsureWalletPublicRequest, opts ...grpc.CallOption) (*EnsureWalletPublicResponse, error)
+	ListPaymentMethodsPublic(ctx context.Context, in *ListPaymentMethodsPublicRequest, opts ...grpc.CallOption) (*ListPaymentMethodsPublicResponse, error)
+	ListWalletTransactionsPublic(ctx context.Context, in *ListWalletTransactionsPublicRequest, opts ...grpc.CallOption) (*ListWalletTransactionsPublicResponse, error)
+	RequestP2PTransfer(ctx context.Context, in *RequestP2PTransferRequest, opts ...grpc.CallOption) (*RequestP2PTransferResponse, error)
+	RequestDeposit(ctx context.Context, in *RequestDepositRequest, opts ...grpc.CallOption) (*RequestDepositResponse, error)
+	RequestWithdrawal(ctx context.Context, in *RequestWithdrawalRequest, opts ...grpc.CallOption) (*RequestWithdrawalResponse, error)
+	ListFundingSources(ctx context.Context, in *ListFundingSourcesRequest, opts ...grpc.CallOption) (*ListFundingSourcesResponse, error)
+	CreateWithdrawalDestination(ctx context.Context, in *CreateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*CreateWithdrawalDestinationResponse, error)
+	ListWithdrawalDestinations(ctx context.Context, in *ListWithdrawalDestinationsRequest, opts ...grpc.CallOption) (*ListWithdrawalDestinationsResponse, error)
+	DeactivateWithdrawalDestination(ctx context.Context, in *DeactivateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*DeactivateWithdrawalDestinationResponse, error)
 }
 
 type walletPublicServiceClient struct {
@@ -62,9 +57,9 @@ func NewWalletPublicServiceClient(cc grpc.ClientConnInterface) WalletPublicServi
 	return &walletPublicServiceClient{cc}
 }
 
-func (c *walletPublicServiceClient) GetWalletPublic(ctx context.Context, in *GetWalletRequest, opts ...grpc.CallOption) (*Wallet, error) {
+func (c *walletPublicServiceClient) GetWalletPublic(ctx context.Context, in *GetWalletPublicRequest, opts ...grpc.CallOption) (*GetWalletPublicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Wallet)
+	out := new(GetWalletPublicResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_GetWalletPublic_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -72,9 +67,9 @@ func (c *walletPublicServiceClient) GetWalletPublic(ctx context.Context, in *Get
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) EnsureWalletPublic(ctx context.Context, in *EnsureWalletRequest, opts ...grpc.CallOption) (*Wallet, error) {
+func (c *walletPublicServiceClient) EnsureWalletPublic(ctx context.Context, in *EnsureWalletPublicRequest, opts ...grpc.CallOption) (*EnsureWalletPublicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Wallet)
+	out := new(EnsureWalletPublicResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_EnsureWalletPublic_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -82,9 +77,9 @@ func (c *walletPublicServiceClient) EnsureWalletPublic(ctx context.Context, in *
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) ListPaymentMethodsPublic(ctx context.Context, in *ListPaymentMethodsRequest, opts ...grpc.CallOption) (*PaymentMethodList, error) {
+func (c *walletPublicServiceClient) ListPaymentMethodsPublic(ctx context.Context, in *ListPaymentMethodsPublicRequest, opts ...grpc.CallOption) (*ListPaymentMethodsPublicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PaymentMethodList)
+	out := new(ListPaymentMethodsPublicResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_ListPaymentMethodsPublic_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -92,9 +87,9 @@ func (c *walletPublicServiceClient) ListPaymentMethodsPublic(ctx context.Context
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) ListWalletTransactionsPublic(ctx context.Context, in *ListWalletTransactionsRequest, opts ...grpc.CallOption) (*WalletLedgerEntryList, error) {
+func (c *walletPublicServiceClient) ListWalletTransactionsPublic(ctx context.Context, in *ListWalletTransactionsPublicRequest, opts ...grpc.CallOption) (*ListWalletTransactionsPublicResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WalletLedgerEntryList)
+	out := new(ListWalletTransactionsPublicResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_ListWalletTransactionsPublic_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -102,9 +97,9 @@ func (c *walletPublicServiceClient) ListWalletTransactionsPublic(ctx context.Con
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) RequestP2PTransfer(ctx context.Context, in *P2PTransferRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+func (c *walletPublicServiceClient) RequestP2PTransfer(ctx context.Context, in *RequestP2PTransferRequest, opts ...grpc.CallOption) (*RequestP2PTransferResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WorkflowRun)
+	out := new(RequestP2PTransferResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_RequestP2PTransfer_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -112,9 +107,9 @@ func (c *walletPublicServiceClient) RequestP2PTransfer(ctx context.Context, in *
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) RequestDeposit(ctx context.Context, in *DepositRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+func (c *walletPublicServiceClient) RequestDeposit(ctx context.Context, in *RequestDepositRequest, opts ...grpc.CallOption) (*RequestDepositResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WorkflowRun)
+	out := new(RequestDepositResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_RequestDeposit_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -122,9 +117,9 @@ func (c *walletPublicServiceClient) RequestDeposit(ctx context.Context, in *Depo
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) RequestWithdrawal(ctx context.Context, in *WithdrawalRequest, opts ...grpc.CallOption) (*WorkflowRun, error) {
+func (c *walletPublicServiceClient) RequestWithdrawal(ctx context.Context, in *RequestWithdrawalRequest, opts ...grpc.CallOption) (*RequestWithdrawalResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WorkflowRun)
+	out := new(RequestWithdrawalResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_RequestWithdrawal_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -132,9 +127,9 @@ func (c *walletPublicServiceClient) RequestWithdrawal(ctx context.Context, in *W
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) ListFundingSources(ctx context.Context, in *ListFundingSourcesRequest, opts ...grpc.CallOption) (*FundingSourceList, error) {
+func (c *walletPublicServiceClient) ListFundingSources(ctx context.Context, in *ListFundingSourcesRequest, opts ...grpc.CallOption) (*ListFundingSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(FundingSourceList)
+	out := new(ListFundingSourcesResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_ListFundingSources_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -142,9 +137,9 @@ func (c *walletPublicServiceClient) ListFundingSources(ctx context.Context, in *
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) CreateWithdrawalDestination(ctx context.Context, in *CreateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*WithdrawalDestination, error) {
+func (c *walletPublicServiceClient) CreateWithdrawalDestination(ctx context.Context, in *CreateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*CreateWithdrawalDestinationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WithdrawalDestination)
+	out := new(CreateWithdrawalDestinationResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_CreateWithdrawalDestination_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -152,9 +147,9 @@ func (c *walletPublicServiceClient) CreateWithdrawalDestination(ctx context.Cont
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) ListWithdrawalDestinations(ctx context.Context, in *ListWithdrawalDestinationsRequest, opts ...grpc.CallOption) (*WithdrawalDestinationList, error) {
+func (c *walletPublicServiceClient) ListWithdrawalDestinations(ctx context.Context, in *ListWithdrawalDestinationsRequest, opts ...grpc.CallOption) (*ListWithdrawalDestinationsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(WithdrawalDestinationList)
+	out := new(ListWithdrawalDestinationsResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_ListWithdrawalDestinations_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -162,30 +157,10 @@ func (c *walletPublicServiceClient) ListWithdrawalDestinations(ctx context.Conte
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) DeactivateWithdrawalDestination(ctx context.Context, in *DeactivateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *walletPublicServiceClient) DeactivateWithdrawalDestination(ctx context.Context, in *DeactivateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*DeactivateWithdrawalDestinationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
+	out := new(DeactivateWithdrawalDestinationResponse)
 	err := c.cc.Invoke(ctx, WalletPublicService_DeactivateWithdrawalDestination_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *walletPublicServiceClient) RequestOwnershipVerification(ctx context.Context, in *RequestOwnershipVerificationRequest, opts ...grpc.CallOption) (*OwnershipVerification, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(OwnershipVerification)
-	err := c.cc.Invoke(ctx, WalletPublicService_RequestOwnershipVerification_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *walletPublicServiceClient) CompleteOwnershipVerification(ctx context.Context, in *CompleteOwnershipVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, WalletPublicService_CompleteOwnershipVerification_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,19 +171,17 @@ func (c *walletPublicServiceClient) CompleteOwnershipVerification(ctx context.Co
 // All implementations must embed UnimplementedWalletPublicServiceServer
 // for forward compatibility.
 type WalletPublicServiceServer interface {
-	GetWalletPublic(context.Context, *GetWalletRequest) (*Wallet, error)
-	EnsureWalletPublic(context.Context, *EnsureWalletRequest) (*Wallet, error)
-	ListPaymentMethodsPublic(context.Context, *ListPaymentMethodsRequest) (*PaymentMethodList, error)
-	ListWalletTransactionsPublic(context.Context, *ListWalletTransactionsRequest) (*WalletLedgerEntryList, error)
-	RequestP2PTransfer(context.Context, *P2PTransferRequest) (*WorkflowRun, error)
-	RequestDeposit(context.Context, *DepositRequest) (*WorkflowRun, error)
-	RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error)
-	ListFundingSources(context.Context, *ListFundingSourcesRequest) (*FundingSourceList, error)
-	CreateWithdrawalDestination(context.Context, *CreateWithdrawalDestinationRequest) (*WithdrawalDestination, error)
-	ListWithdrawalDestinations(context.Context, *ListWithdrawalDestinationsRequest) (*WithdrawalDestinationList, error)
-	DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*emptypb.Empty, error)
-	RequestOwnershipVerification(context.Context, *RequestOwnershipVerificationRequest) (*OwnershipVerification, error)
-	CompleteOwnershipVerification(context.Context, *CompleteOwnershipVerificationRequest) (*emptypb.Empty, error)
+	GetWalletPublic(context.Context, *GetWalletPublicRequest) (*GetWalletPublicResponse, error)
+	EnsureWalletPublic(context.Context, *EnsureWalletPublicRequest) (*EnsureWalletPublicResponse, error)
+	ListPaymentMethodsPublic(context.Context, *ListPaymentMethodsPublicRequest) (*ListPaymentMethodsPublicResponse, error)
+	ListWalletTransactionsPublic(context.Context, *ListWalletTransactionsPublicRequest) (*ListWalletTransactionsPublicResponse, error)
+	RequestP2PTransfer(context.Context, *RequestP2PTransferRequest) (*RequestP2PTransferResponse, error)
+	RequestDeposit(context.Context, *RequestDepositRequest) (*RequestDepositResponse, error)
+	RequestWithdrawal(context.Context, *RequestWithdrawalRequest) (*RequestWithdrawalResponse, error)
+	ListFundingSources(context.Context, *ListFundingSourcesRequest) (*ListFundingSourcesResponse, error)
+	CreateWithdrawalDestination(context.Context, *CreateWithdrawalDestinationRequest) (*CreateWithdrawalDestinationResponse, error)
+	ListWithdrawalDestinations(context.Context, *ListWithdrawalDestinationsRequest) (*ListWithdrawalDestinationsResponse, error)
+	DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*DeactivateWithdrawalDestinationResponse, error)
 	mustEmbedUnimplementedWalletPublicServiceServer()
 }
 
@@ -219,44 +192,38 @@ type WalletPublicServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWalletPublicServiceServer struct{}
 
-func (UnimplementedWalletPublicServiceServer) GetWalletPublic(context.Context, *GetWalletRequest) (*Wallet, error) {
+func (UnimplementedWalletPublicServiceServer) GetWalletPublic(context.Context, *GetWalletPublicRequest) (*GetWalletPublicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWalletPublic not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) EnsureWalletPublic(context.Context, *EnsureWalletRequest) (*Wallet, error) {
+func (UnimplementedWalletPublicServiceServer) EnsureWalletPublic(context.Context, *EnsureWalletPublicRequest) (*EnsureWalletPublicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EnsureWalletPublic not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) ListPaymentMethodsPublic(context.Context, *ListPaymentMethodsRequest) (*PaymentMethodList, error) {
+func (UnimplementedWalletPublicServiceServer) ListPaymentMethodsPublic(context.Context, *ListPaymentMethodsPublicRequest) (*ListPaymentMethodsPublicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPaymentMethodsPublic not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) ListWalletTransactionsPublic(context.Context, *ListWalletTransactionsRequest) (*WalletLedgerEntryList, error) {
+func (UnimplementedWalletPublicServiceServer) ListWalletTransactionsPublic(context.Context, *ListWalletTransactionsPublicRequest) (*ListWalletTransactionsPublicResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListWalletTransactionsPublic not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) RequestP2PTransfer(context.Context, *P2PTransferRequest) (*WorkflowRun, error) {
+func (UnimplementedWalletPublicServiceServer) RequestP2PTransfer(context.Context, *RequestP2PTransferRequest) (*RequestP2PTransferResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestP2PTransfer not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) RequestDeposit(context.Context, *DepositRequest) (*WorkflowRun, error) {
+func (UnimplementedWalletPublicServiceServer) RequestDeposit(context.Context, *RequestDepositRequest) (*RequestDepositResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestDeposit not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) RequestWithdrawal(context.Context, *WithdrawalRequest) (*WorkflowRun, error) {
+func (UnimplementedWalletPublicServiceServer) RequestWithdrawal(context.Context, *RequestWithdrawalRequest) (*RequestWithdrawalResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestWithdrawal not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) ListFundingSources(context.Context, *ListFundingSourcesRequest) (*FundingSourceList, error) {
+func (UnimplementedWalletPublicServiceServer) ListFundingSources(context.Context, *ListFundingSourcesRequest) (*ListFundingSourcesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFundingSources not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) CreateWithdrawalDestination(context.Context, *CreateWithdrawalDestinationRequest) (*WithdrawalDestination, error) {
+func (UnimplementedWalletPublicServiceServer) CreateWithdrawalDestination(context.Context, *CreateWithdrawalDestinationRequest) (*CreateWithdrawalDestinationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateWithdrawalDestination not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) ListWithdrawalDestinations(context.Context, *ListWithdrawalDestinationsRequest) (*WithdrawalDestinationList, error) {
+func (UnimplementedWalletPublicServiceServer) ListWithdrawalDestinations(context.Context, *ListWithdrawalDestinationsRequest) (*ListWithdrawalDestinationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListWithdrawalDestinations not implemented")
 }
-func (UnimplementedWalletPublicServiceServer) DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*emptypb.Empty, error) {
+func (UnimplementedWalletPublicServiceServer) DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*DeactivateWithdrawalDestinationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeactivateWithdrawalDestination not implemented")
-}
-func (UnimplementedWalletPublicServiceServer) RequestOwnershipVerification(context.Context, *RequestOwnershipVerificationRequest) (*OwnershipVerification, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RequestOwnershipVerification not implemented")
-}
-func (UnimplementedWalletPublicServiceServer) CompleteOwnershipVerification(context.Context, *CompleteOwnershipVerificationRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CompleteOwnershipVerification not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) mustEmbedUnimplementedWalletPublicServiceServer() {}
 func (UnimplementedWalletPublicServiceServer) testEmbeddedByValue()                             {}
@@ -280,7 +247,7 @@ func RegisterWalletPublicServiceServer(s grpc.ServiceRegistrar, srv WalletPublic
 }
 
 func _WalletPublicService_GetWalletPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWalletRequest)
+	in := new(GetWalletPublicRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -292,13 +259,13 @@ func _WalletPublicService_GetWalletPublic_Handler(srv interface{}, ctx context.C
 		FullMethod: WalletPublicService_GetWalletPublic_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).GetWalletPublic(ctx, req.(*GetWalletRequest))
+		return srv.(WalletPublicServiceServer).GetWalletPublic(ctx, req.(*GetWalletPublicRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_EnsureWalletPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnsureWalletRequest)
+	in := new(EnsureWalletPublicRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -310,13 +277,13 @@ func _WalletPublicService_EnsureWalletPublic_Handler(srv interface{}, ctx contex
 		FullMethod: WalletPublicService_EnsureWalletPublic_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).EnsureWalletPublic(ctx, req.(*EnsureWalletRequest))
+		return srv.(WalletPublicServiceServer).EnsureWalletPublic(ctx, req.(*EnsureWalletPublicRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_ListPaymentMethodsPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListPaymentMethodsRequest)
+	in := new(ListPaymentMethodsPublicRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -328,13 +295,13 @@ func _WalletPublicService_ListPaymentMethodsPublic_Handler(srv interface{}, ctx 
 		FullMethod: WalletPublicService_ListPaymentMethodsPublic_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).ListPaymentMethodsPublic(ctx, req.(*ListPaymentMethodsRequest))
+		return srv.(WalletPublicServiceServer).ListPaymentMethodsPublic(ctx, req.(*ListPaymentMethodsPublicRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_ListWalletTransactionsPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListWalletTransactionsRequest)
+	in := new(ListWalletTransactionsPublicRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -346,13 +313,13 @@ func _WalletPublicService_ListWalletTransactionsPublic_Handler(srv interface{}, 
 		FullMethod: WalletPublicService_ListWalletTransactionsPublic_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).ListWalletTransactionsPublic(ctx, req.(*ListWalletTransactionsRequest))
+		return srv.(WalletPublicServiceServer).ListWalletTransactionsPublic(ctx, req.(*ListWalletTransactionsPublicRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_RequestP2PTransfer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(P2PTransferRequest)
+	in := new(RequestP2PTransferRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -364,13 +331,13 @@ func _WalletPublicService_RequestP2PTransfer_Handler(srv interface{}, ctx contex
 		FullMethod: WalletPublicService_RequestP2PTransfer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).RequestP2PTransfer(ctx, req.(*P2PTransferRequest))
+		return srv.(WalletPublicServiceServer).RequestP2PTransfer(ctx, req.(*RequestP2PTransferRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_RequestDeposit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DepositRequest)
+	in := new(RequestDepositRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -382,13 +349,13 @@ func _WalletPublicService_RequestDeposit_Handler(srv interface{}, ctx context.Co
 		FullMethod: WalletPublicService_RequestDeposit_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).RequestDeposit(ctx, req.(*DepositRequest))
+		return srv.(WalletPublicServiceServer).RequestDeposit(ctx, req.(*RequestDepositRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _WalletPublicService_RequestWithdrawal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(WithdrawalRequest)
+	in := new(RequestWithdrawalRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -400,7 +367,7 @@ func _WalletPublicService_RequestWithdrawal_Handler(srv interface{}, ctx context
 		FullMethod: WalletPublicService_RequestWithdrawal_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).RequestWithdrawal(ctx, req.(*WithdrawalRequest))
+		return srv.(WalletPublicServiceServer).RequestWithdrawal(ctx, req.(*RequestWithdrawalRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -477,42 +444,6 @@ func _WalletPublicService_DeactivateWithdrawalDestination_Handler(srv interface{
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WalletPublicService_RequestOwnershipVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RequestOwnershipVerificationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletPublicServiceServer).RequestOwnershipVerification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WalletPublicService_RequestOwnershipVerification_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).RequestOwnershipVerification(ctx, req.(*RequestOwnershipVerificationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WalletPublicService_CompleteOwnershipVerification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CompleteOwnershipVerificationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletPublicServiceServer).CompleteOwnershipVerification(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WalletPublicService_CompleteOwnershipVerification_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).CompleteOwnershipVerification(ctx, req.(*CompleteOwnershipVerificationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // WalletPublicService_ServiceDesc is the grpc.ServiceDesc for WalletPublicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -564,17 +495,9 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "DeactivateWithdrawalDestination",
 			Handler:    _WalletPublicService_DeactivateWithdrawalDestination_Handler,
 		},
-		{
-			MethodName: "RequestOwnershipVerification",
-			Handler:    _WalletPublicService_RequestOwnershipVerification_Handler,
-		},
-		{
-			MethodName: "CompleteOwnershipVerification",
-			Handler:    _WalletPublicService_CompleteOwnershipVerification_Handler,
-		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/noebs/wallet/v1/wallet.proto",
+	Metadata: "noebs/wallet/v1/wallet.proto",
 }
 
 const (
@@ -585,7 +508,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type WalletAdminServiceClient interface {
-	RenderWalletAdmin(ctx context.Context, in *AdminWalletRequest, opts ...grpc.CallOption) (*AdminWalletResponse, error)
+	RenderWalletAdmin(ctx context.Context, in *RenderWalletAdminRequest, opts ...grpc.CallOption) (*RenderWalletAdminResponse, error)
 }
 
 type walletAdminServiceClient struct {
@@ -596,9 +519,9 @@ func NewWalletAdminServiceClient(cc grpc.ClientConnInterface) WalletAdminService
 	return &walletAdminServiceClient{cc}
 }
 
-func (c *walletAdminServiceClient) RenderWalletAdmin(ctx context.Context, in *AdminWalletRequest, opts ...grpc.CallOption) (*AdminWalletResponse, error) {
+func (c *walletAdminServiceClient) RenderWalletAdmin(ctx context.Context, in *RenderWalletAdminRequest, opts ...grpc.CallOption) (*RenderWalletAdminResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AdminWalletResponse)
+	out := new(RenderWalletAdminResponse)
 	err := c.cc.Invoke(ctx, WalletAdminService_RenderWalletAdmin_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -610,7 +533,7 @@ func (c *walletAdminServiceClient) RenderWalletAdmin(ctx context.Context, in *Ad
 // All implementations must embed UnimplementedWalletAdminServiceServer
 // for forward compatibility.
 type WalletAdminServiceServer interface {
-	RenderWalletAdmin(context.Context, *AdminWalletRequest) (*AdminWalletResponse, error)
+	RenderWalletAdmin(context.Context, *RenderWalletAdminRequest) (*RenderWalletAdminResponse, error)
 	mustEmbedUnimplementedWalletAdminServiceServer()
 }
 
@@ -621,7 +544,7 @@ type WalletAdminServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedWalletAdminServiceServer struct{}
 
-func (UnimplementedWalletAdminServiceServer) RenderWalletAdmin(context.Context, *AdminWalletRequest) (*AdminWalletResponse, error) {
+func (UnimplementedWalletAdminServiceServer) RenderWalletAdmin(context.Context, *RenderWalletAdminRequest) (*RenderWalletAdminResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RenderWalletAdmin not implemented")
 }
 func (UnimplementedWalletAdminServiceServer) mustEmbedUnimplementedWalletAdminServiceServer() {}
@@ -646,7 +569,7 @@ func RegisterWalletAdminServiceServer(s grpc.ServiceRegistrar, srv WalletAdminSe
 }
 
 func _WalletAdminService_RenderWalletAdmin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AdminWalletRequest)
+	in := new(RenderWalletAdminRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -658,7 +581,7 @@ func _WalletAdminService_RenderWalletAdmin_Handler(srv interface{}, ctx context.
 		FullMethod: WalletAdminService_RenderWalletAdmin_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletAdminServiceServer).RenderWalletAdmin(ctx, req.(*AdminWalletRequest))
+		return srv.(WalletAdminServiceServer).RenderWalletAdmin(ctx, req.(*RenderWalletAdminRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -676,5 +599,5 @@ var WalletAdminService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/noebs/wallet/v1/wallet.proto",
+	Metadata: "noebs/wallet/v1/wallet.proto",
 }

@@ -78,7 +78,7 @@ func TestValidateDeploymentRootRejectsUnexpectedServiceDiscoveryEntry(t *testing
 }
 
 func TestValidateKubernetesDeploymentRootRejectsMissingGRPCServiceDiscoveryEntry(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	rewritePreflightNoebsConfig(t, root, "config.yaml", func(noebs map[string]interface{}) {
 		delete(getMap(noebs, "grpc_service_discovery"), string(serviceRoleWalletLedger))
 	})

@@ -2,6 +2,7 @@ package httpjson
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -11,16 +12,147 @@ import (
 	"github.com/adonese/noebs/wallet/psp"
 )
 
+func TestCreateDepositSendsServerReferenceAsPayloadAndIdempotencyKey(t *testing.T) {
+	type observedRequest struct {
+		body           map[string]any
+		idempotencyKey string
+	}
+	observed := make(chan observedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		observed <- observedRequest{body: body, idempotencyKey: r.Header.Get("X-Deposit-Key")}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"reference":"dep_server_reference","id":"psp-123","state":"pending","amount":2500,"currency":"AED"}}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:         "pay",
+		APIBaseURL:           server.URL,
+		SupportsDeposit:      true,
+		DepositRequestMethod: http.MethodPost,
+		DepositRequestPath:   "/deposits",
+		DepositRequestMapping: psp.RequestMapping{Fields: map[string]string{
+			"reference": "client_reference",
+			"amount":    "amount",
+			"currency":  "currency",
+			"metadata":  "metadata",
+		}},
+		DepositResponseMapping: psp.ResponseMapping{
+			ClientReference: []string{"result.reference"},
+			TransactionID:   []string{"result.id"},
+			Status:          []string{"result.state"},
+			Amount:          []string{"result.amount"},
+			Currency:        []string{"result.currency"},
+		},
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		StatusRequestMethod:   http.MethodGet,
+		StatusRequestPath:     "/status",
+		IdempotencyHeaderName: "X-Deposit-Key",
+	})
+	if err != nil {
+		t.Fatalf("NewProvider() error = %v", err)
+	}
+
+	result, err := provider.CreateDeposit(context.Background(), psp.DepositRequest{
+		IdempotencyKey:  "deposit-idem",
+		ClientReference: "dep_server_reference",
+		Amount:          2500,
+		Currency:        "AED",
+		Metadata:        map[string]any{"order": "42"},
+	})
+	if err != nil {
+		t.Fatalf("CreateDeposit() error = %v", err)
+	}
+	request := <-observed
+	if request.idempotencyKey != "deposit-idem" || request.body["reference"] != "dep_server_reference" {
+		t.Fatalf("request = %+v", request)
+	}
+	if result.ClientReference != "dep_server_reference" || result.ProviderTxID != "psp-123" ||
+		result.Amount != 2500 || result.Currency != "AED" || result.Status != "pending" {
+		t.Fatalf("result = %+v", result)
+	}
+}
+
+func TestNewProviderRejectsIncompleteDepositMappings(t *testing.T) {
+	base := psp.Config{
+		ProviderCode:          "pay",
+		APIBaseURL:            "https://pay.example",
+		IdempotencyHeaderName: "Idempotency-Key",
+		SupportsDeposit:       true,
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		DepositResponseMapping: psp.ResponseMapping{
+			ClientReference: []string{"reference"},
+			TransactionID:   []string{"id"},
+			Status:          []string{"status"},
+			Amount:          []string{"amount"},
+			Currency:        []string{"currency"},
+		},
+		PayoutRequestMethod: http.MethodPost,
+		PayoutRequestPath:   "/payouts",
+		StatusRequestMethod: http.MethodGet,
+		StatusRequestPath:   "/status",
+	}
+
+	missingResponseReference := base
+	missingResponseReference.DepositResponseMapping.ClientReference = nil
+	if _, err := NewProvider(&missingResponseReference); !errors.Is(err, psp.ErrPSPConfigInvalid) {
+		t.Fatalf("missing response reference error = %v, want %v", err, psp.ErrPSPConfigInvalid)
+	}
+
+	missingRequestReference := base
+	missingRequestReference.DepositRequestMapping = psp.RequestMapping{Fields: map[string]string{
+		"amount": "amount", "currency": "currency",
+	}}
+	if _, err := NewProvider(&missingRequestReference); !errors.Is(err, psp.ErrPSPConfigInvalid) {
+		t.Fatalf("missing request reference error = %v, want %v", err, psp.ErrPSPConfigInvalid)
+	}
+}
+
+func TestNewProviderRejectsIncompletePayoutSettlementMappings(t *testing.T) {
+	mapping := psp.ResponseMapping{
+		TransactionID: []string{"id"}, Status: []string{"status"}, Amount: []string{"amount"}, Currency: []string{"currency"},
+	}
+	base := psp.Config{
+		ProviderCode: "pay", APIBaseURL: "https://pay.example", IdempotencyHeaderName: "Idempotency-Key",
+		SupportsWithdrawal:   true,
+		DepositRequestMethod: http.MethodPost, DepositRequestPath: "/deposits",
+		PayoutRequestMethod: http.MethodPost, PayoutRequestPath: "/payouts", PayoutResponseMapping: mapping,
+		StatusRequestMethod: http.MethodGet, StatusRequestPath: "/status", StatusResponseMapping: mapping,
+	}
+	for _, mutate := range []func(*psp.Config){
+		func(config *psp.Config) { config.PayoutResponseMapping.Amount = nil },
+		func(config *psp.Config) { config.PayoutResponseMapping.Currency = nil },
+		func(config *psp.Config) { config.StatusResponseMapping.Amount = nil },
+		func(config *psp.Config) { config.StatusResponseMapping.Currency = nil },
+	} {
+		config := base
+		config.PayoutResponseMapping = mapping
+		config.StatusResponseMapping = mapping
+		mutate(&config)
+		if _, err := NewProvider(&config); !errors.Is(err, psp.ErrPSPConfigInvalid) {
+			t.Fatalf("incomplete payout mapping error = %v, want %v", err, psp.ErrPSPConfigInvalid)
+		}
+	}
+}
+
 func TestNewProviderRequiresExplicitRequestRoutes(t *testing.T) {
 	cfg := &psp.Config{
-		ProviderCode:         "pay",
-		APIBaseURL:           "https://pay.example",
-		DepositRequestMethod: http.MethodPost,
-		DepositRequestPath:   "/deposit/verify",
-		PayoutRequestMethod:  http.MethodPost,
-		PayoutRequestPath:    "/payouts",
-		StatusRequestMethod:  http.MethodGet,
-		StatusRequestPath:    "/transactions/{transaction_id}",
+		ProviderCode:          "pay",
+		APIBaseURL:            "https://pay.example",
+		IdempotencyHeaderName: "Idempotency-Key",
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		StatusRequestMethod:   http.MethodGet,
+		StatusRequestPath:     "/transactions/{transaction_id}",
 	}
 
 	if _, err := NewProvider(cfg); err != nil {
@@ -36,14 +168,15 @@ func TestNewProviderRequiresExplicitRequestRoutes(t *testing.T) {
 
 func TestNewProviderDoesNotUseEnvironmentProxy(t *testing.T) {
 	provider, err := NewProvider(&psp.Config{
-		ProviderCode:         "pay",
-		APIBaseURL:           "https://pay.example",
-		DepositRequestMethod: http.MethodPost,
-		DepositRequestPath:   "/deposit/verify",
-		PayoutRequestMethod:  http.MethodPost,
-		PayoutRequestPath:    "/payouts",
-		StatusRequestMethod:  http.MethodGet,
-		StatusRequestPath:    "/transactions/{transaction_id}",
+		ProviderCode:          "pay",
+		APIBaseURL:            "https://pay.example",
+		IdempotencyHeaderName: "Idempotency-Key",
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		StatusRequestMethod:   http.MethodGet,
+		StatusRequestPath:     "/transactions/{transaction_id}",
 	})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
@@ -112,25 +245,86 @@ func TestGetTransactionStatusRejectsMalformedConfiguredQueryBeforeHTTP(t *testin
 	defer server.Close()
 
 	provider, err := NewProvider(&psp.Config{
-		ProviderCode:         "pay",
-		APIBaseURL:           server.URL,
-		DepositRequestMethod: http.MethodPost,
-		DepositRequestPath:   "/deposit/verify",
-		PayoutRequestMethod:  http.MethodPost,
-		PayoutRequestPath:    "/payouts",
-		StatusRequestMethod:  http.MethodGet,
-		StatusRequestPath:    "/status?existing=%zz",
+		ProviderCode:          "pay",
+		APIBaseURL:            server.URL,
+		IdempotencyHeaderName: "Idempotency-Key",
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		StatusRequestMethod:   http.MethodGet,
+		StatusRequestPath:     "/status?existing=%zz",
 	})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
 
-	_, err = provider.GetTransactionStatus(context.Background(), "psp-123")
+	_, err = provider.GetTransactionStatus(context.Background(), psp.TransactionLookup{
+		ProviderTxID: "psp-123", IdempotencyKey: "status-idem", ClientReference: "client-ref",
+	})
 	if !errors.Is(err, psp.ErrPSPConfigInvalid) {
 		t.Fatalf("GetTransactionStatus() error = %v, want %v", err, psp.ErrPSPConfigInvalid)
 	}
 	if requests != 0 {
 		t.Fatalf("requests = %d, want 0", requests)
+	}
+}
+
+func TestGetTransactionStatusResolvesByPersistedCommandIdentity(t *testing.T) {
+	requests := make(chan url.Values, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.URL.Query()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"provider-1","status":"pending","amount":100,"currency":"AED"}`))
+	}))
+	defer server.Close()
+
+	mapping := psp.ResponseMapping{
+		TransactionID: []string{"id"}, Status: []string{"status"}, Amount: []string{"amount"}, Currency: []string{"currency"},
+	}
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode: "pay", APIBaseURL: server.URL, IdempotencyHeaderName: "Idempotency-Key",
+		SupportsWithdrawal:   true,
+		DepositRequestMethod: http.MethodPost, DepositRequestPath: "/deposits",
+		PayoutRequestMethod: http.MethodPost, PayoutRequestPath: "/payouts", PayoutResponseMapping: mapping,
+		StatusRequestMethod: http.MethodGet, StatusRequestPath: "/status", StatusResponseMapping: mapping,
+		StatusRequestMapping: psp.RequestMapping{Fields: map[string]string{
+			"lookup.idempotency": "idempotency_key", "lookup.reference": "client_reference",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup := psp.TransactionLookup{IdempotencyKey: "withdrawal-idem", ClientReference: "withdrawal-1"}
+	status, err := provider.GetTransactionStatus(context.Background(), lookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := <-requests
+	if query.Get("lookup.idempotency") != lookup.IdempotencyKey || query.Get("lookup.reference") != lookup.ClientReference {
+		t.Fatalf("lookup query = %v", query)
+	}
+	if status.ProviderTxID != "provider-1" || status.Amount != 100 || status.Currency != "AED" || status.Status != "pending" {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestNewProviderRejectsStatusLookupMappingWithoutImmutableCommandIdentity(t *testing.T) {
+	mapping := psp.ResponseMapping{
+		TransactionID: []string{"id"}, Status: []string{"status"}, Amount: []string{"amount"}, Currency: []string{"currency"},
+	}
+	_, err := NewProvider(&psp.Config{
+		ProviderCode: "pay", APIBaseURL: "https://pay.example", IdempotencyHeaderName: "Idempotency-Key",
+		SupportsWithdrawal:   true,
+		DepositRequestMethod: http.MethodPost, DepositRequestPath: "/deposits",
+		PayoutRequestMethod: http.MethodPost, PayoutRequestPath: "/payouts", PayoutResponseMapping: mapping,
+		StatusRequestMethod: http.MethodGet, StatusRequestPath: "/status", StatusResponseMapping: mapping,
+		StatusRequestMapping: psp.RequestMapping{Fields: map[string]string{
+			"lookup.idempotency": "idempotency_key",
+		}},
+	})
+	if !errors.Is(err, psp.ErrPSPConfigInvalid) {
+		t.Fatalf("NewProvider() error = %v, want %v", err, psp.ErrPSPConfigInvalid)
 	}
 }
 
@@ -142,14 +336,15 @@ func TestDoJSONReturnsInvalidResponseError(t *testing.T) {
 	defer server.Close()
 
 	provider, err := NewProvider(&psp.Config{
-		ProviderCode:         "pay",
-		APIBaseURL:           server.URL,
-		DepositRequestMethod: http.MethodPost,
-		DepositRequestPath:   "/deposit/verify",
-		PayoutRequestMethod:  http.MethodPost,
-		PayoutRequestPath:    "/payouts",
-		StatusRequestMethod:  http.MethodGet,
-		StatusRequestPath:    "/status",
+		ProviderCode:          "pay",
+		APIBaseURL:            server.URL,
+		IdempotencyHeaderName: "Idempotency-Key",
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		StatusRequestMethod:   http.MethodGet,
+		StatusRequestPath:     "/status",
 	})
 	if err != nil {
 		t.Fatalf("NewProvider() error = %v", err)
@@ -162,7 +357,7 @@ func TestDoJSONReturnsInvalidResponseError(t *testing.T) {
 	}
 }
 
-func TestVerifyDepositRejectsInvalidMappedAmount(t *testing.T) {
+func TestCreateDepositRejectsInvalidMappedAmount(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"result":{"provider_id":"psp-123","state":"success","minor_units":"12.34","currency":"AED"}}`))
@@ -170,15 +365,18 @@ func TestVerifyDepositRejectsInvalidMappedAmount(t *testing.T) {
 	defer server.Close()
 
 	provider, err := NewProvider(&psp.Config{
-		ProviderCode:         "pay",
-		APIBaseURL:           server.URL,
-		DepositRequestMethod: http.MethodPost,
-		DepositRequestPath:   "/deposit/verify",
+		ProviderCode:          "pay",
+		APIBaseURL:            server.URL,
+		IdempotencyHeaderName: "Idempotency-Key",
+		SupportsDeposit:       true,
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
 		DepositResponseMapping: psp.ResponseMapping{
-			TransactionID: []string{"result.provider_id"},
-			Status:        []string{"result.state"},
-			Amount:        []string{"result.minor_units"},
-			Currency:      []string{"result.currency"},
+			ClientReference: []string{"result.client_reference"},
+			TransactionID:   []string{"result.provider_id"},
+			Status:          []string{"result.state"},
+			Amount:          []string{"result.minor_units"},
+			Currency:        []string{"result.currency"},
 		},
 		PayoutRequestMethod: http.MethodPost,
 		PayoutRequestPath:   "/payouts",
@@ -189,9 +387,14 @@ func TestVerifyDepositRejectsInvalidMappedAmount(t *testing.T) {
 		t.Fatalf("NewProvider() error = %v", err)
 	}
 
-	_, err = provider.VerifyDeposit(context.Background(), "psp-123")
+	_, err = provider.CreateDeposit(context.Background(), psp.DepositRequest{
+		IdempotencyKey:  "deposit-idem",
+		ClientReference: "deposit-reference",
+		Amount:          100,
+		Currency:        "AED",
+	})
 	if !errors.Is(err, psp.ErrPSPResponseInvalid) {
-		t.Fatalf("VerifyDeposit() error = %v, want %v", err, psp.ErrPSPResponseInvalid)
+		t.Fatalf("CreateDeposit() error = %v, want %v", err, psp.ErrPSPResponseInvalid)
 	}
 }
 
@@ -205,14 +408,25 @@ func TestSendPayoutRejectsMissingMappedSourceBeforeHTTP(t *testing.T) {
 	defer server.Close()
 
 	provider, err := NewProvider(&psp.Config{
-		ProviderCode:         "pay",
-		APIBaseURL:           server.URL,
-		DepositRequestMethod: http.MethodPost,
-		DepositRequestPath:   "/deposit/verify",
-		PayoutRequestMethod:  http.MethodPost,
-		PayoutRequestPath:    "/payouts",
+		ProviderCode:          "pay",
+		APIBaseURL:            server.URL,
+		IdempotencyHeaderName: "Idempotency-Key",
+		SupportsWithdrawal:    true,
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
 		PayoutRequestMapping: psp.RequestMapping{
-			Fields: map[string]string{"beneficiary.iban": "destination.iban"},
+			Fields: map[string]string{
+				"reference": "client_reference", "amount": "amount", "currency": "currency",
+				"beneficiary.iban": "destination.iban",
+			},
+		},
+		PayoutResponseMapping: psp.ResponseMapping{
+			TransactionID: []string{"id"}, Status: []string{"status"}, Amount: []string{"amount"}, Currency: []string{"currency"},
+		},
+		StatusResponseMapping: psp.ResponseMapping{
+			TransactionID: []string{"id"}, Status: []string{"status"}, Amount: []string{"amount"}, Currency: []string{"currency"},
 		},
 		StatusRequestMethod: http.MethodGet,
 		StatusRequestPath:   "/status",
@@ -222,6 +436,7 @@ func TestSendPayoutRejectsMissingMappedSourceBeforeHTTP(t *testing.T) {
 	}
 
 	_, err = provider.SendPayout(context.Background(), psp.PayoutRequest{
+		IdempotencyKey:  "payout-idem",
 		ClientReference: "ref-1",
 		Amount:          1500,
 		Currency:        "AED",
@@ -232,6 +447,162 @@ func TestSendPayoutRejectsMissingMappedSourceBeforeHTTP(t *testing.T) {
 	}
 	if requests != 0 {
 		t.Fatalf("requests = %d, want 0", requests)
+	}
+}
+
+func TestSendPayoutRetriesUseTheSameRequiredIdempotencyHeader(t *testing.T) {
+	keys := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keys <- r.Header.Get("Idempotency-Key")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"payout-1","status":"pending","amount":100,"currency":"AED"}`))
+	}))
+	defer server.Close()
+
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:          "pay",
+		APIBaseURL:            server.URL,
+		IdempotencyHeaderName: "Idempotency-Key",
+		SupportsWithdrawal:    true,
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		PayoutResponseMapping: psp.ResponseMapping{
+			TransactionID: []string{"id"},
+			Status:        []string{"status"},
+			Amount:        []string{"amount"},
+			Currency:      []string{"currency"},
+		},
+		StatusResponseMapping: psp.ResponseMapping{
+			TransactionID: []string{"id"},
+			Status:        []string{"status"},
+			Amount:        []string{"amount"},
+			Currency:      []string{"currency"},
+		},
+		StatusRequestMethod: http.MethodGet,
+		StatusRequestPath:   "/status",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := psp.PayoutRequest{
+		IdempotencyKey: "withdrawal-idem", ClientReference: "withdrawal-1",
+		Amount: 100, Currency: "AED", Destination: map[string]any{},
+	}
+	for range 2 {
+		if _, err := provider.SendPayout(context.Background(), request); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 2 {
+		if key := <-keys; key != request.IdempotencyKey {
+			t.Fatalf("idempotency header = %q, want %q", key, request.IdempotencyKey)
+		}
+	}
+}
+
+func TestDoJSONClassifiesAmbiguousClientStatusesAsTemporary(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		want   error
+	}{
+		{name: "success", status: http.StatusNoContent},
+		{name: "bad request", status: http.StatusBadRequest, want: psp.ErrPSPPermanent},
+		{name: "unauthorized", status: http.StatusUnauthorized, want: psp.ErrPSPPermanent},
+		{name: "forbidden", status: http.StatusForbidden, want: psp.ErrPSPPermanent},
+		{name: "not found", status: http.StatusNotFound, want: psp.ErrPSPPermanent},
+		{name: "request timeout", status: http.StatusRequestTimeout, want: psp.ErrPSPTemporary},
+		{name: "conflict", status: http.StatusConflict, want: psp.ErrPSPTemporary},
+		{name: "unprocessable entity", status: http.StatusUnprocessableEntity, want: psp.ErrPSPPermanent},
+		{name: "too early", status: http.StatusTooEarly, want: psp.ErrPSPTemporary},
+		{name: "too many requests", status: http.StatusTooManyRequests, want: psp.ErrPSPTemporary},
+		{name: "server error", status: http.StatusInternalServerError, want: psp.ErrPSPTemporary},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := &Provider{
+				config: &psp.Config{APIBaseURL: "https://pay.example"},
+				client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: test.status,
+						Body:       http.NoBody,
+						Header:     make(http.Header),
+						Request:    req,
+					}, nil
+				})},
+			}
+
+			err := provider.doJSON(context.Background(), http.MethodGet, "/status", nil, "", nil)
+			if !errors.Is(err, test.want) {
+				t.Fatalf("doJSON() error = %v, want %v", err, test.want)
+			}
+			if test.want == psp.ErrPSPTemporary && errors.Is(err, psp.ErrPSPPermanent) {
+				t.Fatalf("doJSON() classified HTTP %d as permanent", test.status)
+			}
+		})
+	}
+}
+
+func TestSendPayoutLostResponseThenConflictRemainsAmbiguousAcrossRetries(t *testing.T) {
+	mapping := psp.ResponseMapping{
+		TransactionID: []string{"id"},
+		Status:        []string{"status"},
+		Amount:        []string{"amount"},
+		Currency:      []string{"currency"},
+	}
+	provider, err := NewProvider(&psp.Config{
+		ProviderCode:          "pay",
+		APIBaseURL:            "https://pay.example",
+		IdempotencyHeaderName: "Idempotency-Key",
+		SupportsWithdrawal:    true,
+		DepositRequestMethod:  http.MethodPost,
+		DepositRequestPath:    "/deposits",
+		PayoutRequestMethod:   http.MethodPost,
+		PayoutRequestPath:     "/payouts",
+		PayoutResponseMapping: mapping,
+		StatusRequestMethod:   http.MethodGet,
+		StatusRequestPath:     "/status",
+		StatusResponseMapping: mapping,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const idempotencyKey = "withdrawal-idem"
+	attempts := 0
+	provider.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		attempts++
+		if key := req.Header.Get("Idempotency-Key"); key != idempotencyKey {
+			t.Fatalf("attempt %d idempotency key = %q, want %q", attempts, key, idempotencyKey)
+		}
+		if attempts == 1 {
+			return nil, errors.New("connection lost after provider accepted payout")
+		}
+		return &http.Response{
+			StatusCode: http.StatusConflict,
+			Body:       http.NoBody,
+			Header:     make(http.Header),
+			Request:    req,
+		}, nil
+	})}
+
+	request := psp.PayoutRequest{
+		IdempotencyKey:  idempotencyKey,
+		ClientReference: "withdrawal-1",
+		Amount:          100,
+		Currency:        "AED",
+		Destination:     map[string]any{},
+	}
+	for attempt := 1; attempt <= 3; attempt++ {
+		_, err := provider.SendPayout(context.Background(), request)
+		if !errors.Is(err, psp.ErrPSPTemporary) || errors.Is(err, psp.ErrPSPPermanent) {
+			t.Fatalf("attempt %d error = %v, want temporary ambiguity", attempt, err)
+		}
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
 	}
 }
 

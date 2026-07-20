@@ -129,10 +129,6 @@ spec:
               subPath: ebs-adapter-migrate.service.yaml
               readOnly: true
             - name: config
-              mountPath: /preflight/services/psp-webhook-migrate.yaml
-              subPath: psp-webhook-migrate.service.yaml
-              readOnly: true
-            - name: config
               mountPath: /preflight/services/admin-reporting-migrate.yaml
               subPath: admin-reporting-migrate.service.yaml
               readOnly: true
@@ -220,10 +216,6 @@ spec:
               mountPath: /preflight/secrets/ebs-adapter-migrate.secrets.yaml
               subPath: secrets.yaml
               readOnly: true
-            - name: psp-webhook-migrate-secrets
-              mountPath: /preflight/secrets/psp-webhook-migrate.secrets.yaml
-              subPath: secrets.yaml
-              readOnly: true
             - name: admin-reporting-migrate-secrets
               mountPath: /preflight/secrets/admin-reporting-migrate.secrets.yaml
               subPath: secrets.yaml
@@ -235,14 +227,6 @@ spec:
             - name: wallet-ledger-migrate-secrets
               mountPath: /preflight/secrets/wallet-ledger-migrate.secrets.yaml
               subPath: secrets.yaml
-              readOnly: true
-            - name: sops-age-key
-              mountPath: /preflight/.sops/age-key.txt
-              subPath: age-key.txt
-              readOnly: true
-            - name: postgres-credentials
-              mountPath: /preflight/platform/postgres-password.txt
-              subPath: password
               readOnly: true
             - name: temporal-postgres-credentials
               mountPath: /preflight/platform/temporal-postgres-password.txt
@@ -271,6 +255,14 @@ spec:
             - name: gateway-auth-postgres-roles
               mountPath: /preflight/platform/gateway-auth-postgres-roles.secrets.yaml
               subPath: roles.yaml
+              readOnly: true
+            - name: service-postgres-roles
+              mountPath: /preflight/platform/service-postgres-roles.secrets.yaml
+              subPath: roles.yaml
+              readOnly: true
+            - name: service-postgres-roles
+              mountPath: /preflight/platform/postgres-provisioning.sql
+              subPath: bootstrap.sql
               readOnly: true
             - name: internal-transport-platform
               mountPath: /preflight/platform/internal-transport.secrets.yaml
@@ -343,9 +335,6 @@ spec:
         - name: ebs-adapter-migrate-secrets
           secret:
             secretName: ebs-adapter-migrate-secrets
-        - name: psp-webhook-migrate-secrets
-          secret:
-            secretName: psp-webhook-migrate-secrets
         - name: admin-reporting-migrate-secrets
           secret:
             secretName: admin-reporting-migrate-secrets
@@ -355,12 +344,6 @@ spec:
         - name: wallet-ledger-migrate-secrets
           secret:
             secretName: wallet-ledger-migrate-secrets
-        - name: sops-age-key
-          secret:
-            secretName: sops-age-key
-        - name: postgres-credentials
-          secret:
-            secretName: postgres-credentials
         - name: temporal-postgres-credentials
           secret:
             secretName: temporal-postgres-credentials
@@ -382,6 +365,9 @@ spec:
         - name: gateway-auth-postgres-roles
           secret:
             secretName: gateway-auth-postgres-roles
+        - name: service-postgres-roles
+          secret:
+            secretName: service-postgres-roles
         - name: internal-transport-platform
           secret:
             secretName: internal-transport-platform

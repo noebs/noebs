@@ -37,8 +37,8 @@ func registerBackofficeLifecycleRoutes(router *fiber.App, handler *backofficeHTT
 	if router == nil || handler == nil || handler.service == nil || handler.cookies == nil || handler.csrf == nil || handler.host == "" || handler.issuer == "" || len(handler.catalog.All()) == 0 {
 		return backofficeauth.ErrInvalidConfiguration
 	}
-	router.Get(backofficeLoginPath, adaptor.HTTPHandlerFunc(handler.login))
-	router.Get(backofficeCallbackPath, adaptor.HTTPHandlerFunc(handler.callback))
+	router.Add(fiber.MethodGet, backofficeLoginPath, adaptor.HTTPHandlerFunc(handler.login))
+	router.Add(fiber.MethodGet, backofficeCallbackPath, adaptor.HTTPHandlerFunc(handler.callback))
 	router.Post(backofficeLogoutPath, adaptor.HTTPHandlerFunc(handler.logout))
 	router.Get(backofficeLoggedOutPath, adaptor.HTTPHandlerFunc(handler.loggedOut))
 	router.Get(backofficeHomePath, adaptor.HTTPHandlerFunc(handler.home))

@@ -13,7 +13,7 @@ import (
 
 var errInvalidKeycloakTransport = errors.New("invalid Keycloak transport configuration")
 
-func keycloakClientTLSConfig(caPEM string) (*tls.Config, error) {
+func authorityClientTLSConfig(caPEM string) (*tls.Config, error) {
 	block, rest := pem.Decode([]byte(strings.TrimSpace(caPEM)))
 	if block == nil || block.Type != "CERTIFICATE" || len(strings.TrimSpace(string(rest))) != 0 {
 		return nil, fmt.Errorf("%w: CA certificate", errInvalidKeycloakTransport)
@@ -28,6 +28,10 @@ func keycloakClientTLSConfig(caPEM string) (*tls.Config, error) {
 		MinVersion: tls.VersionTLS13,
 		RootCAs:    roots,
 	}, nil
+}
+
+func keycloakClientTLSConfig(caPEM string) (*tls.Config, error) {
+	return authorityClientTLSConfig(caPEM)
 }
 
 func readKeycloakClientTLSConfig(path string) (*tls.Config, error) {

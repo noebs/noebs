@@ -17,7 +17,6 @@ const workloadAuthDatabaseName = "workload_auth"
 
 var workloadAuthCallerRoles = []serviceRole{
 	serviceRoleAPIGateway,
-	serviceRoleIdentityAuth,
 	serviceRoleEBSAdapter,
 }
 
@@ -108,15 +107,15 @@ func prepareWorkloadAuthRelease(inputs kubernetesReleaseWorkloadAuthInputs, rand
 	}
 
 	var err error
-	prepared.database.migratePassword, err = prepareWorkloadDatabasePassword("migrate_password", inputs.Database.MigratePassword, random)
+	prepared.database.migratePassword, err = prepareWorkloadDatabasePassword("migrate_password", inputs.Database.MigratePassword)
 	if err != nil {
 		return preparedWorkloadAuthRelease{}, err
 	}
-	prepared.database.runtimePassword, err = prepareWorkloadDatabasePassword("runtime_password", inputs.Database.RuntimePassword, random)
+	prepared.database.runtimePassword, err = prepareWorkloadDatabasePassword("runtime_password", inputs.Database.RuntimePassword)
 	if err != nil {
 		return preparedWorkloadAuthRelease{}, err
 	}
-	prepared.database.cleanupPassword, err = prepareWorkloadDatabasePassword("cleanup_password", inputs.Database.CleanupPassword, random)
+	prepared.database.cleanupPassword, err = prepareWorkloadDatabasePassword("cleanup_password", inputs.Database.CleanupPassword)
 	if err != nil {
 		return preparedWorkloadAuthRelease{}, err
 	}
@@ -163,22 +162,8 @@ func prepareWorkloadCaller(role serviceRole, input kubernetesReleaseWorkloadCall
 	}, nil
 }
 
-func prepareWorkloadDatabasePassword(label, input string, random io.Reader) (string, error) {
-	password := strings.TrimSpace(input)
-	if password == "" {
-		var raw [32]byte
-		if _, err := io.ReadFull(random, raw[:]); err != nil {
-			return "", fmt.Errorf("generate workload authentication %s: %w", label, err)
-		}
-		return base64.RawURLEncoding.EncodeToString(raw[:]), nil
-	}
-	if len(password) < 24 {
-		return "", fmt.Errorf("workload authentication database %s must contain at least 24 characters", label)
-	}
-	if strings.Contains(password, "REPLACE_WITH_") || strings.ContainsAny(password, "\r\n\x00") {
-		return "", fmt.Errorf("workload authentication database %s is invalid", label)
-	}
-	return password, nil
+func prepareWorkloadDatabasePassword(label, input string) (string, error) {
+	return requireCanonicalReleaseSecret("workload authentication database "+label, input)
 }
 
 func (r preparedWorkloadAuthRelease) configForRole(role serviceRole) map[string]interface{} {

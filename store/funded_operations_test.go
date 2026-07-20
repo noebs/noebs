@@ -11,7 +11,7 @@ import (
 
 func TestFundedCardOperationClaimIsOwnedStableAndSingleGrant(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeCardVault)
 	const tenantID = "tenant-funded-claim"
 	if err := MigrateScope(ctx, db, MigrationScopeCardVault); err != nil {
 		t.Fatalf("migrate card vault: %v", err)

@@ -6,6 +6,7 @@ template_source="/opt/temporal/config/temporal.yaml"
 runtime_root="/tmp/temporal"
 runtime_config_dir="$runtime_root/config"
 runtime_config="$runtime_config_dir/development.yaml"
+export SSL_CERT_FILE="/opt/temporal/secrets/keycloak-ca.pem"
 
 read_required_file() {
   local label="$1"
@@ -46,4 +47,9 @@ sed \
   "$template_source" > "$runtime_config"
 chmod 0600 "$runtime_config"
 
-exec temporal-server --root "$runtime_root" --config config --allow-no-auth start
+exec temporal-server --root "$runtime_root" --config config start \
+  --service frontend \
+  --service internal-frontend \
+  --service history \
+  --service matching \
+  --service worker

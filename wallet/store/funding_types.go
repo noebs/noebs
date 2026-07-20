@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -78,15 +79,61 @@ func ValidateFundingSourceReadyForWithdrawal(source *FundingSource) error {
 	if !source.SupportsWithdrawal || len(source.WithdrawalMethod) == 0 {
 		return ErrFundingSourceNotWithdrawable
 	}
+	if !source.PSPProvider.Valid || source.PSPProvider.String == "" || source.PSPProvider.String != strings.TrimSpace(source.PSPProvider.String) {
+		return ErrMissingProviderCode
+	}
 	return nil
 }
 
 type LedgerFundingLink struct {
-	ID              int64     `db:"id"`
-	TenantID        string    `db:"tenant_id"`
-	LedgerEntryID   int64     `db:"ledger_entry_id"`
-	FundingSourceID int64     `db:"funding_source_id"`
-	Amount          int64     `db:"amount"`
-	Currency        string    `db:"currency"`
-	CreatedAt       time.Time `db:"created_at"`
+	ID                      int64         `db:"id"`
+	TenantID                string        `db:"tenant_id"`
+	LedgerEntryID           int64         `db:"ledger_entry_id"`
+	FundingSourceID         int64         `db:"funding_source_id"`
+	WithdrawalReservationID sql.NullInt64 `db:"withdrawal_reservation_id"`
+	Amount                  int64         `db:"amount"`
+	Currency                string        `db:"currency"`
+	CreatedAt               time.Time     `db:"created_at"`
+}
+
+const (
+	FundingSourceReservationReserved = "reserved"
+	FundingSourceReservationConsumed = "consumed"
+	FundingSourceReservationReleased = "released"
+)
+
+type FundingSourceWithdrawalReservation struct {
+	ID              int64         `db:"id"`
+	TenantID        string        `db:"tenant_id"`
+	WorkflowID      string        `db:"workflow_id"`
+	FundingSourceID int64         `db:"funding_source_id"`
+	Amount          int64         `db:"amount"`
+	Currency        string        `db:"currency"`
+	ProviderCode    string        `db:"provider_code"`
+	Status          string        `db:"status"`
+	LedgerEntryID   sql.NullInt64 `db:"ledger_entry_id"`
+	CreatedAt       time.Time     `db:"created_at"`
+	ConsumedAt      sql.NullTime  `db:"consumed_at"`
+	ReleasedAt      sql.NullTime  `db:"released_at"`
+}
+
+type ReserveFundingSourceWithdrawalParams struct {
+	TenantID           string
+	WorkflowID         string
+	CandidateSourceIDs []int64
+	WalletID           uuid.UUID
+	Amount             int64
+	Currency           string
+	ProviderCode       string
+}
+
+type FundingSourceWithdrawalReservationResult struct {
+	Reservation FundingSourceWithdrawalReservation
+	Source      FundingSource
+}
+
+type ReleaseFundingSourceWithdrawalParams struct {
+	TenantID   string
+	WorkflowID string
+	ReleasedAt time.Time
 }

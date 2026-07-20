@@ -12,22 +12,34 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestRequestDepositDoesNotGenerateProviderTransactionID(t *testing.T) {
+func TestDepositIntentReferencesAreServerGenerated(t *testing.T) {
+	first, err := newDepositIntentReference()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := newDepositIntentReference()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second || len(first) != 47 || first[:4] != "dep_" {
+		t.Fatalf("deposit references = %q, %q", first, second)
+	}
+}
+
+func TestRequestDepositRequiresReachableStore(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},
 		Config: ebs_fields.NoebsConfig{},
 	}
 	server := NewServer(svc)
 
-	req := &walletv1.DepositRequest{
-		TenantId:        "tenant",
-		ClientReference: "ref-1",
-		ProviderCode:    "noop",
-		WalletId:        uuid.NewString(),
-		OwnerType:       "user",
-		OwnerId:         "1",
-		Amount:          100,
-		Currency:        "USD",
+	req := &walletv1.RequestDepositRequest{
+		TenantId:       "tenant",
+		IdempotencyKey: "ref-1",
+		ProviderCode:   "noop",
+		WalletId:       uuid.NewString(),
+		Amount:         100,
+		Currency:       "USD",
 	}
 
 	_, err := server.RequestDeposit(walletGatewayIdentityContext(1, "tenant"), req)
@@ -37,7 +49,27 @@ func TestRequestDepositDoesNotGenerateProviderTransactionID(t *testing.T) {
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("expected failed precondition, got %v", status.Code(err))
 	}
-	if req.PspTransactionId != "" {
-		t.Fatalf("expected provider transaction id to remain absent, got %q", req.PspTransactionId)
+}
+
+func TestRequestDepositRequiresExplicitIdempotencyAndNonNilWallet(t *testing.T) {
+	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+	req := &walletv1.RequestDepositRequest{
+		TenantId:     "tenant",
+		ProviderCode: "noop",
+		WalletId:     uuid.NewString(),
+		Amount:       100,
+		Currency:     "USD",
+	}
+
+	_, err := server.RequestDeposit(walletGatewayIdentityContext(1, "tenant"), req)
+	if status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != walletstore.ErrMissingIdempotencyKey.Error() {
+		t.Fatalf("missing idempotency error = %v", err)
+	}
+
+	req.IdempotencyKey = "ref-1"
+	req.WalletId = uuid.Nil.String()
+	_, err = server.RequestDeposit(walletGatewayIdentityContext(1, "tenant"), req)
+	if status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != walletstore.ErrMissingWalletID.Error() {
+		t.Fatalf("nil wallet error = %v", err)
 	}
 }

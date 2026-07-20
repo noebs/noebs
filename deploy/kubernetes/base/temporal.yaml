@@ -31,9 +31,13 @@ data:
     password_source="/opt/temporal-postgres/secrets/password"
     password_runtime="/tmp/temporal-postgres-password"
     pgpass="/var/lib/postgresql/.pgpass"
+    tls_certificate_source="/opt/temporal-postgres/secrets/tls.crt"
+    tls_private_key_source="/opt/temporal-postgres/secrets/tls.key"
+    tls_certificate_runtime="/tmp/temporal-postgres-tls.crt"
+    tls_private_key_runtime="/tmp/temporal-postgres-tls.key"
 
     cleanup() {
-      rm -f "$password_runtime" "$pgpass"
+      rm -f "$password_runtime" "$pgpass" "$tls_certificate_runtime" "$tls_private_key_runtime"
     }
     trap cleanup EXIT
 
@@ -48,8 +52,16 @@ data:
       echo "missing Temporal Postgres password file: $password_source" >&2
       exit 1
     fi
+    for tls_source in "$tls_certificate_source" "$tls_private_key_source"; do
+      if [ ! -s "$tls_source" ]; then
+        echo "missing Temporal Postgres TLS input: $tls_source" >&2
+        exit 1
+      fi
+    done
 
     install -d -o postgres -g postgres -m 0700 "$pgdata"
+    install -o postgres -g postgres -m 0600 "$tls_certificate_source" "$tls_certificate_runtime"
+    install -o postgres -g postgres -m 0600 "$tls_private_key_source" "$tls_private_key_runtime"
 
     if [ ! -s "$pgdata/PG_VERSION" ]; then
       password="$(tr -d '\r\n' < "$password_source")"
@@ -63,11 +75,6 @@ data:
         --auth-local=scram-sha-256 \
         --username="$postgres_user" \
         --pwfile="$password_runtime"
-
-      {
-        echo
-        echo "host all all all scram-sha-256"
-      } >> "$pgdata/pg_hba.conf"
 
       printf '/tmp:5432:*:%s:%s\n' "$(pgpass_escape "$postgres_user")" "$(pgpass_escape "$password")" > "$pgpass"
       chown postgres:postgres "$pgpass"
@@ -88,7 +95,23 @@ data:
       gosu postgres pg_ctl -D "$pgdata" -m fast -w stop
     fi
 
-    exec gosu postgres postgres -D "$pgdata" -c listen_addresses='*'
+    cat > "$pgdata/pg_hba.conf" <<'EOF'
+    local all all scram-sha-256
+    hostssl all all all scram-sha-256
+    hostnossl all all all reject
+    host all all all reject
+    EOF
+    chown postgres:postgres "$pgdata/pg_hba.conf"
+    chmod 0600 "$pgdata/pg_hba.conf"
+
+    exec gosu postgres postgres \
+      -D "$pgdata" \
+      -c listen_addresses='*' \
+      -c ssl=on \
+      -c ssl_min_protocol_version=TLSv1.3 \
+      -c ssl_max_protocol_version=TLSv1.3 \
+      -c "ssl_cert_file=$tls_certificate_runtime" \
+      -c "ssl_key_file=$tls_private_key_runtime"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -118,6 +141,11 @@ data:
             maxConns: 20
             maxIdleConns: 20
             maxConnLifetime: 1h
+            tls:
+              enabled: true
+              caFile: /opt/temporal/secrets/postgres-ca.pem
+              enableHostVerification: true
+              serverName: temporal-postgres
         visibility:
           sql:
             pluginName: postgres12
@@ -129,6 +157,11 @@ data:
             maxConns: 10
             maxIdleConns: 10
             maxConnLifetime: 1h
+            tls:
+              enabled: true
+              caFile: /opt/temporal/secrets/postgres-ca.pem
+              enableHostVerification: true
+              serverName: temporal-postgres
 
     global:
       membership:
@@ -136,10 +169,21 @@ data:
         broadcastAddress: 127.0.0.1
       pprof:
         port: 0
+      tls:
+        frontend:
+          server:
+            certFile: /opt/temporal/secrets/tls.crt
+            keyFile: /opt/temporal/secrets/tls.key
+            requireClientAuth: false
       authorization:
+        jwtKeyProvider:
+          keySourceURIs:
+            - https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs
+          refreshInterval: 1m
         permissionsClaimName: permissions
-        authorizer: ""
-        claimMapper: ""
+        authorizer: default
+        claimMapper: default
+        audience: noebs-temporal
 
     services:
       frontend:
@@ -147,22 +191,28 @@ data:
           grpcPort: 7233
           membershipPort: 6933
           bindOnIP: 0.0.0.0
-          httpPort: 7243
+          httpPort: 0
+      internal-frontend:
+        rpc:
+          grpcPort: 7236
+          membershipPort: 6936
+          bindOnIP: 127.0.0.1
+          httpPort: 0
       matching:
         rpc:
           grpcPort: 7235
           membershipPort: 6935
-          bindOnIP: 0.0.0.0
+          bindOnIP: 127.0.0.1
       history:
         rpc:
           grpcPort: 7234
           membershipPort: 6934
-          bindOnIP: 0.0.0.0
+          bindOnIP: 127.0.0.1
       worker:
         rpc:
           grpcPort: 7239
           membershipPort: 6939
-          bindOnIP: 0.0.0.0
+          bindOnIP: 127.0.0.1
 
     clusterMetadata:
       enableGlobalNamespace: false
@@ -173,9 +223,8 @@ data:
         active:
           enabled: true
           initialFailoverVersion: 1
-          rpcName: frontend
-          rpcAddress: 127.0.0.1:7233
-          httpAddress: 127.0.0.1:7243
+          rpcName: internal-frontend
+          rpcAddress: 127.0.0.1:7236
 
     dcRedirectionPolicy:
       policy: noop
@@ -217,6 +266,7 @@ data:
     runtime_root="/tmp/temporal"
     runtime_config_dir="$runtime_root/config"
     runtime_config="$runtime_config_dir/development.yaml"
+    export SSL_CERT_FILE="/opt/temporal/secrets/keycloak-ca.pem"
 
     read_required_file() {
       local label="$1"
@@ -257,12 +307,18 @@ data:
       "$template_source" > "$runtime_config"
     chmod 0600 "$runtime_config"
 
-    exec temporal-server --root "$runtime_root" --config config --allow-no-auth start
+    exec temporal-server --root "$runtime_root" --config config start \
+      --service frontend \
+      --service internal-frontend \
+      --service history \
+      --service matching \
+      --service worker
   schema-migrate.sh: |
     #!/usr/bin/env bash
     set -euo pipefail
 
     password_source="/opt/temporal/secrets/postgres-password"
+    postgres_ca="/opt/temporal/secrets/postgres-ca.pem"
     postgres_host="temporal-postgres"
     postgres_port="5432"
     postgres_user="temporal"
@@ -272,6 +328,10 @@ data:
 
     if [ ! -s "$password_source" ]; then
       echo "missing Temporal Postgres password file: $password_source" >&2
+      exit 1
+    fi
+    if [ ! -s "$postgres_ca" ]; then
+      echo "missing Temporal Postgres CA file: $postgres_ca" >&2
       exit 1
     fi
 
@@ -289,6 +349,10 @@ data:
       --user "$postgres_user" \
       --password "$password" \
       --database "$temporal_db" \
+      --tls=true \
+      --tls-disable-host-verification=false \
+      --tls-ca-file "$postgres_ca" \
+      --tls-server-name "$postgres_host" \
       setup-schema -v 0.0
     temporal-sql-tool \
       --plugin postgres12 \
@@ -297,6 +361,10 @@ data:
       --user "$postgres_user" \
       --password "$password" \
       --database "$temporal_db" \
+      --tls=true \
+      --tls-disable-host-verification=false \
+      --tls-ca-file "$postgres_ca" \
+      --tls-server-name "$postgres_host" \
       update-schema -d "$schema_root/temporal/versioned"
 
     temporal-sql-tool \
@@ -306,6 +374,10 @@ data:
       --user "$postgres_user" \
       --password "$password" \
       --database "$visibility_db" \
+      --tls=true \
+      --tls-disable-host-verification=false \
+      --tls-ca-file "$postgres_ca" \
+      --tls-server-name "$postgres_host" \
       setup-schema -v 0.0
     temporal-sql-tool \
       --plugin postgres12 \
@@ -314,97 +386,12 @@ data:
       --user "$postgres_user" \
       --password "$password" \
       --database "$visibility_db" \
+      --tls=true \
+      --tls-disable-host-verification=false \
+      --tls-ca-file "$postgres_ca" \
+      --tls-server-name "$postgres_host" \
       update-schema -d "$schema_root/visibility/versioned"
-  namespace-bootstrap.sh: |
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    temporal_namespace="default"
-    temporal_address="temporal-frontend:7233"
-    temporal_retention="72h"
-    temporal_description="Noebs wallet workflow namespace"
-    temporal_host="${temporal_address%:*}"
-    temporal_port="${temporal_address##*:}"
-    describe_stderr="/tmp/temporal-namespace-describe.err"
-
-    until nc -z "$temporal_host" "$temporal_port"; do
-      echo "waiting for Temporal frontend at $temporal_address"
-      sleep 1
-    done
-
-    if temporal operator namespace describe \
-      --address "$temporal_address" \
-      --namespace "$temporal_namespace" \
-      --disable-config-env \
-      --disable-config-file \
-      >/dev/null 2>"$describe_stderr"; then
-      exit 0
-    fi
-
-    if ! grep -Fq "Namespace $temporal_namespace is not found." "$describe_stderr"; then
-      cat "$describe_stderr" >&2
-      exit 1
-    fi
-
-    temporal operator namespace create \
-      --address "$temporal_address" \
-      --namespace "$temporal_namespace" \
-      --retention "$temporal_retention" \
-      --description "$temporal_description" \
-      --disable-config-env \
-      --disable-config-file
   dynamicconfig.yaml: ""
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: temporal-ui-config
-  labels:
-    app.kubernetes.io/name: temporal-ui
-data:
-  development.yaml: |
-    temporalGrpcAddress: temporal-frontend:7233
-    port: 8080
-    publicPath: ""
-    enableUi: true
-    bannerText: ""
-    cloudUi: false
-    defaultNamespace: default
-    feedbackUrl: ""
-    notifyOnNewVersion: false
-    refreshInterval: 0s
-    showTemporalSystemNamespace: false
-    disableWriteActions: false
-    workflowTerminateDisabled: false
-    workflowCancelDisabled: false
-    workflowSignalDisabled: false
-    workflowResetDisabled: false
-    batchActionsDisabled: false
-    startWorkflowDisabled: false
-    hideWorkflowQueryErrors: false
-    refreshWorkflowCountsDisabled: false
-    cors:
-      cookieInsecure: false
-      allowOrigins:
-        - http://localhost:8080
-    tls:
-      caFile: ""
-      certFile: ""
-      keyFile: ""
-      caData: ""
-      certData: ""
-      keyData: ""
-      enableHostVerification: false
-      serverName: ""
-    auth:
-      enabled: false
-      providers: []
-    codec:
-      endpoint: ""
-      passAccessToken: false
-      includeCredentials: false
-    forwardHeaders: []
-    hideLogs: false
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -477,6 +464,14 @@ spec:
               mountPath: /opt/temporal-postgres/secrets/password
               subPath: password
               readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal-postgres/secrets/tls.crt
+              subPath: tls.crt
+              readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal-postgres/secrets/tls.key
+              subPath: tls.key
+              readOnly: true
             - name: temporal-postgres-data
               mountPath: /var/lib/postgresql/data
       volumes:
@@ -520,7 +515,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: temporal-schema-migrate
-          image: temporalio/auto-setup:1.29.1
+          image: temporalio/auto-setup:1.29.7
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
@@ -533,6 +528,10 @@ spec:
             - name: temporal-postgres-credentials
               mountPath: /opt/temporal/secrets/postgres-password
               subPath: password
+              readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal/secrets/postgres-ca.pem
+              subPath: ca.pem
               readOnly: true
       volumes:
         - name: temporal-config
@@ -557,18 +556,6 @@ spec:
     - name: grpc
       port: 7233
       targetPort: grpc
-    - name: front-member
-      port: 6933
-      targetPort: front-member
-    - name: history-member
-      port: 6934
-      targetPort: history-member
-    - name: matching-member
-      port: 6935
-      targetPort: matching-member
-    - name: worker-member
-      port: 6939
-      targetPort: worker-member
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -592,7 +579,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: temporal
-          image: temporalio/auto-setup:1.29.1
+          image: temporalio/auto-setup:1.29.7
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
@@ -600,14 +587,6 @@ spec:
           ports:
             - name: grpc
               containerPort: 7233
-            - name: front-member
-              containerPort: 6933
-            - name: history-member
-              containerPort: 6934
-            - name: matching-member
-              containerPort: 6935
-            - name: worker-member
-              containerPort: 6939
           readinessProbe:
             tcpSocket:
               port: grpc
@@ -643,6 +622,22 @@ spec:
               mountPath: /opt/temporal/secrets/postgres-password
               subPath: password
               readOnly: true
+            - name: temporal-postgres-credentials
+              mountPath: /opt/temporal/secrets/postgres-ca.pem
+              subPath: ca.pem
+              readOnly: true
+            - name: temporal-server-credentials
+              mountPath: /opt/temporal/secrets/tls.crt
+              subPath: tls.crt
+              readOnly: true
+            - name: temporal-server-credentials
+              mountPath: /opt/temporal/secrets/tls.key
+              subPath: tls.key
+              readOnly: true
+            - name: keycloak-transport-ca
+              mountPath: /opt/temporal/secrets/keycloak-ca.pem
+              subPath: ca.pem
+              readOnly: true
       volumes:
         - name: temporal-config
           configMap:
@@ -651,6 +646,12 @@ spec:
         - name: temporal-postgres-credentials
           secret:
             secretName: temporal-postgres-credentials
+        - name: temporal-server-credentials
+          secret:
+            secretName: temporal-server-credentials
+        - name: keycloak-transport-ca
+          secret:
+            secretName: keycloak-transport-ca
 ---
 apiVersion: batch/v1
 kind: Job
@@ -675,78 +676,40 @@ spec:
       restartPolicy: Never
       containers:
         - name: temporal-namespace-bootstrap
-          image: temporalio/auto-setup:1.29.1
+          image: ghcr.io/noebs/noebs:master
           imagePullPolicy: IfNotPresent
           command:
-            - /bin/bash
-            - /opt/temporal/bin/namespace-bootstrap.sh
-          volumeMounts:
-            - name: temporal-config
-              mountPath: /opt/temporal/bin/namespace-bootstrap.sh
-              subPath: namespace-bootstrap.sh
-              readOnly: true
-      volumes:
-        - name: temporal-config
-          configMap:
-            name: temporal-config
-            defaultMode: 0555
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: temporal-ui
-  labels:
-    app.kubernetes.io/name: temporal-ui
-spec:
-  type: ClusterIP
-  selector:
-    app.kubernetes.io/name: temporal-ui
-  ports:
-    - name: http
-      port: 8080
-      targetPort: http
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: temporal-ui
-  labels:
-    app.kubernetes.io/name: temporal-ui
-  annotations:
-    argocd.argoproj.io/sync-wave: "16"
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: temporal-ui
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: temporal-ui
-    spec:
-      serviceAccountName: temporal-ui
-      automountServiceAccountToken: false
-      containers:
-        - name: temporal-ui
-          image: temporalio/ui:2.34.0
-          imagePullPolicy: IfNotPresent
-          command:
-            - /home/ui-server/ui-server
+            - /usr/local/bin/noebs
           args:
-            - --root
-            - /home/ui-server
-            - --config
-            - config
-            - start
-          ports:
-            - name: http
-              containerPort: 8080
+            - ensure-temporal-namespace
+            - --address
+            - temporal-frontend:7233
+            - --token-url
+            - https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/token
+            - --temporal-ca
+            - /etc/noebs-temporal/ca.pem
+            - --keycloak-ca
+            - /etc/noebs-keycloak/ca.pem
+            - --client-secret
+            - /etc/noebs-temporal/client-secret
           volumeMounts:
-            - name: temporal-ui-config
-              mountPath: /home/ui-server/config/development.yaml
-              subPath: development.yaml
+            - name: temporal-authority
+              mountPath: /etc/noebs-temporal/ca.pem
+              subPath: ca.pem
+              readOnly: true
+            - name: temporal-authority
+              mountPath: /etc/noebs-temporal/client-secret
+              subPath: client-secret
+              readOnly: true
+            - name: keycloak-transport-ca
+              mountPath: /etc/noebs-keycloak/ca.pem
+              subPath: ca.pem
               readOnly: true
       volumes:
-        - name: temporal-ui-config
-          configMap:
-            name: temporal-ui-config
+        - name: temporal-authority
+          secret:
+            secretName: temporal-namespace-bootstrap-credentials
+        - name: keycloak-transport-ca
+          secret:
+            secretName: keycloak-transport-ca
+---

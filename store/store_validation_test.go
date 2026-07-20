@@ -73,7 +73,7 @@ func newValidationDB(t *testing.T) *DB {
 
 func TestStoreProvisionTenantCatalogIsIdempotent(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeIdentityAuth)
 	if err := MigrateScope(ctx, db, MigrationScopeIdentityAuth); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestStoreProvisionTenantCatalogIsIdempotent(t *testing.T) {
 
 func TestStoreProvisionTenantCatalogRejectsExtraDatabaseTenantAtomically(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeIdentityAuth)
 	if err := MigrateScope(ctx, db, MigrationScopeIdentityAuth); err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestStore_CacheBillerRequiresExplicitFields(t *testing.T) {
 
 func newIdentityAuthTestStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeIdentityAuth)
 	if err := MigrateScope(ctx, db, MigrationScopeIdentityAuth); err != nil {
 		t.Fatalf("migrate identity-auth scope: %v", err)
 	}
@@ -338,28 +338,32 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 
 func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
 	tenantID := "tenant-targeted-updates"
-	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeNotificationChat} {
-		if err := MigrateScope(ctx, db, scope); err != nil {
-			t.Fatalf("migrate %s: %v", scope, err)
-		}
+	identityDB := newMigrationAuthorityDB(t, MigrationScopeIdentityAuth)
+	if err := MigrateScope(ctx, identityDB, MigrationScopeIdentityAuth); err != nil {
+		t.Fatalf("migrate %s: %v", MigrationScopeIdentityAuth, err)
 	}
-	s := New(db, WithDataKey("test-data-key"))
-	provisionTestTenant(t, ctx, s, tenantID, "Missing User Tenant")
+	notificationDB := newMigrationAuthorityDB(t, MigrationScopeNotificationChat)
+	if err := MigrateScope(ctx, notificationDB, MigrationScopeNotificationChat); err != nil {
+		t.Fatalf("migrate %s: %v", MigrationScopeNotificationChat, err)
+	}
+	identityStore := New(identityDB, WithDataKey("test-data-key"))
+	notificationStore := New(notificationDB, WithDataKey("test-data-key"))
+	provisionTestTenant(t, ctx, identityStore, tenantID, "Missing User Tenant")
+	provisionTestTenant(t, ctx, notificationStore, tenantID, "Missing User Tenant")
 	fullname := "Missing User"
 	tests := []struct {
 		name string
 		run  func() error
 	}{
 		{"UpdateProfileProjection", func() error {
-			return s.UpdateProfileProjection(ctx, tenantID, 999, ProfileProjectionUpdate{Fullname: &fullname})
+			return identityStore.UpdateProfileProjection(ctx, tenantID, 999, ProfileProjectionUpdate{Fullname: &fullname})
 		}},
 		{"SetProfileDeviceToken", func() error {
-			return s.SetProfileDeviceToken(ctx, tenantID, 999, "device-token")
+			return identityStore.SetProfileDeviceToken(ctx, tenantID, 999, "device-token")
 		}},
 		{"UpdatePaymentRequest", func() error {
-			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
+			return notificationStore.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
 		}},
 	}
 	for _, tt := range tests {

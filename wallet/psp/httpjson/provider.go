@@ -25,10 +25,21 @@ type Provider struct {
 }
 
 func NewProvider(cfg *psp.Config) (*Provider, error) {
-	if cfg == nil || cfg.APIBaseURL == "" || cfg.ProviderCode == "" {
+	if cfg == nil || cfg.APIBaseURL == "" || cfg.ProviderCode == "" ||
+		strings.TrimSpace(cfg.IdempotencyHeaderName) == "" ||
+		strings.TrimSpace(cfg.IdempotencyHeaderName) != cfg.IdempotencyHeaderName {
 		return nil, psp.ErrPSPConfigInvalid
 	}
 	if err := validateRequestRoutes(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateDepositContract(cfg); err != nil {
+		return nil, err
+	}
+	if err := validatePayoutContract(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateStatusLookupContract(cfg); err != nil {
 		return nil, err
 	}
 	return &Provider{
@@ -45,14 +56,29 @@ func (p *Provider) Code() string {
 }
 
 func (p *Provider) SupportedOperations() []psp.Operation {
-	return []psp.Operation{psp.OperationDeposit, psp.OperationWithdrawal}
+	operations := make([]psp.Operation, 0, 2)
+	if p != nil && p.config != nil && p.config.SupportsDeposit {
+		operations = append(operations, psp.OperationDeposit)
+	}
+	if p != nil && p.config != nil && p.config.SupportsWithdrawal {
+		operations = append(operations, psp.OperationWithdrawal)
+	}
+	return operations
 }
 
-func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.DepositVerification, error) {
+func (p *Provider) CreateDeposit(ctx context.Context, req psp.DepositRequest) (*psp.DepositResult, error) {
 	if p == nil || p.config == nil {
 		return nil, psp.ErrPSPConfigInvalid
 	}
-	canonical := map[string]any{"transaction_id": txID}
+	if strings.TrimSpace(req.IdempotencyKey) == "" || strings.TrimSpace(req.IdempotencyKey) != req.IdempotencyKey {
+		return nil, psp.ErrPSPRequestInvalid
+	}
+	canonical := map[string]any{
+		"client_reference": req.ClientReference,
+		"amount":           req.Amount,
+		"currency":         req.Currency,
+		"metadata":         req.Metadata,
+	}
 	payload, err := psp.MapRequest(canonical, p.config.DepositRequestMapping)
 	if err != nil {
 		return nil, err
@@ -64,25 +90,29 @@ func (p *Provider) VerifyDeposit(ctx context.Context, txID string) (*psp.Deposit
 	if err != nil {
 		return nil, err
 	}
-	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), "", &resp); err != nil {
+	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), req.IdempotencyKey, &resp); err != nil {
 		return nil, err
 	}
 	mapped, err := psp.MapResponse(resp, p.config.DepositResponseMapping)
 	if err != nil {
 		return nil, err
 	}
-	return &psp.DepositVerification{
-		ProviderTxID: mapped.TransactionID,
-		Amount:       mapped.Amount,
-		Currency:     mapped.Currency,
-		Status:       mapped.Status,
-		Metadata:     mapped.Metadata,
+	return &psp.DepositResult{
+		ClientReference: mapped.ClientReference,
+		ProviderTxID:    mapped.TransactionID,
+		Amount:          mapped.Amount,
+		Currency:        mapped.Currency,
+		Status:          mapped.Status,
+		RawResponse:     resp,
 	}, nil
 }
 
 func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.PayoutResult, error) {
-	if p == nil || p.config == nil {
+	if p == nil || p.config == nil || !p.config.SupportsWithdrawal {
 		return nil, psp.ErrPSPConfigInvalid
+	}
+	if strings.TrimSpace(req.IdempotencyKey) == "" || strings.TrimSpace(req.IdempotencyKey) != req.IdempotencyKey {
+		return nil, psp.ErrPSPRequestInvalid
 	}
 	canonical := map[string]any{
 		"client_reference": req.ClientReference,
@@ -96,14 +126,13 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 		return nil, err
 	}
 	resp := map[string]any{}
-	idempotencyKey := req.ClientReference
 	method := normalizeMethod(p.config.PayoutRequestMethod)
 	path := renderRequestPath(strings.TrimSpace(p.config.PayoutRequestPath), canonical)
 	path, err = appendQueryForMethod(method, path, payload)
 	if err != nil {
 		return nil, err
 	}
-	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), idempotencyKey, &resp); err != nil {
+	if err := p.doJSON(ctx, method, path, payloadForMethod(method, payload), req.IdempotencyKey, &resp); err != nil {
 		return nil, err
 	}
 	mapped, err := psp.MapResponse(resp, p.config.PayoutResponseMapping)
@@ -112,17 +141,70 @@ func (p *Provider) SendPayout(ctx context.Context, req psp.PayoutRequest) (*psp.
 	}
 	return &psp.PayoutResult{
 		ProviderTxID: mapped.TransactionID,
+		Amount:       mapped.Amount,
+		Currency:     mapped.Currency,
 		Status:       mapped.Status,
 		RawResponse:  resp,
 	}, nil
 }
 
-func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.TxStatus, error) {
+func validatePayoutContract(cfg *psp.Config) error {
+	if !cfg.SupportsWithdrawal {
+		return nil
+	}
+	if len(cfg.PayoutRequestMapping.Fields) > 0 {
+		for _, required := range []string{"client_reference", "amount", "currency"} {
+			if !mapsRequestSource(cfg.PayoutRequestMapping, required) {
+				return fmt.Errorf("%w: payout request mapping must map %s", psp.ErrPSPConfigInvalid, required)
+			}
+		}
+	}
+	for name, mapping := range map[string]psp.ResponseMapping{
+		"payout": cfg.PayoutResponseMapping,
+		"status": cfg.StatusResponseMapping,
+	} {
+		for field, paths := range map[string][]string{
+			"transaction_id": mapping.TransactionID,
+			"status":         mapping.Status,
+			"amount":         mapping.Amount,
+			"currency":       mapping.Currency,
+		} {
+			if !hasResponsePath(paths) {
+				return fmt.Errorf("%w: %s response mapping must map %s", psp.ErrPSPConfigInvalid, name, field)
+			}
+		}
+	}
+	return nil
+}
+
+func validateStatusLookupContract(cfg *psp.Config) error {
+	if !cfg.SupportsDeposit && !cfg.SupportsWithdrawal && !cfg.StatusCheckWebhook {
+		return nil
+	}
+	if len(cfg.StatusRequestMapping.Fields) == 0 {
+		return nil
+	}
+	for _, required := range []string{"idempotency_key", "client_reference"} {
+		if !mapsRequestSource(cfg.StatusRequestMapping, required) {
+			return fmt.Errorf("%w: status request mapping must map %s", psp.ErrPSPConfigInvalid, required)
+		}
+	}
+	return nil
+}
+
+func (p *Provider) GetTransactionStatus(ctx context.Context, lookup psp.TransactionLookup) (*psp.TxStatus, error) {
 	if p == nil || p.config == nil {
 		return nil, psp.ErrPSPConfigInvalid
 	}
+	if err := validateTransactionLookup(lookup); err != nil {
+		return nil, err
+	}
 	resp := map[string]any{}
-	canonical := map[string]any{"transaction_id": txID}
+	canonical := map[string]any{
+		"transaction_id":   lookup.ProviderTxID,
+		"idempotency_key":  lookup.IdempotencyKey,
+		"client_reference": lookup.ClientReference,
+	}
 	payload, err := psp.MapRequest(canonical, p.config.StatusRequestMapping)
 	if err != nil {
 		return nil, err
@@ -149,6 +231,18 @@ func (p *Provider) GetTransactionStatus(ctx context.Context, txID string) (*psp.
 	}, nil
 }
 
+func validateTransactionLookup(lookup psp.TransactionLookup) error {
+	for _, value := range []string{lookup.IdempotencyKey, lookup.ClientReference} {
+		if strings.TrimSpace(value) == "" || strings.TrimSpace(value) != value {
+			return psp.ErrPSPRequestInvalid
+		}
+	}
+	if strings.TrimSpace(lookup.ProviderTxID) != lookup.ProviderTxID {
+		return psp.ErrPSPRequestInvalid
+	}
+	return nil
+}
+
 func validateRequestRoutes(cfg *psp.Config) error {
 	if strings.TrimSpace(cfg.DepositRequestMethod) == "" || strings.TrimSpace(cfg.DepositRequestPath) == "" {
 		return psp.ErrPSPConfigInvalid
@@ -160,6 +254,49 @@ func validateRequestRoutes(cfg *psp.Config) error {
 		return psp.ErrPSPConfigInvalid
 	}
 	return nil
+}
+
+func validateDepositContract(cfg *psp.Config) error {
+	if !cfg.SupportsDeposit {
+		return nil
+	}
+	if len(cfg.DepositRequestMapping.Fields) > 0 {
+		for _, required := range []string{"client_reference", "amount", "currency"} {
+			if !mapsRequestSource(cfg.DepositRequestMapping, required) {
+				return fmt.Errorf("%w: deposit request mapping must map %s", psp.ErrPSPConfigInvalid, required)
+			}
+		}
+	}
+	for field, paths := range map[string][]string{
+		"client_reference": cfg.DepositResponseMapping.ClientReference,
+		"transaction_id":   cfg.DepositResponseMapping.TransactionID,
+		"status":           cfg.DepositResponseMapping.Status,
+		"amount":           cfg.DepositResponseMapping.Amount,
+		"currency":         cfg.DepositResponseMapping.Currency,
+	} {
+		if !hasResponsePath(paths) {
+			return fmt.Errorf("%w: deposit response mapping must map %s", psp.ErrPSPConfigInvalid, field)
+		}
+	}
+	return nil
+}
+
+func mapsRequestSource(mapping psp.RequestMapping, source string) bool {
+	for _, configured := range mapping.Fields {
+		if strings.TrimSpace(configured) == source {
+			return true
+		}
+	}
+	return false
+}
+
+func hasResponsePath(paths []string) bool {
+	for _, path := range paths {
+		if strings.TrimSpace(path) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeMethod(method string) string {
@@ -290,21 +427,35 @@ func (p *Provider) doJSON(ctx context.Context, method, path string, payload any,
 	if err != nil {
 		return psp.ErrPSPTemporary
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("%w: read response body: %v", psp.ErrPSPTemporary, err)
 	}
-	if resp.StatusCode >= 500 {
-		return psp.ErrPSPTemporary
-	}
-	if resp.StatusCode >= 400 {
-		return psp.ErrPSPPermanent
+	if err := classifyHTTPStatus(resp.StatusCode); err != nil {
+		return err
 	}
 	if out != nil && len(respBody) > 0 {
 		if err := json.Unmarshal(respBody, out); err != nil {
 			return fmt.Errorf("%w: decode response body: %v", psp.ErrPSPResponseInvalid, err)
 		}
+	}
+	return nil
+}
+
+func classifyHTTPStatus(statusCode int) error {
+	switch statusCode {
+	case http.StatusRequestTimeout,
+		http.StatusConflict,
+		http.StatusTooEarly,
+		http.StatusTooManyRequests:
+		return psp.ErrPSPTemporary
+	}
+	if statusCode >= 500 {
+		return psp.ErrPSPTemporary
+	}
+	if statusCode >= 400 {
+		return psp.ErrPSPPermanent
 	}
 	return nil
 }

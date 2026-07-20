@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -25,10 +24,6 @@ type kubernetesReleaseServiceConfig struct {
 
 func validateKubernetesReleaseCoherence(root string, configMap map[string]interface{}, ageKeyPath string, decrypt deploymentDecryptFunc) error {
 	catalog, err := tenantcatalog.LoadFile(filepath.Join(root, "tenant-catalog.yaml"))
-	if err != nil {
-		return err
-	}
-	postgresPassword, err := readRequiredSecretValue("Noebs Postgres password", filepath.Join(root, "platform", "postgres-password.txt"))
 	if err != nil {
 		return err
 	}
@@ -61,6 +56,10 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if err != nil {
 		return err
 	}
+	serviceDatabases, err := readServicePostgresCredentials(root, ageKeyPath, decrypt)
+	if err != nil {
+		return err
+	}
 	transport, err := readInternalTransportPlatformCredentials(root, ageKeyPath, decrypt)
 	if err != nil {
 		return err
@@ -82,7 +81,7 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 		} else if service.value.DefaultTenantID != defaultTenantID {
 			return fmt.Errorf("%s default_tenant_id does not match the release default tenant", serviceName)
 		}
-		for tenantID := range getMap(service.noebs, "psp") {
+		for _, tenantID := range sortedMapKeys(getMap(service.noebs, "psp")) {
 			if _, err := catalog.Require(tenantID); err != nil {
 				return fmt.Errorf("%s PSP tenant %q: %w", serviceName, tenantID, err)
 			}
@@ -93,7 +92,7 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 		if ca := strings.TrimSpace(service.value.InternalTransport.CACertificate); ca != "" && ca != transport.CACertificate {
 			return fmt.Errorf("%s internal transport CA does not match the release transport CA", serviceName)
 		}
-		expectedDatabaseURL, present := coherentServiceDatabaseURL(service.role, postgresPassword, gatewayDatabase, workloadDatabase)
+		expectedDatabaseURL, present := coherentServiceDatabaseURL(service.role, serviceDatabases, gatewayDatabase, workloadDatabase)
 		if present && service.value.DatabaseURL != expectedDatabaseURL {
 			return fmt.Errorf("%s database URL does not match its release role credential", serviceName)
 		}
@@ -112,9 +111,33 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 	if apiGateway.BackofficeClientSecret != reconciler.ClientCredentials["noebs-backoffice"].ClientSecret {
 		return errors.New("api-gateway back-office client secret does not match the Keycloak managed credential")
 	}
+	if apiGateway.WalletAuthorizerClientSecret != reconciler.ClientCredentials["noebs-wallet-authorizer"].ClientSecret {
+		return errors.New("api-gateway wallet authorizer client secret does not match the Keycloak managed credential")
+	}
+	if apiGateway.WalletAuthorizerRedirectURL != "https://api.noebs.sd/wallet/authorizations/oauth/callback" {
+		return errors.New("api-gateway wallet authorizer redirect URL does not match the Keycloak client boundary")
+	}
 	if apiGateway.OIDC.Issuer != "https://api.noebs.sd/auth/realms/noebs" ||
 		apiGateway.OIDC.JWKSURL != "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs" {
 		return errors.New("api-gateway OIDC endpoints do not match the release Keycloak boundary")
+	}
+	for _, expected := range []struct {
+		role     serviceRole
+		clientID string
+	}{
+		{role: serviceRoleWalletLedger, clientID: temporalLedgerClientID},
+		{role: serviceRoleWalletWorker, clientID: temporalWorkerClientID},
+	} {
+		service := services[expected.role].value
+		if service.TemporalClientID != expected.clientID || service.TemporalClientSecret != reconciler.ClientCredentials[expected.clientID].ClientSecret {
+			return fmt.Errorf("%s Temporal credential does not match its Keycloak managed client", expected.role)
+		}
+		if strings.TrimSpace(service.TemporalCACertificate) != transport.CACertificate || strings.TrimSpace(service.KeycloakCACertificate) != transport.CACertificate {
+			return fmt.Errorf("%s Temporal authority CAs do not match the release transport CA", expected.role)
+		}
+		if service.TemporalServerName != "temporal-frontend" || service.TemporalTokenURL != "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/token" {
+			return fmt.Errorf("%s Temporal endpoints do not match the release authority", expected.role)
+		}
 	}
 	if err := validateReleasePSPWebhookProjection(catalog, apiGateway, services[serviceRolePSPWebhook].noebs, services[serviceRoleWalletWorker].noebs); err != nil {
 		return err
@@ -124,7 +147,9 @@ func validateKubernetesReleaseCoherence(root string, configMap map[string]interf
 
 func validateReleasePSPWebhookProjection(catalog tenantcatalog.Catalog, apiGateway ebs_fields.NoebsConfig, pspWebhook, walletWorker map[string]interface{}) error {
 	credentialPairs := make(map[string]struct{})
-	for tenantID, rawProviders := range getMap(pspWebhook, "psp") {
+	psp := getMap(pspWebhook, "psp")
+	for _, tenantID := range sortedMapKeys(psp) {
+		rawProviders := psp[tenantID]
 		providers, ok := rawProviders.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("psp-webhook PSP tenant %s must contain providers", tenantID)
@@ -133,7 +158,8 @@ func validateReleasePSPWebhookProjection(catalog tenantcatalog.Catalog, apiGatew
 		if len(walletProviders) != len(providers) {
 			return fmt.Errorf("wallet-worker PSP providers do not match psp-webhook for tenant %s", tenantID)
 		}
-		for providerCode, providerCredential := range providers {
+		for _, providerCode := range sortedMapKeys(providers) {
+			providerCredential := providers[providerCode]
 			walletCredential, present := walletProviders[providerCode]
 			if !present || !reflect.DeepEqual(walletCredential, providerCredential) {
 				return fmt.Errorf("wallet-worker PSP providers do not match psp-webhook for tenant %s", tenantID)
@@ -196,7 +222,7 @@ func readKubernetesReleaseServiceConfig(root string, configMap map[string]interf
 	return kubernetesReleaseServiceConfig{role: role, noebs: noebs, value: value}, nil
 }
 
-func coherentServiceDatabaseURL(role serviceRole, postgresPassword string, gateway preparedGatewayAuthRelease, workload preparedWorkloadDatabase) (string, bool) {
+func coherentServiceDatabaseURL(role serviceRole, servicePasswords map[string]string, gateway preparedGatewayAuthRelease, workload preparedWorkloadDatabase) (string, bool) {
 	switch role {
 	case serviceRoleAPIGateway:
 		return gatewayAuthDatabaseURL("gateway_auth_runtime", gateway.runtimePassword), true
@@ -209,18 +235,11 @@ func coherentServiceDatabaseURL(role serviceRole, postgresPassword string, gatew
 	case serviceRoleWorkloadAuthCleanup:
 		return workloadAuthDatabaseURL("workload_auth_cleanup", workload.cleanupPassword), true
 	}
-	owner, present := role.databaseOwnerRole()
+	spec, present := postgresRoleSpecForService(role)
 	if !present {
 		return "", false
 	}
-	databaseName := strings.ReplaceAll(string(owner), "-", "_")
-	return (&url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword("noebs", postgresPassword),
-		Host:     "postgres:5432",
-		Path:     "/" + databaseName,
-		RawQuery: "sslmode=verify-full",
-	}).String(), true
+	return exactPostgresURL("postgres:5432", spec, servicePasswords[spec.username]), true
 }
 
 func validateReleaseWorkloadKeyProjection(services map[serviceRole]kubernetesReleaseServiceConfig) error {

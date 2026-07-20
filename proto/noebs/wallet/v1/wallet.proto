@@ -3,89 +3,56 @@ syntax = "proto3";
 package noebs.wallet.v1;
 
 import "google/api/annotations.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
 
 option go_package = "github.com/adonese/noebs/gen/proto/noebs/wallet/v1;walletv1";
 
 service WalletPublicService {
-  rpc GetWalletPublic(GetWalletRequest) returns (Wallet) {
-    option (google.api.http) = {
-      get: "/wallet/{wallet_id}"
-    };
+  rpc GetWalletPublic(GetWalletPublicRequest) returns (GetWalletPublicResponse) {
+    option (google.api.http) = {get: "/wallet/{wallet_id}"};
   }
-  rpc EnsureWalletPublic(EnsureWalletRequest) returns (Wallet) {
+  rpc EnsureWalletPublic(EnsureWalletPublicRequest) returns (EnsureWalletPublicResponse) {
     option (google.api.http) = {
       post: "/wallet"
       body: "*"
     };
   }
-  rpc ListPaymentMethodsPublic(ListPaymentMethodsRequest) returns (PaymentMethodList) {
-    option (google.api.http) = {
-      get: "/wallet/methods"
-    };
+  rpc ListPaymentMethodsPublic(ListPaymentMethodsPublicRequest) returns (ListPaymentMethodsPublicResponse) {
+    option (google.api.http) = {get: "/wallet/methods"};
   }
-  rpc ListWalletTransactionsPublic(ListWalletTransactionsRequest) returns (WalletLedgerEntryList) {
-    option (google.api.http) = {
-      get: "/wallet/{wallet_id}/transactions"
-    };
+  rpc ListWalletTransactionsPublic(ListWalletTransactionsPublicRequest) returns (ListWalletTransactionsPublicResponse) {
+    option (google.api.http) = {get: "/wallet/{wallet_id}/transactions"};
   }
-  rpc RequestP2PTransfer(P2PTransferRequest) returns (WorkflowRun) {
-    option (google.api.http) = {
-      post: "/wallet/p2p"
-      body: "*"
-    };
-  }
-  rpc RequestDeposit(DepositRequest) returns (WorkflowRun) {
+  rpc RequestP2PTransfer(RequestP2PTransferRequest) returns (RequestP2PTransferResponse) {}
+  rpc RequestDeposit(RequestDepositRequest) returns (RequestDepositResponse) {
     option (google.api.http) = {
       post: "/wallet/deposits"
       body: "*"
     };
   }
-  rpc RequestWithdrawal(WithdrawalRequest) returns (WorkflowRun) {
+  rpc RequestWithdrawal(RequestWithdrawalRequest) returns (RequestWithdrawalResponse) {}
+  rpc ListFundingSources(ListFundingSourcesRequest) returns (ListFundingSourcesResponse) {
+    option (google.api.http) = {get: "/wallet/{wallet_id}/funding_sources"};
+  }
+  rpc CreateWithdrawalDestination(CreateWithdrawalDestinationRequest) returns (CreateWithdrawalDestinationResponse) {
     option (google.api.http) = {
-      post: "/wallet/withdrawals"
+      post: "/wallet/destinations"
       body: "*"
     };
   }
-  rpc ListFundingSources(ListFundingSourcesRequest) returns (FundingSourceList) {
-    option (google.api.http) = {
-      get: "/wallet/{wallet_id}/funding_sources"
-    };
+  rpc ListWithdrawalDestinations(ListWithdrawalDestinationsRequest) returns (ListWithdrawalDestinationsResponse) {
+    option (google.api.http) = {get: "/wallet/{wallet_id}/destinations"};
   }
-  rpc CreateWithdrawalDestination(CreateWithdrawalDestinationRequest) returns (WithdrawalDestination) {
-    option (google.api.http) = {
-      post: "/wallet/{wallet_id}/destinations"
-      body: "*"
-    };
-  }
-  rpc ListWithdrawalDestinations(ListWithdrawalDestinationsRequest) returns (WithdrawalDestinationList) {
-    option (google.api.http) = {
-      get: "/wallet/{wallet_id}/destinations"
-    };
-  }
-  rpc DeactivateWithdrawalDestination(DeactivateWithdrawalDestinationRequest) returns (google.protobuf.Empty) {
+  rpc DeactivateWithdrawalDestination(DeactivateWithdrawalDestinationRequest) returns (DeactivateWithdrawalDestinationResponse) {
     option (google.api.http) = {
       post: "/wallet/destinations/{destination_id}/deactivate"
-      body: "*"
-    };
-  }
-  rpc RequestOwnershipVerification(RequestOwnershipVerificationRequest) returns (OwnershipVerification) {
-    option (google.api.http) = {
-      post: "/wallet/destinations/{destination_id}/verify"
-      body: "*"
-    };
-  }
-  rpc CompleteOwnershipVerification(CompleteOwnershipVerificationRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      post: "/wallet/ownership_verifications/{verification_id}/complete"
       body: "*"
     };
   }
 }
 
 service WalletAdminService {
-  rpc RenderWalletAdmin(AdminWalletRequest) returns (AdminWalletResponse) {}
+  rpc RenderWalletAdmin(RenderWalletAdminRequest) returns (RenderWalletAdminResponse) {}
 }
 
 enum AdminWalletAction {
@@ -108,14 +75,14 @@ enum AdminWalletAction {
   ADMIN_WALLET_ACTION_REJECT_TRANSFER = 16;
 }
 
-message AdminWalletRequest {
+message RenderWalletAdminRequest {
   AdminWalletAction action = 1;
   map<string, string> query = 2;
   map<string, string> form = 3;
   map<string, string> path = 4;
 }
 
-message AdminWalletResponse {
+message RenderWalletAdminResponse {
   int32 status_code = 1;
   string content_type = 2;
   bytes body = 3;
@@ -136,18 +103,26 @@ message Wallet {
   string updated_at = 11;
 }
 
-message GetWalletRequest {
+message GetWalletPublicRequest {
   string tenant_id = 1;
   string wallet_id = 2;
 }
 
-message EnsureWalletRequest {
+message GetWalletPublicResponse {
+  Wallet wallet = 1;
+}
+
+message EnsureWalletPublicRequest {
   string tenant_id = 1;
   int64 user_id = 2;
   string currency = 3;
 }
 
-message ListPaymentMethodsRequest {
+message EnsureWalletPublicResponse {
+  Wallet wallet = 1;
+}
+
+message ListPaymentMethodsPublicRequest {
   string tenant_id = 1;
   string direction = 2;
   string currency = 3;
@@ -173,11 +148,11 @@ message PaymentMethod {
   bool supports_withdrawal = 13;
 }
 
-message PaymentMethodList {
+message ListPaymentMethodsPublicResponse {
   repeated PaymentMethod methods = 1;
 }
 
-message ListWalletTransactionsRequest {
+message ListWalletTransactionsPublicRequest {
   string tenant_id = 1;
   string wallet_id = 2;
   string entry_type = 3;
@@ -203,16 +178,11 @@ message WalletLedgerEntry {
   string created_at = 15;
 }
 
-message WalletLedgerEntryList {
+message ListWalletTransactionsPublicResponse {
   repeated WalletLedgerEntry transactions = 1;
 }
 
-message WorkflowRun {
-  string workflow_id = 1;
-  string run_id = 2;
-}
-
-message P2PTransferRequest {
+message RequestP2PTransferRequest {
   string tenant_id = 1;
   string idempotency_key = 2;
   string currency = 3;
@@ -227,40 +197,49 @@ message P2PTransferRequest {
   string to_owner_id = 12;
 }
 
-message DepositRequest {
-  string tenant_id = 1;
-  string client_reference = 2;
-  string provider_code = 3;
-  string wallet_id = 4;
-  string owner_type = 5;
-  string owner_id = 6;
-  string psp_transaction_id = 7;
-  int64 amount = 8;
-  string currency = 9;
-  optional int64 fee_amount = 10;
-  optional int64 net_amount = 11;
-  string idempotency_key = 12;
-  google.protobuf.Struct metadata = 13;
-  string region = 14;
+message RequestP2PTransferResponse {
+  string workflow_id = 1;
+  string run_id = 2;
 }
 
-message WithdrawalRequest {
+message RequestDepositRequest {
+  string tenant_id = 1;
+  string provider_code = 2;
+  string wallet_id = 3;
+  int64 amount = 4;
+  string currency = 5;
+  string idempotency_key = 6;
+  google.protobuf.Struct metadata = 7;
+  string region = 8;
+}
+
+message RequestDepositResponse {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message RequestWithdrawalRequest {
   string tenant_id = 1;
   string client_reference = 2;
   string provider_code = 3;
   string wallet_id = 4;
   int64 amount = 5;
   string currency = 6;
-  string owner_type = 8;
-  string owner_id = 9;
-  int64 destination_id = 10;
-  optional bool allow_return_to_source = 11;
-  int32 hold_expiry_seconds = 14;
-  int32 approval_timeout_seconds = 15;
-  int32 verification_timeout_seconds = 16;
-  string idempotency_key = 17;
-  google.protobuf.Struct metadata = 18;
-  string region = 19;
+  string owner_type = 7;
+  string owner_id = 8;
+  int64 destination_id = 9;
+  optional bool allow_return_to_source = 10;
+  int32 hold_expiry_seconds = 11;
+  int32 approval_timeout_seconds = 12;
+  string idempotency_key = 13;
+  google.protobuf.Struct metadata = 14;
+  string region = 15;
+  optional bool approval_required = 16;
+}
+
+message RequestWithdrawalResponse {
+  string workflow_id = 1;
+  string run_id = 2;
 }
 
 message FundingSource {
@@ -279,26 +258,13 @@ message FundingSource {
   google.protobuf.Struct withdrawal_method = 13;
 }
 
-message FundingSourceList {
-  repeated FundingSource sources = 1;
-}
-
-message CreateFundingSourceRequest {
-  string tenant_id = 1;
-  string wallet_id = 2;
-  string source_type = 3;
-  string psp_provider = 4;
-  string external_reference = 5;
-  string verification_status = 6;
-  string currency = 7;
-  google.protobuf.Struct source_details = 8;
-  bool supports_withdrawal = 9;
-  google.protobuf.Struct withdrawal_method = 10;
-}
-
 message ListFundingSourcesRequest {
   string tenant_id = 1;
   string wallet_id = 2;
+}
+
+message ListFundingSourcesResponse {
+  repeated FundingSource sources = 1;
 }
 
 message WithdrawalDestination {
@@ -311,30 +277,20 @@ message WithdrawalDestination {
   string display_name = 7;
   string currency = 8;
   string country = 9;
-  string ownership_status = 10;
-  string ownership_verification_method = 11;
-  int64 linked_funding_source_id = 12;
-  bool is_return_to_source = 13;
-  bool is_active = 14;
-  int64 total_withdrawn = 15;
-}
-
-message WithdrawalDestinationList {
-  repeated WithdrawalDestination destinations = 1;
+  int64 linked_funding_source_id = 10;
+  bool is_active = 11;
+  int64 total_withdrawn = 12;
 }
 
 message CreateWithdrawalDestinationRequest {
   string tenant_id = 1;
-  string wallet_id = 2;
-  string destination_type = 3;
-  string psp_provider = 4;
-  google.protobuf.Struct destination_details = 5;
-  string display_name = 6;
-  string currency = 7;
-  string country = 8;
-  string ownership_verification_method = 9;
-  int64 linked_funding_source_id = 10;
-  bool is_return_to_source = 11;
+  string display_name = 2;
+  string country = 3;
+  int64 linked_funding_source_id = 4;
+}
+
+message CreateWithdrawalDestinationResponse {
+  WithdrawalDestination destination = 1;
 }
 
 message ListWithdrawalDestinationsRequest {
@@ -343,35 +299,13 @@ message ListWithdrawalDestinationsRequest {
   bool active_only = 3;
 }
 
+message ListWithdrawalDestinationsResponse {
+  repeated WithdrawalDestination destinations = 1;
+}
+
 message DeactivateWithdrawalDestinationRequest {
   string tenant_id = 1;
   int64 destination_id = 2;
 }
 
-message OwnershipVerification {
-  int64 id = 1;
-  string tenant_id = 2;
-  int64 destination_id = 3;
-  string verification_type = 4;
-  string status = 5;
-  int32 attempts = 6;
-  int32 max_attempts = 7;
-  string workflow_id = 8;
-  string reference_id = 9;
-}
-
-message RequestOwnershipVerificationRequest {
-  string tenant_id = 1;
-  int64 destination_id = 2;
-  string verification_type = 3;
-  int32 verification_timeout_seconds = 4;
-  string workflow_id = 5;
-  string reference_id = 6;
-}
-
-message CompleteOwnershipVerificationRequest {
-  string tenant_id = 1;
-  int64 verification_id = 2;
-  bool verified = 3;
-  string reason = 4;
-}
+message DeactivateWithdrawalDestinationResponse {}

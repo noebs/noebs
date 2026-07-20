@@ -61,10 +61,6 @@ spec:
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
               readOnly: true
-            - name: sops-age-key
-              mountPath: /app/.sops/age-key.txt
-              subPath: age-key.txt
-              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -72,6 +68,3 @@ spec:
         - name: wallet-worker-secrets
           secret:
             secretName: wallet-worker-secrets
-        - name: sops-age-key
-          secret:
-            secretName: sops-age-key

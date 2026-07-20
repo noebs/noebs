@@ -194,9 +194,22 @@ func TestReconcilePrunesKeycloakStateOutsideExactAuthority(t *testing.T) {
 		"noebs-mobile":              {audienceMapperName, subjectMapperName},
 		"noebs-backoffice":          {audienceMapperName, subjectMapperName},
 		walletAuthorizerClientID:    {},
+		temporalLedgerClientID:      {audienceMapperName, "temporal-permissions"},
+		temporalWorkerClientID:      {audienceMapperName, "temporal-permissions"},
+		temporalBootstrapClientID:   {audienceMapperName, "temporal-permissions"},
 	} {
 		if got := fake.clientMapperNames(clientID); !equalStrings(got, want) {
 			t.Fatalf("client %s protocol mappers = %v, want %v", clientID, got, want)
+		}
+	}
+	for clientID, permission := range map[string]string{
+		temporalLedgerClientID:    "[\"default:write\"]",
+		temporalWorkerClientID:    "[\"default:write\"]",
+		temporalBootstrapClientID: "[\"temporal-system:admin\"]",
+	} {
+		mapper, found := fake.clientMapper(clientID, "temporal-permissions")
+		if !found || mapper.Config["claim.name"] != "permissions" || mapper.Config["claim.value"] != permission || mapper.Config["jsonType.label"] != "JSON" {
+			t.Fatalf("client %s Temporal permissions mapper = %#v", clientID, mapper)
 		}
 	}
 	if got := fake.organizationScopeMapperNames(); !equalStrings(got, []string{organizationMapperName, state.OrganizationClaim.MapperName}) {
@@ -425,6 +438,9 @@ func TestPinnedKeycloakBuiltinClientsDoNotIncludeDesiredClients(t *testing.T) {
 	state := repositoryDesiredState(t)
 	desired := []string{state.ReconcilerClient.ClientID, state.ResourceClient.ClientID}
 	for _, client := range state.InteractiveClients {
+		desired = append(desired, client.ClientID)
+	}
+	for _, client := range state.ServiceClients {
 		desired = append(desired, client.ClientID)
 	}
 	for _, clientID := range desired {

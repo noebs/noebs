@@ -49,7 +49,7 @@ func newWalletRouteLedger() *walletRouteLedger {
 	return &walletRouteLedger{wallets: make(map[string]*walletv1.Wallet)}
 }
 
-func (s *walletRouteLedger) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
+func (s *walletRouteLedger) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletPublicRequest) (*walletv1.EnsureWalletPublicResponse, error) {
 	principal, err := walletRoutePrincipal(ctx)
 	if err != nil {
 		return nil, err
@@ -72,10 +72,10 @@ func (s *walletRouteLedger) EnsureWalletPublic(ctx context.Context, req *walletv
 	s.mu.Lock()
 	s.wallets[wallet.GetId()] = wallet
 	s.mu.Unlock()
-	return wallet, nil
+	return &walletv1.EnsureWalletPublicResponse{Wallet: wallet}, nil
 }
 
-func (s *walletRouteLedger) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
+func (s *walletRouteLedger) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletPublicRequest) (*walletv1.GetWalletPublicResponse, error) {
 	principal, err := walletRoutePrincipal(ctx)
 	if err != nil {
 		return nil, err
@@ -86,22 +86,22 @@ func (s *walletRouteLedger) GetWalletPublic(ctx context.Context, req *walletv1.G
 	if wallet == nil || wallet.GetTenantId() != principal.TenantID || wallet.GetOwnerId() != strconv.FormatInt(principal.UserID, 10) {
 		return nil, status.Error(codes.NotFound, "wallet not found")
 	}
-	return wallet, nil
+	return &walletv1.GetWalletPublicResponse{Wallet: wallet}, nil
 }
 
-func (s *walletRouteLedger) ListWalletTransactionsPublic(ctx context.Context, req *walletv1.ListWalletTransactionsRequest) (*walletv1.WalletLedgerEntryList, error) {
-	if _, err := s.GetWalletPublic(ctx, &walletv1.GetWalletRequest{TenantId: req.GetTenantId(), WalletId: req.GetWalletId()}); err != nil {
+func (s *walletRouteLedger) ListWalletTransactionsPublic(ctx context.Context, req *walletv1.ListWalletTransactionsPublicRequest) (*walletv1.ListWalletTransactionsPublicResponse, error) {
+	if _, err := s.GetWalletPublic(ctx, &walletv1.GetWalletPublicRequest{TenantId: req.GetTenantId(), WalletId: req.GetWalletId()}); err != nil {
 		return nil, err
 	}
-	return &walletv1.WalletLedgerEntryList{Transactions: []*walletv1.WalletLedgerEntry{}}, nil
+	return &walletv1.ListWalletTransactionsPublicResponse{Transactions: []*walletv1.WalletLedgerEntry{}}, nil
 }
 
-func (s *walletRouteLedger) ListPaymentMethodsPublic(context.Context, *walletv1.ListPaymentMethodsRequest) (*walletv1.PaymentMethodList, error) {
-	return &walletv1.PaymentMethodList{Methods: []*walletv1.PaymentMethod{}}, nil
+func (s *walletRouteLedger) ListPaymentMethodsPublic(context.Context, *walletv1.ListPaymentMethodsPublicRequest) (*walletv1.ListPaymentMethodsPublicResponse, error) {
+	return &walletv1.ListPaymentMethodsPublicResponse{Methods: []*walletv1.PaymentMethod{}}, nil
 }
 
-func (s *walletRouteLedger) RenderWalletAdmin(context.Context, *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	return &walletv1.AdminWalletResponse{
+func (s *walletRouteLedger) RenderWalletAdmin(context.Context, *walletv1.RenderWalletAdminRequest) (*walletv1.RenderWalletAdminResponse, error) {
+	return &walletv1.RenderWalletAdminResponse{
 		StatusCode:  200,
 		ContentType: "text/html; charset=utf-8",
 		Body:        []byte("<!doctype html><title>Wallet</title>"),

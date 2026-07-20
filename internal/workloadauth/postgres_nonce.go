@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var ErrInvalidNonceClaim = errors.New("invalid workload nonce claim")
@@ -34,9 +36,12 @@ func (s *PostgresNonceStore) Use(ctx context.Context, keyID, audience, nonce str
 	result, err := s.db.ExecContext(ctx, `
 		INSERT INTO workload_request_nonces(key_id, audience, nonce, expires_at)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (key_id, audience, nonce) DO NOTHING
 	`, keyID, audience, nonce, expiresAt.UTC())
 	if err != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+			return false, nil
+		}
 		return false, err
 	}
 	rows, err := result.RowsAffected()

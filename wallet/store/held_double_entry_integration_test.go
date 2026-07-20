@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -29,8 +28,8 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 		_ = container.Terminate(context.Background())
 	}()
 
-	dbName := fmt.Sprintf("noebs_wallet_holds_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -548,7 +547,7 @@ func matchingTestLedgerEntry(walletID uuid.UUID, entryType string, params Double
 	}
 }
 
-func TestExistingHoldMatches(t *testing.T) {
+func TestExistingHoldCreateMatches(t *testing.T) {
 	walletID := uuid.New()
 	params := HoldParams{
 		TenantID:       "tenant",
@@ -574,8 +573,16 @@ func TestExistingHoldMatches(t *testing.T) {
 		ExpiresAt:       params.ExpiresAt,
 		Metadata:        RawJSON(`{"sequence":1,"purpose":"withdrawal"}`),
 	}
-	if !existingHoldMatches(hold, params) {
-		t.Fatal("existingHoldMatches() = false, want true")
+	if !existingHoldCreateMatches(hold, params) {
+		t.Fatal("existingHoldCreateMatches() = false, want true")
+	}
+	for _, status := range []string{HoldStatusActive, HoldStatusCommitted, HoldStatusReleased, HoldStatusExpired, HoldStatusCaptured} {
+		lifecycleState := hold
+		lifecycleState.Status = status
+		lifecycleState.AmountRemaining = 0
+		if !existingHoldCreateMatches(lifecycleState, params) {
+			t.Fatalf("existingHoldCreateMatches(%s lifecycle) = false, want true", status)
+		}
 	}
 
 	cases := []struct {
@@ -601,18 +608,6 @@ func TestExistingHoldMatches(t *testing.T) {
 			},
 		},
 		{
-			name: "partially-captured",
-			mutate: func(hold *BalanceHold, params *HoldParams) {
-				hold.AmountRemaining--
-			},
-		},
-		{
-			name: "released",
-			mutate: func(hold *BalanceHold, params *HoldParams) {
-				hold.Status = HoldStatusReleased
-			},
-		},
-		{
 			name: "expires-at",
 			mutate: func(hold *BalanceHold, params *HoldParams) {
 				params.ExpiresAt = params.ExpiresAt.Add(time.Minute)
@@ -630,8 +625,8 @@ func TestExistingHoldMatches(t *testing.T) {
 			testHold := hold
 			testParams := params
 			tc.mutate(&testHold, &testParams)
-			if existingHoldMatches(testHold, testParams) {
-				t.Fatal("existingHoldMatches() = true, want false")
+			if existingHoldCreateMatches(testHold, testParams) {
+				t.Fatal("existingHoldCreateMatches() = true, want false")
 			}
 		})
 	}

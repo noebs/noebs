@@ -64,16 +64,11 @@ func textOrDefault(value, fallback string) string {
 }
 
 func resolveIdempotencyAndReference(idempotencyKey, referenceID string) (string, string, error) {
-	hasIdempotencyKey := !missingRequiredText(idempotencyKey)
-	hasReferenceID := !missingRequiredText(referenceID)
-	if !hasIdempotencyKey && !hasReferenceID {
+	if missingRequiredText(idempotencyKey) {
 		return "", "", walletstore.ErrMissingIdempotencyKey
 	}
-	if !hasIdempotencyKey {
-		idempotencyKey = referenceID
-	}
-	if !hasReferenceID {
-		referenceID = idempotencyKey
+	if missingRequiredText(referenceID) {
+		return "", "", walletstore.ErrMissingReferenceID
 	}
 	return idempotencyKey, referenceID, nil
 }

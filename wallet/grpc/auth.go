@@ -43,7 +43,7 @@ func (s *Server) claimsForRPC(ctx context.Context) (*gateway.PrincipalIdentity, 
 	return s.requireGatewayClaims(ctx)
 }
 
-func (s *Server) requireAdminForInternalRPC(ctx context.Context) error {
+func (s *Server) requirePublicWalletRPC(ctx context.Context) error {
 	method, ok := grpc.Method(ctx)
 	if !ok {
 		return nil
@@ -52,9 +52,7 @@ func (s *Server) requireAdminForInternalRPC(ctx context.Context) error {
 	case walletv1.WalletPublicService_ListFundingSources_FullMethodName,
 		walletv1.WalletPublicService_CreateWithdrawalDestination_FullMethodName,
 		walletv1.WalletPublicService_ListWithdrawalDestinations_FullMethodName,
-		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName,
-		walletv1.WalletPublicService_RequestOwnershipVerification_FullMethodName,
-		walletv1.WalletPublicService_CompleteOwnershipVerification_FullMethodName:
+		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName:
 		return nil
 	default:
 		return status.Error(codes.PermissionDenied, "wallet method is outside the public service")
@@ -236,18 +234,4 @@ func (s *Server) authorizeDestinationForClaims(ctx context.Context, tenantID str
 		return mapError(err)
 	}
 	return s.authorizeWalletForClaims(ctx, tenantID, dest.WalletID, claims)
-}
-
-func (s *Server) authorizeVerificationForClaims(ctx context.Context, tenantID string, verificationID int64, claims *gateway.PrincipalIdentity) (*walletstore.OwnershipVerification, error) {
-	if claims == nil || !isWalletUserPrincipal(*claims) {
-		return nil, nil
-	}
-	verification, err := s.Service.Store.GetOwnershipVerification(ctx, tenantID, verificationID)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	if err := s.authorizeDestinationForClaims(ctx, tenantID, verification.DestinationID, claims); err != nil {
-		return nil, err
-	}
-	return verification, nil
 }

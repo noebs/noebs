@@ -11,7 +11,7 @@ import (
 
 func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeEBSAdapter)
 	tenantID := "tenant-events"
 	if err := MigrateScope(ctx, db, MigrationScopeEBSAdapter); err != nil {
 		t.Fatalf("migrate ebs-adapter: %v", err)
@@ -115,7 +115,7 @@ func TestStoreCreateTransactionWithEventRejectsMissingInputs(t *testing.T) {
 
 func TestStoreUpsertTransactionProjection(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeAdminReporting)
 	tenantID := "tenant-projection"
 	if err := MigrateScope(ctx, db, MigrationScopeAdminReporting); err != nil {
 		t.Fatalf("migrate admin-reporting: %v", err)

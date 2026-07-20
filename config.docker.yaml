@@ -1,7 +1,5 @@
 noebs:
-  sops_age_key_file: /app/.sops/age-key.txt
   runtime_dir: /app/runtime
-  render_db_password_file: /app/runtime/password
   port: ":8080"
   oidc:
     issuer: "https://api.noebs.sd/auth/realms/noebs"
@@ -14,16 +12,18 @@ noebs:
     unknown_key_refresh_interval_seconds: 30
   backoffice_redirect_url: "https://api.noebs.sd/backoffice/oauth/callback"
   backoffice_post_logout_url: "https://api.noebs.sd/backoffice/oauth/logout/callback"
+  wallet_authorizer_redirect_url: "https://api.noebs.sd/wallet/authorizations/oauth/callback"
   temporal_enabled: true
-  temporal_host: "temporal"
+  temporal_host: "temporal-frontend"
   temporal_port: "7233"
   temporal_namespace: "default"
+  temporal_server_name: "temporal-frontend"
+  temporal_token_url: "https://keycloak:8443/auth/realms/noebs/protocol/openid-connect/token"
   wallet_enabled: true
   wallet_approval_threshold: 100000
   wallet_default_currency: "SDG"
   wallet_hold_expiry_seconds: 3600
   wallet_approval_timeout_seconds: 3600
-  wallet_verification_timeout_seconds: 86400
   wallet_manual_approval_timeout_seconds: 86400
   wallet_psp_poller_cron: "*/5 * * * *"
   wallet_psp_poller_batch_size: 100
@@ -36,13 +36,13 @@ noebs:
   grpc_gateway_enabled: false
   grpc_gateway_port: ":9091"
   service_discovery:
-    identity-auth: "http://identity-auth:8080"
-    card-vault: "http://card-vault:8080"
-    ebs-adapter: "http://ebs-adapter:8080"
-    psp-webhook: "http://psp-webhook:8080"
-    admin-reporting: "http://admin-reporting:8080"
-    notification-chat: "http://notification-chat:8080"
-    wallet-api: "http://wallet-api:8080"
+    identity-auth: "https://identity-auth:8080"
+    card-vault: "https://card-vault:8080"
+    ebs-adapter: "https://ebs-adapter:8080"
+    psp-webhook: "https://psp-webhook:8080"
+    admin-reporting: "https://admin-reporting:8080"
+    notification-chat: "https://notification-chat:8080"
+    wallet-api: "https://wallet-api:8080"
   grpc_service_discovery:
     wallet-ledger: "wallet-ledger:9090"
   kafka_brokers:
@@ -52,8 +52,6 @@ noebs:
   ebs_transaction_event_publisher_batch_size: 100
   ebs_transaction_event_publisher_poll_interval_ms: 1000
   is_debug: false
-  # Only enable for local/dev when the EBS endpoint uses a self-signed cert.
-  ebs_insecure_skip_verify: false
   cors:
     - "*"
   # Optional outbound callback (disabled when empty).

@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const tenantCatalogMigrationTarget = `noebs-(identity-auth|card-vault|ebs-adapter|psp-webhook|admin-reporting|notification-chat|wallet-ledger)-migrate`
+const tenantCatalogMigrationTarget = `noebs-(identity-auth|card-vault|ebs-adapter|admin-reporting|notification-chat|wallet-ledger|gateway-auth)-migrate`
 
 func TestTenantCatalogKubernetesMountContract(t *testing.T) {
 	base := filepath.Join("..", "deploy", "kubernetes", "base")
@@ -137,14 +137,15 @@ func TestTenantCatalogDockerMigrationMountContract(t *testing.T) {
 	wantMount := "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
 	for _, service := range []string{
 		"api-gateway",
-		"identity-auth-migrate", "card-vault-migrate", "ebs-adapter-migrate", "psp-webhook-migrate",
+		"identity-auth-migrate", "card-vault-migrate", "ebs-adapter-migrate",
 		"admin-reporting-migrate", "notification-chat-migrate", "wallet-ledger-migrate",
+		"gateway-auth-migrate",
 	} {
 		if !slices.Contains(compose.Services[service].Volumes, wantMount) {
 			t.Errorf("%s volumes = %v, want %q", service, compose.Services[service].Volumes, wantMount)
 		}
 	}
-	for _, service := range []string{"workload-auth-migrate", "gateway-auth-migrate"} {
+	for _, service := range []string{"workload-auth-migrate"} {
 		if slices.Contains(compose.Services[service].Volumes, wantMount) {
 			t.Errorf("%s must not mount application tenant catalog", service)
 		}

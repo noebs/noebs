@@ -1,0 +1,4 @@
+noebs:
+  service_role: gateway-auth-migrate
+  otel_service_name: gateway-auth-migrate
+  db_driver: pgx

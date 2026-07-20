@@ -53,6 +53,9 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if transfer.RequestedByOperatorID <= 0 {
 		return nil, ErrMissingRequesterID
 	}
+	if transfer.ApprovalTimeoutSeconds <= 0 {
+		return nil, ErrMissingApprovalTimeout
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -70,12 +73,11 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		return nil, err
 	}
 
-	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO manual_transfers(
 		tenant_id, workflow_id, idempotency_key, transfer_type, wallet_id, amount, currency,
 		reason, status, requested_by_operator_id, approved_by_operator_id, proof_of_payment, psp_provider, psp_reference,
-		rejection_reason, requested_at, approved_at, completed_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		rejection_reason, approval_timeout_seconds, decision_deadline_at, requested_at, approved_at, completed_at
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + (? * interval '1 second'), clock_timestamp(), ?, ?)
 	ON CONFLICT DO NOTHING
 	RETURNING *`)
 	var stored ManualTransfer
@@ -95,7 +97,8 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		transfer.PSPProvider,
 		transfer.PSPReference,
 		transfer.RejectionReason,
-		now,
+		transfer.ApprovalTimeoutSeconds,
+		transfer.ApprovalTimeoutSeconds,
 		transfer.ApprovedAt,
 		transfer.CompletedAt,
 	); err != nil {
@@ -272,7 +275,8 @@ func ValidateManualTransferCreateReplay(existing *ManualTransfer, requested Manu
 		existing.Reason != requested.Reason ||
 		existing.RequestedByOperatorID != requested.RequestedByOperatorID ||
 		!nullStringEqual(existing.PSPProvider, requested.PSPProvider) ||
-		!nullStringEqual(existing.PSPReference, requested.PSPReference) {
+		!nullStringEqual(existing.PSPReference, requested.PSPReference) ||
+		existing.ApprovalTimeoutSeconds != requested.ApprovalTimeoutSeconds {
 		return ErrDuplicateManualTransfer
 	}
 	return nil

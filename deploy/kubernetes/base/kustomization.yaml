@@ -54,7 +54,7 @@ patches:
             name: tenant-catalog
   - target:
       kind: Job
-      name: noebs-(identity-auth|card-vault|ebs-adapter|psp-webhook|admin-reporting|notification-chat|wallet-ledger)-migrate
+      name: noebs-(identity-auth|card-vault|ebs-adapter|admin-reporting|notification-chat|wallet-ledger|gateway-auth)-migrate
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/volumeMounts/-

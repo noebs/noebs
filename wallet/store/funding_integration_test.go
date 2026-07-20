@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,8 +27,8 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 		_ = container.Terminate(context.Background())
 	}()
 
-	dbName := fmt.Sprintf("noebs_wallet_funding_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -186,8 +186,54 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 		Amount:          400,
 		Currency:        "AED",
 	}
-	if _, err := store.CreateFundingLink(ctx, usageLink); err != nil {
-		t.Fatalf("create funding usage link: %v", err)
+	reservationRequest := ReserveFundingSourceWithdrawalParams{
+		TenantID: tenantID, WorkflowID: "withdrawal-ref", CandidateSourceIDs: []int64{stored.ID},
+		WalletID: userWallet.ID, Amount: 400, Currency: "AED", ProviderCode: "bankpay",
+	}
+	reservation, err := store.ReserveFundingSourceWithdrawal(ctx, reservationRequest)
+	if err != nil {
+		t.Fatalf("reserve funding source withdrawal: %v", err)
+	}
+	usageLink.WithdrawalReservationID = sql.NullInt64{Int64: reservation.Reservation.ID, Valid: true}
+	const usageLinkCallers = 8
+	usageLinks := make(chan *LedgerFundingLink, usageLinkCallers)
+	usageLinkErrors := make(chan error, usageLinkCallers)
+	var usageLinkWait sync.WaitGroup
+	for range usageLinkCallers {
+		usageLinkWait.Add(1)
+		go func() {
+			defer usageLinkWait.Done()
+			link, err := store.CreateFundingLink(ctx, usageLink)
+			usageLinks <- link
+			usageLinkErrors <- err
+		}()
+	}
+	usageLinkWait.Wait()
+	close(usageLinks)
+	close(usageLinkErrors)
+	for err := range usageLinkErrors {
+		if err != nil {
+			t.Fatalf("concurrent funding usage link: %v", err)
+		}
+	}
+	var usageLinkID int64
+	for link := range usageLinks {
+		if link == nil {
+			t.Fatal("concurrent funding usage link returned nil")
+		}
+		if usageLinkID == 0 {
+			usageLinkID = link.ID
+		} else if link.ID != usageLinkID {
+			t.Fatalf("concurrent funding usage link id = %d, want %d", link.ID, usageLinkID)
+		}
+	}
+	replayedReservation, err := store.ReserveFundingSourceWithdrawal(ctx, reservationRequest)
+	if err != nil {
+		t.Fatalf("replay consumed funding source reservation: %v", err)
+	}
+	if replayedReservation.Reservation.Status != FundingSourceReservationConsumed ||
+		replayedReservation.Reservation.ID != reservation.Reservation.ID {
+		t.Fatalf("replayed reservation = %+v, want consumed id %d", replayedReservation.Reservation, reservation.Reservation.ID)
 	}
 	got, err = store.GetFundingSourceByID(ctx, tenantID, stored.ID)
 	if err != nil {
@@ -207,15 +253,73 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 		t.Fatalf("source total_withdrawn after usage replay = %d, want 400", got.TotalWithdrawn)
 	}
 
+	start := make(chan struct{})
+	type reservationOutcome struct {
+		reservation *FundingSourceWithdrawalReservationResult
+		err         error
+	}
+	outcomes := make(chan reservationOutcome, 2)
+	var wait sync.WaitGroup
+	for _, workflowID := range []string{"concurrent-withdrawal-1", "concurrent-withdrawal-2"} {
+		wait.Add(1)
+		go func(workflowID string) {
+			defer wait.Done()
+			<-start
+			reservation, err := store.ReserveFundingSourceWithdrawal(ctx, ReserveFundingSourceWithdrawalParams{
+				TenantID: tenantID, WorkflowID: workflowID, CandidateSourceIDs: []int64{stored.ID},
+				WalletID: userWallet.ID, Amount: 400, Currency: "AED", ProviderCode: "bankpay",
+			})
+			outcomes <- reservationOutcome{reservation: reservation, err: err}
+		}(workflowID)
+	}
+	close(start)
+	wait.Wait()
+	close(outcomes)
+	var reserved, rejected int
+	var activeReservationID int64
+	for outcome := range outcomes {
+		switch {
+		case outcome.err == nil && outcome.reservation != nil:
+			reserved++
+			activeReservationID = outcome.reservation.Reservation.ID
+		case errors.Is(outcome.err, ErrFundingSourceLimitExceeded):
+			rejected++
+		default:
+			t.Fatalf("concurrent reservation result = %+v, error %v", outcome.reservation, outcome.err)
+		}
+	}
+	if reserved != 1 || rejected != 1 {
+		t.Fatalf("concurrent reservation outcomes: reserved=%d rejected=%d", reserved, rejected)
+	}
+
+	if _, err := db.ExecContext(ctx, `INSERT INTO funding_source_withdrawal_reservations(
+		tenant_id, workflow_id, funding_source_id, amount, currency, provider_code, status
+	) VALUES ($1, $2, $3, $4, $5, $6, 'reserved')`,
+		"other-tenant", "cross-tenant-reservation", stored.ID, 1, "AED", "bankpay",
+	); err == nil {
+		t.Fatal("cross-tenant funding source reservation insert succeeded")
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO ledger_funding_links(
+		tenant_id, ledger_entry_id, funding_source_id, withdrawal_reservation_id, amount, currency
+	) VALUES ($1, $2, $3, $4, $5, $6)`,
+		"other-tenant", withdrawal.DebitEntry.ID, stored.ID, activeReservationID, 400, "AED",
+	); err == nil {
+		t.Fatal("cross-tenant funding source reservation link insert succeeded")
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE funding_sources
+		SET total_withdrawn = total_funded + 1 WHERE tenant_id = $1 AND id = $2`, tenantID, stored.ID); err == nil {
+		t.Fatal("funding source accepted total_withdrawn greater than total_funded")
+	}
+
 	destination, err := store.CreateWithdrawalDestination(ctx, WithdrawalDestination{
-		TenantID:            tenantID,
-		WalletID:            userWallet.ID,
-		DestinationType:     "bank_account",
-		DestinationDetails:  []byte(`{"account_last4":"4321"}`),
-		Currency:            "AED",
-		OwnershipStatus:     "verified",
-		OwnershipVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
-		IsActive:            true,
+		TenantID:              tenantID,
+		WalletID:              userWallet.ID,
+		DestinationType:       stored.SourceType,
+		PSPProvider:           stored.PSPProvider,
+		DestinationDetails:    stored.WithdrawalMethod,
+		Currency:              stored.Currency,
+		LinkedFundingSourceID: stored.ID,
+		IsActive:              true,
 	})
 	if err != nil {
 		t.Fatalf("create withdrawal destination: %v", err)

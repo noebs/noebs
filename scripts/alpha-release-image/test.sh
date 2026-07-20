@@ -63,18 +63,8 @@ assert_absent 'set -x'
   fail "every container stage must use an immutable manifest digest"
 assert_dockerfile_contains 'golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651'
 assert_dockerfile_contains 'debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818'
-assert_dockerfile_contains '5488e32bc471de7982ad895dd054bbab3ab91c417a118426134551e9626e4e85  /tmp/sops'
-assert_dockerfile_contains 'age-v1.2.1-linux-amd64.tar.gz'
-assert_dockerfile_contains '7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50  /tmp/age.tar.gz'
-assert_dockerfile_contains "sha256sum -c -"
-[[ $(grep -nF '5488e32bc471de7982ad895dd054bbab3ab91c417a118426134551e9626e4e85  /tmp/sops' "$dockerfile" | cut -d: -f1) -lt \
-   $(grep -nF 'install -m 0755 /tmp/sops' "$dockerfile" | cut -d: -f1) ]] || \
-  fail "SOPS must be verified before installation"
-[[ $(grep -nF '7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50  /tmp/age.tar.gz' "$dockerfile" | cut -d: -f1) -lt \
-   $(grep -nF 'tar --extract --gzip --file /tmp/age.tar.gz' "$dockerfile" | cut -d: -f1) ]] || \
-  fail "age must be verified before extraction"
-if grep -Eq 'age-v1\.2\.0|(^|[[:space:]])wget([[:space:]]|$)' "$dockerfile"; then
-  fail "known-vulnerable age or unchecked downloader remains in Dockerfile"
+if grep -Eq '(^|[^[:alnum:]_-])(sops|age|age-keygen)([^[:alnum:]_-]|$)|/app/\.sops' "$dockerfile"; then
+  fail "release-host secret tooling or paths remain in the runtime image"
 fi
 
 printf 'PASS: alpha release image workflow invariants\n'

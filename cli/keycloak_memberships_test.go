@@ -382,6 +382,14 @@ client_credentials:
     client_secret: steady-reconciler-secret
   noebs-backoffice:
     client_secret: backoffice-secret
+  noebs-wallet-authorizer:
+    client_secret: wallet-authorizer-secret
+  noebs-temporal-wallet-ledger:
+    client_secret: temporal-wallet-ledger-secret
+  noebs-temporal-wallet-worker:
+    client_secret: temporal-wallet-worker-secret
+  noebs-temporal-namespace-bootstrap:
+    client_secret: temporal-namespace-bootstrap-secret
 identity_providers:
   google:
     client_id: google-client

@@ -55,12 +55,6 @@ func main() {
 		}
 		return
 	}
-	if isRenderDatabasePasswordCommand() {
-		if err := renderDatabasePasswordFile(); err != nil {
-			logrusLogger.Fatalf("render database password failed: %v", err)
-		}
-		return
-	}
 	if isValidateDeploymentCommand() {
 		if err := validateDeploymentCommand(); err != nil {
 			logrusLogger.Fatalf("validate deployment failed: %v", err)
@@ -79,9 +73,9 @@ func main() {
 		}
 		return
 	}
-	if isRenderKeycloakTransportCACommand() {
-		if err := renderKeycloakTransportCACommand(); err != nil {
-			logrusLogger.Fatalf("render Keycloak transport CA failed: %v", err)
+	if isRenderEdgeInternalTransportCommand() {
+		if err := renderEdgeInternalTransportCommand(); err != nil {
+			logrusLogger.Fatalf("render edge internal transport failed: %v", err)
 		}
 		return
 	}
@@ -118,6 +112,12 @@ func main() {
 	if isDeleteKeycloakBootstrapCommand() {
 		if err := deleteKeycloakBootstrapCommand(); err != nil {
 			logrusLogger.Fatalf("delete Keycloak bootstrap client failed: %v", err)
+		}
+		return
+	}
+	if isEnsureTemporalNamespaceCommand() {
+		if err := ensureTemporalNamespaceCommand(); err != nil {
+			logrusLogger.Fatalf("ensure Temporal namespace failed: %v", err)
 		}
 		return
 	}
@@ -222,7 +222,6 @@ func main() {
 	}
 	go func() {
 		<-ctx.Done()
-		closeWalletWorkflowClient()
 		closeWalletLedgerPublicClient()
 	}()
 

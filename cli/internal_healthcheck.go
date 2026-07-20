@@ -33,8 +33,8 @@ func checkInternalHealth() error {
 	if err != nil {
 		return err
 	}
-	if !roleReceivesSignedHTTP(role) {
-		return errors.New("internal healthcheck is only available for authenticated HTTP receivers")
+	if !role.startsHTTP() {
+		return errors.New("internal healthcheck is only available for HTTP services")
 	}
 	tlsConfig, err := cfg.InternalTransport.ClientTLSConfig(string(role))
 	if err != nil {

@@ -6,10 +6,11 @@ the state sanitization in `foundation/terraform/README.md` first.
 
 The reset replaces the foundation-owned `noebs` namespace. That removes every
 old workload, Secret, database volume, and retired object at one boundary,
-including the main, Keycloak, and Temporal PostgreSQL claims. Merely changing
-their password Secrets is invalid: `POSTGRES_PASSWORD_FILE` is consumed only
-while initializing empty `PGDATA`; it does not update roles in an existing
-database cluster.
+including the main, Keycloak, and Temporal PostgreSQL claims. The main Noebs
+database accepts only the current local-peer authority marker and rejects the
+retired shared role/database. Keycloak and Temporal consume their bootstrap
+password files only while initializing empty `PGDATA`. Recreate all older
+claims; changing Secrets does not convert their stored authority.
 
 ## Prepare the immutable release
 
@@ -42,7 +43,7 @@ test -s "$foundation_root/terraform.tfstate"
 install -d -m 0700 "$CUTOVER_DIR"
 steady_secrets="$CUTOVER_DIR/steady-secrets.yaml"
 bootstrap_secrets="$CUTOVER_DIR/bootstrap-secrets.yaml"
-edge_keycloak_ca="$CUTOVER_DIR/edge-keycloak-transport-ca.yaml"
+edge_internal_transport="$CUTOVER_DIR/edge-internal-transport.yaml"
 pause_plan="$CUTOVER_DIR/pause.tfplan"
 namespace_plan="$CUTOVER_DIR/namespace-replacement.tfplan"
 bootstrap_plan="$CUTOVER_DIR/bootstrap.tfplan"
@@ -82,12 +83,12 @@ done
 
 noebs validate-kubernetes-deployment "$RELEASE_ROOT"
 noebs render-kubernetes-secrets "$RELEASE_ROOT" noebs > "$steady_secrets"
-noebs render-keycloak-transport-ca "$RELEASE_ROOT" edge > "$edge_keycloak_ca"
+noebs render-edge-internal-transport "$RELEASE_ROOT" edge > "$edge_internal_transport"
 noebs render-keycloak-bootstrap-secrets \
   "$RELEASE_ROOT" noebs "$BOOTSTRAP_INPUT" "$bootstrap_secrets"
-chmod 0600 "$steady_secrets" "$bootstrap_secrets" "$edge_keycloak_ca"
+chmod 0600 "$steady_secrets" "$bootstrap_secrets" "$edge_internal_transport"
 "${kubectl[@]}" get namespace edge >/dev/null
-"${kubectl[@]}" apply --dry-run=server -f "$edge_keycloak_ca" >/dev/null
+"${kubectl[@]}" apply --dry-run=server -f "$edge_internal_transport" >/dev/null
 
 for render_root in \
   deploy/kubernetes/overlays/bootstrap-current-host \
@@ -279,8 +280,8 @@ caddy_host_path_status="$(sudo stat --format='%u:%g %a %n' \
 expected_caddy_host_path_status=$'10001:10001 700 /var/lib/docker/volumes/noebs_caddy_data/_data\n10001:10001 700 /var/lib/docker/volumes/noebs_caddy_config/_data'
 test "$caddy_host_path_status" = "$expected_caddy_host_path_status"
 
-"${kubectl[@]}" apply -f "$edge_keycloak_ca"
-"${kubectl[@]}" -n edge get secret keycloak-transport-ca \
+"${kubectl[@]}" apply -f "$edge_internal_transport"
+"${kubectl[@]}" -n edge get secret edge-internal-transport \
   -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' \
   | grep -Fx noebs-release-renderer >/dev/null
 
@@ -322,17 +323,22 @@ for retired in \
   secret/consumer-beneficiary-migrate-secrets \
   serviceaccount/consumer-beneficiary \
   serviceaccount/consumer-beneficiary-migrate \
-  job/noebs-consumer-beneficiary-migrate
+  job/noebs-consumer-beneficiary-migrate \
+  secret/psp-webhook-migrate-secrets \
+  serviceaccount/psp-webhook-migrate \
+  job/noebs-psp-webhook-migrate
 do
   ! "${kubectl[@]}" -n noebs get "$retired" >/dev/null 2>&1
 done
 
-consumer_beneficiary_count="$("${kubectl[@]}" -n noebs exec postgres-0 -- sh -ceu '
-  export PGPASSWORD="$(tr -d "\r\n" < /opt/noebs-postgres/secrets/password)"
-  exec psql -U noebs -d postgres -XAtqc \
-    "SELECT count(*) FROM pg_database WHERE datname = '\''consumer_beneficiary'\''"
+retired_authority_count="$("${kubectl[@]}" -n noebs exec postgres-0 -- sh -ceu '
+  test -f /var/lib/postgresql/data/.noebs-postgres-authority
+  exec gosu postgres psql -U postgres -d postgres -XAtqc \
+    "SELECT
+       (SELECT count(*) FROM pg_roles WHERE rolname IN ('\''noebs'\'', '\''psp_webhook_migrate'\'', '\''psp_webhook_runtime'\'')) +
+       (SELECT count(*) FROM pg_database WHERE datname IN ('\''noebs'\'', '\''consumer_beneficiary'\'', '\''psp_webhook'\''))"
 ')"
-test "$consumer_beneficiary_count" = 0
+test "$retired_authority_count" = 0
 
 scripts/alpha-post-deploy-smoke.sh "$RELEASE_COMMIT" "$RELEASE_DIGEST"
 rm -f "$steady_secrets" "$bootstrap_secrets"

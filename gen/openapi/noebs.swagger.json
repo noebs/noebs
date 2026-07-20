@@ -1,7 +1,7 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "proto/noebs/wallet/v1/wallet.proto",
+    "title": "noebs/wallet/v1/wallet.proto",
     "version": "version not set"
   },
   "tags": [
@@ -26,7 +26,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1Wallet"
+              "$ref": "#/definitions/v1EnsureWalletPublicResponse"
             }
           },
           "default": {
@@ -42,7 +42,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1EnsureWalletRequest"
+              "$ref": "#/definitions/v1EnsureWalletPublicRequest"
             }
           }
         ],
@@ -58,7 +58,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1WorkflowRun"
+              "$ref": "#/definitions/v1RequestDepositResponse"
             }
           },
           "default": {
@@ -74,7 +74,39 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1DepositRequest"
+              "$ref": "#/definitions/v1RequestDepositRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/destinations": {
+      "post": {
+        "operationId": "WalletPublicService_CreateWithdrawalDestination",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateWithdrawalDestinationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateWithdrawalDestinationRequest"
             }
           }
         ],
@@ -90,8 +122,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "type": "object",
-              "properties": {}
+              "$ref": "#/definitions/v1DeactivateWithdrawalDestinationResponse"
             }
           },
           "default": {
@@ -123,45 +154,6 @@
         ]
       }
     },
-    "/wallet/destinations/{destinationId}/verify": {
-      "post": {
-        "operationId": "WalletPublicService_RequestOwnershipVerification",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1OwnershipVerification"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "destinationId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceRequestOwnershipVerificationBody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
     "/wallet/methods": {
       "get": {
         "operationId": "WalletPublicService_ListPaymentMethodsPublic",
@@ -169,7 +161,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1PaymentMethodList"
+              "$ref": "#/definitions/v1ListPaymentMethodsPublicResponse"
             }
           },
           "default": {
@@ -231,110 +223,6 @@
         ]
       }
     },
-    "/wallet/ownership_verifications/{verificationId}/complete": {
-      "post": {
-        "operationId": "WalletPublicService_CompleteOwnershipVerification",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "verificationId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceCompleteOwnershipVerificationBody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
-    "/wallet/p2p": {
-      "post": {
-        "operationId": "WalletPublicService_RequestP2PTransfer",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1WorkflowRun"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1P2PTransferRequest"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
-    "/wallet/withdrawals": {
-      "post": {
-        "operationId": "WalletPublicService_RequestWithdrawal",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1WorkflowRun"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1WithdrawalRequest"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
     "/wallet/{walletId}": {
       "get": {
         "operationId": "WalletPublicService_GetWalletPublic",
@@ -342,7 +230,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1Wallet"
+              "$ref": "#/definitions/v1GetWalletPublicResponse"
             }
           },
           "default": {
@@ -378,7 +266,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1WithdrawalDestinationList"
+              "$ref": "#/definitions/v1ListWithdrawalDestinationsResponse"
             }
           },
           "default": {
@@ -411,42 +299,6 @@
         "tags": [
           "WalletPublicService"
         ]
-      },
-      "post": {
-        "operationId": "WalletPublicService_CreateWithdrawalDestination",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1WithdrawalDestination"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "walletId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceCreateWithdrawalDestinationBody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
       }
     },
     "/wallet/{walletId}/funding_sources": {
@@ -456,7 +308,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1FundingSourceList"
+              "$ref": "#/definitions/v1ListFundingSourcesResponse"
             }
           },
           "default": {
@@ -492,7 +344,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1WalletLedgerEntryList"
+              "$ref": "#/definitions/v1ListWalletTransactionsPublicResponse"
             }
           },
           "default": {
@@ -543,81 +395,10 @@
     }
   },
   "definitions": {
-    "WalletPublicServiceCompleteOwnershipVerificationBody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "verified": {
-          "type": "boolean"
-        },
-        "reason": {
-          "type": "string"
-        }
-      }
-    },
-    "WalletPublicServiceCreateWithdrawalDestinationBody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "destinationType": {
-          "type": "string"
-        },
-        "pspProvider": {
-          "type": "string"
-        },
-        "destinationDetails": {
-          "type": "object"
-        },
-        "displayName": {
-          "type": "string"
-        },
-        "currency": {
-          "type": "string"
-        },
-        "country": {
-          "type": "string"
-        },
-        "ownershipVerificationMethod": {
-          "type": "string"
-        },
-        "linkedFundingSourceId": {
-          "type": "string",
-          "format": "int64"
-        },
-        "isReturnToSource": {
-          "type": "boolean"
-        }
-      }
-    },
     "WalletPublicServiceDeactivateWithdrawalDestinationBody": {
       "type": "object",
       "properties": {
         "tenantId": {
-          "type": "string"
-        }
-      }
-    },
-    "WalletPublicServiceRequestOwnershipVerificationBody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "verificationType": {
-          "type": "string"
-        },
-        "verificationTimeoutSeconds": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "workflowId": {
-          "type": "string"
-        },
-        "referenceId": {
           "type": "string"
         }
       }
@@ -681,76 +462,36 @@
       ],
       "default": "ADMIN_WALLET_ACTION_UNSPECIFIED"
     },
-    "v1AdminWalletResponse": {
-      "type": "object",
-      "properties": {
-        "statusCode": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "contentType": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string",
-          "format": "byte"
-        },
-        "redirectLocation": {
-          "type": "string"
-        }
-      }
-    },
-    "v1DepositRequest": {
+    "v1CreateWithdrawalDestinationRequest": {
       "type": "object",
       "properties": {
         "tenantId": {
           "type": "string"
         },
-        "clientReference": {
+        "displayName": {
           "type": "string"
         },
-        "providerCode": {
+        "country": {
           "type": "string"
         },
-        "walletId": {
-          "type": "string"
-        },
-        "ownerType": {
-          "type": "string"
-        },
-        "ownerId": {
-          "type": "string"
-        },
-        "pspTransactionId": {
-          "type": "string"
-        },
-        "amount": {
+        "linkedFundingSourceId": {
           "type": "string",
           "format": "int64"
-        },
-        "currency": {
-          "type": "string"
-        },
-        "feeAmount": {
-          "type": "string",
-          "format": "int64"
-        },
-        "netAmount": {
-          "type": "string",
-          "format": "int64"
-        },
-        "idempotencyKey": {
-          "type": "string"
-        },
-        "metadata": {
-          "type": "object"
-        },
-        "region": {
-          "type": "string"
         }
       }
     },
-    "v1EnsureWalletRequest": {
+    "v1CreateWithdrawalDestinationResponse": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "$ref": "#/definitions/v1WithdrawalDestination"
+        }
+      }
+    },
+    "v1DeactivateWithdrawalDestinationResponse": {
+      "type": "object"
+    },
+    "v1EnsureWalletPublicRequest": {
       "type": "object",
       "properties": {
         "tenantId": {
@@ -762,6 +503,14 @@
         },
         "currency": {
           "type": "string"
+        }
+      }
+    },
+    "v1EnsureWalletPublicResponse": {
+      "type": "object",
+      "properties": {
+        "wallet": {
+          "$ref": "#/definitions/v1Wallet"
         }
       }
     },
@@ -812,7 +561,15 @@
         }
       }
     },
-    "v1FundingSourceList": {
+    "v1GetWalletPublicResponse": {
+      "type": "object",
+      "properties": {
+        "wallet": {
+          "$ref": "#/definitions/v1Wallet"
+        }
+      }
+    },
+    "v1ListFundingSourcesResponse": {
       "type": "object",
       "properties": {
         "sources": {
@@ -824,81 +581,39 @@
         }
       }
     },
-    "v1OwnershipVerification": {
+    "v1ListPaymentMethodsPublicResponse": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "format": "int64"
-        },
-        "tenantId": {
-          "type": "string"
-        },
-        "destinationId": {
-          "type": "string",
-          "format": "int64"
-        },
-        "verificationType": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "attempts": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "maxAttempts": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "workflowId": {
-          "type": "string"
-        },
-        "referenceId": {
-          "type": "string"
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1PaymentMethod"
+          }
         }
       }
     },
-    "v1P2PTransferRequest": {
+    "v1ListWalletTransactionsPublicResponse": {
       "type": "object",
       "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "idempotencyKey": {
-          "type": "string"
-        },
-        "currency": {
-          "type": "string"
-        },
-        "fromWalletId": {
-          "type": "string"
-        },
-        "toWalletId": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string",
-          "format": "int64"
-        },
-        "description": {
-          "type": "string"
-        },
-        "referenceId": {
-          "type": "string"
-        },
-        "fromOwnerType": {
-          "type": "string"
-        },
-        "fromOwnerId": {
-          "type": "string"
-        },
-        "toOwnerType": {
-          "type": "string"
-        },
-        "toOwnerId": {
-          "type": "string"
+        "transactions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WalletLedgerEntry"
+          }
+        }
+      }
+    },
+    "v1ListWithdrawalDestinationsResponse": {
+      "type": "object",
+      "properties": {
+        "destinations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1WithdrawalDestination"
+          }
         }
       }
     },
@@ -954,15 +669,85 @@
         }
       }
     },
-    "v1PaymentMethodList": {
+    "v1RenderWalletAdminResponse": {
       "type": "object",
       "properties": {
-        "methods": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1PaymentMethod"
-          }
+        "statusCode": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "contentType": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string",
+          "format": "byte"
+        },
+        "redirectLocation": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RequestDepositRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "providerCode": {
+          "type": "string"
+        },
+        "walletId": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "string",
+          "format": "int64"
+        },
+        "currency": {
+          "type": "string"
+        },
+        "idempotencyKey": {
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "region": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RequestDepositResponse": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RequestP2PTransferResponse": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RequestWithdrawalResponse": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
         }
       }
     },
@@ -1061,18 +846,6 @@
         }
       }
     },
-    "v1WalletLedgerEntryList": {
-      "type": "object",
-      "properties": {
-        "transactions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1WalletLedgerEntry"
-          }
-        }
-      }
-    },
     "v1WithdrawalDestination": {
       "type": "object",
       "properties": {
@@ -1104,18 +877,9 @@
         "country": {
           "type": "string"
         },
-        "ownershipStatus": {
-          "type": "string"
-        },
-        "ownershipVerificationMethod": {
-          "type": "string"
-        },
         "linkedFundingSourceId": {
           "type": "string",
           "format": "int64"
-        },
-        "isReturnToSource": {
-          "type": "boolean"
         },
         "isActive": {
           "type": "boolean"
@@ -1123,87 +887,6 @@
         "totalWithdrawn": {
           "type": "string",
           "format": "int64"
-        }
-      }
-    },
-    "v1WithdrawalDestinationList": {
-      "type": "object",
-      "properties": {
-        "destinations": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1WithdrawalDestination"
-          }
-        }
-      }
-    },
-    "v1WithdrawalRequest": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "clientReference": {
-          "type": "string"
-        },
-        "providerCode": {
-          "type": "string"
-        },
-        "walletId": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string",
-          "format": "int64"
-        },
-        "currency": {
-          "type": "string"
-        },
-        "ownerType": {
-          "type": "string"
-        },
-        "ownerId": {
-          "type": "string"
-        },
-        "destinationId": {
-          "type": "string",
-          "format": "int64"
-        },
-        "allowReturnToSource": {
-          "type": "boolean"
-        },
-        "holdExpirySeconds": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "approvalTimeoutSeconds": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "verificationTimeoutSeconds": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "idempotencyKey": {
-          "type": "string"
-        },
-        "metadata": {
-          "type": "object"
-        },
-        "region": {
-          "type": "string"
-        }
-      }
-    },
-    "v1WorkflowRun": {
-      "type": "object",
-      "properties": {
-        "workflowId": {
-          "type": "string"
-        },
-        "runId": {
-          "type": "string"
         }
       }
     }

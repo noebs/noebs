@@ -11,6 +11,7 @@ import (
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/wallet"
@@ -116,6 +117,10 @@ func configureGatewayProxyForTest(t *testing.T) {
 
 	setGatewayDiscoveryForTest(t, upstream.URL)
 	setServiceRoleForTest(t, serviceRoleAPIGateway)
+}
+
+func walletAuthorizationHandlerForRegistration() *walletAuthorizationHTTP {
+	return &walletAuthorizationHTTP{service: &transactionauth.Service{}}
 }
 
 func setGatewayDiscoveryForTest(t *testing.T, endpoint string) {

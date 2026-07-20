@@ -22,8 +22,8 @@ import (
 	basestore "github.com/adonese/noebs/store"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
-	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 )
 
 const pspWebhookRouteTestTimeout = 5_000
@@ -246,8 +246,8 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 		_ = container.Terminate(context.Background())
 	}()
 
-	dbName := fmt.Sprintf("noebs_psp_webhook_handler_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -265,17 +265,18 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 
 	const tenantID = "tenant"
 	const providerCode = "handler-noop"
-	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
-		t.Fatalf("migrate psp webhook db: %v", err)
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
+		t.Fatalf("migrate wallet ledger db: %v", err)
 	}
 	provisionWalletHandlerTestTenant(t, ctx, db, tenantID, "PSP Webhook Tenant")
 
 	mapping := `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`
 	stmt := db.Rebind(`INSERT INTO psp_configs(
-		tenant_id, provider_code, provider_name, api_base_url, enabled_currencies,
-		is_active, supports_deposit, supports_withdrawal, webhook_response_mapping
-	) VALUES(?, ?, ?, ?, ARRAY['SDG'], TRUE, TRUE, TRUE, ?::jsonb)`)
-	if _, err := db.ExecContext(ctx, stmt, tenantID, providerCode, "Handler Noop", "https://psp.example", mapping); err != nil {
+		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name, enabled_currencies,
+		is_active, supports_deposit, supports_withdrawal, webhook_response_mapping,
+		deposit_response_mapping
+	) VALUES(?, ?, ?, ?, 'Idempotency-Key', ARRAY['SDG'], TRUE, TRUE, TRUE, ?::jsonb, ?::jsonb)`)
+	if _, err := db.ExecContext(ctx, stmt, tenantID, providerCode, "Handler Noop", "https://psp.example", mapping, mapping); err != nil {
 		t.Fatalf("insert psp config: %v", err)
 	}
 
@@ -295,7 +296,7 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 	}
 
 	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
-	app.Post("/psp/webhooks/:provider", gateway.InternalTenantIdentityMiddleware(), NewPSPWebhookHandler(store, loader, registry, nil).Handle)
+	app.Post("/psp/webhooks/:provider", gateway.InternalTenantIdentityMiddleware(), NewPSPWebhookHandler(store, loader, registry).Handle)
 
 	payload := `{"ref":"missing-ref","psp_tx":"psp-missing","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`
 	req := httptest.NewRequest(http.MethodPost, "/psp/webhooks/"+providerCode+"?tenant_id=default", bytes.NewBufferString(payload))
@@ -332,43 +333,42 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 
 func TestPSPWebhookBindsCallbackToStoredProvider(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
-	signaler := &captureTemporalSignaler{}
+	if _, err := fixture.store.DB.ExecContext(t.Context(), `INSERT INTO psp_configs(
+		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name,
+		enabled_currencies, supports_deposit, deposit_response_mapping
+	) VALUES($1, 'other-provider', 'Other Provider', 'https://other.invalid', 'Idempotency-Key', ARRAY['SDG'], TRUE,
+		'{"client_reference":["client_reference"],"transaction_id":["transaction_id"],"status":["status"],"amount":["amount"],"currency":["currency"]}')`, fixture.tenantID); err != nil {
+		t.Fatalf("seed stored provider: %v", err)
+	}
 	fixture.createPSPTransactionFor(t, "other-provider", "inbound", "provider-bound-ref", "SDG", "workflow-provider-bound")
 
-	status, body := fixture.postWebhook(t, fixture.app(signaler), `{"ref":"provider-bound-ref","psp_tx":"psp-forged","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`)
+	status, body := fixture.postWebhook(t, fixture.app(), `{"ref":"provider-bound-ref","psp_tx":"psp-forged","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`)
 	if status != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusNotFound, body)
 	}
 	if strings.Contains(body, ErrPSPWebhookProviderMismatch.Error()) {
 		t.Fatalf("response disclosed provider binding: %s", body)
 	}
-	if signaler.calls != 0 {
-		t.Fatalf("temporal signal calls = %d, want 0", signaler.calls)
-	}
 	assertPSPWebhookDidNotMutateTransaction(t, fixture.mustGetPSPTransaction(t, "provider-bound-ref"))
 }
 
 func TestPSPWebhookRejectsCallbackDirectionMismatch(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
-	signaler := &captureTemporalSignaler{}
 	fixture.createPSPTransactionFor(t, fixture.providerCode, "inbound", "direction-bound-ref", "SDG", "workflow-direction-bound")
 
-	status, body := fixture.postWebhook(t, fixture.app(signaler), `{"ref":"direction-bound-ref","psp_tx":"psp-forged","status":"success","amount":1250,"currency":"SDG","direction":"outbound"}`)
+	status, body := fixture.postWebhook(t, fixture.app(), `{"ref":"direction-bound-ref","psp_tx":"psp-forged","status":"success","amount":1250,"currency":"SDG","direction":"outbound"}`)
 	if status != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusBadRequest, body)
 	}
 	if !strings.Contains(body, ErrPSPWebhookDirectionMismatch.Error()) {
 		t.Fatalf("response body = %s, want direction mismatch", body)
 	}
-	if signaler.calls != 0 {
-		t.Fatalf("temporal signal calls = %d, want 0", signaler.calls)
-	}
 	assertPSPWebhookDidNotMutateTransaction(t, fixture.mustGetPSPTransaction(t, "direction-bound-ref"))
 }
 
 func TestPSPWebhookAcceptsStoredDepositAndWithdrawalDirections(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
-	app := fixture.app(nil)
+	app := fixture.app()
 
 	tests := []struct {
 		name              string
@@ -409,10 +409,47 @@ func TestValidatePSPWebhookTransactionReturnsTypedBindingErrors(t *testing.T) {
 	}
 }
 
+func TestValidateTerminalPSPWebhookRequiresExactSettlementAmounts(t *testing.T) {
+	stored := &walletstore.PSPTransaction{
+		Direction:        "inbound",
+		Amount:           1250,
+		Currency:         "SDG",
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+	}
+	valid := pspWebhookFields{PSPTransactionID: "psp-1", Status: walletstore.PSPStatusSuccess, Amount: 1250, Currency: "SDG"}
+	if err := validateTerminalPSPWebhook(stored, valid); err != nil {
+		t.Fatalf("valid terminal deposit error = %v", err)
+	}
+	stored.Direction = "outbound"
+	if err := validateTerminalPSPWebhook(stored, valid); err != nil {
+		t.Fatalf("valid terminal payout error = %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*pspWebhookFields)
+		want   error
+	}{
+		{name: "missing provider transaction", mutate: func(fields *pspWebhookFields) { fields.PSPTransactionID = "" }, want: walletstore.ErrMissingPSPTransactionID},
+		{name: "provider transaction mismatch", mutate: func(fields *pspWebhookFields) { fields.PSPTransactionID = "psp-2" }, want: walletstore.ErrDuplicateTransaction},
+		{name: "amount mismatch", mutate: func(fields *pspWebhookFields) { fields.Amount++ }, want: walletstore.ErrInvalidAmount},
+		{name: "currency mismatch", mutate: func(fields *pspWebhookFields) { fields.Currency = "AED" }, want: walletstore.ErrCurrencyMismatch},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fields := valid
+			test.mutate(&fields)
+			if err := validateTerminalPSPWebhook(stored, fields); !errors.Is(err, test.want) {
+				t.Fatalf("validation error = %v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
 func assertPSPWebhookDidNotMutateTransaction(t *testing.T, stored *walletstore.PSPTransaction) {
 	t.Helper()
-	if stored.Status != walletstore.PSPStatusPending {
-		t.Fatalf("stored status = %q, want pending", stored.Status)
+	if stored.Status != walletstore.PSPStatusInitiated {
+		t.Fatalf("stored status = %q, want initiated", stored.Status)
 	}
 	if stored.PSPTransactionID.Valid {
 		t.Fatalf("stored psp transaction id = %q, want unset", stored.PSPTransactionID.String)
@@ -425,106 +462,88 @@ func assertPSPWebhookDidNotMutateTransaction(t *testing.T, stored *walletstore.P
 	}
 }
 
-func TestPSPWebhookSignalsMappedCurrencyWithoutStoredCurrencyFallback(t *testing.T) {
+func TestPSPWebhookRejectsDepositCurrencyMismatch(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
-	signaler := &captureTemporalSignaler{}
-	app := fixture.app(signaler)
+	app := fixture.app()
 	fixture.createPSPTransaction(t, "explicit-currency-ref", "SDG", "workflow-explicit")
 
 	status, body := fixture.postWebhook(t, app, `{"ref":"explicit-currency-ref","psp_tx":"psp-explicit","status":"success","amount":1250,"currency":"AED","direction":"inbound"}`)
-	if status != http.StatusOK {
-		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusOK, body)
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusBadRequest, body)
 	}
-	if signaler.calls != 1 {
-		t.Fatalf("temporal signal calls = %d, want 1", signaler.calls)
-	}
-	if signaler.workflowID != "workflow-explicit" {
-		t.Fatalf("workflow id = %q, want workflow-explicit", signaler.workflowID)
-	}
-	if signaler.signalName != walletworkflow.PSPStatusUpdateSignal {
-		t.Fatalf("signal name = %q, want %q", signaler.signalName, walletworkflow.PSPStatusUpdateSignal)
-	}
-	signal, ok := signaler.arg.(walletpsp.TxStatus)
-	if !ok {
-		t.Fatalf("signal arg type = %T, want walletpsp.TxStatus", signaler.arg)
-	}
-	if signal.Currency != "AED" {
-		t.Fatalf("signal currency = %q, want mapped webhook currency AED", signal.Currency)
-	}
+	stored := fixture.mustGetPSPTransaction(t, "explicit-currency-ref")
+	assertPSPWebhookDidNotMutateTransaction(t, stored)
 }
 
 func TestPSPWebhookRejectsWorkflowWebhookWithoutMappedCurrency(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
-	signaler := &captureTemporalSignaler{}
-	app := fixture.app(signaler)
+	app := fixture.app()
 	fixture.createPSPTransaction(t, "missing-currency-ref", "SDG", "workflow-missing-currency")
 
 	status, body := fixture.postWebhook(t, app, `{"ref":"missing-currency-ref","psp_tx":"psp-missing-currency","status":"success","amount":1250,"direction":"inbound"}`)
 	if status != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusBadRequest, body)
 	}
-	if signaler.calls != 0 {
-		t.Fatalf("temporal signal calls = %d, want 0", signaler.calls)
-	}
 	stored := fixture.mustGetPSPTransaction(t, "missing-currency-ref")
-	if stored.Status != "pending" {
-		t.Fatalf("stored status = %q, want pending", stored.Status)
+	if stored.Status != walletstore.PSPStatusInitiated {
+		t.Fatalf("stored status = %q, want initiated", stored.Status)
 	}
 	if stored.PSPTransactionID.Valid {
 		t.Fatalf("stored psp transaction id = %q, want unset", stored.PSPTransactionID.String)
 	}
 }
 
-func TestPSPWebhookRejectsWorkflowWebhookWithoutTemporalSignaler(t *testing.T) {
+func TestPSPWebhookPersistsTerminalSignalWithoutTemporalDelivery(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
-	app := fixture.app(nil)
+	app := fixture.app()
 	fixture.createPSPTransaction(t, "missing-temporal-ref", "SDG", "workflow-missing-temporal")
 
 	status, body := fixture.postWebhook(t, app, `{"ref":"missing-temporal-ref","psp_tx":"psp-missing-temporal","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`)
-	if status != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusServiceUnavailable, body)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusOK, body)
 	}
 	stored := fixture.mustGetPSPTransaction(t, "missing-temporal-ref")
-	if stored.Status != "pending" {
-		t.Fatalf("stored status = %q, want pending", stored.Status)
+	if stored.Status != walletstore.PSPStatusSuccess {
+		t.Fatalf("stored status = %q, want success", stored.Status)
 	}
-	if stored.PSPTransactionID.Valid {
-		t.Fatalf("stored psp transaction id = %q, want unset", stored.PSPTransactionID.String)
+	if len(stored.WorkflowSignalPayload) == 0 {
+		t.Fatal("terminal status was committed without a queued workflow signal")
+	}
+	if stored.WorkflowSignalDeliveredAt.Valid {
+		t.Fatalf("signal delivered at = %v, want pending", stored.WorkflowSignalDeliveredAt.Time)
 	}
 }
 
-func TestPSPWebhookSignalFailureIsRetriable(t *testing.T) {
+func TestPSPWebhookChangedTerminalRetryPreservesFirstSnapshot(t *testing.T) {
 	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
 	fixture.createPSPTransaction(t, "signal-retry-ref", "SDG", "workflow-signal-retry")
-	payload := `{"ref":"signal-retry-ref","psp_tx":"psp-signal-retry","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`
+	firstPayload := `{"ref":"signal-retry-ref","psp_tx":"psp-signal-retry","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`
 
-	failing := &captureTemporalSignaler{err: errors.New("temporal unavailable")}
-	statusCode, body := fixture.postWebhook(t, fixture.app(failing), payload)
-	if statusCode != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want %d, body=%s", statusCode, http.StatusServiceUnavailable, body)
-	}
-	if failing.calls != 1 {
-		t.Fatalf("failing signal calls = %d, want 1", failing.calls)
+	statusCode, body := fixture.postWebhook(t, fixture.app(), firstPayload)
+	if statusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body=%s", statusCode, http.StatusOK, body)
 	}
 	storedAfterFailure := fixture.mustGetPSPTransaction(t, "signal-retry-ref")
-	if storedAfterFailure.Status != walletstore.PSPStatusSuccess {
-		t.Fatalf("stored status after signal failure = %q, want success", storedAfterFailure.Status)
-	}
 	if !storedAfterFailure.ConfirmedAt.Valid {
 		t.Fatal("stored confirmed_at should be set after first success webhook")
 	}
+	firstRawResponse := append(walletstore.RawJSON(nil), storedAfterFailure.RawResponse...)
+	firstSignal := append(walletstore.RawJSON(nil), storedAfterFailure.WorkflowSignalPayload...)
 
-	signaler := &captureTemporalSignaler{}
-	statusCode, body = fixture.postWebhook(t, fixture.app(signaler), payload)
-	if statusCode != http.StatusOK {
-		t.Fatalf("retry status = %d, want %d, body=%s", statusCode, http.StatusOK, body)
-	}
-	if signaler.calls != 1 {
-		t.Fatalf("retry signal calls = %d, want 1", signaler.calls)
+	changedPayload := `{"ref":"signal-retry-ref","psp_tx":"psp-signal-retry","status":"success","amount":9999,"currency":"AED","direction":"inbound","retry":"changed"}`
+	statusCode, body = fixture.postWebhook(t, fixture.app(), changedPayload)
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("retry status = %d, want %d, body=%s", statusCode, http.StatusBadRequest, body)
 	}
 	storedAfterRetry := fixture.mustGetPSPTransaction(t, "signal-retry-ref")
-	if !storedAfterRetry.ConfirmedAt.Valid || storedAfterRetry.ConfirmedAt.Time.Sub(storedAfterFailure.ConfirmedAt.Time).Abs() >= time.Millisecond {
+	if !storedAfterRetry.ConfirmedAt.Valid || !storedAfterRetry.ConfirmedAt.Time.Equal(storedAfterFailure.ConfirmedAt.Time) {
 		t.Fatalf("retry confirmed_at = %+v, want preserved %+v", storedAfterRetry.ConfirmedAt, storedAfterFailure.ConfirmedAt)
+	}
+	if !bytes.Equal(storedAfterRetry.RawResponse, firstRawResponse) {
+		t.Fatalf("retry raw_response = %s, want first snapshot %s", storedAfterRetry.RawResponse, firstRawResponse)
+	}
+	if !bytes.Equal(storedAfterRetry.WorkflowSignalPayload, firstSignal) {
+		t.Fatalf("retry workflow signal = %s, want first queued signal %s", storedAfterRetry.WorkflowSignalPayload, firstSignal)
 	}
 }
 
@@ -811,8 +830,8 @@ func newPSPWebhookTestFixture(t *testing.T, mapping string) *pspWebhookTestFixtu
 		_ = container.Terminate(context.Background())
 	})
 
-	dbName := fmt.Sprintf("noebs_psp_webhook_workflow_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -830,16 +849,17 @@ func newPSPWebhookTestFixture(t *testing.T, mapping string) *pspWebhookTestFixtu
 
 	const tenantID = "tenant"
 	const providerCode = "handler-noop"
-	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
-		t.Fatalf("migrate psp webhook db: %v", err)
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
+		t.Fatalf("migrate wallet ledger db: %v", err)
 	}
 	provisionWalletHandlerTestTenant(t, ctx, db, tenantID, "PSP Replay Tenant")
 
 	stmt := db.Rebind(`INSERT INTO psp_configs(
-		tenant_id, provider_code, provider_name, api_base_url, enabled_currencies,
-		is_active, supports_deposit, supports_withdrawal, webhook_response_mapping
-	) VALUES(?, ?, ?, ?, ARRAY['SDG', 'AED'], TRUE, TRUE, TRUE, ?::jsonb)`)
-	if _, err := db.ExecContext(ctx, stmt, tenantID, providerCode, "Handler Noop", "https://psp.example", mapping); err != nil {
+		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name, enabled_currencies,
+		is_active, supports_deposit, supports_withdrawal, webhook_response_mapping,
+		deposit_response_mapping
+	) VALUES(?, ?, ?, ?, 'Idempotency-Key', ARRAY['SDG', 'AED'], TRUE, TRUE, TRUE, ?::jsonb, ?::jsonb)`)
+	if _, err := db.ExecContext(ctx, stmt, tenantID, providerCode, "Handler Noop", "https://psp.example", mapping, mapping); err != nil {
 		t.Fatalf("insert psp config: %v", err)
 	}
 
@@ -867,9 +887,9 @@ func newPSPWebhookTestFixture(t *testing.T, mapping string) *pspWebhookTestFixtu
 	}
 }
 
-func (f *pspWebhookTestFixture) app(signaler TemporalSignaler) *fiber.App {
+func (f *pspWebhookTestFixture) app() *fiber.App {
 	app := fiber.New(fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor})
-	app.Post("/psp/webhooks/:provider", gateway.InternalTenantIdentityMiddleware(), NewPSPWebhookHandler(f.store, f.loader, f.registry, signaler).Handle)
+	app.Post("/psp/webhooks/:provider", gateway.InternalTenantIdentityMiddleware(), NewPSPWebhookHandler(f.store, f.loader, f.registry).Handle)
 	return app
 }
 
@@ -883,16 +903,61 @@ func (f *pspWebhookTestFixture) createPSPTransactionFor(t *testing.T, providerCo
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	_, err := f.store.CreatePSPTransaction(ctx, walletstore.PSPTransaction{
-		TenantID:        f.tenantID,
-		PSPProvider:     providerCode,
-		IdempotencyKey:  clientReference + "-idempotency",
-		ClientReference: clientReference,
-		Direction:       direction,
-		Amount:          1250,
-		Currency:        currency,
-		Status:          "pending",
-		WorkflowID:      sql.NullString{String: workflowID, Valid: workflowID != ""},
+	if direction == "inbound" {
+		wallet, err := f.store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
+			TenantID:  f.tenantID,
+			OwnerType: walletstore.OwnerTypeMerchant,
+			OwnerID:   clientReference,
+			Currency:  currency,
+			KYCTier:   walletstore.KYCTierUnverified,
+		})
+		if err != nil {
+			t.Fatalf("create deposit wallet: %v", err)
+		}
+		if workflowID == "" {
+			workflowID = "deposit-" + clientReference
+		}
+		_, err = f.store.ReserveDepositIntent(ctx, walletstore.DepositIntent{
+			TenantID:        f.tenantID,
+			IntentReference: clientReference,
+			ProviderCode:    providerCode,
+			WalletID:        wallet.ID,
+			OwnerType:       walletstore.OwnerTypeMerchant,
+			OwnerID:         clientReference,
+			Amount:          1250,
+			Currency:        currency,
+			IdempotencyKey:  clientReference + "-idempotency",
+			WorkflowID:      workflowID,
+			Metadata:        walletstore.RawJSON(`{}`),
+			RawRequest:      walletstore.RawJSON(`{"source":"webhook-test"}`),
+		})
+		if err != nil {
+			t.Fatalf("reserve deposit intent: %v", err)
+		}
+		return
+	}
+
+	wallet, err := f.store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
+		TenantID: f.tenantID, OwnerType: walletstore.OwnerTypeMerchant, OwnerID: clientReference,
+		Currency: currency, KYCTier: walletstore.KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("create withdrawal wallet: %v", err)
+	}
+	_, err = f.store.CreatePSPTransaction(ctx, walletstore.PSPTransaction{
+		TenantID:            f.tenantID,
+		PSPProvider:         providerCode,
+		IdempotencyKey:      clientReference + "-idempotency",
+		ClientReference:     clientReference,
+		Direction:           direction,
+		WalletID:            uuid.NullUUID{UUID: wallet.ID, Valid: true},
+		OwnerType:           sql.NullString{String: wallet.OwnerType, Valid: true},
+		OwnerID:             sql.NullString{String: wallet.OwnerID, Valid: true},
+		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
+		Amount:              1250,
+		Currency:            currency,
+		Status:              "pending",
+		WorkflowID:          sql.NullString{String: workflowID, Valid: workflowID != ""},
 	})
 	if err != nil {
 		t.Fatalf("create psp transaction: %v", err)
@@ -931,29 +996,12 @@ func (f *pspWebhookTestFixture) mustGetPSPTransaction(t *testing.T, clientRefere
 	return txn
 }
 
-type captureTemporalSignaler struct {
-	calls      int
-	workflowID string
-	signalName string
-	arg        interface{}
-	err        error
-}
-
-func (s *captureTemporalSignaler) SignalWorkflow(_ context.Context, workflowID, runID, signalName string, arg interface{}) error {
-	_ = runID
-	s.calls++
-	s.workflowID = workflowID
-	s.signalName = signalName
-	s.arg = arg
-	return s.err
-}
-
 type acceptingWebhookProvider struct {
 	code        string
 	statusCalls int
 }
 
-func (p *acceptingWebhookProvider) VerifyDeposit(context.Context, string) (*walletpsp.DepositVerification, error) {
+func (p *acceptingWebhookProvider) CreateDeposit(context.Context, walletpsp.DepositRequest) (*walletpsp.DepositResult, error) {
 	return nil, walletpsp.ErrPSPPermanent
 }
 
@@ -961,7 +1009,7 @@ func (p *acceptingWebhookProvider) SendPayout(context.Context, walletpsp.PayoutR
 	return nil, walletpsp.ErrPSPPermanent
 }
 
-func (p *acceptingWebhookProvider) GetTransactionStatus(context.Context, string) (*walletpsp.TxStatus, error) {
+func (p *acceptingWebhookProvider) GetTransactionStatus(context.Context, walletpsp.TransactionLookup) (*walletpsp.TxStatus, error) {
 	p.statusCalls++
 	return &walletpsp.TxStatus{Status: "success"}, nil
 }

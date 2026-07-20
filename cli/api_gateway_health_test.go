@@ -46,8 +46,8 @@ func TestAPIGatewayPublicHealthRouteMatchesKubernetesProbes(t *testing.T) {
 			continue
 		}
 		container := object.Spec.Template.Spec.Containers[0]
-		assertProbePath(t, "readiness", container.ReadinessProbe, "/test")
-		assertProbePath(t, "liveness", container.LivenessProbe, "/test")
+		assertInternalHealthProbe(t, "readiness", container.ReadinessProbe)
+		assertInternalHealthProbe(t, "liveness", container.LivenessProbe)
 		return
 	}
 	t.Fatal("api-gateway Deployment not found")
@@ -62,10 +62,14 @@ func TestAPIGatewayDoesNotExposeMetrics(t *testing.T) {
 	})
 }
 
-func assertProbePath(t testing.TB, name string, probe map[string]any, want string) {
+func assertInternalHealthProbe(t testing.TB, name string, probe map[string]any) {
 	t.Helper()
-	httpGet, ok := probe["httpGet"].(map[string]any)
-	if !ok || httpGet["path"] != want {
-		t.Fatalf("%s probe = %#v, want path %s", name, probe, want)
+	execProbe, ok := probe["exec"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s probe = %#v, want exec", name, probe)
+	}
+	command, ok := execProbe["command"].([]any)
+	if !ok || len(command) != 2 || command[0] != "/usr/local/bin/noebs" || command[1] != "internal-healthcheck" {
+		t.Fatalf("%s probe command = %#v", name, execProbe["command"])
 	}
 }

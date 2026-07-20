@@ -53,21 +53,33 @@ func TestWalletMethodAuthRequirement(t *testing.T) {
 
 func TestWalletPathAuthRequirement(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
-		want walletAuthRequirement
+		name   string
+		method string
+		path   string
+		want   walletAuthRequirement
 	}{
-		{name: "manual transfer request route", path: "/wallet/manual_transfers", want: walletAuthAdmin},
-		{name: "manual transfer decision route", path: "/wallet/manual_transfers/workflow-id/decision", want: walletAuthAdmin},
-		{name: "withdrawal approval route", path: "/wallet/withdrawals/workflow-id/approval", want: walletAuthAdmin},
-		{name: "user withdrawal route", path: "/wallet/withdrawals", want: walletAuthUserIdentity},
-		{name: "other route", path: "/other", want: walletAuthDeny},
+		{name: "ensure wallet", method: http.MethodPost, path: "/wallet", want: walletAuthUserIdentity},
+		{name: "get wallet", method: http.MethodGet, path: "/wallet/550e8400-e29b-41d4-a716-446655440000", want: walletAuthUserIdentity},
+		{name: "payment methods", method: http.MethodGet, path: "/wallet/methods", want: walletAuthUserIdentity},
+		{name: "wallet transactions", method: http.MethodGet, path: "/wallet/550e8400-e29b-41d4-a716-446655440000/transactions", want: walletAuthUserIdentity},
+		{name: "deposit", method: http.MethodPost, path: "/wallet/deposits", want: walletAuthUserIdentity},
+		{name: "funding sources", method: http.MethodGet, path: "/wallet/550e8400-e29b-41d4-a716-446655440000/funding_sources", want: walletAuthUserIdentity},
+		{name: "create destination", method: http.MethodPost, path: "/wallet/destinations", want: walletAuthUserIdentity},
+		{name: "list destinations", method: http.MethodGet, path: "/wallet/550e8400-e29b-41d4-a716-446655440000/destinations", want: walletAuthUserIdentity},
+		{name: "deactivate destination", method: http.MethodPost, path: "/wallet/destinations/7/deactivate", want: walletAuthUserIdentity},
+		{name: "removed manual transfer request", method: http.MethodPost, path: "/wallet/manual_transfers", want: walletAuthDeny},
+		{name: "removed manual transfer decision", method: http.MethodPost, path: "/wallet/manual_transfers/workflow-id/decision", want: walletAuthDeny},
+		{name: "removed withdrawal approval", method: http.MethodPost, path: "/wallet/withdrawals/workflow-id/approval", want: walletAuthDeny},
+		{name: "removed withdrawal verification", method: http.MethodPost, path: "/wallet/withdrawals/workflow-id/verification", want: walletAuthDeny},
+		{name: "removed withdrawal request", method: http.MethodPost, path: "/wallet/withdrawals", want: walletAuthDeny},
+		{name: "wrong method", method: http.MethodDelete, path: "/wallet", want: walletAuthDeny},
+		{name: "other route", method: http.MethodGet, path: "/other", want: walletAuthDeny},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := walletPathAuthRequirement(tt.path); got != tt.want {
-				t.Fatalf("walletPathAuthRequirement(%q) = %v, want %v", tt.path, got, tt.want)
+			if got := walletPathAuthRequirement(tt.method, tt.path); got != tt.want {
+				t.Fatalf("walletPathAuthRequirement(%q, %q) = %v, want %v", tt.method, tt.path, got, tt.want)
 			}
 		})
 	}
@@ -215,45 +227,50 @@ func TestRequireAuthForWalletMethods(t *testing.T) {
 
 func TestRequireAuthForWalletHTTP(t *testing.T) {
 	tests := []struct {
-		name          string
-		path          string
-		userIdentity  bool
-		adminIdentity bool
-		wantStatus    int
-		wantNextCall  bool
+		name         string
+		method       string
+		path         string
+		userIdentity bool
+		wantStatus   int
+		wantNextCall bool
 	}{
 		{
 			name:         "rejects user path without gateway identity",
-			path:         "/wallet/withdrawals",
+			method:       http.MethodPost,
+			path:         "/wallet/deposits",
 			wantStatus:   http.StatusUnauthorized,
 			wantNextCall: false,
 		},
 		{
 			name:         "allows user path with gateway identity",
-			path:         "/wallet/withdrawals",
+			method:       http.MethodPost,
+			path:         "/wallet/deposits",
 			userIdentity: true,
 			wantStatus:   http.StatusNoContent,
 			wantNextCall: true,
 		},
 		{
-			name:         "rejects admin path without admin auth",
+			name:         "removed admin path is outside catalog",
+			method:       http.MethodPost,
 			path:         "/wallet/manual_transfers",
-			wantStatus:   http.StatusUnauthorized,
+			wantStatus:   http.StatusNotFound,
 			wantNextCall: false,
 		},
 		{
-			name:          "allows admin path with gateway admin identity",
-			path:          "/wallet/manual_transfers",
-			adminIdentity: true,
-			wantStatus:    http.StatusNoContent,
-			wantNextCall:  true,
+			name:         "removed approval path is outside catalog",
+			method:       http.MethodPost,
+			path:         "/wallet/withdrawals/workflow-id/approval",
+			userIdentity: true,
+			wantStatus:   http.StatusNotFound,
+			wantNextCall: false,
 		},
 		{
-			name:          "unknown path remains outside catalog",
-			path:          "/other",
-			adminIdentity: true,
-			wantStatus:    http.StatusNotFound,
-			wantNextCall:  false,
+			name:         "unknown path remains outside catalog",
+			method:       http.MethodPost,
+			path:         "/other",
+			userIdentity: true,
+			wantStatus:   http.StatusNotFound,
+			wantNextCall: false,
 		},
 	}
 
@@ -265,12 +282,9 @@ func TestRequireAuthForWalletHTTP(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			})
 
-			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			req := httptest.NewRequest(tt.method, tt.path, nil)
 			if tt.userIdentity {
 				setGatewayUserIdentityHeaders(req, 42, "tenant", "0990000000")
-			}
-			if tt.adminIdentity {
-				setGatewayAdminIdentityHeader(req)
 			}
 			rec := httptest.NewRecorder()
 
@@ -286,29 +300,14 @@ func TestRequireAuthForWalletHTTP(t *testing.T) {
 	}
 }
 
-func TestRequestHasGatewayAdminIdentity(t *testing.T) {
-	validReq := httptest.NewRequest(http.MethodPost, "/wallet/manual_transfers", nil)
-	setGatewayAdminIdentityHeader(validReq)
-	if !requestHasGatewayAdminIdentity(validReq) {
-		t.Fatalf("requestHasGatewayAdminIdentity(validReq) = false, want true")
-	}
-
-	invalidReq := httptest.NewRequest(http.MethodPost, "/wallet/manual_transfers", nil)
-	setGatewayAdminIdentityHeader(invalidReq)
-	invalidReq.Header.Set(gateway.GatewayRolesHeader, "user")
-	if requestHasGatewayAdminIdentity(invalidReq) {
-		t.Fatalf("requestHasGatewayAdminIdentity(invalidReq) = true, want false")
-	}
-}
-
 func TestRequestHasGatewayUserIdentity(t *testing.T) {
-	validReq := httptest.NewRequest(http.MethodPost, "/wallet/withdrawals", nil)
+	validReq := httptest.NewRequest(http.MethodPost, "/wallet/deposits", nil)
 	setGatewayUserIdentityHeaders(validReq, 42, "tenant", "0990000000")
 	if !requestHasGatewayUserIdentity(validReq) {
 		t.Fatalf("requestHasGatewayUserIdentity(validReq) = false, want true")
 	}
 
-	invalidReq := httptest.NewRequest(http.MethodPost, "/wallet/withdrawals", nil)
+	invalidReq := httptest.NewRequest(http.MethodPost, "/wallet/deposits", nil)
 	invalidReq.Header.Set(gateway.GatewayUserIDHeader, "42")
 	if requestHasGatewayUserIdentity(invalidReq) {
 		t.Fatalf("requestHasGatewayUserIdentity(invalidReq) = true, want false")

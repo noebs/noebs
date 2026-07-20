@@ -78,9 +78,8 @@ spec:
               mountPath: /etc/caddy/Caddyfile
               subPath: Caddyfile
               readOnly: true
-            - name: keycloak-transport-ca
-              mountPath: /etc/noebs-keycloak/ca.pem
-              subPath: ca.pem
+            - name: edge-internal-transport
+              mountPath: /etc/noebs-internal
               readOnly: true
             - name: data
               mountPath: /data
@@ -90,9 +89,10 @@ spec:
         - name: config
           configMap:
             name: caddy-config
-        - name: keycloak-transport-ca
+        - name: edge-internal-transport
           secret:
-            secretName: keycloak-transport-ca
+            secretName: edge-internal-transport
+            defaultMode: 0440
         - name: data
           hostPath:
             path: /var/lib/docker/volumes/noebs_caddy_data/_data

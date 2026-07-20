@@ -2,3 +2,4 @@ noebs:
   service_role: wallet-worker
   otel_service_name: wallet-worker
   db_driver: pgx
+  temporal_client_id: noebs-temporal-wallet-worker

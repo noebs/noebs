@@ -18,6 +18,7 @@ import (
 	"github.com/adonese/noebs/internal/backofficeauth"
 	"github.com/adonese/noebs/internal/tenantauth"
 	"github.com/adonese/noebs/internal/tenantcatalog"
+	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/internal/workloadauth"
 	fastws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -41,12 +42,18 @@ type gatewayRouteSpec struct {
 	capabilityPath string
 	role           serviceRole
 	auth           gatewayAuthMode
+	transaction    transactionauth.Operation
 	websocket      bool
 }
 
 const gatewayWebSocketHandshakeTimeout = 10 * time.Second
 
-func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig, catalog tenantcatalog.Catalog) error {
+func registerAPIGatewayProxyRoutes(
+	route *fiber.App,
+	cfg ebs_fields.NoebsConfig,
+	catalog tenantcatalog.Catalog,
+	transactionAuthorization *walletAuthorizationHTTP,
+) error {
 	if oidcVerifier == nil {
 		return errors.New("OIDC verifier is not initialized")
 	}
@@ -62,6 +69,14 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 	profileResolver, err := newIdentityProfileProjectionResolver(cfg, workloadSigners)
 	if err != nil {
 		return fmt.Errorf("configure identity profile projection resolver: %w", err)
+	}
+	if err := registerWalletAuthorizationRoutes(
+		route,
+		transactionAuthorization,
+		mobileAuth,
+		propagateGatewayOIDCPrincipal(profileResolver),
+	); err != nil {
+		return fmt.Errorf("configure wallet transaction authorization: %w", err)
 	}
 	webhookResolver, err := newGatewayWebhookResolver(cfg.PSPWebhookRoutes, catalog)
 	if err != nil {
@@ -86,8 +101,8 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			handler = gatewayWebSocketProxyHandler(target, internalTransportClientTLS)
 		}
 
-		handlers := make([]fiber.Handler, 0, 6)
-		handlers = append(handlers, clearGatewayIdentityHeaders)
+		handlers := make([]fiber.Handler, 0, 8)
+		handlers = append(handlers, captureWalletAuthorizationHeader, clearGatewayIdentityHeaders)
 		switch spec.auth {
 		case gatewayAuthPublic:
 			handlers = append(handlers, clearPublicCredentialHeaders)
@@ -99,6 +114,12 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			handlers = append(handlers, clearPublicCredentialHeaders, webhookResolver.Resolve)
 		default:
 			return fmt.Errorf("unknown gateway auth mode %d for %s %s", spec.auth, spec.method, spec.path)
+		}
+		if spec.transaction != "" {
+			if transactionAuthorization == nil || !spec.transaction.Valid() {
+				return fmt.Errorf("invalid transaction authorization for %s %s", spec.method, spec.path)
+			}
+			handlers = append(handlers, transactionAuthorization.requireIntent(spec.transaction))
 		}
 		if spec.upstreamPath != "" {
 			handlers = append(handlers, rewriteGatewayPath(spec.upstreamPath))
@@ -518,6 +539,9 @@ func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 		{method: fiber.MethodPost, path: "/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/wallets/:id/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 		{method: fiber.MethodGet, path: "/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/deposits", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/p2p", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser, transaction: transactionauth.OperationWalletP2P},
+		{method: fiber.MethodPost, path: "/wallet/withdrawals", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser, transaction: transactionauth.OperationWalletWithdrawal},
 
 		{method: fiber.MethodGet, path: "/backoffice/assets/*", upstreamPath: "/dashboard/assets/*", role: serviceRoleAdminReporting, auth: gatewayAuthPublic},
 	}

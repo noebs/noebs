@@ -14,6 +14,10 @@ import (
 const (
 	DesiredStateAPIVersion         = "noebs.sd/keycloak/v1"
 	walletAuthorizerClientID       = "noebs-wallet-authorizer"
+	temporalAudience               = "noebs-temporal"
+	temporalLedgerClientID         = "noebs-temporal-wallet-ledger"
+	temporalWorkerClientID         = "noebs-temporal-wallet-worker"
+	temporalBootstrapClientID      = "noebs-temporal-namespace-bootstrap"
 	walletAuthorizationCallbackURI = "https://api.noebs.sd/wallet/authorizations/oauth/callback"
 	googleACR                      = "urn:noebs:acr:google"
 	googleTOTPACR                  = "urn:noebs:acr:google-totp"
@@ -52,6 +56,7 @@ type DesiredState struct {
 	ReconcilerClient   ReconcilerClient    `yaml:"reconciler_client"`
 	ResourceClient     ResourceClient      `yaml:"resource_client"`
 	InteractiveClients []InteractiveClient `yaml:"interactive_clients"`
+	ServiceClients     []ServiceClient     `yaml:"service_clients"`
 	RealmRoles         []Role              `yaml:"realm_roles"`
 	OrganizationClaim  OrganizationClaim   `yaml:"organization_claim"`
 	IdentityProviders  []IdentityProvider  `yaml:"identity_providers"`
@@ -123,6 +128,14 @@ type InteractiveClient struct {
 	RedirectURIs           []string `yaml:"redirect_uris"`
 	PostLogoutRedirectURIs []string `yaml:"post_logout_redirect_uris"`
 	WebOrigins             []string `yaml:"web_origins"`
+}
+
+type ServiceClient struct {
+	ClientID    string   `yaml:"client_id"`
+	Name        string   `yaml:"name"`
+	Credential  string   `yaml:"credential"`
+	Audience    string   `yaml:"audience"`
+	Permissions []string `yaml:"permissions"`
 }
 
 type Role struct {
@@ -219,10 +232,12 @@ func (c Config) Validate() error {
 	for name := range c.ClientCredentials {
 		clientNames[name] = struct{}{}
 	}
-	if !exactStringSet(clientNames, "noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID) {
-		return fmt.Errorf("%w: client_credentials must contain only noebs-keycloak-reconciler, noebs-backoffice, and %s", ErrInvalidConfig, walletAuthorizerClientID)
+	if !exactStringSet(clientNames, "noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID,
+		temporalLedgerClientID, temporalWorkerClientID, temporalBootstrapClientID) {
+		return fmt.Errorf("%w: client_credentials must contain the exact repository-owned client set", ErrInvalidConfig)
 	}
-	for _, name := range []string{"noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID} {
+	for _, name := range []string{"noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID,
+		temporalLedgerClientID, temporalWorkerClientID, temporalBootstrapClientID} {
 		credential := c.ClientCredentials[name]
 		if err := validateValue("client_credentials."+name+".client_secret", credential.ClientSecret); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
@@ -415,6 +430,44 @@ func (s DesiredState) Validate() error {
 				return fmt.Errorf("%w: %s must declare the exact confidential one-request LoA2 client", ErrInvalidDesiredState, walletAuthorizerClientID)
 			}
 		}
+	}
+	serviceClientIDs := make(map[string]struct{}, len(s.ServiceClients))
+	for index, client := range s.ServiceClients {
+		prefix := fmt.Sprintf("service_clients[%d]", index)
+		for _, field := range []namedValue{
+			{name: prefix + ".client_id", value: client.ClientID},
+			{name: prefix + ".name", value: client.Name},
+			{name: prefix + ".credential", value: client.Credential},
+			{name: prefix + ".audience", value: client.Audience},
+		} {
+			if err := validateValue(field.name, field.value); err != nil {
+				return fmt.Errorf("%w: %v", ErrInvalidDesiredState, err)
+			}
+		}
+		if client.Credential != client.ClientID || client.Audience != temporalAudience {
+			return fmt.Errorf("%w: %s must use its own credential and the Temporal audience", ErrInvalidDesiredState, prefix)
+		}
+		if _, exists := serviceClientIDs[client.ClientID]; exists {
+			return fmt.Errorf("%w: duplicate service client %q", ErrInvalidDesiredState, client.ClientID)
+		}
+		if _, exists := interactiveClientIDs[client.ClientID]; exists || client.ClientID == s.ResourceClient.ClientID || client.ClientID == s.ReconcilerClient.ClientID {
+			return fmt.Errorf("%w: service client %q conflicts with another client", ErrInvalidDesiredState, client.ClientID)
+		}
+		permissions, err := validateStrings(prefix+".permissions", client.Permissions)
+		if err != nil {
+			return err
+		}
+		wantPermission := "default:write"
+		if client.ClientID == temporalBootstrapClientID {
+			wantPermission = "temporal-system:admin"
+		}
+		if !exactStringSet(permissions, wantPermission) {
+			return fmt.Errorf("%w: %s permissions must contain only %s", ErrInvalidDesiredState, prefix, wantPermission)
+		}
+		serviceClientIDs[client.ClientID] = struct{}{}
+	}
+	if !exactStringSet(serviceClientIDs, temporalLedgerClientID, temporalWorkerClientID, temporalBootstrapClientID) {
+		return fmt.Errorf("%w: service_clients must contain the exact Temporal client set", ErrInvalidDesiredState)
 	}
 	if len(s.IdentityProviders) == 0 {
 		return fmt.Errorf("%w: identity_providers is required", ErrInvalidDesiredState)

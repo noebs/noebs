@@ -8,8 +8,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/store"
 )
 
@@ -55,6 +57,18 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	if payload.Wallet.DefaultCurrency != "SDG" {
 		t.Fatalf("wallet.default_currency = %q, want SDG", payload.Wallet.DefaultCurrency)
 	}
+	transactionAuthorization := payload.Wallet.TransactionAuthorization
+	if transactionAuthorization == nil ||
+		transactionAuthorization.BeginPath != "/wallet/authorizations" ||
+		transactionAuthorization.CredentialHeader != walletAuthorizationHeader ||
+		transactionAuthorization.RequiredACR != walletAuthorizerRequiredACR ||
+		transactionAuthorization.LifetimeSeconds != int64(walletAuthorizationTTL/time.Second) ||
+		!slices.Equal(transactionAuthorization.Operations, []appTransactionAuthorizationOperationConfig{
+			{Operation: transactionauth.OperationWalletP2P, Method: http.MethodPost, Path: "/wallet/p2p"},
+			{Operation: transactionauth.OperationWalletWithdrawal, Method: http.MethodPost, Path: "/wallet/withdrawals"},
+		}) {
+		t.Fatalf("wallet.transaction_authorization = %+v", transactionAuthorization)
+	}
 	if !payload.Features.OpaqueCardManagement || payload.Features.OpaqueBalance || !payload.Features.Chat {
 		t.Fatalf("features = %+v, want independently configured gates", payload.Features)
 	}
@@ -80,6 +94,9 @@ func TestPublicAppConfigCapabilitiesDefaultOff(t *testing.T) {
 	}
 	if payload.Features != (appFeatureConfig{}) {
 		t.Fatalf("features = %+v, want every capability disabled", payload.Features)
+	}
+	if payload.Wallet.TransactionAuthorization != nil {
+		t.Fatalf("disabled wallet advertises transaction authorization: %+v", payload.Wallet.TransactionAuthorization)
 	}
 }
 

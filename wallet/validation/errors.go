@@ -2,37 +2,21 @@ package validation
 
 import (
 	"errors"
-	"fmt"
 )
 
 var (
-	ErrMissingStore               = errors.New("missing validation store")
-	ErrWalletInactive             = errors.New("wallet not active")
-	ErrWalletOwnerMismatch        = errors.New("wallet owner mismatch")
-	ErrLimitExceeded              = errors.New("limit exceeded")
-	ErrPSPConfigDisabled          = errors.New("psp config disabled")
-	ErrPSPConfigMissingCurrencies = errors.New("psp config missing enabled currencies")
-	ErrPSPDirectionInvalid        = errors.New("psp direction not supported")
-	ErrPSPCurrencyInvalid         = errors.New("psp currency not supported")
-	ErrFeeExceedsAmount           = errors.New("fee exceeds amount")
-	ErrMissingPSPTransactionID    = errors.New("missing psp transaction id")
-	ErrMissingRequestedCurrency   = errors.New("missing requested currency")
-	ErrMissingSettlementCurrency  = errors.New("missing settlement currency")
-	ErrMissingWalletCurrency      = errors.New("missing wallet currency")
-	ErrFXCurrencyMismatch         = errors.New("fx currency mismatch")
+	ErrMissingStore                = errors.New("missing validation store")
+	ErrWalletInactive              = errors.New("wallet not active")
+	ErrWalletOwnerMismatch         = errors.New("wallet owner mismatch")
+	ErrPSPConfigDisabled           = errors.New("psp config disabled")
+	ErrPSPConfigMissingCurrencies  = errors.New("psp config missing enabled currencies")
+	ErrPSPConfigMissingIdempotency = errors.New("psp config missing idempotency header")
+	ErrPSPDirectionInvalid         = errors.New("psp direction not supported")
+	ErrPSPCurrencyInvalid          = errors.New("psp currency not supported")
+	ErrFeeExceedsAmount            = errors.New("fee exceeds amount")
+	ErrMissingPSPTransactionID     = errors.New("missing psp transaction id")
+	ErrMissingRequestedCurrency    = errors.New("missing requested currency")
+	ErrMissingSettlementCurrency   = errors.New("missing settlement currency")
+	ErrMissingWalletCurrency       = errors.New("missing wallet currency")
+	ErrFXCurrencyMismatch          = errors.New("fx currency mismatch")
 )
-
-type LimitExceededError struct {
-	Reason string
-}
-
-func (e LimitExceededError) Error() string {
-	if e.Reason == "" {
-		return ErrLimitExceeded.Error()
-	}
-	return fmt.Sprintf("%s: %s", ErrLimitExceeded.Error(), e.Reason)
-}
-
-func (e LimitExceededError) Is(target error) bool {
-	return target == ErrLimitExceeded
-}

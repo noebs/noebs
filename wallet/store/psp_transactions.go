@@ -3,8 +3,12 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type PSPStatusUpdate struct {
@@ -19,6 +23,7 @@ type PSPStatusUpdate struct {
 	RetryCount       int
 	LastErrorType    sql.NullString
 	LastErrorAt      sql.NullTime
+	LockToken        sql.NullString
 }
 
 type PSPTransactionFilter struct {
@@ -59,6 +64,15 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 	if err := ValidatePSPTransactionStatus(txn.Status); err != nil {
 		return nil, err
 	}
+	if err := validatePSPDecisionDeadline(txn); err != nil {
+		return nil, err
+	}
+	if err := validatePSPDepositIntent(txn); err != nil {
+		return nil, err
+	}
+	if err := validatePSPTransactionDirectionAuthority(txn); err != nil {
+		return nil, err
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -80,14 +94,14 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 		return nil, err
 	}
 
-	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO psp_transactions(
 		tenant_id, psp_provider, psp_transaction_id, idempotency_key, client_reference,
-		direction, amount, fee_amount, net_amount, currency, status, workflow_id,
-		response_code, response_message, raw_request, raw_response, created_at,
+		direction, wallet_id, owner_type, owner_id, withdrawal_destination_id, allow_return_to_source,
+		amount, fee_amount, net_amount, currency, status, workflow_id,
+		response_code, response_message, raw_request, raw_response, approval_timeout_seconds, decision_deadline_at, deposit_intent_id, created_at,
 		confirmed_at, last_polled_at, next_poll_at, reconciled_at, retry_count,
 		lock_token, lock_expires_at, last_error_type, last_error_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + (? * interval '1 second'), ?, clock_timestamp(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 
 	var stored PSPTransaction
@@ -98,6 +112,11 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 		txn.IdempotencyKey,
 		txn.ClientReference,
 		txn.Direction,
+		txn.WalletID,
+		txn.OwnerType,
+		txn.OwnerID,
+		txn.WithdrawalDestinationID,
+		txn.AllowReturnToSource,
 		txn.Amount,
 		txn.FeeAmount,
 		txn.NetAmount,
@@ -108,7 +127,9 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 		txn.ResponseMessage,
 		txn.RawRequest,
 		txn.RawResponse,
-		now,
+		txn.ApprovalTimeoutSeconds,
+		txn.ApprovalTimeoutSeconds,
+		txn.DepositIntentID,
 		txn.ConfirmedAt,
 		txn.LastPolledAt,
 		txn.NextPollAt,
@@ -149,17 +170,118 @@ func pspTransactionCreateReplayMatches(existing PSPTransaction, requested PSPTra
 		existing.IdempotencyKey == requested.IdempotencyKey &&
 		existing.ClientReference == requested.ClientReference &&
 		existing.Direction == requested.Direction &&
+		nullUUIDEqual(existing.WalletID, requested.WalletID) &&
+		nullStringEqual(existing.OwnerType, requested.OwnerType) &&
+		nullStringEqual(existing.OwnerID, requested.OwnerID) &&
+		nullInt64Equal(existing.WithdrawalDestinationID, requested.WithdrawalDestinationID) &&
+		nullBoolEqual(existing.AllowReturnToSource, requested.AllowReturnToSource) &&
 		existing.Amount == requested.Amount &&
 		existing.Currency == requested.Currency &&
 		nullInt64Equal(existing.FeeAmount, requested.FeeAmount) &&
 		nullInt64Equal(existing.NetAmount, requested.NetAmount) &&
+		nullInt64Equal(existing.ApprovalTimeoutSeconds, requested.ApprovalTimeoutSeconds) &&
+		nullInt64Equal(existing.DepositIntentID, requested.DepositIntentID) &&
 		requestedNullStringMatches(existing.PSPTransactionID, requested.PSPTransactionID) &&
 		requestedNullStringMatches(existing.WorkflowID, requested.WorkflowID) &&
 		rawJSONMatches([]byte(existing.RawRequest), []byte(requested.RawRequest))
 }
 
+func validatePSPDepositIntent(txn PSPTransaction) error {
+	switch txn.Direction {
+	case "inbound":
+		if !txn.DepositIntentID.Valid {
+			return ErrMissingDepositIntentID
+		}
+		if txn.DepositIntentID.Int64 <= 0 {
+			return ErrInvalidDepositIntentID
+		}
+	case "outbound":
+		if txn.DepositIntentID.Valid {
+			return ErrInvalidDepositIntentID
+		}
+	}
+	return nil
+}
+
+func validatePSPTransactionDirectionAuthority(txn PSPTransaction) error {
+	switch txn.Direction {
+	case "inbound":
+		if txn.WalletID.Valid || txn.OwnerType.Valid || txn.OwnerID.Valid ||
+			txn.WithdrawalDestinationID.Valid || txn.AllowReturnToSource.Valid {
+			return ErrInvalidWithdrawalRequest
+		}
+	case "outbound":
+		if !txn.WalletID.Valid || txn.WalletID.UUID == uuid.Nil {
+			return ErrMissingWalletID
+		}
+		if !txn.OwnerType.Valid || txn.OwnerType.String == "" {
+			return ErrMissingOwnerType
+		}
+		if !OwnerTypeValid(txn.OwnerType.String) {
+			return ErrInvalidOwnerType
+		}
+		if !txn.OwnerID.Valid || txn.OwnerID.String == "" {
+			return ErrMissingOwnerID
+		}
+		if strings.TrimSpace(txn.OwnerID.String) != txn.OwnerID.String {
+			return ErrInvalidWithdrawalRequest
+		}
+		if !txn.AllowReturnToSource.Valid {
+			return ErrMissingReturnToSourcePolicy
+		}
+		if txn.WithdrawalDestinationID.Valid && txn.WithdrawalDestinationID.Int64 <= 0 {
+			return ErrInvalidDestinationID
+		}
+		if !txn.AllowReturnToSource.Bool && !txn.WithdrawalDestinationID.Valid {
+			return ErrMissingDestinationID
+		}
+	}
+	return nil
+}
+
+func validatePSPDecisionDeadline(txn PSPTransaction) error {
+	var request struct {
+		ApprovalRequired       *bool `json:"approval_required"`
+		ApprovalTimeoutSeconds int   `json:"approval_timeout_seconds"`
+		HoldExpirySeconds      int   `json:"hold_expiry_seconds"`
+	}
+	if len(txn.RawRequest) > 0 {
+		if err := json.Unmarshal(txn.RawRequest, &request); err != nil {
+			return err
+		}
+	}
+	if request.ApprovalRequired != nil && *request.ApprovalRequired {
+		if !txn.ApprovalTimeoutSeconds.Valid || txn.ApprovalTimeoutSeconds.Int64 <= 0 {
+			return ErrMissingApprovalTimeout
+		}
+		if request.ApprovalTimeoutSeconds <= 0 || request.HoldExpirySeconds <= 0 {
+			return ErrMissingApprovalTimeout
+		}
+		expected := min(request.ApprovalTimeoutSeconds, request.HoldExpirySeconds)
+		if txn.ApprovalTimeoutSeconds.Int64 != int64(expected) {
+			return ErrInvalidApprovalTimeout
+		}
+		if txn.DecisionDeadlineAt.Valid {
+			return ErrInvalidApprovalTimeout
+		}
+		return nil
+	}
+	if txn.ApprovalTimeoutSeconds.Valid || txn.DecisionDeadlineAt.Valid {
+		return ErrInvalidApprovalTimeout
+	}
+	return nil
+}
+
 func nullInt64Equal(left, right sql.NullInt64) bool {
 	return left.Valid == right.Valid && (!left.Valid || left.Int64 == right.Int64)
+}
+
+func nullBoolEqual(left, right sql.NullBool) bool {
+	return left.Valid == right.Valid && (!left.Valid || left.Bool == right.Bool)
+}
+
+func nullUUIDEqual(left, right uuid.NullUUID) bool {
+	return left.Valid == right.Valid && (!left.Valid || left.UUID == right.UUID)
 }
 
 func requestedNullStringMatches(existing, requested sql.NullString) bool {
@@ -185,6 +307,29 @@ func (s *Store) GetPSPTransactionByReference(ctx context.Context, tenantID, clie
 	var txn PSPTransaction
 	if err := db.GetContext(ctx, &txn, stmt, tenantID, clientReference); err != nil {
 		if err == sql.ErrNoRows {
+			return nil, ErrPSPTransactionNotFound
+		}
+		return nil, err
+	}
+	return &txn, nil
+}
+
+func (s *Store) GetPSPTransactionByWorkflow(ctx context.Context, tenantID, workflowID string) (*PSPTransaction, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateBoundedIdentifier(workflowID, 255, ErrMissingWorkflowID, ErrInvalidWorkflowID); err != nil {
+		return nil, err
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	stmt := db.Rebind("SELECT * FROM psp_transactions WHERE tenant_id = ? AND workflow_id = ?")
+	var txn PSPTransaction
+	if err := db.GetContext(ctx, &txn, stmt, tenantID, workflowID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPSPTransactionNotFound
 		}
 		return nil, err
@@ -223,14 +368,256 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 	if err != nil {
 		return err
 	}
-	existing, err := s.GetPSPTransactionByReference(ctx, tenantID, clientReference)
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	existing, err := getPSPTransactionForUpdate(ctx, tx, tenantID, clientReference)
 	if err != nil {
 		return err
 	}
 	if err := ValidatePSPStatusUpdate(existing, update); err != nil {
 		return err
 	}
-	stmt := db.Rebind(`UPDATE psp_transactions
+	if _, err := updatePSPTransactionRow(ctx, tx, tenantID, clientReference, update, nil); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) ApplyExternalPSPStatus(ctx context.Context, tenantID, clientReference string, update PSPStatusUpdate, workflowSignal *PSPWorkflowSignal) (*PSPTransaction, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if clientReference == "" {
+		return nil, ErrMissingClientReference
+	}
+	if err := ValidatePSPTransactionStatus(update.Status); err != nil {
+		return nil, err
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	existing, err := getPSPTransactionForUpdate(ctx, tx, tenantID, clientReference)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidatePSPStatusTransition(existing.Status, update.Status); err != nil {
+		return nil, err
+	}
+	if existing.PSPTransactionID.Valid && update.PSPTransactionID.Valid && existing.PSPTransactionID.String != update.PSPTransactionID.String {
+		return nil, ErrDuplicateTransaction
+	}
+	if PSPTransactionStatusTerminal(existing.Status) {
+		return existing, nil
+	}
+	terminal := PSPTransactionStatusTerminal(update.Status)
+	switch {
+	case terminal && existing.WorkflowID.Valid && workflowSignal == nil:
+		return nil, ErrMissingWorkflowSignal
+	case terminal && !existing.WorkflowID.Valid && workflowSignal != nil:
+		return nil, ErrMissingWorkflowID
+	case !terminal && workflowSignal != nil:
+		return nil, ErrInvalidStatusTransition
+	}
+	if err := ValidatePSPStatusUpdate(existing, update); err != nil {
+		return nil, err
+	}
+	workflowSignalPayload, err := encodePSPWorkflowSignal(existing, update, workflowSignal)
+	if err != nil {
+		return nil, err
+	}
+	stored, err := applyExternalPSPStatusRow(ctx, tx, tenantID, clientReference, update, workflowSignalPayload)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return stored, nil
+}
+
+func applyExternalPSPStatusRow(ctx context.Context, tx pspTransactionTx, tenantID, clientReference string, update PSPStatusUpdate, workflowSignal RawJSON) (*PSPTransaction, error) {
+	query := `UPDATE psp_transactions
+		SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
+			response_code = COALESCE(?, response_code),
+			response_message = COALESCE(?, response_message),
+			raw_response = COALESCE(?, raw_response),
+			confirmed_at = COALESCE(?, confirmed_at),
+			workflow_signal_payload = COALESCE(workflow_signal_payload, ?)`
+	args := []any{
+		update.Status,
+		update.PSPTransactionID,
+		update.ResponseCode,
+		update.ResponseMessage,
+		update.RawResponse,
+		update.ConfirmedAt,
+		workflowSignal,
+	}
+	if update.LockToken.Valid {
+		query += `, last_polled_at = COALESCE(?, last_polled_at),
+			next_poll_at = COALESCE(?, next_poll_at),
+			retry_count = CASE WHEN ? = 0 THEN retry_count ELSE ? END,
+			last_error_type = ?, last_error_at = ?`
+		args = append(args,
+			update.LastPolledAt,
+			update.NextPollAt,
+			update.RetryCount,
+			update.RetryCount,
+			update.LastErrorType,
+			update.LastErrorAt,
+		)
+	}
+	query += ` WHERE tenant_id = ? AND client_reference = ?
+		AND status NOT IN ('success', 'failed', 'cancelled')`
+	args = append(args, tenantID, clientReference)
+	if update.LockToken.Valid {
+		query += " AND lock_token = ?"
+		args = append(args, update.LockToken.String)
+	}
+	query += " RETURNING *"
+	var stored PSPTransaction
+	if err := tx.GetContext(ctx, &stored, tx.Rebind(query), args...); err != nil {
+		if errors.Is(err, sql.ErrNoRows) && update.LockToken.Valid {
+			return nil, ErrPSPTransactionLockLost
+		}
+		return nil, err
+	}
+	return &stored, nil
+}
+
+func ParsePSPWorkflowSignal(payload RawJSON) (PSPWorkflowSignal, error) {
+	if len(payload) == 0 {
+		return PSPWorkflowSignal{}, ErrMissingWorkflowSignal
+	}
+	var signal PSPWorkflowSignal
+	if err := json.Unmarshal(payload, &signal); err != nil {
+		return PSPWorkflowSignal{}, err
+	}
+	if err := ValidatePSPTransactionStatus(signal.Status); err != nil {
+		return PSPWorkflowSignal{}, err
+	}
+	if !PSPTransactionStatusTerminal(signal.Status) {
+		return PSPWorkflowSignal{}, ErrInvalidStatusTransition
+	}
+	return signal, nil
+}
+
+func encodePSPWorkflowSignal(existing *PSPTransaction, update PSPStatusUpdate, signal *PSPWorkflowSignal) (RawJSON, error) {
+	if signal == nil {
+		return nil, nil
+	}
+	if err := ValidatePSPTransactionStatus(signal.Status); err != nil {
+		return nil, err
+	}
+	if signal.Status != update.Status || !PSPTransactionStatusTerminal(signal.Status) {
+		return nil, ErrInvalidStatusTransition
+	}
+	expectedProviderTxID := existing.PSPTransactionID
+	if update.PSPTransactionID.Valid {
+		expectedProviderTxID = update.PSPTransactionID
+	}
+	if expectedProviderTxID.Valid && signal.ProviderTxID != expectedProviderTxID.String {
+		return nil, ErrDuplicateTransaction
+	}
+	if signal.Status == PSPStatusSuccess {
+		if signal.ProviderTxID == "" {
+			return nil, ErrMissingPSPTransactionID
+		}
+		if signal.Amount != existing.Amount {
+			return nil, ErrInvalidAmount
+		}
+		if signal.Currency != existing.Currency {
+			return nil, ErrCurrencyMismatch
+		}
+	}
+	if len(update.RawResponse) > 0 && !rawJSONMatches(update.RawResponse, signal.RawResponse) {
+		return nil, ErrDuplicateTransaction
+	}
+	payload, err := json.Marshal(signal)
+	if err != nil {
+		return nil, err
+	}
+	return RawJSON(payload), nil
+}
+
+func (s *Store) AcknowledgePSPWorkflowSignal(ctx context.Context, tenantID, clientReference string, deliveredAt time.Time, lockToken string) (*PSPTransaction, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if clientReference == "" {
+		return nil, ErrMissingClientReference
+	}
+	if deliveredAt.IsZero() {
+		return nil, ErrMissingWorkflowSignalDeliveryTime
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return nil, err
+	}
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	existing, err := getPSPTransactionForUpdate(ctx, tx, tenantID, clientReference)
+	if err != nil {
+		return nil, err
+	}
+	if len(existing.WorkflowSignalPayload) == 0 {
+		if lockToken == "" {
+			return existing, nil
+		}
+		return nil, ErrMissingWorkflowSignal
+	}
+	if existing.WorkflowSignalDeliveredAt.Valid {
+		return existing, nil
+	}
+	if lockToken != "" && (!existing.LockToken.Valid || existing.LockToken.String != lockToken) {
+		return nil, ErrPSPTransactionLockLost
+	}
+	stmt := tx.Rebind(`UPDATE psp_transactions
+		SET workflow_signal_delivered_at = ?, lock_token = NULL, lock_expires_at = NULL
+		WHERE tenant_id = ? AND client_reference = ?
+		RETURNING *`)
+	var stored PSPTransaction
+	if err := tx.GetContext(ctx, &stored, stmt, deliveredAt, tenantID, clientReference); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &stored, nil
+}
+
+type pspTransactionTx interface {
+	Rebind(string) string
+	GetContext(context.Context, any, string, ...any) error
+}
+
+func getPSPTransactionForUpdate(ctx context.Context, tx pspTransactionTx, tenantID, clientReference string) (*PSPTransaction, error) {
+	stmt := tx.Rebind("SELECT * FROM psp_transactions WHERE tenant_id = ? AND client_reference = ? FOR UPDATE")
+	var txn PSPTransaction
+	if err := tx.GetContext(ctx, &txn, stmt, tenantID, clientReference); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrPSPTransactionNotFound
+		}
+		return nil, err
+	}
+	return &txn, nil
+}
+
+func updatePSPTransactionRow(ctx context.Context, tx pspTransactionTx, tenantID, clientReference string, update PSPStatusUpdate, workflowSignal RawJSON) (*PSPTransaction, error) {
+	query := `UPDATE psp_transactions
 			SET status = ?, psp_transaction_id = COALESCE(?, psp_transaction_id),
 				response_code = COALESCE(?, response_code),
 				response_message = COALESCE(?, response_message),
@@ -239,10 +626,11 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 				last_polled_at = COALESCE(?, last_polled_at),
 				next_poll_at = COALESCE(?, next_poll_at),
 				retry_count = CASE WHEN ? = 0 THEN retry_count ELSE ? END,
-				last_error_type = ?, last_error_at = ?
+				last_error_type = ?, last_error_at = ?,
+				workflow_signal_payload = COALESCE(workflow_signal_payload, ?)
 			WHERE tenant_id = ? AND client_reference = ?
-			AND (status NOT IN ('success', 'failed', 'cancelled') OR status = ?)`)
-	result, err := db.ExecContext(ctx, stmt,
+			AND (status NOT IN ('success', 'failed', 'cancelled') OR status = ?)`
+	args := []any{
 		update.Status,
 		update.PSPTransactionID,
 		update.ResponseCode,
@@ -255,32 +643,28 @@ func (s *Store) UpdatePSPTransactionStatus(ctx context.Context, tenantID, client
 		update.RetryCount,
 		update.LastErrorType,
 		update.LastErrorAt,
+		workflowSignal,
 		tenantID,
 		clientReference,
 		update.Status,
-	)
-	if err != nil {
-		return err
 	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
+	if update.LockToken.Valid {
+		query += " AND lock_token = ?"
+		args = append(args, update.LockToken.String)
 	}
-	if affected == 0 {
-		stmt := db.Rebind("SELECT status FROM psp_transactions WHERE tenant_id = ? AND client_reference = ?")
-		var currentStatus string
-		if err := db.GetContext(ctx, &currentStatus, stmt, tenantID, clientReference); err != nil {
-			if err == sql.ErrNoRows {
-				return ErrPSPTransactionNotFound
+	query += " RETURNING *"
+	var stored PSPTransaction
+	err := tx.GetContext(ctx, &stored, tx.Rebind(query), args...)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if update.LockToken.Valid {
+				return nil, ErrPSPTransactionLockLost
 			}
-			return err
+			return nil, ErrPSPTransactionNotFound
 		}
-		if PSPTransactionStatusTerminal(currentStatus) {
-			return ValidatePSPStatusTransition(currentStatus, update.Status)
-		}
-		return ErrPSPTransactionNotFound
+		return nil, err
 	}
-	return nil
+	return &stored, nil
 }
 
 func ValidatePSPStatusUpdate(existing *PSPTransaction, update PSPStatusUpdate) error {
@@ -309,7 +693,7 @@ func nullStringRewriteConflict(existing, update sql.NullString) bool {
 }
 
 func nullTimeRewriteConflict(existing, update sql.NullTime) bool {
-	return existing.Valid && update.Valid && !nullTimeEqual(existing, update)
+	return existing.Valid && update.Valid && !existing.Time.Equal(update.Time)
 }
 
 func rawJSONRewriteConflict(existing, update RawJSON) bool {
@@ -331,10 +715,16 @@ func (s *Store) ListPSPTransactionsForPolling(ctx context.Context, tenantID stri
 	now := time.Now().UTC()
 	stmt := db.Rebind(`SELECT * FROM psp_transactions
 		WHERE tenant_id = ?
-		AND status IN ('initiated', 'processing', 'pending')
-		AND (next_poll_at IS NULL OR next_poll_at <= ?)
 		AND (lock_expires_at IS NULL OR lock_expires_at <= ?)
-		ORDER BY next_poll_at NULLS FIRST, created_at ASC
+		AND (
+			(workflow_signal_payload IS NOT NULL AND workflow_signal_delivered_at IS NULL)
+			OR (
+				status IN ('initiated', 'processing', 'pending', 'held')
+				AND (next_poll_at IS NULL OR next_poll_at <= ?)
+			)
+		)
+		ORDER BY (workflow_signal_payload IS NOT NULL AND workflow_signal_delivered_at IS NULL) DESC,
+			next_poll_at NULLS FIRST, created_at ASC
 		LIMIT ?`)
 	var rows []PSPTransaction
 	if err := db.SelectContext(ctx, &rows, stmt, tenantID, now, now, limit); err != nil {
@@ -490,8 +880,15 @@ func (s *Store) TryAcquirePSPTransactionLock(ctx context.Context, tenantID, clie
 	stmt := db.Rebind(`UPDATE psp_transactions
 		SET lock_token = ?, lock_expires_at = ?
 		WHERE tenant_id = ? AND client_reference = ?
-		AND (lock_expires_at IS NULL OR lock_expires_at <= ?)`)
-	result, err := db.ExecContext(ctx, stmt, lockToken, lockExpiresAt, tenantID, clientReference, now)
+		AND (lock_expires_at IS NULL OR lock_expires_at <= ?)
+		AND (
+			(workflow_signal_payload IS NOT NULL AND workflow_signal_delivered_at IS NULL)
+			OR (
+				status IN ('initiated', 'processing', 'pending', 'held')
+				AND (next_poll_at IS NULL OR next_poll_at <= ?)
+			)
+		)`)
+	result, err := db.ExecContext(ctx, stmt, lockToken, lockExpiresAt, tenantID, clientReference, now, now)
 	if err != nil {
 		return false, err
 	}

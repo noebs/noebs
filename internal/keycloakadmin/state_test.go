@@ -49,6 +49,15 @@ func TestRepositoryDesiredStateContract(t *testing.T) {
 	if len(state.RealmRoles) != 0 {
 		t.Fatalf("realm roles = %v, want none", state.RealmRoles)
 	}
+	serviceClients := make(map[string]ServiceClient, len(state.ServiceClients))
+	for _, client := range state.ServiceClients {
+		serviceClients[client.ClientID] = client
+	}
+	if !equalStrings(serviceClients[temporalLedgerClientID].Permissions, []string{"default:write"}) ||
+		!equalStrings(serviceClients[temporalWorkerClientID].Permissions, []string{"default:write"}) ||
+		!equalStrings(serviceClients[temporalBootstrapClientID].Permissions, []string{"temporal-system:admin"}) {
+		t.Fatalf("Temporal service client permissions = %#v", serviceClients)
+	}
 	if len(state.Organizations) != 2 {
 		t.Fatalf("organizations = %d, want 2", len(state.Organizations))
 	}
@@ -324,6 +333,9 @@ func validTestConfig(baseURL string) Config {
 			"noebs-keycloak-reconciler": {ClientSecret: "steady-reconciler-secret"},
 			"noebs-backoffice":          {ClientSecret: "backoffice-secret"},
 			walletAuthorizerClientID:    {ClientSecret: "wallet-authorizer-secret"},
+			temporalLedgerClientID:      {ClientSecret: "temporal-ledger-secret"},
+			temporalWorkerClientID:      {ClientSecret: "temporal-worker-secret"},
+			temporalBootstrapClientID:   {ClientSecret: "temporal-bootstrap-secret"},
 		},
 		IdentityProviders: map[string]IdentityProviderCredential{
 			"google": {ClientID: "google-client", ClientSecret: "google-secret"},

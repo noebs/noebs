@@ -167,35 +167,92 @@ for retired in \
     deployment/consumer-beneficiary \
     service/consumer-beneficiary \
     secret/consumer-beneficiary-secrets \
-    secret/consumer-beneficiary-migrate-secrets
+    secret/consumer-beneficiary-migrate-secrets \
+    secret/psp-webhook-migrate-secrets \
+    serviceaccount/psp-webhook-migrate \
+    job/noebs-psp-webhook-migrate
 do
     if "${kubectl_cmd[@]}" -n "$namespace" get "$retired" >/dev/null 2>&1; then
         fail "retired resource remains: $retired"
     fi
 done
 
-database_version() {
+database_migration_set() {
     local database="$1"
     local table="$2"
     "${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- sh -ceu '
-      export PGPASSWORD="$(tr -d "\r\n" < /opt/noebs-postgres/secrets/password)"
-      exec psql -U noebs -d "$1" -XAtqc "SELECT COALESCE(MAX(version_id) FILTER (WHERE is_applied), 0) FROM $2"
+      exec gosu postgres psql -U postgres -d "$1" -XAtqc \
+        "SELECT string_agg(version_id::text || chr(58) || is_applied::text, chr(44) ORDER BY version_id, id) FROM $2"
     ' sh "$database" "$table"
 }
 
-identity_version="$(database_version identity_auth goose_db_version_identity_auth)"
-card_vault_version="$(database_version card_vault goose_db_version_card_vault)"
-consumer_beneficiary_count="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- sh -ceu '
-  export PGPASSWORD="$(tr -d "\r\n" < /opt/noebs-postgres/secrets/password)"
-  exec psql -U noebs -d postgres -XAtqc \
-    "SELECT count(*) FROM pg_database WHERE datname = '\''consumer_beneficiary'\''"
+identity_migrations="$(database_migration_set identity_auth goose_db_version_identity_auth)"
+card_vault_migrations="$(database_migration_set card_vault goose_db_version_card_vault)"
+ebs_adapter_migrations="$(database_migration_set ebs_adapter goose_db_version_ebs_adapter)"
+admin_reporting_migrations="$(database_migration_set admin_reporting goose_db_version_admin_reporting)"
+notification_chat_migrations="$(database_migration_set notification_chat goose_db_version_notification_chat)"
+wallet_ledger_migrations="$(database_migration_set wallet_ledger goose_db_version_wallet_ledger)"
+workload_auth_migrations="$(database_migration_set workload_auth goose_db_version_workload_auth)"
+gateway_auth_migrations="$(database_migration_set gateway_auth goose_db_version_gateway_auth)"
+authority_marker_status="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- sh -ceu '
+  test -f /var/lib/postgresql/data/.noebs-postgres-authority
+  printf current
 ')"
-[[ "$identity_version" == 101 ]] || fail "identity-auth migration version is $identity_version, want exactly 101"
-[[ "$card_vault_version" =~ ^[0-9]+$ && "$card_vault_version" -ge 104 ]] || fail "card-vault migration version is $card_vault_version, want at least 104"
-[[ "$consumer_beneficiary_count" == 0 ]] || fail "retired consumer_beneficiary database remains"
+topology_drift_count="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- sh -ceu '
+  exec gosu postgres psql -U postgres -d postgres -XAtqc \
+    "WITH expected_roles(name) AS (VALUES
+       ('\''admin_reporting_migrate'\''), ('\''admin_reporting_projector'\''), ('\''admin_reporting_runtime'\''),
+       ('\''card_vault_migrate'\''), ('\''card_vault_runtime'\''),
+       ('\''ebs_adapter_events'\''), ('\''ebs_adapter_migrate'\''), ('\''ebs_adapter_runtime'\''),
+       ('\''gateway_auth_cleanup'\''), ('\''gateway_auth_migrate'\''), ('\''gateway_auth_runtime'\''),
+       ('\''identity_auth_migrate'\''), ('\''identity_auth_runtime'\''),
+       ('\''notification_chat_migrate'\''), ('\''notification_chat_runtime'\''),
+       ('\''wallet_ledger_migrate'\''), ('\''wallet_ledger_runtime'\''), ('\''wallet_ledger_webhook'\''), ('\''wallet_ledger_worker'\''),
+       ('\''workload_auth_cleanup'\''), ('\''workload_auth_migrate'\''), ('\''workload_auth_runtime'\'')),
+     actual_roles(name) AS (
+       SELECT rolname::text
+       FROM pg_roles
+       WHERE rolname <> '\''postgres'\'' AND rolname !~ '\''^pg_'\''
+     ),
+     expected_databases(name) AS (VALUES
+       ('\''admin_reporting'\''), ('\''card_vault'\''), ('\''ebs_adapter'\''), ('\''gateway_auth'\''),
+       ('\''identity_auth'\''), ('\''notification_chat'\''), ('\''wallet_ledger'\''), ('\''workload_auth'\'')),
+     actual_databases(name) AS (
+       SELECT datname::text FROM pg_database
+       WHERE datallowconn AND NOT datistemplate AND datname <> '\''postgres'\''
+     )
+     SELECT
+       (SELECT count(*) FROM (
+          (SELECT name FROM expected_roles EXCEPT SELECT name FROM actual_roles)
+          UNION ALL
+          (SELECT name FROM actual_roles EXCEPT SELECT name FROM expected_roles)
+        ) role_drift) +
+       (SELECT count(*) FROM (
+          (SELECT name FROM expected_databases EXCEPT SELECT name FROM actual_databases)
+          UNION ALL
+          (SELECT name FROM actual_databases EXCEPT SELECT name FROM expected_databases)
+        ) database_drift)"
+')"
+[[ "$authority_marker_status" == current ]] || fail "Postgres authority marker is missing"
+[[ "$topology_drift_count" == 0 ]] || fail "Postgres role or service-database topology drift count is $topology_drift_count"
+for actual_expected_label in \
+    "$identity_migrations|0:true,1:true|identity-auth" \
+    "$card_vault_migrations|0:true,1:true|card-vault" \
+    "$ebs_adapter_migrations|0:true,1:true|ebs-adapter" \
+    "$admin_reporting_migrations|0:true,1:true|admin-reporting" \
+    "$notification_chat_migrations|0:true,1:true|notification-chat" \
+    "$wallet_ledger_migrations|0:true,1:true|wallet-ledger" \
+    "$workload_auth_migrations|0:true,1:true|workload-auth" \
+    "$gateway_auth_migrations|0:true,1:true|gateway-auth"
+do
+    IFS='|' read -r actual expected label <<<"$actual_expected_label"
+    [[ "$actual" == "$expected" ]] || fail "$label migration set is $actual, want exactly $expected"
+done
 
-printf 'alpha post-deploy smoke (cluster): PASS revision=%s image=%s identity=%s card-vault=%s\n' \
-    "$expected_revision" "$expected_digest" "$identity_version" "$card_vault_version"
+printf 'alpha post-deploy smoke (cluster): PASS revision=%s image=%s migrations=%s/%s/%s/%s/%s/%s/%s/%s roles=22 databases=8\n' \
+    "$expected_revision" "$expected_digest" "$identity_migrations" "$card_vault_migrations" "$ebs_adapter_migrations" \
+    "$admin_reporting_migrations" "$notification_chat_migrations" "$wallet_ledger_migrations" \
+    "$workload_auth_migrations" "$gateway_auth_migrations"
 REMOTE
 
 printf 'alpha post-deploy smoke: checking public HTTPS edge without creating data\n'

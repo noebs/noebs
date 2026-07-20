@@ -27,10 +27,7 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if len(dest.DestinationDetails) == 0 {
 		return nil, ErrMissingDestinationDetails
 	}
-	if err := ValidateWithdrawalDestinationOwnership(dest); err != nil {
-		return nil, err
-	}
-	if dest.IsReturnToSource && !dest.LinkedFundingSourceID.Valid {
+	if dest.LinkedFundingSourceID <= 0 {
 		return nil, ErrMissingFundingSourceID
 	}
 	if dest.TotalWithdrawn != 0 {
@@ -43,23 +40,20 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 	if err != nil {
 		return nil, err
 	}
-	if dest.LinkedFundingSourceID.Valid {
-		source, err := s.GetFundingSourceByID(ctx, tenantID, dest.LinkedFundingSourceID.Int64)
-		if err != nil {
-			return nil, err
-		}
-		if err := ValidateWithdrawalDestinationFundingSource(dest, source); err != nil {
-			return nil, err
-		}
+	source, err := s.GetFundingSourceByID(ctx, tenantID, dest.LinkedFundingSourceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateWithdrawalDestinationFundingSource(dest, source); err != nil {
+		return nil, err
 	}
 
 	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO withdrawal_destinations(
 		tenant_id, wallet_id, destination_type, psp_provider, destination_details, display_name,
-		currency, country, ownership_status, ownership_verification_method, ownership_verified_at,
-		ownership_verified_by, ownership_proof, linked_funding_source_id, is_return_to_source,
+		currency, country, linked_funding_source_id,
 		is_active, last_used_at, total_withdrawn, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 	var stored WithdrawalDestination
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -71,13 +65,7 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 		dest.DisplayName,
 		dest.Currency,
 		dest.Country,
-		dest.OwnershipStatus,
-		dest.OwnershipVerificationMethod,
-		dest.OwnershipVerifiedAt,
-		dest.OwnershipVerifiedBy,
-		dest.OwnershipProof,
 		dest.LinkedFundingSourceID,
-		dest.IsReturnToSource,
 		dest.IsActive,
 		dest.LastUsedAt,
 		dest.TotalWithdrawn,
@@ -90,15 +78,12 @@ func (s *Store) CreateWithdrawalDestination(ctx context.Context, dest Withdrawal
 }
 
 func ValidateWithdrawalDestinationFundingSource(dest WithdrawalDestination, source *FundingSource) error {
-	if !dest.LinkedFundingSourceID.Valid {
-		if dest.IsReturnToSource {
-			return ErrMissingFundingSourceID
-		}
-		return nil
+	if dest.LinkedFundingSourceID <= 0 {
+		return ErrMissingFundingSourceID
 	}
 	if source == nil ||
 		source.TenantID != dest.TenantID ||
-		source.ID != dest.LinkedFundingSourceID.Int64 {
+		source.ID != dest.LinkedFundingSourceID {
 		return ErrFundingSourceNotFound
 	}
 	if source.WalletID != dest.WalletID {
@@ -109,6 +94,11 @@ func ValidateWithdrawalDestinationFundingSource(dest WithdrawalDestination, sour
 	}
 	if err := ValidateFundingSourceReadyForWithdrawal(source); err != nil {
 		return err
+	}
+	if dest.DestinationType != source.SourceType ||
+		!nullStringEqual(dest.PSPProvider, source.PSPProvider) ||
+		!rawJSONMatches(dest.DestinationDetails, source.WithdrawalMethod) {
+		return ErrDestinationNotVerified
 	}
 	return nil
 }
@@ -352,55 +342,6 @@ func ValidateWithdrawalDestinationLinkReplay(existing *LedgerWithdrawalDestinati
 		existing.Amount != requested.Amount ||
 		existing.Currency != requested.Currency {
 		return ErrDuplicateDestinationLink
-	}
-	return nil
-}
-
-func (s *Store) UpdateWithdrawalDestinationOwnership(ctx context.Context, tenantID string, destinationID int64, status string, verifiedAt sql.NullTime, updatedAt time.Time) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if destinationID <= 0 {
-		return ErrMissingDestinationID
-	}
-	if updatedAt.IsZero() {
-		return ErrMissingUpdatedAt
-	}
-	updated := WithdrawalDestination{
-		OwnershipStatus:     status,
-		OwnershipVerifiedAt: verifiedAt,
-	}
-	if err := ValidateWithdrawalDestinationOwnership(updated); err != nil {
-		return err
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	existing, err := s.GetWithdrawalDestination(ctx, tenantID, destinationID)
-	if err != nil {
-		return err
-	}
-	if err := ValidateWithdrawalDestinationOwnershipTransition(existing, updated); err != nil {
-		return err
-	}
-	if existing.OwnershipStatus == updated.OwnershipStatus && nullTimeEqual(existing.OwnershipVerifiedAt, updated.OwnershipVerifiedAt) {
-		return nil
-	}
-	stmt := db.Rebind(`UPDATE withdrawal_destinations
-		SET ownership_status = ?, ownership_verified_at = ?, updated_at = ?
-		WHERE tenant_id = ? AND id = ? AND ownership_status = ?`)
-	result, err := db.ExecContext(ctx, stmt, status, verifiedAt, updatedAt, tenantID, destinationID, existing.OwnershipStatus)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrInvalidStatusTransition
 	}
 	return nil
 }

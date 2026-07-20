@@ -30,7 +30,7 @@ func NewServer(service *wallet.Service) *Server {
 	return &Server{Service: service}
 }
 
-func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
+func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletPublicRequest) (*walletv1.GetWalletPublicResponse, error) {
 	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return nil, err
@@ -56,10 +56,10 @@ func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletReq
 	if !walletOwnedByClaims(w, claims) {
 		return nil, status.Error(codes.NotFound, walletstore.ErrWalletNotFound.Error())
 	}
-	return toWalletProto(w), nil
+	return &walletv1.GetWalletPublicResponse{Wallet: toWalletProto(w)}, nil
 }
 
-func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
+func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletPublicRequest) (*walletv1.EnsureWalletPublicResponse, error) {
 	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
 		return nil, err
@@ -75,15 +75,19 @@ func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWal
 	if err != nil {
 		return nil, err
 	}
-	boundReq := &walletv1.EnsureWalletRequest{
+	boundReq := &walletv1.EnsureWalletPublicRequest{
 		TenantId: tenantID,
 		UserId:   userID,
 		Currency: req.Currency,
 	}
-	return s.ensureWallet(ctx, boundReq)
+	wallet, err := s.ensureWallet(ctx, boundReq)
+	if err != nil {
+		return nil, err
+	}
+	return &walletv1.EnsureWalletPublicResponse{Wallet: wallet}, nil
 }
 
-func (s *Server) ensureWallet(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
+func (s *Server) ensureWallet(ctx context.Context, req *walletv1.EnsureWalletPublicRequest) (*walletv1.Wallet, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
@@ -130,14 +134,17 @@ func toWalletProto(w *walletstore.Wallet) *walletv1.Wallet {
 func mapError(err error) error {
 	switch {
 	case errors.Is(err, walletstore.ErrWalletNotFound),
+		errors.Is(err, walletstore.ErrDepositIntentNotFound),
+		errors.Is(err, walletstore.ErrPSPTransactionNotFound),
 		errors.Is(err, walletstore.ErrPSPConfigNotFound),
 		errors.Is(err, walletstore.ErrPSPConfigOverrideNotFound),
 		errors.Is(err, walletstore.ErrTransactionLimitNotFound),
 		errors.Is(err, walletstore.ErrOperatorIdentityNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
+		errors.Is(err, walletstore.ErrFundingSourceReservationNotFound),
+		errors.Is(err, walletstore.ErrLimitReservationNotFound),
 		errors.Is(err, walletstore.ErrLedgerEntryNotFound),
-		errors.Is(err, walletstore.ErrVerificationNotFound),
 		errors.Is(err, walletstore.ErrManualTransferNotFound),
 		errors.Is(err, walletstore.ErrFeeConfigNotFound),
 		errors.Is(err, walletstore.ErrExchangeRateNotFound):
@@ -146,12 +153,16 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrDuplicateWallet),
 		errors.Is(err, walletstore.ErrDuplicateHold),
 		errors.Is(err, walletstore.ErrDuplicateFundingSource),
+		errors.Is(err, walletstore.ErrDuplicateFundingSourceReservation),
 		errors.Is(err, walletstore.ErrDuplicateFundingLink),
 		errors.Is(err, walletstore.ErrDuplicateDestinationLink),
 		errors.Is(err, walletstore.ErrDuplicateAmount),
 		errors.Is(err, walletstore.ErrDuplicateManualTransfer),
 		errors.Is(err, walletstore.ErrDuplicateManualApproval),
-		errors.Is(err, walletstore.ErrDuplicateVerification):
+		errors.Is(err, walletstore.ErrDuplicateP2PCommand),
+		errors.Is(err, walletstore.ErrDuplicateDepositIntent),
+		errors.Is(err, walletstore.ErrDuplicateLimitReservation),
+		errors.Is(err, walletstore.ErrWorkflowDecisionConflict):
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),
@@ -168,42 +179,54 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingProviderCode),
 		errors.Is(err, walletstore.ErrMissingClientReference),
 		errors.Is(err, walletstore.ErrMissingPSPTransactionID),
+		errors.Is(err, walletstore.ErrMissingDepositIntentID),
+		errors.Is(err, walletstore.ErrInvalidDepositIntentID),
+		errors.Is(err, walletstore.ErrInvalidDepositIntent),
 		errors.Is(err, walletstore.ErrMissingDirection),
 		errors.Is(err, walletstore.ErrInvalidDirection),
 		errors.Is(err, walletstore.ErrMissingDestinationID),
+		errors.Is(err, walletstore.ErrInvalidDestinationID),
 		errors.Is(err, walletstore.ErrMissingDestinationType),
 		errors.Is(err, walletstore.ErrMissingDestinationDetails),
 		errors.Is(err, walletstore.ErrMissingSourceType),
 		errors.Is(err, walletstore.ErrMissingFundingSourceID),
+		errors.Is(err, walletstore.ErrMissingFundingSourceReservation),
 		errors.Is(err, walletstore.ErrMissingLedgerEntryID),
 		errors.Is(err, walletstore.ErrInvalidUserID),
 		errors.Is(err, walletstore.ErrInvalidAmount),
 		errors.Is(err, walletstore.ErrInvalidWalletPair),
 		errors.Is(err, walletstore.ErrMissingIdempotencyKey),
+		errors.Is(err, walletstore.ErrInvalidIdempotencyKey),
 		errors.Is(err, walletstore.ErrInvalidLimit),
 		errors.Is(err, walletstore.ErrInvalidOffset),
 		errors.Is(err, walletstore.ErrMissingReferenceType),
 		errors.Is(err, walletstore.ErrMissingReferenceID),
 		errors.Is(err, walletstore.ErrMissingApprovalTimeout),
+		errors.Is(err, walletstore.ErrInvalidApprovalTimeout),
+		errors.Is(err, walletstore.ErrMissingApprovalPolicy),
+		errors.Is(err, walletstore.ErrApprovalNotRequired),
 		errors.Is(err, walletstore.ErrMissingApprovalReason),
 		errors.Is(err, walletstore.ErrMissingApprovalTime),
 		errors.Is(err, walletstore.ErrMissingCompletionTime),
 		errors.Is(err, walletstore.ErrMissingProofOfPayment),
 		errors.Is(err, walletstore.ErrMissingStatusTimeout),
-		errors.Is(err, walletstore.ErrMissingVerificationTimeout),
 		errors.Is(err, walletstore.ErrMissingVerificationTime),
 		errors.Is(err, walletstore.ErrInvalidVerificationTime),
-		errors.Is(err, walletstore.ErrMissingVerificationID),
-		errors.Is(err, walletstore.ErrMissingVerificationType),
-		errors.Is(err, walletstore.ErrInvalidVerificationType),
-		errors.Is(err, walletstore.ErrMissingMaxAttempts),
 		errors.Is(err, walletstore.ErrMissingHoldExpiry),
+		errors.Is(err, walletstore.ErrInvalidHoldExpiry),
+		errors.Is(err, walletstore.ErrMissingReturnToSourcePolicy),
 		errors.Is(err, walletstore.ErrMissingTransferType),
 		errors.Is(err, walletstore.ErrInvalidTransferType),
 		errors.Is(err, walletstore.ErrInvalidStatus),
 		errors.Is(err, walletstore.ErrInvalidDecision),
+		errors.Is(err, walletstore.ErrMissingDecisionKind),
+		errors.Is(err, walletstore.ErrInvalidDecisionKind),
+		errors.Is(err, walletstore.ErrMissingDecisionSubject),
 		errors.Is(err, walletstore.ErrMissingSourceDetails),
 		errors.Is(err, walletstore.ErrMissingTransactionType),
+		errors.Is(err, walletstore.ErrMissingLimitCommandID),
+		errors.Is(err, walletstore.ErrMissingSettlementTransfers),
+		errors.Is(err, walletstore.ErrInvalidLedgerTransactionID),
 		errors.Is(err, walletstore.ErrMissingBaseCurrency),
 		errors.Is(err, walletstore.ErrMissingQuoteCurrency),
 		errors.Is(err, walletstore.ErrMissingDecision),
@@ -211,6 +234,11 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrMissingRequesterID),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingWorkflowID),
+		errors.Is(err, walletstore.ErrInvalidWorkflowID),
+		errors.Is(err, walletstore.ErrMissingWorkflowRunID),
+		errors.Is(err, walletstore.ErrInvalidWorkflowRunID),
+		errors.Is(err, walletstore.ErrMissingP2PCommand),
+		errors.Is(err, walletstore.ErrInvalidP2PCommand),
 		errors.Is(err, walletstore.ErrMissingInteractionType),
 		errors.Is(err, walletstore.ErrInvalidPercentage),
 		errors.Is(err, walletstore.ErrInvalidRate),
@@ -234,7 +262,10 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrWalletInactive),
 		errors.Is(err, walletvalidation.ErrWalletInactive),
 		errors.Is(err, walletstore.ErrInsufficientFunds),
-		errors.Is(err, walletvalidation.ErrLimitExceeded),
+		errors.Is(err, walletstore.ErrTransactionLimitExceeded),
+		errors.Is(err, walletstore.ErrLimitReservationReleased),
+		errors.Is(err, walletstore.ErrLimitReservationConsumed),
+		errors.Is(err, walletstore.ErrWorkflowDecisionWindowClosed),
 		errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	default:

@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,8 +40,8 @@ func TestOpaqueCardHTTPEnrollmentRetryAndPublicIsolation(t *testing.T) {
 		}
 		t.Fatalf("start postgres: %v", err)
 	}
-	databaseName := fmt.Sprintf("opaque_card_http_%d", time.Now().UnixNano())
-	dbURL, err := postgres.CreateDatabase(ctx, databaseName)
+	const databaseName = "card_vault"
+	dbURL, err := postgres.CreateDatabaseForRole(ctx, databaseName, "card_vault_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}

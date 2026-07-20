@@ -11,7 +11,7 @@ output "noebs_namespace" {
 }
 
 output "edge_namespace" {
-  value = var.edge_namespace
+  value = kubernetes_namespace_v1.edge.metadata[0].name
 }
 
 output "noebs_manifest_path" {

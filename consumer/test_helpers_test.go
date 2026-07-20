@@ -39,12 +39,18 @@ func ensurePostgresContainer(t *testing.T) *testdb.PostgresContainer {
 
 func newTestDBWithScopes(t *testing.T, scopes []string) (*store.DB, *store.Store, string) {
 	t.Helper()
+	if len(scopes) != 1 {
+		t.Fatalf("test store requires exactly one service migration scope, got %v", scopes)
+	}
 	container := ensurePostgresContainer(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 
-	dbName := fmt.Sprintf("noebs_consumer_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	dbName, migrateRole, ok := consumerTestDatabaseAuthority(scopes[0])
+	if !ok {
+		t.Fatalf("unsupported consumer test migration scope %q", scopes[0])
+	}
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, migrateRole)
 	if err != nil {
 		t.Fatalf("create test db: %v", err)
 	}
@@ -80,6 +86,21 @@ func migrateConsumerTestScopes(ctx context.Context, db *store.DB, tenantID strin
 		}
 	}
 	return nil
+}
+
+func consumerTestDatabaseAuthority(scope string) (database, migrateRole string, ok bool) {
+	switch scope {
+	case store.MigrationScopeIdentityAuth:
+		return "identity_auth", "identity_auth_migrate", true
+	case store.MigrationScopeCardVault:
+		return "card_vault", "card_vault_migrate", true
+	case store.MigrationScopeEBSAdapter:
+		return "ebs_adapter", "ebs_adapter_migrate", true
+	case store.MigrationScopeNotificationChat:
+		return "notification_chat", "notification_chat_migrate", true
+	default:
+		return "", "", false
+	}
 }
 
 func transactionActorContext(t *testing.T, userID int64) context.Context {

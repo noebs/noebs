@@ -34,13 +34,12 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 		"platform/keycloak-reconciler-config.yaml",
 		"platform/gateway-auth-postgres-roles.secrets.yaml",
 		"platform/workload-auth-postgres-roles.secrets.yaml",
+		"platform/service-postgres-roles.secrets.yaml",
+		"platform/postgres-provisioning.sql",
 		"platform/internal-transport.secrets.yaml",
 		"secrets/api-gateway.secrets.yaml",
 	} {
 		requirePreparedFile(t, outputRoot, name)
-	}
-	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/postgres-password.txt")); got != "noebs-postgres-password" {
-		t.Fatalf("postgres password = %q", got)
 	}
 	keycloakConfig := readPreparedFile(t, outputRoot, "platform/keycloak.conf")
 	if !strings.Contains(keycloakConfig, "proxy-trusted-addresses=10.42.0.1/32\n") {
@@ -66,16 +65,23 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 		t.Fatalf("parse reconciler config: %v", err)
 	}
 	wantBackoffice := testCanonicalReleaseSecret(2)
+	wantWalletAuthorizer := testCanonicalReleaseSecret(12)
 	if reconciler.ClientSecret != testCanonicalReleaseSecret(1) {
 		t.Fatalf("reconciler secret did not come from release inputs")
 	}
 	if reconciler.ClientCredentials["noebs-backoffice"].ClientSecret != wantBackoffice {
 		t.Fatalf("back-office secret did not come from release inputs")
 	}
+	if reconciler.ClientCredentials["noebs-wallet-authorizer"].ClientSecret != wantWalletAuthorizer {
+		t.Fatalf("wallet authorizer secret did not come from release inputs")
+	}
 	apiSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "api-gateway.secrets.yaml"))
 	apiNoebs := getMap(apiSecret, "noebs")
 	if got := firstString(apiNoebs, "backoffice_client_secret"); got != wantBackoffice {
 		t.Fatalf("api-gateway back-office secret = %q", got)
+	}
+	if got := firstString(apiNoebs, "wallet_authorizer_client_secret"); got != wantWalletAuthorizer {
+		t.Fatalf("api-gateway wallet authorizer secret = %q", got)
 	}
 	routes := getMap(apiNoebs, "psp_webhook_routes")
 	if route := getMap(routes, testCanonicalReleaseSecret(11)); firstString(route, "tenant_id") != "tenant-cutover" || firstString(route, "provider_code") != "test-provider" {
@@ -122,6 +128,49 @@ func TestPrepareKubernetesReleaseRejectsInvalidPSPProviderCode(t *testing.T) {
 	}
 }
 
+func TestPrepareKubernetesReleaseValidatesEveryPSPProvider(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	inputs.Noebs.PSP["tenant-cutover"]["a-provider"] = pspSecret{
+		CallbackID:       testCanonicalReleaseSecret(13),
+		APIKey:           "api-key",
+		APISecret:        "api-secret",
+		WebhookSecret:    "webhook-secret",
+		WebhookPublicKey: "webhook-public-key",
+	}
+	inputs.Noebs.PSP["tenant-cutover"]["z-provider"] = pspSecret{
+		CallbackID:    testCanonicalReleaseSecret(14),
+		APIKey:        "api-key",
+		APISecret:     "api-secret",
+		WebhookSecret: "webhook-secret",
+	}
+	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "noebs.psp.tenant-cutover.z-provider missing webhook_public_key") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want incomplete second PSP provider rejection", err)
+	}
+}
+
+func TestPrepareKubernetesReleaseValidatesNonDefaultTenantPSPProvider(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	inputs.Noebs.PSP["tenant-sandbox"] = map[string]pspSecret{
+		"sandbox-provider": {
+			CallbackID:       testCanonicalReleaseSecret(13),
+			APIKey:           "api-key",
+			WebhookSecret:    "webhook-secret",
+			WebhookPublicKey: "webhook-public-key",
+		},
+	}
+	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "noebs.psp.tenant-sandbox.sandbox-provider missing api_secret") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want incomplete non-default-tenant PSP provider rejection", err)
+	}
+}
+
 func TestPrepareKubernetesReleaseRejectsUnknownTenant(t *testing.T) {
 	inputRoot := t.TempDir()
 	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-unknown")
@@ -153,14 +202,21 @@ func TestPrepareKubernetesReleaseRejectsMissingExplicitAuthority(t *testing.T) {
 		want string
 	}{
 		{
-			name: "main postgres password",
-			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.PostgresPassword = "" },
-			want: "noebs.postgres_password",
+			name: "service database password",
+			edit: func(inputs *kubernetesReleaseInputs) {
+				delete(inputs.Noebs.ServiceDatabasePasswords, "identity_auth_runtime")
+			},
+			want: "identity_auth_runtime password is required",
 		},
 		{
 			name: "keycloak client secret",
 			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.Keycloak.ReconcilerClientSecret = "" },
 			want: "Keycloak reconciler client secret",
+		},
+		{
+			name: "wallet authorizer client secret",
+			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.Keycloak.WalletAuthorizerClientSecret = "" },
+			want: "Keycloak wallet authorizer client secret",
 		},
 		{
 			name: "gateway database password",
@@ -222,17 +278,25 @@ func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
 		t.Fatalf("decode input example: %v", err)
 	}
 	for label, value := range map[string]string{
-		"postgres_password":                 inputs.Noebs.PostgresPassword,
-		"keycloak.reconciler_client_secret": inputs.Noebs.Keycloak.ReconcilerClientSecret,
-		"keycloak.backoffice_client_secret": inputs.Noebs.Keycloak.BackofficeClientSecret,
-		"gateway_auth.database.runtime":     inputs.Noebs.GatewayAuth.Database.RuntimePassword,
-		"gateway_auth.encryption_key_id":    inputs.Noebs.GatewayAuth.EncryptionKeyID,
-		"workload_auth.database.runtime":    inputs.Noebs.WorkloadAuth.Database.RuntimePassword,
-		"internal_transport.ca_certificate": inputs.Noebs.InternalTransport.CACertificate,
-		"internal_transport.ca_private_key": inputs.Noebs.InternalTransport.CAPrivateKey,
+		"keycloak.reconciler_client_secret":         inputs.Noebs.Keycloak.ReconcilerClientSecret,
+		"keycloak.backoffice_client_secret":         inputs.Noebs.Keycloak.BackofficeClientSecret,
+		"keycloak.wallet_authorizer_client_secret":  inputs.Noebs.Keycloak.WalletAuthorizerClientSecret,
+		"keycloak.temporal_ledger_client_secret":    inputs.Noebs.Keycloak.TemporalLedgerClientSecret,
+		"keycloak.temporal_worker_client_secret":    inputs.Noebs.Keycloak.TemporalWorkerClientSecret,
+		"keycloak.temporal_bootstrap_client_secret": inputs.Noebs.Keycloak.TemporalBootstrapClientSecret,
+		"gateway_auth.database.runtime":             inputs.Noebs.GatewayAuth.Database.RuntimePassword,
+		"gateway_auth.encryption_key_id":            inputs.Noebs.GatewayAuth.EncryptionKeyID,
+		"workload_auth.database.runtime":            inputs.Noebs.WorkloadAuth.Database.RuntimePassword,
+		"internal_transport.ca_certificate":         inputs.Noebs.InternalTransport.CACertificate,
+		"internal_transport.ca_private_key":         inputs.Noebs.InternalTransport.CAPrivateKey,
 	} {
 		if strings.TrimSpace(value) == "" {
 			t.Fatalf("input example missing %s", label)
+		}
+	}
+	for _, role := range servicePostgresRoleNames() {
+		if strings.TrimSpace(inputs.Noebs.ServiceDatabasePasswords[role]) == "" {
+			t.Fatalf("input example missing service database password %s", role)
 		}
 	}
 	for _, role := range workloadAuthCallerRoles {
@@ -254,8 +318,8 @@ func TestKubernetesReleaseManifestRejectsSplicedArtifact(t *testing.T) {
 	if err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(outputRoot, "platform", "postgres-password.txt")
-	if err := os.WriteFile(path, []byte("another-valid-password\n"), 0o600); err != nil {
+	path := filepath.Join(outputRoot, "platform", "postgres-provisioning.sql")
+	if err := os.WriteFile(path, []byte("SELECT 1;\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := validateKubernetesReleaseManifest(outputRoot); err == nil || !strings.Contains(err.Error(), "fingerprint") {
@@ -313,7 +377,11 @@ func writeKubernetesReleaseInputs(t *testing.T, root string, inputs kubernetesRe
 
 func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesReleaseInputs {
 	t.Helper()
-	workload, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{}, rand.Reader)
+	workload, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{Database: kubernetesReleaseWorkloadDatabaseInput{
+		MigratePassword: testCanonicalReleaseSecret(6),
+		RuntimePassword: testCanonicalReleaseSecret(7),
+		CleanupPassword: testCanonicalReleaseSecret(8),
+	}}, rand.Reader)
 	if err != nil {
 		t.Fatalf("prepare workload authority: %v", err)
 	}
@@ -322,9 +390,13 @@ func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesRel
 		callers[string(role)] = kubernetesReleaseWorkloadCallerInput{KeyID: caller.keyID, PrivateKey: caller.privateKey}
 	}
 	internalTransport := newTestInternalTransportInputs(t, time.Now().UTC())
+	serviceDatabasePasswords := make(map[string]string, len(servicePostgresRoleSpecs))
+	for index, spec := range servicePostgresRoleSpecs {
+		serviceDatabasePasswords[spec.username] = testCanonicalReleaseSecret(byte(20 + index))
+	}
 	return kubernetesReleaseInputs{Noebs: kubernetesReleaseNoebsInputs{
 		DefaultTenantID:          tenantID,
-		PostgresPassword:         "noebs-postgres-password",
+		ServiceDatabasePasswords: serviceDatabasePasswords,
 		GoogleClientID:           "google-client-id",
 		GoogleClientSecret:       "google-client-secret",
 		CardVaultDataKey:         "card-vault-data-key",
@@ -332,8 +404,12 @@ func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesRel
 		KeycloakPostgresPassword: "keycloak-postgres-password",
 		GHCRDockerConfigJSON:     `{"auths":{"ghcr.io":{"auth":"` + base64.StdEncoding.EncodeToString([]byte("noebs:test-token")) + `"}}}`,
 		Keycloak: kubernetesReleaseKeycloakInputs{
-			ReconcilerClientSecret: testCanonicalReleaseSecret(1),
-			BackofficeClientSecret: testCanonicalReleaseSecret(2),
+			ReconcilerClientSecret:        testCanonicalReleaseSecret(1),
+			BackofficeClientSecret:        testCanonicalReleaseSecret(2),
+			WalletAuthorizerClientSecret:  testCanonicalReleaseSecret(12),
+			TemporalLedgerClientSecret:    testCanonicalReleaseSecret(13),
+			TemporalWorkerClientSecret:    testCanonicalReleaseSecret(14),
+			TemporalBootstrapClientSecret: testCanonicalReleaseSecret(15),
 		},
 		GatewayAuth: kubernetesReleaseGatewayAuthInputs{
 			Database: kubernetesReleaseGatewayAuthDatabaseInputs{

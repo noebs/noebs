@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,17 +24,6 @@ var ebsTransport = &http.Transport{
 var ebsHTTPClient = &http.Client{
 	Timeout:   3 * 30 * time.Second,
 	Transport: otelhttp.NewTransport(ebsTransport),
-}
-
-// ConfigureEBSHTTPClient applies runtime configuration to the shared EBS client.
-//
-// This should be called once at the app boundary after loading config.
-func ConfigureEBSHTTPClient(cfg NoebsConfig) {
-	if ebsTransport.TLSClientConfig == nil {
-		ebsTransport.TLSClientConfig = &tls.Config{}
-	}
-	ebsTransport.TLSClientConfig.MinVersion = tls.VersionTLS12
-	ebsTransport.TLSClientConfig.InsecureSkipVerify = cfg.EBSInsecureSkipVerify
 }
 
 // EBSHttpClient the client to interact with EBS
@@ -111,73 +99,20 @@ func EBSHttpClientWithClient(client *http.Client, targetURL string, req []byte) 
 		}).Error("ebs response content type is not application/json")
 		return code, ebsGenericResponse, ContentTypeErr
 	}
-	var tmpRes IPINResponse
-	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err == nil {
-		if ebsGenericResponse.ResponseCode == 0 || strings.Contains(ebsGenericResponse.ResponseMessage, "Success") {
-			code = http.StatusOK
-			return code, ebsGenericResponse, nil
-		} else {
-			code = http.StatusBadGateway
-			return code, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
-		}
-	} else {
-		// there is an error in handling the incoming EBS's ebsResponse
-		// log the err here please
+	if err := json.Unmarshal(responseBody, &ebsGenericResponse); err != nil {
 		log.WithFields(logrus.Fields{
 			"code":           err.Error(),
 			"response_bytes": len(responseBody),
-			"ebs_fields":     ebsGenericResponse,
 		}).Info("ebs response transaction")
-		if isTranDateTimeStringDecodeError(err) {
-			if fallbackErr := json.Unmarshal(responseBody, &tmpRes); fallbackErr != nil {
-				code = http.StatusInternalServerError
-				return code, ebsGenericResponse, fallbackErr
-			}
-			if tmpRes.ResponseCode == 0 || strings.Contains(tmpRes.ResponseMessage, "Success") {
-				code = http.StatusOK
-				return code, tmpRes.newResponse(), nil
-			} else {
-				code = http.StatusBadGateway
-				return code, tmpRes.newResponse(), errors.New(tmpRes.ResponseMessage)
-			}
-		}
 		code = http.StatusInternalServerError
 		return code, ebsGenericResponse, err
 	}
-
-}
-
-func isTranDateTimeStringDecodeError(err error) bool {
-	if err == nil {
-		return false
+	if ebsGenericResponse.ResponseCode == 0 {
+		code = http.StatusOK
+		return code, ebsGenericResponse, nil
 	}
-	message := err.Error()
-	return strings.Contains(message, "tranDateTime") && strings.Contains(message, "type string")
-}
-
-type IPINResponse struct {
-	UUID            string `json:"UUID"`
-	TranDateTime    int    `json:"tranDateTime"`
-	ResponseMessage string `json:"responseMessage"`
-	ResponseStatus  string `json:"responseStatus"`
-	PubKeyValue     string `json:"pubKeyValue"`
-	ResponseCode    int64  `json:"responseCode"`
-	Pan             string `json:"pan"`
-	ExpDate         string `json:"expDate"`
-	Username        string `json:"userName"`
-}
-
-// newResponse the
-func (i IPINResponse) newResponse() EBSParserFields {
-	var res EBSResponse
-	res.ResponseCode = int(i.ResponseCode)
-	res.ResponseMessage = i.ResponseMessage
-	res.PubKeyValue = i.PubKeyValue
-	res.TranDateTime = strconv.Itoa(i.TranDateTime)
-	res.UUID = i.UUID
-	res.PAN = i.Pan
-	res.ExpDate = i.ExpDate
-	return EBSParserFields{EBSResponse: res}
+	code = http.StatusBadGateway
+	return code, ebsGenericResponse, errors.New(ebsGenericResponse.ResponseMessage)
 }
 
 var (

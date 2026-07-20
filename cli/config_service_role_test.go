@@ -48,7 +48,7 @@ func TestLoadConfigMergesServiceConfigRole(t *testing.T) {
 	}
 }
 
-func TestLoadConfigReturnsExplicitSecretDecryptErrorDuringTests(t *testing.T) {
+func TestLoadConfigRejectsSOPSRuntimeSecret(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -62,7 +62,9 @@ func TestLoadConfigReturnsExplicitSecretDecryptErrorDuringTests(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(tmp, "secrets.yaml"), []byte(`noebs:
-  data_key: not-sops-encrypted
+  data_key: ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]
+sops:
+  age: []
 `), 0o600); err != nil {
 		t.Fatalf("write secrets: %v", err)
 	}
@@ -73,8 +75,8 @@ func TestLoadConfigReturnsExplicitSecretDecryptErrorDuringTests(t *testing.T) {
 		_ = os.Chdir(originalWD)
 	})
 
-	if _, err := loadConfig(); err == nil {
-		t.Fatalf("loadConfig() error = nil, want explicit secrets decrypt error")
+	if _, err := loadConfig(); !errors.Is(err, errPlaintextSecretsIsSOPS) {
+		t.Fatalf("loadConfig() error = %v, want %v", err, errPlaintextSecretsIsSOPS)
 	}
 }
 
@@ -151,8 +153,8 @@ func TestLoadConfigSelectsServiceDatabaseURL(t *testing.T) {
   default_tenant_id: test-tenant
   db_driver: postgres
   service_databases:
-    identity-auth: postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable
-    card-vault: postgres://noebs:noebs@postgres:5432/card_vault?sslmode=disable
+    identity-auth: postgres://identity_auth_runtime:secret@postgres:5432/identity_auth?sslmode=disable
+    card-vault: postgres://card_vault_runtime:secret@postgres:5432/card_vault?sslmode=disable
 `), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -176,7 +178,7 @@ func TestLoadConfigSelectsServiceDatabaseURL(t *testing.T) {
 	if err := json.Unmarshal(payload, &cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
-	if cfg.DatabaseURL != "postgres://noebs:noebs@postgres:5432/card_vault?sslmode=disable" {
+	if cfg.DatabaseURL != "postgres://card_vault_runtime:secret@postgres:5432/card_vault?sslmode=disable" {
 		t.Fatalf("db_url = %q", cfg.DatabaseURL)
 	}
 }
@@ -191,7 +193,7 @@ func TestLoadConfigSelectsOwnerDatabaseURLForMigrationRole(t *testing.T) {
   default_tenant_id: test-tenant
   db_driver: postgres
   service_databases:
-    identity-auth: postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable
+    identity-auth: postgres://identity_auth_migrate:secret@postgres:5432/identity_auth?sslmode=disable
 `), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -215,7 +217,7 @@ func TestLoadConfigSelectsOwnerDatabaseURLForMigrationRole(t *testing.T) {
 	if err := json.Unmarshal(payload, &cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
-	if cfg.DatabaseURL != "postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable" {
+	if cfg.DatabaseURL != "postgres://identity_auth_migrate:secret@postgres:5432/identity_auth?sslmode=disable" {
 		t.Fatalf("db_url = %q", cfg.DatabaseURL)
 	}
 }
@@ -230,7 +232,7 @@ func TestLoadConfigSelectsWalletLedgerDatabaseURLForWalletWorker(t *testing.T) {
   default_tenant_id: test-tenant
   db_driver: postgres
   service_databases:
-    wallet-ledger: postgres://noebs:noebs@postgres:5432/wallet_ledger?sslmode=disable
+    wallet-ledger: postgres://wallet_ledger_worker:secret@postgres:5432/wallet_ledger?sslmode=disable
 `), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -254,7 +256,7 @@ func TestLoadConfigSelectsWalletLedgerDatabaseURLForWalletWorker(t *testing.T) {
 	if err := json.Unmarshal(payload, &cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
-	if cfg.DatabaseURL != "postgres://noebs:noebs@postgres:5432/wallet_ledger?sslmode=disable" {
+	if cfg.DatabaseURL != "postgres://wallet_ledger_worker:secret@postgres:5432/wallet_ledger?sslmode=disable" {
 		t.Fatalf("db_url = %q", cfg.DatabaseURL)
 	}
 }
@@ -269,7 +271,7 @@ func TestLoadConfigSelectsGatewayAuthDatabaseURLForAPIGateway(t *testing.T) {
   default_tenant_id: test-tenant
   db_driver: postgres
   service_databases:
-    api-gateway: postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable
+    api-gateway: postgres://gateway_auth_runtime:secret@postgres:5432/gateway_auth?sslmode=disable
 `), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -293,7 +295,7 @@ func TestLoadConfigSelectsGatewayAuthDatabaseURLForAPIGateway(t *testing.T) {
 	if err := json.Unmarshal(payload, &cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
-	if cfg.DatabaseURL != "postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable" {
+	if cfg.DatabaseURL != "postgres://gateway_auth_runtime:secret@postgres:5432/gateway_auth?sslmode=disable" {
 		t.Fatalf("api-gateway db_url = %q", cfg.DatabaseURL)
 	}
 }

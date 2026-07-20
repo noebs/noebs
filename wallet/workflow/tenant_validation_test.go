@@ -5,9 +5,7 @@ import (
 	"testing"
 	"time"
 
-	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
-	"github.com/google/uuid"
 	"go.temporal.io/sdk/testsuite"
 )
 
@@ -26,11 +24,7 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 			params: func(tenantID string) any {
 				return DepositParams{
 					TenantID:        tenantID,
-					ProviderCode:    "pay",
-					ClientReference: "deposit-ref",
-					WalletID:        uuid.NewString(),
-					OwnerType:       "user",
-					OwnerID:         "42",
+					IntentReference: "deposit-ref",
 				}
 			},
 		},
@@ -39,18 +33,8 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 			workflow: Withdrawal,
 			params: func(tenantID string) any {
 				return WithdrawalParams{
-					TenantID:          tenantID,
-					ProviderCode:      "pay",
-					WalletID:          uuid.NewString(),
-					OwnerType:         "user",
-					OwnerID:           "42",
-					DestinationID:     1,
-					HoldExpirySeconds: 60,
-					Request: walletpsp.PayoutRequest{
-						ClientReference: "withdrawal-ref",
-						Amount:          100,
-						Currency:        "USD",
-					},
+					TenantID:        tenantID,
+					ClientReference: "withdrawal-ref",
 				}
 			},
 		},
@@ -61,15 +45,6 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 				return P2PParams{
 					TenantID:       tenantID,
 					IdempotencyKey: "p2p-ref",
-					Currency:       "USD",
-					FromWalletID:   uuid.NewString(),
-					ToWalletID:     uuid.NewString(),
-					Amount:         100,
-					ReferenceID:    "p2p-ref",
-					FromOwnerType:  "user",
-					FromOwnerID:    "1",
-					ToOwnerType:    "user",
-					ToOwnerID:      "2",
 				}
 			},
 		},
@@ -78,15 +53,8 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 			workflow: ManualTransfer,
 			params: func(tenantID string) any {
 				return ManualTransferParams{
-					TenantID:               tenantID,
-					IdempotencyKey:         "manual-ref",
-					TransferType:           "manual_debit",
-					WalletID:               uuid.NewString(),
-					Amount:                 100,
-					Currency:               "USD",
-					Reason:                 "test",
-					RequestedByOperatorID:  10,
-					ApprovalTimeoutSeconds: 60,
+					TenantID:       tenantID,
+					IdempotencyKey: "manual-ref",
 				}
 			},
 		},
@@ -139,11 +107,7 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	baseParams := func() DepositParams {
 		return DepositParams{
 			TenantID:        "tenant",
-			ProviderCode:    "pay",
-			ClientReference: "deposit-ref",
-			WalletID:        uuid.NewString(),
-			OwnerType:       "user",
-			OwnerID:         "42",
+			IntentReference: "deposit-ref",
 		}
 	}
 
@@ -154,53 +118,13 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	}{
 		{
 			name:    "missing-client-reference",
-			mutate:  func(params *DepositParams) { params.ClientReference = "" },
+			mutate:  func(params *DepositParams) { params.IntentReference = "" },
 			wantErr: walletstore.ErrMissingClientReference,
 		},
 		{
 			name:    "blank-client-reference",
-			mutate:  func(params *DepositParams) { params.ClientReference = " \t " },
+			mutate:  func(params *DepositParams) { params.IntentReference = " \t " },
 			wantErr: walletstore.ErrMissingClientReference,
-		},
-		{
-			name:    "missing-provider-code",
-			mutate:  func(params *DepositParams) { params.ProviderCode = "" },
-			wantErr: walletstore.ErrMissingProviderCode,
-		},
-		{
-			name:    "blank-provider-code",
-			mutate:  func(params *DepositParams) { params.ProviderCode = " \t " },
-			wantErr: walletstore.ErrMissingProviderCode,
-		},
-		{
-			name:    "missing-wallet-id",
-			mutate:  func(params *DepositParams) { params.WalletID = "" },
-			wantErr: walletstore.ErrMissingWalletID,
-		},
-		{
-			name:    "invalid-wallet-id",
-			mutate:  func(params *DepositParams) { params.WalletID = "not-a-uuid" },
-			wantErr: walletstore.ErrMissingWalletID,
-		},
-		{
-			name:    "missing-owner-type",
-			mutate:  func(params *DepositParams) { params.OwnerType = "" },
-			wantErr: walletstore.ErrMissingOwnerType,
-		},
-		{
-			name:    "blank-owner-type",
-			mutate:  func(params *DepositParams) { params.OwnerType = " \t " },
-			wantErr: walletstore.ErrMissingOwnerType,
-		},
-		{
-			name:    "missing-owner-id",
-			mutate:  func(params *DepositParams) { params.OwnerID = "" },
-			wantErr: walletstore.ErrMissingOwnerID,
-		},
-		{
-			name:    "blank-owner-id",
-			mutate:  func(params *DepositParams) { params.OwnerID = " \t " },
-			wantErr: walletstore.ErrMissingOwnerID,
 		},
 	}
 
@@ -216,18 +140,8 @@ func TestDepositWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 func TestWithdrawalWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	baseParams := func() WithdrawalParams {
 		return WithdrawalParams{
-			TenantID:          "tenant",
-			ProviderCode:      "pay",
-			WalletID:          uuid.NewString(),
-			OwnerType:         "user",
-			OwnerID:           "42",
-			DestinationID:     1,
-			HoldExpirySeconds: 60,
-			Request: walletpsp.PayoutRequest{
-				ClientReference: "withdrawal-ref",
-				Amount:          100,
-				Currency:        "USD",
-			},
+			TenantID:        "tenant",
+			ClientReference: "withdrawal-ref",
 		}
 	}
 
@@ -237,24 +151,14 @@ func TestWithdrawalWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name:    "missing-provider-code",
-			mutate:  func(params *WithdrawalParams) { params.ProviderCode = "" },
-			wantErr: walletstore.ErrMissingProviderCode,
-		},
-		{
-			name:    "blank-provider-code",
-			mutate:  func(params *WithdrawalParams) { params.ProviderCode = " \t " },
-			wantErr: walletstore.ErrMissingProviderCode,
-		},
-		{
-			name:    "blank-client-reference",
-			mutate:  func(params *WithdrawalParams) { params.Request.ClientReference = " \t " },
+			name:    "missing-client-reference",
+			mutate:  func(params *WithdrawalParams) { params.ClientReference = "" },
 			wantErr: walletstore.ErrMissingClientReference,
 		},
 		{
-			name:    "blank-currency",
-			mutate:  func(params *WithdrawalParams) { params.Request.Currency = " \t " },
-			wantErr: walletstore.ErrMissingCurrency,
+			name:    "blank-client-reference",
+			mutate:  func(params *WithdrawalParams) { params.ClientReference = " \t " },
+			wantErr: walletstore.ErrMissingClientReference,
 		},
 	}
 
@@ -272,15 +176,6 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 		return P2PParams{
 			TenantID:       "tenant",
 			IdempotencyKey: "p2p-idem",
-			ReferenceID:    "p2p-ref",
-			Currency:       "USD",
-			FromWalletID:   uuid.NewString(),
-			ToWalletID:     uuid.NewString(),
-			Amount:         100,
-			FromOwnerType:  "user",
-			FromOwnerID:    "1",
-			ToOwnerType:    "user",
-			ToOwnerID:      "2",
 		}
 	}
 
@@ -299,75 +194,6 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			mutate:  func(params *P2PParams) { params.IdempotencyKey = " \t " },
 			wantErr: walletstore.ErrMissingIdempotencyKey,
 		},
-		{
-			name:    "missing-reference-id",
-			mutate:  func(params *P2PParams) { params.ReferenceID = "" },
-			wantErr: walletstore.ErrMissingReferenceID,
-		},
-		{
-			name:    "blank-reference-id",
-			mutate:  func(params *P2PParams) { params.ReferenceID = " \t " },
-			wantErr: walletstore.ErrMissingReferenceID,
-		},
-		{
-			name:    "missing-currency",
-			mutate:  func(params *P2PParams) { params.Currency = "" },
-			wantErr: walletstore.ErrMissingCurrency,
-		},
-		{
-			name:    "blank-currency",
-			mutate:  func(params *P2PParams) { params.Currency = " \t " },
-			wantErr: walletstore.ErrMissingCurrency,
-		},
-		{
-			name:    "missing-from-wallet-id",
-			mutate:  func(params *P2PParams) { params.FromWalletID = "" },
-			wantErr: walletstore.ErrMissingWalletID,
-		},
-		{
-			name:    "blank-to-wallet-id",
-			mutate:  func(params *P2PParams) { params.ToWalletID = " \t " },
-			wantErr: walletstore.ErrMissingWalletID,
-		},
-		{
-			name:    "invalid-to-wallet-id",
-			mutate:  func(params *P2PParams) { params.ToWalletID = "not-a-uuid" },
-			wantErr: walletstore.ErrMissingWalletID,
-		},
-		{
-			name: "same-wallet",
-			mutate: func(params *P2PParams) {
-				walletID := uuid.NewString()
-				params.FromWalletID = walletID
-				params.ToWalletID = walletID
-			},
-			wantErr: walletstore.ErrInvalidWalletPair,
-		},
-		{
-			name:    "invalid-amount",
-			mutate:  func(params *P2PParams) { params.Amount = 0 },
-			wantErr: walletstore.ErrInvalidAmount,
-		},
-		{
-			name:    "missing-from-owner-type",
-			mutate:  func(params *P2PParams) { params.FromOwnerType = "" },
-			wantErr: walletstore.ErrMissingOwnerType,
-		},
-		{
-			name:    "blank-to-owner-type",
-			mutate:  func(params *P2PParams) { params.ToOwnerType = " \t " },
-			wantErr: walletstore.ErrMissingOwnerType,
-		},
-		{
-			name:    "missing-to-owner-id",
-			mutate:  func(params *P2PParams) { params.ToOwnerID = "" },
-			wantErr: walletstore.ErrMissingOwnerID,
-		},
-		{
-			name:    "blank-from-owner-id",
-			mutate:  func(params *P2PParams) { params.FromOwnerID = " \t " },
-			wantErr: walletstore.ErrMissingOwnerID,
-		},
 	}
 
 	for _, tc := range cases {
@@ -382,15 +208,8 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 func TestManualTransferWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 	baseParams := func() ManualTransferParams {
 		return ManualTransferParams{
-			TenantID:               "tenant",
-			IdempotencyKey:         "manual-ref",
-			TransferType:           "manual_debit",
-			WalletID:               uuid.NewString(),
-			Amount:                 100,
-			Currency:               "USD",
-			Reason:                 "test",
-			RequestedByOperatorID:  10,
-			ApprovalTimeoutSeconds: 60,
+			TenantID:       "tenant",
+			IdempotencyKey: "manual-ref",
 		}
 	}
 
@@ -403,31 +222,6 @@ func TestManualTransferWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			name:    "blank-idempotency-key",
 			mutate:  func(params *ManualTransferParams) { params.IdempotencyKey = " \t " },
 			wantErr: walletstore.ErrMissingIdempotencyKey,
-		},
-		{
-			name:    "blank-transfer-type",
-			mutate:  func(params *ManualTransferParams) { params.TransferType = " \t " },
-			wantErr: walletstore.ErrMissingTransferType,
-		},
-		{
-			name:    "blank-wallet-id",
-			mutate:  func(params *ManualTransferParams) { params.WalletID = " \t " },
-			wantErr: walletstore.ErrMissingWalletID,
-		},
-		{
-			name:    "blank-currency",
-			mutate:  func(params *ManualTransferParams) { params.Currency = " \t " },
-			wantErr: walletstore.ErrMissingCurrency,
-		},
-		{
-			name:    "blank-reason",
-			mutate:  func(params *ManualTransferParams) { params.Reason = " \t " },
-			wantErr: walletstore.ErrMissingReason,
-		},
-		{
-			name:    "missing-approval-timeout",
-			mutate:  func(params *ManualTransferParams) { params.ApprovalTimeoutSeconds = 0 },
-			wantErr: walletstore.ErrMissingApprovalTimeout,
 		},
 	}
 

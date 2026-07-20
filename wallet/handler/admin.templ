@@ -158,7 +158,7 @@ templ WalletDetailPage(data WalletDetailView) {
 							<th>Type</th>
 							<th>Provider</th>
 							<th>Currency</th>
-							<th>Status</th>
+							<th>Funding source</th>
 							<th>Active</th>
 							<th>Total Withdrawn</th>
 						</tr>
@@ -170,7 +170,7 @@ templ WalletDetailPage(data WalletDetailView) {
 								<td>{ dest.DestinationType }</td>
 								<td>{ formatNullString(dest.PSPProvider) }</td>
 								<td>{ dest.Currency }</td>
-								<td>{ dest.OwnershipStatus }</td>
+								<td>{ dest.LinkedFundingSourceID }</td>
 								<td>{ dest.IsActive }</td>
 								<td>{ dest.TotalWithdrawn }</td>
 							</tr>

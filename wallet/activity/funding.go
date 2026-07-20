@@ -66,3 +66,17 @@ func (a *FundingActivities) GetReturnToSourceOptions(ctx context.Context, tenant
 	}
 	return options, nil
 }
+
+func (a *FundingActivities) ReserveFundingSourceWithdrawal(ctx context.Context, params walletstore.ReserveFundingSourceWithdrawalParams) (*walletstore.FundingSourceWithdrawalReservationResult, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Store.ReserveFundingSourceWithdrawal(ctx, params)
+}
+
+func (a *FundingActivities) ReleaseFundingSourceWithdrawal(ctx context.Context, params walletstore.ReleaseFundingSourceWithdrawalParams) error {
+	if a == nil || a.Store == nil {
+		return ErrMissingStore
+	}
+	return a.Store.ReleaseFundingSourceWithdrawal(ctx, params)
+}

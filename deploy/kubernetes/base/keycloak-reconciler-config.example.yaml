@@ -9,6 +9,12 @@ client_credentials:
     client_secret: REPLACE_WITH_BACKOFFICE_CLIENT_SECRET
   noebs-wallet-authorizer:
     client_secret: REPLACE_WITH_WALLET_AUTHORIZER_CLIENT_SECRET
+  noebs-temporal-wallet-ledger:
+    client_secret: REPLACE_WITH_TEMPORAL_WALLET_LEDGER_CLIENT_SECRET
+  noebs-temporal-wallet-worker:
+    client_secret: REPLACE_WITH_TEMPORAL_WALLET_WORKER_CLIENT_SECRET
+  noebs-temporal-namespace-bootstrap:
+    client_secret: REPLACE_WITH_TEMPORAL_NAMESPACE_BOOTSTRAP_CLIENT_SECRET
 identity_providers:
   google:
     client_id: REPLACE_WITH_GOOGLE_CLIENT_ID

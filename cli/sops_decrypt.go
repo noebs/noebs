@@ -63,7 +63,7 @@ type sopsEncryptedValue struct {
 func decryptSopsFile(path, ageKeyFile string) ([]byte, error) {
 	ageKeyFile = strings.TrimSpace(ageKeyFile)
 	if ageKeyFile == "" {
-		return nil, fmt.Errorf("%w: noebs.sops_age_key_file", errMissingSopsAgeKeyFile)
+		return nil, errMissingSopsAgeKeyFile
 	}
 	if _, err := requiredExistingPath("SOPS age key", ageKeyFile); err != nil {
 		return nil, err

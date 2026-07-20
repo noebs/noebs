@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -14,8 +13,8 @@ import (
 
 	"github.com/adonese/noebs/internal/testdb"
 	"github.com/adonese/noebs/internal/transactionauth"
+	"github.com/adonese/noebs/store"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
 func TestPostgresIntentClaimIsAtomicAcrossGatewayInstances(t *testing.T) {
@@ -29,12 +28,32 @@ func TestPostgresIntentClaimIsAtomicAcrossGatewayInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = postgres.Terminate(context.Background()) })
-	databaseName := fmt.Sprintf("transaction_auth_%d", time.Now().UnixNano())
-	databaseURL, err := postgres.CreateDatabase(ctx, databaseName)
+	const databaseName = "gateway_auth"
+	migrationURL, err := postgres.CreateDatabaseForRole(ctx, databaseName, "gateway_auth_migrate")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = postgres.DropDatabase(context.Background(), databaseName) })
+	migrationDB, err := store.OpenFromConfig(migrationURL, store.DriverPostgres)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MigrateScope(ctx, migrationDB, store.MigrationScopeGatewayAuth); err != nil {
+		_ = migrationDB.Close()
+		t.Fatal(err)
+	}
+	if _, err := migrationDB.ExecContext(ctx, `INSERT INTO tenants(id, name) VALUES ('alpha', 'Alpha')`); err != nil {
+		_ = migrationDB.Close()
+		t.Fatal(err)
+	}
+	assertTransactionCleanupAuthority(t, ctx, migrationDB)
+	if err := migrationDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	databaseURL, err := postgres.DatabaseURLForRole(databaseName, "gateway_auth_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
 	firstDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		t.Fatal(err)
@@ -45,14 +64,6 @@ func TestPostgresIntentClaimIsAtomicAcrossGatewayInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = secondDB.Close() })
-	if err := createGatewayAuthTestRoles(ctx, firstDB); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateGatewayAuth(ctx, firstDB); err != nil {
-		t.Fatal(err)
-	}
-	setDatabaseRole(t, ctx, firstDB, "gateway_auth_runtime")
-	setDatabaseRole(t, ctx, secondDB, "gateway_auth_runtime")
 	first, err := transactionauth.NewPostgresStore(firstDB)
 	if err != nil {
 		t.Fatal(err)
@@ -255,12 +266,15 @@ func TestPostgresIntentClaimIsAtomicAcrossGatewayInstances(t *testing.T) {
 		if _, err := first.StartFlow(ctx, expired.BrowserStartHash, flow, now); err != nil {
 			t.Fatal(err)
 		}
-		cleanupDB, err := sql.Open("pgx", databaseURL)
+		cleanupURL, err := postgres.DatabaseURLForRole(databaseName, "gateway_auth_cleanup")
+		if err != nil {
+			t.Fatal(err)
+		}
+		cleanupDB, err := sql.Open("pgx", cleanupURL)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = cleanupDB.Close() })
-		setDatabaseRole(t, ctx, cleanupDB, "gateway_auth_cleanup")
 		cleanup, err := transactionauth.NewPostgresStore(cleanupDB)
 		if err != nil {
 			t.Fatal(err)
@@ -279,7 +293,7 @@ func TestPostgresIntentClaimIsAtomicAcrossGatewayInstances(t *testing.T) {
 }
 
 func TestPostgresIntentExpiryAndMigrationAuthority(t *testing.T) {
-	migration, err := os.ReadFile("../../store/migrations/postgres/gateway_auth/101_gateway_auth.sql")
+	migration, err := os.ReadFile("../../store/migrations/postgres/gateway_auth/001_gateway_auth.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,49 +310,35 @@ func TestPostgresIntentExpiryAndMigrationAuthority(t *testing.T) {
 			t.Fatalf("gateway migration missing %q", required)
 		}
 	}
-	for _, forbidden := range []string{"wallet_pin", "wallet_user_2fa", "oauth_token", "access_token", "refresh_token"} {
+	for _, forbidden := range []string{
+		"wallet_pin",
+		"wallet_user_2fa",
+		"oauth_token",
+		"access_token",
+		"refresh_token",
+		"wallet_transaction_authorization_flows_expiry_idx",
+		"wallet_transaction_authorization_intents,\n    wallet_transaction_authorization_flows\nTO gateway_auth_cleanup",
+		"GRANT ",
+	} {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("gateway migration persists forbidden material %q", forbidden)
 		}
 	}
 }
 
-func migrateGatewayAuth(ctx context.Context, db *sql.DB) error {
-	goose.SetBaseFS(os.DirFS("../../store/migrations/postgres/gateway_auth"))
-	goose.SetTableName("goose_db_version_transaction_auth_test")
-	if err := goose.SetDialect("postgres"); err != nil {
-		return err
-	}
-	return goose.UpContext(ctx, db, ".")
-}
-
-func createGatewayAuthTestRoles(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `
-		DO $$ BEGIN
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_runtime') THEN
-				CREATE ROLE gateway_auth_runtime NOLOGIN;
-			END IF;
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_cleanup') THEN
-				CREATE ROLE gateway_auth_cleanup NOLOGIN;
-			END IF;
-		END $$
-	`)
-	return err
-}
-
-func setDatabaseRole(t testing.TB, ctx context.Context, db *sql.DB, role string) {
+func assertTransactionCleanupAuthority(t testing.TB, ctx context.Context, db *store.DB) {
 	t.Helper()
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	if _, err := db.ExecContext(ctx, `SET ROLE `+role); err != nil {
+	var canDeleteIntent, canReadIntentExpiry, canReadIntentDigest bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT
+			has_table_privilege('gateway_auth_cleanup', 'public.wallet_transaction_authorization_intents', 'DELETE'),
+			has_column_privilege('gateway_auth_cleanup', 'public.wallet_transaction_authorization_intents', 'expires_at', 'SELECT'),
+			has_column_privilege('gateway_auth_cleanup', 'public.wallet_transaction_authorization_intents', 'request_digest', 'SELECT')
+	`).Scan(&canDeleteIntent, &canReadIntentExpiry, &canReadIntentDigest); err != nil {
 		t.Fatal(err)
 	}
-	var currentUser string
-	if err := db.QueryRowContext(ctx, `SELECT current_user`).Scan(&currentUser); err != nil {
-		t.Fatal(err)
-	}
-	if currentUser != role {
-		t.Fatalf("current_user = %q, want %q", currentUser, role)
+	if !canDeleteIntent || !canReadIntentExpiry || canReadIntentDigest {
+		t.Fatalf("gateway cleanup intent authority = delete:%v expiry:%v digest:%v", canDeleteIntent, canReadIntentExpiry, canReadIntentDigest)
 	}
 }
 

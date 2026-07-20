@@ -21,7 +21,6 @@ func TestMapErrorMapsPSPValidationFailures(t *testing.T) {
 		{"unsupported-direction", walletvalidation.ErrPSPDirectionInvalid, codes.FailedPrecondition},
 		{"missing-verification-time", walletstore.ErrMissingVerificationTime, codes.InvalidArgument},
 		{"invalid-verification-time", walletstore.ErrInvalidVerificationTime, codes.InvalidArgument},
-		{"invalid-verification-type", walletstore.ErrInvalidVerificationType, codes.InvalidArgument},
 		{"missing-status-timeout", walletstore.ErrMissingStatusTimeout, codes.InvalidArgument},
 	}
 

@@ -43,6 +43,74 @@ func writeKubernetesReleaseManifest(root string) error {
 	return writeReleaseFile(root, kubernetesReleaseManifestFile, string(payload))
 }
 
+func renderDecryptedKubernetesReleaseManifest(root, ageKeyPath string, decrypt deploymentDecryptFunc) (string, error) {
+	payloads := map[string][]byte{}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		relative = filepath.ToSlash(relative)
+		if entry.IsDir() {
+			if relative == ".sops" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if relative == kubernetesReleaseManifestFile {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+			return fmt.Errorf("kubernetes release artifact must be a regular file: %s", relative)
+		}
+		var payload []byte
+		if renderedKubernetesArtifactIsEncrypted(relative) {
+			payload, err = decrypt(path, ageKeyPath)
+		} else {
+			payload, err = os.ReadFile(path)
+		}
+		if err != nil {
+			return err
+		}
+		payloads[relative] = payload
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("inventory rendered Kubernetes release artifacts: %w", err)
+	}
+	artifacts, fingerprint, err := calculateKubernetesReleaseManifestPayloads(payloads)
+	if err != nil {
+		return "", err
+	}
+	payload, err := yaml.Marshal(kubernetesReleaseManifest{
+		APIVersion:  kubernetesReleaseManifestAPIVersion,
+		Fingerprint: fingerprint,
+		Artifacts:   artifacts,
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal rendered Kubernetes release manifest: %w", err)
+	}
+	return string(payload), nil
+}
+
+func renderedKubernetesArtifactIsEncrypted(relative string) bool {
+	if strings.HasPrefix(relative, "secrets/") {
+		return true
+	}
+	switch relative {
+	case "platform/workload-auth-postgres-roles.secrets.yaml",
+		"platform/gateway-auth-postgres-roles.secrets.yaml",
+		"platform/service-postgres-roles.secrets.yaml",
+		"platform/internal-transport.secrets.yaml":
+		return true
+	default:
+		return false
+	}
+}
+
 func validateKubernetesReleaseManifest(root string) error {
 	path := filepath.Join(root, kubernetesReleaseManifestFile)
 	payload, err := os.ReadFile(path)
@@ -84,7 +152,7 @@ func validateKubernetesReleaseManifest(root string) error {
 }
 
 func calculateKubernetesReleaseManifest(root string) (map[string]string, string, error) {
-	artifacts := map[string]string{}
+	payloads := map[string][]byte{}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -107,15 +175,23 @@ func calculateKubernetesReleaseManifest(root string) (map[string]string, string,
 		if err != nil {
 			return err
 		}
-		digest := sha256.Sum256(payload)
-		artifacts[relative] = "sha256:" + hex.EncodeToString(digest[:])
+		payloads[relative] = payload
 		return nil
 	})
 	if err != nil {
 		return nil, "", fmt.Errorf("inventory Kubernetes release artifacts: %w", err)
 	}
-	if len(artifacts) == 0 {
+	return calculateKubernetesReleaseManifestPayloads(payloads)
+}
+
+func calculateKubernetesReleaseManifestPayloads(payloads map[string][]byte) (map[string]string, string, error) {
+	if len(payloads) == 0 {
 		return nil, "", errors.New("kubernetes release contains no artifacts")
+	}
+	artifacts := make(map[string]string, len(payloads))
+	for name, payload := range payloads {
+		digest := sha256.Sum256(payload)
+		artifacts[name] = "sha256:" + hex.EncodeToString(digest[:])
 	}
 	names := make([]string, 0, len(artifacts))
 	for name := range artifacts {

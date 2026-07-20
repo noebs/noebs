@@ -23,9 +23,11 @@ peer or database by guessing a hostname, tenant, or default identifier.
 ## Human identity and tenant authorization
 
 Keycloak is the sole human credential and membership authority. The `noebs`
-realm contains two interactive clients: public `noebs-mobile` and confidential
-`noebs-backoffice`. `noebs-api` is the resource-server audience. Google is a
-Keycloak identity provider; the application has no separate Google-login path.
+realm contains the public `noebs-mobile` client, confidential
+`noebs-backoffice` BFF client, and confidential `noebs-wallet-authorizer`
+transaction-authorization client. `noebs-api` is the resource-server audience.
+Google is a Keycloak identity provider; the application has no separate
+Google-login path.
 
 Each tenant is a Keycloak Organization. Organization membership groups grant
 the tenant roles `user`, `backoffice`, and `tenant-admin` and their explicit
@@ -52,6 +54,12 @@ refresh tokens remain server-side in the `gateway_auth` database behind an
 opaque secure session cookie. Tenant context is the canonical
 `/backoffice/t/:tenant/...` path and is re-authorized for every request. Unsafe
 operations also require same-origin evidence and a session-bound CSRF token.
+
+Protected wallet writes use a separate Authorization Code with PKCE flow at
+Keycloak LoA2. The gateway binds the callback to the exact tenant, subject,
+operation, canonical request digest, idempotency key, and freshly authenticated
+session, then issues a one-use authorization consumed atomically by the wallet
+route. It cannot authorize a different request or be replayed after success.
 
 The `/ws` chat connection follows the same mobile bearer-token and active-tenant
 boundary. After authorization, the gateway proxies the upgrade to
@@ -95,9 +103,9 @@ direction are never selected from public query parameters.
 | `identity-auth` | Explicit profile projection keyed by tenant, issuer, and subject; KYC/passport profile data | `identity_auth` |
 | `card-vault` | Opaque card enrollment, encrypted PAN/IPIN material, funded-operation claims | `card_vault` |
 | `ebs-adapter` / `ebs-adapter-events` | EBS protocol integration, rail transactions, outbox publication | `ebs_adapter` |
-| `psp-webhook` | PSP configuration, mapping, signed webhook persistence, Temporal signaling | `psp_webhook` |
+| `psp-webhook` | Signed PSP webhook ingress and Temporal signaling | `wallet_ledger`, through `wallet_ledger_webhook` |
 | `wallet-api` | Public and back-office wallet HTTP adapter | None |
-| `wallet-ledger` / `wallet-worker` | Wallets, double-entry ledger, holds, fees, rates, limits, funding, withdrawal, and Temporal workflows | `wallet_ledger` |
+| `wallet-ledger` / `wallet-worker` | Wallets, double-entry ledger, holds, fees, rates, limits, PSP configuration and transactions, funding, withdrawal, and Temporal workflows | `wallet_ledger` |
 | `admin-reporting` / projector | Read-only operational projections and reports | `admin_reporting` |
 | `notification-chat` | WebSocket delivery, internal notification event recording, and biller callbacks | `notification_chat` |
 | Workload-auth verifier/cleanup | Internal-request replay prevention | `workload_auth` |
@@ -106,10 +114,12 @@ Kafka carries EBS transaction events into the reporting projector. Temporal
 owns durable wallet orchestration. Neither mechanism grants data ownership to
 the consumer: the service listed above remains the only writer of its model.
 
-Each schema has an explicit Goose migration scope and migration Job. Runtime,
-migration, and cleanup credentials are separate where the role requires them.
-Stores accept explicit tenant, user, currency, and resource identifiers; only
-API handlers may apply configured defaults.
+Each owned database has one explicit Goose migration scope and migration Job.
+The PSP HTTP process is an ingress role inside the wallet aggregate, so its
+tables are owned by `wallet_ledger_migrate` and it has no separate migration
+scope. Runtime, migration, and cleanup credentials are separate where the role
+requires them. Stores accept explicit tenant, user, currency, and resource
+identifiers; only API handlers may apply configured defaults.
 
 ## Infrastructure and release ownership
 

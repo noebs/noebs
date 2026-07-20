@@ -19,10 +19,7 @@ images:
     digest: sha256:2eb3cd316835c990e69e26ade292ffa78f6fb0db7d5fc6377463c162e1979ac0
   - name: temporalio/auto-setup
     newName: docker.io/temporalio/auto-setup
-    digest: sha256:5b3502a3b685f9eff1b925af90c57c9e3dbeccbef367cc28a2a9712c63379312
-  - name: temporalio/ui
-    newName: docker.io/temporalio/ui
-    digest: sha256:cb17ea423d76a8a19a269d0bcd81fc12eee1f6365acd2a56b590dafb35696a95
+    digest: sha256:f14912b699cf73015ad5c4fc18d522d4b014db90e794039214dfb7c022c2644f
 
 patches:
   - target:
@@ -140,21 +137,6 @@ patches:
           limits:
             cpu: "1"
             memory: 1536Mi
-  - target:
-      group: apps
-      version: v1
-      kind: Deployment
-      name: temporal-ui
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/resources
-        value:
-          requests:
-            cpu: 10m
-            memory: 32Mi
-          limits:
-            cpu: 250m
-            memory: 128Mi
   - target:
       group: batch
       version: v1

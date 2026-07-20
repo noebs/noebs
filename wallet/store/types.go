@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	HoldStatusActive   = "active"
-	HoldStatusReleased = "released"
-	HoldStatusExpired  = "expired"
-	HoldStatusCanceled = "canceled"
-	HoldStatusCaptured = "captured"
+	HoldStatusActive    = "active"
+	HoldStatusCommitted = "committed"
+	HoldStatusReleased  = "released"
+	HoldStatusExpired   = "expired"
+	HoldStatusCaptured  = "captured"
 )
 
 const (
@@ -79,6 +79,8 @@ type BalanceHold struct {
 	Status          string       `db:"status"`
 	ExpiresAt       time.Time    `db:"expires_at"`
 	ReleasedAt      sql.NullTime `db:"released_at"`
+	CommittedAt     sql.NullTime `db:"committed_at"`
+	ExpiredAt       sql.NullTime `db:"expired_at"`
 	CapturedAt      sql.NullTime `db:"captured_at"`
 	CreatedAt       time.Time    `db:"created_at"`
 	Metadata        RawJSON      `db:"metadata"`

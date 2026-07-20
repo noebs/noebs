@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -74,8 +73,8 @@ func TestCreateProfileProjectionRequiresTrustedPrincipalBoundary(t *testing.T) {
 			}
 			t.Fatalf("start postgres: %v", err)
 		}
-		databaseName := fmt.Sprintf("profile_handler_%d", time.Now().UnixNano())
-		dbURL, err := postgres.CreateDatabase(ctx, databaseName)
+		const databaseName = "identity_auth"
+		dbURL, err := postgres.CreateDatabaseForRole(ctx, databaseName, "identity_auth_migrate")
 		if err != nil {
 			t.Fatalf("create database: %v", err)
 		}

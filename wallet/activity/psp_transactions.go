@@ -21,6 +21,7 @@ type UpdatePSPTransactionStatusParams struct {
 	TenantID        string
 	ClientReference string
 	Update          walletstore.PSPStatusUpdate
+	WorkflowSignal  *walletstore.PSPWorkflowSignal
 }
 
 type ListPSPTransactionsByStatusParams struct {
@@ -36,6 +37,13 @@ type TryAcquirePSPTransactionLockParams struct {
 	ClientReference string
 	LockToken       string
 	LockExpiresAt   time.Time
+}
+
+type AcknowledgePSPWorkflowSignalParams struct {
+	TenantID        string
+	ClientReference string
+	DeliveredAt     time.Time
+	LockToken       string
 }
 
 func NewPSPTransactionActivities(store *walletstore.Store) *PSPTransactionActivities {
@@ -70,11 +78,21 @@ func (a *PSPTransactionActivities) ListPSPTransactionsByStatus(ctx context.Conte
 	return a.Store.ListPSPTransactionsByStatus(ctx, params.TenantID, params.Status, params.Start, params.End, params.Limit)
 }
 
-func (a *PSPTransactionActivities) UpdatePSPTransactionStatus(ctx context.Context, params UpdatePSPTransactionStatusParams) error {
+func (a *PSPTransactionActivities) UpdatePSPTransactionStatus(ctx context.Context, params UpdatePSPTransactionStatusParams) (*walletstore.PSPTransaction, error) {
 	if a == nil || a.Store == nil {
-		return ErrMissingStore
+		return nil, ErrMissingStore
 	}
-	return a.Store.UpdatePSPTransactionStatus(ctx, params.TenantID, params.ClientReference, params.Update)
+	if params.WorkflowSignal != nil {
+		return a.Store.ApplyExternalPSPStatus(ctx, params.TenantID, params.ClientReference, params.Update, params.WorkflowSignal)
+	}
+	if err := a.Store.UpdatePSPTransactionStatus(ctx, params.TenantID, params.ClientReference, params.Update); err != nil {
+		stored, getErr := a.Store.GetPSPTransactionByReference(ctx, params.TenantID, params.ClientReference)
+		if getErr == nil && walletstore.PSPTransactionStatusTerminal(stored.Status) && len(stored.WorkflowSignalPayload) > 0 {
+			return stored, nil
+		}
+		return nil, err
+	}
+	return a.Store.GetPSPTransactionByReference(ctx, params.TenantID, params.ClientReference)
 }
 
 func (a *PSPTransactionActivities) TryAcquirePSPTransactionLock(ctx context.Context, params TryAcquirePSPTransactionLockParams) (bool, error) {
@@ -82,4 +100,11 @@ func (a *PSPTransactionActivities) TryAcquirePSPTransactionLock(ctx context.Cont
 		return false, ErrMissingStore
 	}
 	return a.Store.TryAcquirePSPTransactionLock(ctx, params.TenantID, params.ClientReference, params.LockToken, params.LockExpiresAt)
+}
+
+func (a *PSPTransactionActivities) AcknowledgePSPWorkflowSignal(ctx context.Context, params AcknowledgePSPWorkflowSignalParams) (*walletstore.PSPTransaction, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	return a.Store.AcknowledgePSPWorkflowSignal(ctx, params.TenantID, params.ClientReference, params.DeliveredAt, params.LockToken)
 }

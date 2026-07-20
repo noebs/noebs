@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -44,16 +46,15 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 		}
 	}()
 
-	walletRow, err := s.lockWallet(ctx, tx, params.TenantID, params.WalletID)
+	now, err := holdTransactionTime(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-
-	now := time.Now().UTC()
 	insertStmt := db.Rebind(`INSERT INTO balance_holds(
 		tenant_id, wallet_id, amount, amount_remaining, reason, reference_type, reference_id,
 		idempotency_key, status, expires_at, created_at, metadata
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+	WHERE ? > clock_timestamp()
 	ON CONFLICT(tenant_id, wallet_id, reference_type, reference_id) DO NOTHING
 	RETURNING *`)
 	var hold BalanceHold
@@ -70,22 +71,42 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 		params.ExpiresAt,
 		now,
 		params.Metadata,
+		params.ExpiresAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			hold, err = s.loadExistingHold(ctx, tx, params)
 			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return nil, ErrHoldExpired
+				}
 				return nil, err
 			}
-			if !existingHoldMatches(hold, params) {
+			if !existingHoldCreateMatches(hold, params) {
 				return nil, ErrDuplicateHold
 			}
 			if err := tx.Commit(); err != nil {
 				return nil, err
 			}
+			committed = true
 			return &hold, nil
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "balance_holds_wallet_id_fkey" {
+			return nil, ErrWalletNotFound
+		}
 		return nil, err
+	}
+	walletRow, err := s.lockWallet(ctx, tx, params.TenantID, params.WalletID)
+	if err != nil {
+		return nil, err
+	}
+	now, err = holdTransactionTime(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if !now.Before(params.ExpiresAt) {
+		return nil, ErrHoldExpired
 	}
 	if err := validateHoldWalletTarget(walletRow, params); err != nil {
 		return nil, err
@@ -94,7 +115,11 @@ func (s *Store) CreateHold(ctx context.Context, params HoldParams) (*BalanceHold
 		return nil, ErrInsufficientFunds
 	}
 
-	walletRow.AvailableBalance -= params.Amount
+	available, err := checkedSubtractInt64(walletRow.AvailableBalance, params.Amount)
+	if err != nil {
+		return nil, err
+	}
+	walletRow.AvailableBalance = available
 	if err := s.updateWalletBalance(ctx, tx, params.TenantID, walletRow.ID, walletRow.Balance, walletRow.AvailableBalance, now); err != nil {
 		return nil, err
 	}
@@ -130,7 +155,21 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	if err != nil {
 		return err
 	}
-	if hold.Status != HoldStatusActive {
+	if hold.Status != HoldStatusActive && hold.Status != HoldStatusCommitted {
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		committed = true
+		return nil
+	}
+	now, err := holdTransactionTime(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if hold.Status == HoldStatusActive && !now.Before(hold.ExpiresAt) {
+		if err := s.expireLockedHold(ctx, tx, hold, now); err != nil {
+			return err
+		}
 		if err := tx.Commit(); err != nil {
 			return err
 		}
@@ -143,8 +182,11 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 		return err
 	}
 
-	now := time.Now().UTC()
-	walletRow.AvailableBalance += hold.AmountRemaining
+	available, err := checkedAddInt64(walletRow.AvailableBalance, hold.AmountRemaining)
+	if err != nil {
+		return err
+	}
+	walletRow.AvailableBalance = available
 	if err := s.updateWalletBalance(ctx, tx, tenantID, walletRow.ID, walletRow.Balance, walletRow.AvailableBalance, now); err != nil {
 		return err
 	}
@@ -163,6 +205,159 @@ func (s *Store) ReleaseHold(ctx context.Context, tenantID string, holdID int64) 
 	return nil
 }
 
+// CommitHold turns an expiring reservation into a non-expiring obligation.
+// Callers use it immediately before an irreversible external side effect.
+func (s *Store) CommitHold(ctx context.Context, tenantID string, holdID int64) error {
+	if err := ValidateReleaseHold(tenantID, holdID); err != nil {
+		return err
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return err
+	}
+
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	hold, err := s.lockHold(ctx, tx, tenantID, holdID)
+	if err != nil {
+		return err
+	}
+	if hold.Status == HoldStatusCommitted {
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		committed = true
+		return nil
+	}
+	if hold.Status != HoldStatusActive {
+		return ErrHoldNotActive
+	}
+
+	now, err := holdTransactionTime(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if !now.Before(hold.ExpiresAt) {
+		if err := s.expireLockedHold(ctx, tx, hold, now); err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		committed = true
+		return ErrHoldExpired
+	}
+
+	stmt := db.Rebind(`UPDATE balance_holds
+		SET status = ?, committed_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	if _, err := tx.ExecContext(ctx, stmt, HoldStatusCommitted, now, tenantID, hold.ID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
+	return nil
+}
+
+func (s *Store) ExpireHolds(ctx context.Context, tenantID string, limit int) (int, error) {
+	tenantID, err := ValidateTenantID(tenantID)
+	if err != nil {
+		return 0, err
+	}
+	if limit <= 0 {
+		return 0, ErrInvalidLimit
+	}
+	db, err := s.ensureDB()
+	if err != nil {
+		return 0, err
+	}
+
+	expired := 0
+	for expired < limit {
+		found, err := s.expireNextHold(ctx, db, tenantID)
+		if err != nil {
+			return expired, err
+		}
+		if !found {
+			break
+		}
+		expired++
+	}
+	return expired, nil
+}
+
+func (s *Store) expireNextHold(ctx context.Context, db *sqlx.DB, tenantID string) (bool, error) {
+	tx, err := db.BeginTxx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt := db.Rebind(`SELECT * FROM balance_holds
+		WHERE tenant_id = ? AND status = ? AND expires_at <= clock_timestamp()
+		ORDER BY expires_at, id
+		LIMIT 1
+		FOR UPDATE SKIP LOCKED`)
+	var hold BalanceHold
+	if err := tx.GetContext(ctx, &hold, stmt, tenantID, HoldStatusActive); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	now, err := holdTransactionTime(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+	if err := s.expireLockedHold(ctx, tx, &hold, now); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Store) expireLockedHold(ctx context.Context, tx *sqlx.Tx, hold *BalanceHold, now time.Time) error {
+	walletRow, err := s.lockWallet(ctx, tx, hold.TenantID, hold.WalletID)
+	if err != nil {
+		return err
+	}
+	available, err := checkedAddInt64(walletRow.AvailableBalance, hold.AmountRemaining)
+	if err != nil {
+		return err
+	}
+	walletRow.AvailableBalance = available
+	if err := s.updateWalletBalance(ctx, tx, hold.TenantID, walletRow.ID, walletRow.Balance, walletRow.AvailableBalance, now); err != nil {
+		return err
+	}
+
+	stmt := s.DB.Rebind(`UPDATE balance_holds
+		SET status = ?, amount_remaining = 0, expired_at = ?
+		WHERE tenant_id = ? AND id = ?`)
+	_, err = tx.ExecContext(ctx, stmt, HoldStatusExpired, now, hold.TenantID, hold.ID)
+	return err
+}
+
+func holdTransactionTime(ctx context.Context, tx *sqlx.Tx) (time.Time, error) {
+	var now time.Time
+	if err := tx.GetContext(ctx, &now, `SELECT clock_timestamp()`); err != nil {
+		return time.Time{}, err
+	}
+	return now.UTC(), nil
+}
+
 func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, params HoldParams) (BalanceHold, error) {
 	stmt := s.DB.Rebind(`SELECT * FROM balance_holds
 		WHERE tenant_id = ? AND wallet_id = ? AND reference_type = ? AND reference_id = ?`)
@@ -173,16 +368,14 @@ func (s *Store) loadExistingHold(ctx context.Context, tx *sqlx.Tx, params HoldPa
 	return hold, nil
 }
 
-func existingHoldMatches(hold BalanceHold, params HoldParams) bool {
+func existingHoldCreateMatches(hold BalanceHold, params HoldParams) bool {
 	return hold.TenantID == params.TenantID &&
 		hold.WalletID == params.WalletID &&
 		hold.Amount == params.Amount &&
-		hold.AmountRemaining == params.Amount &&
 		hold.Reason == params.Reason &&
 		hold.ReferenceType == params.ReferenceType &&
 		hold.ReferenceID == params.ReferenceID &&
 		hold.IdempotencyKey == params.IdempotencyKey &&
-		hold.Status == HoldStatusActive &&
 		sameHoldExpiry(hold.ExpiresAt, params.ExpiresAt) &&
 		rawJSONMatches(hold.Metadata, params.Metadata)
 }
@@ -200,10 +393,14 @@ func rawJSONMatches(stored, requested []byte) bool {
 	}
 	var storedValue any
 	var requestedValue any
-	if err := json.Unmarshal(stored, &storedValue); err != nil {
+	storedDecoder := json.NewDecoder(bytes.NewReader(stored))
+	storedDecoder.UseNumber()
+	if err := storedDecoder.Decode(&storedValue); err != nil {
 		return string(stored) == string(requested)
 	}
-	if err := json.Unmarshal(requested, &requestedValue); err != nil {
+	requestedDecoder := json.NewDecoder(bytes.NewReader(requested))
+	requestedDecoder.UseNumber()
+	if err := requestedDecoder.Decode(&requestedValue); err != nil {
 		return string(stored) == string(requested)
 	}
 	return reflect.DeepEqual(storedValue, requestedValue)

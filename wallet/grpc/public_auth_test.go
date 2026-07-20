@@ -2,7 +2,6 @@ package walletgrpc
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -34,8 +33,8 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 		_ = container.Terminate(context.Background())
 	})
 
-	dbName := fmt.Sprintf("noebs_wallet_grpc_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -83,17 +82,17 @@ func TestGetWalletPublicEnforcesGatewayIdentityOwnership(t *testing.T) {
 	server, tenantID, wallet42, wallet7 := newWalletServerWithUsers(t)
 	ctx := walletGatewayIdentityContext(42, tenantID)
 
-	resp, err := server.GetWalletPublic(ctx, &walletv1.GetWalletRequest{
+	resp, err := server.GetWalletPublic(ctx, &walletv1.GetWalletPublicRequest{
 		WalletId: wallet42.ID.String(),
 	})
 	if err != nil {
 		t.Fatalf("GetWalletPublic(own wallet) error = %v", err)
 	}
-	if resp == nil || resp.Id != wallet42.ID.String() {
+	if resp.GetWallet().GetId() != wallet42.ID.String() {
 		t.Fatalf("unexpected wallet response: %+v", resp)
 	}
 
-	_, err = server.GetWalletPublic(ctx, &walletv1.GetWalletRequest{
+	_, err = server.GetWalletPublic(ctx, &walletv1.GetWalletPublicRequest{
 		TenantId: tenantID,
 		WalletId: wallet7.ID.String(),
 	})
@@ -105,19 +104,23 @@ func TestGetWalletPublicEnforcesGatewayIdentityOwnership(t *testing.T) {
 func TestRequestWithdrawalRejectsGatewayIdentityMismatch(t *testing.T) {
 	server, tenantID, wallet42, _ := newWalletServerWithUsers(t)
 	ctx := walletGatewayIdentityContext(42, tenantID)
+	allowReturn := true
+	approvalRequired := false
 
-	req := &walletv1.WithdrawalRequest{
-		TenantId:                   tenantID,
-		ClientReference:            "ref-1",
-		ProviderCode:               "noop",
-		WalletId:                   wallet42.ID.String(),
-		Amount:                     100,
-		Currency:                   "USD",
-		OwnerType:                  walletstore.OwnerTypeUser,
-		OwnerId:                    "7",
-		DestinationId:              10,
-		HoldExpirySeconds:          60,
-		VerificationTimeoutSeconds: 60,
+	req := &walletv1.RequestWithdrawalRequest{
+		TenantId:            tenantID,
+		ClientReference:     "ref-1",
+		IdempotencyKey:      "ref-1",
+		ProviderCode:        "noop",
+		WalletId:            wallet42.ID.String(),
+		Amount:              100,
+		Currency:            "USD",
+		OwnerType:           walletstore.OwnerTypeUser,
+		OwnerId:             "7",
+		DestinationId:       10,
+		AllowReturnToSource: &allowReturn,
+		HoldExpirySeconds:   60,
+		ApprovalRequired:    &approvalRequired,
 	}
 
 	_, err := server.RequestWithdrawal(ctx, req)
@@ -139,14 +142,12 @@ func TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation(t *t
 			run: func() error {
 				_, err := server.RequestDeposit(
 					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestDeposit_FullMethodName),
-					&walletv1.DepositRequest{
-						ClientReference: "deposit-ref-tenant",
-						ProviderCode:    "noop",
-						WalletId:        "not-a-uuid",
-						OwnerType:       walletstore.OwnerTypeUser,
-						OwnerId:         "42",
-						Amount:          100,
-						Currency:        "USD",
+					&walletv1.RequestDepositRequest{
+						IdempotencyKey: "deposit-ref-tenant",
+						ProviderCode:   "noop",
+						WalletId:       "not-a-uuid",
+						Amount:         100,
+						Currency:       "USD",
 					},
 				)
 				return err
@@ -157,13 +158,13 @@ func TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation(t *t
 			run: func() error {
 				_, err := server.RequestDeposit(
 					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestDeposit_FullMethodName),
-					&walletv1.DepositRequest{
-						TenantId:        "tenant-a",
-						ClientReference: "deposit-ref-owner",
-						ProviderCode:    "noop",
-						WalletId:        "not-a-uuid",
-						Amount:          100,
-						Currency:        "USD",
+					&walletv1.RequestDepositRequest{
+						TenantId:       "tenant-a",
+						IdempotencyKey: "deposit-ref-owner",
+						ProviderCode:   "noop",
+						WalletId:       "not-a-uuid",
+						Amount:         100,
+						Currency:       "USD",
 					},
 				)
 				return err
@@ -174,7 +175,7 @@ func TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation(t *t
 			run: func() error {
 				_, err := server.RequestWithdrawal(
 					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestWithdrawal_FullMethodName),
-					&walletv1.WithdrawalRequest{
+					&walletv1.RequestWithdrawalRequest{
 						ClientReference:   "withdrawal-ref-tenant",
 						ProviderCode:      "noop",
 						WalletId:          "not-a-uuid",
@@ -193,7 +194,7 @@ func TestPublicPSPRequestsBindGatewayIdentityBeforeTenantAndOwnerValidation(t *t
 			run: func() error {
 				_, err := server.RequestWithdrawal(
 					walletServerMethodContext(ctx, walletv1.WalletPublicService_RequestWithdrawal_FullMethodName),
-					&walletv1.WithdrawalRequest{
+					&walletv1.RequestWithdrawalRequest{
 						TenantId:          "tenant-a",
 						ClientReference:   "withdrawal-ref-owner",
 						ProviderCode:      "noop",

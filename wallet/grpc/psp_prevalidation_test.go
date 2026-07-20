@@ -3,7 +3,6 @@ package walletgrpc
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -20,15 +19,13 @@ import (
 
 func TestRequestDepositValidatesWalletBeforePersistingPSPTransaction(t *testing.T) {
 	server, tenantID, _ := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
-	req := &walletv1.DepositRequest{
-		TenantId:        tenantID,
-		ClientReference: "deposit-missing-wallet",
-		ProviderCode:    "noop",
-		WalletId:        uuid.NewString(),
-		OwnerType:       walletstore.OwnerTypeUser,
-		OwnerId:         "42",
-		Amount:          100,
-		Currency:        "USD",
+	req := &walletv1.RequestDepositRequest{
+		TenantId:       tenantID,
+		IdempotencyKey: "deposit-missing-wallet",
+		ProviderCode:   "noop",
+		WalletId:       uuid.NewString(),
+		Amount:         100,
+		Currency:       "USD",
 	}
 
 	_, err := server.RequestDeposit(walletGatewayIdentityContext(42, tenantID), req)
@@ -38,23 +35,28 @@ func TestRequestDepositValidatesWalletBeforePersistingPSPTransaction(t *testing.
 	if status.Convert(err).Message() != walletstore.ErrWalletNotFound.Error() {
 		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrWalletNotFound.Error())
 	}
-	if _, err := server.Service.Store.GetPSPTransactionByReference(context.Background(), tenantID, req.ClientReference); !errors.Is(err, walletstore.ErrPSPTransactionNotFound) {
-		t.Fatalf("stored PSP transaction error = %v, want %v", err, walletstore.ErrPSPTransactionNotFound)
+	if _, err := server.Service.Store.GetDepositIntentByIdempotency(context.Background(), tenantID, req.ProviderCode, req.IdempotencyKey); !errors.Is(err, walletstore.ErrDepositIntentNotFound) {
+		t.Fatalf("stored deposit intent error = %v, want %v", err, walletstore.ErrDepositIntentNotFound)
 	}
 }
 
 func TestRequestWithdrawalValidatesWalletBeforePersistingPSPTransaction(t *testing.T) {
 	server, tenantID, _ := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{WalletHoldExpirySeconds: 60})
-	req := &walletv1.WithdrawalRequest{
-		TenantId:          tenantID,
-		ClientReference:   "withdrawal-missing-wallet",
-		ProviderCode:      "noop",
-		WalletId:          uuid.NewString(),
-		OwnerType:         walletstore.OwnerTypeUser,
-		OwnerId:           "42",
-		Amount:            100,
-		Currency:          "USD",
-		HoldExpirySeconds: 60,
+	allowReturn := true
+	approvalRequired := false
+	req := &walletv1.RequestWithdrawalRequest{
+		TenantId:            tenantID,
+		IdempotencyKey:      "withdrawal-missing-wallet",
+		ClientReference:     "withdrawal-missing-wallet",
+		ProviderCode:        "noop",
+		WalletId:            uuid.NewString(),
+		OwnerType:           walletstore.OwnerTypeUser,
+		OwnerId:             "42",
+		Amount:              100,
+		Currency:            "USD",
+		AllowReturnToSource: &allowReturn,
+		HoldExpirySeconds:   60,
+		ApprovalRequired:    &approvalRequired,
 	}
 
 	_, err := server.RequestWithdrawal(walletGatewayIdentityContext(42, tenantID), req)
@@ -86,8 +88,8 @@ func newWalletPSPTestServer(t *testing.T, cfg ebs_fields.NoebsConfig) (*Server, 
 		_ = container.Terminate(context.Background())
 	})
 
-	dbName := fmt.Sprintf("noebs_wallet_psp_prevalidation_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -107,9 +109,6 @@ func newWalletPSPTestServer(t *testing.T, cfg ebs_fields.NoebsConfig) (*Server, 
 	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate wallet-ledger db: %v", err)
 	}
-	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
-		t.Fatalf("migrate psp-webhook db: %v", err)
-	}
 	return NewServer(wallet.NewService(db, cfg)), tenantID, db
 }
 
@@ -117,10 +116,12 @@ func seedWalletValidationRules(t *testing.T, ctx context.Context, db *basestore.
 	t.Helper()
 
 	pspStmt := db.Rebind(`INSERT INTO psp_configs(
-		tenant_id, provider_code, provider_name, api_base_url, enabled_currencies,
+		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name, enabled_currencies,
 		is_active, supports_deposit, supports_withdrawal, method_type, display_name,
-		supported_regions, min_amount, max_amount, deposit_input_schema, presentation_schema
-	) VALUES(?, ?, ?, 'https://psp.example', ARRAY[?], TRUE, ?, ?, 'redirect', ?, ARRAY['US'], 1, 1000000000, '{}', '{}')
+		supported_regions, min_amount, max_amount, deposit_input_schema, presentation_schema,
+		deposit_response_mapping
+	) VALUES(?, ?, ?, 'https://psp.example', 'Idempotency-Key', ARRAY[?], TRUE, ?, ?, 'redirect', ?, ARRAY['US'], 1, 1000000000, '{}', '{}',
+		'{"client_reference":["client_reference"],"transaction_id":["transaction_id"],"status":["status"],"amount":["amount"],"currency":["currency"]}')
 	ON CONFLICT (tenant_id, provider_code) DO NOTHING`)
 	if _, err := db.ExecContext(ctx, pspStmt, tenantID, providerCode, "Test PSP", currency, supportsDeposit, supportsWithdrawal, "Test PSP"); err != nil {
 		t.Fatalf("seed psp config: %v", err)

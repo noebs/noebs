@@ -48,8 +48,6 @@ func workloadCallerAudiences(role serviceRole) []string {
 			string(serviceRoleNotification),
 			string(serviceRoleWalletAPI),
 		}
-	case serviceRoleIdentityAuth:
-		return []string{string(serviceRoleCardVault)}
 	case serviceRoleEBSAdapter:
 		return []string{
 			string(serviceRoleCardVault),
@@ -64,7 +62,6 @@ func expectedWorkloadCallers(role serviceRole) map[string]bool {
 	callers := map[string]bool{"api-gateway": true}
 	switch role {
 	case serviceRoleCardVault:
-		callers["identity-auth"] = true
 		callers["ebs-adapter"] = true
 	case serviceRoleNotification:
 		callers["ebs-adapter"] = true
@@ -97,6 +94,9 @@ func validateWorkloadAuthRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsCon
 	}
 	if strings.TrimSpace(cfg.WorkloadAuth.NonceDatabaseURL) == "" {
 		return errors.New("noebs.workload_auth.nonce_db_url is required")
+	}
+	if err := validatePostgresDatabaseIdentity(cfg.WorkloadAuth.NonceDatabaseURL, workloadAuthRuntimePostgresRoleSpec); err != nil {
+		return fmt.Errorf("noebs.workload_auth.nonce_db_url: %w", err)
 	}
 	if cfg.WorkloadAuth.TrustedKeys == nil {
 		return errors.New("noebs.workload_auth.trusted_keys is required")
@@ -133,7 +133,12 @@ func initWorkloadAuth(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 		return nil
 	}
 
-	db, err := store.OpenFromConfigWithCACertificate(cfg.WorkloadAuth.NonceDatabaseURL, store.DriverPostgres, cfg.DatabaseCACertificate)
+	db, err := openPostgresDatabaseWithAuthority(
+		cfg.WorkloadAuth.NonceDatabaseURL,
+		store.DriverPostgres,
+		cfg.DatabaseCACertificate,
+		workloadAuthRuntimePostgresRoleSpec,
+	)
 	if err != nil {
 		return fmt.Errorf("open workload nonce database: %w", err)
 	}

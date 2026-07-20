@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 
@@ -10,17 +11,21 @@ import (
 )
 
 var (
-	ErrMissingTemporalHost      = errors.New("missing temporal host")
-	ErrMissingTemporalPort      = errors.New("missing temporal port")
-	ErrMissingTemporalNamespace = errors.New("missing temporal namespace")
-	ErrMissingTaskQueue         = errors.New("missing temporal task queue")
+	ErrMissingTemporalHost        = errors.New("missing temporal host")
+	ErrMissingTemporalPort        = errors.New("missing temporal port")
+	ErrMissingTemporalNamespace   = errors.New("missing temporal namespace")
+	ErrMissingTaskQueue           = errors.New("missing temporal task queue")
+	ErrMissingTemporalTLS         = errors.New("missing temporal TLS configuration")
+	ErrMissingTemporalCredentials = errors.New("missing temporal credentials")
 )
 
 type Options struct {
-	Host      string
-	Port      string
-	Namespace string
-	TaskQueue TaskQueue
+	Host        string
+	Port        string
+	Namespace   string
+	TaskQueue   TaskQueue
+	TLS         *tls.Config
+	Credentials client.Credentials
 }
 
 func (o Options) Address() (string, error) {
@@ -34,14 +39,26 @@ func (o Options) Address() (string, error) {
 }
 
 func (o Options) Validate() error {
-	if o.Namespace == "" {
-		return ErrMissingTemporalNamespace
-	}
 	if o.TaskQueue == "" {
 		return ErrMissingTaskQueue
 	}
-	_, err := o.Address()
-	return err
+	return o.validateConnection()
+}
+
+func (o Options) validateConnection() error {
+	if o.Namespace == "" {
+		return ErrMissingTemporalNamespace
+	}
+	if _, err := o.Address(); err != nil {
+		return err
+	}
+	if o.TLS == nil {
+		return ErrMissingTemporalTLS
+	}
+	if o.Credentials == nil {
+		return ErrMissingTemporalCredentials
+	}
+	return nil
 }
 
 type Runner struct {
@@ -50,21 +67,44 @@ type Runner struct {
 }
 
 func NewClient(opts Options) (client.Client, error) {
-	if err := opts.Validate(); err != nil {
-		return nil, err
-	}
-	address, err := opts.Address()
+	clientOptions, err := temporalClientOptions(opts)
 	if err != nil {
 		return nil, err
 	}
-	return client.Dial(client.Options{
-		HostPort:  address,
-		Namespace: opts.Namespace,
-	})
+	return client.Dial(clientOptions)
+}
+
+func NewNamespaceClient(opts Options) (client.NamespaceClient, error) {
+	clientOptions, err := temporalClientOptions(opts)
+	if err != nil {
+		return nil, err
+	}
+	return client.NewNamespaceClient(clientOptions)
+}
+
+func temporalClientOptions(opts Options) (client.Options, error) {
+	if err := opts.validateConnection(); err != nil {
+		return client.Options{}, err
+	}
+	address, err := opts.Address()
+	if err != nil {
+		return client.Options{}, err
+	}
+	return client.Options{
+		HostPort:    address,
+		Namespace:   opts.Namespace,
+		Credentials: opts.Credentials,
+		ConnectionOptions: client.ConnectionOptions{
+			TLS: opts.TLS.Clone(),
+		},
+	}, nil
 }
 
 func NewRunner(ctx context.Context, opts Options, register func(worker.Worker)) (*Runner, error) {
 	_ = ctx
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
 	c, err := NewClient(opts)
 	if err != nil {
 		return nil, err

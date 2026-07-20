@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -14,8 +13,8 @@ import (
 
 	"github.com/adonese/noebs/internal/backofficeauth"
 	"github.com/adonese/noebs/internal/testdb"
+	"github.com/adonese/noebs/store"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/pressly/goose/v3"
 )
 
 func TestPostgresStoreConsumesFlowsAndSerializesRefreshAcrossInstances(t *testing.T) {
@@ -29,12 +28,28 @@ func TestPostgresStoreConsumesFlowsAndSerializesRefreshAcrossInstances(t *testin
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = postgres.Terminate(context.Background()) })
-	databaseName := fmt.Sprintf("gateway_auth_%d", time.Now().UnixNano())
-	databaseURL, err := postgres.CreateDatabase(ctx, databaseName)
+	const databaseName = "gateway_auth"
+	migrationURL, err := postgres.CreateDatabaseForRole(ctx, databaseName, "gateway_auth_migrate")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = postgres.DropDatabase(context.Background(), databaseName) })
+	migrationDB, err := store.OpenFromConfig(migrationURL, store.DriverPostgres)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MigrateScope(ctx, migrationDB, store.MigrationScopeGatewayAuth); err != nil {
+		_ = migrationDB.Close()
+		t.Fatal(err)
+	}
+	assertBackofficeCleanupAuthority(t, ctx, migrationDB)
+	if err := migrationDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	databaseURL, err := postgres.DatabaseURLForRole(databaseName, "gateway_auth_runtime")
+	if err != nil {
+		t.Fatal(err)
+	}
 	firstDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		t.Fatal(err)
@@ -45,12 +60,6 @@ func TestPostgresStoreConsumesFlowsAndSerializesRefreshAcrossInstances(t *testin
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = secondDB.Close() })
-	if err := createGatewayAuthTestRoles(ctx, firstDB); err != nil {
-		t.Fatal(err)
-	}
-	if err := migrateGatewayAuth(ctx, firstDB); err != nil {
-		t.Fatal(err)
-	}
 	first, err := backofficeauth.NewPostgresStore(firstDB)
 	if err != nil {
 		t.Fatal(err)
@@ -272,21 +281,20 @@ func TestPostgresStoreConsumesFlowsAndSerializesRefreshAcrossInstances(t *testin
 }
 
 func TestGatewayAuthMigrationKeepsRefreshExpiryAsCleanupBoundary(t *testing.T) {
-	migration, err := os.ReadFile("../../store/migrations/postgres/gateway_auth/101_gateway_auth.sql")
+	migration, err := os.ReadFile("../../store/migrations/postgres/gateway_auth/001_gateway_auth.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
 	sql := string(migration)
 	for _, required := range []string{
 		"CREATE INDEX backoffice_sessions_refresh_expiry_idx",
-		"SELECT (refresh_expires_at, idle_expires_at, absolute_expires_at)",
 		"browser_hash BYTEA NOT NULL CHECK",
 	} {
 		if !strings.Contains(sql, required) {
 			t.Fatalf("migration missing %q", required)
 		}
 	}
-	for _, removed := range []string{"keycloak_session", "browser_hash BYTEA NOT NULL UNIQUE"} {
+	for _, removed := range []string{"keycloak_session", "browser_hash BYTEA NOT NULL UNIQUE", "GRANT "} {
 		if strings.Contains(sql, removed) {
 			t.Fatalf("migration retained %q", removed)
 		}
@@ -316,27 +324,39 @@ func (c *mutableClock) Set(now time.Time) {
 	c.mu.Unlock()
 }
 
-func migrateGatewayAuth(ctx context.Context, db *sql.DB) error {
-	goose.SetBaseFS(os.DirFS("../../store/migrations/postgres/gateway_auth"))
-	goose.SetTableName("goose_db_version_gateway_auth_test")
-	if err := goose.SetDialect("postgres"); err != nil {
-		return err
+func assertBackofficeCleanupAuthority(t testing.TB, ctx context.Context, db *store.DB) {
+	t.Helper()
+	var canDeleteFlow, canReadFlowExpiry, canReadFlowState bool
+	var canDeleteSession, canReadSessionExpiry, canReadSessionToken bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT
+			has_table_privilege('gateway_auth_cleanup', 'public.backoffice_auth_flows', 'DELETE'),
+			has_column_privilege('gateway_auth_cleanup', 'public.backoffice_auth_flows', 'expires_at', 'SELECT'),
+			has_column_privilege('gateway_auth_cleanup', 'public.backoffice_auth_flows', 'state_hash', 'SELECT'),
+			has_table_privilege('gateway_auth_cleanup', 'public.backoffice_sessions', 'DELETE'),
+			has_column_privilege('gateway_auth_cleanup', 'public.backoffice_sessions', 'refresh_expires_at', 'SELECT'),
+			has_column_privilege('gateway_auth_cleanup', 'public.backoffice_sessions', 'tokens_ciphertext', 'SELECT')
+	`).Scan(
+		&canDeleteFlow,
+		&canReadFlowExpiry,
+		&canReadFlowState,
+		&canDeleteSession,
+		&canReadSessionExpiry,
+		&canReadSessionToken,
+	); err != nil {
+		t.Fatal(err)
 	}
-	return goose.UpContext(ctx, db, ".")
-}
-
-func createGatewayAuthTestRoles(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `
-		DO $$ BEGIN
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_runtime') THEN
-				CREATE ROLE gateway_auth_runtime NOLOGIN;
-			END IF;
-			IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_cleanup') THEN
-				CREATE ROLE gateway_auth_cleanup NOLOGIN;
-			END IF;
-		END $$
-	`)
-	return err
+	if !canDeleteFlow || !canReadFlowExpiry || canReadFlowState || !canDeleteSession || !canReadSessionExpiry || canReadSessionToken {
+		t.Fatalf(
+			"gateway cleanup authority = flow(delete:%v expiry:%v state:%v) session(delete:%v expiry:%v token:%v)",
+			canDeleteFlow,
+			canReadFlowExpiry,
+			canReadFlowState,
+			canDeleteSession,
+			canReadSessionExpiry,
+			canReadSessionToken,
+		)
+	}
 }
 
 func digest(fill byte) backofficeauth.Digest {

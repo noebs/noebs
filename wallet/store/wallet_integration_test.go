@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -72,20 +71,33 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	approverID := insertWalletOperator(t, ctx, store, "approver")
 
 	transfer := ManualTransfer{
-		TenantID:              tenantID,
-		WorkflowID:            "wf-1",
-		IdempotencyKey:        "idem-1",
-		TransferType:          ManualTransferTypeDebit,
-		WalletID:              sql.NullString{String: wallet.ID.String(), Valid: true},
-		Amount:                100,
-		Currency:              "USD",
-		Reason:                "manual adjustment",
-		Status:                ManualTransferStatusPending,
-		RequestedByOperatorID: requesterID,
+		TenantID:               tenantID,
+		WorkflowID:             "wf-1",
+		IdempotencyKey:         "idem-1",
+		TransferType:           ManualTransferTypeDebit,
+		WalletID:               sql.NullString{String: wallet.ID.String(), Valid: true},
+		Amount:                 100,
+		Currency:               "USD",
+		Reason:                 "manual adjustment",
+		Status:                 ManualTransferStatusPending,
+		RequestedByOperatorID:  requesterID,
+		ApprovalTimeoutSeconds: 3600,
+	}
+	var before time.Time
+	if err := store.DB.GetContext(ctx, &before, "SELECT clock_timestamp()"); err != nil {
+		t.Fatalf("read DB clock before manual transfer: %v", err)
 	}
 	created, err := store.CreateManualTransfer(ctx, transfer)
 	if err != nil {
 		t.Fatalf("create manual transfer: %v", err)
+	}
+	var after time.Time
+	if err := store.DB.GetContext(ctx, &after, "SELECT clock_timestamp()"); err != nil {
+		t.Fatalf("read DB clock after manual transfer: %v", err)
+	}
+	approvalWindow := time.Duration(transfer.ApprovalTimeoutSeconds) * time.Second
+	if created.DecisionDeadlineAt.Before(before.Add(approvalWindow)) || created.DecisionDeadlineAt.After(after.Add(approvalWindow)) {
+		t.Fatalf("decision deadline = %s, want DB-created deadline in [%s, %s]", created.DecisionDeadlineAt, before.Add(approvalWindow), after.Add(approvalWindow))
 	}
 	replayed, err := store.CreateManualTransfer(ctx, transfer)
 	if err != nil {
@@ -94,11 +106,19 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	if replayed.ID != created.ID {
 		t.Fatalf("replayed transfer id = %d, want %d", replayed.ID, created.ID)
 	}
+	if !replayed.DecisionDeadlineAt.Equal(created.DecisionDeadlineAt) {
+		t.Fatalf("replay deadline = %s, want immutable %s", replayed.DecisionDeadlineAt, created.DecisionDeadlineAt)
+	}
 
 	amountMismatch := transfer
 	amountMismatch.Amount++
 	if _, err := store.CreateManualTransfer(ctx, amountMismatch); !errors.Is(err, ErrDuplicateManualTransfer) {
 		t.Fatalf("manual transfer amount mismatch error = %v, want %v", err, ErrDuplicateManualTransfer)
+	}
+	timeoutMismatch := transfer
+	timeoutMismatch.ApprovalTimeoutSeconds++
+	if _, err := store.CreateManualTransfer(ctx, timeoutMismatch); !errors.Is(err, ErrDuplicateManualTransfer) {
+		t.Fatalf("manual transfer timeout mismatch error = %v, want %v", err, ErrDuplicateManualTransfer)
 	}
 	workflowMismatch := transfer
 	workflowMismatch.WorkflowID = "wf-2"
@@ -106,6 +126,9 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 		t.Fatalf("manual transfer workflow mismatch error = %v, want %v", err, ErrDuplicateManualTransfer)
 	}
 
+	if _, err := store.DB.ExecContext(ctx, `INSERT INTO tenants(id, name) VALUES($1, $2)`, "other-tenant", "Other Wallet Tenant"); err != nil {
+		t.Fatalf("insert foreign tenant: %v", err)
+	}
 	foreignWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID:  "other-tenant",
 		OwnerType: OwnerTypeUser,
@@ -284,8 +307,8 @@ func newWalletStoreIntegration(t *testing.T) (context.Context, *Store, string) {
 		_ = container.Terminate(context.Background())
 	})
 
-	dbName := fmt.Sprintf("noebs_wallet_store_%d", time.Now().UnixNano())
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "wallet_ledger"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "wallet_ledger_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}
@@ -305,6 +328,7 @@ func newWalletStoreIntegration(t *testing.T) (context.Context, *Store, string) {
 	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
+	provisionWalletStoreTestTenant(t, ctx, db, tenantID, "Wallet Store Tenant")
 	return ctx, New(db), tenantID
 }
 

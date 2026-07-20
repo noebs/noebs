@@ -3,8 +3,10 @@ package main
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
 )
@@ -17,8 +19,23 @@ type appConfigResponse struct {
 }
 
 type appWalletConfig struct {
-	Enabled         bool   `json:"enabled"`
-	DefaultCurrency string `json:"default_currency"`
+	Enabled                  bool                               `json:"enabled"`
+	DefaultCurrency          string                             `json:"default_currency"`
+	TransactionAuthorization *appTransactionAuthorizationConfig `json:"transaction_authorization,omitempty"`
+}
+
+type appTransactionAuthorizationConfig struct {
+	BeginPath        string                                       `json:"begin_path"`
+	CredentialHeader string                                       `json:"credential_header"`
+	RequiredACR      string                                       `json:"required_acr"`
+	LifetimeSeconds  int64                                        `json:"lifetime_seconds"`
+	Operations       []appTransactionAuthorizationOperationConfig `json:"operations"`
+}
+
+type appTransactionAuthorizationOperationConfig struct {
+	Operation transactionauth.Operation `json:"operation"`
+	Method    string                    `json:"method"`
+	Path      string                    `json:"path"`
 }
 
 type appOAuthConfig struct {
@@ -40,12 +57,25 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 	if err != nil {
 		return appConfigResponse{}, err
 	}
+	walletConfig := appWalletConfig{
+		Enabled:         cfg.WalletEnabled,
+		DefaultCurrency: strings.TrimSpace(cfg.WalletDefaultCurrency),
+	}
+	if cfg.WalletEnabled {
+		walletConfig.TransactionAuthorization = &appTransactionAuthorizationConfig{
+			BeginPath:        "/wallet/authorizations",
+			CredentialHeader: walletAuthorizationHeader,
+			RequiredACR:      walletAuthorizerRequiredACR,
+			LifetimeSeconds:  int64(walletAuthorizationTTL / time.Second),
+			Operations: []appTransactionAuthorizationOperationConfig{
+				{Operation: transactionauth.OperationWalletP2P, Method: http.MethodPost, Path: "/wallet/p2p"},
+				{Operation: transactionauth.OperationWalletWithdrawal, Method: http.MethodPost, Path: "/wallet/withdrawals"},
+			},
+		}
+	}
 	return appConfigResponse{
 		TenantID: tenantID,
-		Wallet: appWalletConfig{
-			Enabled:         cfg.WalletEnabled,
-			DefaultCurrency: strings.TrimSpace(cfg.WalletDefaultCurrency),
-		},
+		Wallet:   walletConfig,
 		OAuth: appOAuthConfig{
 			Issuer:      strings.TrimSpace(cfg.OIDC.Issuer),
 			ClientID:    "noebs-mobile",

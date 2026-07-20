@@ -28,7 +28,6 @@ func TestWorkloadAuthRuntimeConfigAcceptsExactRoleMatrix(t *testing.T) {
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
 		serviceRoleEBSAdapterMigrate,
-		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
 		serviceRoleWalletLedgerMigrate,
@@ -170,7 +169,7 @@ func validWorkloadRuntimeConfig(role serviceRole) ebs_fields.NoebsConfig {
 		cfg.WorkloadAuth.SigningPrivateKey = base64.StdEncoding.EncodeToString(privateKey)
 	}
 	if roleReceivesSignedHTTP(role) {
-		cfg.WorkloadAuth.NonceDatabaseURL = "postgres://workload-auth"
+		cfg.WorkloadAuth.NonceDatabaseURL = "postgres://workload_auth_runtime:secret@postgres/workload_auth?sslmode=disable"
 		cfg.WorkloadAuth.TrustedKeys = make(map[string]workloadauth.TrustedKeyConfig)
 		for caller := range expectedWorkloadCallers(role) {
 			for keyID, key := range workloadTrustedKeys(caller) {

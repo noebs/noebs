@@ -39,8 +39,8 @@ func TestSignalManualTransferDecisionValidatesCommand(t *testing.T) {
 	}
 }
 
-func TestManualTransferWorkflowIDIncludesTenant(t *testing.T) {
-	if got := manualTransferWorkflowID("tenant-a", "request-1"); got != "wallet-manual-tenant-a-request-1" {
-		t.Fatalf("workflow id = %q", got)
+func TestManualTransferWorkflowIDSeparatesTenants(t *testing.T) {
+	if manualTransferWorkflowID("tenant-a", "request-1") == manualTransferWorkflowID("tenant-b", "request-1") {
+		t.Fatal("workflow ID is not tenant scoped")
 	}
 }

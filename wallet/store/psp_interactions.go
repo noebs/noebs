@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -14,6 +16,7 @@ type PSPInteraction struct {
 	ClientReference  sql.NullString `db:"client_reference"`
 	Direction        sql.NullString `db:"direction"`
 	InteractionType  string         `db:"interaction_type"`
+	IdempotencyKey   sql.NullString `db:"idempotency_key"`
 	Method           sql.NullString `db:"method"`
 	URL              sql.NullString `db:"url"`
 	RequestHeaders   RawJSON        `db:"request_headers"`
@@ -36,6 +39,14 @@ func (s *Store) RecordPSPInteraction(ctx context.Context, interaction PSPInterac
 	if interaction.InteractionType == "" {
 		return nil, ErrMissingInteractionType
 	}
+	dispatch := interaction.InteractionType == "deposit_create" || interaction.InteractionType == "payout_send"
+	if dispatch && (!interaction.IdempotencyKey.Valid || interaction.IdempotencyKey.String == "") {
+		return nil, ErrMissingIdempotencyKey
+	}
+	if dispatch != interaction.IdempotencyKey.Valid ||
+		(interaction.IdempotencyKey.Valid && strings.TrimSpace(interaction.IdempotencyKey.String) != interaction.IdempotencyKey.String) {
+		return nil, ErrInvalidIdempotencyKey
+	}
 	db, err := s.ensureDB()
 	if err != nil {
 		return nil, err
@@ -43,8 +54,11 @@ func (s *Store) RecordPSPInteraction(ctx context.Context, interaction PSPInterac
 	stmt := db.Rebind(`INSERT INTO psp_interactions(
 		tenant_id, psp_provider, psp_transaction_id, client_reference, direction,
 		interaction_type, method, url, request_headers, request_body, response_headers,
-		response_body, status_code, error_message
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		response_body, status_code, error_message, idempotency_key
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ON CONFLICT (tenant_id, psp_provider, interaction_type, idempotency_key)
+		WHERE interaction_type IN ('deposit_create', 'payout_send')
+		DO NOTHING
 	RETURNING *`)
 	var stored PSPInteraction
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -62,7 +76,19 @@ func (s *Store) RecordPSPInteraction(ctx context.Context, interaction PSPInterac
 		interaction.ResponseBody,
 		interaction.StatusCode,
 		interaction.ErrorMessage,
+		interaction.IdempotencyKey,
 	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) && dispatch {
+			get := db.Rebind(`SELECT * FROM psp_interactions
+				WHERE tenant_id = ? AND psp_provider = ? AND interaction_type = ? AND idempotency_key = ?`)
+			if getErr := db.GetContext(ctx, &stored, get,
+				tenantID, interaction.PSPProvider, interaction.InteractionType, interaction.IdempotencyKey,
+			); getErr == nil {
+				return &stored, nil
+			} else {
+				return nil, getErr
+			}
+		}
 		return nil, err
 	}
 	return &stored, nil

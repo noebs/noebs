@@ -27,7 +27,7 @@ type kubernetesReleaseInputs struct {
 
 type kubernetesReleaseNoebsInputs struct {
 	DefaultTenantID          string                                   `yaml:"default_tenant_id"`
-	PostgresPassword         string                                   `yaml:"postgres_password"`
+	ServiceDatabasePasswords map[string]string                        `yaml:"service_database_passwords"`
 	GoogleClientID           string                                   `yaml:"google_client_id"`
 	GoogleClientSecret       string                                   `yaml:"google_client_secret"`
 	CardVaultDataKey         string                                   `yaml:"card_vault_data_key"`
@@ -43,8 +43,12 @@ type kubernetesReleaseNoebsInputs struct {
 }
 
 type kubernetesReleaseKeycloakInputs struct {
-	ReconcilerClientSecret string `yaml:"reconciler_client_secret"`
-	BackofficeClientSecret string `yaml:"backoffice_client_secret"`
+	ReconcilerClientSecret        string `yaml:"reconciler_client_secret"`
+	BackofficeClientSecret        string `yaml:"backoffice_client_secret"`
+	WalletAuthorizerClientSecret  string `yaml:"wallet_authorizer_client_secret"`
+	TemporalLedgerClientSecret    string `yaml:"temporal_ledger_client_secret"`
+	TemporalWorkerClientSecret    string `yaml:"temporal_worker_client_secret"`
+	TemporalBootstrapClientSecret string `yaml:"temporal_bootstrap_client_secret"`
 }
 
 type kubernetesReleaseGatewayAuthInputs struct {
@@ -84,19 +88,25 @@ type pspSecret struct {
 }
 
 type preparedKubernetesRelease struct {
-	configData        map[string]string
-	inputs            kubernetesReleaseInputs
-	ageKeyPath        string
-	tenantCatalog     []byte
-	keycloak          preparedKeycloakRelease
-	gatewayAuth       preparedGatewayAuthRelease
-	workloadAuth      preparedWorkloadAuthRelease
-	internalTransport preparedInternalTransportRelease
+	configData              map[string]string
+	inputs                  kubernetesReleaseInputs
+	ageKeyPath              string
+	tenantCatalog           []byte
+	keycloak                preparedKeycloakRelease
+	gatewayAuth             preparedGatewayAuthRelease
+	workloadAuth            preparedWorkloadAuthRelease
+	serviceDatabases        map[string]string
+	postgresProvisioningSQL string
+	internalTransport       preparedInternalTransportRelease
 }
 
 type preparedKeycloakRelease struct {
-	reconcilerClientSecret string
-	backofficeClientSecret string
+	reconcilerClientSecret        string
+	backofficeClientSecret        string
+	walletAuthorizerClientSecret  string
+	temporalLedgerClientSecret    string
+	temporalWorkerClientSecret    string
+	temporalBootstrapClientSecret string
 }
 
 type preparedGatewayAuthRelease struct {
@@ -170,6 +180,13 @@ func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot strin
 	if err != nil {
 		return err
 	}
+	preparedServiceDatabases, err := prepareServicePostgresPasswords(inputs.Noebs.ServiceDatabasePasswords)
+	if err != nil {
+		return err
+	}
+	if err := validateAllPostgresRolePasswords(preparedServiceDatabases, preparedWorkloadAuth.database, preparedGatewayAuth); err != nil {
+		return err
+	}
 	if strings.TrimSpace(inputs.Noebs.InternalTransport.CACertificate) == "" || strings.TrimSpace(inputs.Noebs.InternalTransport.CAPrivateKey) == "" {
 		return errors.New("kubernetes release inputs require internal_transport.ca_certificate and internal_transport.ca_private_key")
 	}
@@ -177,15 +194,21 @@ func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot strin
 	if err != nil {
 		return err
 	}
+	postgresProvisioningSQL, err := os.ReadFile(filepath.Join(repoRoot, "deploy", "docker", "postgres", "001-service-databases.sql"))
+	if err != nil {
+		return fmt.Errorf("read Postgres provisioning SQL: %w", err)
+	}
 	release := preparedKubernetesRelease{
-		configData:        configData,
-		inputs:            inputs,
-		ageKeyPath:        ageKeyPath,
-		tenantCatalog:     tenantCatalogPayload,
-		keycloak:          preparedKeycloak,
-		gatewayAuth:       preparedGatewayAuth,
-		workloadAuth:      preparedWorkloadAuth,
-		internalTransport: preparedInternalTransport,
+		configData:              configData,
+		inputs:                  inputs,
+		ageKeyPath:              ageKeyPath,
+		tenantCatalog:           tenantCatalogPayload,
+		keycloak:                preparedKeycloak,
+		gatewayAuth:             preparedGatewayAuth,
+		workloadAuth:            preparedWorkloadAuth,
+		serviceDatabases:        preparedServiceDatabases,
+		postgresProvisioningSQL: string(postgresProvisioningSQL),
+		internalTransport:       preparedInternalTransport,
 	}
 	if err := release.validate(); err != nil {
 		return err
@@ -285,7 +308,6 @@ func (r preparedKubernetesRelease) validate() error {
 		return fmt.Errorf("kubernetes release input default_tenant_id: %w", err)
 	}
 	for label, value := range map[string]string{
-		"noebs.postgres_password":          r.inputs.Noebs.PostgresPassword,
 		"noebs.google_client_id":           r.inputs.Noebs.GoogleClientID,
 		"noebs.google_client_secret":       r.inputs.Noebs.GoogleClientSecret,
 		"noebs.card_vault_data_key":        r.inputs.Noebs.CardVaultDataKey,
@@ -316,18 +338,18 @@ func (r preparedKubernetesRelease) validate() error {
 	if err != nil {
 		return err
 	}
-	if err := validatePSPSecretMap(map[string]interface{}{"psp": psp, "default_tenant_id": tenantID}, tenantID); err != nil {
-		return fmt.Errorf("kubernetes release input PSP secrets: %w", err)
-	}
-	for pspTenantID := range psp {
+	for _, pspTenantID := range sortedMapKeys(psp) {
 		if _, err := catalog.Require(pspTenantID); err != nil {
 			return fmt.Errorf("kubernetes release input PSP tenant %q: %w", pspTenantID, err)
 		}
 	}
+	if err := validatePSPSecretMap(map[string]interface{}{"psp": psp, "default_tenant_id": tenantID}, tenantID); err != nil {
+		return fmt.Errorf("kubernetes release input PSP secrets: %w", err)
+	}
 	if _, err := r.pspWebhookRoutes(); err != nil {
 		return err
 	}
-	if _, err := r.serviceDatabaseURL("identity-auth"); err != nil {
+	if _, err := r.serviceDatabaseURL(serviceRoleIdentityAuth); err != nil {
 		return err
 	}
 	return nil
@@ -361,15 +383,17 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 			return err
 		}
 	}
-	postgresPassword := strings.TrimSpace(r.inputs.Noebs.PostgresPassword)
-	if err := writeReleaseFile(outputRoot, "platform/postgres-password.txt", postgresPassword+"\n"); err != nil {
+	temporalPostgresPassword, err := requiredKubernetesReleaseInput("noebs.temporal_postgres_password", r.inputs.Noebs.TemporalPostgresPassword)
+	if err != nil {
 		return err
 	}
-	temporalPostgresPassword := strings.TrimSpace(r.inputs.Noebs.TemporalPostgresPassword)
 	if err := writeReleaseFile(outputRoot, "platform/temporal-postgres-password.txt", temporalPostgresPassword+"\n"); err != nil {
 		return err
 	}
-	keycloakPostgresPassword := strings.TrimSpace(r.inputs.Noebs.KeycloakPostgresPassword)
+	keycloakPostgresPassword, err := requiredKubernetesReleaseInput("noebs.keycloak_postgres_password", r.inputs.Noebs.KeycloakPostgresPassword)
+	if err != nil {
+		return err
+	}
 	if err := writeReleaseFile(outputRoot, "platform/keycloak-postgres-password.txt", keycloakPostgresPassword+"\n"); err != nil {
 		return err
 	}
@@ -416,6 +440,20 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 	if err := writeReleaseFile(outputRoot, "platform/gateway-auth-postgres-roles.secrets.yaml", string(encryptedGatewayDatabase)); err != nil {
 		return err
 	}
+	serviceDatabasePayload, err := yaml.Marshal(map[string]interface{}{"passwords": r.serviceDatabases})
+	if err != nil {
+		return fmt.Errorf("marshal service database credentials: %w", err)
+	}
+	encryptedServiceDatabase, err := encrypt("service-postgres-roles.secrets.yaml", serviceDatabasePayload, r.ageKeyPath)
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/service-postgres-roles.secrets.yaml", string(encryptedServiceDatabase)); err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/postgres-provisioning.sql", r.postgresProvisioningSQL); err != nil {
+		return err
+	}
 	internalTransportPayload, err := yaml.Marshal(r.internalTransport.platformSecret())
 	if err != nil {
 		return fmt.Errorf("marshal internal transport platform credentials: %w", err)
@@ -456,13 +494,17 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	base := func() map[string]interface{} {
 		return map[string]interface{}{"default_tenant_id": tenantID}
 	}
-	withDB := func(ownerName string) (map[string]interface{}, error) {
-		dbURL, err := r.serviceDatabaseURL(ownerName)
+	withDB := func(role serviceRole) (map[string]interface{}, error) {
+		spec, present := postgresRoleSpecForService(role)
+		if !present {
+			return nil, fmt.Errorf("service database role %s is not cataloged", role)
+		}
+		dbURL, err := r.serviceDatabaseURL(role)
 		if err != nil {
 			return nil, err
 		}
 		secret := base()
-		secret["service_databases"] = map[string]interface{}{ownerName: dbURL}
+		secret["service_databases"] = map[string]interface{}{string(spec.owner): dbURL}
 		secret["database_ca_certificate"] = r.internalTransport.caCertificate
 		return secret, nil
 	}
@@ -485,8 +527,9 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 
 	apiGateway := base()
 	apiGateway["backoffice_client_secret"] = r.keycloak.backofficeClientSecret
-	apiGateway["backoffice_encryption_key_id"] = r.gatewayAuth.encryptionKeyID
-	apiGateway["backoffice_encryption_keys"] = r.gatewayAuth.encryptionKeys
+	apiGateway["wallet_authorizer_client_secret"] = r.keycloak.walletAuthorizerClientSecret
+	apiGateway["gateway_auth_encryption_key_id"] = r.gatewayAuth.encryptionKeyID
+	apiGateway["gateway_auth_encryption_keys"] = r.gatewayAuth.encryptionKeys
 	apiGateway["psp_webhook_routes"], err = r.pspWebhookRoutes()
 	if err != nil {
 		return nil, err
@@ -498,13 +541,13 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	}
 	setSecret("api-gateway", apiGateway)
 
-	identityAuth, err := withDB("identity-auth")
+	identityAuth, err := withDB(serviceRoleIdentityAuth)
 	if err != nil {
 		return nil, err
 	}
 	setSecret("identity-auth", identityAuth)
 
-	cardVault, err := withDB("card-vault")
+	cardVault, err := withDB(serviceRoleCardVault)
 	if err != nil {
 		return nil, err
 	}
@@ -513,14 +556,14 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 		return nil, err
 	}
 	setSecret("card-vault", cardVault)
-	cardVaultMigrate, err := withDB("card-vault")
+	cardVaultMigrate, err := withDB(serviceRoleCardVaultMigrate)
 	if err != nil {
 		return nil, err
 	}
 	cardVaultMigrate["data_key"] = cardVault["data_key"]
 	setSecret("card-vault-migrate", cardVaultMigrate)
 
-	ebsAdapter, err := withDB("ebs-adapter")
+	ebsAdapter, err := withDB(serviceRoleEBSAdapter)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +589,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	}
 	setSecret("ebs-adapter", ebsAdapter)
 
-	pspWebhook, err := withDB("psp-webhook")
+	pspWebhook, err := withDB(serviceRolePSPWebhook)
 	if err != nil {
 		return nil, err
 	}
@@ -557,39 +600,42 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	pspWebhook["psp"] = psp
 	setSecret("psp-webhook", pspWebhook)
 
-	walletWorker, err := withDB("wallet-ledger")
+	walletWorker, err := withDB(serviceRoleWalletWorker)
 	if err != nil {
 		return nil, err
 	}
 	walletWorker["psp"] = psp
+	r.addTemporalClientAuthority(walletWorker, r.keycloak.temporalWorkerClientSecret)
 	setSecret("wallet-worker", walletWorker)
 	setSecret("wallet-api", base())
-	for _, serviceName := range []string{
-		"admin-reporting",
-		"notification-chat",
-		"wallet-ledger",
+	for _, role := range []serviceRole{
+		serviceRoleAdminReporting,
+		serviceRoleNotification,
+		serviceRoleWalletLedger,
 	} {
-		secret, err := withDB(serviceName)
+		secret, err := withDB(role)
 		if err != nil {
 			return nil, err
 		}
-		setSecret(serviceName, secret)
+		if role == serviceRoleWalletLedger {
+			r.addTemporalClientAuthority(secret, r.keycloak.temporalLedgerClientSecret)
+		}
+		setSecret(string(role), secret)
 	}
-	for roleName, ownerName := range map[string]string{
-		"identity-auth-migrate":     "identity-auth",
-		"ebs-adapter-migrate":       "ebs-adapter",
-		"ebs-adapter-events":        "ebs-adapter",
-		"psp-webhook-migrate":       "psp-webhook",
-		"admin-reporting-migrate":   "admin-reporting",
-		"admin-reporting-projector": "admin-reporting",
-		"notification-chat-migrate": "notification-chat",
-		"wallet-ledger-migrate":     "wallet-ledger",
+	for _, role := range []serviceRole{
+		serviceRoleIdentityAuthMigrate,
+		serviceRoleEBSAdapterMigrate,
+		serviceRoleEBSAdapterEvents,
+		serviceRoleAdminReportingMigrate,
+		serviceRoleAdminReportingProjector,
+		serviceRoleNotificationMigrate,
+		serviceRoleWalletLedgerMigrate,
 	} {
-		secret, err := withDB(ownerName)
+		secret, err := withDB(role)
 		if err != nil {
 			return nil, err
 		}
-		setSecret(roleName, secret)
+		setSecret(string(role), secret)
 	}
 	setSecret("workload-auth-migrate", map[string]interface{}{
 		"default_tenant_id":       tenantID,
@@ -622,20 +668,22 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	return result, nil
 }
 
-func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (string, error) {
-	databaseName := strings.ReplaceAll(serviceName, "-", "_")
-	password, err := requiredKubernetesReleaseInput("noebs.postgres_password", r.inputs.Noebs.PostgresPassword)
-	if err != nil {
-		return "", err
+func (r preparedKubernetesRelease) addTemporalClientAuthority(secret map[string]interface{}, clientSecret string) {
+	secret["temporal_client_secret"] = clientSecret
+	secret["temporal_ca_certificate"] = r.internalTransport.caCertificate
+	secret["keycloak_ca_certificate"] = r.internalTransport.caCertificate
+}
+
+func (r preparedKubernetesRelease) serviceDatabaseURL(role serviceRole) (string, error) {
+	spec, present := postgresRoleSpecForService(role)
+	if !present {
+		return "", fmt.Errorf("service database role %s is not cataloged", role)
 	}
-	result := url.URL{
-		Scheme:   "postgres",
-		User:     url.UserPassword("noebs", password),
-		Host:     "postgres:5432",
-		Path:     "/" + databaseName,
-		RawQuery: "sslmode=verify-full",
+	password, present := r.serviceDatabases[spec.username]
+	if !present {
+		return "", fmt.Errorf("service database role %s password is missing", spec.username)
 	}
-	return result.String(), nil
+	return exactPostgresURL("postgres:5432", spec, password), nil
 }
 
 func (r preparedKubernetesRelease) releaseDefaultTenantID() (string, error) {
@@ -730,12 +778,37 @@ func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKey
 	if err != nil {
 		return preparedKeycloakRelease{}, err
 	}
-	if reconcilerSecret == backofficeSecret {
+	walletAuthorizerSecret, err := requireCanonicalReleaseSecret("Keycloak wallet authorizer client secret", inputs.WalletAuthorizerClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	temporalLedgerSecret, err := requireCanonicalReleaseSecret("Keycloak Temporal wallet-ledger client secret", inputs.TemporalLedgerClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	temporalWorkerSecret, err := requireCanonicalReleaseSecret("Keycloak Temporal wallet-worker client secret", inputs.TemporalWorkerClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	temporalBootstrapSecret, err := requireCanonicalReleaseSecret("Keycloak Temporal namespace bootstrap client secret", inputs.TemporalBootstrapClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	secrets := []string{reconcilerSecret, backofficeSecret, walletAuthorizerSecret, temporalLedgerSecret, temporalWorkerSecret, temporalBootstrapSecret}
+	seen := make(map[string]struct{}, len(secrets))
+	for _, secret := range secrets {
+		seen[secret] = struct{}{}
+	}
+	if len(seen) != len(secrets) {
 		return preparedKeycloakRelease{}, errors.New("keycloak client secrets must be distinct")
 	}
 	return preparedKeycloakRelease{
-		reconcilerClientSecret: reconcilerSecret,
-		backofficeClientSecret: backofficeSecret,
+		reconcilerClientSecret:        reconcilerSecret,
+		backofficeClientSecret:        backofficeSecret,
+		walletAuthorizerClientSecret:  walletAuthorizerSecret,
+		temporalLedgerClientSecret:    temporalLedgerSecret,
+		temporalWorkerClientSecret:    temporalWorkerSecret,
+		temporalBootstrapClientSecret: temporalBootstrapSecret,
 	}, nil
 }
 
@@ -831,6 +904,10 @@ func (r preparedKubernetesRelease) keycloakReconcilerConfig() (string, error) {
 		ClientCredentials: map[string]keycloakadmin.ClientCredential{
 			"noebs-keycloak-reconciler": {ClientSecret: r.keycloak.reconcilerClientSecret},
 			"noebs-backoffice":          {ClientSecret: r.keycloak.backofficeClientSecret},
+			"noebs-wallet-authorizer":   {ClientSecret: r.keycloak.walletAuthorizerClientSecret},
+			temporalLedgerClientID:      {ClientSecret: r.keycloak.temporalLedgerClientSecret},
+			temporalWorkerClientID:      {ClientSecret: r.keycloak.temporalWorkerClientSecret},
+			temporalBootstrapClientID:   {ClientSecret: r.keycloak.temporalBootstrapClientSecret},
 		},
 		IdentityProviders: map[string]keycloakadmin.IdentityProviderCredential{
 			"google": {ClientID: googleClientID, ClientSecret: googleClientSecret},

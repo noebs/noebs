@@ -12,7 +12,7 @@ import (
 
 func TestTransactionParticipantsIsolateMaskedPANCollisionsWithoutCardOwnershipState(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeEBSAdapter)
 	tenantID := "tenant-participant-isolation"
 	if err := MigrateScope(ctx, db, MigrationScopeEBSAdapter); err != nil {
 		t.Fatalf("migrate %s: %v", MigrationScopeEBSAdapter, err)

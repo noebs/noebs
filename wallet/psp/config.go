@@ -2,6 +2,7 @@ package psp
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/adonese/noebs/wallet/store"
 )
@@ -52,10 +53,12 @@ func MergeConfig(cfg *store.PSPConfig, secrets SecretBundle) (*Config, error) {
 	if cfg.ProviderCode == "" || cfg.APIBaseURL == "" {
 		return nil, ErrPSPConfigInvalid
 	}
-	idempotencyHeader := ""
-	if cfg.IdempotencyHeaderName.Valid {
-		idempotencyHeader = cfg.IdempotencyHeaderName.String
+	if !cfg.IdempotencyHeaderName.Valid ||
+		strings.TrimSpace(cfg.IdempotencyHeaderName.String) == "" ||
+		strings.TrimSpace(cfg.IdempotencyHeaderName.String) != cfg.IdempotencyHeaderName.String {
+		return nil, ErrPSPConfigInvalid
 	}
+	idempotencyHeader := cfg.IdempotencyHeaderName.String
 	depositMapping, err := parseResponseMapping(cfg.DepositResponseMapping)
 	if err != nil {
 		return nil, err

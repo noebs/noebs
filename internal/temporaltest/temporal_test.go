@@ -53,7 +53,7 @@ func TestTemporalContainer(t *testing.T) {
 	}()
 
 	req := testcontainers.ContainerRequest{
-		Image:        "temporalio/auto-setup:1.23.1",
+		Image:        "temporalio/auto-setup:1.29.7",
 		ExposedPorts: []string{"7233/tcp"},
 		Env: map[string]string{
 			"DB":             "postgresql",

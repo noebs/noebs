@@ -1,0 +1,4 @@
+noebs:
+  service_role: gateway-auth-cleanup
+  otel_service_name: gateway-auth-cleanup
+  db_driver: pgx

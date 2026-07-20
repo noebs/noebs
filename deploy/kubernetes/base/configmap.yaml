@@ -5,11 +5,9 @@ metadata:
 data:
   config.yaml: |
     noebs:
-      sops_age_key_file: /app/.sops/age-key.txt
       runtime_dir: /app/runtime
       port: ":8080"
       is_debug: false
-      ebs_insecure_skip_verify: false
       oidc:
         issuer: "https://api.noebs.sd/auth/realms/noebs"
         jwks_url: "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs"
@@ -23,6 +21,7 @@ data:
         unknown_key_refresh_interval_seconds: 30
       backoffice_redirect_url: "https://api.noebs.sd/backoffice/oauth/callback"
       backoffice_post_logout_url: "https://api.noebs.sd/backoffice/oauth/logout/callback"
+      wallet_authorizer_redirect_url: "https://api.noebs.sd/wallet/authorizations/oauth/callback"
       cors:
         - "https://api.noebs.sd"
         - "https://dsa.adonese.sd"
@@ -30,12 +29,13 @@ data:
       temporal_host: "temporal-frontend"
       temporal_port: "7233"
       temporal_namespace: "default"
+      temporal_server_name: "temporal-frontend"
+      temporal_token_url: "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/token"
       wallet_enabled: true
       wallet_approval_threshold: 100000
       wallet_default_currency: "SDG"
       wallet_hold_expiry_seconds: 3600
       wallet_approval_timeout_seconds: 3600
-      wallet_verification_timeout_seconds: 86400
       wallet_manual_approval_timeout_seconds: 86400
       wallet_psp_poller_cron: "*/5 * * * *"
       wallet_psp_poller_batch_size: 100
@@ -117,11 +117,13 @@ data:
       service_role: wallet-ledger
       otel_service_name: wallet-ledger
       db_driver: pgx
+      temporal_client_id: noebs-temporal-wallet-ledger
   wallet-worker.service.yaml: |
     noebs:
       service_role: wallet-worker
       otel_service_name: wallet-worker
       db_driver: pgx
+      temporal_client_id: noebs-temporal-wallet-worker
   workload-auth-migrate.service.yaml: |
     noebs:
       service_role: workload-auth-migrate
@@ -156,11 +158,6 @@ data:
     noebs:
       service_role: ebs-adapter-migrate
       otel_service_name: ebs-adapter-migrate
-      db_driver: pgx
-  psp-webhook-migrate.service.yaml: |
-    noebs:
-      service_role: psp-webhook-migrate
-      otel_service_name: psp-webhook-migrate
       db_driver: pgx
   admin-reporting-migrate.service.yaml: |
     noebs:

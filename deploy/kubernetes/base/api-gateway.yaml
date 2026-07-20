@@ -28,18 +28,16 @@ spec:
           image: ghcr.io/noebs/noebs:master
           imagePullPolicy: IfNotPresent
           ports:
-            - name: http
+            - name: https-internal
               containerPort: 8080
           readinessProbe:
-            httpGet:
-              path: /test
-              port: http
+            exec:
+              command: ["/usr/local/bin/noebs", "internal-healthcheck"]
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            httpGet:
-              path: /test
-              port: http
+            exec:
+              command: ["/usr/local/bin/noebs", "internal-healthcheck"]
             periodSeconds: 30
             failureThreshold: 3
           securityContext:
@@ -61,10 +59,6 @@ spec:
               mountPath: /app/secrets.yaml
               subPath: secrets.yaml
               readOnly: true
-            - name: sops-age-key
-              mountPath: /app/.sops/age-key.txt
-              subPath: age-key.txt
-              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -72,9 +66,6 @@ spec:
         - name: api-gateway-secrets
           secret:
             secretName: api-gateway-secrets
-        - name: sops-age-key
-          secret:
-            secretName: sops-age-key
 ---
 apiVersion: v1
 kind: Service
@@ -87,6 +78,6 @@ spec:
   selector:
     app.kubernetes.io/name: api-gateway
   ports:
-    - name: http
+    - name: https-internal
       port: 8080
-      targetPort: http
+      targetPort: https-internal

@@ -18,6 +18,11 @@ persistence:
         maxConns: 20
         maxIdleConns: 20
         maxConnLifetime: 1h
+        tls:
+          enabled: true
+          caFile: /opt/temporal/secrets/postgres-ca.pem
+          enableHostVerification: true
+          serverName: temporal-postgres
     visibility:
       sql:
         pluginName: postgres12
@@ -29,6 +34,11 @@ persistence:
         maxConns: 10
         maxIdleConns: 10
         maxConnLifetime: 1h
+        tls:
+          enabled: true
+          caFile: /opt/temporal/secrets/postgres-ca.pem
+          enableHostVerification: true
+          serverName: temporal-postgres
 
 global:
   membership:
@@ -36,10 +46,21 @@ global:
     broadcastAddress: 127.0.0.1
   pprof:
     port: 0
+  tls:
+    frontend:
+      server:
+        certFile: /opt/temporal/secrets/tls.crt
+        keyFile: /opt/temporal/secrets/tls.key
+        requireClientAuth: false
   authorization:
+    jwtKeyProvider:
+      keySourceURIs:
+        - https://keycloak:8443/auth/realms/noebs/protocol/openid-connect/certs
+      refreshInterval: 1m
     permissionsClaimName: permissions
-    authorizer: ""
-    claimMapper: ""
+    authorizer: default
+    claimMapper: default
+    audience: noebs-temporal
 
 services:
   frontend:
@@ -47,22 +68,28 @@ services:
       grpcPort: 7233
       membershipPort: 6933
       bindOnIP: 0.0.0.0
-      httpPort: 7243
+      httpPort: 0
+  internal-frontend:
+    rpc:
+      grpcPort: 7236
+      membershipPort: 6936
+      bindOnIP: 127.0.0.1
+      httpPort: 0
   matching:
     rpc:
       grpcPort: 7235
       membershipPort: 6935
-      bindOnIP: 0.0.0.0
+      bindOnIP: 127.0.0.1
   history:
     rpc:
       grpcPort: 7234
       membershipPort: 6934
-      bindOnIP: 0.0.0.0
+      bindOnIP: 127.0.0.1
   worker:
     rpc:
       grpcPort: 7239
       membershipPort: 6939
-      bindOnIP: 0.0.0.0
+      bindOnIP: 127.0.0.1
 
 clusterMetadata:
   enableGlobalNamespace: false
@@ -73,9 +100,8 @@ clusterMetadata:
     active:
       enabled: true
       initialFailoverVersion: 1
-      rpcName: frontend
-      rpcAddress: 127.0.0.1:7233
-      httpAddress: 127.0.0.1:7243
+      rpcName: internal-frontend
+      rpcAddress: 127.0.0.1:7236
 
 dcRedirectionPolicy:
   policy: noop

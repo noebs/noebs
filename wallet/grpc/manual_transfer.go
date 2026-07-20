@@ -2,7 +2,7 @@ package walletgrpc
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
 
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -45,29 +45,38 @@ func (s *Server) signalManualTransferDecision(ctx context.Context, command manua
 	if err != nil {
 		return mapError(err)
 	}
-	if transfer.RequestedByOperatorID == command.OperatorID {
-		return status.Error(codes.InvalidArgument, walletstore.ErrApproverIsRequester.Error())
-	}
-
-	temporalClient, err := s.ensureTemporalClient()
-	if err != nil {
-		return status.Error(codes.FailedPrecondition, err.Error())
-	}
 	decision := walletworkflow.ManualTransferDecision{
 		Approved:            command.Approved,
 		DecidedByOperatorID: command.OperatorID,
 		Reason:              command.Reason,
 		ProofOfPayment:      command.ProofOfPayment,
 	}
-	return mapTemporalError(temporalClient.SignalWorkflow(
-		ctx,
-		command.WorkflowID,
-		"",
-		walletworkflow.ManualTransferDecisionSignal,
-		decision,
-	))
+	_, err = s.Service.Store.ReserveWorkflowDecision(ctx, walletstore.WorkflowDecision{
+		TenantID:            tenantID,
+		WorkflowID:          command.WorkflowID,
+		Kind:                walletstore.WorkflowDecisionManualTransfer,
+		SubjectID:           transfer.ID,
+		Approved:            command.Approved,
+		DecidedByOperatorID: command.OperatorID,
+		Reason:              sql.NullString{String: command.Reason, Valid: command.Reason != ""},
+		ProofOfPayment:      sql.NullString{String: command.ProofOfPayment, Valid: command.ProofOfPayment != ""},
+	})
+	if err != nil {
+		return mapError(err)
+	}
+
+	if temporalClient, clientErr := s.ensureTemporalClient(); clientErr == nil {
+		_ = temporalClient.SignalWorkflow(
+			ctx,
+			command.WorkflowID,
+			"",
+			walletworkflow.ManualTransferDecisionSignal,
+			decision,
+		)
+	}
+	return nil
 }
 
 func manualTransferWorkflowID(tenantID, idempotencyKey string) string {
-	return fmt.Sprintf("wallet-manual-%s-%s", tenantID, idempotencyKey)
+	return walletWorkflowID("manual", tenantID, idempotencyKey)
 }

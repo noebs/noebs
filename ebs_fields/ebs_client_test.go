@@ -9,11 +9,7 @@ import (
 	"testing"
 )
 
-func TestConfigureEBSHTTPClient_SecureByDefault(t *testing.T) {
-	old := ebsTransport.TLSClientConfig
-	t.Cleanup(func() { ebsTransport.TLSClientConfig = old })
-
-	ConfigureEBSHTTPClient(NoebsConfig{})
+func TestEBSHTTPClientVerifiesTLS(t *testing.T) {
 	if ebsTransport.TLSClientConfig == nil {
 		t.Fatalf("expected TLSClientConfig to be set")
 	}
@@ -25,20 +21,7 @@ func TestConfigureEBSHTTPClient_SecureByDefault(t *testing.T) {
 	}
 }
 
-func TestConfigureEBSHTTPClient_AllowsInsecureWhenExplicit(t *testing.T) {
-	old := ebsTransport.TLSClientConfig
-	t.Cleanup(func() { ebsTransport.TLSClientConfig = old })
-
-	ConfigureEBSHTTPClient(NoebsConfig{EBSInsecureSkipVerify: true})
-	if ebsTransport.TLSClientConfig == nil {
-		t.Fatalf("expected TLSClientConfig to be set")
-	}
-	if !ebsTransport.TLSClientConfig.InsecureSkipVerify {
-		t.Fatalf("expected InsecureSkipVerify=true when explicitly configured")
-	}
-}
-
-func TestEBSHTTPClientIPINFallbackParsesNumericTranDateTime(t *testing.T) {
+func TestEBSHTTPClientRejectsNumericTranDateTime(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"UUID":"uuid-1","tranDateTime":20260531120000,"responseCode":0,"responseMessage":"Approved","pubKeyValue":"public-key","pan":"9222081700000000","expDate":"2601"}`))
@@ -46,18 +29,15 @@ func TestEBSHTTPClientIPINFallbackParsesNumericTranDateTime(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	code, res, err := EBSHttpClient(server.URL, []byte(`{}`))
-	if err != nil {
-		t.Fatalf("EBSHttpClient() error = %v", err)
+	if err == nil {
+		t.Fatalf("EBSHttpClient() error = nil, status=%d response=%+v; want strict decode error", code, res)
 	}
-	if code != http.StatusOK {
-		t.Fatalf("EBSHttpClient() status = %d, want %d", code, http.StatusOK)
-	}
-	if res.TranDateTime != "20260531120000" || res.UUID != "uuid-1" || res.PubKeyValue != "public-key" {
-		t.Fatalf("fallback response = %+v", res)
+	if code != http.StatusInternalServerError {
+		t.Fatalf("EBSHttpClient() status = %d, want %d", code, http.StatusInternalServerError)
 	}
 }
 
-func TestEBSHTTPClientIPINFallbackRejectsMalformedTranDateTime(t *testing.T) {
+func TestEBSHTTPClientRejectsMalformedTranDateTime(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"UUID":"uuid-1","tranDateTime":{},"responseCode":0,"responseMessage":"Approved"}`))
@@ -66,23 +46,23 @@ func TestEBSHTTPClientIPINFallbackRejectsMalformedTranDateTime(t *testing.T) {
 
 	code, res, err := EBSHttpClient(server.URL, []byte(`{}`))
 	if err == nil {
-		t.Fatalf("EBSHttpClient() error = nil, status=%d response=%+v; want fallback decode error", code, res)
+		t.Fatalf("EBSHttpClient() error = nil, status=%d response=%+v; want strict decode error", code, res)
 	}
 	if code != http.StatusInternalServerError {
 		t.Fatalf("EBSHttpClient() status = %d, want %d", code, http.StatusInternalServerError)
 	}
 }
 
-func TestEBSHTTPClientIPINFallbackReturnsGatewayFailureMessage(t *testing.T) {
+func TestEBSHTTPClientRejectsNonzeroResponseCode(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"UUID":"uuid-1","tranDateTime":20260531120000,"responseCode":53,"responseMessage":"Invalid PIN"}`))
+		_, _ = w.Write([]byte(`{"responseCode":53,"responseMessage":"Success text is not authoritative"}`))
 	}))
 	t.Cleanup(server.Close)
 
 	code, _, err := EBSHttpClient(server.URL, []byte(`{}`))
-	if err == nil || err.Error() != "Invalid PIN" {
-		t.Fatalf("EBSHttpClient() error = %v, want Invalid PIN", err)
+	if err == nil || err.Error() != "Success text is not authoritative" {
+		t.Fatalf("EBSHttpClient() error = %v, want provider rejection", err)
 	}
 	if code != http.StatusBadGateway {
 		t.Fatalf("EBSHttpClient() status = %d, want %d", code, http.StatusBadGateway)

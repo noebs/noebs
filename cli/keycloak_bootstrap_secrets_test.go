@@ -47,7 +47,10 @@ func TestRenderKeycloakBootstrapSecretsDerivesSteadyConfiguration(t *testing.T) 
 	if config.AdminRealm != "master" || config.ClientID != keycloakadmin.BootstrapClientID || config.ClientSecret != bootstrapSecret {
 		t.Fatalf("bootstrap authority = %#v", config)
 	}
-	if config.BaseURL != steady.BaseURL || config.ClientCredentials["noebs-backoffice"] != steady.ClientCredentials["noebs-backoffice"] || config.IdentityProviders["google"] != steady.IdentityProviders["google"] {
+	if config.BaseURL != steady.BaseURL ||
+		config.ClientCredentials["noebs-backoffice"] != steady.ClientCredentials["noebs-backoffice"] ||
+		config.ClientCredentials["noebs-wallet-authorizer"] != steady.ClientCredentials["noebs-wallet-authorizer"] ||
+		config.IdentityProviders["google"] != steady.IdentityProviders["google"] {
 		t.Fatal("bootstrap reconciler config diverged from steady release inputs")
 	}
 }

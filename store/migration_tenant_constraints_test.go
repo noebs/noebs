@@ -27,18 +27,14 @@ func TestTenantConstraintsBelongToTheirMigrationScope(t *testing.T) {
 				"manual_transfer_approvals",
 				"wallet_audit_log",
 				"funding_sources",
+				"funding_source_withdrawal_reservations",
 				"ledger_funding_links",
 				"withdrawal_destinations",
-				"ownership_verifications",
+				"workflow_decisions",
 				"ledger_withdrawal_destination_links",
-			},
-		},
-		{
-			name:  "psp webhook",
-			scope: MigrationScopePSPWebhook,
-			tables: []string{
-				"tenants",
+				"p2p_commands",
 				"psp_configs",
+				"deposit_intents",
 				"psp_transactions",
 				"psp_transaction_amounts",
 				"psp_config_overrides",
@@ -50,11 +46,15 @@ func TestTenantConstraintsBelongToTheirMigrationScope(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			db := newValidationDB(t)
+			db := newMigrationAuthorityDB(t, test.scope)
 			if err := MigrateScope(ctx, db, test.scope); err != nil {
 				t.Fatalf("migrate %s: %v", test.scope, err)
 			}
 			for _, table := range test.tables {
+				constraintName := "tenant_id_not_reserved"
+				if table == "tenants" {
+					constraintName = "tenant_id_canonical"
+				}
 				var exists bool
 				if err := db.QueryRowContext(ctx, `SELECT EXISTS (
 					SELECT 1
@@ -63,13 +63,13 @@ func TestTenantConstraintsBelongToTheirMigrationScope(t *testing.T) {
 					JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
 					WHERE namespace.nspname = current_schema()
 						AND relation.relname = $1
-						AND tenant_constraint.conname = 'tenant_id_not_reserved'
+						AND tenant_constraint.conname = $2
 						AND tenant_constraint.contype = 'c'
-				)`, table).Scan(&exists); err != nil {
+				)`, table, constraintName).Scan(&exists); err != nil {
 					t.Fatalf("inspect %s constraint: %v", table, err)
 				}
 				if !exists {
-					t.Fatalf("%s has no tenant_id_not_reserved check constraint", table)
+					t.Fatalf("%s has no %s check constraint", table, constraintName)
 				}
 			}
 		})

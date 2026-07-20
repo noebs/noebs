@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,13 +37,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"transaction_events",
 			"meter_names",
 		},
-		serviceRolePSPWebhookMigrate: {
-			"tenants",
-			"psp_configs",
-			"psp_transactions",
-			"psp_config_overrides",
-			"psp_interactions",
-		},
 		serviceRoleAdminReportingMigrate: {
 			"tenants",
 			"transactions",
@@ -53,8 +44,8 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		},
 		serviceRoleNotificationMigrate: {
 			"tenants",
-			"chats_v2",
-			"contacts_v2",
+			"chats",
+			"contacts",
 			"push_data",
 		},
 		serviceRoleWalletLedgerMigrate: {
@@ -65,6 +56,19 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"balance_holds",
 			"fee_configs",
 			"funding_sources",
+			"funding_source_withdrawal_reservations",
+			"psp_configs",
+			"psp_transactions",
+			"psp_transaction_amounts",
+			"psp_config_overrides",
+			"psp_interactions",
+		},
+		serviceRoleGatewayAuthMigrate: {
+			"tenants",
+			"backoffice_auth_flows",
+			"backoffice_sessions",
+			"wallet_transaction_authorization_intents",
+			"wallet_transaction_authorization_flows",
 		},
 	}
 	forbiddenTables := map[serviceRole][]string{
@@ -77,10 +81,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"used_refresh_tokens",
 			"password_recovery_credentials",
 		},
-		serviceRoleNotificationMigrate: {
-			"chats",
-			"contacts",
-		},
 	}
 
 	for role, tables := range roles {
@@ -91,16 +91,27 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 			defer cancel()
 
-			dbName := fmt.Sprintf("noebs_%s_%d", strings.ReplaceAll(string(role), "-", "_"), time.Now().UnixNano())
-			dbURL, err := testPostgres.CreateDatabase(ctx, dbName)
+			spec, ok := postgresRoleSpecForService(role)
+			if !ok {
+				t.Fatalf("%s has no Postgres role spec", role)
+			}
+			dbName := spec.database
+			var dbURL string
+			if dbName == testDBName {
+				dbURL, err = testPostgres.DatabaseURLForRole(dbName, spec.username)
+			} else {
+				dbURL, err = testPostgres.CreateDatabaseForRole(ctx, dbName, spec.username)
+			}
 			if err != nil {
 				t.Fatalf("create database: %v", err)
 			}
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cleanupCancel()
-				_ = testPostgres.DropDatabase(cleanupCtx, dbName)
-			})
+			if dbName != testDBName {
+				t.Cleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					_ = testPostgres.DropDatabase(cleanupCtx, dbName)
+				})
+			}
 
 			db, err := store.OpenFromConfig(dbURL, store.DriverPostgres)
 			if err != nil {
@@ -115,10 +126,14 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			if err := store.MigrateScope(ctx, db, scope); err != nil {
 				t.Fatalf("MigrateScope() error = %v", err)
 			}
-			if err := store.New(db).ProvisionTenantCatalog(ctx, catalog); err != nil {
+			databaseCatalog := catalog
+			if dbName == testDBName {
+				databaseCatalog = runtimeTenantCatalog
+			}
+			if err := store.New(db).ProvisionTenantCatalog(ctx, databaseCatalog); err != nil {
 				t.Fatalf("ProvisionTenantCatalog() error = %v", err)
 			}
-			assertProvisionedTenantCatalog(t, ctx, db, catalog)
+			assertProvisionedTenantCatalog(t, ctx, db, databaseCatalog)
 			for _, table := range tables {
 				if !postgresTableExists(t, ctx, db, table) {
 					t.Fatalf("expected table %s", table)
@@ -135,7 +150,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 				assertNoColumnDefault(t, ctx, db, "wallets", "kyc_tier")
 				assertNoColumnDefault(t, ctx, db, "fee_configs", "currency")
 				assertNoColumnDefault(t, ctx, db, "transaction_limits", "currency")
-				assertNoColumnDefault(t, ctx, db, "withdrawal_destinations", "ownership_status")
 			}
 		})
 	}

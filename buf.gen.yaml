@@ -1,17 +1,15 @@
-version: v1
+version: v2
 plugins:
-  - plugin: go
-    out: gen
+  - local: protoc-gen-go
+    out: gen/proto
     opt: paths=source_relative
-  - plugin: go-grpc
-    out: gen
+  - local: protoc-gen-go-grpc
+    out: gen/proto
     opt: paths=source_relative
-  - plugin: grpc-gateway
-    out: gen
-    opt:
-      - paths=source_relative
-      - generate_unbound_methods=true
-  - plugin: openapiv2
+  - local: protoc-gen-grpc-gateway
+    out: gen/proto
+    opt: paths=source_relative
+  - local: protoc-gen-openapiv2
     out: gen/openapi
     opt:
       - allow_merge=true

@@ -93,6 +93,25 @@ interactive_clients:
       - https://api.noebs.sd/wallet/authorizations/oauth/callback
     post_logout_redirect_uris: []
     web_origins: []
+service_clients:
+  - client_id: noebs-temporal-wallet-ledger
+    name: Noebs Temporal Wallet Ledger
+    credential: noebs-temporal-wallet-ledger
+    audience: noebs-temporal
+    permissions:
+      - default:write
+  - client_id: noebs-temporal-wallet-worker
+    name: Noebs Temporal Wallet Worker
+    credential: noebs-temporal-wallet-worker
+    audience: noebs-temporal
+    permissions:
+      - default:write
+  - client_id: noebs-temporal-namespace-bootstrap
+    name: Noebs Temporal Namespace Bootstrap
+    credential: noebs-temporal-namespace-bootstrap
+    audience: noebs-temporal
+    permissions:
+      - temporal-system:admin
 realm_roles: []
 organization_claim:
   client_scope: organization

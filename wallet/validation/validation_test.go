@@ -192,9 +192,10 @@ func TestValidateWithdrawalWalletAllowsPayoutCurrencyMismatch(t *testing.T) {
 
 func TestValidatePSPConfigRequiresExplicitCurrency(t *testing.T) {
 	cfg := &walletstore.PSPConfig{
-		IsActive:          true,
-		SupportsDeposit:   true,
-		EnabledCurrencies: walletstore.StringArray{"USD"},
+		IsActive:              true,
+		SupportsDeposit:       true,
+		EnabledCurrencies:     walletstore.StringArray{"USD"},
+		IdempotencyHeaderName: sql.NullString{String: "Idempotency-Key", Valid: true},
 	}
 
 	if err := ValidatePSPConfig(cfg, " ", "deposit"); err != walletstore.ErrMissingCurrency {
@@ -204,11 +205,19 @@ func TestValidatePSPConfigRequiresExplicitCurrency(t *testing.T) {
 
 func TestValidatePSPConfigBaseDoesNotRequireRequestCurrency(t *testing.T) {
 	cfg := &walletstore.PSPConfig{
-		IsActive:          true,
-		EnabledCurrencies: walletstore.StringArray{"USD"},
+		IsActive:              true,
+		EnabledCurrencies:     walletstore.StringArray{"USD"},
+		IdempotencyHeaderName: sql.NullString{String: "Idempotency-Key", Valid: true},
 	}
 	if err := ValidatePSPConfigBase(cfg); err != nil {
 		t.Fatalf("ValidatePSPConfigBase() error = %v", err)
+	}
+}
+
+func TestValidatePSPConfigBaseRequiresIdempotencyHeader(t *testing.T) {
+	cfg := &walletstore.PSPConfig{IsActive: true, EnabledCurrencies: walletstore.StringArray{"USD"}}
+	if err := ValidatePSPConfigBase(cfg); err != ErrPSPConfigMissingIdempotency {
+		t.Fatalf("ValidatePSPConfigBase() error = %v, want %v", err, ErrPSPConfigMissingIdempotency)
 	}
 }
 
@@ -228,9 +237,10 @@ func TestValidatePSPConfigRequiresConfiguredCurrencies(t *testing.T) {
 
 func TestValidatePSPConfigMatchesTrimmedCurrency(t *testing.T) {
 	cfg := &walletstore.PSPConfig{
-		IsActive:          true,
-		SupportsDeposit:   true,
-		EnabledCurrencies: walletstore.StringArray{" USD "},
+		IsActive:              true,
+		SupportsDeposit:       true,
+		EnabledCurrencies:     walletstore.StringArray{" USD "},
+		IdempotencyHeaderName: sql.NullString{String: "Idempotency-Key", Valid: true},
 	}
 
 	if err := ValidatePSPConfig(cfg, "usd", "deposit"); err != nil {

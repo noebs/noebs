@@ -28,6 +28,8 @@ type preparedInternalTransportRelease struct {
 	platform      map[string]transportauth.Config
 }
 
+const edgeTransportIdentity = "edge"
+
 func prepareInternalTransportRelease(inputs kubernetesReleaseInternalTransportInputs, random io.Reader, now time.Time) (preparedInternalTransportRelease, error) {
 	if random == nil || now.IsZero() {
 		return preparedInternalTransportRelease{}, errors.New("internal transport generation inputs are required")
@@ -56,8 +58,15 @@ func prepareInternalTransportRelease(inputs kubernetesReleaseInternalTransportIn
 		}
 		prepared.services[role] = config
 	}
-	for _, identity := range []string{"postgres", "keycloak-postgres", "keycloak"} {
-		certificate, privateKey, err := generateInternalTransportIdentity(serviceRole(identity), ca, caKey, random, now.UTC())
+	for _, identity := range []string{"postgres", "keycloak-postgres", "keycloak", "temporal-postgres", "temporal-frontend"} {
+		certificate, privateKey, err := generateInternalTransportServerIdentity(
+			identity,
+			[]string{identity, identity + ".noebs.svc", identity + ".noebs.svc.cluster.local"},
+			ca,
+			caKey,
+			random,
+			now.UTC(),
+		)
 		if err != nil {
 			return preparedInternalTransportRelease{}, err
 		}
@@ -67,6 +76,25 @@ func prepareInternalTransportRelease(inputs kubernetesReleaseInternalTransportIn
 		}
 		prepared.platform[identity] = config
 	}
+	edgeCertificate, edgePrivateKey, err := generateInternalTransportClientIdentity(
+		edgeTransportIdentity,
+		ca,
+		caKey,
+		random,
+		now.UTC(),
+	)
+	if err != nil {
+		return preparedInternalTransportRelease{}, err
+	}
+	edge := transportauth.Config{
+		CACertificate: caPEM,
+		Certificate:   edgeCertificate,
+		PrivateKey:    edgePrivateKey,
+	}
+	if err := edge.ValidateIdentity(edgeTransportIdentity); err != nil {
+		return preparedInternalTransportRelease{}, fmt.Errorf("validate internal transport identity %s: %w", edgeTransportIdentity, err)
+	}
+	prepared.platform[edgeTransportIdentity] = edge
 	return prepared, nil
 }
 
@@ -115,35 +143,67 @@ func parseInternalTransportCA(certificatePEM, privateKeyPEM string) (*x509.Certi
 }
 
 func generateInternalTransportIdentity(role serviceRole, ca *x509.Certificate, caKey *ecdsa.PrivateKey, random io.Reader, now time.Time) (string, string, error) {
+	identity := string(role)
+	return generateInternalTransportCertificate(
+		identity,
+		[]string{identity, identity + ".noebs.svc", identity + ".noebs.svc.cluster.local"},
+		[]x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		ca,
+		caKey,
+		random,
+		now,
+	)
+}
+
+func generateInternalTransportServerIdentity(identity string, dnsNames []string, ca *x509.Certificate, caKey *ecdsa.PrivateKey, random io.Reader, now time.Time) (string, string, error) {
+	return generateInternalTransportCertificate(
+		identity,
+		dnsNames,
+		[]x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		ca,
+		caKey,
+		random,
+		now,
+	)
+}
+
+func generateInternalTransportClientIdentity(identity string, ca *x509.Certificate, caKey *ecdsa.PrivateKey, random io.Reader, now time.Time) (string, string, error) {
+	return generateInternalTransportCertificate(
+		identity,
+		[]string{identity},
+		[]x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		ca,
+		caKey,
+		random,
+		now,
+	)
+}
+
+func generateInternalTransportCertificate(identity string, dnsNames []string, extKeyUsage []x509.ExtKeyUsage, ca *x509.Certificate, caKey *ecdsa.PrivateKey, random io.Reader, now time.Time) (string, string, error) {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), random)
 	if err != nil {
-		return "", "", fmt.Errorf("generate internal transport key for %s: %w", role, err)
+		return "", "", fmt.Errorf("generate internal transport key for %s: %w", identity, err)
 	}
 	serial, err := randomCertificateSerial(random)
 	if err != nil {
 		return "", "", err
 	}
-	identity := string(role)
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject:      pkix.Name{CommonName: identity},
-		DNSNames: []string{
-			identity,
-			identity + ".noebs.svc",
-			identity + ".noebs.svc.cluster.local",
-		},
-		NotBefore:   now.Add(-5 * time.Minute),
-		NotAfter:    now.AddDate(1, 0, 0),
-		KeyUsage:    x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		DNSNames:     dnsNames,
+		NotBefore:    now.Add(-5 * time.Minute),
+		NotAfter:     now.AddDate(1, 0, 0),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  extKeyUsage,
 	}
 	certificateDER, err := x509.CreateCertificate(random, template, ca, &privateKey.PublicKey, caKey)
 	if err != nil {
-		return "", "", fmt.Errorf("create internal transport certificate for %s: %w", role, err)
+		return "", "", fmt.Errorf("create internal transport certificate for %s: %w", identity, err)
 	}
 	privateKeyDER, err := x509.MarshalECPrivateKey(privateKey)
 	if err != nil {
-		return "", "", fmt.Errorf("marshal internal transport key for %s: %w", role, err)
+		return "", "", fmt.Errorf("marshal internal transport key for %s: %w", identity, err)
 	}
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDER})),
 		string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyDER})), nil
@@ -182,6 +242,9 @@ func (r preparedInternalTransportRelease) platformSecret() map[string]interface{
 	postgres := r.platform["postgres"]
 	keycloakPostgres := r.platform["keycloak-postgres"]
 	keycloak := r.platform["keycloak"]
+	temporalPostgres := r.platform["temporal-postgres"]
+	temporal := r.platform["temporal-frontend"]
+	edge := r.platform[edgeTransportIdentity]
 	return map[string]interface{}{
 		"ca_certificate":                r.caCertificate,
 		"postgres_certificate":          postgres.Certificate,
@@ -190,5 +253,11 @@ func (r preparedInternalTransportRelease) platformSecret() map[string]interface{
 		"keycloak_postgres_private_key": keycloakPostgres.PrivateKey,
 		"keycloak_certificate":          keycloak.Certificate,
 		"keycloak_private_key":          keycloak.PrivateKey,
+		"temporal_postgres_certificate": temporalPostgres.Certificate,
+		"temporal_postgres_private_key": temporalPostgres.PrivateKey,
+		"temporal_certificate":          temporal.Certificate,
+		"temporal_private_key":          temporal.PrivateKey,
+		"edge_certificate":              edge.Certificate,
+		"edge_private_key":              edge.PrivateKey,
 	}
 }

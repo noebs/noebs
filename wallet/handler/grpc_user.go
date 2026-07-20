@@ -13,6 +13,8 @@ import (
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	"github.com/adonese/noebs/internal/transactionauth"
+	walletrequest "github.com/adonese/noebs/wallet/request"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -35,6 +37,88 @@ func RegisterGRPCUserRoutes(router fiber.Router, handler *GRPCUserHandler) {
 	router.Post("/wallets", handler.EnsureWallet)
 	router.Get("/wallets/:id/transactions", handler.ListWalletTransactions)
 	router.Get("/wallets/:id", handler.GetWallet)
+	router.Post("/deposits", handler.RequestDeposit)
+	router.Post("/p2p", handler.RequestP2PTransfer)
+	router.Post("/withdrawals", handler.RequestWithdrawal)
+}
+
+func (h *GRPCUserHandler) RequestDeposit(c *fiber.Ctx) error {
+	if !h.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	tenantID, err := authenticatedTenantID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	request, err := walletrequest.ParseDeposit(tenantID, c.Body())
+	if err != nil {
+		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, err.Error()))
+	}
+	outgoing, err := walletOutgoingContext(c, tenantID, userID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	run, err := h.Client.RequestDeposit(outgoing, request)
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletGRPCError(err))
+	}
+	return jsonResponse(c, http.StatusAccepted, fiber.Map{
+		"workflow_id": run.GetWorkflowId(),
+		"run_id":      run.GetRunId(),
+	})
+}
+
+func (h *GRPCUserHandler) RequestP2PTransfer(c *fiber.Ctx) error {
+	return h.requestTransaction(c, transactionauth.OperationWalletP2P)
+}
+
+func (h *GRPCUserHandler) RequestWithdrawal(c *fiber.Ctx) error {
+	return h.requestTransaction(c, transactionauth.OperationWalletWithdrawal)
+}
+
+func (h *GRPCUserHandler) requestTransaction(c *fiber.Ctx, operation transactionauth.Operation) error {
+	if !h.Config.WalletEnabled {
+		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
+	}
+	userID, err := authenticatedUserID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	tenantID, err := authenticatedTenantID(c)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	canonical, err := walletrequest.ParseCanonical(operation, tenantID, c.Body())
+	if err != nil {
+		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, err.Error()))
+	}
+	outgoing, err := walletOutgoingContext(c, tenantID, userID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	var run interface {
+		GetWorkflowId() string
+		GetRunId() string
+	}
+	switch request := canonical.Message.(type) {
+	case *walletv1.RequestP2PTransferRequest:
+		run, err = h.Client.RequestP2PTransfer(outgoing, request)
+	case *walletv1.RequestWithdrawalRequest:
+		run, err = h.Client.RequestWithdrawal(outgoing, request)
+	default:
+		return jsonResponse(c, 0, apperr.ErrInternal)
+	}
+	if err != nil {
+		return jsonResponse(c, 0, mapWalletGRPCError(err))
+	}
+	return jsonResponse(c, http.StatusAccepted, fiber.Map{
+		"workflow_id": run.GetWorkflowId(),
+		"run_id":      run.GetRunId(),
+	})
 }
 
 func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
@@ -70,7 +154,7 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	w, err := h.Client.EnsureWalletPublic(outgoing, &walletv1.EnsureWalletRequest{
+	w, err := h.Client.EnsureWalletPublic(outgoing, &walletv1.EnsureWalletPublicRequest{
 		TenantId: tenantID,
 		UserId:   userID,
 		Currency: currency,
@@ -78,7 +162,7 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletGRPCError(err))
 	}
-	resp, err := walletResponseFromProto(w)
+	resp, err := walletResponseFromProto(w.GetWallet())
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
@@ -115,14 +199,14 @@ func (h *GRPCUserHandler) GetWallet(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	w, err := h.Client.GetWalletPublic(outgoing, &walletv1.GetWalletRequest{
+	w, err := h.Client.GetWalletPublic(outgoing, &walletv1.GetWalletPublicRequest{
 		TenantId: tenantID,
 		WalletId: walletID.String(),
 	})
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletGRPCError(err))
 	}
-	resp, err := walletResponseFromProto(w)
+	resp, err := walletResponseFromProto(w.GetWallet())
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
@@ -167,7 +251,7 @@ func (h *GRPCUserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	entries, err := h.Client.ListWalletTransactionsPublic(outgoing, &walletv1.ListWalletTransactionsRequest{
+	entries, err := h.Client.ListWalletTransactionsPublic(outgoing, &walletv1.ListWalletTransactionsPublicRequest{
 		TenantId:  tenantID,
 		WalletId:  walletID.String(),
 		EntryType: c.Query("entry_type"),
@@ -220,7 +304,7 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	methods, err := h.Client.ListPaymentMethodsPublic(outgoing, &walletv1.ListPaymentMethodsRequest{
+	methods, err := h.Client.ListPaymentMethodsPublic(outgoing, &walletv1.ListPaymentMethodsPublicRequest{
 		TenantId:  tenantID,
 		Direction: c.Query("direction"),
 		Currency:  c.Query("currency"),

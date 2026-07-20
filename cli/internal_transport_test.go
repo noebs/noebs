@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -12,9 +13,12 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/transportauth"
 	"gopkg.in/yaml.v3"
 )
@@ -48,6 +52,12 @@ func TestInternalTransportSigningCAKeyIsInputOnly(t *testing.T) {
 		"keycloak_postgres_private_key": true,
 		"keycloak_certificate":          true,
 		"keycloak_private_key":          true,
+		"temporal_postgres_certificate": true,
+		"temporal_postgres_private_key": true,
+		"temporal_certificate":          true,
+		"temporal_private_key":          true,
+		"edge_certificate":              true,
+		"edge_private_key":              true,
 	}
 	if len(values) != len(want) {
 		t.Fatalf("platform credential keys = %v, want %v", values, want)
@@ -68,6 +78,22 @@ func TestGeneratedInternalTransportHasDistinctPlatformIdentities(t *testing.T) {
 	postgres := prepared.platform["postgres"]
 	keycloakPostgres := prepared.platform["keycloak-postgres"]
 	keycloak := prepared.platform["keycloak"]
+	for identity, config := range prepared.platform {
+		if identity == edgeTransportIdentity {
+			if err := validateClientCertificateIdentity(config.Certificate, edgeTransportIdentity); err != nil {
+				t.Fatalf("validate exact edge client leaf: %v", err)
+			}
+			continue
+		}
+		if err := validateServerCertificateIdentity(
+			config.Certificate,
+			identity,
+			identity+".noebs.svc",
+			identity+".noebs.svc.cluster.local",
+		); err != nil {
+			t.Fatalf("validate exact %s server leaf: %v", identity, err)
+		}
+	}
 	if err := postgres.ValidateIdentity("postgres"); err != nil {
 		t.Fatalf("validate Postgres identity: %v", err)
 	}
@@ -147,6 +173,64 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 	}
 }
 
+func TestEdgeIdentityIsTheOnlyExternalGatewayPeer(t *testing.T) {
+	now := time.Now().UTC()
+	prepared, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverTLS, err := prepared.services[serviceRoleAPIGateway].ServerTLSConfig(
+		string(serviceRoleAPIGateway),
+		internalTransportServerPeers(serviceRoleAPIGateway)...,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	server.TLS = serverTLS
+	server.StartTLS()
+	defer server.Close()
+
+	edgeTLS, err := prepared.platform[edgeTransportIdentity].ClientTLSConfig(edgeTransportIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edgeTLS.ServerName = "api-gateway.noebs.svc.cluster.local"
+	edgeClient := &http.Client{Transport: &http.Transport{TLSClientConfig: edgeTLS}}
+	response, err := edgeClient.Get(server.URL)
+	if err != nil {
+		t.Fatalf("edge mTLS request failed: %v", err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("edge mTLS response = %s, want 204", response.Status)
+	}
+
+	otherTLS, err := prepared.services[serviceRoleIdentityAuth].ClientTLSConfig(string(serviceRoleIdentityAuth))
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherTLS.ServerName = "api-gateway.noebs.svc.cluster.local"
+	other := &http.Client{Transport: &http.Transport{TLSClientConfig: otherTLS}}
+	if response, err := other.Get(server.URL); err == nil {
+		_ = response.Body.Close()
+		t.Fatal("api-gateway accepted identity-auth as an edge peer")
+	}
+
+	tls12 := edgeTLS.Clone()
+	tls12.MaxVersion = tls.VersionTLS12
+	tls12.MinVersion = tls.VersionTLS12
+	legacy := &http.Client{Transport: &http.Transport{TLSClientConfig: tls12}}
+	if response, err := legacy.Get(server.URL); err == nil {
+		_ = response.Body.Close()
+		t.Fatal("api-gateway accepted TLS 1.2")
+	}
+}
+
 func newTestInternalTransportInputs(t *testing.T, now time.Time) kubernetesReleaseInternalTransportInputs {
 	t.Helper()
 	inputs, err := generateTestInternalTransportInputs(now)
@@ -204,8 +288,47 @@ func TestInternalTransportServerRequiresPeerAllowlist(t *testing.T) {
 	}
 }
 
+func TestHTTPRuntimeHasNoPlaintextTransportMode(t *testing.T) {
+	now := time.Now().UTC()
+	prepared, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	discovery := make(map[string]string, len(expectedHTTPServiceDiscoveryKeys()))
+	for _, service := range expectedHTTPServiceDiscoveryKeys() {
+		discovery[service] = "http://" + service + ":8080"
+	}
+	cfg := ebs_fields.NoebsConfig{ServiceDiscovery: discovery}
+	if err := validateInternalTransportRuntimeConfig(serviceRoleIdentityAuth, cfg); err == nil || !strings.Contains(err.Error(), "internal_transport is required") {
+		t.Fatalf("missing transport error = %v", err)
+	}
+	cfg.InternalTransport = prepared.services[serviceRoleIdentityAuth]
+	if err := validateInternalTransportRuntimeConfig(serviceRoleIdentityAuth, cfg); err == nil || !strings.Contains(err.Error(), "requires HTTPS") {
+		t.Fatalf("plaintext discovery error = %v", err)
+	}
+	for service := range discovery {
+		discovery[service] = "https://" + service + ":8080"
+	}
+	if err := validateInternalTransportRuntimeConfig(serviceRoleIdentityAuth, cfg); err != nil {
+		t.Fatalf("exact TLS config rejected: %v", err)
+	}
+}
+
+func TestAPIGatewayTransportAllowsOnlyEdgeAndSelf(t *testing.T) {
+	peers := internalTransportServerPeers(serviceRoleAPIGateway)
+	if !slices.Equal(peers, []string{edgeTransportIdentity, string(serviceRoleAPIGateway)}) {
+		t.Fatalf("api-gateway peers = %v", peers)
+	}
+}
+
 func TestWorkloadSigningPrivateKeysAreIsolatedPerCaller(t *testing.T) {
-	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{}, rand.Reader)
+	prepared, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{
+		Database: kubernetesReleaseWorkloadDatabaseInput{
+			MigratePassword: testCanonicalReleaseSecret(1),
+			RuntimePassword: testCanonicalReleaseSecret(2),
+			CleanupPassword: testCanonicalReleaseSecret(3),
+		},
+	}, rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}

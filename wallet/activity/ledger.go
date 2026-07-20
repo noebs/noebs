@@ -38,6 +38,30 @@ func (a *LedgerActivities) ExecuteSystemDebitDoubleEntry(ctx context.Context, pa
 	return a.Store.PostSystemDebitDoubleEntry(ctx, params)
 }
 
+func (a *LedgerActivities) ExecuteMultiLegSettlement(ctx context.Context, params walletstore.MultiLegSettlementParams) (*walletstore.MultiLegSettlementResult, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	result, err := a.Store.PostMultiLegSettlement(ctx, params)
+	return result, classifyTransactionLimitError(err)
+}
+
+func (a *LedgerActivities) ExecuteSystemFundedMultiLegSettlement(ctx context.Context, params walletstore.MultiLegSettlementParams) (*walletstore.MultiLegSettlementResult, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	result, err := a.Store.PostSystemFundedMultiLegSettlement(ctx, params)
+	return result, classifyTransactionLimitError(err)
+}
+
+func (a *LedgerActivities) ExecuteHeldWithdrawalSettlement(ctx context.Context, params walletstore.HeldWithdrawalSettlementParams) (*walletstore.MultiLegSettlementResult, error) {
+	if a == nil || a.Store == nil {
+		return nil, ErrMissingStore
+	}
+	result, err := a.Store.PostHeldWithdrawalSettlement(ctx, params)
+	return result, classifyTransactionLimitError(err)
+}
+
 func (a *LedgerActivities) ValidateDoubleEntry(ctx context.Context, params walletstore.DoubleEntryParams) (struct{}, error) {
 	_ = ctx
 	if a == nil {
@@ -62,6 +86,22 @@ func (a *LedgerActivities) ValidateSystemDebitDoubleEntry(ctx context.Context, p
 	return struct{}{}, walletstore.ValidateDoubleEntryParams(params)
 }
 
+func (a *LedgerActivities) ValidateMultiLegSettlement(ctx context.Context, params walletstore.MultiLegSettlementParams) (struct{}, error) {
+	_ = ctx
+	if a == nil {
+		return struct{}{}, ErrMissingStore
+	}
+	return struct{}{}, walletstore.ValidateMultiLegSettlementParams(params)
+}
+
+func (a *LedgerActivities) ValidateHeldWithdrawalSettlement(ctx context.Context, params walletstore.HeldWithdrawalSettlementParams) (struct{}, error) {
+	_ = ctx
+	if a == nil {
+		return struct{}{}, ErrMissingStore
+	}
+	return struct{}{}, walletstore.ValidateHeldWithdrawalSettlementParams(params)
+}
+
 func (a *LedgerActivities) CreateHold(ctx context.Context, params walletstore.HoldParams) (*walletstore.BalanceHold, error) {
 	if a == nil || a.Store == nil {
 		return nil, ErrMissingStore
@@ -82,6 +122,20 @@ func (a *LedgerActivities) ReleaseHold(ctx context.Context, tenantID string, hol
 		return ErrMissingStore
 	}
 	return a.Store.ReleaseHold(ctx, tenantID, holdID)
+}
+
+func (a *LedgerActivities) CommitHold(ctx context.Context, tenantID string, holdID int64) error {
+	if a == nil || a.Store == nil {
+		return ErrMissingStore
+	}
+	return a.Store.CommitHold(ctx, tenantID, holdID)
+}
+
+func (a *LedgerActivities) ExpireHolds(ctx context.Context, tenantID string, limit int) (int, error) {
+	if a == nil || a.Store == nil {
+		return 0, ErrMissingStore
+	}
+	return a.Store.ExpireHolds(ctx, tenantID, limit)
 }
 
 func (a *LedgerActivities) ValidateReleaseHold(ctx context.Context, tenantID string, holdID int64) (struct{}, error) {

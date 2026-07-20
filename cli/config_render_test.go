@@ -59,7 +59,7 @@ func TestRenderConfigFilesRejectsBlankTenantOverrideAfterMerge(t *testing.T) {
 `, `noebs:
   service_role: api-gateway
   service_databases:
-    api-gateway: postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable
+    api-gateway: postgres://gateway_auth_runtime:test@postgres:5432/gateway_auth?sslmode=disable
   default_tenant_id: ""
 `)
 	if err := renderConfigFiles(); !errors.Is(err, store.ErrMissingTenantID) {
@@ -119,24 +119,6 @@ func TestRenderConfigFilesRejectsLegacyDatabasePath(t *testing.T) {
 `)
 	if !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("renderConfigFiles() error = %v, want %v", err, errDatabaseNotAllowed)
-	}
-}
-
-func TestRenderDatabasePasswordFileDoesNotRunRuntimeValidation(t *testing.T) {
-	tmp := renderConfigTempDir(t, `noebs:
-  render_db_password_file: password
-  db_url: postgres://noebs:postgres-secret@db:5432/noebs?sslmode=disable
-  db_path: /tmp/legacy.db
-`)
-	if err := renderDatabasePasswordFile(); err != nil {
-		t.Fatalf("renderDatabasePasswordFile() error = %v", err)
-	}
-	got, err := os.ReadFile(filepath.Join(tmp, "password"))
-	if err != nil {
-		t.Fatalf("read rendered password: %v", err)
-	}
-	if string(got) != "postgres-secret" {
-		t.Fatalf("rendered password = %q, want postgres-secret", got)
 	}
 }
 
@@ -210,7 +192,7 @@ func renderConfigTempDir(t *testing.T, payload string) string {
 	return renderConfigTempDirWithService(t, payload, `noebs:
   service_role: api-gateway
   service_databases:
-    api-gateway: postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable
+    api-gateway: postgres://gateway_auth_runtime:test@postgres:5432/gateway_auth?sslmode=disable
 `)
 }
 

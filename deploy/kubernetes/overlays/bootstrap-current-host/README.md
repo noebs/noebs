@@ -7,11 +7,17 @@ Its Noebs image digest is an explicit promotion pin and must match
 `overlays/current-host`, `operations/lookup`, and
 `operations/memberships/base` in the same digest-promotion commit.
 
+Bootstrap uses the steady Postgres authority unchanged: exactly 22 service
+login roles across eight databases. PSP tables migrate with `wallet_ledger`;
+this overlay must not restore a `psp-webhook-migrate` Job, Secret, role, or
+database.
+
 First run `prepare-kubernetes-release` and apply its rendered steady Secrets.
 That creates `keycloak-reconciler-credentials` and projects the explicit
-`noebs-backoffice` credential into the API gateway configuration. It also
-creates the CA-only `keycloak-transport-ca` mounted by every bootstrap and
-steady reconciliation Job; no Job accepts plaintext Keycloak transport.
+`noebs-backoffice` and `noebs-wallet-authorizer` credentials into the API
+gateway configuration. It also creates the CA-only `keycloak-transport-ca`
+mounted by every bootstrap and steady reconciliation Job; no Job accepts
+plaintext Keycloak transport.
 
 Create one additional SOPS-encrypted bootstrap input:
 

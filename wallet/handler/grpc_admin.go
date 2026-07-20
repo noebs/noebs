@@ -116,7 +116,7 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 	if err != nil {
 		return jsonResponse(c, 0, err)
 	}
-	req := &walletv1.AdminWalletRequest{
+	req := &walletv1.RenderWalletAdminRequest{
 		Action: action,
 		Query:  queryArgs(c),
 		Form:   formArgs(c),

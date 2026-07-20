@@ -158,12 +158,12 @@ func buildBackofficeRuntimeDependencies(cfg ebs_fields.NoebsConfig) (backofficeR
 	if err != nil {
 		return backofficeRuntimeDependencies{}, err
 	}
-	keys, err := decodeBackofficeEncryptionKeys(cfg.BackofficeEncryptionKeys)
+	keys, err := decodeGatewayAuthEncryptionKeys(cfg.GatewayAuthEncryptionKeys)
 	if err != nil {
 		return backofficeRuntimeDependencies{}, err
 	}
 	keyring, err := backofficeauth.NewKeyring(backofficeauth.KeyringConfig{
-		ActiveKeyID: cfg.BackofficeEncryptionKeyID,
+		ActiveKeyID: cfg.GatewayAuthEncryptionKeyID,
 		Keys:        keys,
 		Entropy:     rand.Reader,
 	})
@@ -185,10 +185,10 @@ func buildBackofficeRuntimeDependencies(cfg ebs_fields.NoebsConfig) (backofficeR
 	if err != nil || logoutOrigin != csrfOrigin {
 		return backofficeRuntimeDependencies{}, backofficeauth.ErrInvalidConfiguration
 	}
-	if err := requireBackofficeCallbackPath(cfg.BackofficeRedirectURL, backofficeCallbackPath); err != nil {
+	if err := requireExactHTTPSCallbackPath(cfg.BackofficeRedirectURL, backofficeCallbackPath); err != nil {
 		return backofficeRuntimeDependencies{}, err
 	}
-	if err := requireBackofficeCallbackPath(cfg.BackofficePostLogoutURL, backofficeLoggedOutPath); err != nil {
+	if err := requireExactHTTPSCallbackPath(cfg.BackofficePostLogoutURL, backofficeLoggedOutPath); err != nil {
 		return backofficeRuntimeDependencies{}, err
 	}
 	csrf, err := backofficeauth.NewCSRFProtector(csrfOrigin)
@@ -225,7 +225,7 @@ func replaceOIDCEndpoint(jwksURL, current, replacement string) (string, error) {
 	return parsed.String(), nil
 }
 
-func decodeBackofficeEncryptionKeys(encoded map[string]string) (map[string][]byte, error) {
+func decodeGatewayAuthEncryptionKeys(encoded map[string]string) (map[string][]byte, error) {
 	if len(encoded) == 0 {
 		return nil, backofficeauth.ErrInvalidConfiguration
 	}
@@ -233,7 +233,7 @@ func decodeBackofficeEncryptionKeys(encoded map[string]string) (map[string][]byt
 	for keyID, value := range encoded {
 		decoded, err := base64.StdEncoding.DecodeString(value)
 		if err != nil || base64.StdEncoding.EncodeToString(decoded) != value || len(decoded) != 32 {
-			return nil, fmt.Errorf("invalid back-office encryption key %q", keyID)
+			return nil, fmt.Errorf("invalid gateway-auth encryption key %q", keyID)
 		}
 		keys[keyID] = decoded
 	}
@@ -248,7 +248,7 @@ func originOf(raw string) (string, error) {
 	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
-func requireBackofficeCallbackPath(raw, expectedPath string) error {
+func requireExactHTTPSCallbackPath(raw, expectedPath string) error {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
 		parsed.Path != expectedPath || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.Fragment != "" {

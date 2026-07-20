@@ -14,7 +14,7 @@ func NoebsCors(origins []string) fiber.Handler {
 	return cors.New(cors.Config{
 		AllowOrigins: strings.Join(origins, ","),
 		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-		AllowHeaders: "Authorization,Origin,Content-Type,Accept,X-CSRF-Token,X-Active-Tenant",
+		AllowHeaders: "Authorization,Origin,Content-Type,Accept,X-CSRF-Token,X-Active-Tenant,X-Noebs-Transaction-Authorization",
 		MaxAge:       600,
 	})
 }

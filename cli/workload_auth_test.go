@@ -356,7 +356,7 @@ func TestGatewayStripsPublicCredentialsThenPropagatesSignature(t *testing.T) {
 			testPSPWebhookCallbackID: {TenantID: "tenant-1", ProviderCode: "test-provider"},
 		},
 		ServiceDiscovery: discovery,
-	}, gatewayTestTenantCatalog(t)); err != nil {
+	}, gatewayTestTenantCatalog(t), walletAuthorizationHandlerForRegistration()); err != nil {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/backoffice/assets/style.css?flow=login&view=compact&view=full", nil)
@@ -396,7 +396,7 @@ func TestGatewayDoesNotProxyWithoutWorkloadSigner(t *testing.T) {
 	err := registerAPIGatewayProxyRoutes(app, ebs_fields.NoebsConfig{
 		DefaultTenantID:  "tenant-1",
 		ServiceDiscovery: discovery,
-	}, gatewayTestTenantCatalog(t))
+	}, gatewayTestTenantCatalog(t), walletAuthorizationHandlerForRegistration())
 	if !errors.Is(err, workloadauth.ErrMissingSigner) {
 		t.Fatalf("registerAPIGatewayProxyRoutes() error = %v, want %v", err, workloadauth.ErrMissingSigner)
 	}

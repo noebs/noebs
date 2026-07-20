@@ -113,7 +113,7 @@ func TestValidateDeploymentRootRejectsPlaceholders(t *testing.T) {
 }
 
 func TestValidateKubernetesDeploymentRootAcceptsMountedInputs(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 
 	if err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v", err)
@@ -121,7 +121,7 @@ func TestValidateKubernetesDeploymentRootAcceptsMountedInputs(t *testing.T) {
 }
 
 func TestValidateKubernetesDeploymentRootRejectsMissingCardVaultDataKey(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	path := filepath.Join(root, "secrets", "card-vault.secrets.yaml")
 	removeNoebsSecretField(t, path, "data_key")
 
@@ -132,7 +132,7 @@ func TestValidateKubernetesDeploymentRootRejectsMissingCardVaultDataKey(t *testi
 }
 
 func TestValidateKubernetesDeploymentRootRejectsMissingEBSCredentialInput(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	path := filepath.Join(root, "secrets", "ebs-adapter.secrets.yaml")
 	removeNoebsSecretField(t, path, "ipin_key")
 
@@ -143,14 +143,14 @@ func TestValidateKubernetesDeploymentRootRejectsMissingEBSCredentialInput(t *tes
 }
 
 func TestValidateKubernetesDeploymentRootRejectsMissingPlatformSecret(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
-	if err := os.Remove(filepath.Join(root, "platform", "postgres-password.txt")); err != nil {
-		t.Fatalf("remove postgres password: %v", err)
+	root := writeRenderedKubernetesPreflightRoot(t)
+	if err := os.Remove(filepath.Join(root, "platform", "service-postgres-roles.secrets.yaml")); err != nil {
+		t.Fatalf("remove service Postgres roles: %v", err)
 	}
 
 	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
-	if err == nil || !strings.Contains(err.Error(), "Noebs Postgres password") {
-		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want Noebs Postgres password rejection", err)
+	if err == nil || !strings.Contains(err.Error(), "service Postgres role credentials") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want service Postgres role rejection", err)
 	}
 }
 
@@ -166,7 +166,7 @@ func TestValidateKubernetesDeploymentRootRejectsInvalidGHCRDockerConfig(t *testi
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			root := writeKubernetesSecretReleaseRoot(t)
+			root := writeRenderedKubernetesPreflightRoot(t)
 			writePreflightFile(t, root, "platform/ghcr-dockerconfigjson", tt.payload+"\n")
 
 			err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
@@ -178,7 +178,7 @@ func TestValidateKubernetesDeploymentRootRejectsInvalidGHCRDockerConfig(t *testi
 }
 
 func TestValidateKubernetesDeploymentRootRejectsMissingMigrationServiceConfig(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	if err := os.Remove(filepath.Join(root, "services", "wallet-ledger-migrate.yaml")); err != nil {
 		t.Fatalf("remove wallet-ledger-migrate service config: %v", err)
 	}
@@ -190,40 +190,40 @@ func TestValidateKubernetesDeploymentRootRejectsMissingMigrationServiceConfig(t 
 }
 
 func TestValidateKubernetesDeploymentRootRejectsUnexpectedServiceConfig(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	writePreflightFile(t, root, "services/monolith.yaml", `noebs:
   service_role: api-gateway
   otel_service_name: api-gateway
 `)
 
 	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
-	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release service config file") {
+	if err == nil || !strings.Contains(err.Error(), "unexpected rendered Kubernetes release service config file") {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want unexpected service config rejection", err)
 	}
 }
 
 func TestValidateKubernetesDeploymentRootRejectsUnexpectedPlatformFile(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	writePreflightFile(t, root, "platform/temporal-broadcast-address.txt", "temporal:7233\n")
 
 	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
-	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release platform file") {
+	if err == nil || !strings.Contains(err.Error(), "unexpected rendered Kubernetes release platform file") {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want unexpected platform file rejection", err)
 	}
 }
 
-func TestValidateKubernetesDeploymentRootRejectsUnexpectedSOPSFile(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+func TestValidateKubernetesDeploymentRootRejectsSOPSDirectory(t *testing.T) {
+	root := writeRenderedKubernetesPreflightRoot(t)
 	writePreflightFile(t, root, ".sops/old-age-key.txt", "AGE-SECRET-KEY-1OLD\n")
 
 	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
-	if err == nil || !strings.Contains(err.Error(), "unexpected Kubernetes release SOPS file") {
-		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want unexpected SOPS file rejection", err)
+	if err == nil || !strings.Contains(err.Error(), "unexpected rendered Kubernetes release root entry") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want SOPS directory rejection", err)
 	}
 }
 
 func TestValidateKubernetesDeploymentRootRejectsSplicedKeycloakDatabaseCredential(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	path := filepath.Join(root, "platform", "keycloak.conf")
 	payload, err := os.ReadFile(path)
 	if err != nil {
@@ -244,7 +244,7 @@ func TestValidateKubernetesDeploymentRootRejectsSplicedKeycloakDatabaseCredentia
 }
 
 func TestValidateKubernetesDeploymentRootRejectsSplicedKeycloakPostgresIdentity(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	path := filepath.Join(root, "platform", "internal-transport.secrets.yaml")
 	payload, err := os.ReadFile(path)
 	if err != nil {
@@ -271,7 +271,7 @@ func TestValidateKubernetesDeploymentRootRejectsSplicedKeycloakPostgresIdentity(
 }
 
 func TestValidateKubernetesDeploymentRootRejectsSplicedBackofficeCredential(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	setNoebsSecretField(t, filepath.Join(root, "secrets", "api-gateway.secrets.yaml"), "backoffice_client_secret", testCanonicalReleaseSecret(9))
 	if err := writeKubernetesReleaseManifest(root); err != nil {
 		t.Fatal(err)
@@ -283,8 +283,21 @@ func TestValidateKubernetesDeploymentRootRejectsSplicedBackofficeCredential(t *t
 	}
 }
 
+func TestValidateKubernetesDeploymentRootRejectsSplicedWalletAuthorizerCredential(t *testing.T) {
+	root := writeRenderedKubernetesPreflightRoot(t)
+	setNoebsSecretField(t, filepath.Join(root, "secrets", "api-gateway.secrets.yaml"), "wallet_authorizer_client_secret", testCanonicalReleaseSecret(9))
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatal(err)
+	}
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "does not match the Keycloak managed credential") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want wallet authorizer credential coherence rejection", err)
+	}
+}
+
 func TestValidateKubernetesDeploymentRootRejectsSplicedGatewayRoleCredential(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	setNoebsSecretField(t, filepath.Join(root, "secrets", "api-gateway.secrets.yaml"), "service_databases", map[string]interface{}{
 		"api-gateway": gatewayAuthDatabaseURL("gateway_auth_runtime", testCanonicalReleaseSecret(9)),
 	})
@@ -299,7 +312,7 @@ func TestValidateKubernetesDeploymentRootRejectsSplicedGatewayRoleCredential(t *
 }
 
 func TestValidateKubernetesDeploymentRootRejectsTenantOutsideCatalog(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	setNoebsSecretField(t, filepath.Join(root, "secrets", "wallet-api.secrets.yaml"), "default_tenant_id", "tenant-unknown")
 	if err := writeKubernetesReleaseManifest(root); err != nil {
 		t.Fatal(err)
@@ -312,7 +325,7 @@ func TestValidateKubernetesDeploymentRootRejectsTenantOutsideCatalog(t *testing.
 }
 
 func TestValidateKubernetesDeploymentRootConstructsBackofficeOIDCRuntime(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
+	root := writeRenderedKubernetesPreflightRoot(t)
 	path := filepath.Join(root, "config.yaml")
 	config := readYAMLMapFileMust(t, path)
 	getMap(config, "noebs")["backoffice_redirect_url"] = "https://api.noebs.sd/wrong-callback"
@@ -366,6 +379,27 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 		}
 		writePreflightFile(t, root, filepath.Join("deploy", "docker", "services", serviceName+".yaml"), payload)
 	}
+	now := time.Now().UTC()
+	transportInputs := newTestInternalTransportInputs(t, now)
+	transport, err := prepareInternalTransportRelease(transportInputs, rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Docker transport identities: %v", err)
+	}
+	transportCA, transportCAKey, _, err := prepareInternalTransportCA(transportInputs)
+	if err != nil {
+		t.Fatalf("parse Docker transport CA: %v", err)
+	}
+	databaseCertificate, databasePrivateKey, err := generateInternalTransportServerIdentity("db", []string{"db"}, transportCA, transportCAKey, rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Docker Postgres identity: %v", err)
+	}
+	databaseRolePasswords := make(map[string]string, len(allPostgresRoleSpecs()))
+	for index, spec := range servicePostgresRoleSpecs {
+		databaseRolePasswords[spec.username] = testCanonicalReleaseSecret(byte(20 + index))
+	}
+	for index, spec := range authPostgresRoleSpecs {
+		databaseRolePasswords[spec.username] = testCanonicalReleaseSecret(byte(1 + index))
+	}
 
 	for fileName, payload := range kubernetesSecretTestPayloads() {
 		var document map[string]interface{}
@@ -374,6 +408,62 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 		}
 		noebs := getMap(document, "noebs")
 		noebs["default_tenant_id"] = defaultTenantID
+		role, err := parseServiceRole(strings.TrimSuffix(fileName, ".secrets.yaml"))
+		if err != nil {
+			t.Fatalf("parse %s role: %v", fileName, err)
+		}
+		if role.opensDatabase() || roleReceivesSignedHTTP(role) {
+			noebs["database_ca_certificate"] = transport.caCertificate
+		}
+		if roleUsesInternalTransportIdentity(role) {
+			noebs["internal_transport"] = transport.configForRole(role)
+		}
+		switch role {
+		case serviceRoleWalletLedger:
+			noebs["temporal_client_secret"] = testCanonicalReleaseSecret(70)
+			noebs["temporal_ca_certificate"] = transport.caCertificate
+			noebs["keycloak_ca_certificate"] = transport.caCertificate
+		case serviceRoleWalletWorker:
+			noebs["temporal_client_secret"] = testCanonicalReleaseSecret(71)
+			noebs["temporal_ca_certificate"] = transport.caCertificate
+			noebs["keycloak_ca_certificate"] = transport.caCertificate
+		}
+		if role.opensDatabase() {
+			spec, present := postgresRoleSpecForService(role)
+			if !present {
+				t.Fatalf("missing Postgres role spec for %s", role)
+			}
+			getMap(noebs, "service_databases")[string(spec.owner)] = dockerDatabaseURL(
+				spec.username, databaseRolePasswords[spec.username], spec.database,
+			)
+		}
+		if roleReceivesSignedHTTP(role) {
+			getMap(noebs, "workload_auth")["nonce_db_url"] = dockerDatabaseURL(
+				"workload_auth_runtime", databaseRolePasswords["workload_auth_runtime"], "workload_auth",
+			)
+		}
+		switch fileName {
+		case "workload-auth-migrate.secrets.yaml":
+			getMap(noebs, "service_databases")["workload-auth-migrate"] = dockerDatabaseURL(
+				"workload_auth_migrate", databaseRolePasswords["workload_auth_migrate"], "workload_auth",
+			)
+		case "workload-auth-cleanup.secrets.yaml":
+			getMap(noebs, "service_databases")["workload-auth-migrate"] = dockerDatabaseURL(
+				"workload_auth_cleanup", databaseRolePasswords["workload_auth_cleanup"], "workload_auth",
+			)
+		case "gateway-auth-migrate.secrets.yaml":
+			getMap(noebs, "service_databases")["api-gateway"] = dockerDatabaseURL(
+				"gateway_auth_migrate", databaseRolePasswords["gateway_auth_migrate"], "gateway_auth",
+			)
+		case "api-gateway.secrets.yaml":
+			getMap(noebs, "service_databases")["api-gateway"] = dockerDatabaseURL(
+				"gateway_auth_runtime", databaseRolePasswords["gateway_auth_runtime"], "gateway_auth",
+			)
+		case "gateway-auth-cleanup.secrets.yaml":
+			getMap(noebs, "service_databases")["api-gateway"] = dockerDatabaseURL(
+				"gateway_auth_cleanup", databaseRolePasswords["gateway_auth_cleanup"], "gateway_auth",
+			)
+		}
 		if fileName == "ebs-adapter.secrets.yaml" && opts.omitEBSConsumerEndpoint {
 			delete(noebs, "consumer_endpoint")
 		}
@@ -389,23 +479,48 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 		}
 		writePreflightFile(t, root, filepath.Join("deploy", "docker", "secrets", fileName), string(encoded))
 	}
-	writePreflightFile(t, root, "deploy/docker/postgres/bootstrap.secrets.yaml", `noebs:
-  db_url: "postgres://noebs:postgres-password@db:5432/noebs?sslmode=disable"
-`)
-	writePreflightFile(t, root, "deploy/docker/temporal/postgres-password.txt", "temporal-postgres-password\n")
-	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-password.txt", keycloakPassword+"\n")
-	now := time.Now().UTC()
-	transport, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
+	passwordFile, err := encodeServicePostgresPasswordFile(databaseRolePasswords)
 	if err != nil {
-		t.Fatalf("prepare Keycloak Postgres transport identity: %v", err)
+		t.Fatalf("encode Docker role password catalog: %v", err)
 	}
-	keycloakPostgres := transport.platform["keycloak-postgres"]
-	keycloak := transport.platform["keycloak"]
+	writePreflightFile(t, root, "deploy/docker/postgres/service-role-passwords.env", passwordFile)
+	provisioningSQL, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "postgres", "001-service-databases.sql"))
+	if err != nil {
+		t.Fatalf("read Postgres provisioning SQL: %v", err)
+	}
+	writePreflightFile(t, root, "deploy/docker/postgres/001-service-databases.sql", string(provisioningSQL))
+	writePreflightFile(t, root, "deploy/docker/postgres/ca.pem", transport.caCertificate)
+	writePreflightFile(t, root, "deploy/docker/postgres/tls.crt", databaseCertificate)
+	writePreflightFile(t, root, "deploy/docker/postgres/tls.key", databasePrivateKey)
+	writePreflightFile(t, root, "deploy/docker/temporal/postgres-password.txt", "temporal-postgres-password\n")
+	temporalCertificate, temporalPrivateKey, err := generateInternalTransportServerIdentity("temporal-frontend", []string{"temporal-frontend"}, transportCA, transportCAKey, rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Docker Temporal identity: %v", err)
+	}
+	writePreflightFile(t, root, "deploy/docker/temporal/ca.pem", transport.caCertificate)
+	temporalPostgresCertificate, temporalPostgresPrivateKey, err := generateInternalTransportServerIdentity("temporal-postgres", []string{"temporal-postgres"}, transportCA, transportCAKey, rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Docker Temporal Postgres identity: %v", err)
+	}
+	writePreflightFile(t, root, "deploy/docker/temporal/postgres-tls.crt", temporalPostgresCertificate)
+	writePreflightFile(t, root, "deploy/docker/temporal/postgres-tls.key", temporalPostgresPrivateKey)
+	writePreflightFile(t, root, "deploy/docker/temporal/tls.crt", temporalCertificate)
+	writePreflightFile(t, root, "deploy/docker/temporal/tls.key", temporalPrivateKey)
+	writePreflightFile(t, root, "deploy/docker/temporal/namespace-bootstrap-client-secret.txt", testCanonicalReleaseSecret(72)+"\n")
+	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-password.txt", keycloakPassword+"\n")
+	keycloakPostgresCertificate, keycloakPostgresPrivateKey, err := generateInternalTransportServerIdentity("keycloak-postgres", []string{"keycloak-postgres"}, transportCA, transportCAKey, rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Docker Keycloak Postgres identity: %v", err)
+	}
+	keycloakCertificate, keycloakPrivateKey, err := generateInternalTransportServerIdentity("keycloak", []string{"keycloak"}, transportCA, transportCAKey, rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Docker Keycloak identity: %v", err)
+	}
 	writePreflightFile(t, root, "deploy/docker/keycloak/ca.pem", transport.caCertificate)
-	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-tls.crt", keycloakPostgres.Certificate)
-	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-tls.key", keycloakPostgres.PrivateKey)
-	writePreflightFile(t, root, "deploy/docker/keycloak/tls.crt", keycloak.Certificate)
-	writePreflightFile(t, root, "deploy/docker/keycloak/tls.key", keycloak.PrivateKey)
+	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-tls.crt", keycloakPostgresCertificate)
+	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-tls.key", keycloakPostgresPrivateKey)
+	writePreflightFile(t, root, "deploy/docker/keycloak/tls.crt", keycloakCertificate)
+	writePreflightFile(t, root, "deploy/docker/keycloak/tls.key", keycloakPrivateKey)
 	writePreflightFile(t, root, "deploy/docker/keycloak/keycloak.conf", `http-enabled=false
 http-relative-path=/auth
 https-port=8443
@@ -484,4 +599,16 @@ func writePreflightFile(t *testing.T, root, name, payload string) {
 func readPlainPreflightSecret(path, ageKeyFile string) ([]byte, error) {
 	_ = ageKeyFile
 	return os.ReadFile(path)
+}
+
+func writeRenderedKubernetesPreflightRoot(t *testing.T) string {
+	t.Helper()
+	root := writeKubernetesSecretReleaseRoot(t)
+	if err := os.RemoveAll(filepath.Join(root, ".sops")); err != nil {
+		t.Fatalf("remove rendered release SOPS directory: %v", err)
+	}
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatalf("write rendered release manifest: %v", err)
+	}
+	return root
 }

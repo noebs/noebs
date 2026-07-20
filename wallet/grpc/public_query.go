@@ -15,7 +15,7 @@ import (
 
 const publicQueryDefaultLimit = 100
 
-func (s *Server) ListPaymentMethodsPublic(ctx context.Context, req *walletv1.ListPaymentMethodsRequest) (*walletv1.PaymentMethodList, error) {
+func (s *Server) ListPaymentMethodsPublic(ctx context.Context, req *walletv1.ListPaymentMethodsPublicRequest) (*walletv1.ListPaymentMethodsPublicResponse, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
@@ -54,10 +54,10 @@ func (s *Server) ListPaymentMethodsPublic(ctx context.Context, req *walletv1.Lis
 	for _, method := range methods {
 		resp = append(resp, paymentMethodProto(method))
 	}
-	return &walletv1.PaymentMethodList{Methods: resp}, nil
+	return &walletv1.ListPaymentMethodsPublicResponse{Methods: resp}, nil
 }
 
-func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1.ListWalletTransactionsRequest) (*walletv1.WalletLedgerEntryList, error) {
+func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1.ListWalletTransactionsPublicRequest) (*walletv1.ListWalletTransactionsPublicResponse, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
@@ -100,7 +100,7 @@ func (s *Server) ListWalletTransactionsPublic(ctx context.Context, req *walletv1
 	for _, entry := range entries {
 		resp = append(resp, walletLedgerEntryProto(entry))
 	}
-	return &walletv1.WalletLedgerEntryList{Transactions: resp}, nil
+	return &walletv1.ListWalletTransactionsPublicResponse{Transactions: resp}, nil
 }
 
 func publicLimitOffset(reqLimit, reqOffset int32, defaultLimit int) (int, int, error) {

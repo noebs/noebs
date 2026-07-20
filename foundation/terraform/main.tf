@@ -36,6 +36,18 @@ resource "kubernetes_namespace_v1" "noebs" {
   }
 }
 
+resource "kubernetes_namespace_v1" "edge" {
+  metadata {
+    name = var.edge_namespace
+
+    labels = {
+      "app.kubernetes.io/name"       = var.edge_namespace
+      "app.kubernetes.io/part-of"    = "noebs"
+      "app.kubernetes.io/managed-by" = "terraform"
+    }
+  }
+}
+
 resource "helm_release" "argocd" {
   count = var.argocd_installation_mode == "helm" ? 1 : 0
 
@@ -50,6 +62,10 @@ resource "helm_release" "argocd" {
       name  = "server.service.type"
       value = "ClusterIP"
     },
+  ]
+
+  depends_on = [
+    kubernetes_namespace_v1.argocd,
   ]
 }
 
@@ -71,7 +87,7 @@ resource "kubernetes_manifest" "noebs_project" {
           server    = "https://kubernetes.default.svc"
         },
         {
-          namespace = var.edge_namespace
+          namespace = kubernetes_namespace_v1.edge.metadata[0].name
           server    = "https://kubernetes.default.svc"
         },
       ]
@@ -87,6 +103,7 @@ resource "kubernetes_manifest" "noebs_project" {
   depends_on = [
     helm_release.argocd,
     data.kubernetes_namespace_v1.argocd_existing,
+    kubernetes_namespace_v1.edge,
   ]
 }
 
@@ -152,7 +169,7 @@ resource "kubernetes_manifest" "noebs_edge_application" {
       }
       destination = {
         server    = "https://kubernetes.default.svc"
-        namespace = var.edge_namespace
+        namespace = kubernetes_namespace_v1.edge.metadata[0].name
       }
       syncPolicy = {
         automated = {
@@ -160,7 +177,6 @@ resource "kubernetes_manifest" "noebs_edge_application" {
           selfHeal = true
         }
         syncOptions = [
-          "CreateNamespace=true",
           "PruneLast=true",
         ]
       }
@@ -169,5 +185,6 @@ resource "kubernetes_manifest" "noebs_edge_application" {
 
   depends_on = [
     kubernetes_manifest.noebs_project,
+    kubernetes_namespace_v1.edge,
   ]
 }

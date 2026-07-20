@@ -1,8 +1,10 @@
-version: v1
-name: buf.build/adonese/noebs
+version: v2
+modules:
+  - path: proto
+    name: buf.build/adonese/noebs
 lint:
   use:
-    - DEFAULT
+    - STANDARD
 breaking:
   use:
     - FILE

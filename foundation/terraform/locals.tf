@@ -50,10 +50,6 @@ locals {
       port     = 5432
       protocol = "postgres"
     }
-    "temporal-ui" = {
-      port     = 8080
-      protocol = "http"
-    }
     postgres = {
       port     = 5432
       protocol = "postgres"
@@ -90,9 +86,8 @@ locals {
       migration_role = "ebs-adapter-migrate"
     }
     "psp-webhook" = {
-      database       = "psp_webhook"
-      secret_name    = "psp-webhook-secrets"
-      migration_role = "psp-webhook-migrate"
+      database    = "wallet_ledger"
+      secret_name = "psp-webhook-secrets"
     }
     "admin-reporting" = {
       database       = "admin_reporting"
@@ -158,16 +153,17 @@ locals {
     "identity-auth-migrate-secrets",
     "card-vault-migrate-secrets",
     "ebs-adapter-migrate-secrets",
-    "psp-webhook-migrate-secrets",
     "admin-reporting-migrate-secrets",
     "notification-chat-migrate-secrets",
     "wallet-ledger-migrate-secrets",
-    "sops-age-key",
     "postgres-credentials",
+    "service-postgres-roles",
     "workload-auth-postgres-roles",
     "gateway-auth-postgres-roles",
     "internal-transport-platform",
     "temporal-postgres-credentials",
+    "temporal-server-credentials",
+    "temporal-namespace-bootstrap-credentials",
     "keycloak-postgres-credentials",
     "keycloak-secrets",
     "keycloak-transport-ca",
@@ -236,9 +232,6 @@ locals {
     "ebs-adapter-migrate-secrets" = [
       "secrets.yaml",
     ]
-    "psp-webhook-migrate-secrets" = [
-      "secrets.yaml",
-    ]
     "admin-reporting-migrate-secrets" = [
       "secrets.yaml",
     ]
@@ -248,24 +241,20 @@ locals {
     "wallet-ledger-migrate-secrets" = [
       "secrets.yaml",
     ]
-    "sops-age-key" = [
-      "age-key.txt",
-    ]
     "postgres-credentials" = [
-      "password",
+      "ca.pem",
       "tls.crt",
       "tls.key",
     ]
+    "service-postgres-roles" = [
+      "passwords.env",
+      "bootstrap.sql",
+      "roles.yaml",
+    ]
     "workload-auth-postgres-roles" = [
-      "migrate-password",
-      "runtime-password",
-      "cleanup-password",
       "roles.yaml",
     ]
     "gateway-auth-postgres-roles" = [
-      "migrate-password",
-      "runtime-password",
-      "cleanup-password",
       "roles.yaml",
     ]
     "internal-transport-platform" = [
@@ -273,6 +262,18 @@ locals {
     ]
     "temporal-postgres-credentials" = [
       "password",
+      "ca.pem",
+      "tls.crt",
+      "tls.key",
+    ]
+    "temporal-server-credentials" = [
+      "ca.pem",
+      "tls.crt",
+      "tls.key",
+    ]
+    "temporal-namespace-bootstrap-credentials" = [
+      "ca.pem",
+      "client-secret",
     ]
     "keycloak-postgres-credentials" = [
       "password",

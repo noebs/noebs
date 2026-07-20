@@ -19,11 +19,12 @@ func TestDepositFundingSourceCapturesMethodMetadata(t *testing.T) {
 		RawRequest: walletstore.RawJSON(`{
 			"metadata": {
 				"funding_source": {
-					"source_type": "bank_account",
-					"external_reference": "bank-ref-1",
+					"source_type": "attacker_account",
+					"external_reference": "attacker-ref",
+					"verification_status": "verified",
 					"supports_withdrawal": true,
-					"source_details": {"bank_code": "044", "account_last4": "4321"},
-					"withdrawal_method": {"account_number": "1234567890", "bank_code": "044"}
+					"source_details": {"bank_code": "evil"},
+					"withdrawal_method": {"account_number": "attacker"}
 				}
 			}
 		}`),
@@ -31,12 +32,17 @@ func TestDepositFundingSourceCapturesMethodMetadata(t *testing.T) {
 	providerPayload := map[string]any{
 		"metadata": map[string]any{
 			"funding_source": map[string]any{
-				"external_reference": "bank-ref-1",
+				"source_type":         "bank_account",
+				"external_reference":  "bank-ref-1",
+				"verification_status": "verified",
+				"supports_withdrawal": true,
+				"source_details":      map[string]any{"bank_code": "044", "account_last4": "4321"},
+				"withdrawal_method":   map[string]any{"account_number": "1234567890", "bank_code": "044"},
 			},
 		},
 	}
 
-	source, err := depositFundingSource(txn, walletID, "AED", sql.NullString{String: "provider-tx", Valid: true}, false, now, providerPayload)
+	source, err := depositFundingSource(txn, walletID, "AED", sql.NullString{String: "provider-tx", Valid: true}, now, providerPayload)
 	if err != nil {
 		t.Fatalf("deposit funding source: %v", err)
 	}
@@ -88,7 +94,7 @@ func TestDepositFundingSourceRequiresVerificationWhenProviderIdentifierMissing(t
 		}`),
 	}
 
-	source, err := depositFundingSource(txn, walletID, "NGN", sql.NullString{String: "provider-tx", Valid: true}, true, time.Now().UTC())
+	source, err := depositFundingSource(txn, walletID, "NGN", sql.NullString{String: "provider-tx", Valid: true}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("deposit funding source: %v", err)
 	}
@@ -98,9 +104,12 @@ func TestDepositFundingSourceRequiresVerificationWhenProviderIdentifierMissing(t
 	if source.VerifiedAt.Valid {
 		t.Fatalf("expected no verified_at for pending source, got %+v", source.VerifiedAt)
 	}
+	if source.SupportsWithdrawal || len(source.WithdrawalMethod) != 0 {
+		t.Fatalf("request metadata created withdrawal authority: %+v", source)
+	}
 }
 
-func TestDepositFundingSourcePreservesLegacyVerifiedPSPSource(t *testing.T) {
+func TestDepositFundingSourceWithoutProviderEvidenceIsPendingAndNonWithdrawable(t *testing.T) {
 	walletID := uuid.New()
 	txn := &walletstore.PSPTransaction{
 		TenantID:    "tenant",
@@ -108,7 +117,7 @@ func TestDepositFundingSourcePreservesLegacyVerifiedPSPSource(t *testing.T) {
 		RawRequest:  walletstore.RawJSON(`{"metadata": {"note": "legacy request"}}`),
 	}
 
-	source, err := depositFundingSource(txn, walletID, "USD", sql.NullString{String: "provider-tx", Valid: true}, false, time.Now().UTC())
+	source, err := depositFundingSource(txn, walletID, "USD", sql.NullString{String: "provider-tx", Valid: true}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("deposit funding source: %v", err)
 	}
@@ -118,79 +127,7 @@ func TestDepositFundingSourcePreservesLegacyVerifiedPSPSource(t *testing.T) {
 	if !source.ExternalReference.Valid || source.ExternalReference.String != "provider-tx" {
 		t.Fatalf("unexpected external reference: %+v", source.ExternalReference)
 	}
-	if source.VerificationStatus != "verified" {
-		t.Fatalf("expected legacy source to remain verified, got %q", source.VerificationStatus)
-	}
-}
-
-func TestSelectReturnToSourceSkipsIneligibleFundingSources(t *testing.T) {
-	walletID := uuid.New()
-	withdrawalMethod := json.RawMessage(`{"account_number":"1234567890","bank_code":"044"}`)
-	verifiedAt := sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	sources := []walletstore.FundingSource{
-		{
-			ID:                 1,
-			WalletID:           uuid.New(),
-			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
-			Currency:           "AED",
-			VerificationStatus: "verified",
-			VerifiedAt:         verifiedAt,
-			SupportsWithdrawal: true,
-			WithdrawalMethod:   withdrawalMethod,
-			TotalFunded:        10000,
-		},
-		{
-			ID:                 2,
-			WalletID:           walletID,
-			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
-			Currency:           "AED",
-			VerificationStatus: "pending",
-			SupportsWithdrawal: true,
-			WithdrawalMethod:   withdrawalMethod,
-			TotalFunded:        10000,
-		},
-		{
-			ID:                 3,
-			WalletID:           walletID,
-			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
-			Currency:           "AED",
-			VerificationStatus: "verified",
-			VerifiedAt:         verifiedAt,
-			SupportsWithdrawal: true,
-			WithdrawalMethod:   withdrawalMethod,
-			TotalFunded:        100,
-		},
-		{
-			ID:                 4,
-			WalletID:           walletID,
-			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
-			Currency:           "AED",
-			VerificationStatus: "verified",
-			SupportsWithdrawal: true,
-			WithdrawalMethod:   withdrawalMethod,
-			TotalFunded:        10000,
-		},
-		{
-			ID:                 5,
-			WalletID:           walletID,
-			PSPProvider:        sql.NullString{String: "bankpay", Valid: true},
-			Currency:           "AED",
-			VerificationStatus: "verified",
-			VerifiedAt:         verifiedAt,
-			SupportsWithdrawal: true,
-			WithdrawalMethod:   withdrawalMethod,
-			TotalFunded:        10000,
-		},
-	}
-
-	selected, details, err := selectReturnToSource(sources, walletID, "AED", 500, "bankpay")
-	if err != nil {
-		t.Fatalf("select return-to-source: %v", err)
-	}
-	if selected == nil || selected.ID != 5 {
-		t.Fatalf("expected fifth source, got %+v", selected)
-	}
-	if details["account_number"] != "1234567890" {
-		t.Fatalf("unexpected details: %+v", details)
+	if source.VerificationStatus != "pending" || source.VerifiedAt.Valid || source.SupportsWithdrawal || len(source.WithdrawalMethod) != 0 {
+		t.Fatalf("source without provider evidence gained withdrawal authority: %+v", source)
 	}
 }

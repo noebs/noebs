@@ -23,22 +23,21 @@ func TestWorkflowRequestsRejectInvalidOrMismatchedTenantBeforeTemporal(t *testin
 		run  func(string) error
 	}{
 		{"deposit", func(tenantID string) error {
-			_, err := server.RequestDeposit(ctx, &walletv1.DepositRequest{
-				TenantId:        tenantID,
-				ClientReference: "deposit-ref",
-				ProviderCode:    "noop",
-				WalletId:        uuid.NewString(),
-				OwnerType:       "user",
-				OwnerId:         "42",
-				Amount:          100,
-				Currency:        "USD",
+			_, err := server.RequestDeposit(ctx, &walletv1.RequestDepositRequest{
+				TenantId:       tenantID,
+				IdempotencyKey: "deposit-ref",
+				ProviderCode:   "noop",
+				WalletId:       uuid.NewString(),
+				Amount:         100,
+				Currency:       "USD",
 			})
 			return err
 		}},
 		{"p2p", func(tenantID string) error {
-			_, err := server.RequestP2PTransfer(ctx, &walletv1.P2PTransferRequest{
+			_, err := server.RequestP2PTransfer(ctx, &walletv1.RequestP2PTransferRequest{
 				TenantId:       tenantID,
 				IdempotencyKey: "p2p-ref",
+				ReferenceId:    "p2p-ref",
 				Currency:       "USD",
 				FromWalletId:   uuid.NewString(),
 				ToWalletId:     uuid.NewString(),
@@ -51,16 +50,21 @@ func TestWorkflowRequestsRejectInvalidOrMismatchedTenantBeforeTemporal(t *testin
 			return err
 		}},
 		{"withdrawal", func(tenantID string) error {
-			_, err := server.RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
-				TenantId:          tenantID,
-				ClientReference:   "withdrawal-ref",
-				ProviderCode:      "noop",
-				WalletId:          uuid.NewString(),
-				Amount:            100,
-				Currency:          "USD",
-				OwnerType:         "user",
-				OwnerId:           "42",
-				HoldExpirySeconds: 60,
+			allowReturn := true
+			approvalRequired := false
+			_, err := server.RequestWithdrawal(ctx, &walletv1.RequestWithdrawalRequest{
+				TenantId:            tenantID,
+				IdempotencyKey:      "withdrawal-ref",
+				ClientReference:     "withdrawal-ref",
+				ProviderCode:        "noop",
+				WalletId:            uuid.NewString(),
+				Amount:              100,
+				Currency:            "USD",
+				OwnerType:           "user",
+				OwnerId:             "42",
+				AllowReturnToSource: &allowReturn,
+				HoldExpirySeconds:   60,
+				ApprovalRequired:    &approvalRequired,
 			})
 			return err
 		}},
@@ -103,34 +107,30 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "deposit-client-reference",
+			name: "deposit-idempotency",
 			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestDeposit(ctx, &walletv1.DepositRequest{
-					TenantId:        "tenant",
-					ClientReference: " \t ",
-					ProviderCode:    "noop",
-					WalletId:        uuid.NewString(),
-					OwnerType:       "user",
-					OwnerId:         "42",
-					Amount:          100,
-					Currency:        "USD",
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestDeposit(ctx, &walletv1.RequestDepositRequest{
+					TenantId:       "tenant",
+					IdempotencyKey: " \t ",
+					ProviderCode:   "noop",
+					WalletId:       uuid.NewString(),
+					Amount:         100,
+					Currency:       "USD",
 				})
 				return err
 			},
-			wantErr: walletstore.ErrMissingClientReference,
+			wantErr: walletstore.ErrMissingIdempotencyKey,
 		},
 		{
 			name: "deposit-provider",
 			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestDeposit(ctx, &walletv1.DepositRequest{
-					TenantId:        "tenant",
-					ClientReference: "deposit-ref",
-					ProviderCode:    " \t ",
-					WalletId:        uuid.NewString(),
-					OwnerType:       "user",
-					OwnerId:         "42",
-					Amount:          100,
-					Currency:        "USD",
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestDeposit(ctx, &walletv1.RequestDepositRequest{
+					TenantId:       "tenant",
+					IdempotencyKey: "deposit-ref",
+					ProviderCode:   " \t ",
+					WalletId:       uuid.NewString(),
+					Amount:         100,
+					Currency:       "USD",
 				})
 				return err
 			},
@@ -139,7 +139,7 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 		{
 			name: "withdrawal-currency",
 			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestWithdrawal(ctx, &walletv1.RequestWithdrawalRequest{
 					TenantId:          "tenant",
 					ClientReference:   "withdrawal-ref",
 					ProviderCode:      "noop",
@@ -157,7 +157,7 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 		{
 			name: "p2p-idempotency-and-reference",
 			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.P2PTransferRequest{
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.RequestP2PTransferRequest{
 					TenantId:       "tenant",
 					IdempotencyKey: " \t ",
 					ReferenceId:    " \t ",
@@ -177,9 +177,10 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 		{
 			name: "p2p-to-owner",
 			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.P2PTransferRequest{
+				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.RequestP2PTransferRequest{
 					TenantId:       "tenant",
 					IdempotencyKey: "p2p-ref",
+					ReferenceId:    "p2p-ref",
 					Currency:       "USD",
 					FromWalletId:   uuid.NewString(),
 					ToWalletId:     uuid.NewString(),

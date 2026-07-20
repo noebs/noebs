@@ -807,7 +807,7 @@ func WalletDetailPage(data WalletDetailView) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div class=\"table-responsive\"><table class=\"table table-striped table-sm\"><thead class=\"thead-dark\"><tr><th>ID</th><th>Type</th><th>Provider</th><th>Currency</th><th>Status</th><th>Active</th><th>Total Withdrawn</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<div class=\"table-responsive\"><table class=\"table table-striped table-sm\"><thead class=\"thead-dark\"><tr><th>ID</th><th>Type</th><th>Provider</th><th>Currency</th><th>Funding source</th><th>Active</th><th>Total Withdrawn</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -869,9 +869,9 @@ func WalletDetailPage(data WalletDetailView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var55 string
-					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(dest.OwnershipStatus)
+					templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(dest.LinkedFundingSourceID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 173, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 173, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 					if templ_7745c5c3_Err != nil {

@@ -50,5 +50,14 @@ secrets.decrypted.yaml
 /deploy/docker/keycloak/tls.crt
 /deploy/docker/keycloak/tls.key
 /deploy/docker/temporal/postgres-password.txt
-/deploy/docker/postgres/bootstrap.secrets.yaml
+/deploy/docker/temporal/ca.pem
+/deploy/docker/temporal/postgres-tls.crt
+/deploy/docker/temporal/postgres-tls.key
+/deploy/docker/temporal/tls.crt
+/deploy/docker/temporal/tls.key
+/deploy/docker/temporal/namespace-bootstrap-client-secret.txt
+/deploy/docker/postgres/service-role-passwords.env
+/deploy/docker/postgres/ca.pem
+/deploy/docker/postgres/tls.crt
+/deploy/docker/postgres/tls.key
 /deploy/docker/secrets/*.secrets.yaml

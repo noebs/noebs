@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -33,11 +33,11 @@ func validateKubernetesDeploymentCommand() error {
 }
 
 func validateDeploymentRoot(root string) error {
-	return validateDeploymentRootWithDecrypt(root, decryptSopsFile)
+	return validateDeploymentRootWithDecrypt(root, readPlainDeploymentYAML)
 }
 
 func validateKubernetesDeploymentRoot(root string) error {
-	return validateKubernetesDeploymentRootWithDecrypt(root, decryptSopsFile)
+	return validateKubernetesDeploymentRootWithDecrypt(root, readPlainDeploymentYAML)
 }
 
 func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFunc) error {
@@ -53,11 +53,7 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	}
 
 	configPath := filepath.Join(root, "config.docker.yaml")
-	ageKeyPath := filepath.Join(root, ".sops", "age-key.txt")
 	if err := requireReadableFile("config.docker.yaml", configPath); err != nil {
-		return err
-	}
-	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
 		return err
 	}
 
@@ -65,10 +61,20 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	if err != nil {
 		return err
 	}
-	if err := validateDeploymentBootstrapSecret(root, decrypt, ageKeyPath); err != nil {
+	if err := validatePlainSecretFile("Temporal Postgres password", filepath.Join(root, "deploy", "docker", "temporal", "postgres-password.txt")); err != nil {
 		return err
 	}
-	if err := validatePlainSecretFile("Temporal Postgres password", filepath.Join(root, "deploy", "docker", "temporal", "postgres-password.txt")); err != nil {
+	if err := validateDockerTemporalTLS(root); err != nil {
+		return err
+	}
+	if err := validateDockerTemporalPostgresTLS(root); err != nil {
+		return err
+	}
+	bootstrapSecret, err := readRequiredSecretValue("Temporal namespace bootstrap client secret", filepath.Join(root, "deploy", "docker", "temporal", "namespace-bootstrap-client-secret.txt"))
+	if err != nil {
+		return err
+	}
+	if _, err := requireCanonicalReleaseSecret("Temporal namespace bootstrap client secret", bootstrapSecret); err != nil {
 		return err
 	}
 	if err := validatePlainSecretFile("Keycloak Postgres password", filepath.Join(root, "deploy", "docker", "keycloak", "postgres-password.txt")); err != nil {
@@ -80,10 +86,20 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	if err := validateDockerKeycloakTLS(root); err != nil {
 		return err
 	}
+	databaseCA, err := validateDockerPostgresTLS(root)
+	if err != nil {
+		return err
+	}
 	if err := validateKeycloakConfig(filepath.Join(root, "deploy", "docker", "keycloak", "keycloak.conf"), false); err != nil {
 		return err
 	}
+	if err := validatePostgresProvisioningSQLFile(filepath.Join(root, "deploy", "docker", "postgres", "001-service-databases.sql")); err != nil {
+		return err
+	}
 	if err := validateExactDockerReleaseFiles(root); err != nil {
+		return err
+	}
+	if err := validateDockerDatabaseRoleCredentials(root, configMap, "", databaseCA, decrypt); err != nil {
 		return err
 	}
 
@@ -95,7 +111,7 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 		return errors.New("no service configs found under deploy/docker/services")
 	}
 	for _, serviceFile := range serviceFiles {
-		if err := validateDeploymentService(root, configMap, serviceFile, ageKeyPath, decrypt); err != nil {
+		if err := validateDeploymentService(root, configMap, serviceFile, "", decrypt); err != nil {
 			return err
 		}
 	}
@@ -135,17 +151,13 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 
 	configPath := filepath.Join(root, "config.yaml")
 	tenantCatalogPath := filepath.Join(root, "tenant-catalog.yaml")
-	ageKeyPath := filepath.Join(root, ".sops", "age-key.txt")
 	if err := requireReadableFile("config.yaml", configPath); err != nil {
-		return err
-	}
-	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
 		return err
 	}
 	if err := requireReadableFile("tenant catalog", tenantCatalogPath); err != nil {
 		return err
 	}
-	if err := validateKubernetesPlatformInputs(root, ageKeyPath, decrypt); err != nil {
+	if err := validateKubernetesPlatformInputs(root, "", decrypt); err != nil {
 		return err
 	}
 
@@ -153,10 +165,14 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	if err != nil {
 		return err
 	}
-	if err := validateKubernetesReleaseServices(root, configMap, ageKeyPath, decrypt); err != nil {
+	if err := validateRenderedKubernetesReleaseServices(root, configMap, decrypt); err != nil {
 		return err
 	}
 	return validateKubernetesReleaseManifest(root)
+}
+
+func readPlainDeploymentYAML(path, _ string) ([]byte, error) {
+	return readPlaintextSecrets(path)
 }
 
 func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymentDecryptFunc) error {
@@ -164,7 +180,6 @@ func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymen
 		label string
 		path  string
 	}{
-		{label: "Noebs Postgres password", path: filepath.Join(root, "platform", "postgres-password.txt")},
 		{label: "Temporal Postgres password", path: filepath.Join(root, "platform", "temporal-postgres-password.txt")},
 		{label: "Keycloak Postgres password", path: filepath.Join(root, "platform", "keycloak-postgres-password.txt")},
 	} {
@@ -178,13 +193,25 @@ func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymen
 	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf"), true); err != nil {
 		return err
 	}
+	if err := validatePostgresProvisioningSQLFile(filepath.Join(root, "platform", "postgres-provisioning.sql")); err != nil {
+		return err
+	}
 	if err := validateSteadyKeycloakReconcilerConfig(filepath.Join(root, "platform", "keycloak-reconciler-config.yaml")); err != nil {
 		return err
 	}
-	if _, err := readWorkloadAuthDatabaseCredentials(root, ageKeyPath, decrypt); err != nil {
+	workload, err := readWorkloadAuthDatabaseCredentials(root, ageKeyPath, decrypt)
+	if err != nil {
 		return err
 	}
-	if _, err := readGatewayAuthDatabaseCredentials(root, ageKeyPath, decrypt); err != nil {
+	gateway, err := readGatewayAuthDatabaseCredentials(root, ageKeyPath, decrypt)
+	if err != nil {
+		return err
+	}
+	service, err := readServicePostgresCredentials(root, ageKeyPath, decrypt)
+	if err != nil {
+		return err
+	}
+	if err := validateAllPostgresRolePasswords(service, workload, gateway); err != nil {
 		return err
 	}
 	if _, err := readInternalTransportPlatformCredentials(root, ageKeyPath, decrypt); err != nil {
@@ -201,6 +228,12 @@ type internalTransportPlatformCredentials struct {
 	KeycloakPostgresPrivateKey  string `yaml:"keycloak_postgres_private_key"`
 	KeycloakCertificate         string `yaml:"keycloak_certificate"`
 	KeycloakPrivateKey          string `yaml:"keycloak_private_key"`
+	TemporalPostgresCertificate string `yaml:"temporal_postgres_certificate"`
+	TemporalPostgresPrivateKey  string `yaml:"temporal_postgres_private_key"`
+	TemporalCertificate         string `yaml:"temporal_certificate"`
+	TemporalPrivateKey          string `yaml:"temporal_private_key"`
+	EdgeCertificate             string `yaml:"edge_certificate"`
+	EdgePrivateKey              string `yaml:"edge_private_key"`
 }
 
 func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (internalTransportPlatformCredentials, error) {
@@ -226,12 +259,18 @@ func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt d
 	if err := postgres.ValidateIdentity("postgres"); err != nil {
 		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Postgres transport identity: %w", err)
 	}
+	if err := validateServerCertificateIdentity(values.PostgresCertificate, "postgres", "postgres.noebs.svc", "postgres.noebs.svc.cluster.local"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Postgres transport identity: %w", err)
+	}
 	keycloakPostgres := transportauth.Config{
 		CACertificate: strings.TrimSpace(values.CACertificate),
 		Certificate:   values.KeycloakPostgresCertificate,
 		PrivateKey:    values.KeycloakPostgresPrivateKey,
 	}
 	if err := keycloakPostgres.ValidateIdentity("keycloak-postgres"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Keycloak Postgres transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(values.KeycloakPostgresCertificate, "keycloak-postgres", "keycloak-postgres.noebs.svc", "keycloak-postgres.noebs.svc.cluster.local"); err != nil {
 		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Keycloak Postgres transport identity: %w", err)
 	}
 	keycloak := transportauth.Config{
@@ -241,6 +280,42 @@ func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt d
 	}
 	if err := keycloak.ValidateIdentity("keycloak"); err != nil {
 		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Keycloak transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(values.KeycloakCertificate, "keycloak", "keycloak.noebs.svc", "keycloak.noebs.svc.cluster.local"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Keycloak transport identity: %w", err)
+	}
+	temporalPostgres := transportauth.Config{
+		CACertificate: strings.TrimSpace(values.CACertificate),
+		Certificate:   values.TemporalPostgresCertificate,
+		PrivateKey:    values.TemporalPostgresPrivateKey,
+	}
+	if err := temporalPostgres.ValidateIdentity("temporal-postgres"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Temporal Postgres transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(values.TemporalPostgresCertificate, "temporal-postgres", "temporal-postgres.noebs.svc", "temporal-postgres.noebs.svc.cluster.local"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Temporal Postgres transport identity: %w", err)
+	}
+	temporal := transportauth.Config{
+		CACertificate: strings.TrimSpace(values.CACertificate),
+		Certificate:   values.TemporalCertificate,
+		PrivateKey:    values.TemporalPrivateKey,
+	}
+	if err := temporal.ValidateIdentity("temporal-frontend"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Temporal transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(values.TemporalCertificate, "temporal-frontend", "temporal-frontend.noebs.svc", "temporal-frontend.noebs.svc.cluster.local"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Temporal transport identity: %w", err)
+	}
+	edge := transportauth.Config{
+		CACertificate: strings.TrimSpace(values.CACertificate),
+		Certificate:   values.EdgeCertificate,
+		PrivateKey:    values.EdgePrivateKey,
+	}
+	if err := edge.ValidateIdentity(edgeTransportIdentity); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate edge transport identity: %w", err)
+	}
+	if err := validateClientCertificateIdentity(values.EdgeCertificate, edgeTransportIdentity); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate edge transport identity: %w", err)
 	}
 	values.CACertificate = postgres.CACertificate
 	return values, nil
@@ -267,6 +342,57 @@ func validateDockerKeycloakPostgresTLS(root string) error {
 	if err := config.ValidateIdentity("keycloak-postgres"); err != nil {
 		return fmt.Errorf("validate Docker Keycloak Postgres transport identity: %w", err)
 	}
+	if err := validateServerCertificateIdentity(certificate, "keycloak-postgres"); err != nil {
+		return fmt.Errorf("validate Docker Keycloak Postgres transport identity: %w", err)
+	}
+	return nil
+}
+
+func validateDockerTemporalTLS(root string) error {
+	directory := filepath.Join(root, "deploy", "docker", "temporal")
+	ca, err := readRequiredSecretText("Temporal transport CA certificate", filepath.Join(directory, "ca.pem"))
+	if err != nil {
+		return err
+	}
+	certificate, err := readRequiredSecretText("Temporal TLS certificate", filepath.Join(directory, "tls.crt"))
+	if err != nil {
+		return err
+	}
+	privateKey, err := readRequiredSecretText("Temporal TLS private key", filepath.Join(directory, "tls.key"))
+	if err != nil {
+		return err
+	}
+	config := transportauth.Config{CACertificate: ca, Certificate: certificate, PrivateKey: privateKey}
+	if err := config.ValidateIdentity("temporal-frontend"); err != nil {
+		return fmt.Errorf("validate Docker Temporal transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(certificate, "temporal-frontend"); err != nil {
+		return fmt.Errorf("validate Docker Temporal transport identity: %w", err)
+	}
+	return nil
+}
+
+func validateDockerTemporalPostgresTLS(root string) error {
+	directory := filepath.Join(root, "deploy", "docker", "temporal")
+	ca, err := readRequiredSecretText("Temporal transport CA certificate", filepath.Join(directory, "ca.pem"))
+	if err != nil {
+		return err
+	}
+	certificate, err := readRequiredSecretText("Temporal Postgres TLS certificate", filepath.Join(directory, "postgres-tls.crt"))
+	if err != nil {
+		return err
+	}
+	privateKey, err := readRequiredSecretText("Temporal Postgres TLS private key", filepath.Join(directory, "postgres-tls.key"))
+	if err != nil {
+		return err
+	}
+	config := transportauth.Config{CACertificate: ca, Certificate: certificate, PrivateKey: privateKey}
+	if err := config.ValidateIdentity("temporal-postgres"); err != nil {
+		return fmt.Errorf("validate Docker Temporal Postgres transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(certificate, "temporal-postgres"); err != nil {
+		return fmt.Errorf("validate Docker Temporal Postgres transport identity: %w", err)
+	}
 	return nil
 }
 
@@ -285,6 +411,9 @@ func validateDockerKeycloakTLS(root string) error {
 	}
 	config := transportauth.Config{CACertificate: caCertificate, Certificate: certificate, PrivateKey: privateKey}
 	if err := config.ValidateIdentity("keycloak"); err != nil {
+		return fmt.Errorf("validate Docker Keycloak transport identity: %w", err)
+	}
+	if err := validateServerCertificateIdentity(certificate, "keycloak"); err != nil {
 		return fmt.Errorf("validate Docker Keycloak transport identity: %w", err)
 	}
 	postgresCertificate, err := readDockerKeycloakFile(root, "Keycloak Postgres TLS certificate", "postgres-tls.crt")
@@ -333,16 +462,16 @@ func readWorkloadAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploy
 		return preparedWorkloadDatabase{}, fmt.Errorf("parse workload authentication Postgres role credentials: %w", err)
 	}
 	credentials := preparedWorkloadDatabase{
-		migratePassword: strings.TrimSpace(values.MigratePassword),
-		runtimePassword: strings.TrimSpace(values.RuntimePassword),
-		cleanupPassword: strings.TrimSpace(values.CleanupPassword),
+		migratePassword: values.MigratePassword,
+		runtimePassword: values.RuntimePassword,
+		cleanupPassword: values.CleanupPassword,
 	}
 	for label, value := range map[string]string{
 		"migrate_password": credentials.migratePassword,
 		"runtime_password": credentials.runtimePassword,
 		"cleanup_password": credentials.cleanupPassword,
 	} {
-		if _, err := prepareWorkloadDatabasePassword(label, value, strings.NewReader("unused")); err != nil {
+		if _, err := prepareWorkloadDatabasePassword(label, value); err != nil {
 			return preparedWorkloadDatabase{}, err
 		}
 	}
@@ -374,9 +503,9 @@ func readGatewayAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploym
 		return preparedGatewayAuthRelease{}, fmt.Errorf("parse gateway authentication Postgres role credentials: %w", err)
 	}
 	credentials := preparedGatewayAuthRelease{
-		migratePassword: strings.TrimSpace(values.MigratePassword),
-		runtimePassword: strings.TrimSpace(values.RuntimePassword),
-		cleanupPassword: strings.TrimSpace(values.CleanupPassword),
+		migratePassword: values.MigratePassword,
+		runtimePassword: values.RuntimePassword,
+		cleanupPassword: values.CleanupPassword,
 	}
 	for label, value := range map[string]string{
 		"migrate_password": credentials.migratePassword,
@@ -396,6 +525,30 @@ func readGatewayAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploym
 	return credentials, nil
 }
 
+func readServicePostgresCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (map[string]string, error) {
+	path := filepath.Join(root, "platform", "service-postgres-roles.secrets.yaml")
+	if err := requireReadableFile("service Postgres role credentials", path); err != nil {
+		return nil, err
+	}
+	payload, err := decrypt(path, ageKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt service Postgres role credentials: %w", err)
+	}
+	var values struct {
+		Passwords map[string]string `yaml:"passwords"`
+	}
+	decoder := yaml.NewDecoder(strings.NewReader(string(payload)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&values); err != nil {
+		return nil, fmt.Errorf("parse service Postgres role credentials: %w", err)
+	}
+	passwords, err := prepareServicePostgresPasswords(values.Passwords)
+	if err != nil {
+		return nil, err
+	}
+	return passwords, nil
+}
+
 func validateKubernetesReleaseServices(root string, configMap map[string]interface{}, ageKeyPath string, decrypt deploymentDecryptFunc) error {
 	if err := validateExactKubernetesReleaseFiles(root); err != nil {
 		return err
@@ -408,6 +561,20 @@ func validateKubernetesReleaseServices(root string, configMap map[string]interfa
 		}
 	}
 	return validateKubernetesReleaseCoherence(root, configMap, ageKeyPath, decrypt)
+}
+
+func validateRenderedKubernetesReleaseServices(root string, configMap map[string]interface{}, read deploymentDecryptFunc) error {
+	if err := validateExactRenderedKubernetesReleaseFiles(root); err != nil {
+		return err
+	}
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		servicePath := filepath.Join(root, "services", serviceName+".yaml")
+		secretPath := filepath.Join(root, "secrets", serviceSecretFileName(serviceName))
+		if err := validateDeploymentServiceWithSecretPath(configMap, servicePath, secretPath, "", read); err != nil {
+			return err
+		}
+	}
+	return validateKubernetesReleaseCoherence(root, configMap, "", read)
 }
 
 func validateExactKubernetesReleaseFiles(root string) error {
@@ -432,7 +599,6 @@ func validateExactKubernetesReleaseFiles(root string) error {
 	}
 
 	expectedPlatformFiles := map[string]bool{
-		"postgres-password.txt":                     true,
 		"temporal-postgres-password.txt":            true,
 		"keycloak-postgres-password.txt":            true,
 		"ghcr-dockerconfigjson":                     true,
@@ -440,6 +606,8 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		"keycloak-reconciler-config.yaml":           true,
 		"workload-auth-postgres-roles.secrets.yaml": true,
 		"gateway-auth-postgres-roles.secrets.yaml":  true,
+		"service-postgres-roles.secrets.yaml":       true,
+		"postgres-provisioning.sql":                 true,
 		"internal-transport.secrets.yaml":           true,
 	}
 	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
@@ -462,6 +630,50 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		return err
 	}
 	return nil
+}
+
+func validateExactRenderedKubernetesReleaseFiles(root string) error {
+	expectedRootEntries := map[string]bool{
+		"config.yaml":           true,
+		"tenant-catalog.yaml":   true,
+		"release-manifest.yaml": true,
+		"platform":              true,
+		"secrets":               true,
+		"services":              true,
+	}
+	if err := rejectUnexpectedDeploymentEntries("rendered Kubernetes", "root entry", root, expectedRootEntries); err != nil {
+		return err
+	}
+
+	expectedPlatformFiles := map[string]bool{
+		"temporal-postgres-password.txt":            true,
+		"keycloak-postgres-password.txt":            true,
+		"ghcr-dockerconfigjson":                     true,
+		"keycloak.conf":                             true,
+		"keycloak-reconciler-config.yaml":           true,
+		"workload-auth-postgres-roles.secrets.yaml": true,
+		"gateway-auth-postgres-roles.secrets.yaml":  true,
+		"service-postgres-roles.secrets.yaml":       true,
+		"postgres-provisioning.sql":                 true,
+		"internal-transport.secrets.yaml":           true,
+	}
+	if err := rejectUnexpectedDeploymentEntries("rendered Kubernetes", "platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
+		return err
+	}
+
+	expectedServiceFiles := make(map[string]bool, len(kubernetesSecretReleaseServiceNames))
+	for _, serviceName := range kubernetesSecretReleaseServiceNames {
+		expectedServiceFiles[serviceName+".yaml"] = true
+	}
+	if err := rejectUnexpectedDeploymentEntries("rendered Kubernetes", "service config file", filepath.Join(root, "services"), expectedServiceFiles); err != nil {
+		return err
+	}
+
+	expectedSecretFiles := make(map[string]bool, len(kubernetesServiceSecretSources))
+	for _, source := range kubernetesServiceSecretSources {
+		expectedSecretFiles[source.fileName] = true
+	}
+	return rejectUnexpectedDeploymentEntries("rendered Kubernetes", "service secret file", filepath.Join(root, "secrets"), expectedSecretFiles)
 }
 
 func validateSteadyKeycloakReconcilerConfig(path string) error {
@@ -610,78 +822,42 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 	return nil
 }
 
-func validatePSPSecretMap(noebs map[string]interface{}, tenantID string) error {
+func validatePSPSecretMap(noebs map[string]interface{}, defaultTenantID string) error {
 	pspMap := getMap(noebs, "psp")
 	if len(pspMap) == 0 {
 		return errors.New("missing noebs.psp")
 	}
-	tenantMap := getMap(pspMap, tenantID)
-	if len(tenantMap) == 0 {
-		return fmt.Errorf("missing noebs.psp.%s", tenantID)
+	if len(getMap(pspMap, defaultTenantID)) == 0 {
+		return fmt.Errorf("missing noebs.psp.%s", defaultTenantID)
 	}
-	for providerCode, rawProvider := range tenantMap {
-		providerMap, ok := rawProvider.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("noebs.psp.%s.%s must be a map", tenantID, providerCode)
+
+	for _, tenantID := range sortedMapKeys(pspMap) {
+		tenantMap, ok := pspMap[tenantID].(map[string]interface{})
+		if !ok || len(tenantMap) == 0 {
+			return fmt.Errorf("noebs.psp.%s must contain providers", tenantID)
 		}
-		for _, key := range []string{"api_key", "api_secret", "webhook_secret", "webhook_public_key"} {
-			if strings.TrimSpace(firstString(providerMap, key)) == "" {
-				return fmt.Errorf("noebs.psp.%s.%s missing %s", tenantID, providerCode, key)
+		for _, providerCode := range sortedMapKeys(tenantMap) {
+			providerMap, ok := tenantMap[providerCode].(map[string]interface{})
+			if !ok {
+				return fmt.Errorf("noebs.psp.%s.%s must be a map", tenantID, providerCode)
+			}
+			for _, key := range []string{"api_key", "api_secret", "webhook_secret", "webhook_public_key"} {
+				if strings.TrimSpace(firstString(providerMap, key)) == "" {
+					return fmt.Errorf("noebs.psp.%s.%s missing %s", tenantID, providerCode, key)
+				}
 			}
 		}
-		return nil
 	}
-	return fmt.Errorf("missing noebs.psp.%s provider", tenantID)
+	return nil
 }
 
-func validateDeploymentBootstrapSecret(root string, decrypt deploymentDecryptFunc, ageKeyPath string) error {
-	secretPath := filepath.Join(root, "deploy", "docker", "postgres", "bootstrap.secrets.yaml")
-	if err := requireReadableFile("Postgres bootstrap secret", secretPath); err != nil {
-		return err
+func sortedMapKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
 	}
-	payload, err := decrypt(secretPath, ageKeyPath)
-	if err != nil {
-		return fmt.Errorf("decrypt Postgres bootstrap secret: %w", err)
-	}
-	secretMap, err := parseYAMLMap(secretPath, payload)
-	if err != nil {
-		return err
-	}
-	noebs := getMap(secretMap, "noebs")
-	if noebs == nil {
-		return errors.New("postgres bootstrap secret missing noebs")
-	}
-	if err := rejectLegacyDatabasePath(noebs); err != nil {
-		return fmt.Errorf("postgres bootstrap database config: %w", err)
-	}
-	dbURL := firstString(noebs, "db_url")
-	if err := validateDatabaseURLPassword("Postgres bootstrap db_url", dbURL); err != nil {
-		return err
-	}
-	return rejectPlaceholders("Postgres bootstrap secret", noebs)
-}
-
-func validateDatabaseURLPassword(label, value string) error {
-	_, err := databaseURLPassword(label, value)
-	return err
-}
-
-func databaseURLPassword(label, value string) (string, error) {
-	if strings.TrimSpace(value) == "" {
-		return "", fmt.Errorf("%s is required", label)
-	}
-	parsed, err := url.Parse(value)
-	if err != nil {
-		return "", fmt.Errorf("%s parse: %w", label, err)
-	}
-	if parsed.User == nil {
-		return "", fmt.Errorf("%s missing user info", label)
-	}
-	password, ok := parsed.User.Password()
-	if !ok || strings.TrimSpace(password) == "" {
-		return "", fmt.Errorf("%s missing password", label)
-	}
-	return password, nil
+	sort.Strings(keys)
+	return keys
 }
 
 func validatePlainSecretFile(label, path string) error {

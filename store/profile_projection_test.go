@@ -110,8 +110,8 @@ func TestIdentitySchemaContainsNoLocalCredentialAuthority(t *testing.T) {
 		WHERE is_applied`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 101 {
-		t.Fatalf("identity schema version = %d, want 101", version)
+	if version != 1 {
+		t.Fatalf("identity schema version = %d, want 1", version)
 	}
 	rows, err := store.DB.QueryContext(ctx, `SELECT column_name
 		FROM information_schema.columns

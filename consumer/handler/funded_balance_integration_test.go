@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -36,30 +35,44 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 		}
 		t.Fatalf("start postgres: %v", err)
 	}
-	databaseName := fmt.Sprintf("funded_balance_%d", time.Now().UnixNano())
-	dbURL, err := postgres.CreateDatabase(ctx, databaseName)
+	const cardDatabaseName = "card_vault"
+	cardDBURL, err := postgres.CreateDatabaseForRole(ctx, cardDatabaseName, "card_vault_migrate")
 	if err != nil {
-		t.Fatalf("create database: %v", err)
+		t.Fatalf("create card-vault database: %v", err)
 	}
-	db, err := store.OpenFromConfig(dbURL, store.DriverPostgres)
+	cardDB, err := store.OpenFromConfig(cardDBURL, store.DriverPostgres)
 	if err != nil {
-		t.Fatalf("open database: %v", err)
+		t.Fatalf("open card-vault database: %v", err)
+	}
+	const ebsDatabaseName = "ebs_adapter"
+	ebsDBURL, err := postgres.CreateDatabaseForRole(ctx, ebsDatabaseName, "ebs_adapter_migrate")
+	if err != nil {
+		t.Fatalf("create ebs-adapter database: %v", err)
+	}
+	ebsDB, err := store.OpenFromConfig(ebsDBURL, store.DriverPostgres)
+	if err != nil {
+		t.Fatalf("open ebs-adapter database: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = db.Close()
-		_ = postgres.DropDatabase(context.Background(), databaseName)
+		_ = cardDB.Close()
+		_ = ebsDB.Close()
+		_ = postgres.DropDatabase(context.Background(), cardDatabaseName)
+		_ = postgres.DropDatabase(context.Background(), ebsDatabaseName)
 		_ = postgres.Terminate(context.Background())
 	})
 
 	const tenantID = "tenant-funded-balance"
-	for _, scope := range []string{store.MigrationScopeCardVault, store.MigrationScopeEBSAdapter} {
-		if err := store.MigrateScope(ctx, db, scope); err != nil {
-			t.Fatalf("migrate %s: %v", scope, err)
-		}
+	if err := store.MigrateScope(ctx, cardDB, store.MigrationScopeCardVault); err != nil {
+		t.Fatalf("migrate card-vault: %v", err)
 	}
-	storeSvc := store.New(db, store.WithDataKey("funded-balance-test-data-key"))
-	provisionHandlerTestTenant(t, ctx, storeSvc, tenantID, "Funded Balance Tenant")
-	vaultService := &consumer.Service{Store: storeSvc}
+	if err := store.MigrateScope(ctx, ebsDB, store.MigrationScopeEBSAdapter); err != nil {
+		t.Fatalf("migrate ebs-adapter: %v", err)
+	}
+	cardStore := store.New(cardDB, store.WithDataKey("funded-balance-test-data-key"))
+	ebsStore := store.New(ebsDB, store.WithDataKey("funded-balance-test-data-key"))
+	provisionHandlerTestTenant(t, ctx, cardStore, tenantID, "Funded Balance Tenant")
+	provisionHandlerTestTenant(t, ctx, ebsStore, tenantID, "Funded Balance Tenant")
+	vaultService := &consumer.Service{Store: cardStore}
 	first := enrollHandlerTestCard(t, vaultService, tenantID, 101, "4242420000004242", "Daily")
 	second := enrollHandlerTestCard(t, vaultService, tenantID, 101, "4242421111114242", "Backup")
 	foreign := enrollHandlerTestCard(t, vaultService, tenantID, 202, "4242429999994242", "Foreign")
@@ -92,7 +105,7 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 		vaultHost: mustURLHost(t, vaultHTTP.URL),
 	}
 	ebsService := &consumer.Service{
-		Store:           storeSvc,
+		Store:           ebsStore,
 		HTTPClient:      &http.Client{Transport: transport, Timeout: 10 * time.Second},
 		WorkloadSigners: testEBSAdapterWorkloadSigners(t),
 		NoebsConfig: ebs_fields.NoebsConfig{
@@ -270,7 +283,7 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 		t.Fatalf("invalid requests crossed a boundary: vault %d->%d rail %d->%d", beforeVault, vaultClaims.Load(), beforeRail, fixture.totalBalanceCalls())
 	}
 
-	assertFundedPersistenceHasNoSecrets(t, db, tenantID, "4242420000004242", success.CardAuthorization.IPINBlock)
+	assertFundedPersistenceHasNoSecrets(t, cardDB, ebsDB, tenantID, "4242420000004242", success.CardAuthorization.IPINBlock)
 }
 
 type fundedBalanceFixture struct {
@@ -507,18 +520,18 @@ func stringField(body map[string]any, key string) string {
 	return value
 }
 
-func assertFundedPersistenceHasNoSecrets(t *testing.T, db *store.DB, tenantID, pan, ipinBlock string) {
+func assertFundedPersistenceHasNoSecrets(t *testing.T, cardDB, ebsDB *store.DB, tenantID, pan, ipinBlock string) {
 	t.Helper()
 	var claims, transactions, events string
-	if err := db.GetContext(context.Background(), &claims, db.Rebind(`SELECT COALESCE(string_agg(row_to_json(c)::text, ''), '')
+	if err := cardDB.GetContext(context.Background(), &claims, cardDB.Rebind(`SELECT COALESCE(string_agg(row_to_json(c)::text, ''), '')
 		FROM card_funded_operation_claims c WHERE tenant_id = ?`), tenantID); err != nil {
 		t.Fatalf("read funded claims: %v", err)
 	}
-	if err := db.GetContext(context.Background(), &transactions, db.Rebind(`SELECT COALESCE(string_agg(payload::text, ''), '')
+	if err := ebsDB.GetContext(context.Background(), &transactions, ebsDB.Rebind(`SELECT COALESCE(string_agg(payload::text, ''), '')
 		FROM transactions WHERE tenant_id = ?`), tenantID); err != nil {
 		t.Fatalf("read funded transactions: %v", err)
 	}
-	if err := db.GetContext(context.Background(), &events, db.Rebind(`SELECT COALESCE(string_agg(payload::text, ''), '')
+	if err := ebsDB.GetContext(context.Background(), &events, ebsDB.Rebind(`SELECT COALESCE(string_agg(payload::text, ''), '')
 		FROM transaction_events WHERE tenant_id = ?`), tenantID); err != nil {
 		t.Fatalf("read funded events: %v", err)
 	}
@@ -530,7 +543,7 @@ func assertFundedPersistenceHasNoSecrets(t *testing.T, db *store.DB, tenantID, p
 		}
 	}
 	var unmasked int
-	if err := db.GetContext(context.Background(), &unmasked, db.Rebind(`SELECT COUNT(*) FROM transactions
+	if err := ebsDB.GetContext(context.Background(), &unmasked, ebsDB.Rebind(`SELECT COUNT(*) FROM transactions
 		WHERE tenant_id = ? AND pan = ?`), tenantID, pan); err != nil {
 		t.Fatalf("inspect transaction PAN: %v", err)
 	}

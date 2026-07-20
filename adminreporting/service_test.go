@@ -27,8 +27,8 @@ func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	dbName := "admin_reporting_projection_" + time.Now().Format("20060102150405")
-	dbURL, err := container.CreateDatabase(ctx, dbName)
+	const dbName = "admin_reporting"
+	dbURL, err := container.CreateDatabaseForRole(ctx, dbName, "admin_reporting_migrate")
 	if err != nil {
 		t.Fatalf("create database: %v", err)
 	}

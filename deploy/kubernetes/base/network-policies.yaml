@@ -54,8 +54,6 @@ spec:
     - from:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: api-gateway}
-        - podSelector:
-            matchLabels: {app.kubernetes.io/name: notification-chat}
       ports:
         - {protocol: TCP, port: 8080}
 ---
@@ -202,6 +200,7 @@ spec:
                   - notification-chat
                   - wallet-ledger
                   - wallet-worker
+                  - wallet-api
                   - noebs-workload-auth-migrate
                   - noebs-workload-auth-cleanup
                   - noebs-gateway-auth-migrate
@@ -209,7 +208,6 @@ spec:
                   - noebs-identity-auth-migrate
                   - noebs-card-vault-migrate
                   - noebs-ebs-adapter-migrate
-                  - noebs-psp-webhook-migrate
                   - noebs-admin-reporting-migrate
                   - noebs-notification-chat-migrate
                   - noebs-wallet-ledger-migrate
@@ -266,15 +264,11 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels: {app.kubernetes.io/name: psp-webhook}
-        - podSelector:
             matchLabels: {app.kubernetes.io/name: wallet-ledger}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: wallet-worker}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: temporal-namespace-bootstrap}
-        - podSelector:
-            matchLabels: {app.kubernetes.io/name: temporal-ui}
       ports:
         - {protocol: TCP, port: 7233}
 ---
@@ -310,6 +304,14 @@ spec:
             matchLabels: {app.kubernetes.io/name: api-gateway}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: keycloak-reconciler}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: temporal-namespace-bootstrap}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-ledger}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: wallet-worker}
       ports:
         - {protocol: TCP, port: 8443}
 ---
@@ -349,6 +351,7 @@ spec:
           - notification-chat
           - wallet-ledger
           - wallet-worker
+          - wallet-api
           - noebs-workload-auth-migrate
           - noebs-workload-auth-cleanup
           - noebs-gateway-auth-migrate
@@ -356,7 +359,6 @@ spec:
           - noebs-identity-auth-migrate
           - noebs-card-vault-migrate
           - noebs-ebs-adapter-migrate
-          - noebs-psp-webhook-migrate
           - noebs-admin-reporting-migrate
           - noebs-notification-chat-migrate
           - noebs-wallet-ledger-migrate
@@ -413,7 +415,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [psp-webhook, wallet-ledger, wallet-worker, temporal-namespace-bootstrap, temporal-ui]
+        values: [wallet-ledger, wallet-worker, temporal-namespace-bootstrap]
   policyTypes: [Egress]
   egress:
     - to:
@@ -421,6 +423,24 @@ spec:
             matchLabels: {app.kubernetes.io/name: temporal}
       ports:
         - {protocol: TCP, port: 7233}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: temporal-keycloak-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [temporal, temporal-namespace-bootstrap, wallet-ledger, wallet-worker]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 8443}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -522,21 +542,6 @@ spec:
               - key: app.kubernetes.io/name
                 operator: In
                 values: [card-vault, notification-chat]
-      ports:
-        - {protocol: TCP, port: 8080}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: notification-http-egress
-spec:
-  podSelector:
-    matchLabels: {app.kubernetes.io/name: notification-chat}
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/name: identity-auth}
       ports:
         - {protocol: TCP, port: 8080}
 ---

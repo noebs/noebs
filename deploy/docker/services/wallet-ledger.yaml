@@ -2,3 +2,4 @@ noebs:
   service_role: wallet-ledger
   otel_service_name: wallet-ledger
   db_driver: pgx
+  temporal_client_id: noebs-temporal-wallet-ledger

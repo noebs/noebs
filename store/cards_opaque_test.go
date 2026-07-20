@@ -45,7 +45,7 @@ func TestOpaqueIdentifiersRequireExactCanonicalUUIDs(t *testing.T) {
 
 func TestOpaqueCardLifecycleIsTenantScopedAndPANIndependent(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeCardVault)
 	const (
 		tenantA = "tenant-opaque-a"
 		tenantB = "tenant-opaque-b"
@@ -180,7 +180,7 @@ func TestOpaqueCardLifecycleIsTenantScopedAndPANIndependent(t *testing.T) {
 
 func TestOpaqueCardEnrollmentIntentExpiryReplayAndConflict(t *testing.T) {
 	ctx := context.Background()
-	db := newValidationDB(t)
+	db := newMigrationAuthorityDB(t, MigrationScopeCardVault)
 	const tenantID = "tenant-opaque-intents"
 	if err := MigrateScope(ctx, db, MigrationScopeCardVault); err != nil {
 		t.Fatalf("migrate card vault: %v", err)

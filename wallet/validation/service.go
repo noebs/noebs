@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	walletfees "github.com/adonese/noebs/wallet/fees"
-	walletlimits "github.com/adonese/noebs/wallet/limits"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -31,7 +30,6 @@ type P2PValidationResult struct {
 	Amount       int64
 	Fee          *walletfees.FeeResult
 	TotalDebit   int64
-	Limits       *walletlimits.CheckResult
 }
 
 type P2PRule func(ctx context.Context, req P2PValidationRequest, fromWallet, toWallet *walletstore.Wallet) error
@@ -55,7 +53,6 @@ type DepositValidationResult struct {
 	Amount             int64
 	Fee                *walletfees.FeeResult
 	NetAmount          int64
-	Limits             *walletlimits.CheckResult
 	SupportsWithdrawal bool
 }
 
@@ -79,7 +76,6 @@ type WithdrawalValidationResult struct {
 	Amount            int64
 	Fee               *walletfees.FeeResult
 	TotalDebit        int64
-	Limits            *walletlimits.CheckResult
 	PayoutAmount      int64
 	PayoutCurrency    string
 	WalletDebitAmount int64
@@ -204,18 +200,12 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 	if err != nil {
 		return nil, err
 	}
-	totalDebit := req.Amount + feeResult.TotalFee
-	if fromWallet.AvailableBalance < totalDebit {
-		return nil, walletstore.ErrInsufficientFunds
-	}
-
-	limitEnforcer := walletlimits.Enforcer{Store: s.Store}
-	limitResult, err := limitEnforcer.Check(ctx, req.TenantID, req.FromWalletID, req.TransactionType, req.Currency, req.Amount)
+	totalDebit, err := checkedAddInt64(req.Amount, feeResult.TotalFee)
 	if err != nil {
 		return nil, err
 	}
-	if !limitResult.Allowed {
-		return nil, LimitExceededError{Reason: limitResult.Reason}
+	if fromWallet.AvailableBalance < totalDebit {
+		return nil, walletstore.ErrInsufficientFunds
 	}
 
 	for _, rule := range s.P2PRules {
@@ -234,7 +224,6 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 		Amount:       req.Amount,
 		Fee:          feeResult,
 		TotalDebit:   totalDebit,
-		Limits:       limitResult,
 	}, nil
 }
 
@@ -274,18 +263,12 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	if err != nil {
 		return nil, err
 	}
-	netAmount := req.Amount - feeResult.TotalFee
-	if netAmount < 0 {
-		return nil, ErrFeeExceedsAmount
-	}
-
-	limitEnforcer := walletlimits.Enforcer{Store: s.Store}
-	limitResult, err := limitEnforcer.Check(ctx, req.TenantID, req.WalletID, req.TransactionType, req.Currency, req.Amount)
+	netAmount, err := checkedSubtractInt64(req.Amount, feeResult.TotalFee)
 	if err != nil {
 		return nil, err
 	}
-	if !limitResult.Allowed {
-		return nil, LimitExceededError{Reason: limitResult.Reason}
+	if netAmount < 0 {
+		return nil, ErrFeeExceedsAmount
 	}
 
 	for _, rule := range s.DepositRules {
@@ -303,7 +286,6 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 		Amount:             req.Amount,
 		Fee:                feeResult,
 		NetAmount:          netAmount,
-		Limits:             limitResult,
 		SupportsWithdrawal: cfg.SupportsWithdrawal,
 	}, nil
 }
@@ -349,18 +331,12 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 	if err != nil {
 		return nil, err
 	}
-	totalDebit := walletDebitAmount + feeResult.TotalFee
-	if wallet.AvailableBalance < totalDebit {
-		return nil, walletstore.ErrInsufficientFunds
-	}
-
-	limitEnforcer := walletlimits.Enforcer{Store: s.Store}
-	limitResult, err := limitEnforcer.Check(ctx, req.TenantID, req.WalletID, req.TransactionType, wallet.Currency, walletDebitAmount)
+	totalDebit, err := checkedAddInt64(walletDebitAmount, feeResult.TotalFee)
 	if err != nil {
 		return nil, err
 	}
-	if !limitResult.Allowed {
-		return nil, LimitExceededError{Reason: limitResult.Reason}
+	if wallet.AvailableBalance < totalDebit {
+		return nil, walletstore.ErrInsufficientFunds
 	}
 
 	for _, rule := range s.WithdrawalRules {
@@ -378,7 +354,6 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 		Amount:            walletDebitAmount,
 		Fee:               feeResult,
 		TotalDebit:        totalDebit,
-		Limits:            limitResult,
 		PayoutAmount:      req.Amount,
 		PayoutCurrency:    req.Currency,
 		WalletDebitAmount: walletDebitAmount,
@@ -479,6 +454,11 @@ func ValidatePSPConfigBase(cfg *walletstore.PSPConfig) error {
 	}
 	if len(cfg.EnabledCurrencies) == 0 {
 		return ErrPSPConfigMissingCurrencies
+	}
+	if !cfg.IdempotencyHeaderName.Valid ||
+		strings.TrimSpace(cfg.IdempotencyHeaderName.String) == "" ||
+		strings.TrimSpace(cfg.IdempotencyHeaderName.String) != cfg.IdempotencyHeaderName.String {
+		return ErrPSPConfigMissingIdempotency
 	}
 	return nil
 }

@@ -7,7 +7,6 @@ set -euo pipefail
 CONFIG_FILE="/app/config.yaml"
 SERVICE_FILE="/app/service.yaml"
 SECRETS_FILE="/app/secrets.yaml"
-AGE_KEY_FILE="/app/.sops/age-key.txt"
 
 require_file() {
     local label="$1"
@@ -21,7 +20,6 @@ require_file() {
 require_file "config" "$CONFIG_FILE"
 require_file "service config" "$SERVICE_FILE"
 require_file "secrets" "$SECRETS_FILE"
-require_file "age key" "$AGE_KEY_FILE"
 
 echo "Starting noebs service runtime..."
 exec noebs

@@ -11,16 +11,26 @@ const (
 	OperationWithdrawal Operation = "withdrawal"
 )
 
-type DepositVerification struct {
-	ProviderTxID string
-	Amount       int64
-	Currency     string
-	Status       string
-	Metadata     map[string]any
+type DepositRequest struct {
+	ClientReference string
+	IdempotencyKey  string
+	Amount          int64
+	Currency        string
+	Metadata        map[string]any
+}
+
+type DepositResult struct {
+	ClientReference string
+	ProviderTxID    string
+	Amount          int64
+	Currency        string
+	Status          string
+	RawResponse     map[string]any
 }
 
 type PayoutRequest struct {
 	ClientReference string
+	IdempotencyKey  string
 	Amount          int64
 	Currency        string
 	Destination     map[string]any
@@ -29,6 +39,8 @@ type PayoutRequest struct {
 
 type PayoutResult struct {
 	ProviderTxID string
+	Amount       int64
+	Currency     string
 	Status       string
 	RawResponse  map[string]any
 }
@@ -41,10 +53,16 @@ type TxStatus struct {
 	RawResponse  map[string]any
 }
 
+type TransactionLookup struct {
+	ProviderTxID    string
+	IdempotencyKey  string
+	ClientReference string
+}
+
 type Provider interface {
-	VerifyDeposit(ctx context.Context, txID string) (*DepositVerification, error)
+	CreateDeposit(ctx context.Context, req DepositRequest) (*DepositResult, error)
 	SendPayout(ctx context.Context, req PayoutRequest) (*PayoutResult, error)
-	GetTransactionStatus(ctx context.Context, txID string) (*TxStatus, error)
+	GetTransactionStatus(ctx context.Context, lookup TransactionLookup) (*TxStatus, error)
 	VerifyWebhook(payload []byte, signature string) bool
 	Code() string
 	SupportedOperations() []Operation

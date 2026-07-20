@@ -731,16 +731,17 @@ func TestMergeManualTransferStatusUpdatePreservesApprovalEvidence(t *testing.T) 
 func TestCreateManualTransferValidation(t *testing.T) {
 	s := &Store{}
 	transfer := ManualTransfer{
-		TenantID:              "tenant",
-		WorkflowID:            "wf-1",
-		IdempotencyKey:        "idem-1",
-		TransferType:          ManualTransferTypeDebit,
-		WalletID:              sql.NullString{String: uuid.NewString(), Valid: true},
-		Amount:                100,
-		Currency:              "USD",
-		Reason:                "withdrawal",
-		Status:                "pending",
-		RequestedByOperatorID: 42,
+		TenantID:               "tenant",
+		WorkflowID:             "wf-1",
+		IdempotencyKey:         "idem-1",
+		TransferType:           ManualTransferTypeDebit,
+		WalletID:               sql.NullString{String: uuid.NewString(), Valid: true},
+		Amount:                 100,
+		Currency:               "USD",
+		Reason:                 "withdrawal",
+		Status:                 "pending",
+		RequestedByOperatorID:  42,
+		ApprovalTimeoutSeconds: 3600,
 	}
 
 	_, err := s.CreateManualTransfer(t.Context(), ManualTransfer{})
@@ -825,22 +826,29 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	bad.RequestedByOperatorID = 0
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingRequesterID)
+
+	bad = transfer
+	bad.ApprovalTimeoutSeconds = 0
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingApprovalTimeout)
 }
 
 func TestValidateManualTransferCreateReplay(t *testing.T) {
 	requested := ManualTransfer{
-		TenantID:              "tenant",
-		WorkflowID:            "wf-1",
-		IdempotencyKey:        "idem-1",
-		TransferType:          ManualTransferTypeDebit,
-		WalletID:              sql.NullString{String: uuid.NewString(), Valid: true},
-		Amount:                100,
-		Currency:              "USD",
-		Reason:                "withdrawal",
-		Status:                ManualTransferStatusPending,
-		RequestedByOperatorID: 42,
-		PSPProvider:           sql.NullString{String: "bank", Valid: true},
-		PSPReference:          sql.NullString{String: "ref-1", Valid: true},
+		TenantID:               "tenant",
+		WorkflowID:             "wf-1",
+		IdempotencyKey:         "idem-1",
+		TransferType:           ManualTransferTypeDebit,
+		WalletID:               sql.NullString{String: uuid.NewString(), Valid: true},
+		Amount:                 100,
+		Currency:               "USD",
+		Reason:                 "withdrawal",
+		Status:                 ManualTransferStatusPending,
+		RequestedByOperatorID:  42,
+		PSPProvider:            sql.NullString{String: "bank", Valid: true},
+		PSPReference:           sql.NullString{String: "ref-1", Valid: true},
+		ApprovalTimeoutSeconds: 3600,
+		DecisionDeadlineAt:     time.Now().UTC().Add(time.Hour),
 	}
 	existing := requested
 	existing.Status = ManualTransferStatusCompleted
@@ -863,6 +871,12 @@ func TestValidateManualTransferCreateReplay(t *testing.T) {
 		{"requested-by", func(t *ManualTransfer) { t.RequestedByOperatorID = 99 }},
 		{"psp-provider", func(t *ManualTransfer) { t.PSPProvider = sql.NullString{String: "other", Valid: true} }},
 		{"psp-reference", func(t *ManualTransfer) { t.PSPReference = sql.NullString{String: "other", Valid: true} }},
+		{"approval-timeout", func(t *ManualTransfer) { t.ApprovalTimeoutSeconds++ }},
+	}
+	retried := requested
+	retried.DecisionDeadlineAt = retried.DecisionDeadlineAt.Add(time.Hour)
+	if err := ValidateManualTransferCreateReplay(&existing, retried); err != nil {
+		t.Fatalf("same timeout retry with regenerated deadline: %v", err)
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1138,12 +1152,19 @@ func TestValidatePSPStatusTransition(t *testing.T) {
 	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusSuccess, "complete"), ErrInvalidStatus)
 	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusSuccess, PSPStatusFailed), ErrInvalidStatusTransition)
 	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusFailed, PSPStatusPending), ErrInvalidStatusTransition)
+	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusPending, PSPStatusInitiated), ErrInvalidStatusTransition)
+	assertErrorIs(t, ValidatePSPStatusTransition(PSPStatusHeld, PSPStatusInitiated), ErrInvalidStatusTransition)
+	if err := ValidatePSPStatusTransition(PSPStatusHeld, PSPStatusProcessing); err != nil {
+		t.Fatalf("held polling transition: %v", err)
+	}
 }
 
 func TestValidatePSPStatusUpdate(t *testing.T) {
 	existing := &PSPTransaction{
 		Status:           PSPStatusPending,
 		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		Amount:           100,
+		Currency:         "USD",
 	}
 	if err := ValidatePSPStatusUpdate(existing, PSPStatusUpdate{
 		Status:           PSPStatusSuccess,
@@ -1205,6 +1226,67 @@ func TestValidatePSPStatusUpdate(t *testing.T) {
 		ResponseCode: sql.NullString{String: "00", Valid: true},
 	}); err != nil {
 		t.Fatalf("ValidatePSPStatusUpdate(fill terminal details) error = %v", err)
+	}
+}
+
+func TestPSPWorkflowSignalContract(t *testing.T) {
+	existing := &PSPTransaction{
+		Status:           PSPStatusPending,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		Amount:           100,
+		Currency:         "USD",
+	}
+	update := PSPStatusUpdate{
+		Status:           PSPStatusSuccess,
+		PSPTransactionID: sql.NullString{String: "psp-1", Valid: true},
+		RawResponse:      RawJSON(`{"status":"success"}`),
+	}
+	signal := &PSPWorkflowSignal{
+		ProviderTxID: "psp-1",
+		Amount:       100,
+		Currency:     "USD",
+		Status:       PSPStatusSuccess,
+		RawResponse:  RawJSON(`{"status":"success"}`),
+	}
+	payload, err := encodePSPWorkflowSignal(existing, update, signal)
+	if err != nil {
+		t.Fatalf("encode workflow signal: %v", err)
+	}
+	parsed, err := ParsePSPWorkflowSignal(payload)
+	if err != nil {
+		t.Fatalf("parse workflow signal: %v", err)
+	}
+	if parsed.ProviderTxID != signal.ProviderTxID || parsed.Amount != signal.Amount || parsed.Currency != signal.Currency || parsed.Status != signal.Status {
+		t.Fatalf("parsed workflow signal = %+v, want %+v", parsed, *signal)
+	}
+
+	wrongStatus := *signal
+	wrongStatus.Status = PSPStatusFailed
+	if _, err := encodePSPWorkflowSignal(existing, update, &wrongStatus); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("wrong status signal error = %v, want %v", err, ErrInvalidStatusTransition)
+	}
+	wrongProviderID := *signal
+	wrongProviderID.ProviderTxID = "psp-2"
+	if _, err := encodePSPWorkflowSignal(existing, update, &wrongProviderID); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("wrong provider id signal error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	wrongResponse := *signal
+	wrongResponse.RawResponse = RawJSON(`{"status":"success","changed":true}`)
+	if _, err := encodePSPWorkflowSignal(existing, update, &wrongResponse); !errors.Is(err, ErrDuplicateTransaction) {
+		t.Fatalf("wrong raw response signal error = %v, want %v", err, ErrDuplicateTransaction)
+	}
+	wrongAmount := *signal
+	wrongAmount.Amount++
+	if _, err := encodePSPWorkflowSignal(existing, update, &wrongAmount); !errors.Is(err, ErrInvalidAmount) {
+		t.Fatalf("wrong amount signal error = %v, want %v", err, ErrInvalidAmount)
+	}
+	wrongCurrency := *signal
+	wrongCurrency.Currency = "AED"
+	if _, err := encodePSPWorkflowSignal(existing, update, &wrongCurrency); !errors.Is(err, ErrCurrencyMismatch) {
+		t.Fatalf("wrong currency signal error = %v, want %v", err, ErrCurrencyMismatch)
+	}
+	if _, err := ParsePSPWorkflowSignal(RawJSON(`{"status":"pending"}`)); !errors.Is(err, ErrInvalidStatusTransition) {
+		t.Fatalf("nonterminal durable signal error = %v, want %v", err, ErrInvalidStatusTransition)
 	}
 }
 
@@ -1278,6 +1360,10 @@ func TestRecordPSPInteractionValidation(t *testing.T) {
 		{"invalid-tenant", func(interaction *PSPInteraction) { interaction.TenantID = "default" }, ErrInvalidTenantID},
 		{"missing-provider", func(interaction *PSPInteraction) { interaction.PSPProvider = "" }, ErrMissingProviderCode},
 		{"missing-interaction-type", func(interaction *PSPInteraction) { interaction.InteractionType = "" }, ErrMissingInteractionType},
+		{"dispatch-missing-idempotency", func(interaction *PSPInteraction) { interaction.InteractionType = "payout_send" }, ErrMissingIdempotencyKey},
+		{"non-dispatch-idempotency", func(interaction *PSPInteraction) {
+			interaction.IdempotencyKey = sql.NullString{String: "ref-1", Valid: true}
+		}, ErrInvalidIdempotencyKey},
 	}
 
 	for _, tc := range cases {
@@ -1464,277 +1550,15 @@ func TestGetFundingSourceByIDValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingFundingSourceID)
 }
 
-func TestUpdateWithdrawalDestinationOwnershipValidation(t *testing.T) {
-	s := &Store{}
-	now := time.Now().UTC()
-
-	err := s.UpdateWithdrawalDestinationOwnership(t.Context(), "", 1, "verified", sql.NullTime{Time: now, Valid: true}, now)
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "default", 1, "verified", sql.NullTime{Time: now, Valid: true}, now)
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 0, "verified", sql.NullTime{Time: now, Valid: true}, now)
-	assertErrorIs(t, err, ErrMissingDestinationID)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "", sql.NullTime{Time: now, Valid: true}, now)
-	assertErrorIs(t, err, ErrMissingStatus)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "complete", sql.NullTime{Time: now, Valid: true}, now)
-	assertErrorIs(t, err, ErrInvalidStatus)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{Time: now, Valid: true}, time.Time{})
-	assertErrorIs(t, err, ErrMissingUpdatedAt)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{}, now)
-	assertErrorIs(t, err, ErrMissingVerificationTime)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "verified", sql.NullTime{Valid: true}, now)
-	assertErrorIs(t, err, ErrMissingVerificationTime)
-
-	err = s.UpdateWithdrawalDestinationOwnership(t.Context(), "tenant", 1, "pending", sql.NullTime{Time: now, Valid: true}, now)
-	assertErrorIs(t, err, ErrInvalidVerificationTime)
-}
-
-func TestValidateWithdrawalDestinationOwnershipTransition(t *testing.T) {
-	now := time.Now().UTC()
-	verified := &WithdrawalDestination{
-		OwnershipStatus:     DestinationOwnershipStatusVerified,
-		OwnershipVerifiedAt: sql.NullTime{Time: now, Valid: true},
-	}
-	if err := ValidateWithdrawalDestinationOwnershipTransition(verified, *verified); err != nil {
-		t.Fatalf("verified ownership replay error = %v", err)
-	}
-
-	downgrade := *verified
-	downgrade.OwnershipStatus = DestinationOwnershipStatusPending
-	downgrade.OwnershipVerifiedAt = sql.NullTime{}
-	assertErrorIs(t, ValidateWithdrawalDestinationOwnershipTransition(verified, downgrade), ErrInvalidStatusTransition)
-
-	rewrite := *verified
-	rewrite.OwnershipVerifiedAt = sql.NullTime{Time: now.Add(time.Second), Valid: true}
-	assertErrorIs(t, ValidateWithdrawalDestinationOwnershipTransition(verified, rewrite), ErrInvalidStatusTransition)
-
-	pending := &WithdrawalDestination{OwnershipStatus: DestinationOwnershipStatusPending}
-	verifiedNext := *verified
-	if err := ValidateWithdrawalDestinationOwnershipTransition(pending, verifiedNext); err != nil {
-		t.Fatalf("pending to verified ownership transition error = %v", err)
-	}
-
-	assertErrorIs(t, ValidateWithdrawalDestinationOwnershipTransition(nil, verifiedNext), ErrDestinationNotFound)
-}
-
-func TestCreateOwnershipVerificationValidation(t *testing.T) {
-	s := &Store{}
-	now := time.Now().UTC()
-	base := OwnershipVerification{
-		TenantID:         "tenant",
-		DestinationID:    1,
-		VerificationType: "micro_deposit",
-		Status:           "pending",
-		Attempts:         0,
-		MaxAttempts:      3,
-		ExpiresAt:        now.Add(time.Hour),
-	}
-
-	_, err := s.CreateOwnershipVerification(t.Context(), OwnershipVerification{})
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	bad := base
-	bad.TenantID = "default"
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	bad = base
-	bad.DestinationID = 0
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingDestinationID)
-
-	bad = base
-	bad.VerificationType = ""
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingVerificationType)
-
-	bad = base
-	bad.Status = ""
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingStatus)
-
-	bad = base
-	bad.Status = "complete"
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrInvalidStatus)
-
-	bad = base
-	bad.Status = OwnershipVerificationStatusVerified
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrInvalidStatus)
-
-	bad = base
-	bad.MaxAttempts = 0
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingMaxAttempts)
-
-	bad = base
-	bad.ExpiresAt = time.Time{}
-	_, err = s.CreateOwnershipVerification(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingVerificationExpiry)
-}
-
-func TestValidateOwnershipVerificationDestination(t *testing.T) {
-	destination := &WithdrawalDestination{
-		ID:                          7,
-		TenantID:                    "tenant",
-		OwnershipStatus:             DestinationOwnershipStatusPending,
-		OwnershipVerificationMethod: sql.NullString{String: "micro_deposit", Valid: true},
-		IsActive:                    true,
-	}
-	verification := OwnershipVerification{
-		TenantID:         "tenant",
-		DestinationID:    7,
-		VerificationType: "micro_deposit",
-	}
-	if err := ValidateOwnershipVerificationDestination(destination, verification); err != nil {
-		t.Fatalf("ValidateOwnershipVerificationDestination() error = %v", err)
-	}
-
-	foreignTenant := *destination
-	foreignTenant.TenantID = "other"
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(&foreignTenant, verification), ErrDestinationNotFound)
-
-	foreignDestination := *destination
-	foreignDestination.ID = 8
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(&foreignDestination, verification), ErrDestinationNotFound)
-
-	inactive := *destination
-	inactive.IsActive = false
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(&inactive, verification), ErrDestinationNotFound)
-
-	verified := *destination
-	verified.OwnershipStatus = DestinationOwnershipStatusVerified
-	verified.OwnershipVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(&verified, verification), ErrInvalidStatusTransition)
-
-	missingMethod := *destination
-	missingMethod.OwnershipVerificationMethod = sql.NullString{}
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(&missingMethod, verification), ErrMissingVerificationType)
-
-	mismatchedMethod := *destination
-	mismatchedMethod.OwnershipVerificationMethod = sql.NullString{String: "document", Valid: true}
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(&mismatchedMethod, verification), ErrInvalidVerificationType)
-
-	assertErrorIs(t, ValidateOwnershipVerificationDestination(nil, verification), ErrDestinationNotFound)
-}
-
-func TestGetOwnershipVerificationValidation(t *testing.T) {
-	s := &Store{}
-	_, err := s.GetOwnershipVerification(t.Context(), "", 1)
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.GetOwnershipVerification(t.Context(), "default", 1)
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.GetOwnershipVerification(t.Context(), "tenant", 0)
-	assertErrorIs(t, err, ErrMissingVerificationID)
-}
-
-func TestUpdateOwnershipVerificationStatusValidation(t *testing.T) {
-	s := &Store{}
-	now := time.Now().UTC()
-
-	err := s.UpdateOwnershipVerificationStatus(t.Context(), "", 1, "verified", now)
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "default", 1, "verified", now)
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 0, "verified", now)
-	assertErrorIs(t, err, ErrMissingVerificationID)
-
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "", now)
-	assertErrorIs(t, err, ErrMissingStatus)
-
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "completed", now)
-	assertErrorIs(t, err, ErrInvalidStatus)
-
-	err = s.UpdateOwnershipVerificationStatus(t.Context(), "tenant", 1, "verified", time.Time{})
-	assertErrorIs(t, err, ErrMissingVerificationTime)
-}
-
-func TestValidateOwnershipVerificationStatusTransition(t *testing.T) {
-	if err := ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusPending, OwnershipVerificationStatusVerified); err != nil {
-		t.Fatalf("pending->verified transition error = %v", err)
-	}
-	if err := ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusVerified, OwnershipVerificationStatusVerified); err != nil {
-		t.Fatalf("verified replay transition error = %v", err)
-	}
-	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition("", OwnershipVerificationStatusVerified), ErrMissingStatus)
-	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusPending, OwnershipVerificationStatusPending), ErrInvalidStatusTransition)
-	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusVerified, OwnershipVerificationStatusFailed), ErrInvalidStatusTransition)
-	assertErrorIs(t, ValidateOwnershipVerificationStatusTransition(OwnershipVerificationStatusExpired, OwnershipVerificationStatusPending), ErrInvalidStatusTransition)
-}
-
-func TestValidateOwnershipVerificationCreateReplay(t *testing.T) {
-	expiresAt := time.Now().UTC().Add(time.Hour)
-	requested := OwnershipVerification{
-		TenantID:                "tenant",
-		DestinationID:           1,
-		VerificationType:        "micro_deposit",
-		Status:                  OwnershipVerificationStatusPending,
-		MicroDepositAmounts:     []int64{11, 22},
-		MicroDepositConfirmedAt: sql.NullTime{Time: expiresAt.Add(-time.Minute), Valid: true},
-		CardVerificationAmount:  sql.NullInt64{Int64: 33, Valid: true},
-		DocumentType:            sql.NullString{String: "passport", Valid: true},
-		DocumentURL:             sql.NullString{String: "s3://proof", Valid: true},
-		MaxAttempts:             3,
-		ExpiresAt:               expiresAt,
-		WorkflowID:              sql.NullString{String: "workflow-1", Valid: true},
-		ReferenceID:             sql.NullString{String: "reference-1", Valid: true},
-	}
-	existing := requested
-	existing.Status = OwnershipVerificationStatusVerified
-	existing.Attempts = 2
-	existing.CompletedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	if err := ValidateOwnershipVerificationCreateReplay(&existing, requested); err != nil {
-		t.Fatalf("ValidateOwnershipVerificationCreateReplay() error = %v", err)
-	}
-
-	cases := []struct {
-		name   string
-		mutate func(*OwnershipVerification)
-	}{
-		{"tenant", func(v *OwnershipVerification) { v.TenantID = "other" }},
-		{"destination", func(v *OwnershipVerification) { v.DestinationID = 2 }},
-		{"type", func(v *OwnershipVerification) { v.VerificationType = "document" }},
-		{"amounts", func(v *OwnershipVerification) { v.MicroDepositAmounts = []int64{44, 55} }},
-		{"confirmed-at", func(v *OwnershipVerification) { v.MicroDepositConfirmedAt = sql.NullTime{} }},
-		{"card-amount", func(v *OwnershipVerification) { v.CardVerificationAmount = sql.NullInt64{Int64: 34, Valid: true} }},
-		{"document-type", func(v *OwnershipVerification) { v.DocumentType = sql.NullString{String: "national_id", Valid: true} }},
-		{"document-url", func(v *OwnershipVerification) { v.DocumentURL = sql.NullString{String: "s3://other", Valid: true} }},
-		{"max-attempts", func(v *OwnershipVerification) { v.MaxAttempts = 5 }},
-		{"expiry", func(v *OwnershipVerification) { v.ExpiresAt = v.ExpiresAt.Add(time.Minute) }},
-		{"workflow", func(v *OwnershipVerification) { v.WorkflowID = sql.NullString{String: "workflow-2", Valid: true} }},
-		{"reference", func(v *OwnershipVerification) { v.ReferenceID = sql.NullString{String: "reference-2", Valid: true} }},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			replay := requested
-			tc.mutate(&replay)
-			assertErrorIs(t, ValidateOwnershipVerificationCreateReplay(&existing, replay), ErrDuplicateVerification)
-		})
-	}
-	assertErrorIs(t, ValidateOwnershipVerificationCreateReplay(nil, requested), ErrDuplicateVerification)
-}
-
 func TestWithdrawalDestinationValidation(t *testing.T) {
 	s := &Store{}
 	dest := WithdrawalDestination{
-		TenantID:           "tenant",
-		WalletID:           uuid.New(),
-		DestinationType:    "bank_account",
-		Currency:           "USD",
-		DestinationDetails: []byte(`{"account":"123"}`),
-		OwnershipStatus:    "pending",
+		TenantID:              "tenant",
+		WalletID:              uuid.New(),
+		DestinationType:       "bank_account",
+		Currency:              "USD",
+		DestinationDetails:    []byte(`{"account":"123"}`),
+		LinkedFundingSourceID: 1,
 	}
 
 	_, err := s.CreateWithdrawalDestination(t.Context(), WithdrawalDestination{})
@@ -1766,33 +1590,7 @@ func TestWithdrawalDestinationValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingDestinationDetails)
 
 	bad = dest
-	bad.OwnershipStatus = ""
-	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingStatus)
-
-	bad = dest
-	bad.OwnershipStatus = "complete"
-	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
-	assertErrorIs(t, err, ErrInvalidStatus)
-
-	bad = dest
-	bad.OwnershipStatus = DestinationOwnershipStatusVerified
-	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingVerificationTime)
-
-	bad = dest
-	bad.OwnershipStatus = DestinationOwnershipStatusVerified
-	bad.OwnershipVerifiedAt = sql.NullTime{Valid: true}
-	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingVerificationTime)
-
-	bad = dest
-	bad.OwnershipVerifiedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
-	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
-	assertErrorIs(t, err, ErrInvalidVerificationTime)
-
-	bad = dest
-	bad.IsReturnToSource = true
+	bad.LinkedFundingSourceID = 0
 	_, err = s.CreateWithdrawalDestination(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingFundingSourceID)
 
@@ -1830,14 +1628,18 @@ func TestValidateWithdrawalDestinationFundingSource(t *testing.T) {
 	dest := WithdrawalDestination{
 		TenantID:              "tenant",
 		WalletID:              walletID,
+		DestinationType:       "bank_account",
+		PSPProvider:           sql.NullString{String: "pay", Valid: true},
+		DestinationDetails:    []byte(`{"account_number":"1234567890"}`),
 		Currency:              "AED",
-		LinkedFundingSourceID: sql.NullInt64{Int64: 10, Valid: true},
-		IsReturnToSource:      true,
+		LinkedFundingSourceID: 10,
 	}
 	source := FundingSource{
 		ID:                 10,
 		TenantID:           "tenant",
 		WalletID:           walletID,
+		SourceType:         "bank_account",
+		PSPProvider:        sql.NullString{String: "pay", Valid: true},
 		Currency:           "AED",
 		VerificationStatus: "verified",
 		VerifiedAt:         sql.NullTime{Time: time.Now().UTC(), Valid: true},
@@ -1849,7 +1651,7 @@ func TestValidateWithdrawalDestinationFundingSource(t *testing.T) {
 	}
 
 	missingLink := dest
-	missingLink.LinkedFundingSourceID = sql.NullInt64{}
+	missingLink.LinkedFundingSourceID = 0
 	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(missingLink, nil), ErrMissingFundingSourceID)
 
 	otherWallet := source
@@ -1876,6 +1678,14 @@ func TestValidateWithdrawalDestinationFundingSource(t *testing.T) {
 	missingMethod := source
 	missingMethod.WithdrawalMethod = nil
 	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &missingMethod), ErrFundingSourceNotWithdrawable)
+
+	missingProvider := source
+	missingProvider.PSPProvider = sql.NullString{}
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(dest, &missingProvider), ErrMissingProviderCode)
+
+	substitutedDetails := dest
+	substitutedDetails.DestinationDetails = []byte(`{"account_number":"attacker"}`)
+	assertErrorIs(t, ValidateWithdrawalDestinationFundingSource(substitutedDetails, &source), ErrDestinationNotVerified)
 }
 
 func TestFundingSourceValidation(t *testing.T) {
@@ -2223,13 +2033,12 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 		Currency:  "AED",
 	}
 	destination := WithdrawalDestination{
-		ID:                  20,
-		TenantID:            "tenant",
-		WalletID:            walletID,
-		Currency:            "AED",
-		OwnershipStatus:     DestinationOwnershipStatusVerified,
-		OwnershipVerifiedAt: sql.NullTime{Time: time.Now().UTC(), Valid: true},
-		IsActive:            true,
+		ID:                    20,
+		TenantID:              "tenant",
+		WalletID:              walletID,
+		Currency:              "AED",
+		LinkedFundingSourceID: 30,
+		IsActive:              true,
 	}
 	link := LedgerWithdrawalDestinationLink{
 		TenantID:      "tenant",
@@ -2266,19 +2075,9 @@ func TestValidateWithdrawalDestinationLinkLedgerEntry(t *testing.T) {
 	inactive.IsActive = false
 	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &inactive, link), ErrDestinationNotFound)
 
-	pending := destination
-	pending.OwnershipStatus = DestinationOwnershipStatusPending
-	pending.OwnershipVerifiedAt = sql.NullTime{}
-	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &pending, link), ErrDestinationNotVerified)
-
-	missingVerificationTime := destination
-	missingVerificationTime.OwnershipVerifiedAt = sql.NullTime{}
-	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &missingVerificationTime, link), ErrMissingVerificationTime)
-
-	rejected := destination
-	rejected.OwnershipStatus = DestinationOwnershipStatusRejected
-	rejected.OwnershipVerifiedAt = sql.NullTime{}
-	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &rejected, link), ErrDestinationNotVerified)
+	unlinked := destination
+	unlinked.LinkedFundingSourceID = 0
+	assertErrorIs(t, ValidateWithdrawalDestinationLinkLedgerEntry(&entry, &unlinked, link), ErrDestinationNotVerified)
 
 	otherEntry := entry
 	otherEntry.ID = 11
@@ -2496,36 +2295,6 @@ func TestGetLimitsValidation(t *testing.T) {
 
 	_, err = s.GetLimits(t.Context(), "tenant", "basic", "withdrawal", "")
 	assertErrorIs(t, err, ErrMissingCurrency)
-}
-
-func TestGetDailyUsageValidation(t *testing.T) {
-	s := &Store{}
-	_, err := s.GetDailyUsage(t.Context(), "", uuid.New(), "withdrawal")
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.GetDailyUsage(t.Context(), "default", uuid.New(), "withdrawal")
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.GetDailyUsage(t.Context(), "tenant", uuid.Nil, "withdrawal")
-	assertErrorIs(t, err, ErrMissingWalletID)
-
-	_, err = s.GetDailyUsage(t.Context(), "tenant", uuid.New(), "")
-	assertErrorIs(t, err, ErrMissingTransactionType)
-}
-
-func TestGetMonthlyUsageValidation(t *testing.T) {
-	s := &Store{}
-	_, err := s.GetMonthlyUsage(t.Context(), "", uuid.New(), "withdrawal")
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.GetMonthlyUsage(t.Context(), "default", uuid.New(), "withdrawal")
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.GetMonthlyUsage(t.Context(), "tenant", uuid.Nil, "withdrawal")
-	assertErrorIs(t, err, ErrMissingWalletID)
-
-	_, err = s.GetMonthlyUsage(t.Context(), "tenant", uuid.New(), "")
-	assertErrorIs(t, err, ErrMissingTransactionType)
 }
 
 func TestListExchangeRatesValidation(t *testing.T) {

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,14 +17,13 @@ const (
 	defaultSecretsPath       = "/app/secrets.yaml"
 )
 
-var errMissingSopsAgeKeyFile = errors.New("missing SOPS age key file")
+var (
+	errMissingSopsAgeKeyFile  = errors.New("missing SOPS age key file")
+	errPlaintextSecretsIsSOPS = errors.New("plaintext secrets contain SOPS metadata")
+)
 
 func isRenderConfigCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-config"
-}
-
-func isRenderDatabasePasswordCommand() bool {
-	return len(os.Args) > 1 && os.Args[1] == "render-db-password"
 }
 
 func isValidateDeploymentCommand() bool {
@@ -40,8 +38,8 @@ func isRenderKubernetesSecretsCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-kubernetes-secrets"
 }
 
-func isRenderKeycloakTransportCACommand() bool {
-	return len(os.Args) > 1 && os.Args[1] == "render-keycloak-transport-ca"
+func isRenderEdgeInternalTransportCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "render-edge-internal-transport"
 }
 
 func isPrepareKubernetesReleaseCommand() bool {
@@ -50,17 +48,17 @@ func isPrepareKubernetesReleaseCommand() bool {
 
 func isConfigUtilityCommand() bool {
 	return isRenderConfigCommand() ||
-		isRenderDatabasePasswordCommand() ||
 		isValidateDeploymentCommand() ||
 		isValidateKubernetesDeploymentCommand() ||
 		isRenderKubernetesSecretsCommand() ||
-		isRenderKeycloakTransportCACommand() ||
+		isRenderEdgeInternalTransportCommand() ||
 		isRenderKeycloakBootstrapSecretsCommand() ||
 		isPrepareKubernetesReleaseCommand() ||
 		isReconcileKeycloakCommand() ||
 		isAssignKeycloakMembershipsCommand() ||
 		isLookupKeycloakSubjectCommand() ||
 		isDeleteKeycloakBootstrapCommand() ||
+		isEnsureTemporalNamespaceCommand() ||
 		isInternalHealthcheckCommand()
 }
 
@@ -99,22 +97,7 @@ func renderConfigFiles() error {
 		return fmt.Errorf("create runtime config dir: %w", err)
 	}
 
-	if err := writeDatabasePassword(noebs); err != nil {
-		return err
-	}
-
 	return nil
-}
-
-func renderDatabasePasswordFile() error {
-	noebs, _, err := loadMergedConfigForRender(false)
-	if err != nil {
-		return err
-	}
-	if firstString(noebs, "render_db_password_file") == "" {
-		return errors.New("render_db_password_file is required")
-	}
-	return writeDatabasePassword(noebs)
 }
 
 func loadMergedConfigForRender(requireServiceConfig bool) (map[string]interface{}, string, error) {
@@ -168,11 +151,9 @@ func loadMergedConfigForRender(requireServiceConfig bool) (map[string]interface{
 		}
 		configMap = mergeConfig(configMap, serviceConfigMap).(map[string]interface{})
 	}
-	configNoebs := getMap(configMap, "noebs")
-
 	secretsMap := map[string]interface{}{}
 	if secretsPath != "" {
-		decrypted, err := decryptSopsFile(secretsPath, firstString(configNoebs, "sops_age_key_file"))
+		decrypted, err := readRuntimeSecrets(secretsPath)
 		if err != nil {
 			return nil, "", err
 		}
@@ -187,6 +168,25 @@ func loadMergedConfigForRender(requireServiceConfig bool) (map[string]interface{
 		noebs = map[string]interface{}{}
 	}
 	return noebs, configPath, nil
+}
+
+func readRuntimeSecrets(path string) ([]byte, error) {
+	return readPlaintextSecrets(path)
+}
+
+func readPlaintextSecrets(path string) ([]byte, error) {
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read plaintext secrets %s: %w", path, err)
+	}
+	var document map[string]interface{}
+	if err := yaml.Unmarshal(payload, &document); err != nil {
+		return nil, fmt.Errorf("parse plaintext secrets %s: %w", path, err)
+	}
+	if _, encrypted := document[sopsMetadataKey]; encrypted {
+		return nil, errPlaintextSecretsIsSOPS
+	}
+	return payload, nil
 }
 
 func requiredExistingPath(label, path string) (string, error) {
@@ -321,36 +321,6 @@ func getMap(source map[string]interface{}, key string) map[string]interface{} {
 	}
 	if typed, ok := value.(map[string]interface{}); ok {
 		return typed
-	}
-	return nil
-}
-
-func writeDatabasePassword(noebs map[string]interface{}) error {
-	outputPath := firstString(noebs, "render_db_password_file")
-	if outputPath == "" {
-		return nil
-	}
-	dbURL := strings.TrimSpace(fmt.Sprint(noebs["db_url"]))
-	if dbURL == "" {
-		return fmt.Errorf("db_url is required to render database password")
-	}
-	parsed, err := url.Parse(dbURL)
-	if err != nil {
-		return fmt.Errorf("parse db_url: %w", err)
-	}
-	if parsed.User == nil {
-		return fmt.Errorf("db_url missing user info")
-	}
-	password, ok := parsed.User.Password()
-	if !ok || password == "" {
-		return fmt.Errorf("db_url missing password")
-	}
-
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
-		return fmt.Errorf("create db password dir: %w", err)
-	}
-	if err := os.WriteFile(outputPath, []byte(password), 0600); err != nil {
-		return fmt.Errorf("write db password: %w", err)
 	}
 	return nil
 }

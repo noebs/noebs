@@ -35,20 +35,8 @@ func TestResolveIdempotencyAndReference(t *testing.T) {
 			ref:     " \t ",
 			wantErr: walletstore.ErrMissingIdempotencyKey,
 		},
-		{
-			name:    "idempotency defaults from reference",
-			idem:    " \t ",
-			ref:     "ref-1",
-			wantID:  "ref-1",
-			wantRef: "ref-1",
-		},
-		{
-			name:    "reference defaults from idempotency",
-			idem:    "idem-1",
-			ref:     " \t ",
-			wantID:  "idem-1",
-			wantRef: "idem-1",
-		},
+		{name: "missing idempotency", idem: " \t ", ref: "ref-1", wantErr: walletstore.ErrMissingIdempotencyKey},
+		{name: "missing reference", idem: "idem-1", ref: " \t ", wantErr: walletstore.ErrMissingReferenceID},
 		{
 			name:    "explicit values preserved",
 			idem:    " idem-1 ",

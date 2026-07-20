@@ -35,28 +35,7 @@ func TestCurrentServiceRoleReadsConfig(t *testing.T) {
 }
 
 func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
-	roles := []serviceRole{
-		serviceRoleAPIGateway,
-		serviceRoleIdentityAuth,
-		serviceRoleCardVault,
-		serviceRoleEBSAdapter,
-		serviceRoleEBSAdapterEvents,
-		serviceRolePSPWebhook,
-		serviceRoleAdminReporting,
-		serviceRoleAdminReportingProjector,
-		serviceRoleNotification,
-		serviceRoleWalletAPI,
-		serviceRoleWalletLedger,
-		serviceRoleWalletWorker,
-		serviceRoleIdentityAuthMigrate,
-		serviceRoleCardVaultMigrate,
-		serviceRoleEBSAdapterMigrate,
-		serviceRolePSPWebhookMigrate,
-		serviceRoleAdminReportingMigrate,
-		serviceRoleNotificationMigrate,
-		serviceRoleWalletLedgerMigrate,
-	}
-	for _, role := range roles {
+	for _, role := range serviceRoleCatalog {
 		t.Run(string(role), func(t *testing.T) {
 			got, err := parseServiceRole(string(role))
 			if err != nil {
@@ -137,7 +116,6 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
 		serviceRoleEBSAdapterMigrate,
-		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
 		serviceRoleWalletLedgerMigrate,
@@ -164,7 +142,7 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 	if serviceRoleWalletAPI.opensDatabase() {
 		t.Fatalf("wallet-api role must not open the wallet-ledger database")
 	}
-	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable", "pgx"); err != nil {
+	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://gateway_auth_runtime:secret@postgres:5432/gateway_auth?sslmode=disable", "pgx"); err != nil {
 		t.Fatalf("api-gateway database error = %v", err)
 	}
 	if err := rejectLegacyDatabasePath(map[string]interface{}{"db_path": "/data/noebs.db"}); !errors.Is(err, errDatabaseNotAllowed) {
@@ -189,7 +167,6 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
 		serviceRoleEBSAdapterMigrate,
-		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
 		serviceRoleWalletLedgerMigrate,
@@ -227,8 +204,7 @@ func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
 		{role: serviceRoleEBSAdapter, want: serviceRoleEBSAdapter},
 		{role: serviceRoleEBSAdapterEvents, want: serviceRoleEBSAdapter},
 		{role: serviceRoleEBSAdapterMigrate, want: serviceRoleEBSAdapter},
-		{role: serviceRolePSPWebhook, want: serviceRolePSPWebhook},
-		{role: serviceRolePSPWebhookMigrate, want: serviceRolePSPWebhook},
+		{role: serviceRolePSPWebhook, want: serviceRoleWalletLedger},
 		{role: serviceRoleAdminReporting, want: serviceRoleAdminReporting},
 		{role: serviceRoleAdminReportingProjector, want: serviceRoleAdminReporting},
 		{role: serviceRoleAdminReportingMigrate, want: serviceRoleAdminReporting},
@@ -265,7 +241,6 @@ func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
 
 func TestServiceRoleTemporalOwnership(t *testing.T) {
 	temporalRoles := []serviceRole{
-		serviceRolePSPWebhook,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 	}
@@ -279,6 +254,7 @@ func TestServiceRoleTemporalOwnership(t *testing.T) {
 
 	noTemporalRoles := []serviceRole{
 		serviceRoleAPIGateway,
+		serviceRolePSPWebhook,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedgerMigrate,
 	}
@@ -291,20 +267,47 @@ func TestServiceRoleTemporalOwnership(t *testing.T) {
 	}
 }
 
-func validWalletRuntimeConfig() ebs_fields.NoebsConfig {
-	return ebs_fields.NoebsConfig{
-		Port:                             ":8080",
-		WalletEnabled:                    true,
-		TemporalEnabled:                  true,
-		TemporalHost:                     "temporal-frontend",
-		TemporalPort:                     "7233",
-		TemporalNamespace:                "default",
-		GRPCEnabled:                      true,
-		GRPCPort:                         ":9090",
-		WalletDefaultCurrency:            "SDG",
-		WalletHoldExpirySeconds:          3600,
-		WalletApprovalTimeoutSeconds:     3600,
-		WalletVerificationTimeoutSeconds: 86400,
+func runtimeConfigForRole(role serviceRole, cfg ebs_fields.NoebsConfig) ebs_fields.NoebsConfig {
+	if role.opensDatabase() || roleReceivesSignedHTTP(role) {
+		const databaseURL = "postgres://runtime:test@postgres:5432/runtime?sslmode=verify-full"
+		cfg.DatabaseURL = databaseURL
+		cfg.DatabaseCACertificate = testKeycloakCACertificate
+		if roleReceivesSignedHTTP(role) {
+			cfg.WorkloadAuth.NonceDatabaseURL = databaseURL
+		}
+	}
+	if !roleUsesInternalTransportIdentity(role) {
+		return cfg
+	}
+	cfg.InternalTransport = testInternalTransport.services[role]
+	if cfg.ServiceDiscovery == nil {
+		cfg.ServiceDiscovery = make(map[string]string, len(expectedHTTPServiceDiscoveryKeys()))
+	}
+	for _, service := range expectedHTTPServiceDiscoveryKeys() {
+		cfg.ServiceDiscovery[service] = "https://" + service + ":8080"
+	}
+	return cfg
+}
+
+func validWalletRuntimeConfig(role serviceRole) ebs_fields.NoebsConfig {
+	return runtimeConfigForRole(role, ebs_fields.NoebsConfig{
+		Port:                         ":8080",
+		WalletEnabled:                true,
+		TemporalEnabled:              true,
+		TemporalHost:                 "temporal-frontend",
+		TemporalPort:                 "7233",
+		TemporalNamespace:            "default",
+		TemporalServerName:           "temporal-frontend",
+		TemporalCACertificate:        testKeycloakCACertificate,
+		TemporalTokenURL:             "https://identity.example/realms/noebs/protocol/openid-connect/token",
+		TemporalClientID:             temporalLedgerClientID,
+		TemporalClientSecret:         "temporal-client-secret",
+		KeycloakCACertificate:        testKeycloakCACertificate,
+		GRPCEnabled:                  true,
+		GRPCPort:                     ":9090",
+		WalletDefaultCurrency:        "SDG",
+		WalletHoldExpirySeconds:      3600,
+		WalletApprovalTimeoutSeconds: 3600,
 		WalletManualTransferApprovalTimeoutSeconds: 86400,
 		WalletPSPPollerCron:                        "*/5 * * * *",
 		WalletPSPPollerBatchSize:                   100,
@@ -312,29 +315,35 @@ func validWalletRuntimeConfig() ebs_fields.NoebsConfig {
 		WalletReconciliationCron:                   "0 3 * * *",
 		WalletReconciliationBatchSize:              500,
 		WalletReconciliationLookbackHours:          24,
-	}
+	})
+}
+
+func validWalletWorkerRuntimeConfig() ebs_fields.NoebsConfig {
+	cfg := validWalletRuntimeConfig(serviceRoleWalletWorker)
+	cfg.TemporalClientID = temporalWorkerClientID
+	return cfg
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitOTelConfigWhenEnabled(t *testing.T) {
-	cfg := ebs_fields.NoebsConfig{OtelEnabled: true}
+	cfg := runtimeConfigForRole(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{OtelEnabled: true})
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errMissingOtelEndpoint) {
 		t.Fatalf("otel endpoint error = %v, want %v", err, errMissingOtelEndpoint)
 	}
 
-	cfg = ebs_fields.NoebsConfig{
+	cfg = runtimeConfigForRole(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{
 		OtelEnabled:  true,
 		OtelEndpoint: "otel-collector:4317",
-	}
+	})
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errMissingOtelServiceName) {
 		t.Fatalf("otel service name error = %v, want %v", err, errMissingOtelServiceName)
 	}
 
-	cfg = ebs_fields.NoebsConfig{
+	cfg = runtimeConfigForRole(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{
 		OtelEnabled:     true,
 		OtelEndpoint:    "otel-collector:4317",
 		OtelServiceName: string(serviceRoleAPIGateway),
 		OtelSampleRate:  0.1,
-	}
+	})
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errInvalidOtelServiceName) {
 		t.Fatalf("otel service name mismatch error = %v, want %v", err, errInvalidOtelServiceName)
 	}
@@ -403,11 +412,6 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingCardVault); err == nil {
 		t.Fatalf("ebs-adapter should require card-vault service discovery")
 	}
-	missingIdentityAuth := explicitEBSRuntimeConfig()
-	delete(missingIdentityAuth.ServiceDiscovery, string(serviceRoleIdentityAuth))
-	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingIdentityAuth); err == nil {
-		t.Fatalf("ebs-adapter should require identity-auth service discovery")
-	}
 	missingNotification := explicitEBSRuntimeConfig()
 	delete(missingNotification.ServiceDiscovery, string(serviceRoleNotification))
 	if err := validateRoleRuntimeConfig(serviceRoleEBSAdapter, missingNotification); err == nil {
@@ -469,57 +473,47 @@ func TestServiceRoleRuntimeConfigRequiresKafkaProjectionConfig(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleAdminReportingProjector, kafkaProjectionRuntimeConfig()); err != nil {
 		t.Fatalf("admin-reporting-projector kafka projection config error = %v", err)
 	}
-	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, ebs_fields.NoebsConfig{}); err != nil {
+	if err := validateRoleRuntimeConfig(serviceRoleAdminReporting, runtimeConfigForRole(serviceRoleAdminReporting, ebs_fields.NoebsConfig{})); err != nil {
 		t.Fatalf("admin-reporting HTTP runtime should not require kafka config: %v", err)
 	}
 }
 
 func TestServiceRoleRuntimeConfigDoesNotRequireCardVaultServiceDiscovery(t *testing.T) {
-	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{DataKey: "card-vault-data-key"}); err != nil {
+	if err := validateRoleRuntimeConfig(serviceRoleCardVault, runtimeConfigForRole(serviceRoleCardVault, ebs_fields.NoebsConfig{DataKey: "card-vault-data-key"})); err != nil {
 		t.Fatalf("card-vault runtime config error = %v", err)
 	}
-	if err := validateRoleRuntimeConfig(serviceRoleCardVault, ebs_fields.NoebsConfig{}); !errors.Is(err, store.ErrMissingDataKey) {
+	if err := validateRoleRuntimeConfig(serviceRoleCardVault, runtimeConfigForRole(serviceRoleCardVault, ebs_fields.NoebsConfig{})); !errors.Is(err, store.ErrMissingDataKey) {
 		t.Fatalf("card-vault missing data key error = %v, want %v", err, store.ErrMissingDataKey)
 	}
 }
 
-func TestServiceRoleRuntimeConfigRequiresIdentityAuthCardVaultDiscovery(t *testing.T) {
+func TestIdentityAuthRuntimeAcceptsExactTransportConfig(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
 		t.Fatalf("identity-auth runtime config error = %v", err)
-	}
-	missingDiscovery := identityAuthRuntimeConfig()
-	missingDiscovery.ServiceDiscovery = map[string]string{}
-	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, missingDiscovery); err == nil {
-		t.Fatalf("identity-auth should require card-vault service discovery")
 	}
 }
 
 func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
-	return ebs_fields.NoebsConfig{
-		ConsumerIP:         "https://consumer.ebs.example",
-		MerchantIP:         "https://merchant.ebs.example",
-		IPINIp:             "https://ipin.ebs.example",
-		ConsumerID:         "consumer-app",
-		MerchantID:         "merchant-app",
-		EBSIPINUsername:    "ipin-user",
-		EBSIPINPassword:    "ipin-password",
-		EBSConsumerKey:     "consumer-public-key",
-		EBSIpinKey:         "ipin-public-key",
-		BillInquiryPAN:     "1234567890123456",
-		BillInquiryPIN:     "1234",
-		BillInquiryIPIN:    "123456",
-		BillInquiryExpDate: "0129",
-		ServiceDiscovery: map[string]string{
-			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
-			string(serviceRoleCardVault):    "http://card-vault:8080",
-			string(serviceRoleNotification): "http://notification-chat:8080",
-		},
-		KafkaBrokers:                               []string{"kafka:9092"},
-		KafkaTransactionTopic:                      "noebs-ebs-transactions-v1",
-		AdminReportingKafkaConsumerGroup:           "admin-reporting-projections",
-		EBSTransactionEventPublisherBatchSize:      100,
+	return runtimeConfigForRole(serviceRoleEBSAdapter, ebs_fields.NoebsConfig{
+		ConsumerIP:                            "https://consumer.ebs.example",
+		MerchantIP:                            "https://merchant.ebs.example",
+		IPINIp:                                "https://ipin.ebs.example",
+		ConsumerID:                            "consumer-app",
+		MerchantID:                            "merchant-app",
+		EBSIPINUsername:                       "ipin-user",
+		EBSIPINPassword:                       "ipin-password",
+		EBSConsumerKey:                        "consumer-public-key",
+		EBSIpinKey:                            "ipin-public-key",
+		BillInquiryPAN:                        "1234567890123456",
+		BillInquiryPIN:                        "1234",
+		BillInquiryIPIN:                       "123456",
+		BillInquiryExpDate:                    "0129",
+		KafkaBrokers:                          []string{"kafka:9092"},
+		KafkaTransactionTopic:                 "noebs-ebs-transactions-v1",
+		AdminReportingKafkaConsumerGroup:      "admin-reporting-projections",
+		EBSTransactionEventPublisherBatchSize: 100,
 		EBSTransactionEventPublisherPollIntervalMs: 1000,
-	}
+	})
 }
 
 func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
@@ -534,18 +528,14 @@ func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
 }
 
 func identityAuthRuntimeConfig() ebs_fields.NoebsConfig {
-	return ebs_fields.NoebsConfig{
-		ServiceDiscovery: map[string]string{
-			string(serviceRoleCardVault): "http://card-vault:8080",
-		},
-	}
+	return runtimeConfigForRole(serviceRoleIdentityAuth, ebs_fields.NoebsConfig{})
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
 	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
 		t.Fatalf("identity-auth runtime config error = %v", err)
 	}
-	if err := validateRoleRuntimeConfig(serviceRoleWalletAPI, ebs_fields.NoebsConfig{}); !errors.Is(err, errWalletNotEnabled) {
+	if err := validateRoleRuntimeConfig(serviceRoleWalletAPI, runtimeConfigForRole(serviceRoleWalletAPI, ebs_fields.NoebsConfig{})); !errors.Is(err, errWalletNotEnabled) {
 		t.Fatalf("wallet-api runtime config error = %v, want %v", err, errWalletNotEnabled)
 	}
 
@@ -556,14 +546,13 @@ func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
 		{name: "currency", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletDefaultCurrency = "" }},
 		{name: "hold_expiry", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletHoldExpirySeconds = 0 }},
 		{name: "approval_timeout", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletApprovalTimeoutSeconds = 0 }},
-		{name: "verification_timeout", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletVerificationTimeoutSeconds = 0 }},
 		{name: "manual_transfer_approval_timeout", mutate: func(cfg *ebs_fields.NoebsConfig) {
 			cfg.WalletManualTransferApprovalTimeoutSeconds = 0
 		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := validWalletRuntimeConfig()
+			cfg := validWalletRuntimeConfig(serviceRoleWalletAPI)
 			tt.mutate(&cfg)
 			if err := validateRoleRuntimeConfig(serviceRoleWalletAPI, cfg); !errors.Is(err, errInvalidWalletConfig) {
 				t.Fatalf("wallet-api runtime config error = %v, want %v", err, errInvalidWalletConfig)
@@ -573,45 +562,68 @@ func TestServiceRoleRuntimeConfigRequiresExplicitWalletConfig(t *testing.T) {
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitTemporalConfig(t *testing.T) {
-	cfg := validWalletRuntimeConfig()
+	cfg := validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.TemporalEnabled = false
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errTemporalNotEnabled) {
 		t.Fatalf("wallet-ledger temporal enabled error = %v, want %v", err, errTemporalNotEnabled)
 	}
 
-	cfg = validWalletRuntimeConfig()
+	cfg = validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.TemporalHost = ""
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, walletworker.ErrMissingTemporalHost) {
 		t.Fatalf("wallet-ledger temporal host error = %v, want %v", err, walletworker.ErrMissingTemporalHost)
 	}
 
-	cfg = validWalletRuntimeConfig()
+	cfg = validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.TemporalPort = ""
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, walletworker.ErrMissingTemporalPort) {
 		t.Fatalf("wallet-ledger temporal port error = %v, want %v", err, walletworker.ErrMissingTemporalPort)
 	}
 
-	cfg = validWalletRuntimeConfig()
+	cfg = validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.TemporalNamespace = ""
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, walletworker.ErrMissingTemporalNamespace) {
 		t.Fatalf("wallet-ledger temporal namespace error = %v, want %v", err, walletworker.ErrMissingTemporalNamespace)
 	}
+
+	cfg = validWalletRuntimeConfig(serviceRoleWalletLedger)
+	cfg.TemporalClientID = temporalWorkerClientID
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errInvalidTemporalRuntime) {
+		t.Fatalf("wallet-ledger accepted wallet-worker Temporal client: %v", err)
+	}
+
+	cfg = validWalletWorkerRuntimeConfig()
+	cfg.TemporalClientID = temporalBootstrapClientID
+	if err := validateRoleRuntimeConfig(serviceRoleWalletWorker, cfg); !errors.Is(err, errInvalidTemporalRuntime) {
+		t.Fatalf("wallet-worker accepted namespace-bootstrap Temporal client: %v", err)
+	}
+}
+
+func TestPSPWebhookRuntimeDoesNotRequireTemporal(t *testing.T) {
+	cfg := validWalletRuntimeConfig(serviceRolePSPWebhook)
+	cfg.TemporalEnabled = false
+	cfg.TemporalHost = ""
+	cfg.TemporalPort = ""
+	cfg.TemporalNamespace = ""
+	if err := validateRoleRuntimeConfig(serviceRolePSPWebhook, cfg); err != nil {
+		t.Fatalf("psp-webhook runtime config error = %v, want no Temporal dependency", err)
+	}
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitGRPCConfig(t *testing.T) {
-	cfg := validWalletRuntimeConfig()
+	cfg := validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.GRPCEnabled = false
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errGRPCNotEnabled) {
 		t.Fatalf("wallet-ledger grpc enabled error = %v, want %v", err, errGRPCNotEnabled)
 	}
 
-	cfg = validWalletRuntimeConfig()
+	cfg = validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.GRPCPort = ""
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errMissingGRPCPort) {
 		t.Fatalf("wallet-ledger grpc port error = %v, want %v", err, errMissingGRPCPort)
 	}
 
-	cfg = validWalletRuntimeConfig()
+	cfg = validWalletRuntimeConfig(serviceRoleWalletLedger)
 	cfg.GRPCGatewayEnabled = true
 	cfg.GRPCGatewayPort = ""
 	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errMissingGRPCGateway) {
@@ -620,7 +632,7 @@ func TestServiceRoleRuntimeConfigRequiresExplicitGRPCConfig(t *testing.T) {
 }
 
 func TestServiceRoleRuntimeConfigRequiresExplicitWalletWorkerSchedules(t *testing.T) {
-	missingHealthPort := validWalletRuntimeConfig()
+	missingHealthPort := validWalletWorkerRuntimeConfig()
 	missingHealthPort.Port = ""
 	if err := validateRoleRuntimeConfig(serviceRoleWalletWorker, missingHealthPort); !errors.Is(err, errMissingHealthPort) {
 		t.Fatalf("wallet-worker missing health port error = %v, want %v", err, errMissingHealthPort)
@@ -640,7 +652,7 @@ func TestServiceRoleRuntimeConfigRequiresExplicitWalletWorkerSchedules(t *testin
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := validWalletRuntimeConfig()
+			cfg := validWalletWorkerRuntimeConfig()
 			tt.mutate(&cfg)
 			if err := validateRoleRuntimeConfig(serviceRoleWalletWorker, cfg); !errors.Is(err, tt.want) {
 				t.Fatalf("wallet-worker runtime config error = %v, want %v", err, tt.want)

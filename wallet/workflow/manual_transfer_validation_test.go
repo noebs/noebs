@@ -1,10 +1,15 @@
 package workflow
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 	"time"
 
+	walletactivity "github.com/adonese/noebs/wallet/activity"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	"github.com/stretchr/testify/mock"
+	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/testsuite"
 	"go.temporal.io/sdk/workflow"
 )
@@ -92,40 +97,22 @@ func TestValidateWithdrawalApprovalDecision(t *testing.T) {
 	}
 }
 
-func TestValidateDestinationVerificationDecision(t *testing.T) {
-	if err := validateDestinationVerificationDecision(DestinationVerificationDecision{Verified: false, Reason: " \t "}); err != walletstore.ErrMissingReason {
-		t.Fatalf("validateDestinationVerificationDecision(rejected) error = %v, want %v", err, walletstore.ErrMissingReason)
-	}
-	if err := validateDestinationVerificationDecision(DestinationVerificationDecision{Verified: true}); err != nil {
-		t.Fatalf("validateDestinationVerificationDecision(verified) error = %v, want nil", err)
-	}
-}
-
-func TestAwaitManualTransferDecisionIgnoresRequesterSignals(t *testing.T) {
+func TestAwaitManualTransferDecisionReadsDurableDecision(t *testing.T) {
 	var suite testsuite.WorkflowTestSuite
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(waitForManualTransferDecisionTestWorkflow)
-	env.RegisterDelayedCallback(func() {
-		env.SignalWorkflow(ManualTransferDecisionSignal, ManualTransferDecision{
-			Approved:            true,
-			DecidedByOperatorID: 0,
-			ProofOfPayment:      "missing approver",
-		})
-	}, time.Second)
-	env.RegisterDelayedCallback(func() {
-		env.SignalWorkflow(ManualTransferDecisionSignal, ManualTransferDecision{
-			Approved:            true,
-			DecidedByOperatorID: 10,
-			ProofOfPayment:      "requester approval",
-		})
-	}, 2*time.Second)
-	env.RegisterDelayedCallback(func() {
-		env.SignalWorkflow(ManualTransferDecisionSignal, ManualTransferDecision{
-			Approved:            true,
-			DecidedByOperatorID: 11,
-			ProofOfPayment:      "maker-checker approval",
-		})
-	}, 3*time.Second)
+	env.RegisterActivityWithOptions(
+		func(context.Context, walletstore.WorkflowDecisionKey) (walletstore.WorkflowDecisionLookup, error) {
+			return walletstore.WorkflowDecisionLookup{}, nil
+		},
+		activity.RegisterOptions{Name: string(walletactivity.ActivityLookupWorkflowDecision)},
+	)
+	env.OnActivity(string(walletactivity.ActivityLookupWorkflowDecision), mock.Anything, mock.Anything).
+		Return(walletstore.WorkflowDecisionLookup{Found: true, Decision: walletstore.WorkflowDecision{
+			TenantID: "tenant", WorkflowID: "default-test-workflow-id", Kind: walletstore.WorkflowDecisionManualTransfer,
+			SubjectID: 1, Approved: true, DecidedByOperatorID: 11,
+			ProofOfPayment: sql.NullString{String: "maker-checker approval", Valid: true},
+		}}, nil).Once()
 
 	env.ExecuteWorkflow(waitForManualTransferDecisionTestWorkflow)
 
@@ -144,9 +131,41 @@ func TestAwaitManualTransferDecisionIgnoresRequesterSignals(t *testing.T) {
 	}
 }
 
+func TestManualTransferSignalOnlyWakesDurableDecisionLookup(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(waitForManualTransferDecisionTestWorkflow)
+	env.RegisterActivityWithOptions(
+		func(context.Context, walletstore.WorkflowDecisionKey) (walletstore.WorkflowDecisionLookup, error) {
+			return walletstore.WorkflowDecisionLookup{}, nil
+		},
+		activity.RegisterOptions{Name: string(walletactivity.ActivityLookupWorkflowDecision)},
+	)
+	env.OnActivity(string(walletactivity.ActivityLookupWorkflowDecision), mock.Anything, mock.Anything).
+		Return(walletstore.WorkflowDecisionLookup{}, nil).Once()
+	env.OnActivity(string(walletactivity.ActivityLookupWorkflowDecision), mock.Anything, mock.Anything).
+		Return(walletstore.WorkflowDecisionLookup{Found: true, Decision: walletstore.WorkflowDecision{
+			TenantID: "tenant", WorkflowID: "default-test-workflow-id", Kind: walletstore.WorkflowDecisionManualTransfer,
+			SubjectID: 1, Approved: false, DecidedByOperatorID: 12,
+			Reason: sql.NullString{String: "persisted rejection", Valid: true},
+		}}, nil).Once()
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(ManualTransferDecisionSignal, "malformed forged decision payload")
+	}, time.Second)
+
+	env.ExecuteWorkflow(waitForManualTransferDecisionTestWorkflow)
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("workflow error: %v", err)
+	}
+	var decision ManualTransferDecision
+	if err := env.GetWorkflowResult(&decision); err != nil {
+		t.Fatalf("workflow result: %v", err)
+	}
+	if decision.Approved || decision.DecidedByOperatorID != 12 || decision.Reason != "persisted rejection" {
+		t.Fatalf("workflow trusted signal payload instead of durable decision: %+v", decision)
+	}
+}
+
 func waitForManualTransferDecisionTestWorkflow(ctx workflow.Context) (ManualTransferDecision, error) {
-	return awaitManualTransferDecision(ctx, ManualTransferParams{
-		RequestedByOperatorID:  10,
-		ApprovalTimeoutSeconds: 30,
-	})
+	return awaitManualTransferDecision(ctx, "tenant", 1, workflow.Now(ctx).Add(30*time.Second))
 }

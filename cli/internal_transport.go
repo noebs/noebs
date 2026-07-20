@@ -43,19 +43,16 @@ func validateInternalTransportRuntimeConfig(role serviceRole, cfg ebs_fields.Noe
 		}
 		return nil
 	}
-	if secureDiscovery && !present {
-		return errors.New("noebs.internal_transport is required for HTTPS service discovery")
-	}
-	if !secureDiscovery && present {
-		return errors.New("noebs.internal_transport requires HTTPS service discovery")
-	}
 	if !present {
-		return nil
+		return errors.New("noebs.internal_transport is required")
+	}
+	if !secureDiscovery || plainDiscovery {
+		return errors.New("noebs.internal_transport requires HTTPS service discovery")
 	}
 	if _, err := cfg.InternalTransport.ClientTLSConfig(string(role)); err != nil {
 		return fmt.Errorf("noebs.internal_transport client: %w", err)
 	}
-	if roleReceivesSignedHTTP(role) || role == serviceRoleWalletLedger {
+	if role.startsHTTP() || role == serviceRoleWalletLedger {
 		if _, err := cfg.InternalTransport.ServerTLSConfig(string(role), internalTransportServerPeers(role)...); err != nil {
 			return fmt.Errorf("noebs.internal_transport server: %w", err)
 		}
@@ -74,7 +71,7 @@ func initInternalTransport(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 		return err
 	}
 	internalTransportClientTLS = clientTLS
-	if roleReceivesSignedHTTP(role) || role == serviceRoleWalletLedger {
+	if role.startsHTTP() || role == serviceRoleWalletLedger {
 		serverTLS, err := cfg.InternalTransport.ServerTLSConfig(string(role), internalTransportServerPeers(role)...)
 		if err != nil {
 			return err
@@ -88,8 +85,11 @@ func internalTransportServerPeers(role serviceRole) []string {
 	if role == serviceRoleWalletLedger {
 		return []string{string(serviceRoleWalletAPI)}
 	}
-	if !roleReceivesSignedHTTP(role) {
+	if !role.startsHTTP() {
 		return nil
+	}
+	if role == serviceRoleAPIGateway {
+		return []string{"edge", string(serviceRoleAPIGateway)}
 	}
 	callers := expectedWorkloadCallers(role)
 	peers := make([]string, 0, len(callers)+1)

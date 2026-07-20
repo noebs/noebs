@@ -20,6 +20,10 @@ func TestEdgeCaddyRedactsOIDCQueryCredentials(t *testing.T) {
 
 	for _, contract := range []string{
 		"format filter {",
+		"request>headers>X-Noebs-Transaction-Authorization delete",
+		"request>headers>X-CSRF-Token delete",
+		"request>headers>X-Webhook-Signature delete",
+		"resp_headers>Location delete",
 		"request>uri query {",
 		"wrap json",
 	} {
@@ -28,6 +32,7 @@ func TestEdgeCaddyRedactsOIDCQueryCredentials(t *testing.T) {
 		}
 	}
 	for _, parameter := range []string{
+		"request",
 		"code",
 		"state",
 		"session_state",
@@ -41,6 +46,18 @@ func TestEdgeCaddyRedactsOIDCQueryCredentials(t *testing.T) {
 	} {
 		if !strings.Contains(api, "replace "+parameter+" REDACTED") {
 			t.Errorf("api.noebs.sd access log does not redact %q", parameter)
+		}
+	}
+}
+
+func TestEdgeCaddyAllowsExactPostBrokerContinuation(t *testing.T) {
+	caddyfile := readEdgeSecurityFile(t, "Caddyfile")
+	for _, path := range []string{
+		"/auth/realms/noebs/login-actions/post-broker-login",
+		"/auth/realms/noebs/broker/after-post-broker-login",
+	} {
+		if count := strings.Count(caddyfile, path); count != 2 {
+			t.Errorf("post-broker path %q appears %d times, want exact GET and POST allowlists", path, count)
 		}
 	}
 }
@@ -76,6 +93,13 @@ func TestEdgeCaddyRunsAsFixedNonRootIdentity(t *testing.T) {
 	const ownershipCommand = "sudo chown -R -- 10001:10001 /var/lib/docker/volumes/noebs_caddy_data/_data /var/lib/docker/volumes/noebs_caddy_config/_data"
 	if !strings.Contains(runbook, ownershipCommand) {
 		t.Error("edge adoption runbook must transfer retained volume ownership to Caddy")
+	}
+}
+
+func TestEdgeCaddyNeverForwardsCredentialBearingReferrers(t *testing.T) {
+	caddyfile := readEdgeSecurityFile(t, "Caddyfile")
+	if !strings.Contains(caddyfile, "Referrer-Policy no-referrer") || strings.Contains(caddyfile, "strict-origin-when-cross-origin") {
+		t.Fatal("edge Referrer-Policy can disclose authorization query credentials")
 	}
 }
 

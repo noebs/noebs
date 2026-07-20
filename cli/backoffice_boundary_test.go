@@ -59,10 +59,18 @@ func TestBackofficeLifecycleUsesExactCanonicalEndpoints(t *testing.T) {
 	if err := registerBackofficeLifecycleRoutes(app, fixture.handler); err != nil {
 		t.Fatal(err)
 	}
+	headLogin := backofficeBoundaryRequest(t, http.MethodHead, backofficeLoginPath, nil)
+	response := backofficeBoundaryDo(t, app, headLogin)
+	if response.StatusCode != http.StatusMethodNotAllowed || fixture.repository.flowCount() != 0 {
+		backofficeBoundaryBody(t, response)
+		t.Fatalf("HEAD login status=%d flows=%d", response.StatusCode, fixture.repository.flowCount())
+	}
+	assertBackofficeCookieAbsent(t, response, backofficeFlowCookie)
+	backofficeBoundaryBody(t, response)
 
 	wrongHost := backofficeBoundaryRequest(t, http.MethodGet, backofficeLoginPath, nil)
 	wrongHost.Host = "other.example"
-	response := backofficeBoundaryDo(t, app, wrongHost)
+	response = backofficeBoundaryDo(t, app, wrongHost)
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("wrong-host login status = %d", response.StatusCode)
 	}
@@ -87,6 +95,16 @@ func TestBackofficeLifecycleUsesExactCanonicalEndpoints(t *testing.T) {
 	state := authorization.Query().Get("state")
 	fixture.idTokens.setNonce(authorization.Query().Get("nonce"))
 	flowCookie := backofficeBoundaryCookie(t, response, backofficeFlowCookie)
+	headCallback := backofficeBoundaryRequest(t, http.MethodHead, backofficeCallbackPath+"?state="+url.QueryEscape(state)+"&code=code&iss="+url.QueryEscape(backofficeBoundaryIssuer), nil)
+	headCallback.AddCookie(flowCookie)
+	response = backofficeBoundaryDo(t, app, headCallback)
+	if response.StatusCode != http.StatusMethodNotAllowed || fixture.repository.flowCount() != 1 {
+		backofficeBoundaryBody(t, response)
+		t.Fatalf("HEAD callback status=%d flows=%d", response.StatusCode, fixture.repository.flowCount())
+	}
+	assertBackofficeCookieAbsent(t, response, backofficeFlowCookie)
+	assertBackofficeCookieAbsent(t, response, backofficeSessionCookie)
+	backofficeBoundaryBody(t, response)
 
 	oldCallback := backofficeBoundaryRequest(t, http.MethodGet, "/backoffice/callback?state="+url.QueryEscape(state)+"&code=code", nil)
 	oldCallback.AddCookie(flowCookie)
@@ -714,7 +732,7 @@ func TestBackofficeRoutePermissionMatrixIsExact(t *testing.T) {
 	}
 }
 
-func TestBackofficeRuntimeRequiresExactCallbackPaths(t *testing.T) {
+func TestRuntimeRequiresExactHTTPSCallbackPaths(t *testing.T) {
 	for _, test := range []struct {
 		name string
 		raw  string
@@ -729,9 +747,9 @@ func TestBackofficeRuntimeRequiresExactCallbackPaths(t *testing.T) {
 		{"callback fragment", "https://app.example" + backofficeCallbackPath + "#next", backofficeCallbackPath, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			err := requireBackofficeCallbackPath(test.raw, test.path)
+			err := requireExactHTTPSCallbackPath(test.raw, test.path)
 			if (err == nil) != test.ok {
-				t.Fatalf("requireBackofficeCallbackPath(%q, %q) error = %v", test.raw, test.path, err)
+				t.Fatalf("requireExactHTTPSCallbackPath(%q, %q) error = %v", test.raw, test.path, err)
 			}
 		})
 	}
@@ -1043,6 +1061,12 @@ func (r *backofficeBoundaryRepository) allContextsBounded(maximum time.Duration)
 		}
 	}
 	return true
+}
+
+func (r *backofficeBoundaryRepository) flowCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.flows)
 }
 
 type backofficeBoundaryMembership struct {

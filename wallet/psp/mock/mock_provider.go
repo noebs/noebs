@@ -49,8 +49,23 @@ func (mr *MockProviderMockRecorder) Code() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Code", reflect.TypeOf((*MockProvider)(nil).Code))
 }
 
+// CreateDeposit mocks base method.
+func (m *MockProvider) CreateDeposit(arg0 context.Context, arg1 psp.DepositRequest) (*psp.DepositResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDeposit", arg0, arg1)
+	ret0, _ := ret[0].(*psp.DepositResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateDeposit indicates an expected call of CreateDeposit.
+func (mr *MockProviderMockRecorder) CreateDeposit(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDeposit", reflect.TypeOf((*MockProvider)(nil).CreateDeposit), arg0, arg1)
+}
+
 // GetTransactionStatus mocks base method.
-func (m *MockProvider) GetTransactionStatus(arg0 context.Context, arg1 string) (*psp.TxStatus, error) {
+func (m *MockProvider) GetTransactionStatus(arg0 context.Context, arg1 psp.TransactionLookup) (*psp.TxStatus, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetTransactionStatus", arg0, arg1)
 	ret0, _ := ret[0].(*psp.TxStatus)
@@ -91,21 +106,6 @@ func (m *MockProvider) SupportedOperations() []psp.Operation {
 func (mr *MockProviderMockRecorder) SupportedOperations() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SupportedOperations", reflect.TypeOf((*MockProvider)(nil).SupportedOperations))
-}
-
-// VerifyDeposit mocks base method.
-func (m *MockProvider) VerifyDeposit(arg0 context.Context, arg1 string) (*psp.DepositVerification, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "VerifyDeposit", arg0, arg1)
-	ret0, _ := ret[0].(*psp.DepositVerification)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// VerifyDeposit indicates an expected call of VerifyDeposit.
-func (mr *MockProviderMockRecorder) VerifyDeposit(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyDeposit", reflect.TypeOf((*MockProvider)(nil).VerifyDeposit), arg0, arg1)
 }
 
 // VerifyWebhook mocks base method.

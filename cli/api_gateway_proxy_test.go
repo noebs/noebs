@@ -7,6 +7,7 @@ import (
 
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/tenantcatalog"
+	"github.com/adonese/noebs/internal/transactionauth"
 	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/gofiber/fiber/v2"
 )
@@ -16,7 +17,7 @@ func TestAPIGatewayRequiresOIDCVerifier(t *testing.T) {
 	oidcVerifier = nil
 	t.Cleanup(func() { oidcVerifier = previous })
 
-	if err := registerAPIGatewayProxyRoutes(fiber.New(), ebs_fields.NoebsConfig{}, gatewayTestTenantCatalog(t)); err == nil {
+	if err := registerAPIGatewayProxyRoutes(fiber.New(), ebs_fields.NoebsConfig{}, gatewayTestTenantCatalog(t), nil); err == nil {
 		t.Fatal("registerAPIGatewayProxyRoutes() error = nil")
 	}
 }
@@ -96,6 +97,9 @@ func TestAPIGatewayCatalogIsExactOIDCCutoverSurface(t *testing.T) {
 		gatewayRouteKey(http.MethodPost, "/wallet/wallets"):                                           gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodGet, "/wallet/wallets/:id/transactions"):                           gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodGet, "/wallet/wallets/:id"):                                        gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodPost, "/wallet/deposits"):                                          gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodPost, "/wallet/p2p"):                                               gatewayAuthMobileUser,
+		gatewayRouteKey(http.MethodPost, "/wallet/withdrawals"):                                       gatewayAuthMobileUser,
 		gatewayRouteKey(http.MethodGet, "/backoffice/assets/*"):                                       gatewayAuthPublic,
 	}
 
@@ -108,6 +112,13 @@ func TestAPIGatewayCatalogIsExactOIDCCutoverSurface(t *testing.T) {
 		}
 		if spec.auth != want {
 			t.Errorf("%s auth = %d, want %d", key, spec.auth, want)
+		}
+		wantTransaction := map[string]transactionauth.Operation{
+			gatewayRouteKey(http.MethodPost, "/wallet/p2p"):         transactionauth.OperationWalletP2P,
+			gatewayRouteKey(http.MethodPost, "/wallet/withdrawals"): transactionauth.OperationWalletWithdrawal,
+		}[key]
+		if spec.transaction != wantTransaction {
+			t.Errorf("%s transaction = %q, want %q", key, spec.transaction, wantTransaction)
 		}
 		delete(expected, key)
 	}

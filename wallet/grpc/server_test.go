@@ -19,7 +19,7 @@ import (
 func TestEnsureWalletRequiresExplicitCurrency(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
 
-	_, err := server.EnsureWalletPublic(walletGatewayIdentityContext(42, "tenant"), &walletv1.EnsureWalletRequest{
+	_, err := server.EnsureWalletPublic(walletGatewayIdentityContext(42, "tenant"), &walletv1.EnsureWalletPublicRequest{
 		TenantId: "tenant",
 		UserId:   42,
 	})
@@ -38,7 +38,7 @@ func TestRenderWalletAdminRejectsPrincipalWithoutTenant(t *testing.T) {
 		deletePrincipalMetadata(operatorMetadata(tenantauth.PermissionWalletRead), gateway.GatewayTenantIDHeader),
 	)
 
-	_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{
+	_, err := server.RenderWalletAdmin(ctx, &walletv1.RenderWalletAdminRequest{
 		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
 	})
 	if status.Code(err) != codes.PermissionDenied {
@@ -49,7 +49,7 @@ func TestRenderWalletAdminRejectsPrincipalWithoutTenant(t *testing.T) {
 func TestRenderWalletAdminRequiresAdminAuth(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
 
-	_, err := server.RenderWalletAdmin(context.Background(), &walletv1.AdminWalletRequest{
+	_, err := server.RenderWalletAdmin(context.Background(), &walletv1.RenderWalletAdminRequest{
 		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
 	})
 	if status.Code(err) != codes.PermissionDenied {
@@ -104,7 +104,7 @@ func TestRenderWalletAdminRequiresExactActionPermission(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := metadata.NewIncomingContext(context.Background(), operatorMetadata(tt.permission))
-			_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{Action: tt.action})
+			_, err := server.RenderWalletAdmin(ctx, &walletv1.RenderWalletAdminRequest{Action: tt.action})
 			if status.Code(err) != codes.PermissionDenied {
 				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
 			}
@@ -115,7 +115,7 @@ func TestRenderWalletAdminRequiresExactActionPermission(t *testing.T) {
 func TestRenderWalletAdminUsesGatewayTenantMetadata(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
 
-	resp, err := server.RenderWalletAdmin(walletAdminTenantContext("context-tenant"), &walletv1.AdminWalletRequest{
+	resp, err := server.RenderWalletAdmin(walletAdminTenantContext("context-tenant"), &walletv1.RenderWalletAdminRequest{
 		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
 		Query: map[string]string{
 			"tenant_id": "default",

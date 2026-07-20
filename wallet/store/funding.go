@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 func (s *Store) UpsertFundingSource(ctx context.Context, source FundingSource) (*FundingSource, error) {
@@ -287,14 +288,46 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	if err != nil {
 		return nil, err
 	}
+	existing, err = getFundingLinkTx(ctx, tx, tenantID, link.LedgerEntryID, link.FundingSourceID)
+	if err == nil {
+		if err := ValidateFundingLinkReplay(existing, link); err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		committed = true
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
 	if err := ValidateFundingLinkLedgerEntry(ledgerEntry, source, link); err != nil {
 		return nil, err
+	}
+	var reservation *FundingSourceWithdrawalReservation
+	switch ledgerEntry.EntryType {
+	case "credit":
+		if link.WithdrawalReservationID.Valid {
+			return nil, ErrInvalidDirection
+		}
+	case "debit":
+		if !link.WithdrawalReservationID.Valid || link.WithdrawalReservationID.Int64 <= 0 {
+			return nil, ErrMissingFundingSourceReservation
+		}
+		reservation, err = getFundingSourceWithdrawalReservationByIDTx(ctx, tx, tenantID, link.WithdrawalReservationID.Int64)
+		if err != nil {
+			return nil, err
+		}
+		if err := ValidateFundingSourceWithdrawalConsumption(reservation, ledgerEntry, link); err != nil {
+			return nil, err
+		}
 	}
 
 	now := time.Now().UTC()
 	stmt := tx.Rebind(`INSERT INTO ledger_funding_links(
-		tenant_id, ledger_entry_id, funding_source_id, amount, currency, created_at
-	) VALUES(?, ?, ?, ?, ?, ?)
+		tenant_id, ledger_entry_id, funding_source_id, withdrawal_reservation_id, amount, currency, created_at
+	) VALUES(?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(tenant_id, ledger_entry_id, funding_source_id) DO NOTHING
 	RETURNING *`)
 	var stored LedgerFundingLink
@@ -302,6 +335,7 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 		tenantID,
 		link.LedgerEntryID,
 		link.FundingSourceID,
+		link.WithdrawalReservationID,
 		link.Amount,
 		link.Currency,
 		now,
@@ -337,6 +371,22 @@ func (s *Store) CreateFundingLink(ctx context.Context, link LedgerFundingLink) (
 	if affected == 0 {
 		return nil, ErrFundingSourceNotFound
 	}
+	if reservation != nil {
+		consumeStmt := tx.Rebind(`UPDATE funding_source_withdrawal_reservations
+			SET status = 'consumed', ledger_entry_id = ?, consumed_at = ?
+			WHERE tenant_id = ? AND id = ? AND status = 'reserved'`)
+		result, err := tx.ExecContext(ctx, consumeStmt, link.LedgerEntryID, now, tenantID, reservation.ID)
+		if err != nil {
+			return nil, err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return nil, err
+		}
+		if affected != 1 {
+			return nil, ErrInvalidStatusTransition
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
@@ -365,7 +415,7 @@ func getFundingSourceForLinkTx(ctx context.Context, tx interface {
 	GetContext(context.Context, any, string, ...any) error
 }, tenantID string, sourceID int64) (*FundingSource, error) {
 	stmt := tx.Rebind(`SELECT * FROM funding_sources
-		WHERE tenant_id = ? AND id = ?`)
+		WHERE tenant_id = ? AND id = ? FOR UPDATE`)
 	var source FundingSource
 	if err := tx.GetContext(ctx, &source, stmt, tenantID, sourceID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -425,9 +475,43 @@ func ValidateFundingLinkReplay(existing *LedgerFundingLink, requested LedgerFund
 		existing.TenantID != requested.TenantID ||
 		existing.LedgerEntryID != requested.LedgerEntryID ||
 		existing.FundingSourceID != requested.FundingSourceID ||
+		!nullInt64Equal(existing.WithdrawalReservationID, requested.WithdrawalReservationID) ||
 		existing.Amount != requested.Amount ||
 		existing.Currency != requested.Currency {
 		return ErrDuplicateFundingLink
+	}
+	return nil
+}
+
+func getFundingSourceWithdrawalReservationByIDTx(ctx context.Context, tx *sqlx.Tx, tenantID string, reservationID int64) (*FundingSourceWithdrawalReservation, error) {
+	stmt := tx.Rebind(`SELECT * FROM funding_source_withdrawal_reservations
+		WHERE tenant_id = ? AND id = ? FOR UPDATE`)
+	var reservation FundingSourceWithdrawalReservation
+	if err := tx.GetContext(ctx, &reservation, stmt, tenantID, reservationID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrFundingSourceReservationNotFound
+		}
+		return nil, err
+	}
+	return &reservation, nil
+}
+
+func ValidateFundingSourceWithdrawalConsumption(reservation *FundingSourceWithdrawalReservation, entry *LedgerEntry, link LedgerFundingLink) error {
+	if reservation == nil {
+		return ErrFundingSourceReservationNotFound
+	}
+	if entry == nil || entry.EntryType != "debit" {
+		return ErrInvalidDirection
+	}
+	if reservation.TenantID != link.TenantID ||
+		reservation.ID != link.WithdrawalReservationID.Int64 ||
+		reservation.FundingSourceID != link.FundingSourceID ||
+		reservation.Amount != link.Amount ||
+		reservation.Currency != link.Currency {
+		return ErrDuplicateFundingSourceReservation
+	}
+	if reservation.Status != FundingSourceReservationReserved {
+		return ErrInvalidStatusTransition
 	}
 	return nil
 }

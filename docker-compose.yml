@@ -37,13 +37,6 @@ x-migrate-defaults: &migrate-defaults
   restart: "no"
   user: "10001:10001"
 
-x-sops-age-key-secret: &sops-age-key-secret
-  source: sops_age_key
-  target: /app/.sops/age-key.txt
-  uid: "10001"
-  gid: "10001"
-  mode: 0400
-
 x-api-gateway-secret: &api-gateway-secret
   source: api-gateway-secrets
   target: /app/secrets.yaml
@@ -115,56 +108,28 @@ x-wallet-worker-secret: &wallet-worker-secret
   mode: 0400
 
 services:
-  runtime-init:
-    <<: *service-defaults
-    image: alpine:3.20
-    command: ["sh", "-c", "mkdir -p /app/runtime && chown -R 10001:10001 /app/runtime"]
-    volumes:
-      - noebs-runtime:/app/runtime
-    restart: "no"
-
-  secrets-init:
-    <<: *service-defaults
-    build:
-      context: .
-    entrypoint: ["/usr/local/bin/noebs", "render-db-password"]
-    depends_on:
-      runtime-init:
-        condition: service_completed_successfully
-    volumes:
-      - "./config.docker.yaml:/app/config.yaml:ro"
-      - noebs-runtime:/app/runtime
-    secrets:
-      - source: postgres-bootstrap-secrets
-        target: /app/secrets.yaml
-      - source: sops_age_key
-        target: /app/.sops/age-key.txt
-    restart: "no"
-
   db:
     <<: *service-defaults
     image: postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     init: true
-    depends_on:
-      secrets-init:
-        condition: service_completed_successfully
     entrypoint: ["/bin/bash", "/opt/noebs-postgres/bin/start.sh"]
     volumes:
       - noebs-postgres:/var/lib/postgresql/data
-      - noebs-runtime:/opt/noebs-postgres/secrets:ro
       - ./deploy/docker/postgres/postgres-start.sh:/opt/noebs-postgres/bin/start.sh:ro
       - ./deploy/docker/postgres/001-service-databases.sql:/opt/noebs-postgres/init/001-service-databases.sql:ro
     secrets:
-      - source: workload-auth-migrate-password
-        target: workload-auth-migrate-password
-      - source: workload-auth-runtime-password
-        target: workload-auth-runtime-password
-      - source: workload-auth-cleanup-password
-        target: workload-auth-cleanup-password
+      - source: service-role-passwords
+        target: service-role-passwords
+      - source: noebs_postgres_transport_ca_certificate
+        target: /opt/noebs-postgres/secrets/ca.pem
+      - source: noebs_postgres_tls_certificate
+        target: /opt/noebs-postgres/secrets/tls.crt
+      - source: noebs_postgres_tls_private_key
+        target: /opt/noebs-postgres/secrets/tls.key
     networks:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U noebs -d noebs"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -172,7 +137,7 @@ services:
 
   kafka:
     <<: *service-defaults
-    image: apache/kafka:3.9.1
+    image: apache/kafka@sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
     init: true
     entrypoint: ["/bin/bash", "/opt/noebs-kafka/bin/start.sh"]
     volumes:
@@ -191,7 +156,7 @@ services:
 
   kafka-topics:
     <<: *service-defaults
-    image: apache/kafka:3.9.1
+    image: apache/kafka@sha256:4ceccc577f03f51f6af8dbfda55194d0d892f4fa7913ffbded567ce3895622ed
     init: true
     depends_on:
       kafka:
@@ -216,8 +181,12 @@ services:
     secrets:
       - source: temporal_postgres_password
         target: /opt/temporal-postgres/secrets/password
+      - source: temporal_postgres_tls_certificate
+        target: /opt/temporal-postgres/secrets/tls.crt
+      - source: temporal_postgres_tls_private_key
+        target: /opt/temporal-postgres/secrets/tls.key
     networks:
-      - backend
+      - temporal-storage
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
       interval: 10s
@@ -227,7 +196,7 @@ services:
 
   temporal-schema-migrate:
     <<: *service-defaults
-    image: temporalio/auto-setup:1.29.1
+    image: temporalio/auto-setup@sha256:f14912b699cf73015ad5c4fc18d522d4b014db90e794039214dfb7c022c2644f
     depends_on:
       temporal-postgres:
         condition: service_healthy
@@ -237,13 +206,15 @@ services:
     secrets:
       - source: temporal_postgres_password
         target: /opt/temporal/secrets/postgres-password
+      - source: temporal_transport_ca_certificate
+        target: /opt/temporal/secrets/postgres-ca.pem
     networks:
-      - backend
+      - temporal-storage
     restart: "no"
 
   temporal:
     <<: *service-defaults
-    image: temporalio/auto-setup:1.29.1
+    image: temporalio/auto-setup@sha256:f14912b699cf73015ad5c4fc18d522d4b014db90e794039214dfb7c022c2644f
     depends_on:
       temporal-schema-migrate:
         condition: service_completed_successfully
@@ -255,10 +226,20 @@ services:
     secrets:
       - source: temporal_postgres_password
         target: /opt/temporal/secrets/postgres-password
+      - source: temporal_transport_ca_certificate
+        target: /opt/temporal/secrets/postgres-ca.pem
+      - source: temporal_tls_certificate
+        target: /opt/temporal/secrets/tls.crt
+      - source: temporal_tls_private_key
+        target: /opt/temporal/secrets/tls.key
+      - source: keycloak_transport_ca_certificate
+        target: /opt/temporal/secrets/keycloak-ca.pem
     networks:
-      backend:
+      temporal-control:
         aliases:
           - temporal-frontend
+      temporal-storage:
+      temporal-keycloak:
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/7233' || exit 1"]
       interval: 10s
@@ -267,29 +248,36 @@ services:
       start_period: 20s
 
   temporal-namespace-bootstrap:
-    <<: *service-defaults
-    image: temporalio/auto-setup:1.29.1
+    <<: [*service-defaults, *web-hardening]
+    build:
+      context: .
     depends_on:
       temporal:
         condition: service_healthy
-    entrypoint: ["/bin/bash", "/opt/temporal/bin/namespace-bootstrap.sh"]
-    volumes:
-      - ./deploy/docker/temporal/namespace-bootstrap.sh:/opt/temporal/bin/namespace-bootstrap.sh:ro
+    entrypoint:
+      - /usr/local/bin/noebs
+      - ensure-temporal-namespace
+      - --address
+      - temporal-frontend:7233
+      - --token-url
+      - https://keycloak:8443/auth/realms/noebs/protocol/openid-connect/token
+      - --temporal-ca
+      - /etc/noebs-temporal/ca.pem
+      - --keycloak-ca
+      - /etc/noebs-keycloak/ca.pem
+      - --client-secret
+      - /etc/noebs-temporal/client-secret
+    secrets:
+      - source: temporal_transport_ca_certificate
+        target: /etc/noebs-temporal/ca.pem
+      - source: keycloak_transport_ca_certificate
+        target: /etc/noebs-keycloak/ca.pem
+      - source: temporal_namespace_bootstrap_client_secret
+        target: /etc/noebs-temporal/client-secret
     networks:
-      - backend
+      - temporal-control
+      - temporal-keycloak
     restart: "no"
-
-  temporal-ui:
-    <<: *service-defaults
-    image: temporalio/ui:2.34.0
-    depends_on:
-      temporal-namespace-bootstrap:
-        condition: service_completed_successfully
-    entrypoint: ["/home/ui-server/ui-server", "--root", "/home/ui-server", "--config", "config", "start"]
-    volumes:
-      - ./deploy/docker/temporal/ui.yaml:/home/ui-server/config/development.yaml:ro
-    networks:
-      - backend
 
   keycloak-postgres:
     <<: *service-defaults
@@ -346,6 +334,7 @@ services:
         mode: 0400
     networks:
       - backend
+      - temporal-keycloak
     stop_grace_period: 30s
     user: "1000:1000"
 
@@ -357,20 +346,46 @@ services:
     secrets:
       - source: workload-auth-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   workload-auth-cleanup:
     <<: *migrate-defaults
     depends_on:
       workload-auth-migrate:
         condition: service_completed_successfully
+    entrypoint: ["/bin/bash", "/opt/noebs/recurring-cleanup.sh"]
+    restart: unless-stopped
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/workload-auth-cleanup.yaml:/app/service.yaml:ro"
+      - "./deploy/docker/recurring-cleanup.sh:/opt/noebs/recurring-cleanup.sh:ro"
     secrets:
       - source: workload-auth-cleanup-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
+
+  gateway-auth-migrate:
+    <<: *migrate-defaults
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/gateway-auth-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
+    secrets:
+      - source: gateway-auth-migrate-secrets
+        target: /app/secrets.yaml
+
+  gateway-auth-cleanup:
+    <<: *migrate-defaults
+    depends_on:
+      gateway-auth-migrate:
+        condition: service_completed_successfully
+    entrypoint: ["/bin/bash", "/opt/noebs/recurring-cleanup.sh"]
+    restart: unless-stopped
+    volumes:
+      - "./config.docker.yaml:/app/config.yaml:ro"
+      - "./deploy/docker/services/gateway-auth-cleanup.yaml:/app/service.yaml:ro"
+      - "./deploy/docker/recurring-cleanup.sh:/opt/noebs/recurring-cleanup.sh:ro"
+    secrets:
+      - source: gateway-auth-cleanup-secrets
+        target: /app/secrets.yaml
 
   identity-auth-migrate:
     <<: *migrate-defaults
@@ -381,7 +396,6 @@ services:
     secrets:
       - source: identity-auth-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   card-vault-migrate:
     <<: *migrate-defaults
@@ -392,7 +406,6 @@ services:
     secrets:
       - source: card-vault-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   ebs-adapter-migrate:
     <<: *migrate-defaults
@@ -403,18 +416,6 @@ services:
     secrets:
       - source: ebs-adapter-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
-
-  psp-webhook-migrate:
-    <<: *migrate-defaults
-    volumes:
-      - "./config.docker.yaml:/app/config.yaml:ro"
-      - "./deploy/docker/services/psp-webhook-migrate.yaml:/app/service.yaml:ro"
-      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
-    secrets:
-      - source: psp-webhook-migrate-secrets
-        target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   admin-reporting-migrate:
     <<: *migrate-defaults
@@ -425,7 +426,6 @@ services:
     secrets:
       - source: admin-reporting-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   notification-chat-migrate:
     <<: *migrate-defaults
@@ -436,7 +436,6 @@ services:
     secrets:
       - source: notification-chat-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   wallet-ledger-migrate:
     <<: *migrate-defaults
@@ -447,13 +446,15 @@ services:
     secrets:
       - source: wallet-ledger-migrate-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
 
   api-gateway:
     <<: [*service-defaults, *web-hardening]
     build:
       context: .
     init: true
+    depends_on:
+      gateway-auth-migrate:
+        condition: service_completed_successfully
     ports:
       # `:8080` is a common host port and is already used on our server.
       # Keep the local stack reachable without creating another public edge.
@@ -464,13 +465,12 @@ services:
       - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - *api-gateway-secret
-      - *sops-age-key-secret
     networks:
       - backend
       - public
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -485,17 +485,18 @@ services:
     depends_on:
       identity-auth-migrate:
         condition: service_completed_successfully
+      workload-auth-migrate:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth.yaml:/app/service.yaml:ro"
     secrets:
       - *identity-auth-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -510,17 +511,18 @@ services:
     depends_on:
       card-vault-migrate:
         condition: service_completed_successfully
+      workload-auth-migrate:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/card-vault.yaml:/app/service.yaml:ro"
     secrets:
       - *card-vault-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -535,17 +537,18 @@ services:
     depends_on:
       ebs-adapter-migrate:
         condition: service_completed_successfully
+      workload-auth-migrate:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter.yaml:/app/service.yaml:ro"
     secrets:
       - *ebs-adapter-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -568,7 +571,6 @@ services:
     secrets:
       - source: ebs-adapter-events-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -590,17 +592,18 @@ services:
         condition: service_completed_successfully
       wallet-ledger:
         condition: service_healthy
+      workload-auth-migrate:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-api.yaml:/app/service.yaml:ro"
     secrets:
       - *wallet-api-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -613,21 +616,20 @@ services:
       context: .
     init: true
     depends_on:
-      psp-webhook-migrate:
+      wallet-ledger-migrate:
         condition: service_completed_successfully
-      temporal-namespace-bootstrap:
+      workload-auth-migrate:
         condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/psp-webhook.yaml:/app/service.yaml:ro"
     secrets:
       - *psp-webhook-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -642,17 +644,18 @@ services:
     depends_on:
       admin-reporting-migrate:
         condition: service_completed_successfully
+      workload-auth-migrate:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting.yaml:/app/service.yaml:ro"
     secrets:
       - *admin-reporting-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -675,7 +678,6 @@ services:
     secrets:
       - source: admin-reporting-projector-secrets
         target: /app/secrets.yaml
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
@@ -695,17 +697,18 @@ services:
     depends_on:
       notification-chat-migrate:
         condition: service_completed_successfully
+      workload-auth-migrate:
+        condition: service_completed_successfully
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat.yaml:/app/service.yaml:ro"
     secrets:
       - *notification-chat-secret
-      - *sops-age-key-secret
     networks:
       - backend
     stop_grace_period: 30s
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
+      test: ["CMD", "/usr/local/bin/noebs", "internal-healthcheck"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -727,9 +730,9 @@ services:
       - "./deploy/docker/services/wallet-ledger.yaml:/app/service.yaml:ro"
     secrets:
       - *wallet-ledger-secret
-      - *sops-age-key-secret
     networks:
       - backend
+      - temporal-control
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD-SHELL", "timeout 2 bash -c '</dev/tcp/127.0.0.1/9090' || exit 1"]
@@ -754,9 +757,9 @@ services:
       - "./deploy/docker/services/wallet-worker.yaml:/app/service.yaml:ro"
     secrets:
       - *wallet-worker-secret
-      - *sops-age-key-secret
     networks:
       - backend
+      - temporal-control
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
@@ -768,20 +771,19 @@ services:
 
 volumes:
   noebs-postgres:
-  noebs-runtime:
   kafka-data:
   temporal-postgres:
   keycloak-postgres-data:
 
 secrets:
-  postgres-bootstrap-secrets:
-    file: ./deploy/docker/postgres/bootstrap.secrets.yaml
-  workload-auth-migrate-password:
-    file: ./deploy/docker/postgres/workload-auth-migrate-password.txt
-  workload-auth-runtime-password:
-    file: ./deploy/docker/postgres/workload-auth-runtime-password.txt
-  workload-auth-cleanup-password:
-    file: ./deploy/docker/postgres/workload-auth-cleanup-password.txt
+  service-role-passwords:
+    file: ./deploy/docker/postgres/service-role-passwords.env
+  noebs_postgres_transport_ca_certificate:
+    file: ./deploy/docker/postgres/ca.pem
+  noebs_postgres_tls_certificate:
+    file: ./deploy/docker/postgres/tls.crt
+  noebs_postgres_tls_private_key:
+    file: ./deploy/docker/postgres/tls.key
   api-gateway-secrets:
     file: ./deploy/docker/secrets/api-gateway.secrets.yaml
   identity-auth-secrets:
@@ -810,22 +812,22 @@ secrets:
     file: ./deploy/docker/secrets/workload-auth-migrate.secrets.yaml
   workload-auth-cleanup-secrets:
     file: ./deploy/docker/secrets/workload-auth-cleanup.secrets.yaml
+  gateway-auth-migrate-secrets:
+    file: ./deploy/docker/secrets/gateway-auth-migrate.secrets.yaml
+  gateway-auth-cleanup-secrets:
+    file: ./deploy/docker/secrets/gateway-auth-cleanup.secrets.yaml
   identity-auth-migrate-secrets:
     file: ./deploy/docker/secrets/identity-auth-migrate.secrets.yaml
   card-vault-migrate-secrets:
     file: ./deploy/docker/secrets/card-vault-migrate.secrets.yaml
   ebs-adapter-migrate-secrets:
     file: ./deploy/docker/secrets/ebs-adapter-migrate.secrets.yaml
-  psp-webhook-migrate-secrets:
-    file: ./deploy/docker/secrets/psp-webhook-migrate.secrets.yaml
   admin-reporting-migrate-secrets:
     file: ./deploy/docker/secrets/admin-reporting-migrate.secrets.yaml
   notification-chat-migrate-secrets:
     file: ./deploy/docker/secrets/notification-chat-migrate.secrets.yaml
   wallet-ledger-migrate-secrets:
     file: ./deploy/docker/secrets/wallet-ledger-migrate.secrets.yaml
-  sops_age_key:
-    file: ./.sops/age-key.txt
   keycloak_config:
     file: ./deploy/docker/keycloak/keycloak.conf
   keycloak_postgres_password:
@@ -842,8 +844,26 @@ secrets:
     file: ./deploy/docker/keycloak/tls.key
   temporal_postgres_password:
     file: ./deploy/docker/temporal/postgres-password.txt
+  temporal_postgres_tls_certificate:
+    file: ./deploy/docker/temporal/postgres-tls.crt
+  temporal_postgres_tls_private_key:
+    file: ./deploy/docker/temporal/postgres-tls.key
+  temporal_transport_ca_certificate:
+    file: ./deploy/docker/temporal/ca.pem
+  temporal_tls_certificate:
+    file: ./deploy/docker/temporal/tls.crt
+  temporal_tls_private_key:
+    file: ./deploy/docker/temporal/tls.key
+  temporal_namespace_bootstrap_client_secret:
+    file: ./deploy/docker/temporal/namespace-bootstrap-client-secret.txt
 
 networks:
   public:
   backend:
+    internal: true
+  temporal-control:
+    internal: true
+  temporal-storage:
+    internal: true
+  temporal-keycloak:
     internal: true

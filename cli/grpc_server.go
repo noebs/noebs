@@ -43,12 +43,11 @@ func initGRPCServers() error {
 	}
 
 	walletSrv := walletgrpc.NewServer(walletService)
-	walletSrv.TemporalOptions = walletworker.Options{
-		Host:      noebsConfig.TemporalHost,
-		Port:      noebsConfig.TemporalPort,
-		Namespace: noebsConfig.TemporalNamespace,
-		TaskQueue: walletworker.TaskQueueMain,
+	temporalOptions, err := buildTemporalOptions(context.Background(), noebsConfig, walletworker.TaskQueueMain, temporalLedgerClientID)
+	if err != nil {
+		return err
 	}
+	walletSrv.TemporalOptions = temporalOptions
 	if walletWorker != nil {
 		walletSrv.TemporalClient = walletWorker.Client
 	}
@@ -111,17 +110,12 @@ func requireAuthForWalletHTTP(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		switch walletPathAuthRequirement(r.URL.Path) {
+		switch walletPathAuthRequirement(r.Method, r.URL.Path) {
 		case walletAuthDeny:
 			http.NotFound(w, r)
 			return
 		case walletAuthUserIdentity:
 			if !requestHasGatewayUserIdentity(r) {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-		case walletAuthAdmin:
-			if !requestHasGatewayAdminIdentity(r) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -144,30 +138,44 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		walletv1.WalletPublicService_ListFundingSources_FullMethodName,
 		walletv1.WalletPublicService_CreateWithdrawalDestination_FullMethodName,
 		walletv1.WalletPublicService_ListWithdrawalDestinations_FullMethodName,
-		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName,
-		walletv1.WalletPublicService_RequestOwnershipVerification_FullMethodName,
-		walletv1.WalletPublicService_CompleteOwnershipVerification_FullMethodName:
+		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName:
 		return walletAuthUserIdentity
 	default:
 		return walletAuthDeny
 	}
 }
 
-func walletPathAuthRequirement(path string) walletAuthRequirement {
-	switch {
-	case path == "/wallet/manual_transfers":
-		return walletAuthAdmin
-	case strings.HasPrefix(path, "/wallet/manual_transfers/") && strings.HasSuffix(path, "/decision"):
-		return walletAuthAdmin
-	case strings.HasPrefix(path, "/wallet/withdrawals/") && strings.HasSuffix(path, "/approval"):
-		return walletAuthAdmin
-	case strings.HasPrefix(path, "/wallet/withdrawals/") && strings.HasSuffix(path, "/verification"):
-		return walletAuthAdmin
-	case path == "/wallet" || strings.HasPrefix(path, "/wallet/"):
-		return walletAuthUserIdentity
-	default:
+func walletPathAuthRequirement(method, path string) walletAuthRequirement {
+	if path == "" || !strings.HasPrefix(path, "/") || path == "/" || strings.HasSuffix(path, "/") {
 		return walletAuthDeny
 	}
+	segments := strings.Split(path[1:], "/")
+	for _, segment := range segments {
+		if segment == "" {
+			return walletAuthDeny
+		}
+	}
+
+	switch method {
+	case http.MethodGet:
+		if len(segments) == 2 && segments[0] == "wallet" {
+			return walletAuthUserIdentity
+		}
+		if len(segments) == 3 && segments[0] == "wallet" {
+			switch segments[2] {
+			case "transactions", "funding_sources", "destinations":
+				return walletAuthUserIdentity
+			}
+		}
+	case http.MethodPost:
+		if path == "/wallet" || path == "/wallet/deposits" || path == "/wallet/destinations" {
+			return walletAuthUserIdentity
+		}
+		if len(segments) == 4 && segments[0] == "wallet" && segments[1] == "destinations" && segments[3] == "deactivate" {
+			return walletAuthUserIdentity
+		}
+	}
+	return walletAuthDeny
 }
 
 func contextHasGatewayAdminIdentity(ctx context.Context) bool {
@@ -176,14 +184,6 @@ func contextHasGatewayAdminIdentity(ctx context.Context) bool {
 		return false
 	}
 	principal, ok := gatewayPrincipalFromMetadata(md)
-	return ok && isGatewayOperator(principal)
-}
-
-func requestHasGatewayAdminIdentity(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	principal, ok := gatewayPrincipalFromRequest(r)
 	return ok && isGatewayOperator(principal)
 }
 

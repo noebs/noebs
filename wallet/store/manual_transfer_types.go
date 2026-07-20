@@ -61,25 +61,27 @@ func IsManualTransferDebit(transferType string) bool {
 }
 
 type ManualTransfer struct {
-	ID                    int64          `db:"id"`
-	TenantID              string         `db:"tenant_id"`
-	WorkflowID            string         `db:"workflow_id"`
-	IdempotencyKey        string         `db:"idempotency_key"`
-	TransferType          string         `db:"transfer_type"`
-	WalletID              sql.NullString `db:"wallet_id"`
-	Amount                int64          `db:"amount"`
-	Currency              string         `db:"currency"`
-	Reason                string         `db:"reason"`
-	Status                string         `db:"status"`
-	RequestedByOperatorID int64          `db:"requested_by_operator_id"`
-	ApprovedByOperatorID  sql.NullInt64  `db:"approved_by_operator_id"`
-	ProofOfPayment        sql.NullString `db:"proof_of_payment"`
-	PSPProvider           sql.NullString `db:"psp_provider"`
-	PSPReference          sql.NullString `db:"psp_reference"`
-	RejectionReason       sql.NullString `db:"rejection_reason"`
-	RequestedAt           time.Time      `db:"requested_at"`
-	ApprovedAt            sql.NullTime   `db:"approved_at"`
-	CompletedAt           sql.NullTime   `db:"completed_at"`
+	ID                     int64          `db:"id"`
+	TenantID               string         `db:"tenant_id"`
+	WorkflowID             string         `db:"workflow_id"`
+	IdempotencyKey         string         `db:"idempotency_key"`
+	TransferType           string         `db:"transfer_type"`
+	WalletID               sql.NullString `db:"wallet_id"`
+	Amount                 int64          `db:"amount"`
+	Currency               string         `db:"currency"`
+	Reason                 string         `db:"reason"`
+	Status                 string         `db:"status"`
+	RequestedByOperatorID  int64          `db:"requested_by_operator_id"`
+	ApprovedByOperatorID   sql.NullInt64  `db:"approved_by_operator_id"`
+	ProofOfPayment         sql.NullString `db:"proof_of_payment"`
+	PSPProvider            sql.NullString `db:"psp_provider"`
+	PSPReference           sql.NullString `db:"psp_reference"`
+	RejectionReason        sql.NullString `db:"rejection_reason"`
+	ApprovalTimeoutSeconds int            `db:"approval_timeout_seconds"`
+	DecisionDeadlineAt     time.Time      `db:"decision_deadline_at"`
+	RequestedAt            time.Time      `db:"requested_at"`
+	ApprovedAt             sql.NullTime   `db:"approved_at"`
+	CompletedAt            sql.NullTime   `db:"completed_at"`
 }
 
 type ManualTransferApproval struct {

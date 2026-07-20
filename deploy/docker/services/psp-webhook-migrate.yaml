@@ -1,4 +1,0 @@
-noebs:
-  service_role: psp-webhook-migrate
-  otel_service_name: psp-webhook-migrate
-  db_driver: pgx

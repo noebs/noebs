@@ -2,10 +2,11 @@ package walletgrpc
 
 import (
 	"context"
-	"database/sql"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"strings"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
@@ -20,16 +21,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositRequest) (*walletv1.WorkflowRun, error) {
+func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.RequestDepositRequest) (*walletv1.RequestDepositResponse, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if missingRequiredText(req.ClientReference) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingClientReference.Error())
-	}
+	req.ProviderCode = strings.TrimSpace(req.ProviderCode)
+	req.WalletId = strings.TrimSpace(req.WalletId)
+	req.Currency = strings.TrimSpace(req.Currency)
+	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
+	req.Region = strings.TrimSpace(req.Region)
 	if missingRequiredText(req.ProviderCode) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingProviderCode.Error())
 	}
@@ -42,8 +45,11 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if missingRequiredText(req.Currency) {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
 	}
+	if missingRequiredText(req.IdempotencyKey) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingIdempotencyKey.Error())
+	}
 	walletID, err := uuid.Parse(req.WalletId)
-	if err != nil {
+	if err != nil || walletID == uuid.Nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
 	claims, err := s.claimsForRPC(ctx)
@@ -54,7 +60,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 	if err != nil {
 		return nil, err
 	}
-	ownerType, ownerID, err := bindOwnerToClaims(req.OwnerType, req.OwnerId, claims)
+	ownerType, ownerID, err := bindOwnerToClaims("", "", claims)
 	if err != nil {
 		return nil, err
 	}
@@ -65,13 +71,21 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
 	req.TenantId = tenantID
-	req.OwnerType = ownerType
-	req.OwnerId = ownerID
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
 	}
-	if err := s.validateDepositRequest(ctx, req, walletID); err != nil {
-		return nil, mapError(err)
+
+	metadata := metadataFromStruct(req.Metadata)
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	rawRequest, err := depositRawRequest(req, ownerType, ownerID, metadata)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	temporalClient, err := s.ensureTemporalClient()
@@ -79,123 +93,119 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.DepositReques
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
 
-	workflowID := depositWorkflowID(req.TenantId, req.ClientReference)
-	idempotencyKey := textOrDefault(req.IdempotencyKey, req.ClientReference)
-	feeAmount := sql.NullInt64{}
-	if req.FeeAmount != nil {
-		feeAmount = sql.NullInt64{Int64: req.GetFeeAmount(), Valid: true}
-	}
-	netAmount := sql.NullInt64{}
-	if req.NetAmount != nil {
-		netAmount = sql.NullInt64{Int64: req.GetNetAmount(), Valid: true}
-	}
-	metadata := metadataFromStruct(req.Metadata)
-	rawRequest, err := depositRawRequest(req, metadata)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	requestedTxn := walletstore.PSPTransaction{
-		TenantID:         req.TenantId,
-		PSPProvider:      req.ProviderCode,
-		PSPTransactionID: sql.NullString{String: req.PspTransactionId, Valid: req.PspTransactionId != ""},
-		IdempotencyKey:   idempotencyKey,
-		ClientReference:  req.ClientReference,
-		Direction:        "inbound",
-		Amount:           req.Amount,
-		FeeAmount:        feeAmount,
-		NetAmount:        netAmount,
-		Currency:         req.Currency,
-		Status:           "initiated",
-		WorkflowID:       sql.NullString{String: workflowID, Valid: workflowID != ""},
-		RawRequest:       walletstore.RawJSON(rawRequest),
-	}
-	if existing, err := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); err == nil {
-		if err := walletstore.ValidatePSPTransactionCreateReplay(existing, requestedTxn); err != nil {
-			return nil, mapError(err)
-		}
-		existingID := existing.WorkflowID.String
-		if !existing.WorkflowID.Valid {
-			existingID = workflowID
-		}
-		return &walletv1.WorkflowRun{WorkflowId: existingID, RunId: ""}, nil
-	} else if err != nil && !errors.Is(err, walletstore.ErrPSPTransactionNotFound) {
-		return nil, mapError(err)
-	}
-
-	txn := requestedTxn
-	if _, err := s.Service.Store.CreatePSPTransaction(ctx, txn); err != nil {
-		return nil, mapError(err)
-	}
-
 	taskQueue, err := s.temporalTaskQueue()
 	if err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
-	params := walletworkflow.DepositParams{
-		TenantID:        req.TenantId,
+	intentReference, err := newDepositIntentReference()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "create deposit intent reference")
+	}
+	requested := walletstore.DepositIntent{
+		TenantID:        tenantID,
+		IntentReference: intentReference,
 		ProviderCode:    req.ProviderCode,
-		ClientReference: req.ClientReference,
-		WalletID:        req.WalletId,
-		OwnerType:       req.OwnerType,
-		OwnerID:         req.OwnerId,
+		WalletID:        walletID,
+		OwnerType:       ownerType,
+		OwnerID:         ownerID,
+		Amount:          req.Amount,
+		Currency:        req.Currency,
+		IdempotencyKey:  req.IdempotencyKey,
+		WorkflowID:      depositWorkflowID(tenantID, intentReference),
+		Metadata:        walletstore.RawJSON(metadataJSON),
 		Region:          req.Region,
+		RawRequest:      walletstore.RawJSON(rawRequest),
+	}
+
+	intent, err := s.Service.Store.GetDepositIntentByIdempotency(ctx, tenantID, req.ProviderCode, req.IdempotencyKey)
+	switch {
+	case err == nil:
+		if err := walletstore.ValidateDepositIntentReplay(intent, requested); err != nil {
+			return nil, mapError(err)
+		}
+	case errors.Is(err, walletstore.ErrDepositIntentNotFound):
+		if err := s.validateDepositRequest(ctx, requested); err != nil {
+			return nil, mapError(err)
+		}
+		intent, err = s.Service.Store.ReserveDepositIntent(ctx, requested)
+		if err != nil {
+			return nil, mapError(err)
+		}
+	default:
+		return nil, mapError(err)
+	}
+	if intent.RunID.Valid {
+		return &walletv1.RequestDepositResponse{WorkflowId: intent.WorkflowID, RunId: intent.RunID.String}, nil
+	}
+
+	params := walletworkflow.DepositParams{
+		TenantID:        intent.TenantID,
+		IntentReference: intent.IntentReference,
 	}
 	run, err := temporalClient.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:                    workflowID,
+		ID:                    intent.WorkflowID,
 		TaskQueue:             string(taskQueue),
 		WorkflowIDReusePolicy: enumspb.WORKFLOW_ID_REUSE_POLICY_REJECT_DUPLICATE,
 	}, walletworkflow.Deposit, params)
 	if err != nil {
-		if already, ok := err.(*serviceerror.WorkflowExecutionAlreadyStarted); ok {
-			return &walletv1.WorkflowRun{WorkflowId: workflowID, RunId: already.RunId}, nil
+		var already *serviceerror.WorkflowExecutionAlreadyStarted
+		if errors.As(err, &already) {
+			runID := already.RunId
+			recorded, recordErr := s.Service.Store.RecordDepositIntentRun(ctx, intent.TenantID, intent.IntentReference, intent.WorkflowID, runID)
+			if recordErr != nil {
+				return nil, mapError(recordErr)
+			}
+			return &walletv1.RequestDepositResponse{WorkflowId: recorded.WorkflowID, RunId: recorded.RunID.String}, nil
 		}
-		return nil, mapPSPWorkflowStartFailure(markPSPTransactionWorkflowStartFailed(ctx, s.Service.Store, req.TenantId, req.ClientReference, err))
+		return nil, mapTemporalError(err)
 	}
-
-	return &walletv1.WorkflowRun{
-		WorkflowId: run.GetID(),
-		RunId:      run.GetRunID(),
-	}, nil
+	recorded, err := s.Service.Store.RecordDepositIntentRun(ctx, intent.TenantID, intent.IntentReference, run.GetID(), run.GetRunID())
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &walletv1.RequestDepositResponse{WorkflowId: recorded.WorkflowID, RunId: recorded.RunID.String}, nil
 }
 
-func (s *Server) validateDepositRequest(ctx context.Context, req *walletv1.DepositRequest, walletID uuid.UUID) error {
+func (s *Server) validateDepositRequest(ctx context.Context, intent walletstore.DepositIntent) error {
 	validator := walletvalidation.Service{Store: s.Service.Store}
 	_, err := validator.ValidateDeposit(ctx, walletvalidation.DepositValidationRequest{
-		TenantID:        req.TenantId,
+		TenantID:        intent.TenantID,
 		TransactionType: "deposit",
-		ProviderCode:    req.ProviderCode,
-		TransactionID:   req.PspTransactionId,
-		WalletID:        walletID,
-		Currency:        req.Currency,
-		Amount:          req.Amount,
-		OwnerType:       req.OwnerType,
-		OwnerID:         req.OwnerId,
-		Region:          req.Region,
+		ProviderCode:    intent.ProviderCode,
+		WalletID:        intent.WalletID,
+		Currency:        intent.Currency,
+		Amount:          intent.Amount,
+		OwnerType:       intent.OwnerType,
+		OwnerID:         intent.OwnerID,
+		Region:          intent.Region,
 	})
 	return err
 }
 
 func depositWorkflowID(tenantID, clientReference string) string {
-	return fmt.Sprintf("wallet-deposit-%s-%s", tenantID, clientReference)
+	return walletWorkflowID("deposit", tenantID, clientReference)
 }
 
-func depositRawRequest(req *walletv1.DepositRequest, metadata map[string]any) (json.RawMessage, error) {
-	payload := map[string]any{
-		"tenant_id":        req.TenantId,
-		"client_reference": req.ClientReference,
-		"provider_code":    req.ProviderCode,
-		"wallet_id":        req.WalletId,
-		"owner_type":       req.OwnerType,
-		"owner_id":         req.OwnerId,
-		"amount":           req.Amount,
-		"currency":         req.Currency,
-		"fee_amount":       req.FeeAmount,
-		"net_amount":       req.NetAmount,
-		"region":           req.Region,
-		"metadata":         metadata,
+func newDepositIntentReference() (string, error) {
+	material := make([]byte, 32)
+	if _, err := rand.Read(material); err != nil {
+		return "", err
 	}
-	if req.PspTransactionId != "" {
-		payload["psp_transaction_id"] = req.PspTransactionId
+	return "dep_" + base64.RawURLEncoding.EncodeToString(material), nil
+}
+
+func depositRawRequest(req *walletv1.RequestDepositRequest, ownerType, ownerID string, metadata map[string]any) (json.RawMessage, error) {
+	payload := map[string]any{
+		"tenant_id":       req.TenantId,
+		"provider_code":   req.ProviderCode,
+		"wallet_id":       req.WalletId,
+		"owner_type":      ownerType,
+		"owner_id":        ownerID,
+		"amount":          req.Amount,
+		"currency":        req.Currency,
+		"idempotency_key": req.IdempotencyKey,
+		"region":          req.Region,
+		"metadata":        metadata,
 	}
 	return json.Marshal(payload)
 }

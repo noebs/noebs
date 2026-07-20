@@ -916,8 +916,10 @@ type NoebsConfig struct {
 	BackofficeClientSecret                     string                     `json:"backoffice_client_secret"`
 	BackofficeRedirectURL                      string                     `json:"backoffice_redirect_url"`
 	BackofficePostLogoutURL                    string                     `json:"backoffice_post_logout_url"`
-	BackofficeEncryptionKeyID                  string                     `json:"backoffice_encryption_key_id"`
-	BackofficeEncryptionKeys                   map[string]string          `json:"backoffice_encryption_keys"`
+	WalletAuthorizerClientSecret               string                     `json:"wallet_authorizer_client_secret"`
+	WalletAuthorizerRedirectURL                string                     `json:"wallet_authorizer_redirect_url"`
+	GatewayAuthEncryptionKeyID                 string                     `json:"gateway_auth_encryption_key_id"`
+	GatewayAuthEncryptionKeys                  map[string]string          `json:"gateway_auth_encryption_keys"`
 	WorkloadAuth                               workloadauth.Config        `json:"workload_auth"`
 	InternalTransport                          transportauth.Config       `json:"internal_transport"`
 	ServiceDiscovery                           map[string]string          `json:"service_discovery"`
@@ -928,9 +930,7 @@ type NoebsConfig struct {
 	AdminReportingKafkaConsumerGroup           string                     `json:"admin_reporting_kafka_consumer_group"`
 	EBSTransactionEventPublisherBatchSize      int                        `json:"ebs_transaction_event_publisher_batch_size"`
 	EBSTransactionEventPublisherPollIntervalMs int                        `json:"ebs_transaction_event_publisher_poll_interval_ms"`
-	SOPSAgeKeyFile                             string                     `json:"sops_age_key_file"`
 	RuntimeDir                                 string                     `json:"runtime_dir"`
-	RenderDBPasswordFile                       string                     `json:"render_db_password_file"`
 	DataKey                                    string                     `json:"data_key"`
 	DatabaseURL                                string                     `json:"db_url"`
 	DatabaseDriver                             string                     `json:"db_driver"`
@@ -978,12 +978,6 @@ type NoebsConfig struct {
 	EBSConsumerKey     string `json:"pub_key"`
 	EBSIpinKey         string `json:"ipin_key"`
 
-	// EBS HTTP client behavior.
-	//
-	// NOTE: keep this secure-by-default. Only enable in local/dev if the EBS endpoint
-	// uses a self-signed cert.
-	EBSInsecureSkipVerify bool `json:"ebs_insecure_skip_verify"`
-
 	// Alpha capabilities are independent and default off. A deployment enables
 	// each client surface only after its own backend and end-to-end release gate
 	// has passed.
@@ -1005,16 +999,20 @@ type NoebsConfig struct {
 	LogSamplingAfterMs int     `json:"log_sampling_after_ms"`
 	OtelEnabled        bool    `json:"otel_enabled"`
 	OtelEndpoint       string  `json:"otel_endpoint"`
-	OtelInsecure       bool    `json:"otel_insecure"`
 	OtelSampleRate     float64 `json:"otel_sample_rate"`
 	OtelServiceName    string  `json:"otel_service_name"`
 	OtelServiceVersion string  `json:"otel_service_version"`
 
 	// Temporal
-	TemporalEnabled   bool   `json:"temporal_enabled"`
-	TemporalHost      string `json:"temporal_host"`
-	TemporalPort      string `json:"temporal_port"`
-	TemporalNamespace string `json:"temporal_namespace"`
+	TemporalEnabled       bool   `json:"temporal_enabled"`
+	TemporalHost          string `json:"temporal_host"`
+	TemporalPort          string `json:"temporal_port"`
+	TemporalNamespace     string `json:"temporal_namespace"`
+	TemporalServerName    string `json:"temporal_server_name"`
+	TemporalCACertificate string `json:"temporal_ca_certificate"`
+	TemporalTokenURL      string `json:"temporal_token_url"`
+	TemporalClientID      string `json:"temporal_client_id"`
+	TemporalClientSecret  string `json:"temporal_client_secret"`
 
 	// Wallet
 	WalletEnabled                              bool   `json:"wallet_enabled"`
@@ -1022,7 +1020,6 @@ type NoebsConfig struct {
 	WalletDefaultCurrency                      string `json:"wallet_default_currency"`
 	WalletHoldExpirySeconds                    int    `json:"wallet_hold_expiry_seconds"`
 	WalletApprovalTimeoutSeconds               int    `json:"wallet_approval_timeout_seconds"`
-	WalletVerificationTimeoutSeconds           int    `json:"wallet_verification_timeout_seconds"`
 	WalletManualTransferApprovalTimeoutSeconds int    `json:"wallet_manual_approval_timeout_seconds"`
 	WalletPSPPollerCron                        string `json:"wallet_psp_poller_cron"`
 	WalletPSPPollerBatchSize                   int    `json:"wallet_psp_poller_batch_size"`

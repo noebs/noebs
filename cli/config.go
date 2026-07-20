@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -27,12 +28,10 @@ import (
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletpsphttpjson "github.com/adonese/noebs/wallet/psp/httpjson"
-	walletpspnoop "github.com/adonese/noebs/wallet/psp/noop"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/adaptor/v2"
-	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"go.temporal.io/api/serviceerror"
@@ -53,6 +52,11 @@ var errRetiredHumanAuthConfig = errors.New("retired human authentication config"
 
 const applicationTenantCatalogPath = "/app/tenant-catalog.yaml"
 
+const (
+	cliTestRootEnv       = "NOEBS_CLI_TEST_ROOT"
+	cliTestConfigPathEnv = "NOEBS_CLI_TEST_CONFIG_PATH"
+)
+
 var (
 	tenantCatalogFilePath = applicationTenantCatalogPath
 	runtimeTenantCatalog  tenantcatalog.Catalog
@@ -70,6 +74,8 @@ var retiredHumanAuthConfigKeys = []string{
 	"google_client_id",
 	"google_client_secret",
 	"google_redirect_url",
+	"backoffice_encryption_key_id",
+	"backoffice_encryption_keys",
 }
 
 func isTestRun() bool {
@@ -79,7 +85,11 @@ func isTestRun() bool {
 func loadConfig() ([]byte, error) {
 	configPath := defaultConfigPath
 	if isTestRun() {
-		configPath = "./config.test.yaml"
+		var err error
+		configPath, err = configPathForTestProcess()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if _, err := requiredExistingPath("config", configPath); err != nil {
 		return nil, err
@@ -130,7 +140,7 @@ func loadConfig() ([]byte, error) {
 	if secretsPath, err := optionalExistingPath(secretsPath); err != nil {
 		return nil, err
 	} else if secretsPath != "" {
-		decrypted, err := decryptSopsFile(secretsPath, firstString(getMap(configMap, "noebs"), "sops_age_key_file"))
+		decrypted, err := readRuntimeSecrets(secretsPath)
 		if err != nil {
 			return nil, err
 		} else if err := yaml.Unmarshal(decrypted, &secretsMap); err != nil {
@@ -168,6 +178,22 @@ func loadConfig() ([]byte, error) {
 	return payload, nil
 }
 
+func configPathForTestProcess() (string, error) {
+	root := os.Getenv(cliTestRootEnv)
+	path := os.Getenv(cliTestConfigPathEnv)
+	if root == "" || path == "" {
+		return "./config.test.yaml", nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve test config directory: %w", err)
+	}
+	if filepath.Clean(cwd) == filepath.Clean(root) {
+		return path, nil
+	}
+	return "./config.test.yaml", nil
+}
+
 func rejectRetiredHumanAuthConfig(noebs map[string]interface{}) error {
 	for _, key := range retiredHumanAuthConfigKeys {
 		if _, exists := noebs[key]; exists {
@@ -182,16 +208,10 @@ func buildPSPDeps(pspStore *walletstore.Store, secrets map[string]interface{}) (
 		return nil, nil, errMissingPSPStore
 	}
 	pspRegistry := walletpsp.NewRegistry()
-	if err := pspRegistry.Register("noop", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
-		_ = cfg
-		return &walletpspnoop.Provider{}, nil
-	}); err != nil {
-		logrusLogger.Printf("error registering noop PSP provider: %v", err)
-	}
 	if err := pspRegistry.Register("httpjson", func(cfg *walletpsp.Config) (walletpsp.Provider, error) {
 		return walletpsphttpjson.NewProvider(cfg)
 	}); err != nil {
-		logrusLogger.Printf("error registering httpjson PSP provider: %v", err)
+		return nil, nil, fmt.Errorf("register httpjson PSP provider: %w", err)
 	}
 
 	var secretResolver walletpsp.SecretResolver = walletpsp.SecretResolverFunc(func(ctx context.Context, tenantID, providerCode string) (walletpsp.SecretBundle, error) {
@@ -297,15 +317,6 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 		}
 	}
 	return nil
-}
-
-var walletWorkflowClient wallethandler.TemporalSignaler
-var walletWorkflowCloser interface{ Close() }
-
-func closeWalletWorkflowClient() {
-	if walletWorkflowCloser != nil {
-		walletWorkflowCloser.Close()
-	}
 }
 
 var errRoleDatabaseNotInitialized = errors.New("role database not initialized")
@@ -529,21 +540,13 @@ func GetMainEngine() *fiber.App {
 	userIdentity := gateway.InternalUserIdentityMiddleware()
 	adminIdentity := principalIdentity
 	if otelEnabled {
-		route.Use(otelfiber.Middleware(
-			otelfiber.WithServerName(noebsConfig.OtelServiceName),
-			otelfiber.WithSpanNameFormatter(func(ctx *fiber.Ctx) string {
-				if r := ctx.Route(); r != nil && r.Path != "" {
-					return ctx.Method() + " " + r.Path
-				}
-				return ctx.Method() + " " + ctx.Path()
-			}),
-		))
+		route.Use(httpTracingMiddleware(noebsConfig.OtelServiceName))
 	}
 	route.Use(gateway.Instrumentation())
 	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
 	registerAPIGatewayHealthRoute(route, role)
-	if roleReceivesSignedHTTP(role) {
+	if role.startsHTTP() {
 		route.Get(internalHealthPath, func(c *fiber.Ctx) error {
 			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 		})
@@ -561,7 +564,7 @@ func GetMainEngine() *fiber.App {
 		return h
 	}
 	if role == serviceRolePSPWebhook {
-		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(pspWebhookStore, walletPSPLoader, walletPSPRegistry, walletWorkflowClient)
+		walletWebhookHandler := wallethandler.NewPSPWebhookHandler(pspWebhookStore, walletPSPLoader, walletPSPRegistry)
 		wallethandler.RegisterWebhookRoutes(route.Group("", tenantIdentity), walletWebhookHandler)
 		return route
 	}
@@ -599,13 +602,16 @@ func GetMainEngine() *fiber.App {
 	if backofficeAuthHandler == nil {
 		logrusLogger.Fatal("api-gateway back-office authentication is not initialized")
 	}
+	if walletAuthorizationHandler == nil {
+		logrusLogger.Fatal("api-gateway wallet transaction authorization is not initialized")
+	}
 	if err := registerBackofficeLifecycleRoutes(route, backofficeAuthHandler); err != nil {
 		logrusLogger.Fatalf("error registering back-office authentication routes: %v", err)
 	}
 	if err := registerBackofficeProxyRoutes(route, noebsConfig, backofficeAuthHandler); err != nil {
 		logrusLogger.Fatalf("error registering back-office proxy routes: %v", err)
 	}
-	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, runtimeTenantCatalog); err != nil {
+	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, runtimeTenantCatalog, walletAuthorizationHandler); err != nil {
 		logrusLogger.Fatalf("error in api gateway service discovery: %v", err)
 	}
 
@@ -625,7 +631,7 @@ func registerAPIGatewayHealthRoute(route *fiber.App, role serviceRole) {
 
 var initOnce sync.Once
 
-var openServiceDatabase = store.OpenFromConfigWithCACertificate
+var openServiceDatabase = openPostgresDatabaseWithAuthority
 
 func ensureInit() {
 	initOnce.Do(initConfig)
@@ -687,13 +693,13 @@ func initConfig() {
 	if err := initInternalTransport(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error initializing internal transport: %v", err)
 	}
-	ebs_fields.ConfigureEBSHTTPClient(noebsConfig)
 	configureLogger(noebsConfig)
 	if err := initOTel(context.Background(), role, noebsConfig, logrusLogger); err != nil {
 		logrusLogger.Fatalf("error initializing otel: %v", err)
 	}
 	if role.opensDatabase() {
-		database, err = openServiceDatabase(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver, noebsConfig.DatabaseCACertificate)
+		databaseRole, _ := postgresRoleSpecForService(role)
+		database, err = openServiceDatabase(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver, noebsConfig.DatabaseCACertificate, databaseRole)
 		if err != nil {
 			logrusLogger.Fatalf("error in connecting to db: %v", err)
 		}
@@ -704,7 +710,7 @@ func initConfig() {
 			if err := store.MigrateScope(migrateCtx, database, migrationScope); err != nil {
 				logrusLogger.Fatalf("error in migrations: %v", err)
 			}
-			if migrationScope != store.MigrationScopeWorkloadAuth && migrationScope != store.MigrationScopeGatewayAuth {
+			if migrationScope != store.MigrationScopeWorkloadAuth {
 				catalog, err := tenantcatalog.LoadFile(tenantCatalogFilePath)
 				if err != nil {
 					logrusLogger.Fatalf("error loading tenant catalog: %v", err)
@@ -746,6 +752,9 @@ func initConfig() {
 	}
 	if err := initBackofficeAuth(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
 		logrusLogger.Fatalf("error initializing back-office authentication: %v", err)
+	}
+	if err := initWalletAuthorization(role, noebsConfig, database); err != nil {
+		logrusLogger.Fatalf("error initializing wallet transaction authorization: %v", err)
 	}
 
 	// Initialize sentry
@@ -793,19 +802,6 @@ func initConfig() {
 			Topic:   noebsConfig.KafkaTransactionTopic,
 		}
 	}
-	if role == serviceRolePSPWebhook {
-		client, err := walletworker.NewClient(walletworker.Options{
-			Host:      noebsConfig.TemporalHost,
-			Port:      noebsConfig.TemporalPort,
-			Namespace: noebsConfig.TemporalNamespace,
-			TaskQueue: walletworker.TaskQueueMain,
-		})
-		if err != nil {
-			logrusLogger.Fatalf("error creating wallet workflow client: %v", err)
-		}
-		walletWorkflowClient = client
-		walletWorkflowCloser = client
-	}
 	if role == serviceRoleWalletAPI {
 		if err := initWalletLedgerPublicClient(noebsConfig); err != nil {
 			logrusLogger.Fatalf("error creating wallet-ledger grpc client: %v", err)
@@ -816,11 +812,9 @@ func initConfig() {
 			logrusLogger.Fatalf("error in wallet-worker PSP dependencies: %v", errMissingWalletPSPDeps)
 		}
 		pspActivities := walletactivity.NewPSPActivities(walletPSPLoader, walletPSPRegistry)
-		workerOpts := walletworker.Options{
-			Host:      noebsConfig.TemporalHost,
-			Port:      noebsConfig.TemporalPort,
-			Namespace: noebsConfig.TemporalNamespace,
-			TaskQueue: walletworker.TaskQueueMain,
+		workerOpts, err := buildTemporalOptions(context.Background(), noebsConfig, walletworker.TaskQueueMain, temporalWorkerClientID)
+		if err != nil {
+			logrusLogger.Fatalf("error configuring wallet worker Temporal authority: %v", err)
 		}
 		register := func(w temporalworker.Worker) {
 			walletworker.RegisterWallet(w, walletworker.RegisterDeps{

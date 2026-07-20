@@ -29,13 +29,15 @@ Required Kubernetes Secrets in namespace `noebs`:
 - `wallet-ledger-secrets` with key `secrets.yaml`.
 - `wallet-worker-secrets` with key `secrets.yaml`.
 - `ebs-adapter-events-secrets`, `admin-reporting-projector-secrets`, `workload-auth-migrate-secrets`, `workload-auth-cleanup-secrets`, `gateway-auth-migrate-secrets`, and `gateway-auth-cleanup-secrets`, each with key `secrets.yaml`.
-- `identity-auth-migrate-secrets`, `card-vault-migrate-secrets`, `ebs-adapter-migrate-secrets`, `psp-webhook-migrate-secrets`, `admin-reporting-migrate-secrets`, `notification-chat-migrate-secrets`, and `wallet-ledger-migrate-secrets`, each with key `secrets.yaml`.
-- `workload-auth-postgres-roles` with keys `migrate-password`, `runtime-password`, `cleanup-password`, and `roles.yaml`.
-- `gateway-auth-postgres-roles` with keys `migrate-password`, `runtime-password`, `cleanup-password`, and `roles.yaml`.
+- `identity-auth-migrate-secrets`, `card-vault-migrate-secrets`, `ebs-adapter-migrate-secrets`, `admin-reporting-migrate-secrets`, `notification-chat-migrate-secrets`, and `wallet-ledger-migrate-secrets`, each with key `secrets.yaml`.
+- `workload-auth-postgres-roles` with key `roles.yaml`.
+- `gateway-auth-postgres-roles` with key `roles.yaml`.
+- `service-postgres-roles` with keys `passwords.env`, `bootstrap.sql`, and `roles.yaml`; only Postgres and deployment preflight mount this complete catalog.
 - `internal-transport-platform` with key `credentials.yaml`.
-- `sops-age-key` with key `age-key.txt`.
-- `postgres-credentials` with keys `password`, `tls.crt`, and `tls.key`.
-- `temporal-postgres-credentials` with key `password`.
+- `postgres-credentials` with keys `ca.pem`, `tls.crt`, and `tls.key`; there is no network bootstrap password.
+- `temporal-postgres-credentials` with keys `password`, `ca.pem`, `tls.crt`, and `tls.key`.
+- `temporal-server-credentials` with keys `ca.pem`, `tls.crt`, and `tls.key`.
+- `temporal-namespace-bootstrap-credentials` with keys `ca.pem` and `client-secret`.
 - `ghcr-credentials` with key `.dockerconfigjson`.
 
 Prepare the release from one strict SOPS-encrypted authority input and its
@@ -58,7 +60,8 @@ The preparation command reads tracked Kubernetes config, service roles, and
 tenant catalog from the repo, decrypts only the named authority input,
 encrypts service secret files with SOPS, fingerprints the complete artifact
 set, and validates the output. The renderer validates that same layout and
-cross-artifact authority before emitting Kubernetes `Secret` manifests. The
+cross-artifact authority, decrypts each service into its own Kubernetes
+`Secret`, and emits a second fingerprint for the rendered plaintext set. The
 release directory contains exactly `config.yaml`, `tenant-catalog.yaml`,
 `release-manifest.yaml`, `.sops/age-key.txt`, one `services/<role>.yaml` file
 for every runtime and migration role, one `secrets/<service>.secrets.yaml`
@@ -66,27 +69,33 @@ file per service-owned secret, and the explicit platform files under
 `platform/`. Missing or extra artifacts, placeholders, mismatched database
 roles/passwords, Keycloak credentials, CAs, workload keys, PSP routes, tenant
 catalog membership, or invalid OIDC/BFF construction fail before output.
+The age identity never enters Kubernetes; application and preflight pods
+accept only the rendered plaintext Secret format.
 
 The encrypted authority input supplies the internal CA certificate and private
 key. Preparation derives per-role leaf identities, but the CA signing key is
 input-only: it is never written to the prepared release or rendered into
-Kubernetes. `internal-transport-platform` contains only the public CA plus the
-Postgres leaf certificate and private key. Rotating the CA requires a
+Kubernetes. `internal-transport-platform` contains the public CA and the
+server leaf identities consumed by the renderer and deployment preflight. Rotating the CA requires a
 coordinated full workload cutover; do not roll only part of the identity set.
 
-Noebs HTTP service discovery, the wallet API-to-ledger gRPC hop, service connections to both Postgres servers, and every Keycloak application hop use TLS 1.3 with generated identities. Keycloak verifies the distinct `keycloak-postgres` database identity; Caddy, the API gateway, and the reconciliation jobs verify the `keycloak` HTTPS identity. Keycloak has no plaintext application listener. Its HTTP management listener stays pod-local to kubelet probes through a node-only NetworkPolicy. Internal Noebs HTTP and wallet gRPC servers require a trusted client certificate. Both Postgres servers use `hostssl` authentication and explicitly reject `hostnossl`.
+Noebs HTTP service discovery, the wallet API-to-ledger gRPC hop, service connections to every Postgres server, and every Keycloak application hop use TLS 1.3 with generated identities. Keycloak verifies the distinct `keycloak-postgres` database identity; Temporal and its schema job verify the distinct `temporal-postgres` identity; Caddy, the API gateway, and the reconciliation jobs verify the `keycloak` HTTPS identity. Keycloak has no plaintext application listener. Its HTTP management listener stays pod-local to kubelet probes through a node-only NetworkPolicy. Internal Noebs HTTP and wallet gRPC servers require a trusted client certificate. All Postgres servers use `hostssl` authentication and explicitly reject `hostnossl`.
 
-Kafka and Temporal remain plaintext single-node platform dependencies for this alpha. Their exposure is constrained to exact namespace peers by NetworkPolicy, but this is residual risk rather than end-to-end transport security. Docker Compose remains a local-development path: its Postgres bootstrap permits plaintext only when no TLS files are mounted, and its workload nonce cleanup service is one-shot rather than scheduled.
+Kafka remains a plaintext single-node platform dependency for this alpha. Temporal exposes only its TLS/JWT frontend to the exact wallet and bootstrap peers; backend and internal-frontend listeners remain loopback-only. Keycloak owns distinct revocable identities for wallet-ledger, wallet-worker, and namespace bootstrap, and the unused Temporal UI is absent. Docker Compose uses the same Temporal authority boundary on isolated networks.
 
 Keycloak may open public HTTPS connections for configured identity providers. Kubernetes NetworkPolicy cannot constrain egress by DNS name, so the policy permits TCP 443 to public IPv4 addresses while excluding cluster, private, loopback, carrier-grade NAT, and link-local ranges.
 
-Each noebs service secret contains only the material owned by that service. Database-opening service secrets include `noebs.service_databases` keyed only by the database owner role. Runtime config copies the owner URL into `noebs.db_url` for that role and rejects non-owner database entries. `api-gateway-secrets` contains the explicit confidential back-office client, session-encryption keyring, opaque PSP callback routing map, and `api-gateway` session database entry; it contains no JWT or static administrator credential. `wallet-api-secrets` has no database entry. `wallet-worker-secrets` uses the `wallet-ledger` owner key because wallet-ledger owns wallet state; the worker has no separate database or migration scope.
+Each noebs service secret contains only the material owned by that service. Database-opening service secrets include `noebs.service_databases` keyed only by the database owner role. Runtime config copies the owner URL into `noebs.db_url` for that role and rejects non-owner database entries. `api-gateway-secrets` contains the explicit confidential back-office and wallet-authorization clients, session-encryption keyring, opaque PSP callback routing map, and `api-gateway` session database entry; it contains no JWT or static administrator credential. `wallet-api-secrets` has no database entry. `wallet-worker-secrets` and `psp-webhook-secrets` use the `wallet-ledger` owner key and connect as the exact `wallet_ledger_worker` and `wallet_ledger_webhook` roles. PSP tables are in the wallet migration scope; the webhook ingress has no migration role or database.
 
 `ebs-adapter-secrets` must provide explicit resolved EBS runtime values: `consumer_endpoint`, `merchant_endpoint`, `ipin_endpoint`, `consumer_app_id`, `merchant_app_id`, `ipin_username`, `ipin_password`, `pub_key`, `ipin_key`, `pan`, `pin`, `ipin`, and `exp_date`. The runtime does not pick QA or production endpoints from mode booleans.
 
 `keycloak-secrets` is not a noebs merged secret. It contains the steady configuration, the CA used to verify `keycloak-postgres`, and the `keycloak` HTTPS certificate and private key; bootstrap admin options are forbidden. `keycloak-transport-ca` contains only the public CA used by HTTPS clients. `keycloak-reconciler-credentials` contains the realm-local reconciler config rendered by the release preparation command. Keycloak realm, client, organization, role, and identity-provider state is reconciled from `deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml`. The one-time service-account bootstrap is isolated in `deploy/kubernetes/overlays/bootstrap-current-host`.
 
-When using the in-cluster `postgres` StatefulSet, service database URLs point at the owned database names created by the init script: `gateway_auth`, `workload_auth`, `identity_auth`, `card_vault`, `ebs_adapter`, `psp_webhook`, `admin_reporting`, `notification_chat`, and `wallet_ledger`.
+When using the in-cluster `postgres` StatefulSet, its exact 22 login roles connect to these eight service databases: `gateway_auth`, `workload_auth`, `identity_auth`, `card_vault`, `ebs_adapter`, `admin_reporting`, `notification_chat`, and `wallet_ledger`.
+
+Postgres role or TLS rotation is a bounded-outage operation because the StatefulSet uses fixed-name Secret `subPath` mounts and reconciles role passwords only at process start. Pause automated Argo CD sync, scale every Noebs application Deployment to zero, suspend `noebs-workload-auth-cleanup` and `noebs-gateway-auth-cleanup`, and apply the complete newly rendered Secret set. Replace the database pod with exactly `kubectl -n noebs delete pod postgres-0`, then wait for the replacement `postgres-0` pod to become Ready. Run one sync of the unchanged reviewed revision: preflight must succeed, migration hooks must complete in waves 9–16, cleanup resumes at wave 19, and application Deployments return at waves 20–21. Resume automated sync only after the new pods pass readiness. Do not use `rollout restart`, a database-only secret update, partial credentials, or simultaneous old/new passwords.
+
+The Postgres data volume is also a clean-install boundary. Startup requires `.noebs-postgres-authority` and rejects any volume with unexpected roles or databases. Recreate a nonconforming PVC; do not migrate its grants or owners forward.
 
 Noebs service roles and OTel service names are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
@@ -161,8 +170,8 @@ done
 After Argo CD reports `Synced` and `Healthy`, verify that its revision is the
 digest-pin commit, every Deployment and StatefulSet has completed rollout, all
 Noebs pod `imageID` values end in the expected digest, no runtime pod is
-`BestEffort`, and the identity/card-vault migration versions are at least the
-versions required by the release. Then run the non-financial live smoke script
+`BestEffort`, and every service database has exactly the release's migration
+set. Then run the non-financial live smoke script
 with the digest-pin commit and released OCI digest:
 
 ```sh
@@ -179,8 +188,8 @@ self-heal will overwrite it. Confirm the previous digest still resolves in
 GHCR before starting the release.
 
 Database migration is a separate boundary. The Keycloak cutover deliberately
-resets the resettable Noebs service databases and creates identity projection
-schema `101` with Keycloak as the sole identity authority. A pre-cutover binary
+resets the resettable Noebs service databases and creates the consolidated
+identity projection schema `001` with Keycloak as the sole identity authority. A pre-cutover binary
 is incompatible with that schema and trust boundary and is not a rollback
 candidate.
 
@@ -197,7 +206,10 @@ Noebs images are pulled through the explicit `ghcr-credentials` image pull Secre
 The host-network edge Caddy deployment is the sole public TLS and routing
 authority. It sends Noebs API traffic to `api-gateway` and the explicit public
 Keycloak paths to `keycloak`; this overlay creates no Ingress and no public TLS
-Secret. Internal HTTP routing is owned by the gateway through
+Secret. The edge release requires `edge/edge-internal-transport` with
+`ca.pem`, `tls.crt`, and `tls.key`; Caddy uses that exact client identity and
+the `api-gateway.noebs.svc.cluster.local` server name for the gateway hop.
+Internal HTTP routing is owned by the gateway through
 `noebs.service_discovery` in the mounted config. Wallet API to wallet ledger
 gRPC routing uses `noebs.grpc_service_discovery.wallet-ledger`.
 

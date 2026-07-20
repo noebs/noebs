@@ -3,7 +3,7 @@
 	header {
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
-		Referrer-Policy strict-origin-when-cross-origin
+		Referrer-Policy no-referrer
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	}
 }
@@ -33,7 +33,7 @@ api.noebs.sd {
 		}
 		reverse_proxy @keycloak_metadata https://keycloak.noebs.svc.cluster.local:8443 {
 			transport http {
-				tls_trust_pool file /etc/noebs-keycloak/ca.pem
+				tls_trust_pool file /etc/noebs-internal/ca.pem
 				tls_server_name keycloak.noebs.svc.cluster.local
 			}
 			header_up X-Forwarded-For {remote_host}
@@ -44,11 +44,11 @@ api.noebs.sd {
 
 		@keycloak_browser_get {
 			method GET
-			path /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login
+			path /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login /auth/realms/noebs/broker/after-post-broker-login
 		}
 		reverse_proxy @keycloak_browser_get https://keycloak.noebs.svc.cluster.local:8443 {
 			transport http {
-				tls_trust_pool file /etc/noebs-keycloak/ca.pem
+				tls_trust_pool file /etc/noebs-internal/ca.pem
 				tls_server_name keycloak.noebs.svc.cluster.local
 			}
 			header_up X-Forwarded-For {remote_host}
@@ -59,11 +59,11 @@ api.noebs.sd {
 
 		@keycloak_browser_post {
 			method POST
-			path /auth/realms/noebs/protocol/openid-connect/token /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/first-broker-login
+			path /auth/realms/noebs/protocol/openid-connect/token /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/login-actions/post-broker-login /auth/realms/noebs/broker/after-post-broker-login
 		}
 		reverse_proxy @keycloak_browser_post https://keycloak.noebs.svc.cluster.local:8443 {
 			transport http {
-				tls_trust_pool file /etc/noebs-keycloak/ca.pem
+				tls_trust_pool file /etc/noebs-internal/ca.pem
 				tls_server_name keycloak.noebs.svc.cluster.local
 			}
 			header_up X-Forwarded-For {remote_host}
@@ -75,13 +75,24 @@ api.noebs.sd {
 		@keycloak_private path /auth /auth/*
 		respond @keycloak_private 404
 
-		reverse_proxy api-gateway.noebs.svc.cluster.local:8080
+		reverse_proxy https://api-gateway.noebs.svc.cluster.local:8080 {
+			transport http {
+				tls_trust_pool file /etc/noebs-internal/ca.pem
+				tls_server_name api-gateway.noebs.svc.cluster.local
+				tls_client_auth /etc/noebs-internal/tls.crt /etc/noebs-internal/tls.key
+			}
+		}
 	}
 
 	log {
 		output stdout
 		format filter {
+			request>headers>X-Noebs-Transaction-Authorization delete
+			request>headers>X-CSRF-Token delete
+			request>headers>X-Webhook-Signature delete
+			resp_headers>Location delete
 			request>uri query {
+				replace request REDACTED
 				replace code REDACTED
 				replace state REDACTED
 				replace session_state REDACTED
