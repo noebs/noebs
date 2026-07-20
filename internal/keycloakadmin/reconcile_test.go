@@ -70,6 +70,34 @@ func TestReconcileEmptyRealmThenNoOp(t *testing.T) {
 	}
 }
 
+func TestReconcileFinalizesClientCreateNormalization(t *testing.T) {
+	fake := newFakeKeycloak()
+	fake.normalizeClientCreates = true
+	server := httptest.NewTLSServer(fake)
+	defer server.Close()
+
+	reconciler, err := New(validTestConfig(server.URL), server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := repositoryDesiredState(t)
+	if _, err := reconciler.Reconcile(context.Background(), state); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	writes := fake.writeCount()
+
+	second, err := reconciler.Reconcile(context.Background(), state)
+	if err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+	if second.Changed() {
+		t.Fatalf("second Reconcile() result = %#v, want create normalization finalized in the first pass", second)
+	}
+	if got := fake.writeCount() - writes; got != len(state.IdentityProviders) {
+		t.Fatalf("second Reconcile() issued %d writes, want one masked-secret assertion per identity provider", got)
+	}
+}
+
 func TestReconcileDeletesOrganizationsAndGroupsOutsideDesiredState(t *testing.T) {
 	fake := newFakeKeycloak()
 	server := httptest.NewTLSServer(fake)
@@ -808,9 +836,10 @@ func TestDeleteBootstrapClient(t *testing.T) {
 type fakeKeycloak struct {
 	mu sync.Mutex
 
-	nextID int
-	writes int
-	realm  *realmRepresentation
+	nextID                 int
+	writes                 int
+	realm                  *realmRepresentation
+	normalizeClientCreates bool
 
 	realmRoles                map[string]roleRepresentation
 	clients                   map[string]clientRepresentation
@@ -1418,11 +1447,17 @@ func (f *fakeKeycloak) handleClients(writer http.ResponseWriter, request *http.R
 				return
 			}
 			client.ID = f.id("client")
+			if f.normalizeClientCreates && (client.ClientID == "noebs-keycloak-reconciler" || client.ClientID == "noebs-api") {
+				client.RootURL = "keycloak-create-default"
+			}
 			f.clients[client.ID] = client
 			f.clientRoles[client.ID] = map[string]roleRepresentation{}
 			f.clientRoleComposites[client.ID] = map[string][]roleRepresentation{}
 			f.clientMappers[client.ID] = map[string]protocolMapperRepresentation{}
 			f.defaultScopes[client.ID] = map[string]bool{}
+			if f.normalizeClientCreates && client.ClientID == "noebs-keycloak-reconciler" {
+				f.defaultScopes[client.ID][f.clientScopeID("basic")] = true
+			}
 			f.optionalScopes[client.ID] = map[string]bool{}
 			f.clientClientScopeMappings[client.ID] = map[string][]roleRepresentation{}
 			if client.ServiceAccountsEnabled {
@@ -1456,6 +1491,9 @@ func (f *fakeKeycloak) handleClients(writer http.ResponseWriter, request *http.R
 			}
 			replacement.Attributes = attributes
 			f.clients[clientID] = replacement
+			if f.normalizeClientCreates && client.ClientID == "noebs-keycloak-reconciler" {
+				f.defaultScopes[clientID][f.clientScopeID("basic")] = true
+			}
 			f.mutated(writer, http.StatusNoContent)
 		}
 		return

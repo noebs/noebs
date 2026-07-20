@@ -328,7 +328,6 @@ func reconcileReconcilerClient(ctx context.Context, session *adminSession, state
 	if err != nil {
 		return clientRepresentation{}, err
 	}
-	secretMatches := false
 	if !exists {
 		if err := session.post(ctx, base+"/clients", wanted); err != nil {
 			return clientRepresentation{}, fmt.Errorf("create reconciler client %s: %w", desired.ClientID, err)
@@ -341,19 +340,18 @@ func reconcileReconcilerClient(ctx context.Context, session *adminSession, state
 		if !exists {
 			return clientRepresentation{}, fmt.Errorf("%w: created reconciler client %s was not returned by Keycloak", ErrUnexpectedResponse, desired.ClientID)
 		}
-	} else {
-		secretMatches, err = clientSecretMatches(ctx, session, base, existing, credential.ClientSecret)
-		if err != nil {
-			return clientRepresentation{}, err
+	}
+	secretMatches, err := clientSecretMatches(ctx, session, base, existing, credential.ClientSecret)
+	if err != nil {
+		return clientRepresentation{}, err
+	}
+	if !clientMatches(existing, wanted) || !secretMatches {
+		update := clientUpdate(existing, wanted)
+		if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
+			return clientRepresentation{}, fmt.Errorf("update reconciler client %s: %w", desired.ClientID, err)
 		}
-		if !clientMatches(existing, wanted) || !secretMatches {
-			update := clientUpdate(existing, wanted)
-			if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
-				return clientRepresentation{}, fmt.Errorf("update reconciler client %s: %w", desired.ClientID, err)
-			}
-			result.Updated++
-			existing = update
-		}
+		result.Updated++
+		existing = update
 	}
 	if !secretMatches {
 		if err := verifyClientSecret(ctx, session, base, existing, credential.ClientSecret); err != nil {
@@ -680,15 +678,14 @@ func reconcileResourceClient(ctx context.Context, session *adminSession, state D
 		if !found {
 			return clientRepresentation{}, fmt.Errorf("%w: created client %s was not returned by Keycloak", ErrUnexpectedResponse, wanted.ClientID)
 		}
-	} else {
-		if !clientMatches(existing, wanted) {
-			update := clientUpdate(existing, wanted)
-			if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
-				return clientRepresentation{}, fmt.Errorf("update client %s: %w", wanted.ClientID, err)
-			}
-			result.Updated++
-			existing = update
+	}
+	if !clientMatches(existing, wanted) {
+		update := clientUpdate(existing, wanted)
+		if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
+			return clientRepresentation{}, fmt.Errorf("update client %s: %w", wanted.ClientID, err)
 		}
+		result.Updated++
+		existing = update
 	}
 
 	return existing, nil
@@ -749,7 +746,6 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 		if err != nil {
 			return nil, err
 		}
-		secretMatches := publicClient
 		if !found {
 			if err := session.post(ctx, base+"/clients", wanted); err != nil {
 				return nil, fmt.Errorf("create interactive client %s: %w", desired.ClientID, err)
@@ -762,21 +758,21 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 			if !found {
 				return nil, fmt.Errorf("%w: created client %s was not returned by Keycloak", ErrUnexpectedResponse, desired.ClientID)
 			}
-		} else {
-			if !publicClient {
-				secretMatches, err = clientSecretMatches(ctx, session, base, existing, secret)
-				if err != nil {
-					return nil, err
-				}
+		}
+		secretMatches := publicClient
+		if !publicClient {
+			secretMatches, err = clientSecretMatches(ctx, session, base, existing, secret)
+			if err != nil {
+				return nil, err
 			}
-			if !clientMatches(existing, wanted) || !secretMatches {
-				update := clientUpdate(existing, wanted)
-				if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
-					return nil, fmt.Errorf("update interactive client %s: %w", desired.ClientID, err)
-				}
-				result.Updated++
-				existing = update
+		}
+		if !clientMatches(existing, wanted) || !secretMatches {
+			update := clientUpdate(existing, wanted)
+			if err := session.put(ctx, base+"/clients/"+url.PathEscape(existing.ID), update); err != nil {
+				return nil, fmt.Errorf("update interactive client %s: %w", desired.ClientID, err)
 			}
+			result.Updated++
+			existing = update
 		}
 		if !secretMatches {
 			if err := verifyClientSecret(ctx, session, base, existing, secret); err != nil {
