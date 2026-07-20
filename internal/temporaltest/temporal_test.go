@@ -56,7 +56,7 @@ func TestTemporalContainer(t *testing.T) {
 		Image:        "temporalio/auto-setup:1.29.7",
 		ExposedPorts: []string{"7233/tcp"},
 		Env: map[string]string{
-			"DB":             "postgresql",
+			"DB":             "postgres12",
 			"DB_PORT":        "5432",
 			"POSTGRES_USER":  "temporal",
 			"POSTGRES_PWD":   "temporal",
