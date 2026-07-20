@@ -2655,8 +2655,6 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 		`reverse_proxy https://api-gateway.noebs.svc.cluster.local:8080`,
 		`tls_server_name api-gateway.noebs.svc.cluster.local`,
 		`tls_client_auth /etc/noebs-internal/tls.crt /etc/noebs-internal/tls.key`,
-		`header_up X-Forwarded-For {remote_host}`,
-		`header_up X-Forwarded-Host {host}`,
 		`header_up X-Forwarded-Port 443`,
 		`@keycloak_private path /auth /auth/*`,
 		`respond @keycloak_private 404`,
@@ -2664,6 +2662,11 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 	} {
 		if !strings.Contains(caddyfile, required) {
 			t.Errorf("edge Caddyfile missing %q", required)
+		}
+	}
+	for _, redundant := range []string{`header_up X-Forwarded-For`, `header_up X-Forwarded-Host`} {
+		if strings.Contains(caddyfile, redundant) {
+			t.Errorf("edge Caddyfile overrides Caddy's secure forwarding default with %q", redundant)
 		}
 	}
 	unmatchedKeycloakSurface := caddyfile
