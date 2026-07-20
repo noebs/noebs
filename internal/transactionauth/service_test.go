@@ -201,6 +201,20 @@ func TestCallbackIdentityMustMatchInitiator(t *testing.T) {
 	}
 }
 
+func TestCallbackAuthenticationMustFollowBrowserStart(t *testing.T) {
+	service, repository, oauth, clock := serviceFixture(t)
+	_, challenge := completeBrowserStart(t, service, repository, oauth, testBinding())
+	oauth.identity = VerifiedIdentity{
+		Issuer:             testBinding().Issuer,
+		Subject:            testBinding().Subject,
+		ACR:                "urn:noebs:acr:google-totp",
+		AuthenticationTime: clock.Now().Add(-2 * time.Second),
+	}
+	if _, err := service.Complete(context.Background(), oauth.state, challenge.BrowserBinding, "code"); !errors.Is(err, ErrAuthorizationDenied) {
+		t.Fatalf("pre-challenge authentication error = %v, want %v", err, ErrAuthorizationDenied)
+	}
+}
+
 func TestLateBrowserStartCannotOutliveIntent(t *testing.T) {
 	service, _, _, clock := serviceFixture(t)
 	initiated, err := service.Begin(context.Background(), testBinding())

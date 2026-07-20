@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-const flowVerifierPurpose = "wallet-authorization-pkce-verifier"
+const (
+	flowVerifierPurpose             = "wallet-authorization-pkce-verifier"
+	oidcAuthenticationTimePrecision = time.Second
+)
 
 type ServiceConfig struct {
 	Repository       Repository
@@ -177,7 +180,8 @@ func (s *Service) Complete(ctx context.Context, state, browserBinding, code stri
 		return Authorization{}, err
 	}
 	if identity.Issuer != flow.Binding.Issuer || identity.Subject != flow.Binding.Subject || identity.ACR != s.requiredACR ||
-		identity.AuthenticationTime.IsZero() {
+		identity.AuthenticationTime.IsZero() ||
+		identity.AuthenticationTime.Before(flow.CreatedAt.Add(-oidcAuthenticationTimePrecision)) {
 		return Authorization{}, ErrAuthorizationDenied
 	}
 	completedAt := s.clock.Now().UTC()
