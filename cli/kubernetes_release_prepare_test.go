@@ -41,6 +41,14 @@ func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
 	} {
 		requirePreparedFile(t, outputRoot, name)
 	}
+	for path, want := range map[string]string{
+		"platform/temporal-postgres-password.txt": "temporal-postgres-password",
+		"platform/keycloak-postgres-password.txt": "keycloak-postgres-password",
+	} {
+		if got := readPreparedFile(t, outputRoot, path); got != want {
+			t.Fatalf("prepared %s = %q, want exact mounted password bytes", path, got)
+		}
+	}
 	keycloakConfig := readPreparedFile(t, outputRoot, "platform/keycloak.conf")
 	if !strings.Contains(keycloakConfig, "proxy-trusted-addresses=10.42.0.1/32\n") {
 		t.Fatal("prepared Keycloak config must trust only the observed host-network Caddy source")

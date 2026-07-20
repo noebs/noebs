@@ -387,14 +387,14 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 	if err != nil {
 		return err
 	}
-	if err := writeReleaseFile(outputRoot, "platform/temporal-postgres-password.txt", temporalPostgresPassword+"\n"); err != nil {
+	if err := writeReleaseFile(outputRoot, "platform/temporal-postgres-password.txt", temporalPostgresPassword); err != nil {
 		return err
 	}
 	keycloakPostgresPassword, err := requiredKubernetesReleaseInput("noebs.keycloak_postgres_password", r.inputs.Noebs.KeycloakPostgresPassword)
 	if err != nil {
 		return err
 	}
-	if err := writeReleaseFile(outputRoot, "platform/keycloak-postgres-password.txt", keycloakPostgresPassword+"\n"); err != nil {
+	if err := writeReleaseFile(outputRoot, "platform/keycloak-postgres-password.txt", keycloakPostgresPassword); err != nil {
 		return err
 	}
 	keycloakConfig, err := r.keycloakConfig()
