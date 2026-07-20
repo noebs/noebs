@@ -577,6 +577,37 @@ spec:
     spec:
       serviceAccountName: temporal
       automountServiceAccountToken: false
+      initContainers:
+        - name: wait-for-temporal-authorities
+          image: temporalio/auto-setup:1.29.7
+          imagePullPolicy: IfNotPresent
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              until timeout 2 bash -c 'exec 3<>/dev/tcp/temporal-postgres/5432' 2>/dev/null; do
+                sleep 1
+              done
+              until curl --fail --silent --cacert /etc/noebs-keycloak/ca.pem --connect-timeout 2 --max-time 5 https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs >/dev/null; do
+                sleep 1
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: keycloak-transport-ca
+              mountPath: /etc/noebs-keycloak/ca.pem
+              subPath: ca.pem
+              readOnly: true
       containers:
         - name: temporal
           image: temporalio/auto-setup:1.29.7

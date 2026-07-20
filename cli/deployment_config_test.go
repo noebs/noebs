@@ -462,6 +462,54 @@ func TestCurrentHostDatabaseConsumersWaitForPostgres(t *testing.T) {
 	}
 }
 
+func TestCurrentHostTemporalWaitsForVerifiedAuthorities(t *testing.T) {
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host")
+	payload, err := exec.Command("kustomize", "build", path).CombinedOutput()
+	if err != nil {
+		t.Fatalf("kustomize build %s: %v\n%s", path, err, payload)
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(payload))
+	for {
+		var object manifestObject
+		if err := decoder.Decode(&object); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			t.Fatalf("decode kustomize build %s: %v", path, err)
+		}
+		if object.Kind != "Deployment" || object.Metadata.Name != "temporal" {
+			continue
+		}
+		if len(object.Spec.Template.Spec.InitContainers) != 1 {
+			t.Fatalf("temporal init containers = %#v", object.Spec.Template.Spec.InitContainers)
+		}
+		gate := object.Spec.Template.Spec.InitContainers[0]
+		if gate.Name != "wait-for-temporal-authorities" || !strings.HasPrefix(gate.Image, "docker.io/temporalio/auto-setup@sha256:") || gate.ImagePullPolicy != "IfNotPresent" {
+			t.Fatalf("Temporal authority gate = %#v", gate)
+		}
+		if !slices.Equal(gate.Command, []string{"/bin/bash", "-ec"}) || len(gate.Args) != 1 {
+			t.Fatalf("Temporal authority gate command = %v %v", gate.Command, gate.Args)
+		}
+		for _, required := range []string{
+			"timeout 2",
+			"/dev/tcp/temporal-postgres/5432",
+			"curl --fail --silent --cacert /etc/noebs-keycloak/ca.pem",
+			"https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs",
+			"sleep 1",
+		} {
+			if !strings.Contains(gate.Args[0], required) {
+				t.Fatalf("Temporal authority gate missing %q", required)
+			}
+		}
+		if strings.Contains(gate.Args[0], "--insecure") {
+			t.Fatal("Temporal authority gate disables TLS verification")
+		}
+		requireMount(t, "temporal", gate, "/etc/noebs-keycloak/ca.pem", "ca.pem")
+		return
+	}
+	t.Fatal("temporal Deployment not found")
+}
+
 func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml")
 	payload, err := os.ReadFile(path)
@@ -491,14 +539,14 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		images[image.Name] = image.Digest
 	}
 
-	type resourceOperation struct {
-		Op    string `yaml:"op"`
-		Path  string `yaml:"path"`
-		Value struct {
-			Requests map[string]string `yaml:"requests"`
-			Limits   map[string]string `yaml:"limits"`
-			Type     string            `yaml:"type"`
-		} `yaml:"value"`
+	type patchOperation struct {
+		Op    string    `yaml:"op"`
+		Path  string    `yaml:"path"`
+		Value yaml.Node `yaml:"value"`
+	}
+	type resourceBudget struct {
+		Requests map[string]string `yaml:"requests"`
+		Limits   map[string]string `yaml:"limits"`
 	}
 	type resourcePatch struct {
 		kind string
@@ -511,32 +559,44 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s target name %q: %v", path, patch.Target.Name, err)
 		}
-		var operations []resourceOperation
+		var operations []patchOperation
 		if err := yaml.Unmarshal([]byte(patch.Patch), &operations); err != nil {
 			t.Fatalf("decode %s patch for %s/%s: %v", path, patch.Target.Kind, patch.Target.Name, err)
 		}
-		resourceOperations := make([]resourceOperation, 0, 1)
+		resourceBudgets := make([]resourceBudget, 0, 1)
 		for _, operation := range operations {
 			if operation.Op == "add" && (operation.Path == "/spec/template/spec/containers/0/resources" ||
 				operation.Path == "/spec/jobTemplate/spec/template/spec/containers/0/resources") {
-				resourceOperations = append(resourceOperations, operation)
+				var budget resourceBudget
+				if err := operation.Value.Decode(&budget); err != nil {
+					t.Fatalf("decode %s resource budget for %s/%s: %v", path, patch.Target.Kind, patch.Target.Name, err)
+				}
+				resourceBudgets = append(resourceBudgets, budget)
 			}
-			if operation.Op == "add" && operation.Path == "/spec/strategy" && operation.Value.Type == "Recreate" {
-				recreateCutoverTargets[patch.Target.Name] = true
+			if operation.Op == "add" && operation.Path == "/spec/strategy" {
+				var strategy struct {
+					Type string `yaml:"type"`
+				}
+				if err := operation.Value.Decode(&strategy); err != nil {
+					t.Fatalf("decode %s strategy for %s/%s: %v", path, patch.Target.Kind, patch.Target.Name, err)
+				}
+				if strategy.Type == "Recreate" {
+					recreateCutoverTargets[patch.Target.Name] = true
+				}
 			}
 		}
-		if len(resourceOperations) == 0 {
+		if len(resourceBudgets) == 0 {
 			continue
 		}
-		if len(resourceOperations) != 1 {
+		if len(resourceBudgets) != 1 {
 			t.Fatalf("%s patch for %s/%s must add primary container resources exactly once", path, patch.Target.Kind, patch.Target.Name)
 		}
-		resourceOperation := resourceOperations[0]
+		resourceBudget := resourceBudgets[0]
 		for _, resourceName := range []string{"cpu", "memory"} {
-			if strings.TrimSpace(resourceOperation.Value.Requests[resourceName]) == "" {
+			if strings.TrimSpace(resourceBudget.Requests[resourceName]) == "" {
 				t.Fatalf("%s patch for %s/%s has no %s request", path, patch.Target.Kind, patch.Target.Name, resourceName)
 			}
-			if strings.TrimSpace(resourceOperation.Value.Limits[resourceName]) == "" {
+			if strings.TrimSpace(resourceBudget.Limits[resourceName]) == "" {
 				t.Fatalf("%s patch for %s/%s has no %s limit", path, patch.Target.Kind, patch.Target.Name, resourceName)
 			}
 		}
