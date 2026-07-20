@@ -10,11 +10,22 @@ data:
       port: ":8080"
       is_debug: false
       ebs_insecure_skip_verify: false
+      oidc:
+        issuer: "https://api.noebs.sd/auth/realms/noebs"
+        jwks_url: "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs"
+        audience: "noebs-api"
+        allowed_clients:
+          - "noebs-mobile"
+          - "noebs-backoffice"
+        access_token_type: "Bearer"
+        max_future_issued_at_seconds: 5
+        jwks_refresh_seconds: 300
+        unknown_key_refresh_interval_seconds: 30
+      backoffice_redirect_url: "https://api.noebs.sd/backoffice/oauth/callback"
+      backoffice_post_logout_url: "https://api.noebs.sd/backoffice/oauth/logout/callback"
       cors:
         - "https://api.noebs.sd"
         - "https://dsa.adonese.sd"
-      consumer_biller_hooks_url: ""
-      payment_link_base: "https://api.noebs.sd/pay/"
       temporal_enabled: true
       temporal_host: "temporal-frontend"
       temporal_port: "7233"
@@ -45,7 +56,6 @@ data:
         psp-webhook: "https://psp-webhook:8080"
         admin-reporting: "https://admin-reporting:8080"
         notification-chat: "https://notification-chat:8080"
-        consumer-beneficiary: "https://consumer-beneficiary:8080"
         wallet-api: "https://wallet-api:8080"
       grpc_service_discovery:
         wallet-ledger: "wallet-ledger:9090"
@@ -55,14 +65,11 @@ data:
       admin_reporting_kafka_consumer_group: "admin-reporting-projections"
       ebs_transaction_event_publisher_batch_size: 100
       ebs_transaction_event_publisher_poll_interval_ms: 1000
-      ebs_dynamic_fees:
-        p2p_fees: 30
-        custom_fees: 85
-        special_payment_fees: 2
   api-gateway.service.yaml: |
     noebs:
       service_role: api-gateway
       otel_service_name: api-gateway
+      db_driver: pgx
   identity-auth.service.yaml: |
     noebs:
       service_role: identity-auth
@@ -103,11 +110,6 @@ data:
       service_role: notification-chat
       otel_service_name: notification-chat
       db_driver: pgx
-  consumer-beneficiary.service.yaml: |
-    noebs:
-      service_role: consumer-beneficiary
-      otel_service_name: consumer-beneficiary
-      db_driver: pgx
   wallet-api.service.yaml: |
     noebs:
       service_role: wallet-api
@@ -131,6 +133,16 @@ data:
     noebs:
       service_role: workload-auth-cleanup
       otel_service_name: workload-auth-cleanup
+      db_driver: pgx
+  gateway-auth-migrate.service.yaml: |
+    noebs:
+      service_role: gateway-auth-migrate
+      otel_service_name: gateway-auth-migrate
+      db_driver: pgx
+  gateway-auth-cleanup.service.yaml: |
+    noebs:
+      service_role: gateway-auth-cleanup
+      otel_service_name: gateway-auth-cleanup
       db_driver: pgx
   identity-auth-migrate.service.yaml: |
     noebs:
@@ -161,11 +173,6 @@ data:
     noebs:
       service_role: notification-chat-migrate
       otel_service_name: notification-chat-migrate
-      db_driver: pgx
-  consumer-beneficiary-migrate.service.yaml: |
-    noebs:
-      service_role: consumer-beneficiary-migrate
-      otel_service_name: consumer-beneficiary-migrate
       db_driver: pgx
   wallet-ledger-migrate.service.yaml: |
     noebs:

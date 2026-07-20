@@ -12,7 +12,6 @@ func TestStructsHaveNoGormTags(t *testing.T) {
 	}{
 		{"KYC", reflect.TypeOf(KYC{})},
 		{"Passport", reflect.TypeOf(Passport{})},
-		{"Token", reflect.TypeOf(Token{})},
 		{"Card", reflect.TypeOf(Card{})},
 		{"EBSResponse", reflect.TypeOf(EBSResponse{})},
 		{"Merchant", reflect.TypeOf(Merchant{})},

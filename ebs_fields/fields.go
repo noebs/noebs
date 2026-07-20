@@ -231,8 +231,7 @@ func iso8601(fl validator.FieldLevel) bool {
 // We should really split this up between consumer and merchant. It is just too complicated to manage now
 type EBSResponse struct {
 	Model
-	TenantID               string `json:"-"`
-	TokenID                int64
+	TenantID               string  `json:"-"`
 	TerminalID             string  `json:"terminalId,omitempty"`
 	SystemTraceAuditNumber int     `json:"systemTraceAuditNumber,omitempty"`
 	ClientID               string  `json:"clientId,omitempty"`
@@ -899,52 +898,47 @@ func isEBS(pan string) bool {
 	return re.Match([]byte(pan))
 }
 
-type TokenCard struct {
-	CardInfoFields
-	Fingerprint string `json:"fingerprint" binding:"required"`
-}
-
 type ValidationError struct {
 	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
 }
 
-// NoebsConfig contains all about noebs configuration, including EBS endpoints,
-// database settings, and auth keys. Runtime config is built by merging
-// config.yaml with secrets.yaml (SOPS-encrypted) at startup.
+type PSPWebhookRoute struct {
+	TenantID     string `json:"tenant_id"`
+	ProviderCode string `json:"provider_code"`
+}
+
+// NoebsConfig contains the merged runtime configuration.
 type NoebsConfig struct {
-	ServiceRole                                string                 `json:"service_role"`
-	OIDC                                       oidcauth.RuntimeConfig `json:"oidc"`
-	WorkloadAuth                               workloadauth.Config    `json:"workload_auth"`
-	InternalTransport                          transportauth.Config   `json:"internal_transport"`
-	ServiceDiscovery                           map[string]string      `json:"service_discovery"`
-	GRPCServiceDiscovery                       map[string]string      `json:"grpc_service_discovery"`
-	KafkaBrokers                               []string               `json:"kafka_brokers"`
-	KafkaTransactionTopic                      string                 `json:"kafka_transaction_topic"`
-	AdminReportingKafkaConsumerGroup           string                 `json:"admin_reporting_kafka_consumer_group"`
-	EBSTransactionEventPublisherBatchSize      int                    `json:"ebs_transaction_event_publisher_batch_size"`
-	EBSTransactionEventPublisherPollIntervalMs int                    `json:"ebs_transaction_event_publisher_poll_interval_ms"`
-	SOPSAgeKeyFile                             string                 `json:"sops_age_key_file"`
-	RuntimeDir                                 string                 `json:"runtime_dir"`
-	RenderDBPasswordFile                       string                 `json:"render_db_password_file"`
-	AdminKey                                   string                 `json:"admin_key"`
-	AdminUser                                  string                 `json:"admin_user"`
-	AdminPassword                              string                 `json:"admin_password"`
-	DataKey                                    string                 `json:"data_key"`
-	DatabaseURL                                string                 `json:"db_url"`
-	DatabaseDriver                             string                 `json:"db_driver"`
-	DatabaseCACertificate                      string                 `json:"database_ca_certificate"`
-	DefaultTenantID                            string                 `json:"default_tenant_id"`
-	SMSAPIKey                                  string                 `json:"sms_key"`
-	SMSSender                                  string                 `json:"sms_sender"`
-	SMSGateway                                 string                 `json:"sms_gateway"`
-	RedisPort                                  string                 `json:"redis_port"`
-	JWTKey                                     string                 `json:"jwt_secret"`
-	Sentry                                     string                 `json:"sentry"`
-	Port                                       string                 `json:"port"`
-	GoogleClientID                             string                 `json:"google_client_id"`
-	GoogleClientSecret                         string                 `json:"google_client_secret"`
-	GoogleRedirectURL                          string                 `json:"google_redirect_url"`
+	ServiceRole                                string                     `json:"service_role"`
+	OIDC                                       oidcauth.RuntimeConfig     `json:"oidc"`
+	KeycloakCACertificate                      string                     `json:"keycloak_ca_certificate"`
+	BackofficeClientSecret                     string                     `json:"backoffice_client_secret"`
+	BackofficeRedirectURL                      string                     `json:"backoffice_redirect_url"`
+	BackofficePostLogoutURL                    string                     `json:"backoffice_post_logout_url"`
+	BackofficeEncryptionKeyID                  string                     `json:"backoffice_encryption_key_id"`
+	BackofficeEncryptionKeys                   map[string]string          `json:"backoffice_encryption_keys"`
+	WorkloadAuth                               workloadauth.Config        `json:"workload_auth"`
+	InternalTransport                          transportauth.Config       `json:"internal_transport"`
+	ServiceDiscovery                           map[string]string          `json:"service_discovery"`
+	GRPCServiceDiscovery                       map[string]string          `json:"grpc_service_discovery"`
+	PSPWebhookRoutes                           map[string]PSPWebhookRoute `json:"psp_webhook_routes"`
+	KafkaBrokers                               []string                   `json:"kafka_brokers"`
+	KafkaTransactionTopic                      string                     `json:"kafka_transaction_topic"`
+	AdminReportingKafkaConsumerGroup           string                     `json:"admin_reporting_kafka_consumer_group"`
+	EBSTransactionEventPublisherBatchSize      int                        `json:"ebs_transaction_event_publisher_batch_size"`
+	EBSTransactionEventPublisherPollIntervalMs int                        `json:"ebs_transaction_event_publisher_poll_interval_ms"`
+	SOPSAgeKeyFile                             string                     `json:"sops_age_key_file"`
+	RuntimeDir                                 string                     `json:"runtime_dir"`
+	RenderDBPasswordFile                       string                     `json:"render_db_password_file"`
+	DataKey                                    string                     `json:"data_key"`
+	DatabaseURL                                string                     `json:"db_url"`
+	DatabaseDriver                             string                     `json:"db_driver"`
+	DatabaseCACertificate                      string                     `json:"database_ca_certificate"`
+	DefaultTenantID                            string                     `json:"default_tenant_id"`
+	RedisPort                                  string                     `json:"redis_port"`
+	Sentry                                     string                     `json:"sentry"`
+	Port                                       string                     `json:"port"`
 
 	IsConsumerProd bool `json:"is_consumer_prod"`
 	IsMerchantProd bool `json:"is_merchant_prod"`
@@ -964,8 +958,6 @@ type NoebsConfig struct {
 
 	ConsumerID string `json:"consumer_app_id"` // The ID that will be used within noebs to identify the consumer
 	MerchantID string `json:"merchant_app_id"` // The ID that will be used within noebs to identify the merchant
-
-	EBSDynamicFees DynamicFeesFields `json:"ebs_dynamic_fees"`
 
 	ConsumerQAID string `json:"consumer_qa_id"` // EBS application ID for mobile and card not present services prod)
 	MerchantQAID string `json:"merchant_qa_id"` // EBS client ID for pos and merchant services (prod)
@@ -998,14 +990,12 @@ type NoebsConfig struct {
 	OpaqueCardManagementEnabled bool `json:"opaque_card_management_enabled"`
 	OpaqueBalanceEnabled        bool `json:"opaque_balance_enabled"`
 	ChatEnabled                 bool `json:"chat_enabled"`
-	NotificationsEnabled        bool `json:"notifications_enabled"`
 
 	// server config
 	Cors    []string `json:"cors"`
 	IsDebug bool     `json:"is_debug"` // set as true if you want to have more debug options
 
 	// Optional outbound callback for biller confirmations (disabled when empty).
-	ConsumerBillerHooksURL string `json:"consumer_biller_hooks_url"`
 
 	// test behavior toggles
 	IntegrationTests bool `json:"integration_tests"`
@@ -1019,9 +1009,6 @@ type NoebsConfig struct {
 	OtelSampleRate     float64 `json:"otel_sample_rate"`
 	OtelServiceName    string  `json:"otel_service_name"`
 	OtelServiceVersion string  `json:"otel_service_version"`
-
-	// SMS message
-	SMSMessage string `json:"sms_message"`
 
 	// Temporal
 	TemporalEnabled   bool   `json:"temporal_enabled"`
@@ -1051,26 +1038,6 @@ type NoebsConfig struct {
 	GRPCPort           string `json:"grpc_port"`
 	GRPCGatewayEnabled bool   `json:"grpc_gateway_enabled"`
 	GRPCGatewayPort    string `json:"grpc_gateway_port"`
-
-	// This the base of the link for payment links
-	PaymentLinkBase string `json:"payment_link_base"`
-}
-
-type QuickPaymentFields struct {
-	EncodedPaymentToken string `json:"token"`
-	ConsumerCardTransferFields
-}
-
-func (q QuickPaymentFields) MarshallP2pFields() []byte {
-	d := ConsumerCardTransferFields{
-		ConsumerCommonFields:     q.ConsumerCommonFields,
-		AmountFields:             q.AmountFields,
-		ConsumerCardHolderFields: q.ConsumerCardHolderFields,
-		ToCard:                   q.ToCard, // must be acquired from the generated card.
-		DynamicFees:              q.DynamicFees,
-	}
-	data, _ := json.Marshal(&d)
-	return data
 }
 
 type CacheBillers struct {

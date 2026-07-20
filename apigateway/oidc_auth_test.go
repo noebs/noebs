@@ -99,10 +99,10 @@ func TestOIDCAuthMiddlewareRequiresPermissionFromSelectedOrganization(t *testing
 		}
 		if response.StatusCode != test.status {
 			body, _ := io.ReadAll(response.Body)
-			response.Body.Close()
+			closeTestResponseBody(t, response.Body)
 			t.Fatalf("tenant %s status = %d, want %d: %s", test.tenant, response.StatusCode, test.status, body)
 		}
-		response.Body.Close()
+		closeTestResponseBody(t, response.Body)
 	}
 }
 
@@ -127,7 +127,7 @@ func TestOIDCAuthMiddlewareRejectsAuthorizedPartyOutsideRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer closeTestResponseBody(t, response.Body)
 	assertOIDCFailure(t, response, http.StatusForbidden, "authorization_denied", req.Header.Get(fiber.HeaderAuthorization))
 }
 
@@ -154,7 +154,7 @@ func TestOIDCAuthMiddlewareStoresTypedTenantPrincipal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer closeTestResponseBody(t, response.Body)
 	if response.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(response.Body)
 		t.Fatalf("status = %d, want %d: %s", response.StatusCode, http.StatusNoContent, body)
@@ -197,7 +197,7 @@ func TestOIDCAuthMiddlewareRejectsMissingMalformedAndDuplicateAuthorization(t *t
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer response.Body.Close()
+			defer closeTestResponseBody(t, response.Body)
 			assertOIDCFailure(t, response, http.StatusUnauthorized, "authentication_failed", token)
 		})
 	}
@@ -219,7 +219,7 @@ func TestOIDCAuthMiddlewareNeverUnionsRolesAcrossTenants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer closeTestResponseBody(t, response.Body)
 	assertOIDCFailure(t, response, http.StatusForbidden, "authorization_denied", token)
 }
 
@@ -242,7 +242,7 @@ func TestOIDCAuthMiddlewareIgnoresPoisonedTopLevelResourceAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer closeTestResponseBody(t, response.Body)
 	assertOIDCFailure(t, response, http.StatusForbidden, "authorization_denied", token)
 }
 
@@ -269,7 +269,7 @@ func TestOIDCAuthMiddlewareRequiresSelectorResultToMatchMembership(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer response.Body.Close()
+			defer closeTestResponseBody(t, response.Body)
 			assertOIDCFailure(t, response, http.StatusForbidden, "authorization_denied", token)
 		})
 	}

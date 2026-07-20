@@ -36,28 +36,13 @@ func TestEBSClientHasNoInProcessCacheCardSideChannel(t *testing.T) {
 	}
 }
 
-func TestDynamicFeesHaveNoRuntimeDefaultsHelper(t *testing.T) {
-	data, err := os.ReadFile("ebs_urls.go")
-	if err != nil {
-		t.Fatalf("read ebs_urls.go: %v", err)
-	}
-	if strings.Contains(string(data), "DynamicFeesWithDefaults") {
-		t.Fatalf("EBS dynamic fees must be explicit merged config, not hard-coded runtime defaults")
-	}
-}
-
 func TestNoebsConfigUsesExplicitResolvedEBSEndpoints(t *testing.T) {
 	payload := []byte(`{
 		"consumer_endpoint": "https://consumer.ebs.example",
 		"merchant_endpoint": "https://merchant.ebs.example",
 		"ipin_endpoint": "https://ipin.ebs.example",
 		"consumer_app_id": "consumer-app",
-		"merchant_app_id": "merchant-app",
-		"ebs_dynamic_fees": {
-			"p2p_fees": 30,
-			"custom_fees": 85,
-			"special_payment_fees": 2
-		}
+		"merchant_app_id": "merchant-app"
 	}`)
 
 	var cfg NoebsConfig
@@ -78,8 +63,5 @@ func TestNoebsConfigUsesExplicitResolvedEBSEndpoints(t *testing.T) {
 	}
 	if cfg.MerchantID != "merchant-app" {
 		t.Fatalf("MerchantID = %q", cfg.MerchantID)
-	}
-	if cfg.EBSDynamicFees.CardTransferfees != 30 || cfg.EBSDynamicFees.CustomFees != 85 || cfg.EBSDynamicFees.SpecialPaymentFees != 2 {
-		t.Fatalf("EBSDynamicFees = %+v", cfg.EBSDynamicFees)
 	}
 }

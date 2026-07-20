@@ -22,9 +22,6 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
-	if err := s.requireAdminForInternalRPC(ctx); err != nil {
-		return nil, err
-	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
@@ -39,6 +36,17 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	}
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
+	}
+	requirePIN, require2FA := p2pRequirements(s.Service.Config, req.Amount)
+	if requirePIN && missingRequiredText(req.WalletPin) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
+	}
+	if require2FA && missingRequiredText(req.TwoFaCode) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
+	}
+	idempotencyKey, referenceID, err := resolveIdempotencyAndReference(req.IdempotencyKey, req.ReferenceId)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
@@ -78,22 +86,8 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 		return nil, err
 	}
 
-	requirePIN, require2FA := p2pRequirements(s.Service.Config, req.Amount)
-	if requirePIN && missingRequiredText(req.WalletPin) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
-	}
-	if require2FA {
-		if req.UserId <= 0 {
-			return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
-		}
-		if missingRequiredText(req.TwoFaCode) {
-			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
-		}
-	}
-
-	idempotencyKey, referenceID, err := resolveIdempotencyAndReference(req.IdempotencyKey, req.ReferenceId)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	if require2FA && req.UserId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 	}
 	if err := s.validateP2PTransferRequest(ctx, req, fromWalletID, toWalletID); err != nil {
 		return nil, mapError(err)

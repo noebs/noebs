@@ -45,7 +45,7 @@ func TestSortTableRejectsInvalidQueryFieldsBeforeDB(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := sortTable(nil, "tenant_1", tt.searchField, tt.search, tt.sortField, tt.sortOrder, 0, 50)
+			_, _, err := sortTable(nil, "tenant-1", tt.searchField, tt.search, tt.sortField, tt.sortOrder, 0, 50)
 			if !errors.Is(err, ErrInvalidDashboardQuery) {
 				t.Fatalf("sortTable() error = %v, want %v", err, ErrInvalidDashboardQuery)
 			}
@@ -54,7 +54,7 @@ func TestSortTableRejectsInvalidQueryFieldsBeforeDB(t *testing.T) {
 }
 
 func TestSortTableValidatesDashboardQueryBeforeDB(t *testing.T) {
-	_, _, err := sortTable(nil, "tenant_1", "systemTraceAuditNumber", "123456", "responseCode", "DESC", 0, 50)
+	_, _, err := sortTable(nil, "tenant-1", "systemTraceAuditNumber", "123456", "responseCode", "DESC", 0, 50)
 	if err == nil || err.Error() != "nil db" {
 		t.Fatalf("sortTable() error = %v, want nil db after query validation", err)
 	}

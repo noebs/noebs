@@ -16,22 +16,6 @@ const (
 	maxKYCImageBytes       = 2 * 1024 * 1024
 )
 
-func (h *Handler) GetCards(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	cards, main, err := h.Service.GetCardsByUserID(c.UserContext(), tenantID, userID)
-	if err != nil {
-		return jsonResponse(c, statusForError(err), fiber.Map{
-			"code":    "database_error",
-			"message": "Unable to load cards",
-		})
-	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"cards": cards, "main_card": main})
-}
-
 func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
 	userID := getUserID(c)
 	if userID <= 0 {
@@ -41,7 +25,7 @@ func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
 		Token string `json:"token"`
 	}
 	var req data
-	if err := bindStrictJSON(c, &req); err != nil {
+	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	req.Token = strings.TrimSpace(req.Token)
@@ -58,62 +42,6 @@ func (h *Handler) AddDeviceToken(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, nil)
 }
 
-func (h *Handler) RetiredBeneficiaryContract(c *fiber.Ctx) error {
-	return jsonResponse(c, http.StatusGone, fiber.Map{
-		"code":    "beneficiary_contract_retired",
-		"message": "Generic beneficiaries are unavailable; upgrade to typed recipient and biller references.",
-	})
-}
-
-func (h *Handler) AddCards(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	var list []ebs_fields.Card
-	if err := parseJSON(c, &list); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
-	}
-	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	if err := h.Service.AddCardsForUserID(c.UserContext(), tenantID, userID, mobile, list); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
-	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"code": "ok", "message": "cards added"})
-}
-
-func (h *Handler) EditCard(c *fiber.Ctx) error {
-	var req ebs_fields.Card
-	if err := bindJSON(c, &req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
-	}
-	userID := getUserID(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	if err := h.Service.EditCardForUserID(c.UserContext(), tenantID, userID, req); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
-	}
-	return jsonResponse(c, http.StatusCreated, fiber.Map{"result": "ok"})
-}
-
-func (h *Handler) RemoveCard(c *fiber.Ctx) error {
-	userID := getUserID(c)
-	var card ebs_fields.Card
-	if err := bindJSON(c, &card); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "unmarshalling_error"})
-	}
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	if err := h.Service.RemoveCardForUserID(c.UserContext(), tenantID, userID, card.CardIdx); err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "database_error", "message": err.Error()})
-	}
-	return jsonResponse(c, http.StatusOK, fiber.Map{"result": "ok"})
-}
-
 func (h *Handler) NecToName(c *fiber.Ctx) error {
 	nec := strings.TrimSpace(c.Query("nec"))
 	if nec == "" {
@@ -128,19 +56,6 @@ func (h *Handler) NecToName(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": "No user found with this NEC", "code": "nec_not_found"})
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"result": name})
-}
-
-func (h *Handler) Notifications(c *fiber.Ctx) error {
-	mobile := getMobile(c)
-	tenantID, err := resolveTenantID(c)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "missing_tenant_id", "message": err.Error()})
-	}
-	records, err := h.Service.Notifications(c.UserContext(), tenantID, mobile)
-	if err != nil {
-		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"error": err.Error()})
-	}
-	return jsonResponse(c, http.StatusOK, records)
 }
 
 func (h *Handler) GetUser(c *fiber.Ctx) error {
@@ -242,7 +157,7 @@ func (h *Handler) KYC(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusRequestEntityTooLarge, fiber.Map{"message": "KYC request body is too large", "code": "payload_too_large"})
 	}
 	var req ebs_fields.KYCPassport
-	if err := bindStrictJSON(c, &req); err != nil {
+	if err := bindJSON(c, &req); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"message": err.Error(), "code": "bad_request"})
 	}
 	if len(req.Selfie) > maxKYCImageBytes || len(req.PassportImg) > maxKYCImageBytes {

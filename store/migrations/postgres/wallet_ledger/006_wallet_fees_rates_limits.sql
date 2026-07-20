@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS fee_configs (
   max_fee BIGINT,
   fee_account_code TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by_operator_id BIGINT NOT NULL REFERENCES operator_identities(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(tenant_id, transaction_type, currency, tier_min)
 );
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
   buy_rate NUMERIC(18,8) NOT NULL,
   sell_rate NUMERIC(18,8) NOT NULL,
   spread NUMERIC(8,4),
-  set_by TEXT NOT NULL,
+  set_by_operator_id BIGINT NOT NULL REFERENCES operator_identities(id),
   effective_from TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   effective_to TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

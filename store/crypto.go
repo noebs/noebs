@@ -11,22 +11,12 @@ import (
 	"errors"
 	"io"
 	"strings"
-	"sync"
 )
 
 const (
 	encPrefix  = "enc:"
 	hashPrefix = "h:"
 )
-
-var luhnScratchPool = sync.Pool{
-	New: func() any {
-		b := make([]byte, 0, 19)
-		return &b
-	},
-}
-
-var luhnDoubles = [10]byte{0, 2, 4, 6, 8, 1, 3, 5, 7, 9}
 
 type dataCrypto struct {
 	gcm    cipher.AEAD
@@ -110,38 +100,4 @@ func (c *dataCrypto) IsHash(value string) bool {
 
 func (c *dataCrypto) IsEncrypted(value string) bool {
 	return strings.HasPrefix(value, encPrefix)
-}
-
-func looksLikePAN(value string) bool {
-	if value == "" {
-		return false
-	}
-	bufPtr := luhnScratchPool.Get().(*[]byte)
-	buf := (*bufPtr)[:0]
-	defer func() {
-		*bufPtr = buf[:0]
-		luhnScratchPool.Put(bufPtr)
-	}()
-	for i := 0; i < len(value); i++ {
-		c := value[i]
-		if c < '0' || c > '9' {
-			return false
-		}
-		buf = append(buf, c)
-	}
-	if len(buf) < 12 || len(buf) > 19 {
-		return false
-	}
-	sum := 0
-	alt := false
-	for i := len(buf) - 1; i >= 0; i-- {
-		d := int(buf[i] - '0')
-		if alt {
-			sum += int(luhnDoubles[d])
-		} else {
-			sum += d
-		}
-		alt = !alt
-	}
-	return sum%10 == 0
 }

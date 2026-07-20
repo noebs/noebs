@@ -51,7 +51,7 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 		_ = container.DropDatabase(dropCtx, dbName)
 	})
 	tenantID := "tenant"
-	if err := basestore.MigrateScope(context.Background(), db, tenantID, basestore.MigrationScopeWalletLedger); err != nil {
+	if err := basestore.MigrateScope(context.Background(), db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 
@@ -62,9 +62,7 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 	service := wallet.NewService(db, cfg)
 	server := NewServer(service)
 
-	if err := basestore.New(db).EnsureTenant(context.Background(), tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletGRPCTestTenant(t, context.Background(), db, tenantID, "Public Auth Tenant")
 
 	wallet42, err := service.EnsureUserWallet(context.Background(), tenantID, 42, "USD")
 	if err != nil {
@@ -78,11 +76,7 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 }
 
 func walletGatewayIdentityContext(userID int64, tenantID string) context.Context {
-	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
-		"x-noebs-tenant-id", tenantID,
-		"x-noebs-user-id", fmt.Sprintf("%d", userID),
-		"x-noebs-mobile", "0990000000",
-	))
+	return metadata.NewIncomingContext(context.Background(), userMetadata(userID, tenantID))
 }
 
 func TestGetWalletPublicEnforcesGatewayIdentityOwnership(t *testing.T) {

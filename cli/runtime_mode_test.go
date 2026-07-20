@@ -45,7 +45,6 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 		serviceRoleAdminReporting,
 		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
@@ -55,7 +54,6 @@ func TestParseServiceRoleAcceptsKnownRoles(t *testing.T) {
 		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
-		serviceRoleBeneficiaryMigrate,
 		serviceRoleWalletLedgerMigrate,
 	}
 	for _, role := range roles {
@@ -105,9 +103,6 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 	if !serviceRoleNotification.startsHTTP() || !serviceRoleNotification.startsChat() || serviceRoleNotification.startsGRPC() || serviceRoleNotification.startsWalletWorker() || serviceRoleNotification.runsMigrations() {
 		t.Fatalf("notification-chat role should own only the HTTP chat process")
 	}
-	if !serviceRoleBeneficiary.startsHTTP() || serviceRoleBeneficiary.startsGRPC() || serviceRoleBeneficiary.startsWalletWorker() || serviceRoleBeneficiary.runsMigrations() {
-		t.Fatalf("consumer-beneficiary role should own only the HTTP process")
-	}
 	if !serviceRoleWalletAPI.startsHTTP() || serviceRoleWalletAPI.startsGRPC() || serviceRoleWalletAPI.startsWalletWorker() || serviceRoleWalletAPI.runsMigrations() {
 		t.Fatalf("wallet-api role should own only the HTTP process")
 	}
@@ -128,7 +123,6 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 	}
@@ -146,7 +140,6 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
-		serviceRoleBeneficiaryMigrate,
 		serviceRoleWalletLedgerMigrate,
 	}
 	for _, role := range migrationRoles {
@@ -165,14 +158,14 @@ func TestServiceRoleProcessOwnership(t *testing.T) {
 }
 
 func TestServiceRoleDatabaseOwnership(t *testing.T) {
-	if serviceRoleAPIGateway.opensDatabase() {
-		t.Fatalf("api-gateway role must not open a service database")
+	if !serviceRoleAPIGateway.opensDatabase() {
+		t.Fatalf("api-gateway role must open the gateway-auth database")
 	}
 	if serviceRoleWalletAPI.opensDatabase() {
 		t.Fatalf("wallet-api role must not open the wallet-ledger database")
 	}
-	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable", "pgx"); !errors.Is(err, errDatabaseNotAllowed) {
-		t.Fatalf("api-gateway database error = %v, want %v", err, errDatabaseNotAllowed)
+	if err := validateRoleDatabaseConfig(serviceRoleAPIGateway, "postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable", "pgx"); err != nil {
+		t.Fatalf("api-gateway database error = %v", err)
 	}
 	if err := rejectLegacyDatabasePath(map[string]interface{}{"db_path": "/data/noebs.db"}); !errors.Is(err, errDatabaseNotAllowed) {
 		t.Fatalf("database path error = %v, want %v", err, errDatabaseNotAllowed)
@@ -182,6 +175,7 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 	}
 
 	databaseRoles := []serviceRole{
+		serviceRoleAPIGateway,
 		serviceRoleIdentityAuth,
 		serviceRoleCardVault,
 		serviceRoleEBSAdapter,
@@ -190,7 +184,6 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 		serviceRoleAdminReporting,
 		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleIdentityAuthMigrate,
@@ -199,7 +192,6 @@ func TestServiceRoleDatabaseOwnership(t *testing.T) {
 		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
-		serviceRoleBeneficiaryMigrate,
 		serviceRoleWalletLedgerMigrate,
 	}
 	for _, role := range databaseRoles {
@@ -242,11 +234,12 @@ func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
 		{role: serviceRoleAdminReportingMigrate, want: serviceRoleAdminReporting},
 		{role: serviceRoleNotification, want: serviceRoleNotification},
 		{role: serviceRoleNotificationMigrate, want: serviceRoleNotification},
-		{role: serviceRoleBeneficiary, want: serviceRoleBeneficiary},
-		{role: serviceRoleBeneficiaryMigrate, want: serviceRoleBeneficiary},
 		{role: serviceRoleWalletLedger, want: serviceRoleWalletLedger},
 		{role: serviceRoleWalletLedgerMigrate, want: serviceRoleWalletLedger},
 		{role: serviceRoleWalletWorker, want: serviceRoleWalletLedger},
+		{role: serviceRoleAPIGateway, want: serviceRoleAPIGateway},
+		{role: serviceRoleGatewayAuthMigrate, want: serviceRoleAPIGateway},
+		{role: serviceRoleGatewayAuthCleanup, want: serviceRoleAPIGateway},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.role), func(t *testing.T) {
@@ -260,7 +253,7 @@ func TestServiceRoleDatabaseOwnerKeys(t *testing.T) {
 		})
 	}
 
-	noDatabaseRoles := []serviceRole{serviceRoleAPIGateway, serviceRoleWalletAPI}
+	noDatabaseRoles := []serviceRole{serviceRoleWalletAPI}
 	for _, role := range noDatabaseRoles {
 		t.Run(string(role), func(t *testing.T) {
 			if owner, ok := role.databaseOwnerRole(); ok {
@@ -360,60 +353,6 @@ func TestServiceRoleRuntimeConfigRequiresExplicitOTelConfigWhenEnabled(t *testin
 	}
 }
 
-func TestServiceRoleRuntimeConfigRequiresAPIGatewayAuthSecrets(t *testing.T) {
-	required := []struct {
-		name   string
-		mutate func(*ebs_fields.NoebsConfig)
-	}{
-		{name: "jwt_secret", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.JWTKey = "" }},
-		{name: "admin_key", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.AdminKey = "" }},
-		{name: "admin_user", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.AdminUser = "" }},
-		{name: "admin_password", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.AdminPassword = "" }},
-	}
-	for _, tt := range required {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := apiGatewayRuntimeConfig()
-			tt.mutate(&cfg)
-			if err := validateRoleRuntimeConfig(serviceRoleAPIGateway, cfg); !errors.Is(err, errMissingGatewayAuth) {
-				t.Fatalf("api-gateway runtime config error = %v, want %v", err, errMissingGatewayAuth)
-			}
-		})
-	}
-
-	if err := validateRoleRuntimeConfig(serviceRoleAPIGateway, apiGatewayRuntimeConfig()); err != nil {
-		t.Fatalf("api-gateway runtime config error = %v", err)
-	}
-}
-
-func TestServiceRoleRuntimeConfigRequiresIdentityAuthSecrets(t *testing.T) {
-	required := []struct {
-		name   string
-		mutate func(*ebs_fields.NoebsConfig)
-	}{
-		{name: "jwt_secret", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.JWTKey = "" }},
-		{name: "sms_key", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.SMSAPIKey = "" }},
-		{name: "sms_sender", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.SMSSender = "" }},
-		{name: "sms_gateway", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.SMSGateway = "" }},
-		{name: "sms_message", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.SMSMessage = "" }},
-		{name: "google_client_id", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.GoogleClientID = "" }},
-		{name: "google_client_secret", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.GoogleClientSecret = "" }},
-		{name: "google_redirect_url", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.GoogleRedirectURL = "" }},
-	}
-	for _, tt := range required {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := identityAuthRuntimeConfig()
-			tt.mutate(&cfg)
-			if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, cfg); !errors.Is(err, errMissingIdentityAuth) {
-				t.Fatalf("identity-auth runtime config error = %v, want %v", err, errMissingIdentityAuth)
-			}
-		})
-	}
-
-	if err := validateRoleRuntimeConfig(serviceRoleIdentityAuth, identityAuthRuntimeConfig()); err != nil {
-		t.Fatalf("identity-auth runtime config error = %v", err)
-	}
-}
-
 func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) {
 	legacy := explicitEBSRuntimeConfig()
 	legacy.ConsumerQAIP = "https://consumer.qa.example"
@@ -444,9 +383,6 @@ func TestServiceRoleRuntimeConfigRequiresExplicitEBSAdapterConfig(t *testing.T) 
 		{name: "pin", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.BillInquiryPIN = "" }},
 		{name: "ipin", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.BillInquiryIPIN = "" }},
 		{name: "exp_date", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.BillInquiryExpDate = "" }},
-		{name: "p2p_fees", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.EBSDynamicFees.CardTransferfees = 0 }},
-		{name: "special_payment_fees", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.EBSDynamicFees.SpecialPaymentFees = 0 }},
-		{name: "custom_fees", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.EBSDynamicFees.CustomFees = 0 }},
 	}
 
 	for _, tt := range required {
@@ -573,11 +509,6 @@ func explicitEBSRuntimeConfig() ebs_fields.NoebsConfig {
 		BillInquiryPIN:     "1234",
 		BillInquiryIPIN:    "123456",
 		BillInquiryExpDate: "0129",
-		EBSDynamicFees: ebs_fields.DynamicFeesFields{
-			CardTransferfees:   30,
-			SpecialPaymentFees: 2,
-			CustomFees:         85,
-		},
 		ServiceDiscovery: map[string]string{
 			string(serviceRoleIdentityAuth): "http://identity-auth:8080",
 			string(serviceRoleCardVault):    "http://card-vault:8080",
@@ -604,26 +535,9 @@ func kafkaProjectionRuntimeConfig() ebs_fields.NoebsConfig {
 
 func identityAuthRuntimeConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
-		JWTKey:             "jwt-secret",
-		SMSAPIKey:          "sms-key",
-		SMSSender:          "NOEBS",
-		SMSGateway:         "https://sms.example/send?",
-		SMSMessage:         "code",
-		GoogleClientID:     "google-client-id",
-		GoogleClientSecret: "google-client-secret",
-		GoogleRedirectURL:  "https://app.example/auth/google/callback",
 		ServiceDiscovery: map[string]string{
 			string(serviceRoleCardVault): "http://card-vault:8080",
 		},
-	}
-}
-
-func apiGatewayRuntimeConfig() ebs_fields.NoebsConfig {
-	return ebs_fields.NoebsConfig{
-		JWTKey:        "jwt-secret",
-		AdminKey:      "admin-key",
-		AdminUser:     "admin@example.test",
-		AdminPassword: "admin-password",
 	}
 }
 
@@ -759,7 +673,6 @@ func TestInitRoleServicesInitializesOnlyOwnedDependencies(t *testing.T) {
 		{role: serviceRoleAdminReporting, adminReports: true, dashboard: true},
 		{role: serviceRoleAdminReportingProjector, adminReports: true},
 		{role: serviceRoleNotification, consumer: true},
-		{role: serviceRoleBeneficiary, consumer: true},
 		{role: serviceRoleWalletAPI},
 		{role: serviceRoleWalletLedger, wallet: true},
 		{role: serviceRoleWalletWorker, wallet: true, walletPSPDeps: true},

@@ -12,8 +12,8 @@ import (
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/apperr"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/tenantauth"
 	"github.com/adonese/noebs/wallet"
-	"github.com/adonese/noebs/wallet/rbac"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/gofiber/fiber/v2"
 )
@@ -118,7 +118,11 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrMissingStatus),
 		errors.Is(err, walletstore.ErrInvalidStatus),
 		errors.Is(err, walletstore.ErrMissingInteractionType),
-		errors.Is(err, walletstore.ErrMissingSetBy),
+		errors.Is(err, walletstore.ErrMissingOperatorID),
+		errors.Is(err, walletstore.ErrMissingOperatorIssuer),
+		errors.Is(err, walletstore.ErrInvalidOperatorIssuer),
+		errors.Is(err, walletstore.ErrMissingOperatorSubject),
+		errors.Is(err, walletstore.ErrInvalidOperatorSubject),
 		errors.Is(err, walletstore.ErrFundingSourceNotVerified),
 		errors.Is(err, walletstore.ErrDestinationNotVerified),
 		errors.Is(err, walletstore.ErrFundingSourceNotWithdrawable),
@@ -169,37 +173,13 @@ func resolveCurrency(currency string) (string, error) {
 	return currency, nil
 }
 
-func requirePermission(c *fiber.Ctx, perm rbac.Permission) error {
-	if perm == "" {
-		return nil
-	}
+func requirePermission(c *fiber.Ctx, permission tenantauth.Permission) error {
 	if c == nil {
 		return apperr.ErrForbidden
 	}
-	if hasPermissionHeader(c, perm) {
-		return nil
+	principal, ok := gateway.InternalPrincipalIdentity(c)
+	if !ok || principal.Permission() != permission {
+		return apperr.ErrForbidden
 	}
-	roleName := strings.TrimSpace(c.Get(gateway.GatewayAdminRoleHeader))
-	if roleName != "" {
-		if role := rbac.RoleForName(roleName); role != nil && role.HasPermission(perm) {
-			return nil
-		}
-	}
-	return apperr.ErrForbidden
-}
-
-func hasPermissionHeader(c *fiber.Ctx, perm rbac.Permission) bool {
-	if c == nil {
-		return false
-	}
-	header := strings.TrimSpace(c.Get(gateway.GatewayAdminPermissionsHeader))
-	if header == "" {
-		return false
-	}
-	for _, raw := range strings.Split(header, ",") {
-		if strings.TrimSpace(raw) == string(perm) {
-			return true
-		}
-	}
-	return false
+	return nil
 }

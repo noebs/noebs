@@ -74,10 +74,3 @@ const (
 	ConsumerRegister             = "register"
 	ConsumerCompleteRegistration = "completeCardRegistration"
 )
-
-// DynamicFeesFields for p2p and mohe dynamic fees case
-type DynamicFeesFields struct {
-	CardTransferfees   float32 `json:"p2p_fees"`
-	CustomFees         float32 `json:"custom_fees"`
-	SpecialPaymentFees float32 `json:"special_payment_fees"`
-}

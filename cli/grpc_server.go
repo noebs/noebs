@@ -6,9 +6,12 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	"github.com/adonese/noebs/internal/tenantauth"
+	"github.com/adonese/noebs/internal/workloadauth"
 	walletgrpc "github.com/adonese/noebs/wallet/grpc"
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -26,7 +29,7 @@ var grpcGatewayHandler http.Handler
 type walletAuthRequirement uint8
 
 const (
-	walletAuthNone walletAuthRequirement = iota
+	walletAuthDeny walletAuthRequirement = iota
 	walletAuthUserIdentity
 	walletAuthAdmin
 )
@@ -64,7 +67,6 @@ func initGRPCServers() error {
 			grpc.Creds(credentials.NewTLS(internalTransportServerTLS.Clone())),
 			grpc.UnaryInterceptor(requireAuthForWalletMethods),
 		)
-		walletv1.RegisterWalletInternalServiceServer(server, walletSrv)
 		walletv1.RegisterWalletPublicServiceServer(server, walletSrv)
 		walletv1.RegisterWalletAdminServiceServer(server, walletSrv)
 		grpcServer = server
@@ -89,8 +91,8 @@ func requireAuthForWalletMethods(
 	handler grpc.UnaryHandler,
 ) (any, error) {
 	switch walletMethodAuthRequirement(info.FullMethod) {
-	case walletAuthNone:
-		return handler(ctx, req)
+	case walletAuthDeny:
+		return nil, status.Error(codes.PermissionDenied, "wallet method is outside the authentication catalog")
 	case walletAuthUserIdentity:
 		if !contextHasGatewayUserIdentity(ctx) {
 			return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
@@ -110,8 +112,8 @@ func requireAuthForWalletHTTP(next http.Handler) http.Handler {
 			return
 		}
 		switch walletPathAuthRequirement(r.URL.Path) {
-		case walletAuthNone:
-			next.ServeHTTP(w, r)
+		case walletAuthDeny:
+			http.NotFound(w, r)
 			return
 		case walletAuthUserIdentity:
 			if !requestHasGatewayUserIdentity(r) {
@@ -129,17 +131,8 @@ func requireAuthForWalletHTTP(next http.Handler) http.Handler {
 }
 
 func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
-	if strings.HasPrefix(fullMethod, "/noebs.wallet.v1.WalletInternalService/") {
-		return walletAuthAdmin
-	}
-	if strings.HasPrefix(fullMethod, "/noebs.wallet.v1.WalletAdminService/") {
-		return walletAuthAdmin
-	}
 	switch fullMethod {
-	case walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
-		walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
-		walletv1.WalletPublicService_SignalWithdrawalApproval_FullMethodName,
-		walletv1.WalletPublicService_SignalWithdrawalVerification_FullMethodName:
+	case walletv1.WalletAdminService_RenderWalletAdmin_FullMethodName:
 		return walletAuthAdmin
 	case walletv1.WalletPublicService_GetWalletPublic_FullMethodName,
 		walletv1.WalletPublicService_EnsureWalletPublic_FullMethodName,
@@ -160,7 +153,7 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		walletv1.WalletPublicService_DisableUser2FA_FullMethodName:
 		return walletAuthUserIdentity
 	default:
-		return walletAuthNone
+		return walletAuthDeny
 	}
 }
 
@@ -177,7 +170,7 @@ func walletPathAuthRequirement(path string) walletAuthRequirement {
 	case path == "/wallet" || strings.HasPrefix(path, "/wallet/"):
 		return walletAuthUserIdentity
 	default:
-		return walletAuthNone
+		return walletAuthDeny
 	}
 }
 
@@ -186,35 +179,26 @@ func contextHasGatewayAdminIdentity(ctx context.Context) bool {
 	if !ok {
 		return false
 	}
-	values := md.Get(strings.ToLower(gateway.GatewayAdminIdentityHeader))
-	if len(values) != 1 {
-		return false
-	}
-	return values[0] == gateway.GatewayAdminIdentityValue
+	principal, ok := gatewayPrincipalFromMetadata(md)
+	return ok && isGatewayOperator(principal)
 }
 
 func requestHasGatewayAdminIdentity(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	return r.Header.Get(gateway.GatewayAdminIdentityHeader) == gateway.GatewayAdminIdentityValue
+	principal, ok := gatewayPrincipalFromRequest(r)
+	return ok && isGatewayOperator(principal)
 }
 
 func grpcGatewayIncomingHeaderMatcher(key string) (string, bool) {
 	if isPublicCredentialHeader(key) {
 		return "", false
 	}
-	if strings.EqualFold(key, gateway.GatewayAdminIdentityHeader) {
-		return strings.ToLower(gateway.GatewayAdminIdentityHeader), true
-	}
-	if strings.EqualFold(key, gateway.GatewayTenantIDHeader) {
-		return strings.ToLower(gateway.GatewayTenantIDHeader), true
-	}
-	if strings.EqualFold(key, gateway.GatewayUserIDHeader) {
-		return strings.ToLower(gateway.GatewayUserIDHeader), true
-	}
-	if strings.EqualFold(key, gateway.GatewayMobileHeader) {
-		return strings.ToLower(gateway.GatewayMobileHeader), true
+	for _, identityHeader := range workloadauth.IdentityHeaderNames() {
+		if strings.EqualFold(key, identityHeader) {
+			return strings.ToLower(identityHeader), true
+		}
 	}
 	return runtime.DefaultHeaderMatcher(key)
 }
@@ -231,30 +215,100 @@ func contextHasGatewayUserIdentity(ctx context.Context) bool {
 	if !ok {
 		return false
 	}
-	_, err := gateway.ParseInternalUserIdentity(
-		singleMetadataValue(md, gateway.GatewayTenantIDHeader),
-		singleMetadataValue(md, gateway.GatewayUserIDHeader),
-		singleMetadataValue(md, gateway.GatewayMobileHeader),
-	)
-	return err == nil
+	principal, ok := gatewayPrincipalFromMetadata(md)
+	return ok && principal.UserID > 0 && principal.HasRole(tenantauth.RoleUser)
 }
 
 func requestHasGatewayUserIdentity(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	_, err := gateway.ParseInternalUserIdentity(
-		r.Header.Get(gateway.GatewayTenantIDHeader),
-		r.Header.Get(gateway.GatewayUserIDHeader),
-		r.Header.Get(gateway.GatewayMobileHeader),
-	)
-	return err == nil
+	principal, ok := gatewayPrincipalFromRequest(r)
+	return ok && principal.UserID > 0 && principal.HasRole(tenantauth.RoleUser)
 }
 
-func singleMetadataValue(md metadata.MD, header string) string {
-	values := md.Get(strings.ToLower(header))
-	if len(values) != 1 {
-		return ""
+func gatewayPrincipalFromMetadata(md metadata.MD) (gateway.PrincipalIdentity, bool) {
+	value := func(header string) (string, bool) {
+		values := md.Get(strings.ToLower(header))
+		return singleIdentityValue(values)
 	}
-	return values[0]
+	return parseGatewayPrincipal(value)
+}
+
+func gatewayPrincipalFromRequest(r *http.Request) (gateway.PrincipalIdentity, bool) {
+	value := func(header string) (string, bool) {
+		return singleIdentityValue(r.Header.Values(header))
+	}
+	return parseGatewayPrincipal(value)
+}
+
+func parseGatewayPrincipal(value func(string) (string, bool)) (gateway.PrincipalIdentity, bool) {
+	tenantID, ok := value(gateway.GatewayTenantIDHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	issuer, ok := value(gateway.GatewayIssuerHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	subject, ok := value(gateway.GatewaySubjectHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	organizationID, ok := value(gateway.GatewayOrganizationIDHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	authorizedParty, ok := value(gateway.GatewayAuthorizedPartyHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	roles, ok := value(gateway.GatewayRolesHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	permission, ok := value(gateway.GatewayPermissionHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	userID, ok := value(gateway.GatewayUserIDHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	sourceIP, ok := value(gateway.GatewaySourceIPHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	tokenExpiresAt, ok := value(gateway.GatewayTokenExpiresAtHeader)
+	if !ok {
+		return gateway.PrincipalIdentity{}, false
+	}
+	principal, err := gateway.ParseInternalPrincipalIdentity(gateway.PrincipalHeaderValues{
+		TenantID:        tenantID,
+		Issuer:          issuer,
+		Subject:         subject,
+		OrganizationID:  organizationID,
+		AuthorizedParty: authorizedParty,
+		Roles:           roles,
+		Permission:      permission,
+		UserID:          userID,
+		SourceIP:        sourceIP,
+		TokenExpiresAt:  tokenExpiresAt,
+	}, time.Now().UTC())
+	return principal, err == nil
+}
+
+func singleIdentityValue(values []string) (string, bool) {
+	if len(values) == 0 {
+		return "", true
+	}
+	if len(values) > 1 {
+		return "", false
+	}
+	return values[0], true
+}
+
+func isGatewayOperator(principal gateway.PrincipalIdentity) bool {
+	return principal.HasRole(tenantauth.RoleBackoffice) ||
+		principal.HasRole(tenantauth.RoleTenantAdmin)
 }

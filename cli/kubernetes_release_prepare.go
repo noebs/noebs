@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adonese/noebs/internal/keycloakadmin"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,24 +27,36 @@ type kubernetesReleaseInputs struct {
 
 type kubernetesReleaseNoebsInputs struct {
 	DefaultTenantID          string                                   `yaml:"default_tenant_id"`
-	AdminKey                 string                                   `yaml:"admin_key"`
-	AdminUser                string                                   `yaml:"admin_user"`
-	AdminPassword            string                                   `yaml:"admin_password"`
-	SMSKey                   string                                   `yaml:"sms_key"`
-	SMSSender                string                                   `yaml:"sms_sender"`
-	SMSGateway               string                                   `yaml:"sms_gateway"`
-	SMSMessage               string                                   `yaml:"sms_message"`
+	PostgresPassword         string                                   `yaml:"postgres_password"`
 	GoogleClientID           string                                   `yaml:"google_client_id"`
 	GoogleClientSecret       string                                   `yaml:"google_client_secret"`
-	GoogleRedirectURL        string                                   `yaml:"google_redirect_url"`
 	CardVaultDataKey         string                                   `yaml:"card_vault_data_key"`
 	TemporalPostgresPassword string                                   `yaml:"temporal_postgres_password"`
 	KeycloakPostgresPassword string                                   `yaml:"keycloak_postgres_password"`
 	GHCRDockerConfigJSON     string                                   `yaml:"ghcr_dockerconfigjson"`
 	EBS                      kubernetesReleaseEBSInputs               `yaml:"ebs"`
 	PSP                      map[string]map[string]pspSecret          `yaml:"psp"`
+	Keycloak                 kubernetesReleaseKeycloakInputs          `yaml:"keycloak"`
+	GatewayAuth              kubernetesReleaseGatewayAuthInputs       `yaml:"gateway_auth"`
 	WorkloadAuth             kubernetesReleaseWorkloadAuthInputs      `yaml:"workload_auth"`
 	InternalTransport        kubernetesReleaseInternalTransportInputs `yaml:"internal_transport"`
+}
+
+type kubernetesReleaseKeycloakInputs struct {
+	ReconcilerClientSecret string `yaml:"reconciler_client_secret"`
+	BackofficeClientSecret string `yaml:"backoffice_client_secret"`
+}
+
+type kubernetesReleaseGatewayAuthInputs struct {
+	Database        kubernetesReleaseGatewayAuthDatabaseInputs `yaml:"database"`
+	EncryptionKeyID string                                     `yaml:"encryption_key_id"`
+	EncryptionKeys  map[string]string                          `yaml:"encryption_keys"`
+}
+
+type kubernetesReleaseGatewayAuthDatabaseInputs struct {
+	MigratePassword string `yaml:"migrate_password"`
+	RuntimePassword string `yaml:"runtime_password"`
+	CleanupPassword string `yaml:"cleanup_password"`
 }
 
 type kubernetesReleaseEBSInputs struct {
@@ -61,6 +76,7 @@ type kubernetesReleaseEBSInputs struct {
 }
 
 type pspSecret struct {
+	CallbackID       string `yaml:"callback_id"`
 	APIKey           string `yaml:"api_key"`
 	APISecret        string `yaml:"api_secret"`
 	WebhookSecret    string `yaml:"webhook_secret"`
@@ -69,38 +85,37 @@ type pspSecret struct {
 
 type preparedKubernetesRelease struct {
 	configData        map[string]string
-	legacy            map[string]interface{}
 	inputs            kubernetesReleaseInputs
 	ageKeyPath        string
+	tenantCatalog     []byte
+	keycloak          preparedKeycloakRelease
+	gatewayAuth       preparedGatewayAuthRelease
 	workloadAuth      preparedWorkloadAuthRelease
 	internalTransport preparedInternalTransportRelease
 }
 
-type cutoverStringField struct {
-	label      string
-	legacyKeys []string
-	input      string
+type preparedKeycloakRelease struct {
+	reconcilerClientSecret string
+	backofficeClientSecret string
 }
 
-type legacyStringValue struct {
-	value   string
-	key     string
-	present bool
+type preparedGatewayAuthRelease struct {
+	migratePassword string
+	runtimePassword string
+	cleanupPassword string
+	encryptionKeyID string
+	encryptionKeys  map[string]string
 }
 
 func prepareKubernetesReleaseCommand() error {
 	if len(os.Args) != 6 {
-		return errors.New("usage: noebs prepare-kubernetes-release <repo-root> <legacy-root> <inputs-yaml> <output-root>")
+		return errors.New("usage: noebs prepare-kubernetes-release <repo-root> <inputs-yaml> <age-key-file> <output-root>")
 	}
 	return prepareKubernetesRelease(os.Args[2], os.Args[3], os.Args[4], os.Args[5], decryptSopsFile, encryptSopsYAML)
 }
 
-func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot string, decrypt deploymentDecryptFunc, encrypt kubernetesSecretEncryptFunc) error {
+func prepareKubernetesRelease(repoRoot, inputsPath, ageKeyPath, outputRoot string, decrypt deploymentDecryptFunc, encrypt kubernetesSecretEncryptFunc) error {
 	repoRoot, err := resolveDeploymentRoot(repoRoot)
-	if err != nil {
-		return err
-	}
-	legacyRoot, err = resolveDeploymentRoot(legacyRoot)
 	if err != nil {
 		return err
 	}
@@ -119,7 +134,10 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 		return errors.New("kubernetes secret encrypt function is required")
 	}
 
-	ageKeyPath := filepath.Join(legacyRoot, ".sops", "age-key.txt")
+	ageKeyPath = strings.TrimSpace(ageKeyPath)
+	if ageKeyPath == "" {
+		return errors.New("SOPS age key path is required")
+	}
 	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
 		return err
 	}
@@ -127,18 +145,33 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 	if err != nil {
 		return err
 	}
-	legacy, err := readLegacyNoebsConfig(legacyRoot, ageKeyPath, decrypt)
+	tenantCatalogPath := filepath.Join(repoRoot, "deploy", "kubernetes", "keycloak-authority", "tenant-catalog.yaml")
+	tenantCatalogPayload, err := os.ReadFile(tenantCatalogPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("read Kubernetes tenant catalog: %w", err)
 	}
 	inputs, err := readKubernetesReleaseInputs(inputsPath, ageKeyPath, decrypt)
 	if err != nil {
 		return err
 	}
 
-	preparedWorkloadAuth, err := generatePreparedWorkloadAuth(inputs.Noebs.WorkloadAuth)
+	preparedKeycloak, err := prepareKeycloakRelease(inputs.Noebs.Keycloak)
 	if err != nil {
 		return err
+	}
+	preparedGatewayAuth, err := prepareGatewayAuthRelease(inputs.Noebs.GatewayAuth)
+	if err != nil {
+		return err
+	}
+	if err := requireExplicitWorkloadAuthInputs(inputs.Noebs.WorkloadAuth); err != nil {
+		return err
+	}
+	preparedWorkloadAuth, err := prepareWorkloadAuthRelease(inputs.Noebs.WorkloadAuth, rand.Reader)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(inputs.Noebs.InternalTransport.CACertificate) == "" || strings.TrimSpace(inputs.Noebs.InternalTransport.CAPrivateKey) == "" {
+		return errors.New("kubernetes release inputs require internal_transport.ca_certificate and internal_transport.ca_private_key")
 	}
 	preparedInternalTransport, err := prepareInternalTransportRelease(inputs.Noebs.InternalTransport, rand.Reader, time.Now().UTC())
 	if err != nil {
@@ -146,9 +179,11 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 	}
 	release := preparedKubernetesRelease{
 		configData:        configData,
-		legacy:            legacy,
 		inputs:            inputs,
 		ageKeyPath:        ageKeyPath,
+		tenantCatalog:     tenantCatalogPayload,
+		keycloak:          preparedKeycloak,
+		gatewayAuth:       preparedGatewayAuth,
 		workloadAuth:      preparedWorkloadAuth,
 		internalTransport: preparedInternalTransport,
 	}
@@ -156,6 +191,9 @@ func prepareKubernetesRelease(repoRoot, legacyRoot, inputsPath, outputRoot strin
 		return err
 	}
 	if err := release.write(outputRoot, encrypt); err != nil {
+		return err
+	}
+	if err := writeKubernetesReleaseManifest(outputRoot); err != nil {
 		return err
 	}
 	return validateKubernetesSecretReleaseRootWithDecrypt(outputRoot, decrypt)
@@ -209,31 +247,6 @@ func readNoebsKubernetesConfigMapData(repoRoot string) (map[string]string, error
 	return nil, errors.New("noebs-config ConfigMap not found")
 }
 
-func readLegacyNoebsConfig(root, ageKeyPath string, decrypt deploymentDecryptFunc) (map[string]interface{}, error) {
-	configMap, err := readYAMLMapFile(filepath.Join(root, "config.docker.yaml"))
-	if err != nil {
-		return nil, err
-	}
-	secretPath := filepath.Join(root, "secrets.yaml")
-	if err := requireReadableFile("legacy noebs secrets", secretPath); err != nil {
-		return nil, err
-	}
-	secretPayload, err := decrypt(secretPath, ageKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("decrypt legacy noebs secrets: %w", err)
-	}
-	secretMap, err := parseYAMLMap(secretPath, secretPayload)
-	if err != nil {
-		return nil, err
-	}
-	merged := mergeConfig(configMap, secretMap).(map[string]interface{})
-	noebs := getMap(merged, "noebs")
-	if noebs == nil {
-		return nil, errors.New("legacy merged config missing noebs")
-	}
-	return noebs, nil
-}
-
 func readKubernetesReleaseInputs(path, ageKeyPath string, decrypt deploymentDecryptFunc) (kubernetesReleaseInputs, error) {
 	path = strings.TrimSpace(path)
 	if err := requireReadableFile("kubernetes release inputs", path); err != nil {
@@ -249,19 +262,50 @@ func readKubernetesReleaseInputs(path, ageKeyPath string, decrypt deploymentDecr
 	if err := decoder.Decode(&inputs); err != nil {
 		return kubernetesReleaseInputs{}, fmt.Errorf("parse kubernetes release inputs: %w", err)
 	}
+	var extra interface{}
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return kubernetesReleaseInputs{}, errors.New("kubernetes release inputs must contain one YAML document")
+		}
+		return kubernetesReleaseInputs{}, fmt.Errorf("parse kubernetes release inputs: %w", err)
+	}
 	return inputs, nil
 }
 
 func (r preparedKubernetesRelease) validate() error {
-	tenantID, err := r.releaseDefaultTenantID()
-	if err != nil {
-		return err
-	}
+	tenantID := r.inputs.Noebs.DefaultTenantID
 	if _, err := validateTenantID(tenantID); err != nil {
 		return fmt.Errorf("kubernetes release input default_tenant_id: %w", err)
 	}
-	for _, field := range r.cutoverStringFields() {
-		if _, err := r.cutoverField(field); err != nil {
+	catalog, err := tenantcatalog.Load(bytes.NewReader(r.tenantCatalog))
+	if err != nil {
+		return fmt.Errorf("load Kubernetes tenant catalog: %w", err)
+	}
+	if _, err := catalog.Require(tenantID); err != nil {
+		return fmt.Errorf("kubernetes release input default_tenant_id: %w", err)
+	}
+	for label, value := range map[string]string{
+		"noebs.postgres_password":          r.inputs.Noebs.PostgresPassword,
+		"noebs.google_client_id":           r.inputs.Noebs.GoogleClientID,
+		"noebs.google_client_secret":       r.inputs.Noebs.GoogleClientSecret,
+		"noebs.card_vault_data_key":        r.inputs.Noebs.CardVaultDataKey,
+		"noebs.temporal_postgres_password": r.inputs.Noebs.TemporalPostgresPassword,
+		"noebs.keycloak_postgres_password": r.inputs.Noebs.KeycloakPostgresPassword,
+		"noebs.ebs.consumer_endpoint":      r.inputs.Noebs.EBS.ConsumerEndpoint,
+		"noebs.ebs.merchant_endpoint":      r.inputs.Noebs.EBS.MerchantEndpoint,
+		"noebs.ebs.ipin_endpoint":          r.inputs.Noebs.EBS.IPINEndpoint,
+		"noebs.ebs.consumer_app_id":        r.inputs.Noebs.EBS.ConsumerAppID,
+		"noebs.ebs.merchant_app_id":        r.inputs.Noebs.EBS.MerchantAppID,
+		"noebs.ebs.ipin_username":          r.inputs.Noebs.EBS.IPINUsername,
+		"noebs.ebs.ipin_password":          r.inputs.Noebs.EBS.IPINPassword,
+		"noebs.ebs.pub_key":                r.inputs.Noebs.EBS.PublicKey,
+		"noebs.ebs.ipin_key":               r.inputs.Noebs.EBS.IPINKey,
+		"noebs.ebs.pan":                    r.inputs.Noebs.EBS.PAN,
+		"noebs.ebs.pin":                    r.inputs.Noebs.EBS.PIN,
+		"noebs.ebs.ipin":                   r.inputs.Noebs.EBS.IPIN,
+		"noebs.ebs.exp_date":               r.inputs.Noebs.EBS.Expiry,
+	} {
+		if _, err := requiredKubernetesReleaseInput(label, value); err != nil {
 			return err
 		}
 	}
@@ -275,13 +319,13 @@ func (r preparedKubernetesRelease) validate() error {
 	if err := validatePSPSecretMap(map[string]interface{}{"psp": psp, "default_tenant_id": tenantID}, tenantID); err != nil {
 		return fmt.Errorf("kubernetes release input PSP secrets: %w", err)
 	}
-	for _, key := range []string{
-		"db_url",
-		"jwt_secret",
-	} {
-		if _, err := r.requiredLegacyString(key); err != nil {
-			return err
+	for pspTenantID := range psp {
+		if _, err := catalog.Require(pspTenantID); err != nil {
+			return fmt.Errorf("kubernetes release input PSP tenant %q: %w", pspTenantID, err)
 		}
+	}
+	if _, err := r.pspWebhookRoutes(); err != nil {
+		return err
 	}
 	if _, err := r.serviceDatabaseURL("identity-auth"); err != nil {
 		return err
@@ -304,6 +348,9 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 	if err := writeReleaseFile(outputRoot, "config.yaml", configPayload); err != nil {
 		return err
 	}
+	if err := writeReleaseFile(outputRoot, "tenant-catalog.yaml", string(r.tenantCatalog)); err != nil {
+		return err
+	}
 	for _, serviceName := range kubernetesSecretReleaseServiceNames {
 		configKey := serviceName + ".service.yaml"
 		configPayload, err := configMapDataValue(r.configData, configKey)
@@ -314,24 +361,15 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 			return err
 		}
 	}
-	postgresPassword, err := databaseURLPassword("legacy noebs.db_url", firstString(r.legacy, "db_url"))
-	if err != nil {
-		return err
-	}
+	postgresPassword := strings.TrimSpace(r.inputs.Noebs.PostgresPassword)
 	if err := writeReleaseFile(outputRoot, "platform/postgres-password.txt", postgresPassword+"\n"); err != nil {
 		return err
 	}
-	temporalPostgresPassword, err := r.cutoverString("noebs.temporal_postgres_password", []string{"temporal_postgres_password"}, r.inputs.Noebs.TemporalPostgresPassword)
-	if err != nil {
-		return err
-	}
+	temporalPostgresPassword := strings.TrimSpace(r.inputs.Noebs.TemporalPostgresPassword)
 	if err := writeReleaseFile(outputRoot, "platform/temporal-postgres-password.txt", temporalPostgresPassword+"\n"); err != nil {
 		return err
 	}
-	keycloakPostgresPassword, err := r.cutoverString("noebs.keycloak_postgres_password", []string{"keycloak_postgres_password"}, r.inputs.Noebs.KeycloakPostgresPassword)
-	if err != nil {
-		return err
-	}
+	keycloakPostgresPassword := strings.TrimSpace(r.inputs.Noebs.KeycloakPostgresPassword)
 	if err := writeReleaseFile(outputRoot, "platform/keycloak-postgres-password.txt", keycloakPostgresPassword+"\n"); err != nil {
 		return err
 	}
@@ -340,6 +378,13 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 		return err
 	}
 	if err := writeReleaseFile(outputRoot, "platform/keycloak.conf", keycloakConfig); err != nil {
+		return err
+	}
+	keycloakReconcilerConfig, err := r.keycloakReconcilerConfig()
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/keycloak-reconciler-config.yaml", keycloakReconcilerConfig); err != nil {
 		return err
 	}
 	ghcrDockerConfig, err := r.ghcrDockerConfigJSON()
@@ -358,6 +403,17 @@ func (r preparedKubernetesRelease) write(outputRoot string, encrypt kubernetesSe
 		return err
 	}
 	if err := writeReleaseFile(outputRoot, "platform/workload-auth-postgres-roles.secrets.yaml", string(encryptedWorkloadDatabase)); err != nil {
+		return err
+	}
+	gatewayDatabasePayload, err := yaml.Marshal(r.gatewayAuth.databaseCredentialSecret())
+	if err != nil {
+		return fmt.Errorf("marshal gateway authentication database credentials: %w", err)
+	}
+	encryptedGatewayDatabase, err := encrypt("gateway-auth-postgres-roles.secrets.yaml", gatewayDatabasePayload, r.ageKeyPath)
+	if err != nil {
+		return err
+	}
+	if err := writeReleaseFile(outputRoot, "platform/gateway-auth-postgres-roles.secrets.yaml", string(encryptedGatewayDatabase)); err != nil {
 		return err
 	}
 	internalTransportPayload, err := yaml.Marshal(r.internalTransport.platformSecret())
@@ -428,57 +484,21 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	}
 
 	apiGateway := base()
-	jwtSecret, err := r.requiredLegacyString("jwt_secret")
+	apiGateway["backoffice_client_secret"] = r.keycloak.backofficeClientSecret
+	apiGateway["backoffice_encryption_key_id"] = r.gatewayAuth.encryptionKeyID
+	apiGateway["backoffice_encryption_keys"] = r.gatewayAuth.encryptionKeys
+	apiGateway["psp_webhook_routes"], err = r.pspWebhookRoutes()
 	if err != nil {
 		return nil, err
 	}
-	apiGateway["jwt_secret"] = jwtSecret
-	apiGateway["admin_key"], err = r.cutoverString("noebs.admin_key", []string{"admin_key"}, r.inputs.Noebs.AdminKey)
-	if err != nil {
-		return nil, err
-	}
-	apiGateway["admin_user"], err = r.cutoverString("noebs.admin_user", []string{"admin_user"}, r.inputs.Noebs.AdminUser)
-	if err != nil {
-		return nil, err
-	}
-	apiGateway["admin_password"], err = r.cutoverString("noebs.admin_password", []string{"admin_password"}, r.inputs.Noebs.AdminPassword)
-	if err != nil {
-		return nil, err
+	apiGateway["database_ca_certificate"] = r.internalTransport.caCertificate
+	apiGateway["keycloak_ca_certificate"] = r.internalTransport.caCertificate
+	apiGateway["service_databases"] = map[string]interface{}{
+		"api-gateway": gatewayAuthDatabaseURL("gateway_auth_runtime", r.gatewayAuth.runtimePassword),
 	}
 	setSecret("api-gateway", apiGateway)
 
 	identityAuth, err := withDB("identity-auth")
-	if err != nil {
-		return nil, err
-	}
-	googleClientID, err := r.cutoverString("noebs.google_client_id", []string{"google_client_id"}, r.inputs.Noebs.GoogleClientID)
-	if err != nil {
-		return nil, err
-	}
-	googleClientSecret, err := r.cutoverString("noebs.google_client_secret", []string{"google_client_secret"}, r.inputs.Noebs.GoogleClientSecret)
-	if err != nil {
-		return nil, err
-	}
-	identityAuth["jwt_secret"] = jwtSecret
-	identityAuth["sms_key"], err = r.cutoverString("noebs.sms_key", []string{"sms_key"}, r.inputs.Noebs.SMSKey)
-	if err != nil {
-		return nil, err
-	}
-	identityAuth["sms_sender"], err = r.cutoverString("noebs.sms_sender", []string{"sms_sender"}, r.inputs.Noebs.SMSSender)
-	if err != nil {
-		return nil, err
-	}
-	identityAuth["sms_gateway"], err = r.cutoverString("noebs.sms_gateway", []string{"sms_gateway"}, r.inputs.Noebs.SMSGateway)
-	if err != nil {
-		return nil, err
-	}
-	identityAuth["sms_message"], err = r.cutoverString("noebs.sms_message", []string{"sms_message"}, r.inputs.Noebs.SMSMessage)
-	if err != nil {
-		return nil, err
-	}
-	identityAuth["google_client_id"] = googleClientID
-	identityAuth["google_client_secret"] = googleClientSecret
-	identityAuth["google_redirect_url"], err = r.cutoverString("noebs.google_redirect_url", []string{"google_redirect_url"}, r.inputs.Noebs.GoogleRedirectURL)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +508,7 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	cardVault["data_key"], err = r.cutoverString("noebs.card_vault_data_key", []string{"data_key", "card_vault_data_key"}, r.inputs.Noebs.CardVaultDataKey)
+	cardVault["data_key"], err = requiredKubernetesReleaseInput("noebs.card_vault_data_key", r.inputs.Noebs.CardVaultDataKey)
 	if err != nil {
 		return nil, err
 	}
@@ -504,9 +524,22 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	if err != nil {
 		return nil, err
 	}
-	for _, field := range r.ebsCutoverStringFields() {
-		key := strings.TrimPrefix(field.label, "noebs.ebs.")
-		ebsAdapter[key], err = r.cutoverField(field)
+	for key, value := range map[string]string{
+		"consumer_endpoint": r.inputs.Noebs.EBS.ConsumerEndpoint,
+		"merchant_endpoint": r.inputs.Noebs.EBS.MerchantEndpoint,
+		"ipin_endpoint":     r.inputs.Noebs.EBS.IPINEndpoint,
+		"consumer_app_id":   r.inputs.Noebs.EBS.ConsumerAppID,
+		"merchant_app_id":   r.inputs.Noebs.EBS.MerchantAppID,
+		"ipin_username":     r.inputs.Noebs.EBS.IPINUsername,
+		"ipin_password":     r.inputs.Noebs.EBS.IPINPassword,
+		"pub_key":           r.inputs.Noebs.EBS.PublicKey,
+		"ipin_key":          r.inputs.Noebs.EBS.IPINKey,
+		"pan":               r.inputs.Noebs.EBS.PAN,
+		"pin":               r.inputs.Noebs.EBS.PIN,
+		"ipin":              r.inputs.Noebs.EBS.IPIN,
+		"exp_date":          r.inputs.Noebs.EBS.Expiry,
+	} {
+		ebsAdapter[key], err = requiredKubernetesReleaseInput("noebs.ebs."+key, value)
 		if err != nil {
 			return nil, err
 		}
@@ -534,7 +567,6 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 	for _, serviceName := range []string{
 		"admin-reporting",
 		"notification-chat",
-		"consumer-beneficiary",
 		"wallet-ledger",
 	} {
 		secret, err := withDB(serviceName)
@@ -544,15 +576,14 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 		setSecret(serviceName, secret)
 	}
 	for roleName, ownerName := range map[string]string{
-		"identity-auth-migrate":        "identity-auth",
-		"ebs-adapter-migrate":          "ebs-adapter",
-		"ebs-adapter-events":           "ebs-adapter",
-		"psp-webhook-migrate":          "psp-webhook",
-		"admin-reporting-migrate":      "admin-reporting",
-		"admin-reporting-projector":    "admin-reporting",
-		"notification-chat-migrate":    "notification-chat",
-		"consumer-beneficiary-migrate": "consumer-beneficiary",
-		"wallet-ledger-migrate":        "wallet-ledger",
+		"identity-auth-migrate":     "identity-auth",
+		"ebs-adapter-migrate":       "ebs-adapter",
+		"ebs-adapter-events":        "ebs-adapter",
+		"psp-webhook-migrate":       "psp-webhook",
+		"admin-reporting-migrate":   "admin-reporting",
+		"admin-reporting-projector": "admin-reporting",
+		"notification-chat-migrate": "notification-chat",
+		"wallet-ledger-migrate":     "wallet-ledger",
 	} {
 		secret, err := withDB(ownerName)
 		if err != nil {
@@ -574,29 +605,32 @@ func (r preparedKubernetesRelease) serviceSecrets() (map[string]map[string]inter
 			"workload-auth-migrate": workloadAuthDatabaseURL("workload_auth_cleanup", r.workloadAuth.database.cleanupPassword),
 		},
 	})
+	setSecret("gateway-auth-migrate", map[string]interface{}{
+		"default_tenant_id":       tenantID,
+		"database_ca_certificate": r.internalTransport.caCertificate,
+		"service_databases": map[string]interface{}{
+			"api-gateway": gatewayAuthDatabaseURL("gateway_auth_migrate", r.gatewayAuth.migratePassword),
+		},
+	})
+	setSecret("gateway-auth-cleanup", map[string]interface{}{
+		"default_tenant_id":       tenantID,
+		"database_ca_certificate": r.internalTransport.caCertificate,
+		"service_databases": map[string]interface{}{
+			"api-gateway": gatewayAuthDatabaseURL("gateway_auth_cleanup", r.gatewayAuth.cleanupPassword),
+		},
+	})
 	return result, nil
 }
 
 func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (string, error) {
 	databaseName := strings.ReplaceAll(serviceName, "-", "_")
-	source, err := r.requiredLegacyString("db_url")
+	password, err := requiredKubernetesReleaseInput("noebs.postgres_password", r.inputs.Noebs.PostgresPassword)
 	if err != nil {
 		return "", err
 	}
-	parsed, err := url.Parse(source)
-	if err != nil {
-		return "", fmt.Errorf("parse legacy noebs.db_url: %w", err)
-	}
-	if parsed.User == nil {
-		return "", errors.New("legacy noebs.db_url missing user info")
-	}
-	password, ok := parsed.User.Password()
-	if !ok || strings.TrimSpace(password) == "" {
-		return "", errors.New("legacy noebs.db_url missing password")
-	}
 	result := url.URL{
 		Scheme:   "postgres",
-		User:     url.UserPassword(parsed.User.Username(), password),
+		User:     url.UserPassword("noebs", password),
 		Host:     "postgres:5432",
 		Path:     "/" + databaseName,
 		RawQuery: "sslmode=verify-full",
@@ -605,138 +639,46 @@ func (r preparedKubernetesRelease) serviceDatabaseURL(serviceName string) (strin
 }
 
 func (r preparedKubernetesRelease) releaseDefaultTenantID() (string, error) {
-	return r.cutoverString("noebs.default_tenant_id", []string{"default_tenant_id"}, r.inputs.Noebs.DefaultTenantID)
-}
-
-func (r preparedKubernetesRelease) cutoverStringFields() []cutoverStringField {
-	fields := []cutoverStringField{
-		{label: "noebs.admin_key", legacyKeys: []string{"admin_key"}, input: r.inputs.Noebs.AdminKey},
-		{label: "noebs.admin_user", legacyKeys: []string{"admin_user"}, input: r.inputs.Noebs.AdminUser},
-		{label: "noebs.admin_password", legacyKeys: []string{"admin_password"}, input: r.inputs.Noebs.AdminPassword},
-		{label: "noebs.sms_key", legacyKeys: []string{"sms_key"}, input: r.inputs.Noebs.SMSKey},
-		{label: "noebs.sms_sender", legacyKeys: []string{"sms_sender"}, input: r.inputs.Noebs.SMSSender},
-		{label: "noebs.sms_gateway", legacyKeys: []string{"sms_gateway"}, input: r.inputs.Noebs.SMSGateway},
-		{label: "noebs.sms_message", legacyKeys: []string{"sms_message"}, input: r.inputs.Noebs.SMSMessage},
-		{label: "noebs.google_client_id", legacyKeys: []string{"google_client_id"}, input: r.inputs.Noebs.GoogleClientID},
-		{label: "noebs.google_client_secret", legacyKeys: []string{"google_client_secret"}, input: r.inputs.Noebs.GoogleClientSecret},
-		{label: "noebs.google_redirect_url", legacyKeys: []string{"google_redirect_url"}, input: r.inputs.Noebs.GoogleRedirectURL},
-		{label: "noebs.card_vault_data_key", legacyKeys: []string{"data_key", "card_vault_data_key"}, input: r.inputs.Noebs.CardVaultDataKey},
-		{label: "noebs.temporal_postgres_password", legacyKeys: []string{"temporal_postgres_password"}, input: r.inputs.Noebs.TemporalPostgresPassword},
-		{label: "noebs.keycloak_postgres_password", legacyKeys: []string{"keycloak_postgres_password"}, input: r.inputs.Noebs.KeycloakPostgresPassword},
-		{label: "noebs.ghcr_dockerconfigjson", legacyKeys: []string{"ghcr_dockerconfigjson"}, input: r.inputs.Noebs.GHCRDockerConfigJSON},
-	}
-	return append(fields, r.ebsCutoverStringFields()...)
-}
-
-func (r preparedKubernetesRelease) ebsCutoverStringFields() []cutoverStringField {
-	return []cutoverStringField{
-		{label: "noebs.ebs.consumer_endpoint", legacyKeys: []string{"consumer_endpoint"}, input: r.inputs.Noebs.EBS.ConsumerEndpoint},
-		{label: "noebs.ebs.merchant_endpoint", legacyKeys: []string{"merchant_endpoint"}, input: r.inputs.Noebs.EBS.MerchantEndpoint},
-		{label: "noebs.ebs.ipin_endpoint", legacyKeys: []string{"ipin_endpoint"}, input: r.inputs.Noebs.EBS.IPINEndpoint},
-		{label: "noebs.ebs.consumer_app_id", legacyKeys: []string{"consumer_app_id"}, input: r.inputs.Noebs.EBS.ConsumerAppID},
-		{label: "noebs.ebs.merchant_app_id", legacyKeys: []string{"merchant_app_id"}, input: r.inputs.Noebs.EBS.MerchantAppID},
-		{label: "noebs.ebs.ipin_username", legacyKeys: []string{"ipin_username"}, input: r.inputs.Noebs.EBS.IPINUsername},
-		{label: "noebs.ebs.ipin_password", legacyKeys: []string{"ipin_password"}, input: r.inputs.Noebs.EBS.IPINPassword},
-		{label: "noebs.ebs.pub_key", legacyKeys: []string{"pub_key"}, input: r.inputs.Noebs.EBS.PublicKey},
-		{label: "noebs.ebs.ipin_key", legacyKeys: []string{"ipin_key"}, input: r.inputs.Noebs.EBS.IPINKey},
-		{label: "noebs.ebs.pan", legacyKeys: []string{"pan"}, input: r.inputs.Noebs.EBS.PAN},
-		{label: "noebs.ebs.pin", legacyKeys: []string{"pin"}, input: r.inputs.Noebs.EBS.PIN},
-		{label: "noebs.ebs.ipin", legacyKeys: []string{"ipin"}, input: r.inputs.Noebs.EBS.IPIN},
-		{label: "noebs.ebs.exp_date", legacyKeys: []string{"exp_date"}, input: r.inputs.Noebs.EBS.Expiry},
-	}
-}
-
-func (r preparedKubernetesRelease) cutoverField(field cutoverStringField) (string, error) {
-	return r.cutoverString(field.label, field.legacyKeys, field.input)
-}
-
-func (r preparedKubernetesRelease) cutoverString(label string, legacyKeys []string, input string) (string, error) {
-	legacy, err := r.firstLegacyString(legacyKeys...)
-	if err != nil {
-		return "", err
-	}
-	input = strings.TrimSpace(input)
-	switch {
-	case legacy.value != "" && input != "":
-		return "", fmt.Errorf("kubernetes release input %s duplicates current secret noebs.%s", label, legacy.key)
-	case legacy.value != "":
-		if strings.Contains(legacy.value, "REPLACE_WITH_") {
-			return "", fmt.Errorf("current secret noebs.%s contains placeholder", legacy.key)
-		}
-		return legacy.value, nil
-	case input != "":
-		if strings.Contains(input, "REPLACE_WITH_") {
-			return "", fmt.Errorf("kubernetes release input %s contains placeholder", label)
-		}
-		return input, nil
-	default:
-		return "", fmt.Errorf("missing kubernetes release input %s", label)
-	}
-}
-
-func (r preparedKubernetesRelease) firstLegacyString(keys ...string) (legacyStringValue, error) {
-	for _, key := range keys {
-		raw, ok := r.legacy[key]
-		if !ok {
-			continue
-		}
-		text, ok := raw.(string)
-		if !ok {
-			return legacyStringValue{}, fmt.Errorf("current secret noebs.%s must be a string", key)
-		}
-		return legacyStringValue{value: strings.TrimSpace(text), key: key, present: true}, nil
-	}
-	return legacyStringValue{}, nil
+	return requiredKubernetesReleaseInput("noebs.default_tenant_id", r.inputs.Noebs.DefaultTenantID)
 }
 
 func (r preparedKubernetesRelease) pspSecrets() (map[string]interface{}, error) {
-	legacyPSP, legacyPresent, err := r.legacyMap("psp")
-	if err != nil {
-		return nil, err
-	}
 	inputPSP := pspInputsToMap(r.inputs.Noebs.PSP)
-	hasLegacy := legacyPresent && len(legacyPSP) != 0
-	hasInput := len(inputPSP) != 0
-	switch {
-	case hasLegacy && hasInput:
-		return nil, errors.New("kubernetes release input noebs.psp duplicates current secret noebs.psp")
-	case hasLegacy:
-		return legacyPSP, nil
-	case hasInput:
-		return inputPSP, nil
-	default:
+	if len(inputPSP) == 0 {
 		return nil, errors.New("missing kubernetes release input noebs.psp")
 	}
+	return inputPSP, nil
 }
 
-func (r preparedKubernetesRelease) legacyMap(key string) (map[string]interface{}, bool, error) {
-	raw, present := r.legacy[key]
-	if !present || raw == nil {
-		return nil, false, nil
+func (r preparedKubernetesRelease) pspWebhookRoutes() (map[string]interface{}, error) {
+	routes := make(map[string]interface{})
+	for tenantID, providers := range r.inputs.Noebs.PSP {
+		for providerCode, provider := range providers {
+			parsedProvider, err := tenantcatalog.ParseID(providerCode)
+			if err != nil || string(parsedProvider) != providerCode {
+				return nil, fmt.Errorf("kubernetes release input PSP provider %q is invalid", providerCode)
+			}
+			callbackID, err := requireCanonicalReleaseSecret("PSP webhook callback ID for "+tenantID+"/"+providerCode, provider.CallbackID)
+			if err != nil {
+				return nil, err
+			}
+			if _, duplicate := routes[callbackID]; duplicate {
+				return nil, errors.New("PSP webhook callback IDs must be unique")
+			}
+			routes[callbackID] = map[string]interface{}{
+				"tenant_id":     tenantID,
+				"provider_code": providerCode,
+			}
+		}
 	}
-	typed, ok := raw.(map[string]interface{})
-	if !ok {
-		return nil, true, fmt.Errorf("current secret noebs.%s must be a map", key)
+	if len(routes) == 0 {
+		return nil, errors.New("missing kubernetes release input noebs.psp webhook routes")
 	}
-	return typed, true, nil
-}
-
-func (r preparedKubernetesRelease) requiredLegacyString(key string) (string, error) {
-	legacy, err := r.firstLegacyString(key)
-	if err != nil {
-		return "", err
-	}
-	if legacy.value == "" {
-		return "", fmt.Errorf("legacy noebs.%s is required to prepare Kubernetes release", key)
-	}
-	if strings.Contains(legacy.value, "REPLACE_WITH_") {
-		return "", fmt.Errorf("legacy noebs.%s contains placeholder", key)
-	}
-	return legacy.value, nil
+	return routes, nil
 }
 
 func (r preparedKubernetesRelease) ghcrDockerConfigJSON() (string, error) {
-	payload, err := r.cutoverString("noebs.ghcr_dockerconfigjson", []string{"ghcr_dockerconfigjson"}, r.inputs.Noebs.GHCRDockerConfigJSON)
+	payload, err := requiredKubernetesReleaseInput("noebs.ghcr_dockerconfigjson", r.inputs.Noebs.GHCRDockerConfigJSON)
 	if err != nil {
 		return "", err
 	}
@@ -747,19 +689,24 @@ func (r preparedKubernetesRelease) ghcrDockerConfigJSON() (string, error) {
 }
 
 func (r preparedKubernetesRelease) keycloakConfig() (string, error) {
-	postgresPassword, err := r.cutoverString("noebs.keycloak_postgres_password", []string{"keycloak_postgres_password"}, r.inputs.Noebs.KeycloakPostgresPassword)
+	postgresPassword, err := requiredKubernetesReleaseInput("noebs.keycloak_postgres_password", r.inputs.Noebs.KeycloakPostgresPassword)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(`http-enabled=true
-http-port=8080
+	return fmt.Sprintf(`http-enabled=false
 http-relative-path=/auth
+https-port=8443
+https-certificate-file=/opt/keycloak/conf/tls.crt
+https-certificate-key-file=/opt/keycloak/conf/tls.key
+https-protocols=TLSv1.3
+http-management-scheme=http
+http-management-port=9000
 http-management-relative-path=/
 hostname=https://api.noebs.sd/auth
 hostname-strict=true
 hostname-backchannel-dynamic=false
 proxy-headers=xforwarded
-proxy-trusted-addresses=10.42.0.0/16
+proxy-trusted-addresses=10.42.0.1/32
 health-enabled=true
 metrics-enabled=true
 
@@ -767,15 +714,152 @@ db=postgres
 db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
 db-username=keycloak
 db-password=%s
+db-tls-mode=verify-server
+db-tls-trust-store-file=/opt/keycloak/conf/db-ca.pem
 `,
 		postgresPassword,
 	), nil
+}
+
+func prepareKeycloakRelease(inputs kubernetesReleaseKeycloakInputs) (preparedKeycloakRelease, error) {
+	reconcilerSecret, err := requireCanonicalReleaseSecret("Keycloak reconciler client secret", inputs.ReconcilerClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	backofficeSecret, err := requireCanonicalReleaseSecret("Keycloak back-office client secret", inputs.BackofficeClientSecret)
+	if err != nil {
+		return preparedKeycloakRelease{}, err
+	}
+	if reconcilerSecret == backofficeSecret {
+		return preparedKeycloakRelease{}, errors.New("keycloak client secrets must be distinct")
+	}
+	return preparedKeycloakRelease{
+		reconcilerClientSecret: reconcilerSecret,
+		backofficeClientSecret: backofficeSecret,
+	}, nil
+}
+
+func prepareGatewayAuthRelease(inputs kubernetesReleaseGatewayAuthInputs) (preparedGatewayAuthRelease, error) {
+	migratePassword, err := requireCanonicalReleaseSecret("gateway authentication migration database password", inputs.Database.MigratePassword)
+	if err != nil {
+		return preparedGatewayAuthRelease{}, err
+	}
+	runtimePassword, err := requireCanonicalReleaseSecret("gateway authentication runtime database password", inputs.Database.RuntimePassword)
+	if err != nil {
+		return preparedGatewayAuthRelease{}, err
+	}
+	cleanupPassword, err := requireCanonicalReleaseSecret("gateway authentication cleanup database password", inputs.Database.CleanupPassword)
+	if err != nil {
+		return preparedGatewayAuthRelease{}, err
+	}
+	if migratePassword == runtimePassword || migratePassword == cleanupPassword || runtimePassword == cleanupPassword {
+		return preparedGatewayAuthRelease{}, errors.New("gateway authentication database passwords must be distinct")
+	}
+	keyID := strings.TrimSpace(inputs.EncryptionKeyID)
+	if keyID == "" || keyID != inputs.EncryptionKeyID || strings.Contains(keyID, "REPLACE_WITH_") {
+		return preparedGatewayAuthRelease{}, errors.New("gateway authentication encryption_key_id is invalid")
+	}
+	if len(inputs.EncryptionKeys) == 0 {
+		return preparedGatewayAuthRelease{}, errors.New("gateway authentication encryption_keys is required")
+	}
+	encryptionKeys := make(map[string]string, len(inputs.EncryptionKeys))
+	for id, encoded := range inputs.EncryptionKeys {
+		if id == "" || id != strings.TrimSpace(id) {
+			return preparedGatewayAuthRelease{}, errors.New("gateway authentication encryption key id is invalid")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil || len(decoded) != 32 || base64.StdEncoding.EncodeToString(decoded) != encoded {
+			return preparedGatewayAuthRelease{}, fmt.Errorf("gateway authentication encryption key %q is invalid", id)
+		}
+		encryptionKeys[id] = encoded
+	}
+	if _, ok := encryptionKeys[keyID]; !ok {
+		return preparedGatewayAuthRelease{}, errors.New("gateway authentication active encryption key is missing from encryption_keys")
+	}
+	return preparedGatewayAuthRelease{
+		migratePassword: migratePassword,
+		runtimePassword: runtimePassword,
+		cleanupPassword: cleanupPassword,
+		encryptionKeyID: keyID,
+		encryptionKeys:  encryptionKeys,
+	}, nil
+}
+
+func (r preparedGatewayAuthRelease) databaseCredentialSecret() map[string]interface{} {
+	return map[string]interface{}{
+		"migrate_password": r.migratePassword,
+		"runtime_password": r.runtimePassword,
+		"cleanup_password": r.cleanupPassword,
+	}
+}
+
+func gatewayAuthDatabaseURL(username, password string) string {
+	return (&url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(username, password),
+		Host:     "postgres:5432",
+		Path:     "/gateway_auth",
+		RawQuery: "sslmode=verify-full",
+	}).String()
+}
+
+func requireCanonicalReleaseSecret(label, value string) (string, error) {
+	if value != strings.TrimSpace(value) {
+		return "", fmt.Errorf("%s must be canonical without surrounding whitespace", label)
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil || len(decoded) != 32 || base64.RawURLEncoding.EncodeToString(decoded) != value {
+		return "", fmt.Errorf("%s must be an explicit canonical base64url encoding of 32 bytes", label)
+	}
+	return value, nil
+}
+
+func (r preparedKubernetesRelease) keycloakReconcilerConfig() (string, error) {
+	googleClientID, err := requiredKubernetesReleaseInput("noebs.google_client_id", r.inputs.Noebs.GoogleClientID)
+	if err != nil {
+		return "", err
+	}
+	googleClientSecret, err := requiredKubernetesReleaseInput("noebs.google_client_secret", r.inputs.Noebs.GoogleClientSecret)
+	if err != nil {
+		return "", err
+	}
+	config := keycloakadmin.Config{
+		BaseURL:      "https://keycloak.noebs.svc.cluster.local:8443/auth",
+		AdminRealm:   "noebs",
+		ClientID:     "noebs-keycloak-reconciler",
+		ClientSecret: r.keycloak.reconcilerClientSecret,
+		ClientCredentials: map[string]keycloakadmin.ClientCredential{
+			"noebs-keycloak-reconciler": {ClientSecret: r.keycloak.reconcilerClientSecret},
+			"noebs-backoffice":          {ClientSecret: r.keycloak.backofficeClientSecret},
+		},
+		IdentityProviders: map[string]keycloakadmin.IdentityProviderCredential{
+			"google": {ClientID: googleClientID, ClientSecret: googleClientSecret},
+		},
+	}
+	if err := config.Validate(); err != nil {
+		return "", err
+	}
+	payload, err := yaml.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("marshal Keycloak reconciler config: %w", err)
+	}
+	return string(payload), nil
 }
 
 func configMapDataValue(data map[string]string, key string) (string, error) {
 	value := data[key]
 	if strings.TrimSpace(value) == "" {
 		return "", fmt.Errorf("noebs-config missing %s", key)
+	}
+	return value, nil
+}
+
+func requiredKubernetesReleaseInput(label, value string) (string, error) {
+	if value == "" {
+		return "", fmt.Errorf("missing kubernetes release input %s", label)
+	}
+	if value != strings.TrimSpace(value) || strings.Contains(value, "REPLACE_WITH_") || strings.ContainsAny(value, "\r\x00") {
+		return "", fmt.Errorf("kubernetes release input %s is invalid", label)
 	}
 	return value, nil
 }

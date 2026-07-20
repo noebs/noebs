@@ -7,6 +7,17 @@ CREATE TABLE IF NOT EXISTS tenants (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- This is an audit projection, not an authorization database. Roles and
+-- tenant membership are evaluated from the current Keycloak token on every
+-- request and are deliberately not persisted here.
+CREATE TABLE IF NOT EXISTS operator_identities (
+  id BIGSERIAL PRIMARY KEY,
+  issuer TEXT NOT NULL CHECK (issuer <> '' AND issuer = btrim(issuer)),
+  subject TEXT NOT NULL CHECK (subject <> '' AND subject = btrim(subject)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(issuer, subject)
+);
+
 CREATE TABLE IF NOT EXISTS wallets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id TEXT NOT NULL,
@@ -109,3 +120,4 @@ DROP TABLE IF EXISTS balance_holds;
 DROP TABLE IF EXISTS ledger_entries;
 DROP TABLE IF EXISTS ledger_transactions;
 DROP TABLE IF EXISTS wallets;
+DROP TABLE IF EXISTS operator_identities;

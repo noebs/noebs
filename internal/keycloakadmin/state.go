@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -40,6 +41,7 @@ type IdentityProviderCredential struct {
 type DesiredState struct {
 	APIVersion         string              `yaml:"api_version"`
 	Realm              Realm               `yaml:"realm"`
+	Authentication     Authentication      `yaml:"authentication"`
 	ReconcilerClient   ReconcilerClient    `yaml:"reconciler_client"`
 	ResourceClient     ResourceClient      `yaml:"resource_client"`
 	InteractiveClients []InteractiveClient `yaml:"interactive_clients"`
@@ -47,6 +49,7 @@ type DesiredState struct {
 	OrganizationClaim  OrganizationClaim   `yaml:"organization_claim"`
 	IdentityProviders  []IdentityProvider  `yaml:"identity_providers"`
 	Organizations      []Organization      `yaml:"organizations"`
+	tenantCatalog      tenantcatalog.Catalog
 }
 
 type ReconcilerClient struct {
@@ -64,6 +67,31 @@ type Realm struct {
 	SSOSessionMaxLifespanSeconds int    `yaml:"sso_session_max_lifespan_seconds"`
 	RevokeRefreshToken           bool   `yaml:"revoke_refresh_token"`
 	RefreshTokenMaxReuse         int    `yaml:"refresh_token_max_reuse"`
+}
+
+type Authentication struct {
+	BrowserFlow          string    `yaml:"browser_flow"`
+	FirstBrokerLoginFlow string    `yaml:"first_broker_login_flow"`
+	PostBrokerLoginFlow  string    `yaml:"post_broker_login_flow"`
+	OTP                  OTPPolicy `yaml:"otp"`
+}
+
+type OTPPolicy struct {
+	Type                    string         `yaml:"type"`
+	Algorithm               string         `yaml:"algorithm"`
+	InitialCounter          int            `yaml:"initial_counter"`
+	Digits                  int            `yaml:"digits"`
+	LookAheadWindow         int            `yaml:"look_ahead_window"`
+	PeriodSeconds           int            `yaml:"period_seconds"`
+	Reusable                bool           `yaml:"reusable"`
+	ConfigureRequiredAction RequiredAction `yaml:"configure_required_action"`
+}
+
+type RequiredAction struct {
+	Alias         string `yaml:"alias"`
+	Enabled       bool   `yaml:"enabled"`
+	DefaultAction bool   `yaml:"default_action"`
+	Priority      int    `yaml:"priority"`
 }
 
 type ResourceClient struct {
@@ -132,8 +160,8 @@ func (c Config) Validate() error {
 		return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
 	}
 	parsed, err := url.Parse(c.BaseURL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.HasSuffix(parsed.Path, "/") {
-		return fmt.Errorf("%w: base_url must be an absolute HTTP URL without credentials, query, fragment, or trailing slash", ErrInvalidConfig)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.HasSuffix(parsed.Path, "/") {
+		return fmt.Errorf("%w: base_url must be an absolute HTTPS URL without credentials, query, fragment, or trailing slash", ErrInvalidConfig)
 	}
 	for _, field := range []namedValue{
 		{name: "admin_realm", value: c.AdminRealm},
@@ -188,11 +216,12 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func LoadDesiredState(reader io.Reader) (DesiredState, error) {
+func LoadDesiredState(reader io.Reader, catalog tenantcatalog.Catalog) (DesiredState, error) {
 	var state DesiredState
 	if err := decodeYAML(reader, &state); err != nil {
 		return DesiredState{}, fmt.Errorf("%w: %v", ErrInvalidDesiredState, err)
 	}
+	state.tenantCatalog = catalog
 	if err := state.Validate(); err != nil {
 		return DesiredState{}, err
 	}
@@ -206,6 +235,12 @@ func (s DesiredState) Validate() error {
 	for _, field := range []namedValue{
 		{name: "realm.name", value: s.Realm.Name},
 		{name: "realm.display_name", value: s.Realm.DisplayName},
+		{name: "authentication.browser_flow", value: s.Authentication.BrowserFlow},
+		{name: "authentication.first_broker_login_flow", value: s.Authentication.FirstBrokerLoginFlow},
+		{name: "authentication.post_broker_login_flow", value: s.Authentication.PostBrokerLoginFlow},
+		{name: "authentication.otp.type", value: s.Authentication.OTP.Type},
+		{name: "authentication.otp.algorithm", value: s.Authentication.OTP.Algorithm},
+		{name: "authentication.otp.configure_required_action.alias", value: s.Authentication.OTP.ConfigureRequiredAction.Alias},
 		{name: "reconciler_client.client_id", value: s.ReconcilerClient.ClientID},
 		{name: "reconciler_client.name", value: s.ReconcilerClient.Name},
 		{name: "reconciler_client.credential", value: s.ReconcilerClient.Credential},
@@ -232,6 +267,20 @@ func (s DesiredState) Validate() error {
 	if !s.Realm.RevokeRefreshToken || s.Realm.RefreshTokenMaxReuse != 0 {
 		return fmt.Errorf("%w: realm refresh tokens must rotate with zero reuse", ErrInvalidDesiredState)
 	}
+	if s.Authentication.BrowserFlow != "noebs-browser" ||
+		s.Authentication.FirstBrokerLoginFlow != "noebs-first-broker-login" ||
+		s.Authentication.PostBrokerLoginFlow != "noebs-google-otp" {
+		return fmt.Errorf("%w: authentication must bind the repository-owned browser, first-broker, and Google post-broker flows", ErrInvalidDesiredState)
+	}
+	otp := s.Authentication.OTP
+	if otp.Type != "totp" || otp.Algorithm != "HmacSHA256" || otp.InitialCounter != 0 ||
+		otp.Digits != 6 || otp.LookAheadWindow != 1 || otp.PeriodSeconds != 30 || otp.Reusable {
+		return fmt.Errorf("%w: authentication.otp must use the exact non-reusable TOTP SHA-256 policy", ErrInvalidDesiredState)
+	}
+	action := otp.ConfigureRequiredAction
+	if action.Alias != "CONFIGURE_TOTP" || !action.Enabled || !action.DefaultAction || action.Priority != 10 {
+		return fmt.Errorf("%w: authentication.otp.configure_required_action must enforce first-use OTP setup", ErrInvalidDesiredState)
+	}
 	if s.ResourceClient.ClientID != "noebs-api" {
 		return fmt.Errorf("%w: resource_client.client_id must be %q", ErrInvalidDesiredState, "noebs-api")
 	}
@@ -246,8 +295,9 @@ func (s DesiredState) Validate() error {
 		return fmt.Errorf("%w: reconciler_client.realm_management_roles must contain only realm-admin", ErrInvalidDesiredState)
 	}
 	if s.OrganizationClaim.ClientScope != "organization" ||
+		s.OrganizationClaim.MapperName != "noebs-organization-groups" ||
 		s.OrganizationClaim.ProtocolMapper != "oidc-organization-group-membership-mapper" {
-		return fmt.Errorf("%w: organization claim must use the built-in organization scope and organization group mapper", ErrInvalidDesiredState)
+		return fmt.Errorf("%w: organization claim must use the exact organization scope and Noebs group mapper", ErrInvalidDesiredState)
 	}
 	if !exactStringMap(s.OrganizationClaim.Config, map[string]string{
 		"id.token.claim":            "false",
@@ -260,12 +310,8 @@ func (s DesiredState) Validate() error {
 		return fmt.Errorf("%w: organization_claim.config must emit organization group role mappings in access tokens only", ErrInvalidDesiredState)
 	}
 
-	realmRoles, err := validateRoles("realm_roles", s.RealmRoles)
-	if err != nil {
-		return err
-	}
-	if !exactStringSet(realmRoles, "platform-admin") {
-		return fmt.Errorf("%w: realm_roles must contain only platform-admin", ErrInvalidDesiredState)
+	if len(s.RealmRoles) != 0 {
+		return fmt.Errorf("%w: realm_roles must be empty; tenant authority belongs to organization groups", ErrInvalidDesiredState)
 	}
 	clientRoles, err := validateRoles("resource_client.roles", s.ResourceClient.Roles)
 	if err != nil {
@@ -467,6 +513,23 @@ func (s DesiredState) Validate() error {
 					return fmt.Errorf("%w: organization tenant-admin group must map every route permission", ErrInvalidDesiredState)
 				}
 			}
+		}
+	}
+	wantedTenants := s.tenantCatalog.All()
+	if len(wantedTenants) == 0 {
+		return fmt.Errorf("%w: tenant catalog is required", ErrInvalidDesiredState)
+	}
+	if len(s.Organizations) != len(wantedTenants) {
+		return fmt.Errorf("%w: organization aliases and names must exactly match the tenant catalog", ErrInvalidDesiredState)
+	}
+	organizationsByAlias := make(map[string]Organization, len(s.Organizations))
+	for _, organization := range s.Organizations {
+		organizationsByAlias[organization.Alias] = organization
+	}
+	for _, tenant := range wantedTenants {
+		organization, exists := organizationsByAlias[string(tenant.ID)]
+		if !exists || organization.Name != tenant.Name {
+			return fmt.Errorf("%w: organization aliases and names must exactly match the tenant catalog", ErrInvalidDesiredState)
 		}
 	}
 	return nil

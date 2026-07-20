@@ -1,4 +1,4 @@
-base_url: http://keycloak:8080/auth
+base_url: https://keycloak.noebs.svc.cluster.local:8443/auth
 admin_realm: noebs
 client_id: noebs-keycloak-reconciler
 client_secret: REPLACE_WITH_RECONCILER_CLIENT_SECRET

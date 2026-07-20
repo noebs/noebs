@@ -11,13 +11,18 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/apperr"
+	"github.com/adonese/noebs/internal/workloadauth"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/gofiber/fiber/v2"
 )
 
-var ErrMissingTemporalSignaler = errors.New("missing temporal signaler")
+var (
+	ErrMissingTemporalSignaler     = errors.New("missing temporal signaler")
+	ErrPSPWebhookProviderMismatch  = errors.New("psp webhook provider mismatch")
+	ErrPSPWebhookDirectionMismatch = errors.New("psp webhook direction mismatch")
+)
 
 type TemporalSignaler interface {
 	SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error
@@ -57,16 +62,10 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, err)
 	}
 
-	scope := walletpsp.Scope{
-		Region:    strings.TrimSpace(c.Query("region")),
-		Currency:  strings.TrimSpace(c.Query("currency")),
-		Direction: normalizeDirection(c.Query("direction")),
-	}
-
 	if h.Loader == nil || h.Registry == nil {
 		return jsonResponse(c, http.StatusServiceUnavailable, apperr.ErrUnavailable)
 	}
-	cfg, err := h.Loader.LoadWebhook(c.Context(), tenantID, providerCode, scope)
+	cfg, err := h.Loader.LoadWebhook(c.Context(), tenantID, providerCode, walletpsp.Scope{})
 	if err != nil {
 		switch {
 		case errors.Is(err, walletpsp.ErrPSPNotRegistered), errors.Is(err, walletpsp.ErrPSPConfigInvalid):
@@ -80,7 +79,7 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	fields, err := mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
 	if err != nil {
 		errMsg := err.Error()
-		if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, "", "", scope.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
+		if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, "", "", "", http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
 			return jsonResponse(c, 0, mapWalletError(logErr))
 		}
 		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, errMsg))
@@ -90,30 +89,20 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, err.Error()))
 	}
 
-	signature := strings.TrimSpace(firstHeader(c, "X-Webhook-Signature", "X-Signature", "Signature"))
+	signature := webhookSignature(c)
 	signatureValid := provider.VerifyWebhook(payload, signature)
-	if !signatureValid {
-		checkedMap, checkedPayload, err := h.authorizeUnsignedWebhook(c, cfg, provider, providerCode, tenantID, fields.ClientReference, fields.PSPTransactionID, fields.Direction, payloadMap, payload)
-		if err != nil {
-			errMsg := err.Error()
-			if errors.Is(err, walletpsp.ErrPSPWebhookInvalid) {
-				errMsg = "invalid webhook signature"
-			}
-			if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, fields.ClientReference, fields.PSPTransactionID, fields.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
-				return jsonResponse(c, 0, mapWalletError(logErr))
-			}
-			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletpsp.ErrPSPWebhookInvalid, apperr.ErrBadRequest, errMsg))
+	checkedMap, checkedPayload, authErr := h.authorizeWebhook(c, cfg, provider, providerCode, tenantID, fields, signatureValid, payloadMap, payload)
+	if authErr != nil {
+		return h.rejectWebhookAuthentication(c, tenantID, providerCode, fields, payload, authErr)
+	}
+	payloadMap, payload = checkedMap, checkedPayload
+	fields, err = mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
+	if err != nil {
+		errMsg := err.Error()
+		if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, "", "", "", http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
+			return jsonResponse(c, 0, mapWalletError(logErr))
 		}
-		payloadMap = checkedMap
-		payload = checkedPayload
-		fields, err = mappedPSPWebhookFields(payloadMap, cfg.WebhookResponseMapping)
-		if err != nil {
-			errMsg := err.Error()
-			if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, "", "", scope.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); logErr != nil {
-				return jsonResponse(c, 0, mapWalletError(logErr))
-			}
-			return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, errMsg))
-		}
+		return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(err, apperr.ErrBadRequest, errMsg))
 	}
 
 	if fields.ClientReference == "" {
@@ -141,6 +130,18 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 			return jsonResponse(c, 0, mapWalletError(err))
 		}
 		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	if err := validatePSPWebhookTransaction(stored, providerCode, fields.Direction); err != nil {
+		statusCode := http.StatusBadRequest
+		publicErr := apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+		if errors.Is(err, ErrPSPWebhookProviderMismatch) {
+			statusCode = http.StatusNotFound
+			publicErr = apperr.Wrap(walletstore.ErrPSPTransactionNotFound, apperr.ErrNotFound, walletstore.ErrPSPTransactionNotFound.Error())
+		}
+		if logErr := h.recordWebhookInteraction(c, tenantID, providerCode, clientRef, pspTransactionID, fields.Direction, statusCode, fiber.Map{"error": publicErr.Error(), "client_reference": clientRef}, err.Error(), payload); logErr != nil {
+			return jsonResponse(c, 0, mapWalletError(logErr))
+		}
+		return jsonResponse(c, statusCode, publicErr)
 	}
 
 	signalCurrency := strings.TrimSpace(fields.Currency)
@@ -182,6 +183,37 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 	return jsonResponse(c, http.StatusOK, fiber.Map{"status": update.Status, "client_reference": clientRef})
+}
+
+func (h *PSPWebhookHandler) rejectWebhookAuthentication(c *fiber.Ctx, tenantID, providerCode string, fields pspWebhookFields, payload []byte, authErr error) error {
+	errMsg := authErr.Error()
+	if errors.Is(authErr, walletpsp.ErrPSPWebhookInvalid) {
+		errMsg = "webhook authentication failed"
+	}
+	if err := h.recordWebhookInteraction(c, tenantID, providerCode, fields.ClientReference, fields.PSPTransactionID, fields.Direction, http.StatusBadRequest, fiber.Map{"error": errMsg}, errMsg, payload); err != nil {
+		return jsonResponse(c, 0, mapWalletError(err))
+	}
+	return jsonResponse(c, http.StatusBadRequest, apperr.Wrap(walletpsp.ErrPSPWebhookInvalid, apperr.ErrBadRequest, errMsg))
+}
+
+func validatePSPWebhookTransaction(stored *walletstore.PSPTransaction, providerCode, callbackDirection string) error {
+	if stored == nil {
+		return walletstore.ErrPSPTransactionNotFound
+	}
+	if stored.PSPProvider != providerCode {
+		return ErrPSPWebhookProviderMismatch
+	}
+	if callbackDirection == "" {
+		return nil
+	}
+	expectedDirection := normalizeDirection(stored.Direction)
+	if expectedDirection != "deposit" && expectedDirection != "withdrawal" {
+		return walletstore.ErrInvalidDirection
+	}
+	if normalizeDirection(callbackDirection) != expectedDirection {
+		return ErrPSPWebhookDirectionMismatch
+	}
+	return nil
 }
 
 type pspWebhookFields struct {
@@ -231,7 +263,7 @@ func (h *PSPWebhookHandler) recordWebhookInteraction(c *fiber.Ctx, tenantID, pro
 	if h == nil || h.Store == nil {
 		return apperr.ErrUnavailable
 	}
-	requestHeaders, err := rawJSONFromAny(c.GetReqHeaders())
+	requestHeaders, err := webhookAuditHeaders(c)
 	if err != nil {
 		return err
 	}
@@ -259,17 +291,15 @@ func (h *PSPWebhookHandler) recordWebhookInteraction(c *fiber.Ctx, tenantID, pro
 	return err
 }
 
-func (h *PSPWebhookHandler) authorizeUnsignedWebhook(c *fiber.Ctx, cfg *walletpsp.Config, provider walletpsp.Provider, providerCode, tenantID, clientReference, pspTransactionID, direction string, payloadMap map[string]any, payload []byte) (map[string]any, []byte, error) {
+func (h *PSPWebhookHandler) authorizeIPAllowedWebhook(c *fiber.Ctx, cfg *walletpsp.Config, provider walletpsp.Provider, providerCode, tenantID, clientReference, pspTransactionID, direction string, payloadMap map[string]any, payload []byte) (map[string]any, []byte, error) {
 	if cfg == nil {
 		return nil, nil, walletpsp.ErrPSPWebhookInvalid
 	}
-	mode := strings.ToLower(strings.TrimSpace(cfg.WebhookAuthMode))
-	switch mode {
-	case "ip_allowlist", "signature_or_ip_allowlist":
-	default:
+	sourceIP, ok := c.Locals("request_source").(string)
+	if !ok {
 		return nil, nil, walletpsp.ErrPSPWebhookInvalid
 	}
-	allowed, err := webhookIPAllowed(c.IP(), cfg.WebhookAllowedCIDRs)
+	allowed, err := webhookIPAllowed(sourceIP, cfg.WebhookAllowedCIDRs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -296,6 +326,23 @@ func (h *PSPWebhookHandler) authorizeUnsignedWebhook(c *fiber.Ctx, cfg *walletps
 		return nil, nil, err
 	}
 	return authoritative, raw, nil
+}
+
+func (h *PSPWebhookHandler) authorizeWebhook(c *fiber.Ctx, cfg *walletpsp.Config, provider walletpsp.Provider, providerCode, tenantID string, fields pspWebhookFields, signatureValid bool, payloadMap map[string]any, payload []byte) (map[string]any, []byte, error) {
+	if cfg == nil {
+		return nil, nil, walletpsp.ErrPSPWebhookInvalid
+	}
+	switch strings.ToLower(strings.TrimSpace(cfg.WebhookAuthMode)) {
+	case "signature":
+		if !signatureValid {
+			return nil, nil, walletpsp.ErrPSPWebhookInvalid
+		}
+		return payloadMap, payload, nil
+	case "ip_allowlist":
+		return h.authorizeIPAllowedWebhook(c, cfg, provider, providerCode, tenantID, fields.ClientReference, fields.PSPTransactionID, fields.Direction, payloadMap, payload)
+	default:
+		return nil, nil, walletpsp.ErrPSPWebhookInvalid
+	}
 }
 
 func authoritativeWebhookPayload(original map[string]any, mapping walletpsp.ResponseMapping, clientReference, pspTransactionID, direction string, status *walletpsp.TxStatus) map[string]any {
@@ -478,6 +525,30 @@ func webhookProviderHeaders(cfg *walletpsp.Config) (walletstore.RawJSON, error) 
 	return rawJSONFromAny(headers)
 }
 
+func webhookAuditHeaders(c *fiber.Ctx) (walletstore.RawJSON, error) {
+	headers := c.GetReqHeaders()
+	redacted := map[string]struct{}{
+		"authorization":       {},
+		"cookie":              {},
+		"proxy-authorization": {},
+		"signature":           {},
+		"x-signature":         {},
+		"x-webhook-signature": {},
+	}
+	for _, name := range workloadauth.IdentityHeaderNames() {
+		redacted[strings.ToLower(name)] = struct{}{}
+	}
+	for _, name := range workloadauth.WorkloadHeaderNames() {
+		redacted[strings.ToLower(name)] = struct{}{}
+	}
+	for name := range headers {
+		if _, sensitive := redacted[strings.ToLower(name)]; sensitive {
+			headers[name] = []string{"REDACTED"}
+		}
+	}
+	return rawJSONFromAny(headers)
+}
+
 func errorString(err error) string {
 	if err == nil {
 		return ""
@@ -485,13 +556,12 @@ func errorString(err error) string {
 	return err.Error()
 }
 
-func firstHeader(c *fiber.Ctx, keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(c.Get(key)); value != "" {
-			return value
-		}
+func webhookSignature(c *fiber.Ctx) string {
+	values := c.Request().Header.PeekAll("X-Webhook-Signature")
+	if len(values) != 1 {
+		return ""
 	}
-	return ""
+	return strings.TrimSpace(string(values[0]))
 }
 
 func rawJSONFromAny(value any) (walletstore.RawJSON, error) {

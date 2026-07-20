@@ -1,179 +1,202 @@
-# Keycloak cutover coordination
+# Keycloak authority cutover
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
-This file records evidence, decisions, ownership, and verification for the
-Keycloak cutover. Repository code and locally reproduced results are the
-authority. GitHub checks and pull-request state are not release evidence.
+Repository code and locally reproduced evidence are authoritative. GitHub
+checks, pull-request state, and prose in this file are not release evidence.
 
 ## Main-agent verdict
 
-The current deployment is not Keycloak-backed. Keycloak 26.6.1 is running with
-only the `master` realm, while the API gateway authenticates users with a
-shared HS256 secret and administrators with a shared key or Basic credentials.
-The static admin credential can select arbitrary tenants, admin actor IDs come
-from request forms, and the default-deny NetworkPolicies do not permit any
-Noebs workload or the public edge to reach Keycloak.
+**GO for the reviewed Keycloak/auth/IaC design. NO-GO for the live cutover
+until the remaining release gates below are closed.**
 
-This is a replacement, not a dual-auth migration. The completed cutover must
-have no HS256 user-token path, static admin credential, local password/OTP
-authority, or request-supplied audit actor fallback.
+The independent auth, transport, IaC, and release reviewers found no surviving
+P0/P1/P2 defect. The live cluster has not been mutated for this cutover. It
+still runs the old release, K3s Secret encryption is disabled, and no token
+from the new `noebs` realm has crossed the deployed gateway.
 
-## Accepted design
+The principal code blocker is repository-owned wallet TOTP. Removing it is
+required to make Keycloak the only human MFA authority, but three RPC methods
+overlap pre-existing user edits in protected `wallet/grpc/funding.go`. The
+main agent asked for approval to delete only those methods while preserving
+every unrelated hunk and has not received it yet.
 
-- One `noebs` realm represents human identities. One subject may belong to
-  several tenants.
-- Each tenant is a Keycloak Organization. The live first organization alias is
-  `tenant-cutover`; more aliases use the same declarative structure.
-- The API is a separate `noebs-api` resource-server client. Access tokens must
-  have the exact public issuer, the `noebs-api` audience, an allowed authorized
-  party, an access-token type, RS256 signature, subject, issue time, and expiry.
-- A request selects an active tenant explicitly. Authorization uses only the
-  selected entry in the Keycloak `organization` claim; roles from different
-  organizations are never combined.
-- Organization membership roles are exactly `user`, `backoffice`, and
-  `tenant-admin`. Route permissions are `reporting:read`, `wallet:read`,
-  `wallet:audit:read`, `wallet:manual:create`, `wallet:fees:write`,
-  `wallet:rates:write`, `wallet:workflow:approve`, and
-  `wallet:workflow:reject`. The realm-level `platform-admin` role is reserved
-  for genuinely cross-tenant platform operations.
-- The immutable human identity is `(issuer, subject)`. Numeric local user IDs
-  may remain only as a domain projection. Credentials never return to the
-  application database.
-- The gateway derives tenant, role, subject, and any projected user ID. It
-  clears public identity headers and carries the decision through the existing
-  signed workload boundary. Downstream services never interpret bearer tokens.
-- Back-office reporting requires `backoffice` or stronger membership. Wallet
-  mutation and approval routes require `tenant-admin` or `platform-admin` plus
-  exact route permissions. Actor identity is always the verified subject.
-- Browser back-office authentication is an in-process API-gateway BFF, not an
-  identity-aware proxy. It uses Authorization Code with PKCE S256, a
-  confidential Keycloak client, one-time flow state, and opaque shared
-  PostgreSQL sessions; OAuth tokens never enter the browser or downstream
-  services.
-- Back-office tenant context is part of the canonical path
-  `/backoffice/t/:tenant/...` and is re-authorized against the current token on
-  every request. There is no session-global active tenant and no tenant query,
-  form, header, or default fallback. Unsafe forms also require a per-session
-  synchronizer token and same-origin evidence.
-- Keycloak realm, clients, scopes/mappers, organizations, groups, and role
-  mappings are reconciled idempotently from repository-owned desired state.
-  Startup import alone is insufficient because it skips an existing realm.
-- The canonical public Keycloak path is under the already trusted
-  `https://api.noebs.sd/auth` edge until a separately managed auth DNS record
-  exists. Keycloak uses a fixed hostname; `hostname-strict=false` is removed.
+## Authority model proved by code
 
-## Review evidence
+- Human authentication is Google federation into one Keycloak `noebs` realm.
+  There is no local username/password execution, direct grant, implicit grant,
+  password reset, local recovery, static API key, Basic auth, or HS256 human
+  token path.
+- Keycloak owns TOTP enrollment and challenge. `CONFIGURE_TOTP` is the only
+  enabled/default required action. The exact policy is TOTP, HMAC-SHA256,
+  six digits, 30 seconds, look-ahead one, and non-reusable codes.
+- The browser flow is an SSO cookie plus an exact Google default-provider
+  redirector. First broker login creates only a unique subject; collisions
+  fail closed. The required Google post-broker flow is OTP only.
+- `noebs-mobile` is public and `noebs-backoffice` is confidential. Both use
+  Authorization Code with PKCE S256. Direct grants, service accounts, implicit
+  flow, full scope, and authorization services are disabled for interactive
+  clients.
+- `noebs-api` is the resource client. Tenant membership classes are exactly
+  `user`, `backoffice`, and `tenant-admin`; route permissions are explicit
+  client roles inherited through organization groups.
+- Tenants are exact Keycloak Organizations backed by the repository tenant
+  catalog. One subject may have a different membership class in each tenant.
+  A request selects exactly one tenant; roles are never unioned across
+  organizations.
+- Human identity is `(issuer, subject)`. Numeric user IDs are local profile
+  projections, never credential authority.
+- The API gateway is the sole bearer-token verifier. It verifies RS256,
+  issuer, one exact audience, authorized party, token type, key ID, lifetime,
+  and the selected organization. It signs the complete derived principal for
+  downstream services.
+- Downstream workloads accept only the signed V2 workload envelope. Public
+  tenant, role, permission, user, actor, source-IP, and legacy credential
+  headers are stripped and cannot become authority.
+- Back-office sessions are opaque PostgreSQL records with encrypted token
+  material, refresh locking, CSRF, origin checks, nonce, PKCE, and RP logout.
+- Membership changes use the realm-local repository command. It audits the
+  complete client/role/group topology before reading or changing a subject,
+  plans exact add/change/remove operations, applies them, and rereads the
+  result.
 
-### Authentication and authorization review
+## Exact Keycloak topology
 
-- `apigateway/jwt_auth.go` issues ten-hour shared-secret tokens.
-- `apigateway/admin_auth.go` accepts a shared key, Basic auth, and a debug
-  bypass.
-- `cli/gateway_proxy.go` hard-codes the internal admin role and accepts the
-  tenant from public headers/query/form values.
-- `wallet/grpc/admin_render.go` accepts `requested_by`, `set_by`, and
-  `approver_id` from forms instead of the authenticated actor.
-- `wallet_ledger/008_wallet_admin_audit.sql` stores a second administrator
-  password/TOTP authority.
-- `/generate_api_key` creates credentials that no incoming auth path consumes.
-- The strict verifier and gateway adapter are now committed in `c498bb8` and
-  `563fe0b`. They reject duplicate/bare credentials, non-RS256 tokens, invalid
-  issuer/audience/client/type/time claims, and organization role union before
-  producing a tenant-scoped principal.
-- Internal TLS peer authorization is committed in `fa1cb40`. Wallet-ledger now
-  accepts only the `wallet-api` certificate identity rather than every client
-  certificate issued by the Noebs CA.
+- Desired clients: `noebs-api`, `noebs-mobile`, `noebs-backoffice`, and the
+  realm-local `noebs-keycloak-reconciler`.
+- Keycloak 26.7 refuses deletion of fixed `account`, `account-console`,
+  `admin-cli`, and `security-admin-console` clients with HTTP 400. The
+  reconciler therefore owns them as exact disabled shells with no flows,
+  redirects, origins, scopes, mappers, grants, service accounts, or role
+  mappings. This is platform topology, not a fallback authority.
+- `broker` and `realm-management` remain the only active Keycloak built-ins.
+- Unmanaged clients, IdPs, mappers, scopes, realm roles, flows, organizations,
+  groups, composites, and mappings are pruned. A second reconcile must report
+  zero changes.
 
-### IaC and live-host review
+## Transport and deployment authority
 
-- The in-cluster Keycloak database contains only realm `master`; no Noebs
-  organization or client exists.
-- `deploy/kubernetes/base/network-policies.yaml` permits Keycloak to reach only
-  its PostgreSQL instance. There is no public Keycloak route.
-- The live Noebs Argo application is pinned to stale revision `34acb6ce...`,
-  workloads use mutable image references, and the edge Caddy deployment is not
-  owned by an Argo application.
-- K3s secret encryption at rest is disabled. The cluster-admin kubeconfig,
-  OpenTofu state, and its backup are mode `0644`; the state contains release
-  secret values. Permissions/encryption must be fixed and all affected secrets
-  rotated before calling the platform secure.
+- Keycloak application traffic is HTTPS-only on 8443 with TLS 1.3. Its
+  management health port is separate, unexposed by a Service, and restricted
+  to the node probe path.
+- Every gateway, OIDC, back-office, reconciliation, lookup, membership, and
+  bootstrap client verifies the internal CA and exact Keycloak service name.
+  There is no plaintext or skip-verification path.
+- Keycloak Postgres has a distinct leaf identity. Keycloak uses
+  `verify-server`; Postgres accepts only `hostssl ... scram-sha-256` and
+  explicitly rejects `hostnossl`, including after first initdb.
+- Caddy is the only public edge. It exposes an exact `noebs` discovery/JWKS,
+  authorization, token, logout, Google broker, and required-action allowlist;
+  blanket `/auth` access returns 404. Sensitive OAuth query fields are
+  redacted from logs.
+- Kubernetes bootstrap and steady overlays are separate. The temporary master
+  client is deleted before steady realm-local reconciliation.
+- OpenTofu owns namespaces, Argo wiring, and immutable Git revisions. It does
+  not read or persist Kubernetes Secret values. Runtime Secret rendering is a
+  separate strict release boundary.
 
-### Host hardening evidence
+## Reproduced evidence
 
-- A stopped-restart-policy Testcontainers PostgreSQL container had published a
-  random port on the public interface. Container `8abb4599cdcc` and its
-  anonymous data volume were removed after confirming their Testcontainers
-  labels and creation metadata.
-- `deploy/host/noebs-public-docker-firewall` now rejects new traffic forwarded
-  from `eth0` to any Docker default or user-defined bridge instead of relying on
-  a list of known ports. The installed systemd unit reapplies the policy after
-  Docker restarts.
-- From outside the server, ports 3100, 9100, 18081, and the orphaned 33001 no
-  longer connect. Port 9100 remains reachable through Tailscale and on the host,
-  and the public HTTPS edge still responds.
-- The live K3s cluster-admin kubeconfig, OpenTofu state and backup, tfvars, and
-  saved plan files are now mode `0600`; the node remained Ready after the
-  change. Secret encryption and credential rotation are still outstanding.
-- The node runs K3s v1.35.4+k3s1, new enough for the supported
-  existing-cluster encryption transition. Its install-time systemd arguments
-  still specify `write-kubeconfig-mode=644`, so a restart would undo the manual
-  permission fix. Repository-owned K3s config now replaces those arguments,
-  keeps mode `0600`, and selects the `secretbox` provider; it has not yet been
-  installed or activated.
+Independent Keycloak 26.7 probe using the pinned image:
 
-### Server test evidence
+- steady realm-local reconcile: `created=0 updated=0 deleted=0`;
+- hostile auth drift repair: `created=0 updated=8 deleted=2`;
+- immediate second reconcile: zero changes;
+- PKCE authorization: 303 to the local Google broker, then 303 to
+  `accounts.google.com`, with no username/password form marker;
+- exact flows, bindings, required actions, OTP policy, clients, mappings, and
+  stock-client inertness verified through the Admin REST API.
 
-- Commit `2d4d508` was checked out as an isolated detached worktree on
-  `100.102.164.34` and tested with Go 1.26.5. CLI tests and race-enabled OIDC,
-  tenant-policy, and gateway tests passed.
-- On the server's four-vCPU test allocation, warm token verification measured
-  about 92.6 microseconds per operation and tenant policy about 121 nanoseconds
-  with zero policy allocations. Two Ryuk helpers left by the test process were
-  removed; no Testcontainers resources remain.
-- An isolated Keycloak 26.7.0 instance using the pinned image digest was
-  bootstrapped on the target host. The first reconcile created 25 resources
-  and applied nine mappings. After matching Keycloak's canonical
-  representations, the next reconcile made zero changes.
-- The temporary `master` client was deleted, its next token request returned
-  401, and two subsequent reconciles authenticated only as the realm-local
-  `noebs-keycloak-reconciler`; both made zero changes. Its token carried the
-  direct `realm-management/realm-admin` scope, while the confidential
-  back-office client had no web origins and only the exact login and logout
-  callbacks.
-- Both steady and one-time bootstrap Kustomize overlays passed K3s
-  server-side dry-run. The steady rendering contains no bootstrap credential,
-  the bootstrap rendering contains no temporary user/password path, Caddy
-  validates the public-only realm route, and OpenTofu validates without
-  reading Kubernetes Secret data into state.
-- Edge Caddy now uses ordinary pod networking with explicit host ports instead
-  of `hostNetwork`. K3s accepted the rendered Deployment in server-side
-  dry-run; Keycloak will see a `10.42.0.0/16` proxy source and the Caddy
-  namespace/pod NetworkPolicy selector is no longer implementation-dependent.
+Independent transport probes using the pinned production images:
 
-## Work streams
+- Keycloak listened only on HTTPS 8443 for application traffic;
+- CA-verified TLS 1.3 returned 200;
+- wrong hostname, wrong CA, TLS 1.2, and plaintext application traffic failed;
+- the exact `0440 root:1000` Secret mount worked with supplemental group 1000;
+- pinned Caddy adapted the repository Caddyfile successfully.
 
-| Stream | Owner | State | Exit evidence |
-|---|---|---|---|
-| OIDC verification and tenant policy | quality reviewer | complete | race tests; rotation/adversarial matrix; 26.4 us verification and 23 ns policy benchmarks |
-| Gateway/runtime cutover | main agent | pending | no static/HS auth routes; route policy matrix passes |
-| Keycloak desired state and reconciler | IaC reviewer | complete | fake empty-state/second-pass tests; real 26.7 bootstrap deletion and steady zero-drift reconciles |
-| Principal projection and actor propagation | auth reviewer | pending | `(issuer, sub)` uniqueness and spoof tests |
-| Back-office OAuth BFF | quality reviewer | active | flow replay, refresh locking, CSRF, tenant-tab isolation, and hot-path benchmark |
-| Host hardening and release path | main agent | active | local build, immutable server deploy, live negative/positive smoke |
+Current local deterministic gates:
 
-## Release gates
+- `go test ./... -count=1`: pass;
+- `go vet ./...`: pass;
+- auth-critical race suite: pass;
+- `golangci-lint --new-from-rev=HEAD`: no findings;
+- uncapped full-lint comparison: no working-tree-only finding, with total
+  findings reduced from 215 at `HEAD` to 148;
+- `go mod tidy -diff`: clean;
+- changed-file formatting and `git diff --check`: clean;
+- OpenTofu recursive formatting/init/validate: pass;
+- all nine Kustomize entry points render and pass current-host server-side
+  dry-run;
+- all shell syntax, protobuf/OpenAPI regeneration, Templ regeneration, and
+  release-image invariant gates: pass.
 
-1. Local unit, integration, race, vet, vulnerability, manifest, OpenTofu, and
-   benchmark checks pass without relying on GitHub automation.
-2. A clean Keycloak/PostgreSQL state reconciles twice without drift and emits
-   tokens whose organization-specific roles pass the gateway matrix.
-3. Static admin, Basic, HS256, legacy login/refresh/OTP/recovery/Google, local
-   admin password/TOTP, and unused API-key paths are absent.
-4. Cross-tenant, cross-client, role-union, direct-backend, header-spoof, actor
-   spoof, and maker-approver self-approval cases fail.
-5. A scoped commit is pushed, built locally into an immutable image, deployed
-   to `100.102.164.34`, and verified against the exact source revision.
-6. Server filesystem permissions and secret storage are hardened, exposed
-   release credentials are rotated, and no secret values enter Git history or
-   command output.
+Local Docker is unavailable, so 68 PostgreSQL/Temporal integration tests are
+environment-skipped. Those must run from the exact committed tree on
+`100.102.164.34`. The live Google callback and OTP UI also require the real
+Google credential and a user-controlled browser session; configuration and
+redirect behavior alone are already proved.
+
+Five-run benchmark evidence, without a checked-in comparison baseline:
+
+- keyring seal/open: median 4,005 ns/op, 11,728 B, 9 allocs;
+- CSRF validation: 209.2 ns/op, 256 B, 6 allocs;
+- in-memory session authentication: 2,576 ns/op, 3,048 B, 25 allocs;
+- warm tenant authorization: 38.88 ns/op, zero allocations;
+- warm bearer verification: median 26,069 ns/op, 8,616 B, 108 allocs;
+- cached workload capabilities: 49.22 ns/op, 64 B, 2 allocs.
+
+## Live state and remaining release gates
+
+Current host facts:
+
+- SSH host: `adonese@100.102.164.34`, K3s v1.35.4, node Ready;
+- old Noebs release remains live;
+- K3s Secret encryption is disabled;
+- old Ingress, `noebs-tls`, unhashed edge ConfigMap, legacy service Secrets,
+  and old Keycloak data still exist;
+- foundation and application server checkouts are old and dirty, so neither
+  may be used as source authority;
+- the old foundation state contains legacy Kubernetes Secret data-source
+  addresses and must be sanitized without displaying values.
+
+Release gates, in order:
+
+1. Obtain approval for the protected overlap and remove wallet-owned TOTP
+   end-to-end while preserving unrelated user edits.
+2. Commit and push the exact intended tree without staging any protected user
+   changes; reproduce tests from that committed tree.
+3. Run the skipped PostgreSQL/Temporal integration suite and vulnerability
+   scan on the server; repeat the real pinned Keycloak test from the commit.
+4. Build the exact commit on the server, push an immutable image, verify the
+   registry digest, and commit the digest plus exact Argo revision.
+5. Back up the complete K3s datastore and matching token, enable `secretbox`
+   encryption using the documented existing-cluster sequence, and verify the
+   node after each restart.
+6. Prepare one strict encrypted release input. Preserve external Google/EBS
+   credentials, rotate local credentials, render Secrets without printing
+   them, and sanitize foundation state before its first new-code plan.
+7. Perform the documented coordinated empty-state replacement, bootstrap
+   Keycloak, prove the temporary master client returns 401 after deletion,
+   switch to the steady overlay, and remove temporary Secrets.
+8. Assign one temporary subject different roles in both tenants through the
+   production command. Verify selected-tenant allow/deny behavior, no role
+   union, edge 404s for admin/other realms, then remove the subject.
+9. Update this file with immutable commit/image/digest, backup/encryption,
+   deployment, live token, membership, and cleanup evidence; issue the final
+   main-agent verdict.
+
+## Workspace protection
+
+These pre-existing user changes remain outside this cutover checkpoint and
+must not be staged or overwritten:
+
+- `parsing/fields.go`
+- `parsing/fields_test.go`
+- `wallet/grpc/funding.go`
+- `wallet/grpc/helpers.go`
+- `wallet/grpc/helpers_test.go`
+
+`noebs-fly-litefs.conf` contained a tracked Fly WireGuard private key and is
+deleted in this tree. Treat that historical key as compromised. Revoking the
+peer or rewriting repository history requires separate explicit approval.

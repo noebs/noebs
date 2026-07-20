@@ -92,13 +92,6 @@ func (h *Handler) SetOpaqueMainCard(c *fiber.Ctx) error {
 	return c.SendStatus(http.StatusNoContent)
 }
 
-func (h *Handler) LegacyCardUpgradeRequired(c *fiber.Ctx) error {
-	return jsonResponse(c, http.StatusGone, fiber.Map{
-		"code":    consumer.ErrUpgradeRequired.Error(),
-		"message": "This card endpoint has been retired; upgrade to opaque card references.",
-	})
-}
-
 func (h *Handler) CreateCardEnrollmentIntentInternal(c *fiber.Ctx) error {
 	tenantID, userID, ok := opaqueCardIdentity(c)
 	if !ok {

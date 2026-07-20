@@ -5,11 +5,15 @@ pgdata="/var/lib/postgresql/data"
 postgres_user="keycloak"
 postgres_db="keycloak"
 password_source="/opt/keycloak-postgres/secrets/password"
+tls_certificate_source="/opt/keycloak-postgres/secrets/tls.crt"
+tls_private_key_source="/opt/keycloak-postgres/secrets/tls.key"
+tls_certificate_runtime="/tmp/keycloak-postgres-tls.crt"
+tls_private_key_runtime="/tmp/keycloak-postgres-tls.key"
 password_runtime="/tmp/keycloak-postgres-password"
 pgpass="/var/lib/postgresql/.pgpass"
 
 cleanup() {
-  rm -f "$password_runtime" "$pgpass"
+  rm -f "$password_runtime" "$pgpass" "$tls_certificate_runtime" "$tls_private_key_runtime"
 }
 trap cleanup EXIT
 
@@ -24,8 +28,14 @@ if [ ! -s "$password_source" ]; then
   echo "missing Keycloak Postgres password file: $password_source" >&2
   exit 1
 fi
+if [ ! -s "$tls_certificate_source" ] || [ ! -s "$tls_private_key_source" ]; then
+  echo "missing Keycloak Postgres TLS certificate or private key" >&2
+  exit 1
+fi
 
 install -d -o postgres -g postgres -m 0700 "$pgdata"
+install -o postgres -g postgres -m 0600 "$tls_certificate_source" "$tls_certificate_runtime"
+install -o postgres -g postgres -m 0600 "$tls_private_key_source" "$tls_private_key_runtime"
 
 if [ ! -s "$pgdata/PG_VERSION" ]; then
   password="$(tr -d '\r\n' < "$password_source")"
@@ -39,11 +49,6 @@ if [ ! -s "$pgdata/PG_VERSION" ]; then
     --auth-local=scram-sha-256 \
     --username="$postgres_user" \
     --pwfile="$password_runtime"
-
-  {
-    echo
-    echo "host all all all scram-sha-256"
-  } >> "$pgdata/pg_hba.conf"
 
   printf '/tmp:5432:*:%s:%s\n' "$(pgpass_escape "$postgres_user")" "$(pgpass_escape "$password")" > "$pgpass"
   chown postgres:postgres "$pgpass"
@@ -60,4 +65,19 @@ if [ ! -s "$pgdata/PG_VERSION" ]; then
   gosu postgres pg_ctl -D "$pgdata" -m fast -w stop
 fi
 
-exec gosu postgres postgres -D "$pgdata" -c listen_addresses='*'
+cat > "$pgdata/pg_hba.conf" <<'HBA'
+local all all scram-sha-256
+hostssl all all all scram-sha-256
+hostnossl all all all reject
+HBA
+chown postgres:postgres "$pgdata/pg_hba.conf"
+chmod 0600 "$pgdata/pg_hba.conf"
+
+exec gosu postgres postgres \
+  -D "$pgdata" \
+  -c "listen_addresses=*" \
+  -c "ssl=on" \
+  -c "ssl_min_protocol_version=TLSv1.3" \
+  -c "ssl_max_protocol_version=TLSv1.3" \
+  -c "ssl_cert_file=$tls_certificate_runtime" \
+  -c "ssl_key_file=$tls_private_key_runtime"

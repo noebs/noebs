@@ -59,8 +59,8 @@ func TestDecryptSopsFileUsesExplicitAgeKeyWithoutSOPSCLIEnvironment(t *testing.T
 		t.Fatalf("unmarshal decrypted output: %v\n%s", err, output)
 	}
 	noebs := decoded["noebs"]
-	if got := noebs["admin_key"]; got != "secret-admin-key" {
-		t.Fatalf("admin_key = %#v, want secret-admin-key", got)
+	if got := noebs["data_key"]; got != "secret-data-key" {
+		t.Fatalf("data_key = %#v, want secret-data-key", got)
 	}
 	if got := noebs["retry_count"]; got != 3 {
 		t.Fatalf("retry_count = %#v, want 3", got)
@@ -77,17 +77,17 @@ func encryptedTestSOPSYAML(t *testing.T, recipient string) []byte {
 		t.Fatalf("generate test SOPS data key: %v", err)
 	}
 	lastModified := time.Date(2026, 5, 28, 0, 0, 0, 0, time.UTC)
-	adminKey := encryptTestSOPSValue(t, dataKey, "noebs:admin_key:", []byte("secret-admin-key"), "str")
+	secretDataKey := encryptTestSOPSValue(t, dataKey, "noebs:data_key:", []byte("secret-data-key"), "str")
 	retryCount := encryptTestSOPSValue(t, dataKey, "noebs:retry_count:", []byte("3"), "int")
 	hash := sha512.New()
-	_, _ = hash.Write([]byte("secret-admin-key"))
+	_, _ = hash.Write([]byte("secret-data-key"))
 	_, _ = hash.Write([]byte("3"))
 	mac := fmt.Sprintf("%X", hash.Sum(nil))
 	encryptedMAC := encryptTestSOPSValue(t, dataKey, lastModified.Format(time.RFC3339), []byte(mac), "str")
 	encryptedDataKey := encryptTestSOPSDataKey(t, recipient, dataKey)
 
 	return []byte(fmt.Sprintf(`noebs:
-    admin_key: %s
+    data_key: %s
     retry_count: %s
     empty_value: ""
 sops:
@@ -99,7 +99,7 @@ sops:
     mac: %s
     unencrypted_suffix: _unencrypted
     version: 3.10.2
-`, adminKey, retryCount, recipient, indentBlock(encryptedDataKey, 12), lastModified.Format(time.RFC3339), encryptedMAC))
+`, secretDataKey, retryCount, recipient, indentBlock(encryptedDataKey, 12), lastModified.Format(time.RFC3339), encryptedMAC))
 }
 
 func encryptTestSOPSDataKey(t *testing.T, recipient string, dataKey []byte) string {

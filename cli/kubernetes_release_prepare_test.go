@@ -1,492 +1,265 @@
 package main
 
 import (
+	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/internal/keycloakadmin"
 	"gopkg.in/yaml.v3"
 )
 
-func TestPrepareKubernetesReleaseTransformsExplicitInputs(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
+func TestPrepareKubernetesReleaseUsesOnlyExplicitAuthority(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	outputRoot := filepath.Join(t.TempDir(), "release")
 
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
 	if err != nil {
 		t.Fatalf("prepareKubernetesRelease() error = %v", err)
 	}
 
-	requirePreparedFile(t, outputRoot, "config.yaml")
-	requirePreparedFile(t, outputRoot, "services/api-gateway.yaml")
-	requirePreparedFile(t, outputRoot, "services/wallet-ledger-migrate.yaml")
-	requirePreparedFile(t, outputRoot, "platform/keycloak.conf")
-	requirePreparedFile(t, outputRoot, "platform/ghcr-dockerconfigjson")
-	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/postgres-password.txt")); got != "legacy-pass" {
-		t.Fatalf("postgres password = %q, want legacy-pass", got)
+	for _, name := range []string{
+		"config.yaml",
+		"tenant-catalog.yaml",
+		"release-manifest.yaml",
+		"services/api-gateway.yaml",
+		"platform/keycloak.conf",
+		"platform/keycloak-reconciler-config.yaml",
+		"platform/gateway-auth-postgres-roles.secrets.yaml",
+		"platform/workload-auth-postgres-roles.secrets.yaml",
+		"platform/internal-transport.secrets.yaml",
+		"secrets/api-gateway.secrets.yaml",
+	} {
+		requirePreparedFile(t, outputRoot, name)
 	}
-	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/ghcr-dockerconfigjson")); !strings.Contains(got, `"ghcr.io"`) {
-		t.Fatalf("ghcr docker config json = %q, want ghcr.io auth", got)
+	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/postgres-password.txt")); got != "noebs-postgres-password" {
+		t.Fatalf("postgres password = %q", got)
 	}
-	ebsSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "ebs-adapter.secrets.yaml"))
-	ebsNoebs := getMap(ebsSecret, "noebs")
-	if got := firstString(ebsNoebs, "consumer_endpoint"); got != "https://consumer.input.example" {
-		t.Fatalf("consumer_endpoint = %q, want explicit input", got)
+	keycloakConfig := readPreparedFile(t, outputRoot, "platform/keycloak.conf")
+	if !strings.Contains(keycloakConfig, "proxy-trusted-addresses=10.42.0.1/32\n") {
+		t.Fatal("prepared Keycloak config must trust only the observed host-network Caddy source")
 	}
-	if got := firstString(ebsNoebs, "merchant_endpoint"); got != "https://merchant.input.example" {
-		t.Fatalf("merchant_endpoint = %q, want explicit input", got)
+	for _, required := range []string{
+		"db-tls-mode=verify-server\n",
+		"db-tls-trust-store-file=/opt/keycloak/conf/db-ca.pem\n",
+	} {
+		if !strings.Contains(keycloakConfig, required) {
+			t.Fatalf("prepared Keycloak config missing %q", required)
+		}
 	}
-	if got := firstString(ebsNoebs, "consumer_app_id"); got != "consumer-app" {
-		t.Fatalf("consumer_app_id = %q, want explicit input", got)
+	for _, forbidden := range []string{"proxy-trusted-addresses=10.42.0.0/16", "proxy-trusted-addresses=213.199.63.78/32"} {
+		if strings.Contains(keycloakConfig, forbidden) {
+			t.Fatalf("prepared Keycloak config contains overbroad or incorrect proxy trust %q", forbidden)
+		}
 	}
-	identitySecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "identity-auth.secrets.yaml"))
-	identityNoebs := getMap(identitySecret, "noebs")
-	if got := firstString(identityNoebs, "google_client_id"); got != "legacy-google-client-id" {
-		t.Fatalf("google_client_id = %q, want legacy secret value", got)
-	}
-	if got := firstString(identityNoebs, "google_client_secret"); got != "legacy-google-client-secret" {
-		t.Fatalf("google_client_secret = %q, want legacy secret value", got)
-	}
-	if got := firstString(identityNoebs, "google_redirect_url"); got != "https://api.noebs.sd/oauth/callback" {
-		t.Fatalf("google_redirect_url = %q, want explicit input", got)
-	}
-	if got := firstString(identityNoebs, "sms_key"); got != "input-sms-key" {
-		t.Fatalf("sms_key = %q, want explicit input", got)
-	}
-	if got := firstString(identityNoebs, "sms_sender"); got != "input-sms-sender" {
-		t.Fatalf("sms_sender = %q, want explicit input", got)
-	}
-	if got := firstString(identityNoebs, "sms_gateway"); got != "https://sms-gateway.noebs.sd/send?" {
-		t.Fatalf("sms_gateway = %q, want explicit input", got)
-	}
-	walletWorkerSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "wallet-worker.secrets.yaml"))
-	walletWorkerNoebs := getMap(walletWorkerSecret, "noebs")
-	serviceDatabases := getMap(walletWorkerNoebs, "service_databases")
-	if _, ok := serviceDatabases["wallet-ledger"]; !ok {
-		t.Fatalf("wallet-worker service_databases = %#v, want wallet-ledger owner entry", serviceDatabases)
-	}
-}
 
-func TestPrepareKubernetesReleaseRejectsReservedTenant(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "default")
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), store.ErrInvalidTenantID.Error()) {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want invalid tenant rejection", err)
+	var reconciler keycloakadmin.Config
+	payload := readPreparedFile(t, outputRoot, "platform/keycloak-reconciler-config.yaml")
+	if err := yaml.Unmarshal([]byte(payload), &reconciler); err != nil {
+		t.Fatalf("parse reconciler config: %v", err)
 	}
-}
-
-func TestPrepareKubernetesReleaseRejectsMissingExplicitInput(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	payload := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
-	payload = strings.ReplaceAll(payload, "    ipin_endpoint: \"https://ipin.example\"\n", "")
-	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), payload)
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "noebs.ebs.ipin_endpoint") {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want missing explicit ipin endpoint rejection", err)
+	wantBackoffice := testCanonicalReleaseSecret(2)
+	if reconciler.ClientSecret != testCanonicalReleaseSecret(1) {
+		t.Fatalf("reconciler secret did not come from release inputs")
 	}
-	assertPathMissing(t, outputRoot)
-}
-
-func TestPrepareKubernetesReleaseRejectsDuplicateCutoverInput(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	payload := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
-	payload = strings.Replace(payload, "  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", "  google_client_id: stale-google-client-id\n  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", 1)
-	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), payload)
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "duplicates current secret noebs.google_client_id") {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want duplicate current secret rejection", err)
-	}
-}
-
-func TestPrepareKubernetesReleaseRejectsMissingGoogleCutoverValue(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	secretPath := filepath.Join(legacyRoot, "secrets.yaml")
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.ReplaceAll(payload, "  google_client_id: legacy-google-client-id\n", "")
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "missing kubernetes release input noebs.google_client_id") {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want missing google cutover value rejection", err)
-	}
-	assertPathMissing(t, outputRoot)
-	if _, statErr := os.Stat(secretPath); statErr != nil {
-		t.Fatalf("legacy secret file should remain in place: %v", statErr)
-	}
-}
-
-func TestPrepareKubernetesReleaseUsesExplicitGoogleWhenCurrentSecretMissing(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.ReplaceAll(payload, "  google_client_id: legacy-google-client-id\n", "")
-	payload = strings.ReplaceAll(payload, "  google_client_secret: legacy-google-client-secret\n", "")
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	inputs := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
-	inputs = strings.Replace(inputs, "  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", "  google_client_id: input-google-client-id\n  google_client_secret: input-google-client-secret\n  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", 1)
-	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), inputs)
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err != nil {
-		t.Fatalf("prepareKubernetesRelease() error = %v", err)
-	}
-	identitySecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "identity-auth.secrets.yaml"))
-	identityNoebs := getMap(identitySecret, "noebs")
-	if got := firstString(identityNoebs, "google_client_id"); got != "input-google-client-id" {
-		t.Fatalf("google_client_id = %q, want explicit input", got)
-	}
-	if got := firstString(identityNoebs, "google_client_secret"); got != "input-google-client-secret" {
-		t.Fatalf("google_client_secret = %q, want explicit input", got)
-	}
-}
-
-func TestPrepareKubernetesReleaseTransformsCurrentSecretValues(t *testing.T) {
-	legacyRoot := writeCompleteLegacyReleaseRoot(t)
-	writePreflightFile(t, legacyRoot, "kubernetes-release.inputs.yaml", "noebs: {}\n")
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, filepath.Join(legacyRoot, "kubernetes-release.inputs.yaml"), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err != nil {
-		t.Fatalf("prepareKubernetesRelease() error = %v", err)
+	if reconciler.ClientCredentials["noebs-backoffice"].ClientSecret != wantBackoffice {
+		t.Fatalf("back-office secret did not come from release inputs")
 	}
 	apiSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "api-gateway.secrets.yaml"))
 	apiNoebs := getMap(apiSecret, "noebs")
-	if got := firstString(apiNoebs, "admin_key"); got != "legacy-admin-key" {
-		t.Fatalf("admin_key = %q, want current secret value", got)
+	if got := firstString(apiNoebs, "backoffice_client_secret"); got != wantBackoffice {
+		t.Fatalf("api-gateway back-office secret = %q", got)
 	}
-	identitySecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "identity-auth.secrets.yaml"))
-	identityNoebs := getMap(identitySecret, "noebs")
-	if got := firstString(identityNoebs, "sms_key"); got != "legacy-sms-key" {
-		t.Fatalf("sms_key = %q, want current secret value", got)
+	routes := getMap(apiNoebs, "psp_webhook_routes")
+	if route := getMap(routes, testCanonicalReleaseSecret(11)); firstString(route, "tenant_id") != "tenant-cutover" || firstString(route, "provider_code") != "test-provider" {
+		t.Fatalf("api-gateway PSP webhook routes = %#v", routes)
 	}
-	ebsSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "ebs-adapter.secrets.yaml"))
-	ebsNoebs := getMap(ebsSecret, "noebs")
-	if got := firstString(ebsNoebs, "consumer_endpoint"); got != "https://legacy-consumer.example" {
-		t.Fatalf("consumer_endpoint = %q, want current secret value", got)
+	pspSecret := getMap(readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "psp-webhook.secrets.yaml")), "noebs")
+	if _, present := pspSecret["psp_webhook_routes"]; present {
+		t.Fatal("psp-webhook secret contains gateway callback routes")
 	}
-	pspSecret := readYAMLMapFileMust(t, filepath.Join(outputRoot, "secrets", "psp-webhook.secrets.yaml"))
-	pspNoebs := getMap(pspSecret, "noebs")
-	psp := getMap(pspNoebs, "psp")
-	if _, ok := psp["tenant_1"]; !ok {
-		t.Fatalf("psp tenants = %#v, want current secret PSP map", psp)
+	provider := getMap(getMap(getMap(pspSecret, "psp"), "tenant-cutover"), "test-provider")
+	if _, present := provider["callback_id"]; present {
+		t.Fatal("PSP provider credential map contains public callback authority")
 	}
-	if got := strings.TrimSpace(readPreparedFile(t, outputRoot, "platform/temporal-postgres-password.txt")); got != "legacy-temporal-postgres-password" {
-		t.Fatalf("temporal postgres password = %q, want current secret value", got)
-	}
-	keycloakConfig := readPreparedFile(t, outputRoot, "platform/keycloak.conf")
-	for _, forbidden := range []string{"bootstrap-admin-username", "bootstrap-admin-password", "bootstrap-admin-client-id", "bootstrap-admin-client-secret"} {
-		if strings.Contains(keycloakConfig, forbidden) {
-			t.Fatalf("steady keycloak config contains %s:\n%s", forbidden, keycloakConfig)
-		}
-	}
-	for _, required := range []string{
-		"http-relative-path=/auth",
-		"hostname=https://api.noebs.sd/auth",
-		"hostname-strict=true",
-		"proxy-trusted-addresses=10.42.0.0/16",
-	} {
-		if !strings.Contains(keycloakConfig, required) {
-			t.Fatalf("steady keycloak config missing %s:\n%s", required, keycloakConfig)
-		}
+	if err := validateKubernetesReleaseManifest(outputRoot); err != nil {
+		t.Fatalf("validateKubernetesReleaseManifest() error = %v", err)
 	}
 }
 
-func TestPrepareKubernetesReleaseRejectsMissingExplicitEBSRuntimeEndpoint(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	payload := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
-	payload = strings.ReplaceAll(payload, "    consumer_endpoint: \"https://consumer.input.example\"\n", "")
-	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), payload)
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
+func TestPrepareKubernetesReleaseRejectsDuplicatePSPCallbackID(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	inputs.Noebs.PSP["tenant-cutover"]["second-provider"] = pspSecret{
+		CallbackID: testCanonicalReleaseSecret(11), APIKey: "key", APISecret: "secret", WebhookSecret: "webhook", WebhookPublicKey: "public",
+	}
+	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
 
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "noebs.ebs.consumer_endpoint") {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want missing explicit EBS endpoint rejection", err)
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "callback IDs must be unique") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want duplicate callback rejection", err)
+	}
+}
+
+func TestPrepareKubernetesReleaseRejectsInvalidPSPProviderCode(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	provider := inputs.Noebs.PSP["tenant-cutover"]["test-provider"]
+	delete(inputs.Noebs.PSP["tenant-cutover"], "test-provider")
+	inputs.Noebs.PSP["tenant-cutover"]["test_provider"] = provider
+	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "PSP provider") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want canonical provider rejection", err)
+	}
+}
+
+func TestPrepareKubernetesReleaseRejectsUnknownTenant(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-unknown")
+	outputRoot := filepath.Join(t.TempDir(), "release")
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "unknown tenant") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want unknown tenant", err)
 	}
 	assertPathMissing(t, outputRoot)
 }
 
+func TestPrepareKubernetesReleaseRejectsNoncanonicalTenant(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, " tenant-cutover ")
+	outputRoot := filepath.Join(t.TempDir(), "release")
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if err == nil || !strings.Contains(err.Error(), "invalid tenant") {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want noncanonical tenant rejection", err)
+	}
+	assertPathMissing(t, outputRoot)
+}
+
+func TestPrepareKubernetesReleaseRejectsMissingExplicitAuthority(t *testing.T) {
+	tests := []struct {
+		name string
+		edit func(*kubernetesReleaseInputs)
+		want string
+	}{
+		{
+			name: "main postgres password",
+			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.PostgresPassword = "" },
+			want: "noebs.postgres_password",
+		},
+		{
+			name: "keycloak client secret",
+			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.Keycloak.ReconcilerClientSecret = "" },
+			want: "Keycloak reconciler client secret",
+		},
+		{
+			name: "gateway database password",
+			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.GatewayAuth.Database.RuntimePassword = "" },
+			want: "gateway authentication runtime database password",
+		},
+		{
+			name: "workload signing key",
+			edit: func(inputs *kubernetesReleaseInputs) {
+				delete(inputs.Noebs.WorkloadAuth.Callers, string(serviceRoleAPIGateway))
+			},
+			want: "workload_auth.callers.api-gateway",
+		},
+		{
+			name: "transport CA",
+			edit: func(inputs *kubernetesReleaseInputs) { inputs.Noebs.InternalTransport.CAPrivateKey = "" },
+			want: "internal_transport.ca_certificate and internal_transport.ca_private_key",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inputRoot := t.TempDir()
+			inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+			tt.edit(&inputs)
+			inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
+			outputRoot := filepath.Join(t.TempDir(), "release")
+
+			err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("prepareKubernetesRelease() error = %v, want %q", err, tt.want)
+			}
+			assertPathMissing(t, outputRoot)
+		})
+	}
+}
+
 func TestPrepareKubernetesReleaseRejectsNonEmptyOutputRoot(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
 	outputRoot := t.TempDir()
 	writePreflightFile(t, outputRoot, "stale", "do not overwrite")
 
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
 	if err == nil || !strings.Contains(err.Error(), "output root must be empty") {
 		t.Fatalf("prepareKubernetesRelease() error = %v, want non-empty output rejection", err)
 	}
 }
 
 func TestKubernetesReleaseInputsExampleMatchesStrictSchema(t *testing.T) {
-	payload, err := os.ReadFile(filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kubernetes-release.inputs.yaml.example"))
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kubernetes-release.inputs.yaml.example")
+	payload, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("read kubernetes release inputs example: %v", err)
+		t.Fatalf("read input example: %v", err)
 	}
-	inputs := replaceKubernetesReleaseInputPlaceholders(t, string(payload))
-	legacyRoot := writeLegacyReleaseRoot(t)
-	legacyPayload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	legacyPayload = strings.ReplaceAll(legacyPayload, "  google_client_id: legacy-google-client-id\n", "")
-	legacyPayload = strings.ReplaceAll(legacyPayload, "  google_client_secret: legacy-google-client-secret\n", "")
-	writePreflightFile(t, legacyRoot, "secrets.yaml", legacyPayload)
-	writePreflightFile(t, legacyRoot, "kubernetes-release.inputs.yaml", inputs)
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err = prepareKubernetesRelease("..", legacyRoot, filepath.Join(legacyRoot, "kubernetes-release.inputs.yaml"), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err != nil {
-		t.Fatalf("prepareKubernetesRelease() with example-derived inputs error = %v", err)
+	var inputs kubernetesReleaseInputs
+	decoder := yaml.NewDecoder(bytes.NewReader(payload))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&inputs); err != nil {
+		t.Fatalf("decode input example: %v", err)
 	}
-	requirePreparedFile(t, outputRoot, "secrets/identity-auth.secrets.yaml")
-	requirePreparedFile(t, outputRoot, "secrets/ebs-adapter.secrets.yaml")
-}
-
-func TestAuditKubernetesReleaseInputsReportsMissingCurrentAndCutoverValues(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	if audit.Ready {
-		t.Fatalf("audit ready = true, want false")
-	}
-	requireStringEntry(t, audit.CurrentSecret, "noebs.db_url from current secret")
-	requireStringEntry(t, audit.CurrentSecret, "noebs.jwt_secret from current secret")
-	requireStringEntry(t, audit.CurrentSecret, "noebs.google_client_id from current secret noebs.google_client_id")
-	requireStringEntry(t, audit.Missing, "noebs.default_tenant_id")
-	requireStringEntry(t, audit.Missing, "noebs.admin_key")
-	requireStringEntry(t, audit.Missing, "noebs.ebs.consumer_endpoint")
-	requireStringEntry(t, audit.Missing, "noebs.psp")
-}
-
-func TestAuditKubernetesReleaseInputsReportsEmptyCurrentSecretValues(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.Replace(payload, "  google_client_id: legacy-google-client-id\n", "  google_client_id: \"\"\n", 1)
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	if audit.Ready {
-		t.Fatalf("audit ready = true, want false")
-	}
-	requireStringEntry(t, audit.EmptyCurrentSecret, "current secret noebs.google_client_id is empty")
-	requireStringEntry(t, audit.Missing, "noebs.google_client_id")
-}
-
-func TestAuditKubernetesReleaseInputsRejectsMalformedCurrentSecretTypes(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.Replace(payload, "  google_client_id: legacy-google-client-id\n", "  google_client_id:\n    nested: wrong\n", 1)
-	payload = strings.Replace(payload, "  google_client_secret: legacy-google-client-secret\n", "  is_consumer_prod: \"true\"\n  psp: invalid\n", 1)
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	if audit.Ready {
-		t.Fatalf("audit ready = true, want false")
-	}
-	requireStringEntry(t, audit.Invalid, "current secret noebs.google_client_id must be a string")
-	requireStringEntry(t, audit.Invalid, "current secret noebs.is_consumer_prod must be a boolean")
-	requireStringEntry(t, audit.Invalid, "current secret noebs.psp must be a map")
-}
-
-func TestAuditKubernetesReleaseInputsReportsUnsupportedLegacyEBSSelectors(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.Replace(payload, "  google_client_secret: legacy-google-client-secret\n", `  google_client_secret: legacy-google-client-secret
-  consumer_qa: "https://legacy-consumer-qa.example"
-  is_merchant_prod: true
-`, 1)
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	if audit.Ready {
-		t.Fatalf("audit ready = true, want false")
-	}
-	requireStringEntry(t, audit.UnsupportedCurrentSecret, "current secret noebs.consumer_qa cannot be transformed; provide noebs.ebs.consumer_endpoint")
-	requireStringEntry(t, audit.UnsupportedCurrentSecret, "current secret noebs.is_merchant_prod cannot select an EBS runtime; provide noebs.ebs.merchant_endpoint and noebs.ebs.merchant_app_id")
-}
-
-func TestPrepareKubernetesReleaseRejectsMalformedCurrentSecretDespiteCutoverInput(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.Replace(payload, "  google_client_id: legacy-google-client-id\n", "  google_client_id:\n    nested: wrong\n", 1)
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	inputs := readPreparedFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath))
-	inputs = strings.Replace(inputs, "  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", "  google_client_id: explicit-google-client-id\n  google_redirect_url: \"https://api.noebs.sd/oauth/callback\"\n", 1)
-	writePreflightFile(t, filepath.Dir(inputsPath), filepath.Base(inputsPath), inputs)
-	outputRoot := filepath.Join(t.TempDir(), "kubernetes-release")
-
-	err := prepareKubernetesRelease("..", legacyRoot, inputsPath, outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt)
-	if err == nil || !strings.Contains(err.Error(), "current secret noebs.google_client_id must be a string") {
-		t.Fatalf("prepareKubernetesRelease() error = %v, want malformed current secret rejection", err)
-	}
-	assertPathMissing(t, outputRoot)
-}
-
-func TestAuditKubernetesReleaseInputsReportsReadyCompleteCurrentSecret(t *testing.T) {
-	legacyRoot := writeCompleteLegacyReleaseRoot(t)
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	if !audit.Ready {
-		t.Fatalf("audit ready = false, missing=%v duplicate=%v invalid=%v", audit.Missing, audit.Duplicate, audit.Invalid)
-	}
-	requireStringEntry(t, audit.CurrentSecret, "noebs.default_tenant_id from current secret noebs.default_tenant_id")
-	requireStringEntry(t, audit.CurrentSecret, "noebs.psp from current secret")
-	if len(audit.Missing) != 0 || len(audit.Duplicate) != 0 || len(audit.Invalid) != 0 {
-		t.Fatalf("audit has failures: missing=%v duplicate=%v invalid=%v", audit.Missing, audit.Duplicate, audit.Invalid)
-	}
-}
-
-func TestAuditKubernetesReleaseInputsReportsDuplicatesAndDoesNotPrintSecretValues(t *testing.T) {
-	legacyRoot := writeCompleteLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, inputsPath, readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	if audit.Ready {
-		t.Fatalf("audit ready = true, want false")
-	}
-	requireStringEntry(t, audit.Duplicate, "noebs.admin_key duplicates current secret noebs.admin_key")
-	requireStringEntry(t, audit.Duplicate, "noebs.ebs.consumer_endpoint duplicates current secret noebs.consumer_endpoint")
-	requireStringEntry(t, audit.Duplicate, "noebs.psp duplicates current secret noebs.psp")
-
-	var out strings.Builder
-	if err := writeKubernetesReleaseInputAudit(&out, audit); err != nil {
-		t.Fatalf("writeKubernetesReleaseInputAudit() error = %v", err)
-	}
-	for _, secretValue := range []string{
-		"legacy-admin-key",
-		"admin-key",
-		"legacy-ipin-password",
-		"ipin-password",
-		"legacy-psp-api-key",
-		"psp-api-key",
+	for label, value := range map[string]string{
+		"postgres_password":                 inputs.Noebs.PostgresPassword,
+		"keycloak.reconciler_client_secret": inputs.Noebs.Keycloak.ReconcilerClientSecret,
+		"keycloak.backoffice_client_secret": inputs.Noebs.Keycloak.BackofficeClientSecret,
+		"gateway_auth.database.runtime":     inputs.Noebs.GatewayAuth.Database.RuntimePassword,
+		"gateway_auth.encryption_key_id":    inputs.Noebs.GatewayAuth.EncryptionKeyID,
+		"workload_auth.database.runtime":    inputs.Noebs.WorkloadAuth.Database.RuntimePassword,
+		"internal_transport.ca_certificate": inputs.Noebs.InternalTransport.CACertificate,
+		"internal_transport.ca_private_key": inputs.Noebs.InternalTransport.CAPrivateKey,
 	} {
-		if strings.Contains(out.String(), secretValue) {
-			t.Fatalf("audit output leaked secret value %q:\n%s", secretValue, out.String())
+		if strings.TrimSpace(value) == "" {
+			t.Fatalf("input example missing %s", label)
 		}
 	}
-}
-
-func TestKubernetesReleaseInputTemplateOmitsCurrentSecretValues(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	var out strings.Builder
-	if err := writeKubernetesReleaseInputTemplate(&out, audit); err != nil {
-		t.Fatalf("writeKubernetesReleaseInputTemplate() error = %v", err)
-	}
-
-	var decoded map[string]interface{}
-	if err := yaml.Unmarshal([]byte(out.String()), &decoded); err != nil {
-		t.Fatalf("template is not valid YAML: %v\n%s", err, out.String())
-	}
-	noebs := getMap(decoded, "noebs")
-	if got := firstString(noebs, "admin_key"); got != "REPLACE_WITH_GATEWAY_ADMIN_KEY" {
-		t.Fatalf("admin_key placeholder = %q", got)
-	}
-	if got := firstString(noebs, "google_client_id"); got != "" {
-		t.Fatalf("google_client_id placeholder = %q, want omitted because current secret owns it", got)
-	}
-	if got := firstString(noebs, "google_client_secret"); got != "" {
-		t.Fatalf("google_client_secret placeholder = %q, want omitted because current secret owns it", got)
-	}
-	ebs := getMap(noebs, "ebs")
-	if got := firstString(ebs, "consumer_endpoint"); got != "REPLACE_WITH_EBS_CONSUMER_ENDPOINT" {
-		t.Fatalf("consumer endpoint placeholder = %q", got)
-	}
-	if got := firstString(noebs, "ghcr_dockerconfigjson"); !strings.Contains(got, "REPLACE_WITH_GHCR_AUTH_BASE64") {
-		t.Fatalf("ghcr dockerconfigjson placeholder = %q", got)
-	}
-	psp := getMap(noebs, "psp")
-	if len(psp) == 0 {
-		t.Fatalf("psp placeholder missing from template:\n%s", out.String())
-	}
-
-	for _, secretValue := range []string{
-		"legacy-user",
-		"legacy-pass",
-		"jwt-secret",
-		"legacy-google-client-id",
-		"legacy-google-client-secret",
-	} {
-		if strings.Contains(out.String(), secretValue) {
-			t.Fatalf("template leaked secret/current value %q:\n%s", secretValue, out.String())
+	for _, role := range workloadAuthCallerRoles {
+		caller := inputs.Noebs.WorkloadAuth.Callers[string(role)]
+		if caller.KeyID == "" || caller.PrivateKey == "" {
+			t.Fatalf("input example missing workload caller %s", role)
 		}
 	}
-}
-
-func TestKubernetesReleaseInputTemplateUsesExistingInputs(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	inputsPath := writeKubernetesReleaseInputsFile(t, legacyRoot, "tenant_1")
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, inputsPath, readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
-	}
-	var out strings.Builder
-	if err := writeKubernetesReleaseInputTemplate(&out, audit); err != nil {
-		t.Fatalf("writeKubernetesReleaseInputTemplate() error = %v", err)
-	}
-	var decoded map[string]interface{}
-	if err := yaml.Unmarshal([]byte(out.String()), &decoded); err != nil {
-		t.Fatalf("template is not valid YAML: %v\n%s", err, out.String())
-	}
-	noebs := getMap(decoded, "noebs")
-	if len(noebs) != 0 {
-		t.Fatalf("template noebs = %#v, want empty because inputs plus current secret cover release", noebs)
+	provider := inputs.Noebs.PSP["REPLACE_WITH_TENANT_ID"]["REPLACE_WITH_PROVIDER_CODE"]
+	if provider.CallbackID == "" {
+		t.Fatal("input example missing PSP callback_id")
 	}
 }
 
-func TestKubernetesReleaseInputTemplateRejectsCurrentSecretOnlyMissing(t *testing.T) {
-	legacyRoot := writeLegacyReleaseRoot(t)
-	payload := readPreparedFile(t, legacyRoot, "secrets.yaml")
-	payload = strings.ReplaceAll(payload, `  db_url: "postgres://legacy-user:legacy-pass@legacy-db:5432/noebs?sslmode=disable"`+"\n", "")
-	writePreflightFile(t, legacyRoot, "secrets.yaml", payload)
-
-	audit, err := auditKubernetesReleaseInputs(legacyRoot, "", readPlainPreflightSecret)
-	if err != nil {
-		t.Fatalf("auditKubernetesReleaseInputs() error = %v", err)
+func TestKubernetesReleaseManifestRejectsSplicedArtifact(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputsPath := writeKubernetesReleaseInputsFile(t, inputRoot, "tenant-cutover")
+	outputRoot := filepath.Join(t.TempDir(), "release")
+	if err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), outputRoot, readPlainPreflightSecret, plainKubernetesSecretEncrypt); err != nil {
+		t.Fatal(err)
 	}
-	var out strings.Builder
-	err = writeKubernetesReleaseInputTemplate(&out, audit)
-	if err == nil || !strings.Contains(err.Error(), "noebs.db_url from current secret") {
-		t.Fatalf("writeKubernetesReleaseInputTemplate() error = %v, want current-secret-only rejection", err)
+	path := filepath.Join(outputRoot, "platform", "postgres-password.txt")
+	if err := os.WriteFile(path, []byte("another-valid-password\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if out.Len() != 0 {
-		t.Fatalf("template output = %q, want empty on current-secret-only rejection", out.String())
+	if err := validateKubernetesReleaseManifest(outputRoot); err == nil || !strings.Contains(err.Error(), "fingerprint") {
+		t.Fatalf("validateKubernetesReleaseManifest() error = %v, want fingerprint mismatch", err)
 	}
 }
 
@@ -504,190 +277,108 @@ printf 'args=%s\n' "$*"
 	if err := os.WriteFile(ageKeyFile, []byte("# public key: age1testrecipient\nAGE-SECRET-KEY-1LOCAL\n"), 0o600); err != nil {
 		t.Fatalf("write age key: %v", err)
 	}
-
 	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("SOPS_AGE_KEY_FILE", "/ambient/key.txt")
 	t.Setenv("AMBIENT_SECRET", "must-not-leak")
 
-	encrypted, err := encryptSopsYAML("test-secret", []byte("noebs:\n  admin_key: secret\n"), ageKeyFile)
+	encrypted, err := encryptSopsYAML("test-secret", []byte("noebs:\n  secret: value\n"), ageKeyFile)
 	if err != nil {
 		t.Fatalf("encryptSopsYAML() error = %v", err)
 	}
 	text := string(encrypted)
-	if !strings.Contains(text, "age_key=unset\n") {
-		t.Fatalf("encryptSopsYAML output = %q, want no SOPS age key environment", text)
-	}
-	if !strings.Contains(text, "ambient=unset\n") {
-		t.Fatalf("encryptSopsYAML output = %q, want scrubbed ambient environment", text)
+	if !strings.Contains(text, "age_key=unset\n") || !strings.Contains(text, "ambient=unset\n") {
+		t.Fatalf("encryptSopsYAML output retained ambient environment: %q", text)
 	}
 	if strings.Contains(text, "must-not-leak") || strings.Contains(text, "/ambient/key.txt") {
 		t.Fatalf("encryptSopsYAML output leaked ambient environment: %q", text)
 	}
-	if !strings.Contains(text, "--config /dev/null --encrypt --age age1testrecipient") {
-		t.Fatalf("encryptSopsYAML output = %q, want explicit recipient argument", text)
-	}
-}
-
-func writeLegacyReleaseRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	writePreflightFile(t, root, ".sops/age-key.txt", "# public key: age1testrecipient\nAGE-SECRET-KEY-1LOCAL\n")
-	writePreflightFile(t, root, "config.docker.yaml", "noebs:\n  port: \":8080\"\n")
-	writePreflightFile(t, root, "secrets.yaml", `noebs:
-  db_url: "postgres://legacy-user:legacy-pass@legacy-db:5432/noebs?sslmode=disable"
-  jwt_secret: jwt-secret
-  google_client_id: legacy-google-client-id
-  google_client_secret: legacy-google-client-secret
-`)
-	return root
-}
-
-func writeCompleteLegacyReleaseRoot(t *testing.T) string {
-	t.Helper()
-	root := writeLegacyReleaseRoot(t)
-	writePreflightFile(t, root, "secrets.yaml", `noebs:
-  db_url: "postgres://legacy-user:legacy-pass@legacy-db:5432/noebs?sslmode=disable"
-  jwt_secret: jwt-secret
-  default_tenant_id: tenant_1
-  admin_key: legacy-admin-key
-  admin_user: legacy-admin
-  admin_password: legacy-admin-password
-  sms_key: legacy-sms-key
-  sms_sender: legacy-sms-sender
-  sms_gateway: "https://sms-gateway.noebs.sd/send?"
-  sms_message: "legacy-code"
-  google_client_id: legacy-google-client-id
-  google_client_secret: legacy-google-client-secret
-  google_redirect_url: "https://legacy.example/oauth/callback"
-  data_key: legacy-card-vault-data-key
-  temporal_postgres_password: legacy-temporal-postgres-password
-  keycloak_postgres_password: legacy-keycloak-postgres-password
-  ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"bGVnYWN5OnRva2Vu"}}}'
-  consumer_endpoint: "https://legacy-consumer.example"
-  merchant_endpoint: "https://legacy-merchant.example"
-  ipin_endpoint: "https://legacy-ipin.example"
-  consumer_app_id: legacy-consumer-app
-  merchant_app_id: legacy-merchant-app
-  ipin_username: legacy-ipin-user
-  ipin_password: legacy-ipin-password
-  pub_key: legacy-consumer-public-key
-  ipin_key: legacy-ipin-public-key
-  pan: "1234567890123456"
-  pin: "1234"
-  ipin: "123456"
-  exp_date: "0129"
-  psp:
-    tenant_1:
-      test-provider:
-        api_key: legacy-psp-api-key
-        api_secret: legacy-psp-api-secret
-        webhook_secret: legacy-psp-webhook-secret
-        webhook_public_key: legacy-psp-webhook-public-key
-`)
-	return root
 }
 
 func writeKubernetesReleaseInputsFile(t *testing.T, root, tenantID string) string {
 	t.Helper()
-	writePreflightFile(t, root, "kubernetes-release.inputs.yaml", `noebs:
-  default_tenant_id: `+tenantID+`
-  admin_key: admin-key
-  admin_user: admin
-  admin_password: admin-password
-  sms_key: input-sms-key
-  sms_sender: input-sms-sender
-  sms_gateway: "https://sms-gateway.noebs.sd/send?"
-  sms_message: "code"
-  google_redirect_url: "https://api.noebs.sd/oauth/callback"
-  card_vault_data_key: card-vault-data-key
-  temporal_postgres_password: temporal-postgres-password
-  keycloak_postgres_password: keycloak-postgres-password
-  ghcr_dockerconfigjson: '{"auths":{"ghcr.io":{"auth":"bm9lYnM6dG9rZW4="}}}'
-  ebs:
-    consumer_endpoint: "https://consumer.input.example"
-    merchant_endpoint: "https://merchant.input.example"
-    ipin_endpoint: "https://ipin.example"
-    consumer_app_id: consumer-app
-    merchant_app_id: merchant-app
-    ipin_username: ipin-user
-    ipin_password: ipin-password
-    pub_key: consumer-public-key
-    ipin_key: ipin-public-key
-    pan: "1234567890123456"
-    pin: "1234"
-    ipin: "123456"
-    exp_date: "0129"
-  psp:
-    `+tenantID+`:
-      test-provider:
-        api_key: psp-api-key
-        api_secret: psp-api-secret
-        webhook_secret: psp-webhook-secret
-        webhook_public_key: psp-webhook-public-key
-`)
-	return filepath.Join(root, "kubernetes-release.inputs.yaml")
+	return writeKubernetesReleaseInputs(t, root, newTestKubernetesReleaseInputs(t, tenantID))
 }
 
-func replaceKubernetesReleaseInputPlaceholders(t *testing.T, payload string) string {
+func writeKubernetesReleaseInputs(t *testing.T, root string, inputs kubernetesReleaseInputs) string {
 	t.Helper()
-	replacements := map[string]string{
-		"REPLACE_WITH_TENANT_ID":                         "tenant_1",
-		"REPLACE_WITH_GATEWAY_ADMIN_KEY":                 "admin-key",
-		"REPLACE_WITH_GATEWAY_ADMIN_USER":                "admin",
-		"REPLACE_WITH_GATEWAY_ADMIN_PASSWORD":            "admin-password",
-		"REPLACE_WITH_SMS_API_KEY":                       "input-sms-key",
-		"REPLACE_WITH_SMS_SENDER":                        "input-sms-sender",
-		"REPLACE_WITH_SMS_GATEWAY":                       "https://sms-gateway.noebs.sd/send?",
-		"REPLACE_WITH_SMS_MESSAGE":                       "code",
-		"REPLACE_WITH_GOOGLE_CLIENT_ID":                  "input-google-client-id",
-		"REPLACE_WITH_GOOGLE_CLIENT_SECRET":              "input-google-client-secret",
-		"REPLACE_WITH_GOOGLE_REDIRECT_URL":               "https://api.noebs.sd/oauth/callback",
-		"REPLACE_WITH_CARD_VAULT_DATA_KEY":               "card-vault-data-key",
-		"REPLACE_WITH_TEMPORAL_POSTGRES_PASSWORD":        "temporal-postgres-password",
-		"REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD":        "keycloak-postgres-password",
-		"REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME": "keycloak-admin",
-		"REPLACE_WITH_KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD": "keycloak-admin-password",
-		"REPLACE_WITH_GHCR_AUTH_BASE64":                  "bm9lYnM6dG9rZW4=",
-		"REPLACE_WITH_EBS_CONSUMER_ENDPOINT":             "https://consumer.input.example",
-		"REPLACE_WITH_EBS_MERCHANT_ENDPOINT":             "https://merchant.input.example",
-		"REPLACE_WITH_EBS_IPIN_ENDPOINT":                 "https://ipin.example",
-		"REPLACE_WITH_EBS_CONSUMER_APP_ID":               "consumer-app",
-		"REPLACE_WITH_EBS_MERCHANT_APP_ID":               "merchant-app",
-		"REPLACE_WITH_EBS_IPIN_USERNAME":                 "ipin-user",
-		"REPLACE_WITH_EBS_IPIN_PASSWORD":                 "ipin-password",
-		"REPLACE_WITH_EBS_CONSUMER_PUBLIC_KEY":           "consumer-public-key",
-		"REPLACE_WITH_EBS_IPIN_PUBLIC_KEY":               "ipin-public-key",
-		"REPLACE_WITH_BILL_INQUIRY_PAN":                  "1234567890123456",
-		"REPLACE_WITH_BILL_INQUIRY_PIN":                  "1234",
-		"REPLACE_WITH_BILL_INQUIRY_IPIN":                 "123456",
-		"REPLACE_WITH_BILL_INQUIRY_EXPIRY":               "0129",
-		"REPLACE_WITH_PROVIDER_CODE":                     "test-provider",
-		"REPLACE_WITH_PSP_API_KEY":                       "psp-api-key",
-		"REPLACE_WITH_PSP_API_SECRET":                    "psp-api-secret",
-		"REPLACE_WITH_PSP_WEBHOOK_SECRET":                "psp-webhook-secret",
-		"REPLACE_WITH_PSP_WEBHOOK_PUBLIC_KEY":            "psp-webhook-public-key",
+	payload, err := yaml.Marshal(inputs)
+	if err != nil {
+		t.Fatalf("marshal Kubernetes release inputs: %v", err)
 	}
-	for placeholder, value := range replacements {
-		payload = strings.ReplaceAll(payload, placeholder, value)
+	path := filepath.Join(root, "kubernetes-release.inputs.yaml")
+	writePreflightFile(t, root, filepath.Base(path), string(payload))
+	writePreflightFile(t, root, "age-key.txt", "# public key: age1testrecipient\nAGE-SECRET-KEY-1LOCAL\n")
+	return path
+}
+
+func newTestKubernetesReleaseInputs(t *testing.T, tenantID string) kubernetesReleaseInputs {
+	t.Helper()
+	workload, err := prepareWorkloadAuthRelease(kubernetesReleaseWorkloadAuthInputs{}, rand.Reader)
+	if err != nil {
+		t.Fatalf("prepare workload authority: %v", err)
 	}
-	if strings.Contains(payload, "REPLACE_WITH_") {
-		t.Fatalf("kubernetes release inputs example contains unreplaced placeholder:\n%s", payload)
+	callers := make(map[string]kubernetesReleaseWorkloadCallerInput, len(workload.callers))
+	for role, caller := range workload.callers {
+		callers[string(role)] = kubernetesReleaseWorkloadCallerInput{KeyID: caller.keyID, PrivateKey: caller.privateKey}
 	}
-	return payload
+	internalTransport := newTestInternalTransportInputs(t, time.Now().UTC())
+	return kubernetesReleaseInputs{Noebs: kubernetesReleaseNoebsInputs{
+		DefaultTenantID:          tenantID,
+		PostgresPassword:         "noebs-postgres-password",
+		GoogleClientID:           "google-client-id",
+		GoogleClientSecret:       "google-client-secret",
+		CardVaultDataKey:         "card-vault-data-key",
+		TemporalPostgresPassword: "temporal-postgres-password",
+		KeycloakPostgresPassword: "keycloak-postgres-password",
+		GHCRDockerConfigJSON:     `{"auths":{"ghcr.io":{"auth":"` + base64.StdEncoding.EncodeToString([]byte("noebs:test-token")) + `"}}}`,
+		Keycloak: kubernetesReleaseKeycloakInputs{
+			ReconcilerClientSecret: testCanonicalReleaseSecret(1),
+			BackofficeClientSecret: testCanonicalReleaseSecret(2),
+		},
+		GatewayAuth: kubernetesReleaseGatewayAuthInputs{
+			Database: kubernetesReleaseGatewayAuthDatabaseInputs{
+				MigratePassword: testCanonicalReleaseSecret(3),
+				RuntimePassword: testCanonicalReleaseSecret(4),
+				CleanupPassword: testCanonicalReleaseSecret(5),
+			},
+			EncryptionKeyID: "gateway-key-1",
+			EncryptionKeys: map[string]string{
+				"gateway-key-1": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{6}, 32)),
+			},
+		},
+		WorkloadAuth: kubernetesReleaseWorkloadAuthInputs{
+			Callers: callers,
+			Database: kubernetesReleaseWorkloadDatabaseInput{
+				MigratePassword: workload.database.migratePassword,
+				RuntimePassword: workload.database.runtimePassword,
+				CleanupPassword: workload.database.cleanupPassword,
+			},
+		},
+		InternalTransport: internalTransport,
+		EBS: kubernetesReleaseEBSInputs{
+			ConsumerEndpoint: "https://consumer.input.example", MerchantEndpoint: "https://merchant.input.example",
+			IPINEndpoint: "https://ipin.input.example", ConsumerAppID: "consumer-app", MerchantAppID: "merchant-app",
+			IPINUsername: "ipin-user", IPINPassword: "ipin-password", PublicKey: "consumer-public-key",
+			IPINKey: "ipin-public-key", PAN: "1234567890123456", PIN: "1234", IPIN: "123456", Expiry: "0129",
+		},
+		PSP: map[string]map[string]pspSecret{
+			tenantID: {
+				"test-provider": {CallbackID: testCanonicalReleaseSecret(11), APIKey: "psp-api-key", APISecret: "psp-api-secret", WebhookSecret: "psp-webhook-secret", WebhookPublicKey: "psp-webhook-public-key"},
+			},
+		},
+	}}
+}
+
+func testCanonicalReleaseSecret(value byte) string {
+	return base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{value}, 32))
+}
+
+func kubernetesReleaseTestAgeKeyPath(root string) string {
+	return filepath.Join(root, "age-key.txt")
 }
 
 func plainKubernetesSecretEncrypt(_ string, payload []byte, _ string) ([]byte, error) {
 	return payload, nil
-}
-
-func requireStringEntry(t *testing.T, entries []string, want string) {
-	t.Helper()
-	for _, entry := range entries {
-		if entry == want {
-			return
-		}
-	}
-	t.Fatalf("entries missing %q: %v", want, entries)
 }
 
 func readPreparedFile(t *testing.T, root, name string) string {

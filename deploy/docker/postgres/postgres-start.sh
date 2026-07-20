@@ -9,6 +9,9 @@ tls_private_key_source="/opt/noebs-postgres/secrets/tls.key"
 migrate_password_source="/run/secrets/workload-auth-migrate-password"
 runtime_password_source="/run/secrets/workload-auth-runtime-password"
 cleanup_password_source="/run/secrets/workload-auth-cleanup-password"
+gateway_migrate_password_source="/run/secrets/gateway-auth-migrate-password"
+gateway_runtime_password_source="/run/secrets/gateway-auth-runtime-password"
+gateway_cleanup_password_source="/run/secrets/gateway-auth-cleanup-password"
 password_runtime="/tmp/noebs-postgres-password"
 service_database_sql="/opt/noebs-postgres/init/001-service-databases.sql"
 pgpass="/var/lib/postgresql/.pgpass"
@@ -29,9 +32,15 @@ if [ ! -s "$password_source" ]; then
   echo "missing Noebs Postgres password file: $password_source" >&2
   exit 1
 fi
-for role_password_source in "$migrate_password_source" "$runtime_password_source" "$cleanup_password_source"; do
+for role_password_source in \
+  "$migrate_password_source" \
+  "$runtime_password_source" \
+  "$cleanup_password_source" \
+  "$gateway_migrate_password_source" \
+  "$gateway_runtime_password_source" \
+  "$gateway_cleanup_password_source"; do
   if [ ! -s "$role_password_source" ]; then
-    echo "missing workload authentication Postgres role password file: $role_password_source" >&2
+    echo "missing Postgres role password file: $role_password_source" >&2
     exit 1
   fi
 done
@@ -54,6 +63,9 @@ password="$(tr -d '\r\n' < "$password_source")"
 export NOEBS_WORKLOAD_AUTH_MIGRATE_PASSWORD="$(tr -d '\r\n' < "$migrate_password_source")"
 export NOEBS_WORKLOAD_AUTH_RUNTIME_PASSWORD="$(tr -d '\r\n' < "$runtime_password_source")"
 export NOEBS_WORKLOAD_AUTH_CLEANUP_PASSWORD="$(tr -d '\r\n' < "$cleanup_password_source")"
+export NOEBS_GATEWAY_AUTH_MIGRATE_PASSWORD="$(tr -d '\r\n' < "$gateway_migrate_password_source")"
+export NOEBS_GATEWAY_AUTH_RUNTIME_PASSWORD="$(tr -d '\r\n' < "$gateway_runtime_password_source")"
+export NOEBS_GATEWAY_AUTH_CLEANUP_PASSWORD="$(tr -d '\r\n' < "$gateway_cleanup_password_source")"
 
 if [ ! -s "$pgdata/PG_VERSION" ]; then
   printf '%s\n' "$password" > "$password_runtime"
@@ -101,6 +113,9 @@ gosu postgres pg_ctl -D "$pgdata" -m fast -w stop
 unset NOEBS_WORKLOAD_AUTH_MIGRATE_PASSWORD
 unset NOEBS_WORKLOAD_AUTH_RUNTIME_PASSWORD
 unset NOEBS_WORKLOAD_AUTH_CLEANUP_PASSWORD
+unset NOEBS_GATEWAY_AUTH_MIGRATE_PASSWORD
+unset NOEBS_GATEWAY_AUTH_RUNTIME_PASSWORD
+unset NOEBS_GATEWAY_AUTH_CLEANUP_PASSWORD
 
 postgres_args=(-D "$pgdata" -c "listen_addresses=*")
 if [ "$tls_enabled" = true ]; then

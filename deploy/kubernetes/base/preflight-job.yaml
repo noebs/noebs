@@ -40,6 +40,14 @@ spec:
                 - ALL
             readOnlyRootFilesystem: false
           volumeMounts:
+            - name: release-manifest
+              mountPath: /preflight/release-manifest.yaml
+              subPath: release-manifest.yaml
+              readOnly: true
+            - name: tenant-catalog
+              mountPath: /preflight/tenant-catalog.yaml
+              subPath: tenant-catalog.yaml
+              readOnly: true
             - name: config
               mountPath: /preflight/config.yaml
               subPath: config.yaml
@@ -81,10 +89,6 @@ spec:
               subPath: notification-chat.service.yaml
               readOnly: true
             - name: config
-              mountPath: /preflight/services/consumer-beneficiary.yaml
-              subPath: consumer-beneficiary.service.yaml
-              readOnly: true
-            - name: config
               mountPath: /preflight/services/wallet-api.yaml
               subPath: wallet-api.service.yaml
               readOnly: true
@@ -103,6 +107,14 @@ spec:
             - name: config
               mountPath: /preflight/services/workload-auth-cleanup.yaml
               subPath: workload-auth-cleanup.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/gateway-auth-migrate.yaml
+              subPath: gateway-auth-migrate.service.yaml
+              readOnly: true
+            - name: config
+              mountPath: /preflight/services/gateway-auth-cleanup.yaml
+              subPath: gateway-auth-cleanup.service.yaml
               readOnly: true
             - name: config
               mountPath: /preflight/services/identity-auth-migrate.yaml
@@ -127,10 +139,6 @@ spec:
             - name: config
               mountPath: /preflight/services/notification-chat-migrate.yaml
               subPath: notification-chat-migrate.service.yaml
-              readOnly: true
-            - name: config
-              mountPath: /preflight/services/consumer-beneficiary-migrate.yaml
-              subPath: consumer-beneficiary-migrate.service.yaml
               readOnly: true
             - name: config
               mountPath: /preflight/services/wallet-ledger-migrate.yaml
@@ -164,10 +172,6 @@ spec:
               mountPath: /preflight/secrets/notification-chat.secrets.yaml
               subPath: secrets.yaml
               readOnly: true
-            - name: consumer-beneficiary-secrets
-              mountPath: /preflight/secrets/consumer-beneficiary.secrets.yaml
-              subPath: secrets.yaml
-              readOnly: true
             - name: wallet-api-secrets
               mountPath: /preflight/secrets/wallet-api.secrets.yaml
               subPath: secrets.yaml
@@ -196,6 +200,14 @@ spec:
               mountPath: /preflight/secrets/workload-auth-cleanup.secrets.yaml
               subPath: secrets.yaml
               readOnly: true
+            - name: gateway-auth-migrate-secrets
+              mountPath: /preflight/secrets/gateway-auth-migrate.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
+            - name: gateway-auth-cleanup-secrets
+              mountPath: /preflight/secrets/gateway-auth-cleanup.secrets.yaml
+              subPath: secrets.yaml
+              readOnly: true
             - name: identity-auth-migrate-secrets
               mountPath: /preflight/secrets/identity-auth-migrate.secrets.yaml
               subPath: secrets.yaml
@@ -218,10 +230,6 @@ spec:
               readOnly: true
             - name: notification-chat-migrate-secrets
               mountPath: /preflight/secrets/notification-chat-migrate.secrets.yaml
-              subPath: secrets.yaml
-              readOnly: true
-            - name: consumer-beneficiary-migrate-secrets
-              mountPath: /preflight/secrets/consumer-beneficiary-migrate.secrets.yaml
               subPath: secrets.yaml
               readOnly: true
             - name: wallet-ledger-migrate-secrets
@@ -252,8 +260,16 @@ spec:
               mountPath: /preflight/platform/keycloak.conf
               subPath: keycloak.conf
               readOnly: true
+            - name: keycloak-reconciler-credentials
+              mountPath: /preflight/platform/keycloak-reconciler-config.yaml
+              subPath: config.yaml
+              readOnly: true
             - name: workload-auth-postgres-roles
               mountPath: /preflight/platform/workload-auth-postgres-roles.secrets.yaml
+              subPath: roles.yaml
+              readOnly: true
+            - name: gateway-auth-postgres-roles
+              mountPath: /preflight/platform/gateway-auth-postgres-roles.secrets.yaml
               subPath: roles.yaml
               readOnly: true
             - name: internal-transport-platform
@@ -261,6 +277,12 @@ spec:
               subPath: credentials.yaml
               readOnly: true
       volumes:
+        - name: release-manifest
+          secret:
+            secretName: noebs-release-manifest
+        - name: tenant-catalog
+          configMap:
+            name: tenant-catalog
         - name: config
           configMap:
             name: noebs-config
@@ -285,9 +307,6 @@ spec:
         - name: notification-chat-secrets
           secret:
             secretName: notification-chat-secrets
-        - name: consumer-beneficiary-secrets
-          secret:
-            secretName: consumer-beneficiary-secrets
         - name: wallet-api-secrets
           secret:
             secretName: wallet-api-secrets
@@ -309,6 +328,12 @@ spec:
         - name: workload-auth-cleanup-secrets
           secret:
             secretName: workload-auth-cleanup-secrets
+        - name: gateway-auth-migrate-secrets
+          secret:
+            secretName: gateway-auth-migrate-secrets
+        - name: gateway-auth-cleanup-secrets
+          secret:
+            secretName: gateway-auth-cleanup-secrets
         - name: identity-auth-migrate-secrets
           secret:
             secretName: identity-auth-migrate-secrets
@@ -327,9 +352,6 @@ spec:
         - name: notification-chat-migrate-secrets
           secret:
             secretName: notification-chat-migrate-secrets
-        - name: consumer-beneficiary-migrate-secrets
-          secret:
-            secretName: consumer-beneficiary-migrate-secrets
         - name: wallet-ledger-migrate-secrets
           secret:
             secretName: wallet-ledger-migrate-secrets
@@ -351,9 +373,15 @@ spec:
         - name: keycloak-secrets
           secret:
             secretName: keycloak-secrets
+        - name: keycloak-reconciler-credentials
+          secret:
+            secretName: keycloak-reconciler-credentials
         - name: workload-auth-postgres-roles
           secret:
             secretName: workload-auth-postgres-roles
+        - name: gateway-auth-postgres-roles
+          secret:
+            secretName: gateway-auth-postgres-roles
         - name: internal-transport-platform
           secret:
             secretName: internal-transport-platform

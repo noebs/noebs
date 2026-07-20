@@ -5,14 +5,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func (h *Handler) Purchase(c *fiber.Ctx) error {
-	var req ebs_fields.ConsumerPurchaseFields
-	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerPurchaseFields) {
-		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-		r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.SpecialPaymentFees
-	}, h.Service.Purchase, nil)
-}
-
 func (h *Handler) IsAlive(c *fiber.Ctx) error {
 	var req ebs_fields.ConsumerIsAliveFields
 	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerIsAliveFields) {
@@ -40,15 +32,6 @@ func (h *Handler) TransactionStatus(c *fiber.Ctx) error {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
 	}, h.Service.TransactionStatus, func(res ebs_fields.EBSParserFields) interface{} {
 		return fiber.Map{"ebs_response": res.OriginalTransaction}
-	})
-}
-
-func (h *Handler) WorkingKey(c *fiber.Ctx) error {
-	var req ebs_fields.ConsumerWorkingKeyFields
-	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerWorkingKeyFields) {
-		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-	}, h.Service.WorkingKey, func(res ebs_fields.EBSParserFields) interface{} {
-		return fiber.Map{"ebs_response": res, "fees": h.Service.NoebsConfig.EBSDynamicFees}
 	})
 }
 
@@ -134,22 +117,6 @@ func (h *Handler) RegisterCard(c *fiber.Ctx) error {
 	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerRegistrationFields) {
 		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
 	}, h.Service.RegisterCard, nil)
-}
-
-func (h *Handler) CardTransfer(c *fiber.Ctx) error {
-	var req ebs_fields.ConsumerCardTransferAndMobileFields
-	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerCardTransferAndMobileFields) {
-		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-		r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.CardTransferfees
-	}, h.Service.CardTransfer, nil)
-}
-
-func (h *Handler) MobileTransfer(c *fiber.Ctx) error {
-	var req ebs_fields.ConsumerMobileTransferFields
-	return handleConfiguredEBS(c, &req, func(r *ebs_fields.ConsumerMobileTransferFields) {
-		r.ApplicationId = h.Service.NoebsConfig.ConsumerID
-		r.DynamicFees = h.Service.NoebsConfig.EBSDynamicFees.CardTransferfees
-	}, h.Service.MobileTransfer, nil)
 }
 
 func (h *Handler) GenerateVoucher(c *fiber.Ctx) error {

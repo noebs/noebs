@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,12 +10,22 @@ import (
 	"github.com/adonese/noebs/adminreporting"
 	"github.com/adonese/noebs/consumer"
 	"github.com/adonese/noebs/dashboard"
+	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/workloadauth"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/wallet"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
 )
+
+const testPSPWebhookCallbackID = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+func closeResponseBody(t testing.TB, body io.Closer) {
+	t.Helper()
+	if err := body.Close(); err != nil {
+		t.Errorf("close response body: %v", err)
+	}
+}
 
 func setServiceRoleForTest(t *testing.T, role serviceRole) {
 	t.Helper()
@@ -52,8 +63,6 @@ func (roleTestWorkloadVerifier) Verify(req *http.Request, _ []byte) (workloadaut
 		caller = string(serviceRoleAPIGateway)
 	case strings.HasPrefix(path, "/internal/identity-auth/"):
 		caller = string(serviceRoleEBSAdapter)
-	case path == "/internal/card-vault/cards/masked":
-		caller = string(serviceRoleIdentityAuth)
 	case strings.HasPrefix(path, "/internal/card-vault/"):
 		caller = string(serviceRoleEBSAdapter)
 	case strings.HasPrefix(path, "/internal/notification-chat/"):
@@ -112,23 +121,18 @@ func configureGatewayProxyForTest(t *testing.T) {
 func setGatewayDiscoveryForTest(t *testing.T, endpoint string) {
 	t.Helper()
 	previousDiscovery := noebsConfig.ServiceDiscovery
+	previousWebhookRoutes := noebsConfig.PSPWebhookRoutes
 	noebsConfig.ServiceDiscovery = map[string]string{}
 	for _, spec := range gatewayProxyRouteSpecs() {
 		noebsConfig.ServiceDiscovery[string(spec.role)] = endpoint
 	}
+	noebsConfig.PSPWebhookRoutes = map[string]ebs_fields.PSPWebhookRoute{
+		testPSPWebhookCallbackID: {TenantID: "test-tenant", ProviderCode: "test-provider"},
+	}
 	t.Cleanup(func() {
 		noebsConfig.ServiceDiscovery = previousDiscovery
+		noebsConfig.PSPWebhookRoutes = previousWebhookRoutes
 	})
-}
-
-func setAdminKeyForTest(t *testing.T) string {
-	t.Helper()
-	previousKey := noebsConfig.AdminKey
-	noebsConfig.AdminKey = "test-admin-key"
-	t.Cleanup(func() {
-		noebsConfig.AdminKey = previousKey
-	})
-	return noebsConfig.AdminKey
 }
 
 func assertGatewayProxied(t *testing.T, resp *http.Response) {

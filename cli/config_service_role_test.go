@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -61,7 +62,7 @@ func TestLoadConfigReturnsExplicitSecretDecryptErrorDuringTests(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(tmp, "secrets.yaml"), []byte(`noebs:
-  jwt_secret: not-sops-encrypted
+  data_key: not-sops-encrypted
 `), 0o600); err != nil {
 		t.Fatalf("write secrets: %v", err)
 	}
@@ -113,7 +114,7 @@ func TestLoadConfigDoesNotReadParentSecretsDuringTests(t *testing.T) {
 	}
 	parent := t.TempDir()
 	if err := os.WriteFile(filepath.Join(parent, "secrets.yaml"), []byte(`noebs:
-  jwt_secret: not-sops-encrypted
+  data_key: not-sops-encrypted
 `), 0o600); err != nil {
 		t.Fatalf("write parent secrets: %v", err)
 	}
@@ -258,7 +259,7 @@ func TestLoadConfigSelectsWalletLedgerDatabaseURLForWalletWorker(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDoesNotRequireServiceDatabaseURLForAPIGateway(t *testing.T) {
+func TestLoadConfigSelectsGatewayAuthDatabaseURLForAPIGateway(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -268,7 +269,7 @@ func TestLoadConfigDoesNotRequireServiceDatabaseURLForAPIGateway(t *testing.T) {
   default_tenant_id: test-tenant
   db_driver: postgres
   service_databases:
-    identity-auth: postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable
+    api-gateway: postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable
 `), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -292,8 +293,8 @@ func TestLoadConfigDoesNotRequireServiceDatabaseURLForAPIGateway(t *testing.T) {
 	if err := json.Unmarshal(payload, &cfg); err != nil {
 		t.Fatalf("unmarshal config: %v", err)
 	}
-	if cfg.DatabaseURL != "" {
-		t.Fatalf("api-gateway db_url = %q, want empty", cfg.DatabaseURL)
+	if cfg.DatabaseURL != "postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable" {
+		t.Fatalf("api-gateway db_url = %q", cfg.DatabaseURL)
 	}
 }
 
@@ -336,7 +337,7 @@ func TestLoadConfigDoesNotRequireServiceDatabaseURLForWalletAPI(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsServiceDatabaseURLForAPIGateway(t *testing.T) {
+func TestLoadConfigRequiresGatewayAuthDatabaseURLForAPIGateway(t *testing.T) {
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -346,7 +347,7 @@ func TestLoadConfigRejectsServiceDatabaseURLForAPIGateway(t *testing.T) {
   default_tenant_id: test-tenant
   db_driver: postgres
   service_databases:
-    api-gateway: postgres://noebs:noebs@postgres:5432/api_gateway?sslmode=disable
+    identity-auth: postgres://noebs:noebs@postgres:5432/identity_auth?sslmode=disable
 `), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -363,8 +364,8 @@ func TestLoadConfigRejectsServiceDatabaseURLForAPIGateway(t *testing.T) {
 	})
 
 	_, err = loadConfig()
-	if !errors.Is(err, errDatabaseNotAllowed) {
-		t.Fatalf("loadConfig() error = %v, want %v", err, errDatabaseNotAllowed)
+	if err == nil || !strings.Contains(err.Error(), `noebs.service_databases missing "api-gateway"`) {
+		t.Fatalf("loadConfig() error = %v, want missing api-gateway database", err)
 	}
 }
 

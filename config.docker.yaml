@@ -3,6 +3,17 @@ noebs:
   runtime_dir: /app/runtime
   render_db_password_file: /app/runtime/password
   port: ":8080"
+  oidc:
+    issuer: "https://api.noebs.sd/auth/realms/noebs"
+    jwks_url: "https://keycloak:8443/auth/realms/noebs/protocol/openid-connect/certs"
+    audience: "noebs-api"
+    allowed_clients: ["noebs-mobile", "noebs-backoffice"]
+    access_token_type: "Bearer"
+    max_future_issued_at_seconds: 5
+    jwks_refresh_seconds: 300
+    unknown_key_refresh_interval_seconds: 30
+  backoffice_redirect_url: "https://api.noebs.sd/backoffice/oauth/callback"
+  backoffice_post_logout_url: "https://api.noebs.sd/backoffice/oauth/logout/callback"
   temporal_enabled: true
   temporal_host: "temporal"
   temporal_port: "7233"
@@ -33,7 +44,6 @@ noebs:
     psp-webhook: "http://psp-webhook:8080"
     admin-reporting: "http://admin-reporting:8080"
     notification-chat: "http://notification-chat:8080"
-    consumer-beneficiary: "http://consumer-beneficiary:8080"
     wallet-api: "http://wallet-api:8080"
   grpc_service_discovery:
     wallet-ledger: "wallet-ledger:9090"
@@ -49,8 +59,3 @@ noebs:
   cors:
     - "*"
   # Optional outbound callback (disabled when empty).
-  consumer_biller_hooks_url: ""
-  ebs_dynamic_fees:
-    p2p_fees: 30
-    custom_fees: 85
-    special_payment_fees: 2

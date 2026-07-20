@@ -9,11 +9,7 @@ import (
 // EBS-backed Consumer API operations.
 //
 // Handlers are responsible for validation and applying explicit config values
-// such as ApplicationId and dynamic fees. Service methods assume validated inputs.
-
-func (s *Service) Purchase(ctx context.Context, tenantID string, req ebs_fields.ConsumerPurchaseFields) (ebs_fields.EBSParserFields, error) {
-	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerPurchaseEndpoint, req)
-}
+// such as ApplicationId. Service methods assume validated inputs.
 
 func (s *Service) IsAlive(ctx context.Context, tenantID string, req ebs_fields.ConsumerIsAliveFields) (ebs_fields.EBSParserFields, error) {
 	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerIsAliveEndpoint, req)
@@ -29,10 +25,6 @@ func (s *Service) Balance(ctx context.Context, tenantID string, req ebs_fields.C
 
 func (s *Service) TransactionStatus(ctx context.Context, tenantID string, req ebs_fields.ConsumerTransactionStatusFields) (ebs_fields.EBSParserFields, error) {
 	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerTransactionStatusEndpoint, req)
-}
-
-func (s *Service) WorkingKey(ctx context.Context, tenantID string, req ebs_fields.ConsumerWorkingKeyFields) (ebs_fields.EBSParserFields, error) {
-	return s.callEBSJSON(ctx, tenantID, s.NoebsConfig.ConsumerIP, ebs_fields.ConsumerWorkingKeyEndpoint, req)
 }
 
 func (s *Service) CashIn(ctx context.Context, tenantID string, req ebs_fields.ConsumerCashInFields) (ebs_fields.EBSParserFields, error) {

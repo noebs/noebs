@@ -85,7 +85,9 @@ WHERE datname IN (
   'admin_reporting',
   'notification_chat',
   'consumer_beneficiary',
-  'wallet_ledger'
+  'wallet_ledger',
+  'workload_auth',
+  'gateway_auth'
 )
 AND pid <> pg_backend_pid();
 
@@ -98,6 +100,8 @@ DROP DATABASE IF EXISTS admin_reporting WITH (FORCE);
 DROP DATABASE IF EXISTS notification_chat WITH (FORCE);
 DROP DATABASE IF EXISTS consumer_beneficiary WITH (FORCE);
 DROP DATABASE IF EXISTS wallet_ledger WITH (FORCE);
+DROP DATABASE IF EXISTS workload_auth WITH (FORCE);
+DROP DATABASE IF EXISTS gateway_auth WITH (FORCE);
 SQL
 
 psql "$connection" --set=ON_ERROR_STOP=1 --file="$service_database_sql"

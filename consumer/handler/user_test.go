@@ -8,45 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/adonese/noebs/consumer"
-	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
-	"github.com/jmoiron/sqlx"
 )
-
-func TestGetCardsReturnsServerErrorForDatabaseFailure(t *testing.T) {
-	db, err := sqlx.Open(store.DriverPostgres, "postgres://unused")
-	if err != nil {
-		t.Fatalf("open closed test database: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close test database: %v", err)
-	}
-
-	service := &consumer.Service{Store: store.New(&store.DB{DB: db, Driver: store.DriverPostgres})}
-	app := fiber.New()
-	app.Use(authenticatedUserTestIdentity)
-	app.Get("/consumer/get_cards", (&Handler{Service: service}).GetCards)
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/consumer/get_cards", nil))
-	if err != nil {
-		t.Fatalf("app.Test() error = %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
-	}
-	var payload map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if payload["code"] != "database_error" {
-		t.Fatalf("code = %v, want database_error", payload["code"])
-	}
-	if _, ok := payload["cards"]; ok {
-		t.Fatalf("database failure masqueraded as an empty card list: %#v", payload)
-	}
-}
 
 func TestKYCRequiresAuthenticatedMobile(t *testing.T) {
 	app := fiber.New()
@@ -130,7 +93,7 @@ func TestKYCRejectsOversizedImages(t *testing.T) {
 }
 
 func authenticatedUserTestIdentity(c *fiber.Ctx) error {
-	c.Locals("tenant_id", "tenant_1")
+	c.Locals("tenant_id", "tenant-1")
 	c.Locals("user_id", int64(1))
 	c.Locals("mobile", "0990000000")
 	return c.Next()

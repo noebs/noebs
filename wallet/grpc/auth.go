@@ -4,9 +4,11 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	"github.com/adonese/noebs/internal/tenantauth"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -15,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func (s *Server) claimsFromContext(ctx context.Context) (*gateway.TokenClaims, error) {
+func (s *Server) claimsFromContext(ctx context.Context) (*gateway.PrincipalIdentity, error) {
 	if s == nil || s.Service == nil {
 		return nil, status.Error(codes.FailedPrecondition, "missing wallet service")
 	}
@@ -23,52 +25,22 @@ func (s *Server) claimsFromContext(ctx context.Context) (*gateway.TokenClaims, e
 	if !ok {
 		return nil, nil
 	}
-	tenantID, err := singleGatewayMetadataValue(md, gateway.GatewayTenantIDHeader)
-	if err != nil {
-		return nil, err
-	}
-	userID, err := singleGatewayMetadataValue(md, gateway.GatewayUserIDHeader)
-	if err != nil {
-		return nil, err
-	}
-	mobile, err := singleGatewayMetadataValue(md, gateway.GatewayMobileHeader)
-	if err != nil {
-		return nil, err
-	}
-	if !hasGatewayIdentityValues(tenantID, userID, mobile) {
-		return nil, nil
-	}
-	identity, err := gateway.ParseInternalUserIdentity(tenantID, userID, mobile)
-	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
-	}
-	return &gateway.TokenClaims{
-		UserID:   identity.UserID,
-		Mobile:   identity.Mobile,
-		TenantID: identity.TenantID,
-	}, nil
+	return principalFromMetadata(md, time.Now().UTC())
 }
 
-func (s *Server) requireGatewayClaims(ctx context.Context) (*gateway.TokenClaims, error) {
+func (s *Server) requireGatewayClaims(ctx context.Context) (*gateway.PrincipalIdentity, error) {
 	claims, err := s.claimsFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if claims == nil {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
 	}
 	return claims, nil
 }
 
-func (s *Server) claimsForRPC(ctx context.Context) (*gateway.TokenClaims, error) {
-	claims, err := s.claimsFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if claims == nil && isPublicWalletUserRPC(ctx) {
-		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
-	}
-	return claims, nil
+func (s *Server) claimsForRPC(ctx context.Context) (*gateway.PrincipalIdentity, error) {
+	return s.requireGatewayClaims(ctx)
 }
 
 func (s *Server) requireAdminForInternalRPC(ctx context.Context) error {
@@ -76,29 +48,20 @@ func (s *Server) requireAdminForInternalRPC(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	if !strings.HasPrefix(method, "/"+walletv1.WalletInternalService_ServiceDesc.ServiceName+"/") {
-		return nil
-	}
-	md, _ := metadata.FromIncomingContext(ctx)
-	return s.requireAdmin(md)
-}
-
-func isPublicWalletUserRPC(ctx context.Context) bool {
-	method, ok := grpc.Method(ctx)
-	if !ok {
-		return false
-	}
-	if !strings.HasPrefix(method, "/"+walletv1.WalletPublicService_ServiceDesc.ServiceName+"/") {
-		return false
-	}
 	switch method {
-	case walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
-		walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
-		walletv1.WalletPublicService_SignalWithdrawalApproval_FullMethodName,
-		walletv1.WalletPublicService_SignalWithdrawalVerification_FullMethodName:
-		return false
+	case walletv1.WalletPublicService_ListFundingSources_FullMethodName,
+		walletv1.WalletPublicService_CreateWithdrawalDestination_FullMethodName,
+		walletv1.WalletPublicService_ListWithdrawalDestinations_FullMethodName,
+		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName,
+		walletv1.WalletPublicService_RequestOwnershipVerification_FullMethodName,
+		walletv1.WalletPublicService_CompleteOwnershipVerification_FullMethodName,
+		walletv1.WalletPublicService_SetWalletPIN_FullMethodName,
+		walletv1.WalletPublicService_EnrollUser2FA_FullMethodName,
+		walletv1.WalletPublicService_ConfirmUser2FA_FullMethodName,
+		walletv1.WalletPublicService_DisableUser2FA_FullMethodName:
+		return nil
 	default:
-		return true
+		return status.Error(codes.PermissionDenied, "wallet method is outside the public service")
 	}
 }
 
@@ -122,7 +85,53 @@ func hasGatewayIdentityValues(values ...string) bool {
 	return false
 }
 
-func bindTenantToClaims(tenantID string, claims *gateway.TokenClaims) (string, error) {
+func principalFromMetadata(md metadata.MD, now time.Time) (*gateway.PrincipalIdentity, error) {
+	headers := []string{
+		gateway.GatewayTenantIDHeader,
+		gateway.GatewayIssuerHeader,
+		gateway.GatewaySubjectHeader,
+		gateway.GatewayOrganizationIDHeader,
+		gateway.GatewayAuthorizedPartyHeader,
+		gateway.GatewayRolesHeader,
+		gateway.GatewayPermissionHeader,
+		gateway.GatewayUserIDHeader,
+		gateway.GatewaySourceIPHeader,
+		gateway.GatewayTokenExpiresAtHeader,
+	}
+	values := make([]string, len(headers))
+	for index, header := range headers {
+		value, err := singleGatewayMetadataValue(md, header)
+		if err != nil {
+			return nil, err
+		}
+		values[index] = value
+	}
+	if !hasGatewayIdentityValues(values...) {
+		return nil, nil
+	}
+	principal, err := gateway.ParseInternalPrincipalIdentity(gateway.PrincipalHeaderValues{
+		TenantID:        values[0],
+		Issuer:          values[1],
+		Subject:         values[2],
+		OrganizationID:  values[3],
+		AuthorizedParty: values[4],
+		Roles:           values[5],
+		Permission:      values[6],
+		UserID:          values[7],
+		SourceIP:        values[8],
+		TokenExpiresAt:  values[9],
+	}, now)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "missing or invalid gateway identity")
+	}
+	return &principal, nil
+}
+
+func isWalletUserPrincipal(principal gateway.PrincipalIdentity) bool {
+	return principal.UserID > 0 && principal.HasRole(tenantauth.RoleUser)
+}
+
+func bindTenantToClaims(tenantID string, claims *gateway.PrincipalIdentity) (string, error) {
 	tenantID = strings.TrimSpace(tenantID)
 	if claims == nil {
 		return validateGRPCTenantID(tenantID)
@@ -156,8 +165,8 @@ func validateGRPCTenantID(tenantID string) (string, error) {
 	return tenantID, nil
 }
 
-func bindUserIDToClaims(userID int64, claims *gateway.TokenClaims) (int64, error) {
-	if claims == nil {
+func bindUserIDToClaims(userID int64, claims *gateway.PrincipalIdentity) (int64, error) {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return userID, nil
 	}
 	if claims.UserID <= 0 {
@@ -172,10 +181,10 @@ func bindUserIDToClaims(userID int64, claims *gateway.TokenClaims) (int64, error
 	return claims.UserID, nil
 }
 
-func bindOwnerToClaims(ownerType, ownerID string, claims *gateway.TokenClaims) (string, string, error) {
+func bindOwnerToClaims(ownerType, ownerID string, claims *gateway.PrincipalIdentity) (string, string, error) {
 	ownerType = strings.TrimSpace(ownerType)
 	ownerID = strings.TrimSpace(ownerID)
-	if claims == nil {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return ownerType, ownerID, nil
 	}
 	if claims.UserID <= 0 {
@@ -195,8 +204,8 @@ func bindOwnerToClaims(ownerType, ownerID string, claims *gateway.TokenClaims) (
 	return ownerType, ownerID, nil
 }
 
-func walletOwnedByClaims(walletRow *walletstore.Wallet, claims *gateway.TokenClaims) bool {
-	if claims == nil {
+func walletOwnedByClaims(walletRow *walletstore.Wallet, claims *gateway.PrincipalIdentity) bool {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return true
 	}
 	if walletRow == nil || walletRow.TenantID != strings.TrimSpace(claims.TenantID) || walletRow.OwnerType != walletstore.OwnerTypeUser {
@@ -208,8 +217,8 @@ func walletOwnedByClaims(walletRow *walletstore.Wallet, claims *gateway.TokenCla
 	return walletRow.OwnerID == strconv.FormatInt(claims.UserID, 10)
 }
 
-func (s *Server) authorizeWalletForClaims(ctx context.Context, tenantID string, walletID uuid.UUID, claims *gateway.TokenClaims) error {
-	if claims == nil {
+func (s *Server) authorizeWalletForClaims(ctx context.Context, tenantID string, walletID uuid.UUID, claims *gateway.PrincipalIdentity) error {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return nil
 	}
 	walletRow, err := s.Service.Store.GetWallet(ctx, tenantID, walletID)
@@ -222,8 +231,8 @@ func (s *Server) authorizeWalletForClaims(ctx context.Context, tenantID string, 
 	return nil
 }
 
-func (s *Server) authorizeDestinationForClaims(ctx context.Context, tenantID string, destinationID int64, claims *gateway.TokenClaims) error {
-	if claims == nil {
+func (s *Server) authorizeDestinationForClaims(ctx context.Context, tenantID string, destinationID int64, claims *gateway.PrincipalIdentity) error {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return nil
 	}
 	dest, err := s.Service.Store.GetWithdrawalDestination(ctx, tenantID, destinationID)
@@ -233,8 +242,8 @@ func (s *Server) authorizeDestinationForClaims(ctx context.Context, tenantID str
 	return s.authorizeWalletForClaims(ctx, tenantID, dest.WalletID, claims)
 }
 
-func (s *Server) authorizeVerificationForClaims(ctx context.Context, tenantID string, verificationID int64, claims *gateway.TokenClaims) (*walletstore.OwnershipVerification, error) {
-	if claims == nil {
+func (s *Server) authorizeVerificationForClaims(ctx context.Context, tenantID string, verificationID int64, claims *gateway.PrincipalIdentity) (*walletstore.OwnershipVerification, error) {
+	if claims == nil || !isWalletUserPrincipal(*claims) {
 		return nil, nil
 	}
 	verification, err := s.Service.Store.GetOwnershipVerification(ctx, tenantID, verificationID)

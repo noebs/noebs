@@ -2,14 +2,14 @@ package handler
 
 templ adminNav(tenantID string) {
 	<div class="btn-group" role="group" aria-label="Wallet admin navigation">
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet" + tenantQuery(tenantID)}>Overview</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/wallets" + tenantQuery(tenantID)}>Wallets</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/transactions" + tenantQuery(tenantID)}>Transactions</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/pending" + tenantQuery(tenantID)}>Pending</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/manual" + tenantQuery(tenantID)}>Manual</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/fees" + tenantQuery(tenantID)}>Fees</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/rates" + tenantQuery(tenantID)}>Rates</a>
-		<a class="btn btn-sm btn-outline-secondary" href={"/admin/wallet/audit" + tenantQuery(tenantID)}>Audit</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "") }>Overview</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/wallets") }>Wallets</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/transactions") }>Transactions</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/pending") }>Pending</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/manual") }>Manual</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/fees") }>Fees</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/rates") }>Rates</a>
+		<a class="btn btn-sm btn-outline-secondary" href={ adminWalletPath(tenantID, "/audit") }>Audit</a>
 	</div>
 }
 
@@ -20,15 +20,19 @@ templ adminLayout(title string, tenantID string) {
 			<meta name="viewport" content="width=device-width, initial-scale=1">
 			<title>{ title }</title>
 			<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-			<link rel="stylesheet" href="/dashboard/assets/style.css">
+			<link rel="stylesheet" href="/backoffice/assets/style.css">
 		</head>
 		<body>
 			<nav class="navbar navbar-dark fixed-top bg-dark">
 				<div class="container">
-					<a class="navbar-brand" href={"/admin/wallet" + tenantQuery(tenantID)}>Wallet Admin</a>
+					<a class="navbar-brand" href={ adminWalletPath(tenantID, "") }>Wallet Admin</a>
+					<form method="post" action="/backoffice/logout">
+						<input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
+						<button type="submit">Sign out</button>
+					</form>
 				</div>
 			</nav>
-			<main role="main" class="container" style="padding-top: 4rem;">
+			<main role="main" class="container">
 				<div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
 					<div>
 						<h1 class="h3 mb-1">{ title }</h1>
@@ -47,9 +51,9 @@ templ adminLayout(title string, tenantID string) {
 templ WalletDashboardPage(data WalletDashboardView) {
 	@adminLayout("Wallet Admin", data.TenantID) {
 		<div class="list-group">
-			<a class="list-group-item list-group-item-action" href={"/admin/wallet/wallets" + tenantQuery(data.TenantID)}>Wallets</a>
-			<a class="list-group-item list-group-item-action" href={"/admin/wallet/pending" + tenantQuery(data.TenantID)}>Pending Approvals</a>
-			<a class="list-group-item list-group-item-action" href={"/admin/wallet/audit" + tenantQuery(data.TenantID)}>Audit Log</a>
+			<a class="list-group-item list-group-item-action" href={ adminWalletPath(data.TenantID, "/wallets") }>Wallets</a>
+			<a class="list-group-item list-group-item-action" href={ adminWalletPath(data.TenantID, "/pending") }>Pending Approvals</a>
+			<a class="list-group-item list-group-item-action" href={ adminWalletPath(data.TenantID, "/audit") }>Audit Log</a>
 		</div>
 	}
 }
@@ -76,7 +80,7 @@ templ WalletListPage(data WalletListView) {
 					<tbody>
 						for _, w := range data.Wallets {
 							<tr>
-								<td><a href={"/admin/wallet/wallets/" + w.ID.String() + tenantQuery(data.TenantID)}>{ w.ID.String() }</a></td>
+								<td><a href={ adminWalletPath(data.TenantID, "/wallets/" + w.ID.String()) }>{ w.ID.String() }</a></td>
 								<td>{ w.OwnerType }/{ w.OwnerID }</td>
 								<td>{ w.Currency }</td>
 								<td>{ w.Balance }</td>
@@ -201,22 +205,21 @@ templ PendingApprovalsPage(data PendingApprovalsView) {
 					<tbody>
 						for _, transfer := range data.ManualTransfers {
 							<tr>
-								<td><a href={"/admin/wallet/manual/" + transfer.WorkflowID + tenantQuery(data.TenantID)}>{ transfer.WorkflowID }</a></td>
+									<td><a href={ adminWalletPath(data.TenantID, "/manual/" + transfer.WorkflowID) }>{ transfer.WorkflowID }</a></td>
 								<td>{ transfer.TransferType }</td>
 								<td>{ formatNullString(transfer.WalletID) }</td>
-								<td>{ formatNullInt64(transfer.RequestedBy) }</td>
+								<td>{ transfer.RequestedByOperatorID }</td>
 								<td>{ transfer.Amount }</td>
 								<td>{ transfer.Currency }</td>
 								<td>{ formatTime(transfer.RequestedAt) }</td>
 								<td>
 									<form method="post" class="form-inline">
-										<input type="hidden" name="tenant_id" value={ data.TenantID }>
+										<input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
 										<input type="hidden" name="kind" value="manual_transfer">
-										<input type="number" min="1" name="approver_id" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Approver ID">
 										<input type="text" name="proof_of_payment" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Proof">
 										<input type="text" name="reason" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Reason">
-										<button class="btn btn-sm btn-success mb-2 mr-1" formaction={"/admin/wallet/approve/" + transfer.WorkflowID}>Approve</button>
-										<button class="btn btn-sm btn-danger mb-2" formaction={"/admin/wallet/reject/" + transfer.WorkflowID}>Reject</button>
+										<button class="btn btn-sm btn-success mb-2 mr-1" formaction={ adminWalletPath(data.TenantID, "/approve/" + transfer.WorkflowID) }>Approve</button>
+										<button class="btn btn-sm btn-danger mb-2" formaction={ adminWalletPath(data.TenantID, "/reject/" + transfer.WorkflowID) }>Reject</button>
 									</form>
 								</td>
 							</tr>
@@ -256,13 +259,12 @@ templ PendingApprovalsPage(data PendingApprovalsView) {
 								<td>{ formatTime(item.RequestedAt) }</td>
 								<td>
 									<form method="post" class="form-inline">
-										<input type="hidden" name="tenant_id" value={ data.TenantID }>
+										<input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
 										<input type="hidden" name="kind" value="withdrawal">
-										<input type="number" min="1" name="approver_id" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Approver ID">
 										<input type="text" name="proof_of_payment" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Proof">
 										<input type="text" name="reason" class="form-control form-control-sm mb-2 mr-sm-2" placeholder="Reason">
-										<button class="btn btn-sm btn-success mb-2 mr-1" formaction={"/admin/wallet/approve/" + item.WorkflowID}>Approve</button>
-										<button class="btn btn-sm btn-danger mb-2" formaction={"/admin/wallet/reject/" + item.WorkflowID}>Reject</button>
+										<button class="btn btn-sm btn-success mb-2 mr-1" formaction={ adminWalletPath(data.TenantID, "/approve/" + item.WorkflowID) }>Approve</button>
+										<button class="btn btn-sm btn-danger mb-2" formaction={ adminWalletPath(data.TenantID, "/reject/" + item.WorkflowID) }>Reject</button>
 									</form>
 								</td>
 							</tr>
@@ -277,7 +279,6 @@ templ PendingApprovalsPage(data PendingApprovalsView) {
 templ AuditLogPage(data AuditLogView) {
 	@adminLayout("Audit Log", data.TenantID) {
 		<form method="get" class="mb-3">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="event_type" placeholder="Event type" value={ data.Filter.EventType }>
@@ -357,7 +358,6 @@ templ AuditLogPage(data AuditLogView) {
 templ PSPTransactionsPage(data PSPTransactionsView) {
 	@adminLayout("PSP Transactions", data.TenantID) {
 		<form method="get" class="mb-3">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="status" placeholder="Status" value={ data.Filter.Status }>
@@ -411,7 +411,7 @@ templ PSPTransactionsPage(data PSPTransactionsView) {
 					<tbody>
 						for _, txn := range data.Transactions {
 							<tr>
-								<td><a href={"/admin/wallet/transactions/" + txn.ClientReference + tenantQuery(data.TenantID)}>{ txn.ClientReference }</a></td>
+								<td><a href={ adminWalletPath(data.TenantID, "/transactions/" + txn.ClientReference) }>{ txn.ClientReference }</a></td>
 								<td>{ txn.PSPProvider }</td>
 								<td>{ txn.Direction }</td>
 								<td>{ txn.Status }</td>
@@ -457,7 +457,7 @@ templ PSPTransactionDetailPage(data PSPTransactionDetailView) {
 templ ManualTransferFormPage(data ManualTransferFormView) {
 	@adminLayout("Manual Transfers", data.TenantID) {
 		<form method="post" class="mb-4">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="idempotency_key" placeholder="Idempotency key" value={ data.Values.IdempotencyKey }>
@@ -482,9 +482,6 @@ templ ManualTransferFormPage(data ManualTransferFormView) {
 			</div>
 			<div class="form-row mt-2">
 				<div class="col">
-					<input class="form-control form-control-sm" type="number" name="requested_by" placeholder="Requested by (admin id)" value={ data.Values.RequestedBy }>
-				</div>
-				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="psp_provider" placeholder="PSP provider (optional)" value={ data.Values.PSPProvider }>
 				</div>
 				<div class="col">
@@ -502,7 +499,6 @@ templ ManualTransferFormPage(data ManualTransferFormView) {
 		</form>
 
 		<form method="get" class="mb-3">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="status" placeholder="Status" value={ data.Filter.Status }>
@@ -512,9 +508,6 @@ templ ManualTransferFormPage(data ManualTransferFormView) {
 				</div>
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="wallet_id" placeholder="Wallet ID" value={ data.Filter.WalletID }>
-				</div>
-				<div class="col">
-					<input class="form-control form-control-sm" type="text" name="requested_by" placeholder="Requested by" value={ data.Filter.RequestedBy }>
 				</div>
 			</div>
 			<div class="form-row mt-2">
@@ -556,11 +549,11 @@ templ ManualTransferFormPage(data ManualTransferFormView) {
 					<tbody>
 						for _, transfer := range data.Transfers {
 							<tr>
-								<td><a href={"/admin/wallet/manual/" + transfer.WorkflowID + tenantQuery(data.TenantID)}>{ transfer.WorkflowID }</a></td>
+								<td><a href={ adminWalletPath(data.TenantID, "/manual/" + transfer.WorkflowID) }>{ transfer.WorkflowID }</a></td>
 								<td>{ transfer.Status }</td>
 								<td>{ transfer.TransferType }</td>
 								<td>{ formatNullString(transfer.WalletID) }</td>
-								<td>{ formatNullInt64(transfer.RequestedBy) }</td>
+								<td>{ transfer.RequestedByOperatorID }</td>
 								<td>{ transfer.Amount }</td>
 								<td>{ transfer.Currency }</td>
 								<td>{ formatTime(transfer.RequestedAt) }</td>
@@ -581,11 +574,11 @@ templ ManualTransferDetailPage(data ManualTransferDetailView) {
 				<p class="card-text">Status: { data.Transfer.Status }</p>
 				<p class="card-text">Type: { data.Transfer.TransferType }</p>
 				<p class="card-text">Wallet: { formatNullString(data.Transfer.WalletID) }</p>
-				<p class="card-text">Requested By: { formatNullInt64(data.Transfer.RequestedBy) }</p>
+				<p class="card-text">Requested By: { data.Transfer.RequestedByOperatorID }</p>
 				<p class="card-text">Amount: { data.Transfer.Amount } { data.Transfer.Currency }</p>
 				<p class="card-text">Reason: { data.Transfer.Reason }</p>
 				<p class="card-text">Requested At: { formatTime(data.Transfer.RequestedAt) }</p>
-				<p class="card-text">Approved By: { formatNullInt64(data.Transfer.ApprovedBy) }</p>
+				<p class="card-text">Approved By: { formatNullInt64(data.Transfer.ApprovedByOperatorID) }</p>
 				<p class="card-text">Approved At: { formatNullTime(data.Transfer.ApprovedAt) }</p>
 				<p class="card-text">Completed At: { formatNullTime(data.Transfer.CompletedAt) }</p>
 				<p class="card-text">Proof: { formatNullString(data.Transfer.ProofOfPayment) }</p>
@@ -610,7 +603,7 @@ templ ManualTransferDetailPage(data ManualTransferDetailView) {
 					<tbody>
 						for _, approval := range data.Approvals {
 							<tr>
-								<td>{ approval.ApproverID }</td>
+								<td>{ approval.DecidedByOperatorID }</td>
 								<td>{ approval.Decision }</td>
 								<td>{ formatNullString(approval.Reason) }</td>
 								<td>{ formatTime(approval.DecidedAt) }</td>
@@ -626,7 +619,7 @@ templ ManualTransferDetailPage(data ManualTransferDetailView) {
 templ FeesPage(data FeeConfigView) {
 	@adminLayout("Fee Configs", data.TenantID) {
 		<form method="post" class="mb-4">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="transaction_type" placeholder="Transaction type" value={ data.Form.TransactionType }>
@@ -672,7 +665,6 @@ templ FeesPage(data FeeConfigView) {
 		</form>
 
 		<form method="get" class="mb-3">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="transaction_type" placeholder="Transaction type" value={ data.Filter.TransactionType }>
@@ -715,6 +707,7 @@ templ FeesPage(data FeeConfigView) {
 							<th>Max</th>
 							<th>Account</th>
 							<th>Active</th>
+							<th>Created By</th>
 							<th>Created</th>
 						</tr>
 					</thead>
@@ -731,6 +724,7 @@ templ FeesPage(data FeeConfigView) {
 								<td>{ formatNullInt64(cfg.MaxFee) }</td>
 								<td>{ formatNullString(cfg.FeeAccountCode) }</td>
 								<td>{ cfg.IsActive }</td>
+								<td>{ cfg.CreatedByOperatorID }</td>
 								<td>{ formatTime(cfg.CreatedAt) }</td>
 							</tr>
 						}
@@ -744,7 +738,7 @@ templ FeesPage(data FeeConfigView) {
 templ RatesPage(data RateView) {
 	@adminLayout("Exchange Rates", data.TenantID) {
 		<form method="post" class="mb-4">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
+			<input type="hidden" name="_csrf" value={ backofficeCSRF(ctx) }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="base_currency" placeholder="Base currency" value={ data.Form.BaseCurrency }>
@@ -764,9 +758,6 @@ templ RatesPage(data RateView) {
 					<input class="form-control form-control-sm" type="text" name="spread" placeholder="Spread (optional)" value={ data.Form.Spread }>
 				</div>
 				<div class="col">
-					<input class="form-control form-control-sm" type="text" name="set_by" placeholder="Set by" value={ data.Form.SetBy }>
-				</div>
-				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="effective_from" placeholder="Effective from (RFC3339)" value={ data.Form.EffectiveFrom }>
 				</div>
 				<div class="col">
@@ -776,7 +767,6 @@ templ RatesPage(data RateView) {
 		</form>
 
 		<form method="get" class="mb-3">
-			<input type="hidden" name="tenant_id" value={ data.TenantID }>
 			<div class="form-row">
 				<div class="col">
 					<input class="form-control form-control-sm" type="text" name="base_currency" placeholder="Base currency" value={ data.Filter.BaseCurrency }>
@@ -825,7 +815,7 @@ templ RatesPage(data RateView) {
 								<td>{ rate.BuyRate.String() }</td>
 								<td>{ rate.SellRate.String() }</td>
 								<td>{ formatNullDecimal(rate.Spread) }</td>
-								<td>{ rate.SetBy }</td>
+								<td>{ rate.SetByOperatorID }</td>
 								<td>{ formatTime(rate.EffectiveFrom) }</td>
 								<td>{ formatNullTime(rate.EffectiveTo) }</td>
 							</tr>

@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/apperr"
+	"github.com/adonese/noebs/internal/tenantauth"
 	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -298,8 +300,9 @@ func authenticatedAdminIdentity(c *fiber.Ctx) error {
 	if c == nil {
 		return apperr.ErrUnauthorized
 	}
-	authenticated, ok := c.Locals("admin_identity").(bool)
-	if !ok || !authenticated {
+	principal, ok := gateway.InternalPrincipalIdentity(c)
+	if !ok || (!principal.HasRole(tenantauth.RoleBackoffice) &&
+		!principal.HasRole(tenantauth.RoleTenantAdmin)) {
 		return apperr.ErrUnauthorized
 	}
 	return nil

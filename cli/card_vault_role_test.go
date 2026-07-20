@@ -1,292 +1,97 @@
 package main
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
-type cardVaultRoute struct {
-	name   string
-	method string
-	path   string
-}
-
-func cardVaultSteadyRoutes() []cardVaultRoute {
-	return []cardVaultRoute{
-		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
-		{name: "add card", method: http.MethodPost, path: "/consumer/add_card"},
-		{name: "edit card", method: http.MethodPut, path: "/consumer/edit_card"},
-		{name: "delete card", method: http.MethodDelete, path: "/consumer/delete_card"},
-		{name: "main card", method: http.MethodPost, path: "/consumer/cards/set_main"},
-		{name: "get payment token", method: http.MethodGet, path: "/consumer/payment_token"},
-		{name: "create payment token", method: http.MethodPost, path: "/consumer/payment_token"},
+func cardVaultActiveRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "card list", method: http.MethodGet, path: "/consumer/cards"},
+		{name: "rename card", method: http.MethodPatch, path: "/consumer/cards/:card_id", requestPath: "/consumer/cards/card-1"},
+		{name: "retire card", method: http.MethodDelete, path: "/consumer/cards/:card_id", requestPath: "/consumer/cards/card-1"},
+		{name: "main card", method: http.MethodPut, path: "/consumer/cards/:card_id/main", requestPath: "/consumer/cards/card-1/main"},
 	}
 }
 
-func cardVaultTransitionalRoutes() []cardVaultRoute {
-	return nil
+func cardVaultInternalRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "create enrollment intent", method: http.MethodPost, path: "/internal/card-vault/enrollment-intents"},
+		{name: "begin enrollment", method: http.MethodPost, path: "/internal/card-vault/enrollment-intents/begin"},
+		{name: "claim enrollment rail", method: http.MethodPost, path: "/internal/card-vault/enrollment-intents/claim-rail"},
+		{name: "complete enrollment", method: http.MethodPost, path: "/internal/card-vault/enrollment-intents/complete"},
+		{name: "fail enrollment", method: http.MethodPost, path: "/internal/card-vault/enrollment-intents/fail"},
+		{name: "claim funded operation", method: http.MethodPost, path: "/internal/card-vault/funded-operations/claim"},
+	}
 }
 
-func TestCardVaultRoutesAreProxiedByAPIGateway(t *testing.T) {
-	ensureInit()
-	configureGatewayProxyForTest(t)
-	authorization := testAuthorizationHeader(t)
-	route := GetMainEngine()
+func TestCardVaultGatewayCatalogIsExact(t *testing.T) {
+	expected := make([]gatewayRouteExpectation, 0, len(cardVaultActiveRoutes()))
+	for _, route := range cardVaultActiveRoutes() {
+		expected = append(expected, gatewayRouteExpectation{
+			method: route.method,
+			path:   route.path,
+			auth:   gatewayAuthMobileUser,
+		})
+	}
+	assertGatewayRoleCatalogExact(t, serviceRoleCardVault, expected)
+}
 
-	tests := append(cardVaultSteadyRoutes(), cardVaultTransitionalRoutes()...)
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			assertGatewayProxied(t, resp)
+func TestCardVaultActiveRoutesAreOwnedByCardVault(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	app := GetMainEngine()
+
+	for _, route := range cardVaultActiveRoutes() {
+		t.Run(route.name, func(t *testing.T) {
+			assertFiberRoutePresent(t, app, route.method, route.path)
 		})
 	}
 }
 
-func TestCardVaultSteadyRoutesAreOwnedByCardVault(t *testing.T) {
+func TestCardVaultInternalCatalogIsExact(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
+	app := GetMainEngine()
 
-	for _, tt := range cardVaultSteadyRoutes() {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusNotFound {
-				body, err := io.ReadAll(resp.Body)
-				if err != nil {
-					t.Fatalf("read response body: %v", err)
-				}
-				if strings.Contains(string(body), "Cannot "+tt.method+" "+tt.path) {
-					t.Fatalf("card-vault did not register %s", tt.path)
-				}
-			}
+	for _, route := range cardVaultInternalRoutes() {
+		t.Run("active/"+route.name, func(t *testing.T) {
+			assertFiberRoutePresent(t, app, route.method, route.path)
 		})
 	}
 }
 
-func TestCardVaultTransitionalRoutesStayVisibleUntilSplit(t *testing.T) {
+func TestCardVaultFundedOperationClaimRequiresGatewayTenantIdentity(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
-
-	for _, tt := range cardVaultTransitionalRoutes() {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
-		})
-	}
-}
-
-func TestCardVaultSteadyRoutesExcludeTransitionalRoutes(t *testing.T) {
-	steady := map[string]bool{}
-	for _, route := range cardVaultSteadyRoutes() {
-		steady[route.method+" "+route.path] = true
-	}
-	for _, route := range cardVaultTransitionalRoutes() {
-		key := route.method + " " + route.path
-		if steady[key] {
-			t.Fatalf("%s must stay transitional until service-to-service commands replace mixed ownership", key)
-		}
-	}
-}
-
-func TestCardVaultDoesNotExposePublicMobilePANLookup(t *testing.T) {
-	for _, spec := range gatewayProxyRouteSpecs() {
-		if spec.path == "/consumer/users/cards" || spec.path == "/consumer/mobile2pan" {
-			t.Fatalf("%s must not be proxied as a public route; use internal card-vault commands", spec.path)
-		}
-	}
-
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
-
-	for _, tt := range []cardVaultRoute{
-		{name: "cards by mobile", method: http.MethodGet, path: "/consumer/users/cards"},
-		{name: "mobile to pan", method: http.MethodGet, path: "/consumer/mobile2pan"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-			}
-		})
-	}
-}
-
-func TestPaymentRequestStaysDisabledUntilDeliveryIsAtomic(t *testing.T) {
-	for _, spec := range gatewayProxyRouteSpecs() {
-		if spec.method == http.MethodPost && spec.path == "/consumer/payment_request" {
-			t.Fatal("payment_request must not be proxied before token and notification delivery are atomic and idempotent")
-		}
-	}
-
-	t.Run("gateway", func(t *testing.T) {
-		ensureInit()
-		configureGatewayProxyForTest(t)
-		route := GetMainEngine()
-		req := httptest.NewRequest(http.MethodPost, "/consumer/payment_request", nil)
-		req.Header.Set("Authorization", testAuthorizationHeader(t))
-		resp, err := route.Test(req, routeTestTimeout)
-		if err != nil {
-			t.Fatalf("route.Test() error = %v", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-		}
-	})
-
-	t.Run("service", func(t *testing.T) {
-		ensureInit()
-		setServiceRoleForTest(t, serviceRoleCardVault)
-		route := GetMainEngine()
-		req := httptest.NewRequest(http.MethodPost, "/consumer/payment_request", nil)
-		setTestGatewayUserIdentityHeaders(req)
-		resp, err := route.Test(req, routeTestTimeout)
-		if err != nil {
-			t.Fatalf("route.Test() error = %v", err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-		}
-	})
-}
-
-func TestCardVaultDoesNotOwnIdentityEBSOrNotificationRoutes(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
-
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "login", method: http.MethodPost, path: "/consumer/login"},
-		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
-		{name: "balance", method: http.MethodPost, path: "/consumer/balance"},
-		{name: "transactions", method: http.MethodGet, path: "/consumer/transactions"},
-		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-		{name: "ebs card info", method: http.MethodPost, path: "/consumer/card_info"},
-		{name: "quick pay execution", method: http.MethodPost, path: "/consumer/payment_token/quick_pay"},
-		{name: "ebs card registration start", method: http.MethodPost, path: "/consumer/cards/new"},
-		{name: "ebs card registration completion", method: http.MethodPost, path: "/consumer/cards/complete"},
-		{name: "ebs meter lookup", method: http.MethodGet, path: "/consumer/nec2name"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-			}
-		})
-	}
-}
-
-func TestCardVaultOwnsQuickPayInternalCommands(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
-
-	tests := []cardVaultRoute{
-		{name: "resolve quick pay token", method: http.MethodPost, path: "/internal/card-vault/quick-pay/resolve"},
-		{name: "finalize quick pay token", method: http.MethodPost, path: "/internal/card-vault/quick-pay/finalize"},
-		{name: "masked cards", method: http.MethodPost, path: "/internal/card-vault/cards/masked"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
-		})
-	}
-}
-
-func TestCardVaultOwnsCardRegistrationInternalCommand(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
-
-	tests := []cardVaultRoute{
-		{name: "completed card registration card", method: http.MethodPost, path: "/internal/card-vault/card-registration/cards"},
-		{name: "card by mobile", method: http.MethodPost, path: "/internal/card-vault/cards/by-mobile"},
-		{name: "card by mobile and pan", method: http.MethodPost, path: "/internal/card-vault/cards/by-mobile-pan"},
-		{name: "masked card by mobile", method: http.MethodPost, path: "/internal/card-vault/cards/masked-by-mobile"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			assertFiberRouteRegistered(t, resp, tt.method, tt.path)
-		})
-	}
-}
-
-func TestCardVaultFundedOperationClaimRequiresAdminIdentity(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleCardVault)
-	route := GetMainEngine()
+	app := GetMainEngine()
 	const path = "/internal/card-vault/funded-operations/claim"
 
-	unauthorized := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-	resp, err := route.Test(unauthorized, routeTestTimeout)
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	resp, err := app.Test(req, routeTestTimeout)
 	if err != nil {
-		t.Fatalf("unauthorized claim: %v", err)
+		t.Fatalf("route.Test() error = %v", err)
 	}
-	_ = resp.Body.Close()
+	defer closeResponseBody(t, resp.Body)
 	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("unauthorized status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
+}
 
-	authorized := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-	setGatewayAdminTenantIdentityHeaders(authorized, "test-tenant")
-	resp, err = route.Test(authorized, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("authorized claim: %v", err)
+func TestCardVaultDoesNotOwnOtherServiceRoutes(t *testing.T) {
+	ensureInit()
+	setServiceRoleForTest(t, serviceRoleCardVault)
+	app := GetMainEngine()
+
+	for _, route := range []roleRoute{
+		{name: "identity profile", method: http.MethodGet, path: "/consumer/user"},
+		{name: "EBS balance", method: http.MethodPost, path: "/consumer/balance"},
+		{name: "EBS transactions", method: http.MethodGet, path: "/consumer/transactions"},
+		{name: "notification websocket", method: http.MethodGet, path: "/ws"},
+	} {
+		t.Run(route.name, func(t *testing.T) {
+			assertFiberRouteAbsent(t, app, route)
+		})
 	}
-	defer resp.Body.Close()
-	assertFiberRouteRegistered(t, resp, http.MethodPost, path)
 }

@@ -35,7 +35,7 @@ func TestPostgresNonceStoreIsAtomicAcrossInstancesAndAudiences(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err := store.MigrateScope(ctx, db, "test-tenant", store.MigrationScopeWorkloadAuth); err != nil {
+	if err := store.MigrateScope(ctx, db, store.MigrationScopeWorkloadAuth); err != nil {
 		t.Fatal(err)
 	}
 	first, err := workloadauth.NewPostgresNonceStore(db.DB)

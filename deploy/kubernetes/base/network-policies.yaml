@@ -36,12 +36,8 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: edge
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
+        - ipBlock:
+            cidr: 10.42.0.1/32
       ports:
         - {protocol: TCP, port: 8080}
 ---
@@ -150,22 +146,6 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: consumer-beneficiary-ingress
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: consumer-beneficiary
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels: {app.kubernetes.io/name: api-gateway}
-      ports:
-        - {protocol: TCP, port: 8080}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
   name: wallet-api-ingress
 spec:
   podSelector:
@@ -212,6 +192,7 @@ spec:
                 operator: In
                 values:
                   - identity-auth
+                  - api-gateway
                   - card-vault
                   - ebs-adapter
                   - ebs-adapter-events
@@ -219,19 +200,18 @@ spec:
                   - admin-reporting
                   - admin-reporting-projector
                   - notification-chat
-                  - consumer-beneficiary
-                  - wallet-api
                   - wallet-ledger
                   - wallet-worker
                   - noebs-workload-auth-migrate
                   - noebs-workload-auth-cleanup
+                  - noebs-gateway-auth-migrate
+                  - noebs-gateway-auth-cleanup
                   - noebs-identity-auth-migrate
                   - noebs-card-vault-migrate
                   - noebs-ebs-adapter-migrate
                   - noebs-psp-webhook-migrate
                   - noebs-admin-reporting-migrate
                   - noebs-notification-chat-migrate
-                  - noebs-consumer-beneficiary-migrate
                   - noebs-wallet-ledger-migrate
       ports:
         - {protocol: TCP, port: 5432}
@@ -317,24 +297,36 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: keycloak-http-ingress
+  name: keycloak-https-ingress
 spec:
   podSelector:
     matchLabels: {app.kubernetes.io/name: keycloak}
   policyTypes: [Ingress]
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: edge
-          podSelector:
-            matchLabels: {app.kubernetes.io/name: caddy}
+        - ipBlock:
+            cidr: 10.42.0.1/32
         - podSelector:
             matchLabels: {app.kubernetes.io/name: api-gateway}
         - podSelector:
             matchLabels: {app.kubernetes.io/name: keycloak-reconciler}
       ports:
-        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-management-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 10.42.0.1/32
+      ports:
+        - {protocol: TCP, port: 9000}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -347,6 +339,7 @@ spec:
         operator: In
         values:
           - identity-auth
+          - api-gateway
           - card-vault
           - ebs-adapter
           - ebs-adapter-events
@@ -354,19 +347,18 @@ spec:
           - admin-reporting
           - admin-reporting-projector
           - notification-chat
-          - consumer-beneficiary
-          - wallet-api
           - wallet-ledger
           - wallet-worker
           - noebs-workload-auth-migrate
           - noebs-workload-auth-cleanup
+          - noebs-gateway-auth-migrate
+          - noebs-gateway-auth-cleanup
           - noebs-identity-auth-migrate
           - noebs-card-vault-migrate
           - noebs-ebs-adapter-migrate
           - noebs-psp-webhook-migrate
           - noebs-admin-reporting-migrate
           - noebs-notification-chat-migrate
-          - noebs-consumer-beneficiary-migrate
           - noebs-wallet-ledger-migrate
   policyTypes: [Egress]
   egress:
@@ -481,7 +473,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [identity-auth, card-vault, ebs-adapter, psp-webhook, admin-reporting, notification-chat, consumer-beneficiary, wallet-api]
+                values: [identity-auth, card-vault, ebs-adapter, psp-webhook, admin-reporting, notification-chat, wallet-api]
       ports:
         - {protocol: TCP, port: 8080}
 ---
@@ -498,7 +490,7 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: keycloak}
       ports:
-        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8443}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -513,7 +505,7 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/name: keycloak}
       ports:
-        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8443}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
@@ -19,18 +20,13 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.WithdrawalRequest) (*walletv1.WorkflowRun, error) {
 	if s == nil || s.Service == nil || s.Service.Store == nil {
 		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
-	}
-	if err := s.requireAdminForInternalRPC(ctx); err != nil {
-		return nil, err
 	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
@@ -53,6 +49,41 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	walletID, err := uuid.Parse(req.WalletId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	allowReturnToSource := true
+	if req.AllowReturnToSource != nil {
+		allowReturnToSource = req.GetAllowReturnToSource()
+	}
+	if !allowReturnToSource && req.DestinationId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationID.Error())
+	}
+	holdExpirySeconds := int(req.HoldExpirySeconds)
+	if holdExpirySeconds <= 0 {
+		holdExpirySeconds = s.Service.Config.WalletHoldExpirySeconds
+	}
+	if holdExpirySeconds <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingHoldExpiry.Error())
+	}
+	verificationTimeoutSeconds := int(req.VerificationTimeoutSeconds)
+	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
+		verificationTimeoutSeconds = s.Service.Config.WalletVerificationTimeoutSeconds
+	}
+	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationTimeout.Error())
+	}
+	requirePIN, require2FA, approvalRequired := withdrawalRequirements(s.Service.Config, req.Amount)
+	if requirePIN && missingRequiredText(req.WalletPin) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
+	}
+	if require2FA && missingRequiredText(req.TwoFaCode) {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
+	}
+	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
+	if approvalRequired && approvalTimeoutSeconds <= 0 {
+		approvalTimeoutSeconds = s.Service.Config.WalletApprovalTimeoutSeconds
+	}
+	if approvalRequired && approvalTimeoutSeconds <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
 	}
 	claims, err := s.claimsForRPC(ctx)
 	if err != nil {
@@ -84,47 +115,8 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		return nil, err
 	}
 
-	allowReturnToSource := true
-	if req.AllowReturnToSource != nil {
-		allowReturnToSource = req.GetAllowReturnToSource()
-	}
-	if !allowReturnToSource && req.DestinationId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDestinationID.Error())
-	}
-	holdExpirySeconds := int(req.HoldExpirySeconds)
-	if holdExpirySeconds <= 0 {
-		holdExpirySeconds = s.Service.Config.WalletHoldExpirySeconds
-	}
-	if holdExpirySeconds <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingHoldExpiry.Error())
-	}
-
-	verificationTimeoutSeconds := int(req.VerificationTimeoutSeconds)
-	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
-		verificationTimeoutSeconds = s.Service.Config.WalletVerificationTimeoutSeconds
-	}
-	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationTimeout.Error())
-	}
-
-	requirePIN, require2FA, approvalRequired := withdrawalRequirements(s.Service.Config, req.Amount)
-	if requirePIN && missingRequiredText(req.WalletPin) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
-	}
-	if require2FA {
-		if req.UserId <= 0 {
-			return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
-		}
-		if missingRequiredText(req.TwoFaCode) {
-			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
-		}
-	}
-	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
-	if approvalRequired && approvalTimeoutSeconds <= 0 {
-		approvalTimeoutSeconds = s.Service.Config.WalletApprovalTimeoutSeconds
-	}
-	if approvalRequired && approvalTimeoutSeconds <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalTimeout.Error())
+	if require2FA && req.UserId <= 0 {
+		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
 	}
 	if err := s.validateWithdrawalRequest(ctx, req, walletID); err != nil {
 		return nil, mapError(err)
@@ -235,83 +227,52 @@ func (s *Server) validateWithdrawalRequest(ctx context.Context, req *walletv1.Wi
 	return err
 }
 
-func (s *Server) SignalWithdrawalApproval(ctx context.Context, req *walletv1.WithdrawalApprovalRequest) (*emptypb.Empty, error) {
-	if s == nil || s.Service == nil {
-		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
-	}
-	md, _ := metadata.FromIncomingContext(ctx)
-	if err := s.requireAdmin(md); err != nil {
-		return nil, err
-	}
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "missing request")
-	}
-	if missingRequiredText(req.WorkflowId) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
-	}
-	if req.ApproverId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApproverID.Error())
-	}
-	if req.Approved {
-		if missingRequiredText(req.ProofOfPayment) {
-			return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingProofOfPayment.Error())
-		}
-	} else if missingRequiredText(req.Reason) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalReason.Error())
-	}
-
-	temporalClient, err := s.ensureTemporalClient()
-	if err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
-	}
-
-	decision := walletworkflow.WithdrawalApprovalDecision{
-		Approved:       req.Approved,
-		ApproverID:     req.ApproverId,
-		Reason:         req.Reason,
-		ProofOfPayment: req.ProofOfPayment,
-	}
-	if err := temporalClient.SignalWorkflow(ctx, req.WorkflowId, "", walletworkflow.WithdrawalApprovalSignal, decision); err != nil {
-		return nil, mapTemporalError(err)
-	}
-	return &emptypb.Empty{}, nil
+type withdrawalApprovalCommand struct {
+	WorkflowID     string
+	Approved       bool
+	OperatorID     int64
+	Reason         string
+	ProofOfPayment string
 }
 
-func (s *Server) SignalWithdrawalVerification(ctx context.Context, req *walletv1.WithdrawalDestinationVerificationRequest) (*emptypb.Empty, error) {
+func (s *Server) signalWithdrawalApproval(ctx context.Context, command withdrawalApprovalCommand) error {
 	if s == nil || s.Service == nil {
-		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
+		return status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
 	}
-	md, _ := metadata.FromIncomingContext(ctx)
-	if err := s.requireAdmin(md); err != nil {
-		return nil, err
+	if missingRequiredText(command.WorkflowID) {
+		return status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
 	}
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "missing request")
+	if command.OperatorID <= 0 {
+		return status.Error(codes.InvalidArgument, walletstore.ErrMissingApproverID.Error())
 	}
-	if missingRequiredText(req.WorkflowId) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWorkflowID.Error())
+	if command.Approved {
+		if missingRequiredText(command.ProofOfPayment) {
+			return status.Error(codes.InvalidArgument, walletstore.ErrMissingProofOfPayment.Error())
+		}
+	} else if missingRequiredText(command.Reason) {
+		return status.Error(codes.InvalidArgument, walletstore.ErrMissingApprovalReason.Error())
 	}
-	if req.VerificationId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationID.Error())
+	tenantID, err := adminTenantIDFromContext(ctx)
+	if err != nil {
+		return err
 	}
-	if !req.Verified && missingRequiredText(req.Reason) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingReason.Error())
+	prefix := withdrawalWorkflowIDPrefix(tenantID)
+	if len(command.WorkflowID) <= len(prefix) || !strings.HasPrefix(command.WorkflowID, prefix) {
+		return status.Error(codes.NotFound, "withdrawal workflow not found")
 	}
-
 	temporalClient, err := s.ensureTemporalClient()
 	if err != nil {
-		return nil, status.Error(codes.FailedPrecondition, err.Error())
+		return status.Error(codes.FailedPrecondition, err.Error())
 	}
-
-	decision := walletworkflow.DestinationVerificationDecision{
-		VerificationID: req.VerificationId,
-		Verified:       req.Verified,
-		Reason:         req.Reason,
+	decision := walletworkflow.WithdrawalApprovalDecision{
+		Approved:            command.Approved,
+		DecidedByOperatorID: command.OperatorID,
+		Reason:              command.Reason,
+		ProofOfPayment:      command.ProofOfPayment,
 	}
-	if err := temporalClient.SignalWorkflow(ctx, req.WorkflowId, "", walletworkflow.WithdrawalVerificationSignal, decision); err != nil {
-		return nil, mapTemporalError(err)
-	}
-	return &emptypb.Empty{}, nil
+	return mapTemporalError(temporalClient.SignalWorkflow(
+		ctx, command.WorkflowID, "", walletworkflow.WithdrawalApprovalSignal, decision,
+	))
 }
 
 func withdrawalRequirements(cfg ebs_fields.NoebsConfig, amount int64) (bool, bool, bool) {
@@ -332,7 +293,11 @@ func withdrawalRequirements(cfg ebs_fields.NoebsConfig, amount int64) (bool, boo
 }
 
 func withdrawalWorkflowID(tenantID, clientReference string) string {
-	return fmt.Sprintf("wallet-withdrawal-%s-%s", tenantID, clientReference)
+	return withdrawalWorkflowIDPrefix(tenantID) + clientReference
+}
+
+func withdrawalWorkflowIDPrefix(tenantID string) string {
+	return fmt.Sprintf("wallet-withdrawal-%s-", tenantID)
 }
 
 func withdrawalRawRequest(req *walletv1.WithdrawalRequest, allowReturnToSource, requirePIN, require2FA, approvalRequired bool, metadata map[string]any) (json.RawMessage, error) {

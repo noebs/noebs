@@ -36,14 +36,14 @@ func TestResolveTenantIDUsesGatewayTenantMiddleware(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveTenantID() error = %v", err)
 		}
-		if tenantID != "tenant_1" {
-			t.Fatalf("tenantID = %q, want tenant_1", tenantID)
+		if tenantID != "tenant-1" {
+			t.Fatalf("tenantID = %q, want tenant-1", tenantID)
 		}
 		return c.SendStatus(http.StatusNoContent)
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(gateway.GatewayTenantIDHeader, " tenant_1 ")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -61,7 +61,7 @@ func TestResolveTenantIDDoesNotReadGatewayTenantHeaderDirectly(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -79,7 +79,7 @@ func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-Tenant-ID", "tenant_1")
+	req.Header.Set("X-Tenant-ID", "tenant-1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -90,12 +90,6 @@ func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
 func TestStatusForErrorMapsDuplicateTransactionsToConflict(t *testing.T) {
 	if got := statusForError(store.ErrDuplicateTransaction); got != http.StatusConflict {
 		t.Fatalf("statusForError(ErrDuplicateTransaction) = %d, want %d", got, http.StatusConflict)
-	}
-}
-
-func TestStatusForErrorMapsInvalidAmountToBadRequest(t *testing.T) {
-	if got := statusForError(store.ErrInvalidAmount); got != http.StatusBadRequest {
-		t.Fatalf("statusForError(ErrInvalidAmount) = %d, want %d", got, http.StatusBadRequest)
 	}
 }
 

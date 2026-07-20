@@ -12,11 +12,47 @@ func TestClaimsConstructorsRejectMissingIdentityAndRealmRoleInTenant(t *testing.
 	if _, err := NewOrganization("", []Role{RoleUser}, nil); !errors.Is(err, ErrInvalidClaims) {
 		t.Fatalf("empty organization error = %v, want invalid claims", err)
 	}
-	if _, err := NewOrganization("org-a", []Role{RolePlatformAdmin}, nil); !errors.Is(err, ErrInvalidRole) {
-		t.Fatalf("tenant platform-admin error = %v, want invalid role", err)
+	if _, err := NewOrganizationClaim("", []string{"user"}); !errors.Is(err, ErrInvalidClaims) {
+		t.Fatalf("empty organization claim error = %v, want invalid claims", err)
 	}
-	if _, err := NewClaims(Identity{}, nil, false); !errors.Is(err, ErrInvalidClaims) {
+	if _, err := NewOrganization("org-a", []Role{Role("platform-admin")}, nil); !errors.Is(err, ErrInvalidRole) {
+		t.Fatalf("unknown role error = %v, want invalid role", err)
+	}
+	if _, err := NewClaims(Identity{}, nil); !errors.Is(err, ErrInvalidClaims) {
 		t.Fatalf("empty identity error = %v, want invalid claims", err)
+	}
+}
+
+func TestClaimsRejectUnknownRoleOnlyWhenItsTenantIsSelected(t *testing.T) {
+	valid, err := NewOrganizationClaim("org-a", []string{"user", "wallet:read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalid, err := NewOrganizationClaim("org-b", []string{"user", "wallet:unknown"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := NewClaims(policyTestIdentity(), map[string]Organization{
+		"tenant-a": valid,
+		"tenant-b": invalid,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	principal, err := SelectTenant(claims, "tenant-a")
+	if err != nil {
+		t.Fatalf("select valid tenant: %v", err)
+	}
+	if !principal.HasRole(RoleUser) || !principal.HasPermission(PermissionWalletRead) {
+		t.Fatalf("principal roles = %v, permissions = %v", principal.Roles(), principal.Permissions())
+	}
+	if _, err := SelectTenant(claims, "tenant-b"); !errors.Is(err, ErrInvalidRole) {
+		t.Fatalf("select invalid tenant error = %v, want invalid role", err)
+	}
+	memberships := claims.Memberships()
+	if len(memberships) != 1 || memberships[0].TenantID != "tenant-a" {
+		t.Fatalf("memberships = %+v, want only tenant-a", memberships)
 	}
 }
 
@@ -24,7 +60,7 @@ func TestAuthorizeNeverUnionsRolesAcrossTenants(t *testing.T) {
 	claims := policyTestClaims(t, map[string][]Role{
 		"tenant-a": {RoleUser, RoleTenantAdmin},
 		"tenant-b": {RoleUser},
-	}, false)
+	})
 
 	principal, err := Authorize(claims, "tenant-a", RoleTenantAdmin)
 	if err != nil {
@@ -41,19 +77,15 @@ func TestAuthorizeNeverUnionsRolesAcrossTenants(t *testing.T) {
 	}
 }
 
-func TestPlatformAdminStillRequiresTenantMembership(t *testing.T) {
-	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleUser}}, true)
-
-	if _, err := Authorize(claims, "tenant-a", RolePlatformAdmin); err != nil {
-		t.Fatalf("member platform admin: %v", err)
-	}
-	if _, err := Authorize(claims, "tenant-b", RolePlatformAdmin); !errors.Is(err, ErrUnknownTenant) {
-		t.Fatalf("non-member platform admin error = %v, want unknown tenant", err)
+func TestAuthorizationRejectsUnmodeledGlobalRoles(t *testing.T) {
+	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleUser}})
+	if _, err := Authorize(claims, "tenant-a", Role("platform-admin")); !errors.Is(err, ErrInvalidPolicy) {
+		t.Fatalf("unmodeled global role error = %v, want invalid policy", err)
 	}
 }
 
 func TestAuthorizeRequiresExplicitTenantAndExactRole(t *testing.T) {
-	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleBackoffice}}, false)
+	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleBackoffice}})
 
 	if _, err := Authorize(claims, "", RoleBackoffice); !errors.Is(err, ErrMissingTenant) {
 		t.Fatalf("missing tenant error = %v", err)
@@ -77,7 +109,7 @@ func TestPolicyCopiesConfiguredRoles(t *testing.T) {
 	}
 	allowed[0] = RoleTenantAdmin
 
-	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleUser}}, false)
+	claims := policyTestClaims(t, map[string][]Role{"tenant-a": {RoleUser}})
 	if _, err := policy.Authorize(claims, "tenant-a"); err != nil {
 		t.Fatalf("policy changed with caller-owned slice: %v", err)
 	}
@@ -89,7 +121,7 @@ func TestClaimsCopyMemberships(t *testing.T) {
 		t.Fatal(err)
 	}
 	organizations := map[string]Organization{"tenant-a": organization}
-	claims, err := NewClaims(policyTestIdentity(), organizations, false)
+	claims, err := NewClaims(policyTestIdentity(), organizations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +154,7 @@ func TestClaimsMembershipsAreSortedAndImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims, err := NewClaims(policyTestIdentity(), organizations, false)
+	claims, err := NewClaims(policyTestIdentity(), organizations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +181,7 @@ func TestPermissionPolicyNeverUnionsCapabilitiesAcrossTenants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	claims, err := NewClaims(policyTestIdentity(), organizations, false)
+	claims, err := NewClaims(policyTestIdentity(), organizations)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +204,7 @@ func BenchmarkAuthorizeTenantWarm(b *testing.B) {
 	claims := policyTestClaims(b, map[string][]Role{
 		"tenant-a": {RoleUser, RoleTenantAdmin},
 		"tenant-b": {RoleUser},
-	}, false)
+	})
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
@@ -182,7 +214,7 @@ func BenchmarkAuthorizeTenantWarm(b *testing.B) {
 	}
 }
 
-func policyTestClaims(tb testing.TB, memberships map[string][]Role, platformAdmin bool) Claims {
+func policyTestClaims(tb testing.TB, memberships map[string][]Role) Claims {
 	tb.Helper()
 	organizations := make(map[string]Organization, len(memberships))
 	for tenant, roles := range memberships {
@@ -192,7 +224,7 @@ func policyTestClaims(tb testing.TB, memberships map[string][]Role, platformAdmi
 		}
 		organizations[tenant] = organization
 	}
-	claims, err := NewClaims(policyTestIdentity(), organizations, platformAdmin)
+	claims, err := NewClaims(policyTestIdentity(), organizations)
 	if err != nil {
 		tb.Fatal(err)
 	}

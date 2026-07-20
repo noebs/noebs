@@ -31,19 +31,14 @@ func TestWalletMethodAuthRequirement(t *testing.T) {
 			want:       walletAuthUserIdentity,
 		},
 		{
-			name:       "public admin method uses admin auth",
-			fullMethod: walletv1.WalletPublicService_SignalManualTransferDecision_FullMethodName,
+			name:       "admin method uses operator identity",
+			fullMethod: walletv1.WalletAdminService_RenderWalletAdmin_FullMethodName,
 			want:       walletAuthAdmin,
 		},
 		{
-			name:       "internal method uses admin auth",
-			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
-			want:       walletAuthAdmin,
-		},
-		{
-			name:       "unknown method has no auth requirement",
+			name:       "unknown method is denied",
 			fullMethod: "/other.Service/Method",
-			want:       walletAuthNone,
+			want:       walletAuthDeny,
 		},
 	}
 
@@ -66,7 +61,7 @@ func TestWalletPathAuthRequirement(t *testing.T) {
 		{name: "manual transfer decision route", path: "/wallet/manual_transfers/workflow-id/decision", want: walletAuthAdmin},
 		{name: "withdrawal approval route", path: "/wallet/withdrawals/workflow-id/approval", want: walletAuthAdmin},
 		{name: "user withdrawal route", path: "/wallet/withdrawals", want: walletAuthUserIdentity},
-		{name: "other route", path: "/other", want: walletAuthNone},
+		{name: "other route", path: "/other", want: walletAuthDeny},
 	}
 
 	for _, tt := range tests {
@@ -78,13 +73,34 @@ func TestWalletPathAuthRequirement(t *testing.T) {
 	}
 }
 
-func TestGRPCGatewayIncomingHeaderMatcher(t *testing.T) {
-	key, ok := grpcGatewayIncomingHeaderMatcher(gateway.GatewayAdminIdentityHeader)
-	if !ok {
-		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) ok = false, want true", gateway.GatewayAdminIdentityHeader)
+func TestWalletGRPCServiceDescriptorsAreCoveredByTheAuthCatalog(t *testing.T) {
+	services := []struct {
+		description grpc.ServiceDesc
+		want        walletAuthRequirement
+	}{
+		{description: walletv1.WalletPublicService_ServiceDesc, want: walletAuthUserIdentity},
+		{description: walletv1.WalletAdminService_ServiceDesc, want: walletAuthAdmin},
 	}
-	if key != "x-noebs-admin-identity" {
-		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) = %q, want %q", gateway.GatewayAdminIdentityHeader, key, "x-noebs-admin-identity")
+	for _, service := range services {
+		if len(service.description.Streams) != 0 {
+			t.Fatalf("%s adds streaming RPCs without a stream authentication interceptor", service.description.ServiceName)
+		}
+		for _, method := range service.description.Methods {
+			fullMethod := "/" + service.description.ServiceName + "/" + method.MethodName
+			if got := walletMethodAuthRequirement(fullMethod); got != service.want {
+				t.Errorf("%s auth = %v, want %v", fullMethod, got, service.want)
+			}
+		}
+	}
+}
+
+func TestGRPCGatewayIncomingHeaderMatcher(t *testing.T) {
+	key, ok := grpcGatewayIncomingHeaderMatcher(gateway.GatewayRolesHeader)
+	if !ok {
+		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) ok = false, want true", gateway.GatewayRolesHeader)
+	}
+	if key != "x-noebs-roles" {
+		t.Fatalf("grpcGatewayIncomingHeaderMatcher(%s) = %q, want %q", gateway.GatewayRolesHeader, key, "x-noebs-roles")
 	}
 	key, ok = grpcGatewayIncomingHeaderMatcher(gateway.GatewayTenantIDHeader)
 	if !ok {
@@ -154,32 +170,25 @@ func TestRequireAuthForWalletMethods(t *testing.T) {
 			wantCalled: true,
 		},
 		{
-			name:       "rejects public admin method without admin auth",
+			name:       "rejects admin method without operator identity",
 			ctx:        gatewayUserIdentityContext(42, "tenant", "0990000000"),
-			fullMethod: walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
+			fullMethod: walletv1.WalletAdminService_RenderWalletAdmin_FullMethodName,
 			wantCode:   codes.PermissionDenied,
 			wantCalled: false,
 		},
 		{
-			name:       "allows public admin method with gateway admin identity",
+			name:       "allows admin method with operator identity",
 			ctx:        gatewayAdminIdentityContext(),
-			fullMethod: walletv1.WalletPublicService_RequestManualTransfer_FullMethodName,
+			fullMethod: walletv1.WalletAdminService_RenderWalletAdmin_FullMethodName,
 			wantCode:   codes.OK,
 			wantCalled: true,
 		},
 		{
-			name:       "rejects internal method without admin auth",
-			ctx:        gatewayUserIdentityContext(42, "tenant", "0990000000"),
-			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
+			name:       "denies unknown method even with admin auth",
+			ctx:        gatewayAdminIdentityContext(),
+			fullMethod: "/other.Service/Method",
 			wantCode:   codes.PermissionDenied,
 			wantCalled: false,
-		},
-		{
-			name:       "allows internal method with admin auth",
-			ctx:        gatewayAdminIdentityContext(),
-			fullMethod: walletv1.WalletInternalService_RequestWithdrawal_FullMethodName,
-			wantCode:   codes.OK,
-			wantCalled: true,
 		},
 	}
 
@@ -239,6 +248,13 @@ func TestRequireAuthForWalletHTTP(t *testing.T) {
 			wantStatus:    http.StatusNoContent,
 			wantNextCall:  true,
 		},
+		{
+			name:          "unknown path remains outside catalog",
+			path:          "/other",
+			adminIdentity: true,
+			wantStatus:    http.StatusNotFound,
+			wantNextCall:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -278,7 +294,8 @@ func TestRequestHasGatewayAdminIdentity(t *testing.T) {
 	}
 
 	invalidReq := httptest.NewRequest(http.MethodPost, "/wallet/manual_transfers", nil)
-	invalidReq.Header.Set(gateway.GatewayAdminIdentityHeader, "wrong")
+	setGatewayAdminIdentityHeader(invalidReq)
+	invalidReq.Header.Set(gateway.GatewayRolesHeader, "user")
 	if requestHasGatewayAdminIdentity(invalidReq) {
 		t.Fatalf("requestHasGatewayAdminIdentity(invalidReq) = true, want false")
 	}

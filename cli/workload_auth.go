@@ -46,7 +46,6 @@ func workloadCallerAudiences(role serviceRole) []string {
 			string(serviceRolePSPWebhook),
 			string(serviceRoleAdminReporting),
 			string(serviceRoleNotification),
-			string(serviceRoleBeneficiary),
 			string(serviceRoleWalletAPI),
 		}
 	case serviceRoleIdentityAuth:
@@ -99,7 +98,7 @@ func validateWorkloadAuthRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsCon
 	if strings.TrimSpace(cfg.WorkloadAuth.NonceDatabaseURL) == "" {
 		return errors.New("noebs.workload_auth.nonce_db_url is required")
 	}
-	if len(registry) == 0 {
+	if cfg.WorkloadAuth.TrustedKeys == nil {
 		return errors.New("noebs.workload_auth.trusted_keys is required")
 	}
 	expected := expectedWorkloadCallers(role)
@@ -159,6 +158,7 @@ func initWorkloadAuth(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 }
 
 func signedWorkloadBoundary(role serviceRole, verifier workloadRequestVerifier) fiber.Handler {
+	capabilities := workloadCapabilities(role)
 	return func(c *fiber.Ctx) error {
 		if verifier == nil {
 			return workloadAuthFailure(c, http.StatusServiceUnavailable, "workload_auth_unavailable")
@@ -178,8 +178,8 @@ func signedWorkloadBoundary(role serviceRole, verifier workloadRequestVerifier) 
 		if err != nil {
 			return workloadAuthFailure(c, http.StatusForbidden, "workload_capability_denied")
 		}
-		if !authorizeWorkload(role, principal.Caller, c.Method(), decodedPath) {
-			if !workloadCapabilityExists(role, c.Method(), decodedPath) {
+		if !authorizeWorkload(capabilities, principal.Caller, c.Method(), decodedPath) {
+			if !workloadCapabilityExists(capabilities, c.Method(), decodedPath) {
 				return c.SendStatus(http.StatusNotFound)
 			}
 			return workloadAuthFailure(c, http.StatusForbidden, "workload_capability_denied")
@@ -241,8 +241,8 @@ func decodedFiberAuthorizationPath(c *fiber.Ctx, signedURL *url.URL) (string, er
 	return decoded, nil
 }
 
-func authorizeWorkload(role serviceRole, caller, method, path string) bool {
-	for _, capability := range workloadCapabilities(role) {
+func authorizeWorkload(capabilities []workloadCapability, caller, method, path string) bool {
+	for _, capability := range capabilities {
 		if capability.caller == caller && capability.method == method && matchWorkloadPath(capability.path, path) {
 			return true
 		}
@@ -250,8 +250,8 @@ func authorizeWorkload(role serviceRole, caller, method, path string) bool {
 	return false
 }
 
-func workloadCapabilityExists(role serviceRole, method, path string) bool {
-	for _, capability := range workloadCapabilities(role) {
+func workloadCapabilityExists(capabilities []workloadCapability, method, path string) bool {
+	for _, capability := range capabilities {
 		if capability.method == method && matchWorkloadPath(capability.path, path) {
 			return true
 		}
@@ -263,10 +263,25 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 	var capabilities []workloadCapability
 	for _, spec := range gatewayProxyRouteSpecs() {
 		if spec.role == role {
+			path := spec.path
+			if spec.capabilityPath != "" {
+				path = spec.capabilityPath
+			} else if spec.upstreamPath != "" {
+				path = spec.upstreamPath
+			}
 			capabilities = append(capabilities, workloadCapability{
 				caller: string(serviceRoleAPIGateway),
 				method: spec.method,
-				path:   spec.path,
+				path:   path,
+			})
+		}
+	}
+	for _, spec := range backofficeRouteSpecs() {
+		if spec.role == role {
+			capabilities = append(capabilities, workloadCapability{
+				caller: string(serviceRoleAPIGateway),
+				method: spec.method,
+				path:   spec.upstreamPath,
 			})
 		}
 	}
@@ -277,7 +292,6 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 	case serviceRoleIdentityAuth:
 		add(string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
 	case serviceRoleCardVault:
-		add(string(serviceRoleIdentityAuth), http.MethodPost, "/internal/card-vault/cards/masked")
 		for _, path := range []string{
 			"/internal/card-vault/enrollment-intents",
 			"/internal/card-vault/enrollment-intents/begin",
@@ -290,7 +304,6 @@ func workloadCapabilities(role serviceRole) []workloadCapability {
 		}
 	case serviceRoleNotification:
 		add(string(serviceRoleEBSAdapter), http.MethodPost, "/internal/notification-chat/push-data")
-		add(string(serviceRoleEBSAdapter), http.MethodPost, "/internal/notification-chat/biller-hook")
 	}
 	return capabilities
 }

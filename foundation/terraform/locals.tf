@@ -11,8 +11,8 @@ locals {
       protocol = "https"
     }
     keycloak = {
-      port     = 8080
-      protocol = "http"
+      port     = 8443
+      protocol = "https"
     }
     "card-vault" = {
       port     = 8080
@@ -31,10 +31,6 @@ locals {
       protocol = "https"
     }
     "notification-chat" = {
-      port     = 8080
-      protocol = "https"
-    }
-    "consumer-beneficiary" = {
       port     = 8080
       protocol = "https"
     }
@@ -73,6 +69,11 @@ locals {
   }
 
   noebs_database_catalog = {
+    "api-gateway" = {
+      database       = "gateway_auth"
+      secret_name    = "api-gateway-secrets"
+      migration_role = "gateway-auth-migrate"
+    }
     "identity-auth" = {
       database       = "identity_auth"
       secret_name    = "identity-auth-secrets"
@@ -102,11 +103,6 @@ locals {
       database       = "notification_chat"
       secret_name    = "notification-chat-secrets"
       migration_role = "notification-chat-migrate"
-    }
-    "consumer-beneficiary" = {
-      database       = "consumer_beneficiary"
-      secret_name    = "consumer-beneficiary-secrets"
-      migration_role = "consumer-beneficiary-migrate"
     }
     "wallet-ledger" = {
       database       = "wallet_ledger"
@@ -142,6 +138,7 @@ locals {
   }
 
   noebs_required_kubernetes_secrets = [
+    "noebs-release-manifest",
     "api-gateway-secrets",
     "identity-auth-secrets",
     "card-vault-secrets",
@@ -151,32 +148,37 @@ locals {
     "admin-reporting-secrets",
     "admin-reporting-projector-secrets",
     "notification-chat-secrets",
-    "consumer-beneficiary-secrets",
     "wallet-api-secrets",
     "wallet-ledger-secrets",
     "wallet-worker-secrets",
     "workload-auth-migrate-secrets",
     "workload-auth-cleanup-secrets",
+    "gateway-auth-migrate-secrets",
+    "gateway-auth-cleanup-secrets",
     "identity-auth-migrate-secrets",
     "card-vault-migrate-secrets",
     "ebs-adapter-migrate-secrets",
     "psp-webhook-migrate-secrets",
     "admin-reporting-migrate-secrets",
     "notification-chat-migrate-secrets",
-    "consumer-beneficiary-migrate-secrets",
     "wallet-ledger-migrate-secrets",
     "sops-age-key",
     "postgres-credentials",
     "workload-auth-postgres-roles",
+    "gateway-auth-postgres-roles",
     "internal-transport-platform",
     "temporal-postgres-credentials",
     "keycloak-postgres-credentials",
     "keycloak-secrets",
+    "keycloak-transport-ca",
+    "keycloak-reconciler-credentials",
     "ghcr-credentials",
-    "noebs-tls",
   ]
 
   noebs_required_kubernetes_secret_keys = {
+    "noebs-release-manifest" = [
+      "release-manifest.yaml",
+    ]
     "api-gateway-secrets" = [
       "secrets.yaml",
     ]
@@ -204,9 +206,6 @@ locals {
     "notification-chat-secrets" = [
       "secrets.yaml",
     ]
-    "consumer-beneficiary-secrets" = [
-      "secrets.yaml",
-    ]
     "wallet-api-secrets" = [
       "secrets.yaml",
     ]
@@ -220,6 +219,12 @@ locals {
       "secrets.yaml",
     ]
     "workload-auth-cleanup-secrets" = [
+      "secrets.yaml",
+    ]
+    "gateway-auth-migrate-secrets" = [
+      "secrets.yaml",
+    ]
+    "gateway-auth-cleanup-secrets" = [
       "secrets.yaml",
     ]
     "identity-auth-migrate-secrets" = [
@@ -240,9 +245,6 @@ locals {
     "notification-chat-migrate-secrets" = [
       "secrets.yaml",
     ]
-    "consumer-beneficiary-migrate-secrets" = [
-      "secrets.yaml",
-    ]
     "wallet-ledger-migrate-secrets" = [
       "secrets.yaml",
     ]
@@ -260,6 +262,12 @@ locals {
       "cleanup-password",
       "roles.yaml",
     ]
+    "gateway-auth-postgres-roles" = [
+      "migrate-password",
+      "runtime-password",
+      "cleanup-password",
+      "roles.yaml",
+    ]
     "internal-transport-platform" = [
       "credentials.yaml",
     ]
@@ -268,16 +276,23 @@ locals {
     ]
     "keycloak-postgres-credentials" = [
       "password",
+      "tls.crt",
+      "tls.key",
     ]
     "keycloak-secrets" = [
       "keycloak.conf",
+      "db-ca.pem",
+      "tls.crt",
+      "tls.key",
+    ]
+    "keycloak-transport-ca" = [
+      "ca.pem",
+    ]
+    "keycloak-reconciler-credentials" = [
+      "config.yaml",
     ]
     "ghcr-credentials" = [
       ".dockerconfigjson",
-    ]
-    "noebs-tls" = [
-      "tls.crt",
-      "tls.key",
     ]
   }
 }

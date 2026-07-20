@@ -377,36 +377,38 @@ func TestVerifierDoesNotAcceptRoleAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tenantauth.Authorize(verified, "tenant-a", tenantauth.RoleTenantAdmin); !errors.Is(err, tenantauth.ErrForbidden) {
-		t.Fatalf("alias authorization error = %v, want forbidden", err)
+	if _, err := tenantauth.Authorize(verified, "tenant-a", tenantauth.RoleTenantAdmin); !errors.Is(err, tenantauth.ErrInvalidRole) {
+		t.Fatalf("alias authorization error = %v, want invalid role", err)
 	}
 }
 
-func TestVerifierAcceptsPlatformAdminOnlyFromRealmRoles(t *testing.T) {
+func TestVerifierRejectsUnknownRoleOnlyInTheSelectedOrganization(t *testing.T) {
 	keys := oidcTestKeys(t)
 	clock := &fakeClock{now: oidcTestNow}
 	verifier := newTestVerifier(t, clock, staticTestKeys(t, map[string]*rsa.PrivateKey{"key-1": keys[0]}))
 	claims := validTokenClaims(oidcTestNow)
-	claims["organization"] = organizationClaims("org-a", []string{"user", "platform-admin"}, "org-b", []string{"user"})
+	claims["organization"] = organizationClaims("org-a", []string{"user"}, "org-b", []string{"user", "platform-admin"})
+	claims["realm_access"] = map[string]any{"roles": []string{"platform-admin", "tenant-admin"}}
+	claims["resource_access"] = map[string]any{
+		testAudience: map[string]any{"roles": []string{"platform-admin", "tenant-admin"}},
+	}
 
 	verified, err := verifier.VerifyBearer(context.Background(), "Bearer "+signRS256(t, keys[0], "key-1", claims, joseTokenType))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tenantauth.Authorize(verified, "tenant-a", tenantauth.RolePlatformAdmin); !errors.Is(err, tenantauth.ErrForbidden) {
-		t.Fatalf("organization platform-admin error = %v, want forbidden", err)
+	if _, err := tenantauth.Authorize(verified, "tenant-a", tenantauth.RoleUser); err != nil {
+		t.Fatalf("valid tenant authorization: %v", err)
 	}
-
-	claims["realm_access"] = map[string]any{"roles": []string{"platform-admin"}}
-	verified, err = verifier.VerifyBearer(context.Background(), "Bearer "+signRS256(t, keys[0], "key-1", claims, joseTokenType))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := tenantauth.Authorize(verified, "tenant-a", tenantauth.RoleTenantAdmin); !errors.Is(err, tenantauth.ErrForbidden) {
+		t.Fatalf("top-level role union error = %v, want forbidden", err)
 	}
-	if _, err := tenantauth.Authorize(verified, "tenant-a", tenantauth.RolePlatformAdmin); err != nil {
-		t.Fatalf("realm platform-admin: %v", err)
+	if _, err := tenantauth.Authorize(verified, "tenant-b", tenantauth.RoleUser); !errors.Is(err, tenantauth.ErrInvalidRole) {
+		t.Fatalf("invalid tenant authorization error = %v, want invalid role", err)
 	}
-	if _, err := tenantauth.Authorize(verified, "tenant-c", tenantauth.RolePlatformAdmin); !errors.Is(err, tenantauth.ErrUnknownTenant) {
-		t.Fatalf("non-member realm platform-admin error = %v, want unknown tenant", err)
+	memberships := verified.Memberships()
+	if len(memberships) != 1 || memberships[0].TenantID != "tenant-a" {
+		t.Fatalf("memberships = %+v, want only tenant-a", memberships)
 	}
 }
 

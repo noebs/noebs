@@ -1,7 +1,7 @@
 -- +goose Up
 CREATE TABLE IF NOT EXISTS ledger_withdrawal_destination_links (
   id BIGSERIAL PRIMARY KEY,
-  tenant_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL CONSTRAINT tenant_id_not_reserved CHECK (lower(btrim(tenant_id)) <> 'default'),
   ledger_entry_id BIGINT NOT NULL REFERENCES ledger_entries(id),
   destination_id BIGINT NOT NULL REFERENCES withdrawal_destinations(id),
   amount BIGINT NOT NULL,

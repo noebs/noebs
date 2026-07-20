@@ -74,6 +74,12 @@ func validateDeploymentRootWithDecrypt(root string, decrypt deploymentDecryptFun
 	if err := validatePlainSecretFile("Keycloak Postgres password", filepath.Join(root, "deploy", "docker", "keycloak", "postgres-password.txt")); err != nil {
 		return err
 	}
+	if err := validateDockerKeycloakPostgresTLS(root); err != nil {
+		return err
+	}
+	if err := validateDockerKeycloakTLS(root); err != nil {
+		return err
+	}
 	if err := validateKeycloakConfig(filepath.Join(root, "deploy", "docker", "keycloak", "keycloak.conf"), false); err != nil {
 		return err
 	}
@@ -128,11 +134,15 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	}
 
 	configPath := filepath.Join(root, "config.yaml")
+	tenantCatalogPath := filepath.Join(root, "tenant-catalog.yaml")
 	ageKeyPath := filepath.Join(root, ".sops", "age-key.txt")
 	if err := requireReadableFile("config.yaml", configPath); err != nil {
 		return err
 	}
 	if err := requireReadableFile("SOPS age key", ageKeyPath); err != nil {
+		return err
+	}
+	if err := requireReadableFile("tenant catalog", tenantCatalogPath); err != nil {
 		return err
 	}
 	if err := validateKubernetesPlatformInputs(root, ageKeyPath, decrypt); err != nil {
@@ -146,7 +156,7 @@ func validateKubernetesDeploymentRootWithDecrypt(root string, decrypt deployment
 	if err := validateKubernetesReleaseServices(root, configMap, ageKeyPath, decrypt); err != nil {
 		return err
 	}
-	return nil
+	return validateKubernetesReleaseManifest(root)
 }
 
 func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymentDecryptFunc) error {
@@ -168,7 +178,13 @@ func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymen
 	if err := validateKeycloakConfig(filepath.Join(root, "platform", "keycloak.conf"), true); err != nil {
 		return err
 	}
+	if err := validateSteadyKeycloakReconcilerConfig(filepath.Join(root, "platform", "keycloak-reconciler-config.yaml")); err != nil {
+		return err
+	}
 	if _, err := readWorkloadAuthDatabaseCredentials(root, ageKeyPath, decrypt); err != nil {
+		return err
+	}
+	if _, err := readGatewayAuthDatabaseCredentials(root, ageKeyPath, decrypt); err != nil {
 		return err
 	}
 	if _, err := readInternalTransportPlatformCredentials(root, ageKeyPath, decrypt); err != nil {
@@ -178,9 +194,13 @@ func validateKubernetesPlatformInputs(root, ageKeyPath string, decrypt deploymen
 }
 
 type internalTransportPlatformCredentials struct {
-	CACertificate       string `yaml:"ca_certificate"`
-	PostgresCertificate string `yaml:"postgres_certificate"`
-	PostgresPrivateKey  string `yaml:"postgres_private_key"`
+	CACertificate               string `yaml:"ca_certificate"`
+	PostgresCertificate         string `yaml:"postgres_certificate"`
+	PostgresPrivateKey          string `yaml:"postgres_private_key"`
+	KeycloakPostgresCertificate string `yaml:"keycloak_postgres_certificate"`
+	KeycloakPostgresPrivateKey  string `yaml:"keycloak_postgres_private_key"`
+	KeycloakCertificate         string `yaml:"keycloak_certificate"`
+	KeycloakPrivateKey          string `yaml:"keycloak_private_key"`
 }
 
 func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (internalTransportPlatformCredentials, error) {
@@ -206,8 +226,91 @@ func readInternalTransportPlatformCredentials(root, ageKeyPath string, decrypt d
 	if err := postgres.ValidateIdentity("postgres"); err != nil {
 		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Postgres transport identity: %w", err)
 	}
+	keycloakPostgres := transportauth.Config{
+		CACertificate: strings.TrimSpace(values.CACertificate),
+		Certificate:   values.KeycloakPostgresCertificate,
+		PrivateKey:    values.KeycloakPostgresPrivateKey,
+	}
+	if err := keycloakPostgres.ValidateIdentity("keycloak-postgres"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Keycloak Postgres transport identity: %w", err)
+	}
+	keycloak := transportauth.Config{
+		CACertificate: strings.TrimSpace(values.CACertificate),
+		Certificate:   values.KeycloakCertificate,
+		PrivateKey:    values.KeycloakPrivateKey,
+	}
+	if err := keycloak.ValidateIdentity("keycloak"); err != nil {
+		return internalTransportPlatformCredentials{}, fmt.Errorf("validate Keycloak transport identity: %w", err)
+	}
 	values.CACertificate = postgres.CACertificate
 	return values, nil
+}
+
+func validateDockerKeycloakPostgresTLS(root string) error {
+	caCertificate, err := readDockerKeycloakFile(root, "Keycloak transport CA certificate", "ca.pem")
+	if err != nil {
+		return err
+	}
+	certificate, err := readDockerKeycloakFile(root, "Keycloak Postgres TLS certificate", "postgres-tls.crt")
+	if err != nil {
+		return err
+	}
+	privateKey, err := readDockerKeycloakFile(root, "Keycloak Postgres TLS private key", "postgres-tls.key")
+	if err != nil {
+		return err
+	}
+	config := transportauth.Config{
+		CACertificate: caCertificate,
+		Certificate:   certificate,
+		PrivateKey:    privateKey,
+	}
+	if err := config.ValidateIdentity("keycloak-postgres"); err != nil {
+		return fmt.Errorf("validate Docker Keycloak Postgres transport identity: %w", err)
+	}
+	return nil
+}
+
+func validateDockerKeycloakTLS(root string) error {
+	caCertificate, err := readDockerKeycloakFile(root, "Keycloak transport CA certificate", "ca.pem")
+	if err != nil {
+		return err
+	}
+	certificate, err := readDockerKeycloakFile(root, "Keycloak TLS certificate", "tls.crt")
+	if err != nil {
+		return err
+	}
+	privateKey, err := readDockerKeycloakFile(root, "Keycloak TLS private key", "tls.key")
+	if err != nil {
+		return err
+	}
+	config := transportauth.Config{CACertificate: caCertificate, Certificate: certificate, PrivateKey: privateKey}
+	if err := config.ValidateIdentity("keycloak"); err != nil {
+		return fmt.Errorf("validate Docker Keycloak transport identity: %w", err)
+	}
+	postgresCertificate, err := readDockerKeycloakFile(root, "Keycloak Postgres TLS certificate", "postgres-tls.crt")
+	if err != nil {
+		return err
+	}
+	postgresPrivateKey, err := readDockerKeycloakFile(root, "Keycloak Postgres TLS private key", "postgres-tls.key")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(certificate) == strings.TrimSpace(postgresCertificate) || strings.TrimSpace(privateKey) == strings.TrimSpace(postgresPrivateKey) {
+		return errors.New("transport identities for Keycloak and Keycloak Postgres must be distinct")
+	}
+	return nil
+}
+
+func readDockerKeycloakFile(root, label, name string) (string, error) {
+	path := filepath.Join(root, "deploy", "docker", "keycloak", name)
+	if err := requireReadableFile(label, path); err != nil {
+		return "", err
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", label, err)
+	}
+	return string(payload), nil
 }
 
 func readWorkloadAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (preparedWorkloadDatabase, error) {
@@ -251,6 +354,48 @@ func readWorkloadAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploy
 	return credentials, nil
 }
 
+func readGatewayAuthDatabaseCredentials(root, ageKeyPath string, decrypt deploymentDecryptFunc) (preparedGatewayAuthRelease, error) {
+	path := filepath.Join(root, "platform", "gateway-auth-postgres-roles.secrets.yaml")
+	if err := requireReadableFile("gateway authentication Postgres role credentials", path); err != nil {
+		return preparedGatewayAuthRelease{}, err
+	}
+	payload, err := decrypt(path, ageKeyPath)
+	if err != nil {
+		return preparedGatewayAuthRelease{}, fmt.Errorf("decrypt gateway authentication Postgres role credentials: %w", err)
+	}
+	var values struct {
+		MigratePassword string `yaml:"migrate_password"`
+		RuntimePassword string `yaml:"runtime_password"`
+		CleanupPassword string `yaml:"cleanup_password"`
+	}
+	decoder := yaml.NewDecoder(strings.NewReader(string(payload)))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&values); err != nil {
+		return preparedGatewayAuthRelease{}, fmt.Errorf("parse gateway authentication Postgres role credentials: %w", err)
+	}
+	credentials := preparedGatewayAuthRelease{
+		migratePassword: strings.TrimSpace(values.MigratePassword),
+		runtimePassword: strings.TrimSpace(values.RuntimePassword),
+		cleanupPassword: strings.TrimSpace(values.CleanupPassword),
+	}
+	for label, value := range map[string]string{
+		"migrate_password": credentials.migratePassword,
+		"runtime_password": credentials.runtimePassword,
+		"cleanup_password": credentials.cleanupPassword,
+	} {
+		decoded, err := base64.RawURLEncoding.DecodeString(value)
+		if err != nil || len(decoded) != 32 || base64.RawURLEncoding.EncodeToString(decoded) != value {
+			return preparedGatewayAuthRelease{}, fmt.Errorf("gateway authentication database %s is invalid", label)
+		}
+	}
+	if credentials.migratePassword == credentials.runtimePassword ||
+		credentials.migratePassword == credentials.cleanupPassword ||
+		credentials.runtimePassword == credentials.cleanupPassword {
+		return preparedGatewayAuthRelease{}, errors.New("gateway authentication database passwords must be distinct")
+	}
+	return credentials, nil
+}
+
 func validateKubernetesReleaseServices(root string, configMap map[string]interface{}, ageKeyPath string, decrypt deploymentDecryptFunc) error {
 	if err := validateExactKubernetesReleaseFiles(root); err != nil {
 		return err
@@ -262,16 +407,18 @@ func validateKubernetesReleaseServices(root string, configMap map[string]interfa
 			return err
 		}
 	}
-	return nil
+	return validateKubernetesReleaseCoherence(root, configMap, ageKeyPath, decrypt)
 }
 
 func validateExactKubernetesReleaseFiles(root string) error {
 	expectedRootEntries := map[string]bool{
-		"config.yaml": true,
-		".sops":       true,
-		"platform":    true,
-		"secrets":     true,
-		"services":    true,
+		"config.yaml":           true,
+		"tenant-catalog.yaml":   true,
+		"release-manifest.yaml": true,
+		".sops":                 true,
+		"platform":              true,
+		"secrets":               true,
+		"services":              true,
 	}
 	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "root entry", root, expectedRootEntries); err != nil {
 		return err
@@ -290,7 +437,9 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		"keycloak-postgres-password.txt":            true,
 		"ghcr-dockerconfigjson":                     true,
 		"keycloak.conf":                             true,
+		"keycloak-reconciler-config.yaml":           true,
 		"workload-auth-postgres-roles.secrets.yaml": true,
+		"gateway-auth-postgres-roles.secrets.yaml":  true,
 		"internal-transport.secrets.yaml":           true,
 	}
 	if err := rejectUnexpectedDeploymentEntries("Kubernetes", "platform file", filepath.Join(root, "platform"), expectedPlatformFiles); err != nil {
@@ -313,6 +462,11 @@ func validateExactKubernetesReleaseFiles(root string) error {
 		return err
 	}
 	return nil
+}
+
+func validateSteadyKeycloakReconcilerConfig(path string) error {
+	_, err := readSteadyKeycloakReconcilerConfig(path)
+	return err
 }
 
 func rejectUnexpectedDeploymentEntries(releaseLabel, entryLabel, dir string, expected map[string]bool) error {
@@ -404,6 +558,9 @@ func validateDeploymentServiceWithSecretPath(configMap map[string]interface{}, s
 }
 
 func validateMergedDeploymentService(serviceName string, role serviceRole, noebs map[string]interface{}) error {
+	if err := rejectRetiredHumanAuthConfig(noebs); err != nil {
+		return fmt.Errorf("%s config: %w", serviceName, err)
+	}
 	if err := applyServiceDatabaseURL(noebs); err != nil {
 		return fmt.Errorf("%s service database config: %w", serviceName, err)
 	}
@@ -442,11 +599,6 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 			return fmt.Errorf("%s runtime config: %w", serviceName, err)
 		}
 	}
-	if role == serviceRoleIdentityAuth {
-		if err := validateReleaseSMSGateway(cfg.SMSGateway); err != nil {
-			return fmt.Errorf("%s sms_gateway: %w", serviceName, err)
-		}
-	}
 	if role == serviceRolePSPWebhook || role == serviceRoleWalletWorker {
 		if err := validatePSPSecretMap(noebs, defaultTenantID); err != nil {
 			return fmt.Errorf("%s PSP secrets: %w", serviceName, err)
@@ -454,54 +606,6 @@ func validateMergedDeploymentService(serviceName string, role serviceRole, noebs
 	}
 	if err := rejectPlaceholders("noebs."+serviceName, noebs); err != nil {
 		return err
-	}
-	return nil
-}
-
-func validateReleaseSMSGateway(value string) error {
-	value = strings.TrimSpace(value)
-	parsed, err := url.Parse(value)
-	if err != nil {
-		return fmt.Errorf("parse: %w", err)
-	}
-	if parsed.Scheme != "https" {
-		return errors.New("must use https")
-	}
-	if parsed.Host == "" || parsed.Hostname() == "" {
-		return errors.New("must include a host")
-	}
-	if parsed.User != nil {
-		return errors.New("must not contain user info")
-	}
-	if parsed.Fragment != "" {
-		return errors.New("must not contain a fragment")
-	}
-
-	hostname := strings.ToLower(parsed.Hostname())
-	for _, suffix := range []string{".invalid", ".example", ".test", ".localhost"} {
-		if strings.HasSuffix(hostname, suffix) {
-			return fmt.Errorf("host %q is reserved for non-production use", hostname)
-		}
-	}
-	if hostname == "localhost" {
-		return errors.New("localhost is not a release SMS gateway")
-	}
-	for _, label := range strings.FieldsFunc(hostname, func(r rune) bool { return r == '.' || r == '-' }) {
-		if label == "dummy" || label == "placeholder" {
-			return fmt.Errorf("host %q contains a placeholder label", hostname)
-		}
-	}
-	if strings.Contains(strings.ToLower(value), "replace_with_") {
-		return errors.New("contains a placeholder")
-	}
-	query, err := url.ParseQuery(parsed.RawQuery)
-	if err != nil {
-		return fmt.Errorf("parse query: %w", err)
-	}
-	for _, key := range []string{"api_key", "from", "to", "sms"} {
-		if query.Has(key) {
-			return fmt.Errorf("must not predefine dynamic %s query parameter", key)
-		}
 	}
 	return nil
 }
@@ -646,46 +750,47 @@ func validateDockerConfigJSONPayload(label, payload string) error {
 }
 
 func validateKeycloakConfig(path string, requirePublicContract bool) error {
-	if err := requireReadableFile("Keycloak config", path); err != nil {
-		return err
-	}
-	payload, err := os.ReadFile(path)
+	values, err := readKeycloakConfigValues(path)
 	if err != nil {
-		return fmt.Errorf("read Keycloak config: %w", err)
-	}
-	if strings.Contains(string(payload), "REPLACE_WITH_") {
-		return errors.New("keycloak config contains placeholder")
-	}
-	values := map[string]string{}
-	for lineIndex, line := range strings.Split(string(payload), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			return fmt.Errorf("keycloak config line %d must be key=value", lineIndex+1)
-		}
-		key = strings.TrimSpace(key)
-		value = strings.TrimSpace(value)
-		if key == "" || value == "" {
-			return fmt.Errorf("keycloak config line %d has empty key or value", lineIndex+1)
-		}
-		values[key] = value
+		return err
 	}
 	for _, key := range []string{
 		"http-enabled",
-		"http-port",
+		"https-port",
+		"https-certificate-file",
+		"https-certificate-key-file",
+		"https-protocols",
+		"http-management-scheme",
+		"http-management-port",
 		"health-enabled",
 		"metrics-enabled",
 		"db",
 		"db-url",
 		"db-username",
 		"db-password",
+		"db-tls-mode",
+		"db-tls-trust-store-file",
 	} {
 		if strings.TrimSpace(values[key]) == "" {
 			return fmt.Errorf("keycloak config missing %s", key)
 		}
+	}
+	for key, expected := range map[string]string{
+		"http-enabled":                  "false",
+		"https-port":                    "8443",
+		"https-certificate-file":        "/opt/keycloak/conf/tls.crt",
+		"https-certificate-key-file":    "/opt/keycloak/conf/tls.key",
+		"https-protocols":               "TLSv1.3",
+		"http-management-scheme":        "http",
+		"http-management-port":          "9000",
+		"http-management-relative-path": "/",
+	} {
+		if values[key] != expected {
+			return fmt.Errorf("keycloak config %s must be %q", key, expected)
+		}
+	}
+	if _, exists := values["http-port"]; exists {
+		return errors.New("keycloak config must not declare an HTTP application port")
 	}
 	for _, key := range []string{
 		"bootstrap-admin-username",
@@ -698,22 +803,73 @@ func validateKeycloakConfig(path string, requirePublicContract bool) error {
 		}
 	}
 	if !requirePublicContract {
-		return nil
+		return validateKeycloakDatabaseConfig(values)
 	}
 	for key, expected := range map[string]string{
-		"http-relative-path":            "/auth",
-		"http-management-relative-path": "/",
-		"hostname":                      "https://api.noebs.sd/auth",
-		"hostname-strict":               "true",
-		"hostname-backchannel-dynamic":  "false",
-		"proxy-headers":                 "xforwarded",
-		"proxy-trusted-addresses":       "10.42.0.0/16",
+		"http-relative-path":           "/auth",
+		"hostname":                     "https://api.noebs.sd/auth",
+		"hostname-strict":              "true",
+		"hostname-backchannel-dynamic": "false",
+		"proxy-headers":                "xforwarded",
+		"proxy-trusted-addresses":      "10.42.0.1/32",
 	} {
 		if values[key] != expected {
 			return fmt.Errorf("keycloak config %s must be %q", key, expected)
 		}
 	}
+	return validateKeycloakDatabaseConfig(values)
+}
+
+func validateKeycloakDatabaseConfig(values map[string]string) error {
+	for _, setting := range []struct {
+		key   string
+		value string
+	}{
+		{key: "db", value: "postgres"},
+		{key: "db-url", value: "jdbc:postgresql://keycloak-postgres:5432/keycloak"},
+		{key: "db-username", value: "keycloak"},
+		{key: "db-tls-mode", value: "verify-server"},
+		{key: "db-tls-trust-store-file", value: "/opt/keycloak/conf/db-ca.pem"},
+	} {
+		if values[setting.key] != setting.value {
+			return fmt.Errorf("keycloak config %s must be %q", setting.key, setting.value)
+		}
+	}
 	return nil
+}
+
+func readKeycloakConfigValues(path string) (map[string]string, error) {
+	if err := requireReadableFile("Keycloak config", path); err != nil {
+		return nil, err
+	}
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read Keycloak config: %w", err)
+	}
+	if strings.Contains(string(payload), "REPLACE_WITH_") {
+		return nil, errors.New("keycloak config contains placeholder")
+	}
+	values := map[string]string{}
+	for lineIndex, line := range strings.Split(string(payload), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return nil, fmt.Errorf("keycloak config line %d must be key=value", lineIndex+1)
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			return nil, fmt.Errorf("keycloak config line %d has empty key or value", lineIndex+1)
+		}
+		if _, duplicate := values[key]; duplicate {
+			return nil, fmt.Errorf("keycloak config contains duplicate %s", key)
+		}
+		values[key] = value
+	}
+	return values, nil
 }
 
 func readYAMLMapFile(path string) (map[string]interface{}, error) {

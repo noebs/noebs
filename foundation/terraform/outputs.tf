@@ -26,6 +26,10 @@ output "create_noebs_application" {
   value = var.create_noebs_application
 }
 
+output "noebs_automated_sync" {
+  value = var.noebs_automated_sync
+}
+
 output "create_edge_application" {
   value = var.create_edge_application
 }

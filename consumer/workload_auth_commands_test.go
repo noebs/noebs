@@ -23,13 +23,8 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	identityPublic, identityPrivate, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
 	registry := workloadauth.Registry{
-		"ebs-adapter-test":   {Caller: "ebs-adapter", PublicKey: ebsPublic},
-		"identity-auth-test": {Caller: "identity-auth", PublicKey: identityPublic},
+		"ebs-adapter-test": {Caller: "ebs-adapter", PublicKey: ebsPublic},
 	}
 	verifiers := make(map[string]*workloadauth.Verifier)
 	for _, audience := range []string{cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey} {
@@ -46,8 +41,7 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 	}
 	expected := map[string]expectedCommand{
 		"/internal/card-vault/funded-operations/claim": {audience: cardVaultServiceDiscoveryKey, caller: "ebs-adapter"},
-		"/internal/notification-chat/biller-hook":      {audience: notificationServiceDiscoveryKey, caller: "ebs-adapter"},
-		"/internal/card-vault/cards/masked":            {audience: cardVaultServiceDiscoveryKey, caller: "identity-auth"},
+		"/internal/notification-chat/push-data":        {audience: notificationServiceDiscoveryKey, caller: "ebs-adapter"},
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		command, ok := expected[r.URL.Path]
@@ -68,9 +62,9 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if r.Header.Get(gateway.GatewayTenantIDHeader) != "tenant_1" ||
-			r.Header.Get(gateway.GatewayAdminIdentityHeader) != "" ||
-			r.Header.Get(gateway.GatewayAdminRoleHeader) != "" ||
+		if r.Header.Get(gateway.GatewayTenantIDHeader) != "tenant-1" ||
+			r.Header.Get("X-Noebs-Admin-Identity") != "" ||
+			r.Header.Get("X-Noebs-Admin-Role") != "" ||
 			r.Header.Get("Authorization") != "" {
 			t.Errorf("unexpected command identity headers: %v", r.Header)
 			w.WriteHeader(http.StatusBadRequest)
@@ -90,22 +84,12 @@ func TestInternalServiceCommandsCarryVerifiedWorkloadIdentity(t *testing.T) {
 		WorkloadSigners: commandSignerSet(t, "ebs-adapter-test", ebsPrivate,
 			cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey),
 	}
-	identity := &Service{
-		HTTPClient:  server.Client(),
-		NoebsConfig: ebs_fields.NoebsConfig{ServiceDiscovery: discovery},
-		WorkloadSigners: commandSignerSet(t, "identity-auth-test", identityPrivate,
-			cardVaultServiceDiscoveryKey),
-	}
-
 	commands := []func() error{
 		func() error {
-			return ebs.doAdminServiceCommand(context.Background(), "tenant_1", cardVaultCommandTarget, "/internal/card-vault/funded-operations/claim", map[string]string{"operation_id": "operation-1"}, nil)
+			return ebs.doAdminServiceCommand(context.Background(), "tenant-1", cardVaultCommandTarget, "/internal/card-vault/funded-operations/claim", map[string]string{"operation_id": "operation-1"}, nil)
 		},
 		func() error {
-			return ebs.doAdminServiceCommand(context.Background(), "tenant_1", notificationCommandTarget, "/internal/notification-chat/biller-hook", map[string]string{"event": "paid"}, nil)
-		},
-		func() error {
-			return identity.doCardVaultCommand(context.Background(), "tenant_1", 42, "/internal/card-vault/cards/masked", struct{}{}, nil)
+			return ebs.doAdminServiceCommand(context.Background(), "tenant-1", notificationCommandTarget, "/internal/notification-chat/push-data", map[string]string{"event": "paid"}, nil)
 		},
 	}
 	for index, command := range commands {
@@ -127,16 +111,6 @@ func commandSignerSet(t *testing.T, keyID string, privateKey ed25519.PrivateKey,
 	return signers
 }
 
-func testEBSWorkloadSigners(t *testing.T) *workloadauth.SignerSet {
-	t.Helper()
-	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return commandSignerSet(t, "ebs-adapter-test", privateKey,
-		cardVaultServiceDiscoveryKey, notificationServiceDiscoveryKey)
-}
-
 type commandNonceStore struct{}
 
 func (commandNonceStore) Use(context.Context, string, string, string, time.Time) (bool, error) {
@@ -156,7 +130,7 @@ func TestInternalServiceCommandDoesNotSendWithoutSigner(t *testing.T) {
 			notificationServiceDiscoveryKey: server.URL,
 		}},
 	}
-	err := service.doAdminServiceCommand(context.Background(), "tenant_1", notificationCommandTarget, "/internal/notification-chat/biller-hook", struct{}{}, nil)
+	err := service.doAdminServiceCommand(context.Background(), "tenant-1", notificationCommandTarget, "/internal/notification-chat/push-data", struct{}{}, nil)
 	if !errors.Is(err, workloadauth.ErrMissingSigner) {
 		t.Fatalf("error = %v", err)
 	}

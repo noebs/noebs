@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -57,13 +56,11 @@ func TestOpaqueCardHTTPEnrollmentRetryAndPublicIsolation(t *testing.T) {
 		_ = postgres.Terminate(context.Background())
 	})
 	const tenantID = "tenant-opaque-http"
-	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopeCardVault); err != nil {
+	if err := store.MigrateScope(ctx, db, store.MigrationScopeCardVault); err != nil {
 		t.Fatalf("migrate card vault: %v", err)
 	}
 	storeSvc := store.New(db, store.WithDataKey("opaque-card-http-data-key"))
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionHandlerTestTenant(t, ctx, storeSvc, tenantID, "Opaque Card HTTP Tenant")
 	vaultService := &consumer.Service{Store: storeSvc}
 	vaultHandler := &Handler{Service: vaultService}
 
@@ -247,13 +244,10 @@ func TestOpaqueCardHTTPEnrollmentRetryAndPublicIsolation(t *testing.T) {
 
 	legacyBefore := countCards(t, db, tenantID)
 	legacy := testFiberRequest(t, publicApp, http.MethodPost, "/consumer/add_card", `[{"pan":"4111111111111111","ipin":"1234"}]`, 101)
-	if legacy.StatusCode != http.StatusGone {
-		t.Fatalf("legacy add status = %d, want 410", legacy.StatusCode)
+	if legacy.StatusCode != http.StatusNotFound {
+		t.Fatalf("legacy add status = %d, want 404", legacy.StatusCode)
 	}
-	legacyBody := readResponseBody(t, legacy)
-	if !bytes.Contains(legacyBody, []byte(`"code":"upgrade_required"`)) {
-		t.Fatalf("legacy response = %s", legacyBody)
-	}
+	_ = readResponseBody(t, legacy)
 	if after := countCards(t, db, tenantID); after != legacyBefore {
 		t.Fatalf("legacy endpoint mutated cards: before=%d after=%d", legacyBefore, after)
 	}

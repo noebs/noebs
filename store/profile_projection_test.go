@@ -16,9 +16,7 @@ const (
 func TestProfileProjectionUsesPrincipalCompositeAuthority(t *testing.T) {
 	ctx := context.Background()
 	store := newIdentityAuthTestStore(t, ctx)
-	if err := store.EnsureTenant(ctx, "tenant"); err != nil {
-		t.Fatal(err)
-	}
+	provisionTestTenant(t, ctx, store, "tenant", "Profile Tenant")
 	created, err := store.CreateProfileProjection(ctx, CreateProfileProjectionParams{
 		PrincipalIdentity: PrincipalIdentity{TenantID: "tenant", Issuer: testProfileIssuer, Subject: testProfileSubject},
 		Fullname:          "Profile Owner",
@@ -58,9 +56,7 @@ func TestProfileProjectionUsesPrincipalCompositeAuthority(t *testing.T) {
 func TestResolveProfileProjectionNeverCreates(t *testing.T) {
 	ctx := context.Background()
 	store := newIdentityAuthTestStore(t, ctx)
-	if err := store.EnsureTenant(ctx, "tenant"); err != nil {
-		t.Fatal(err)
-	}
+	provisionTestTenant(t, ctx, store, "tenant", "Profile Tenant")
 	identity := PrincipalIdentity{TenantID: "tenant", Issuer: testProfileIssuer, Subject: testProfileSubject}
 	if _, err := store.ResolveProfileProjection(ctx, identity); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("unknown principal error = %v, want sql.ErrNoRows", err)
@@ -108,6 +104,15 @@ func TestProfileProjectionRejectsInvalidAuthorityBeforeDatabaseAccess(t *testing
 func TestIdentitySchemaContainsNoLocalCredentialAuthority(t *testing.T) {
 	ctx := context.Background()
 	store := newIdentityAuthTestStore(t, ctx)
+	var version int64
+	if err := store.DB.QueryRowContext(ctx, `SELECT MAX(version_id)
+		FROM goose_db_version_identity_auth
+		WHERE is_applied`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	if version != 101 {
+		t.Fatalf("identity schema version = %d, want 101", version)
+	}
 	rows, err := store.DB.QueryContext(ctx, `SELECT column_name
 		FROM information_schema.columns
 		WHERE table_schema = 'public' AND table_name = 'users'

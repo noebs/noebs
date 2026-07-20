@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -11,7 +10,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
-	"github.com/pressly/goose/v3"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 )
 
 func TestOpaqueIdentifiersRequireExactCanonicalUUIDs(t *testing.T) {
@@ -53,15 +52,14 @@ func TestOpaqueCardLifecycleIsTenantScopedAndPANIndependent(t *testing.T) {
 		userA   = int64(101)
 		userB   = int64(202)
 	)
-	if err := MigrateScope(ctx, db, tenantA, MigrationScopeCardVault); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeCardVault); err != nil {
 		t.Fatalf("migrate card vault: %v", err)
 	}
 	storeSvc := New(db, WithDataKey("opaque-card-test-key"))
-	for _, tenantID := range []string{tenantA, tenantB} {
-		if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-			t.Fatalf("ensure %s: %v", tenantID, err)
-		}
-	}
+	provisionTestTenants(t, ctx, storeSvc,
+		tenantcatalog.Tenant{ID: tenantA, Name: "Tenant A"},
+		tenantcatalog.Tenant{ID: tenantB, Name: "Tenant B"},
+	)
 
 	baseTime := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
 	first := enrollVerifiedCard(t, storeSvc, tenantA, userA, "4242424242424242", "Daily", baseTime)
@@ -184,13 +182,11 @@ func TestOpaqueCardEnrollmentIntentExpiryReplayAndConflict(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)
 	const tenantID = "tenant-opaque-intents"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeCardVault); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeCardVault); err != nil {
 		t.Fatalf("migrate card vault: %v", err)
 	}
 	storeSvc := New(db, WithDataKey("opaque-intent-test-key"))
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionTestTenant(t, ctx, storeSvc, tenantID, "Intent Tenant")
 	now := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
 	intent, err := storeSvc.CreateCardEnrollmentIntent(ctx, tenantID, 10, now, 5*time.Minute)
 	if err != nil {
@@ -279,89 +275,6 @@ func TestOpaqueCardEnrollmentIntentExpiryReplayAndConflict(t *testing.T) {
 	reissue := enrollVerifiedCard(t, storeSvc, tenantID, 11, "4000000000001234", "Reissue", now.Add(10*time.Second))
 	if reissue.CardID == card.CardID {
 		t.Fatal("retired card id was reused")
-	}
-}
-
-func TestLegacyCardRowsAreQuarantinedFromOpaqueList(t *testing.T) {
-	ctx := context.Background()
-	db := newValidationDB(t)
-	const tenantID = "tenant-opaque-legacy"
-	if err := goose.SetDialect("postgres"); err != nil {
-		t.Fatalf("set goose dialect: %v", err)
-	}
-	goose.SetTableName(migrationScopeTableNames[MigrationScopeCardVault])
-	goose.SetBaseFS(postgresMigrations)
-	if err := goose.UpToContext(ctx, db.DB.DB, migrationScopePaths[MigrationScopeCardVault], 104); err != nil {
-		t.Fatalf("migrate card vault to legacy version: %v", err)
-	}
-	if _, err := db.ExecContext(ctx, db.Rebind(`INSERT INTO tenants(id, name, created_at) VALUES(?, ?, ?)`), tenantID, tenantID, time.Now().UTC()); err != nil {
-		t.Fatalf("insert tenant: %v", err)
-	}
-	now := time.Now().UTC()
-	stmt := db.Rebind(`INSERT INTO cards(
-		tenant_id, user_id, mobile, pan, pan_enc, expiry, name, ipin, ipin_enc,
-		is_main, is_valid, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, TRUE, ?, ?)`)
-	if _, err := db.ExecContext(ctx, stmt,
-		tenantID, 41, "0912000041", "4242424242424242", "enc:legacy-pan-ciphertext",
-		"2912", "Legacy", "1234", "enc:legacy-ipin", now, now,
-	); err != nil {
-		t.Fatalf("insert legacy card: %v", err)
-	}
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeCardVault); err != nil {
-		t.Fatalf("apply opaque cutover: %v", err)
-	}
-	storeSvc := New(db, WithDataKey("opaque-legacy-test-key"))
-	var cardID, status string
-	readStmt := db.Rebind(`SELECT card_id::text, status
-		FROM legacy_card_quarantine
-		WHERE tenant_id = ? AND user_id = ?`)
-	if err := db.QueryRowContext(ctx, readStmt, tenantID, 41).Scan(&cardID, &status); err != nil {
-		t.Fatalf("read legacy card: %v", err)
-	}
-	if _, err := NormalizeCardID(cardID); err != nil {
-		t.Fatalf("legacy card_id = %q: %v", cardID, err)
-	}
-	if status != CardStatusLegacyUnverified {
-		t.Fatalf("legacy state status=%q", status)
-	}
-	cards, err := storeSvc.ListActiveCardSummaries(ctx, tenantID, 41)
-	if err != nil {
-		t.Fatalf("list opaque cards: %v", err)
-	}
-	if len(cards) != 0 {
-		t.Fatalf("legacy card leaked in public list: %+v", cards)
-	}
-	for _, table := range []string{"cards", "legacy_card_quarantine"} {
-		for _, column := range []string{
-			"pan", "pan_enc", "legacy_pan_fingerprint", "legacy_pan_ciphertext",
-			"ipin", "ipin_enc", "mobile", "is_valid",
-		} {
-			var count int
-			if err := db.GetContext(ctx, &count, `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`, table, column); err != nil {
-				t.Fatalf("inspect %s.%s: %v", table, column, err)
-			}
-			if count != 0 {
-				t.Fatalf("unsafe legacy column survived: %s.%s", table, column)
-			}
-		}
-	}
-	var cacheTable sql.NullString
-	if err := db.GetContext(ctx, &cacheTable, `SELECT to_regclass('cache_cards')::text`); err != nil {
-		t.Fatalf("inspect cache_cards: %v", err)
-	}
-	if cacheTable.Valid {
-		t.Fatalf("cache_cards survived opaque cutover: %q", cacheTable.String)
-	}
-	if err := goose.DownToContext(ctx, db.DB.DB, migrationScopePaths[MigrationScopeCardVault], 104); err == nil || !strings.Contains(err.Error(), "migration 105 is irreversible") {
-		t.Fatalf("irreversible down error = %v", err)
-	}
-	version, err := goose.GetDBVersionContext(ctx, db.DB.DB)
-	if err != nil {
-		t.Fatalf("read card-vault migration version: %v", err)
-	}
-	if version != 105 {
-		t.Fatalf("card-vault migration version after rejected down = %d, want 105", version)
 	}
 }
 

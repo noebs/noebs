@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,10 +23,18 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 		expected[fmt.Sprintf("%s|%s|%s|%s", role, caller, method, path)] = true
 	}
 	for _, spec := range gatewayProxyRouteSpecs() {
-		add(spec.role, string(serviceRoleAPIGateway), spec.method, spec.path)
+		path := spec.path
+		if spec.capabilityPath != "" {
+			path = spec.capabilityPath
+		} else if spec.upstreamPath != "" {
+			path = spec.upstreamPath
+		}
+		add(spec.role, string(serviceRoleAPIGateway), spec.method, path)
+	}
+	for _, spec := range backofficeRouteSpecs() {
+		add(spec.role, string(serviceRoleAPIGateway), spec.method, spec.upstreamPath)
 	}
 	add(serviceRoleIdentityAuth, string(serviceRoleAPIGateway), http.MethodPost, "/internal/identity-auth/principals/resolve")
-	add(serviceRoleCardVault, string(serviceRoleIdentityAuth), http.MethodPost, "/internal/card-vault/cards/masked")
 	for _, path := range []string{
 		"/internal/card-vault/enrollment-intents",
 		"/internal/card-vault/enrollment-intents/begin",
@@ -37,7 +46,6 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 		add(serviceRoleCardVault, string(serviceRoleEBSAdapter), http.MethodPost, path)
 	}
 	add(serviceRoleNotification, string(serviceRoleEBSAdapter), http.MethodPost, "/internal/notification-chat/push-data")
-	add(serviceRoleNotification, string(serviceRoleEBSAdapter), http.MethodPost, "/internal/notification-chat/biller-hook")
 
 	receivers := []serviceRole{
 		serviceRoleIdentityAuth,
@@ -46,7 +54,6 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 	}
 	actual := make(map[string]bool)
@@ -72,6 +79,7 @@ func TestWorkloadCapabilitiesMatchReviewedMatrix(t *testing.T) {
 }
 
 func TestMobileIdentityCapabilitiesAreAbsent(t *testing.T) {
+	capabilities := workloadCapabilities(serviceRoleIdentityAuth)
 	for _, capability := range []struct {
 		caller string
 		path   string
@@ -79,8 +87,19 @@ func TestMobileIdentityCapabilitiesAreAbsent(t *testing.T) {
 		{caller: string(serviceRoleEBSAdapter), path: "/internal/identity-auth/users/by-mobile"},
 		{caller: string(serviceRoleNotification), path: "/internal/identity-auth/users/resolve-batch"},
 	} {
-		if authorizeWorkload(serviceRoleIdentityAuth, capability.caller, http.MethodPost, capability.path) {
+		if authorizeWorkload(capabilities, capability.caller, http.MethodPost, capability.path) {
 			t.Fatalf("obsolete capability remains authorized: %s %s", capability.caller, capability.path)
+		}
+	}
+}
+
+func BenchmarkAuthorizeCachedWorkloadCapabilities(b *testing.B) {
+	capabilities := workloadCapabilities(serviceRoleWalletAPI)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		if !authorizeWorkload(capabilities, string(serviceRoleAPIGateway), http.MethodGet, "/wallet/methods") {
+			b.Fatal("workload capability denied")
 		}
 	}
 }
@@ -150,14 +169,6 @@ func TestSignedWorkloadBoundaryVerifiesBeforeExactCapability(t *testing.T) {
 			method:     http.MethodPatch,
 			target:     "/consumer/cards/019f73cf-203f-7eb1-b6a8-d50d75ca3a9f",
 			wantStatus: http.StatusForbidden,
-		},
-		{
-			name:       "legacy internal route has no capability",
-			caller:     string(serviceRoleEBSAdapter),
-			audience:   string(serviceRoleCardVault),
-			method:     http.MethodPost,
-			target:     "/internal/card-vault/cards/by-mobile-pan",
-			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:       "wrong audience",
@@ -295,7 +306,8 @@ func TestSignedWorkloadBoundaryClaimsReplayBeforeHandler(t *testing.T) {
 }
 
 func TestGatewayStripsPublicCredentialsThenPropagatesSignature(t *testing.T) {
-	verifier := newTestWorkloadVerifier(t, string(serviceRoleIdentityAuth), string(serviceRoleAPIGateway))
+	installGatewayOIDCVerifierForTest(t)
+	verifier := newTestWorkloadVerifier(t, string(serviceRoleAdminReporting), string(serviceRoleAPIGateway))
 	var sawRequest atomic.Bool
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
@@ -310,7 +322,7 @@ func TestGatewayStripsPublicCredentialsThenPropagatesSignature(t *testing.T) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		if principal.Caller != string(serviceRoleAPIGateway) || r.Header.Get(workloadauth.HeaderTenantID) != "tenant_1" || r.Header.Get(workloadauth.HeaderUserID) != "" {
+		if principal.Caller != string(serviceRoleAPIGateway) || r.Header.Get(workloadauth.HeaderTenantID) != "" || r.Header.Get(workloadauth.HeaderUserID) != "" {
 			t.Errorf("unexpected signed gateway identity: caller=%q tenant=%q user=%q", principal.Caller, r.Header.Get(workloadauth.HeaderTenantID), r.Header.Get(workloadauth.HeaderUserID))
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -333,20 +345,22 @@ func TestGatewayStripsPublicCredentialsThenPropagatesSignature(t *testing.T) {
 	workloadSigners = newTestWorkloadSigners(t, string(serviceRoleAPIGateway),
 		string(serviceRoleIdentityAuth), string(serviceRoleCardVault), string(serviceRoleEBSAdapter),
 		string(serviceRolePSPWebhook), string(serviceRoleAdminReporting), string(serviceRoleNotification),
-		string(serviceRoleBeneficiary), string(serviceRoleWalletAPI))
+		string(serviceRoleWalletAPI))
 	t.Cleanup(func() { workloadSigners = previousSigners })
 
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
 	app.Use(gateway.RequestID())
 	if err := registerAPIGatewayProxyRoutes(app, ebs_fields.NoebsConfig{
-		DefaultTenantID:  "tenant_1",
+		DefaultTenantID: "tenant-1",
+		PSPWebhookRoutes: map[string]ebs_fields.PSPWebhookRoute{
+			testPSPWebhookCallbackID: {TenantID: "tenant-1", ProviderCode: "test-provider"},
+		},
 		ServiceDiscovery: discovery,
-	}, gateway.JWTAuth{}, func(c *fiber.Ctx) error { return c.Next() }); err != nil {
+	}, gatewayTestTenantCatalog(t)); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/consumer/login?flow=login&view=compact&view=full", strings.NewReader(`{"mobile":"0990000000"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tenant-ID", "tenant_1")
+	req := httptest.NewRequest(http.MethodGet, "/backoffice/assets/style.css?flow=login&view=compact&view=full", nil)
+	req.Header.Set("X-Tenant-ID", "tenant-1")
 	req.Header.Set(workloadauth.HeaderKeyID, "attacker-key")
 	req.Header.Set(workloadauth.HeaderSignature, "attacker-signature")
 	req.Header.Set(workloadauth.HeaderUserID, "999")
@@ -362,6 +376,7 @@ func TestGatewayStripsPublicCredentialsThenPropagatesSignature(t *testing.T) {
 }
 
 func TestGatewayDoesNotProxyWithoutWorkloadSigner(t *testing.T) {
+	installGatewayOIDCVerifierForTest(t)
 	var hits atomic.Int32
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hits.Add(1)
@@ -378,25 +393,24 @@ func TestGatewayDoesNotProxyWithoutWorkloadSigner(t *testing.T) {
 
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
 	app.Use(gateway.RequestID())
-	if err := registerAPIGatewayProxyRoutes(app, ebs_fields.NoebsConfig{
-		DefaultTenantID:  "tenant_1",
+	err := registerAPIGatewayProxyRoutes(app, ebs_fields.NoebsConfig{
+		DefaultTenantID:  "tenant-1",
 		ServiceDiscovery: discovery,
-	}, gateway.JWTAuth{}, func(c *fiber.Ctx) error { return c.Next() }); err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodPost, "/consumer/login", strings.NewReader(`{"mobile":"0990000000"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Tenant-ID", "tenant_1")
-	response, err := app.Test(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusBadGateway {
-		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadGateway)
+	}, gatewayTestTenantCatalog(t))
+	if !errors.Is(err, workloadauth.ErrMissingSigner) {
+		t.Fatalf("registerAPIGatewayProxyRoutes() error = %v, want %v", err, workloadauth.ErrMissingSigner)
 	}
 	if hits.Load() != 0 {
 		t.Fatalf("upstream hits = %d", hits.Load())
+	}
+}
+
+func installGatewayOIDCVerifierForTest(t *testing.T) {
+	t.Helper()
+	previous := oidcVerifier
+	t.Cleanup(func() { oidcVerifier = previous })
+	if err := initOIDCVerifier(serviceRoleAPIGateway, ebs_fields.NoebsConfig{OIDC: validOIDCRuntimeConfig(), KeycloakCACertificate: testKeycloakCACertificate}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -405,7 +419,7 @@ func newSignedTestRequest(t *testing.T, caller, audience, method, target string,
 	req := httptest.NewRequest(method, target, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(workloadauth.HeaderRequestID, "request-"+strings.ReplaceAll(t.Name(), "/", "-"))
-	req.Header.Set(workloadauth.HeaderTenantID, "tenant_1")
+	req.Header.Set(workloadauth.HeaderTenantID, "tenant-1")
 	req.Header.Set(workloadauth.HeaderUserID, "42")
 	signers := newTestWorkloadSigners(t, caller, audience)
 	if err := signers.Sign(audience, req, body); err != nil {

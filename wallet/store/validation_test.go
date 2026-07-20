@@ -436,13 +436,13 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 	approvedAt := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
 	completedAt := approvedAt.Add(time.Hour)
 	pending := &ManualTransfer{
-		ID:          11,
-		Status:      ManualTransferStatusPending,
-		RequestedBy: sql.NullInt64{Int64: 7, Valid: true},
+		ID:                    11,
+		Status:                ManualTransferStatusPending,
+		RequestedByOperatorID: 7,
 	}
 	approved := *pending
 	approved.Status = ManualTransferStatusApproved
-	approved.ApprovedBy = sql.NullInt64{Int64: 42, Valid: true}
+	approved.ApprovedByOperatorID = sql.NullInt64{Int64: 42, Valid: true}
 	approved.ApprovedAt = sql.NullTime{Time: approvedAt, Valid: true}
 	approved.ProofOfPayment = sql.NullString{String: "receipt", Valid: true}
 	rejected := *pending
@@ -453,10 +453,10 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 	completed.CompletedAt = sql.NullTime{Time: completedAt, Valid: true}
 
 	approvalUpdate := ManualTransferStatusUpdate{
-		Status:         ManualTransferStatusApproved,
-		ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
-		ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-		ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+		Status:               ManualTransferStatusApproved,
+		ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+		ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
+		ProofOfPayment:       sql.NullString{String: "receipt", Valid: true},
 	}
 	rejectionUpdate := ManualTransferStatusUpdate{
 		Status:          ManualTransferStatusRejected,
@@ -497,10 +497,10 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "approve self approval",
 			current: pending,
 			update: ManualTransferStatusUpdate{
-				Status:         ManualTransferStatusApproved,
-				ApprovedBy:     sql.NullInt64{Int64: 7, Valid: true},
-				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+				Status:               ManualTransferStatusApproved,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 7, Valid: true},
+				ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment:       sql.NullString{String: "receipt", Valid: true},
 			},
 			wantErr: ErrApproverIsRequester,
 		},
@@ -508,9 +508,9 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "approve missing approved at",
 			current: pending,
 			update: ManualTransferStatusUpdate{
-				Status:         ManualTransferStatusApproved,
-				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
-				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+				Status:               ManualTransferStatusApproved,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+				ProofOfPayment:       sql.NullString{String: "receipt", Valid: true},
 			},
 			wantErr: ErrMissingApprovalTime,
 		},
@@ -518,9 +518,9 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "approve missing proof",
 			current: pending,
 			update: ManualTransferStatusUpdate{
-				Status:     ManualTransferStatusApproved,
-				ApprovedBy: sql.NullInt64{Int64: 42, Valid: true},
-				ApprovedAt: sql.NullTime{Time: approvedAt, Valid: true},
+				Status:               ManualTransferStatusApproved,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
 			},
 			wantErr: ErrMissingProofOfPayment,
 		},
@@ -528,11 +528,11 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "approve cannot complete",
 			current: pending,
 			update: ManualTransferStatusUpdate{
-				Status:         ManualTransferStatusApproved,
-				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
-				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-				CompletedAt:    sql.NullTime{Time: completedAt, Valid: true},
-				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+				Status:               ManualTransferStatusApproved,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
+				CompletedAt:          sql.NullTime{Time: completedAt, Valid: true},
+				ProofOfPayment:       sql.NullString{String: "receipt", Valid: true},
 			},
 			wantErr: ErrInvalidStatus,
 		},
@@ -540,10 +540,10 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "approve replay mismatch",
 			current: &approved,
 			update: ManualTransferStatusUpdate{
-				Status:         ManualTransferStatusApproved,
-				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
-				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-				ProofOfPayment: sql.NullString{String: "other receipt", Valid: true},
+				Status:               ManualTransferStatusApproved,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment:       sql.NullString{String: "other receipt", Valid: true},
 			},
 			wantErr: ErrInvalidStatusTransition,
 		},
@@ -567,9 +567,9 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "reject cannot approve",
 			current: pending,
 			update: ManualTransferStatusUpdate{
-				Status:          ManualTransferStatusRejected,
-				ApprovedBy:      sql.NullInt64{Int64: 42, Valid: true},
-				RejectionReason: sql.NullString{String: "missing documents", Valid: true},
+				Status:               ManualTransferStatusRejected,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+				RejectionReason:      sql.NullString{String: "missing documents", Valid: true},
 			},
 			wantErr: ErrInvalidStatus,
 		},
@@ -607,8 +607,8 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 		{
 			name: "complete without approval evidence",
 			current: &ManualTransfer{
-				Status:      ManualTransferStatusApproved,
-				RequestedBy: sql.NullInt64{Int64: 7, Valid: true},
+				Status:                ManualTransferStatusApproved,
+				RequestedByOperatorID: 7,
 			},
 			update:  completionUpdate,
 			wantErr: ErrMissingApproverID,
@@ -624,9 +624,9 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 		{
 			name: "current pending has approval evidence",
 			current: &ManualTransfer{
-				Status:         ManualTransferStatusPending,
-				RequestedBy:    sql.NullInt64{Int64: 7, Valid: true},
-				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+				Status:                ManualTransferStatusPending,
+				RequestedByOperatorID: 7,
+				ProofOfPayment:        sql.NullString{String: "receipt", Valid: true},
 			},
 			update:  approvalUpdate,
 			wantErr: ErrInvalidStatus,
@@ -634,10 +634,10 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 		{
 			name: "current rejected has approval evidence",
 			current: &ManualTransfer{
-				Status:          ManualTransferStatusRejected,
-				RequestedBy:     sql.NullInt64{Int64: 7, Valid: true},
-				ApprovedBy:      sql.NullInt64{Int64: 42, Valid: true},
-				RejectionReason: sql.NullString{String: "missing documents", Valid: true},
+				Status:                ManualTransferStatusRejected,
+				RequestedByOperatorID: 7,
+				ApprovedByOperatorID:  sql.NullInt64{Int64: 42, Valid: true},
+				RejectionReason:       sql.NullString{String: "missing documents", Valid: true},
 			},
 			update:  rejectionUpdate,
 			wantErr: ErrInvalidStatus,
@@ -645,11 +645,11 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 		{
 			name: "current completed missing completed at",
 			current: &ManualTransfer{
-				Status:         ManualTransferStatusCompleted,
-				RequestedBy:    sql.NullInt64{Int64: 7, Valid: true},
-				ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
-				ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-				ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+				Status:                ManualTransferStatusCompleted,
+				RequestedByOperatorID: 7,
+				ApprovedByOperatorID:  sql.NullInt64{Int64: 42, Valid: true},
+				ApprovedAt:            sql.NullTime{Time: approvedAt, Valid: true},
+				ProofOfPayment:        sql.NullString{String: "receipt", Valid: true},
 			},
 			update:  completionUpdate,
 			wantErr: ErrMissingCompletionTime,
@@ -658,9 +658,9 @@ func TestValidateManualTransferStatusTransition(t *testing.T) {
 			name:    "complete with approval rewrite",
 			current: &approved,
 			update: ManualTransferStatusUpdate{
-				Status:      ManualTransferStatusCompleted,
-				ApprovedBy:  sql.NullInt64{Int64: 99, Valid: true},
-				CompletedAt: sql.NullTime{Time: completedAt, Valid: true},
+				Status:               ManualTransferStatusCompleted,
+				ApprovedByOperatorID: sql.NullInt64{Int64: 99, Valid: true},
+				CompletedAt:          sql.NullTime{Time: completedAt, Valid: true},
 			},
 			wantErr: ErrInvalidStatus,
 		},
@@ -704,18 +704,18 @@ func TestMergeManualTransferStatusUpdatePreservesApprovalEvidence(t *testing.T) 
 	approvedAt := time.Date(2026, time.May, 31, 12, 0, 0, 0, time.UTC)
 	completedAt := approvedAt.Add(time.Hour)
 	current := &ManualTransfer{
-		Status:         ManualTransferStatusApproved,
-		ApprovedBy:     sql.NullInt64{Int64: 42, Valid: true},
-		ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-		ProofOfPayment: sql.NullString{String: "receipt", Valid: true},
+		Status:               ManualTransferStatusApproved,
+		ApprovedByOperatorID: sql.NullInt64{Int64: 42, Valid: true},
+		ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
+		ProofOfPayment:       sql.NullString{String: "receipt", Valid: true},
 	}
 	merged := mergeManualTransferStatusUpdate(current, ManualTransferStatusUpdate{
 		Status:      ManualTransferStatusCompleted,
 		CompletedAt: sql.NullTime{Time: completedAt, Valid: true},
 	})
 
-	if merged.ApprovedBy != current.ApprovedBy {
-		t.Fatalf("approved_by = %+v, want %+v", merged.ApprovedBy, current.ApprovedBy)
+	if merged.ApprovedByOperatorID != current.ApprovedByOperatorID {
+		t.Fatalf("approved_by = %+v, want %+v", merged.ApprovedByOperatorID, current.ApprovedByOperatorID)
 	}
 	if !sameManualTransferNullTime(merged.ApprovedAt, current.ApprovedAt) {
 		t.Fatalf("approved_at = %+v, want %+v", merged.ApprovedAt, current.ApprovedAt)
@@ -728,25 +728,19 @@ func TestMergeManualTransferStatusUpdatePreservesApprovalEvidence(t *testing.T) 
 	}
 }
 
-func TestGetManualTransferByWorkflowIDValidation(t *testing.T) {
-	s := &Store{}
-	_, err := s.GetManualTransferByWorkflowID(t.Context(), "")
-	assertErrorIs(t, err, ErrMissingWorkflowID)
-}
-
 func TestCreateManualTransferValidation(t *testing.T) {
 	s := &Store{}
 	transfer := ManualTransfer{
-		TenantID:       "tenant",
-		WorkflowID:     "wf-1",
-		IdempotencyKey: "idem-1",
-		TransferType:   ManualTransferTypeDebit,
-		WalletID:       sql.NullString{String: uuid.NewString(), Valid: true},
-		Amount:         100,
-		Currency:       "USD",
-		Reason:         "withdrawal",
-		Status:         "pending",
-		RequestedBy:    sql.NullInt64{Int64: 42, Valid: true},
+		TenantID:              "tenant",
+		WorkflowID:            "wf-1",
+		IdempotencyKey:        "idem-1",
+		TransferType:          ManualTransferTypeDebit,
+		WalletID:              sql.NullString{String: uuid.NewString(), Valid: true},
+		Amount:                100,
+		Currency:              "USD",
+		Reason:                "withdrawal",
+		Status:                "pending",
+		RequestedByOperatorID: 42,
 	}
 
 	_, err := s.CreateManualTransfer(t.Context(), ManualTransfer{})
@@ -808,7 +802,7 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidStatus)
 
 	bad = transfer
-	bad.ApprovedBy = sql.NullInt64{Int64: 2, Valid: true}
+	bad.ApprovedByOperatorID = sql.NullInt64{Int64: 2, Valid: true}
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidStatus)
 
@@ -828,25 +822,25 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingWalletID)
 
 	bad = transfer
-	bad.RequestedBy = sql.NullInt64{}
+	bad.RequestedByOperatorID = 0
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingRequesterID)
 }
 
 func TestValidateManualTransferCreateReplay(t *testing.T) {
 	requested := ManualTransfer{
-		TenantID:       "tenant",
-		WorkflowID:     "wf-1",
-		IdempotencyKey: "idem-1",
-		TransferType:   ManualTransferTypeDebit,
-		WalletID:       sql.NullString{String: uuid.NewString(), Valid: true},
-		Amount:         100,
-		Currency:       "USD",
-		Reason:         "withdrawal",
-		Status:         ManualTransferStatusPending,
-		RequestedBy:    sql.NullInt64{Int64: 42, Valid: true},
-		PSPProvider:    sql.NullString{String: "bank", Valid: true},
-		PSPReference:   sql.NullString{String: "ref-1", Valid: true},
+		TenantID:              "tenant",
+		WorkflowID:            "wf-1",
+		IdempotencyKey:        "idem-1",
+		TransferType:          ManualTransferTypeDebit,
+		WalletID:              sql.NullString{String: uuid.NewString(), Valid: true},
+		Amount:                100,
+		Currency:              "USD",
+		Reason:                "withdrawal",
+		Status:                ManualTransferStatusPending,
+		RequestedByOperatorID: 42,
+		PSPProvider:           sql.NullString{String: "bank", Valid: true},
+		PSPReference:          sql.NullString{String: "ref-1", Valid: true},
 	}
 	existing := requested
 	existing.Status = ManualTransferStatusCompleted
@@ -866,7 +860,7 @@ func TestValidateManualTransferCreateReplay(t *testing.T) {
 		{"amount", func(t *ManualTransfer) { t.Amount++ }},
 		{"currency", func(t *ManualTransfer) { t.Currency = "AED" }},
 		{"reason", func(t *ManualTransfer) { t.Reason = "other" }},
-		{"requested-by", func(t *ManualTransfer) { t.RequestedBy = sql.NullInt64{Int64: 99, Valid: true} }},
+		{"requested-by", func(t *ManualTransfer) { t.RequestedByOperatorID = 99 }},
 		{"psp-provider", func(t *ManualTransfer) { t.PSPProvider = sql.NullString{String: "other", Valid: true} }},
 		{"psp-reference", func(t *ManualTransfer) { t.PSPReference = sql.NullString{String: "other", Valid: true} }},
 	}
@@ -888,16 +882,12 @@ func TestValidateManualTransferCreateTarget(t *testing.T) {
 		Currency: "USD",
 		Status:   WalletStatusActive,
 	}
-	requester := &AdminUser{
-		ID:       42,
-		TenantID: "tenant",
-		IsActive: true,
-	}
+	requester := &OperatorIdentity{ID: 42, Issuer: "https://identity.example/realms/noebs", Subject: "requester"}
 	transfer := ManualTransfer{
-		TenantID:    "tenant",
-		WalletID:    sql.NullString{String: walletID.String(), Valid: true},
-		Currency:    "USD",
-		RequestedBy: sql.NullInt64{Int64: requester.ID, Valid: true},
+		TenantID:              "tenant",
+		WalletID:              sql.NullString{String: walletID.String(), Valid: true},
+		Currency:              "USD",
+		RequestedByOperatorID: requester.ID,
 	}
 	if err := ValidateManualTransferCreateTarget(wallet, requester, transfer); err != nil {
 		t.Fatalf("ValidateManualTransferCreateTarget() error = %v", err)
@@ -919,33 +909,25 @@ func TestValidateManualTransferCreateTarget(t *testing.T) {
 	otherCurrency.Currency = "AED"
 	assertErrorIs(t, ValidateManualTransferCreateTarget(&otherCurrency, requester, transfer), ErrCurrencyMismatch)
 
-	foreignRequester := *requester
-	foreignRequester.TenantID = "other"
-	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &foreignRequester, transfer), ErrAdminUserNotFound)
-
 	otherRequester := *requester
 	otherRequester.ID = 99
-	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &otherRequester, transfer), ErrAdminUserNotFound)
-
-	inactiveRequester := *requester
-	inactiveRequester.IsActive = false
-	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &inactiveRequester, transfer), ErrAdminUserNotFound)
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, &otherRequester, transfer), ErrOperatorIdentityNotFound)
 
 	missingRequester := transfer
-	missingRequester.RequestedBy = sql.NullInt64{}
+	missingRequester.RequestedByOperatorID = 0
 	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, requester, missingRequester), ErrMissingRequesterID)
 
 	assertErrorIs(t, ValidateManualTransferCreateTarget(nil, requester, transfer), ErrWalletNotFound)
-	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, nil, transfer), ErrAdminUserNotFound)
+	assertErrorIs(t, ValidateManualTransferCreateTarget(wallet, nil, transfer), ErrOperatorIdentityNotFound)
 }
 
 func TestAddManualTransferApprovalValidation(t *testing.T) {
 	s := &Store{}
 	approval := ManualTransferApproval{
-		TenantID:         "tenant",
-		ManualTransferID: 1,
-		ApproverID:       2,
-		Decision:         "approved",
+		TenantID:            "tenant",
+		ManualTransferID:    1,
+		DecidedByOperatorID: 2,
+		Decision:            "approved",
 	}
 
 	_, err := s.AddManualTransferApproval(t.Context(), ManualTransferApproval{})
@@ -962,7 +944,7 @@ func TestAddManualTransferApprovalValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingManualTransferID)
 
 	bad = approval
-	bad.ApproverID = 0
+	bad.DecidedByOperatorID = 0
 	_, err = s.AddManualTransferApproval(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingApproverID)
 
@@ -979,11 +961,11 @@ func TestAddManualTransferApprovalValidation(t *testing.T) {
 
 func TestValidateManualTransferApprovalReplay(t *testing.T) {
 	requested := ManualTransferApproval{
-		TenantID:         "tenant",
-		ManualTransferID: 1,
-		ApproverID:       42,
-		Decision:         ManualTransferStatusApproved,
-		Reason:           sql.NullString{String: "ok", Valid: true},
+		TenantID:            "tenant",
+		ManualTransferID:    1,
+		DecidedByOperatorID: 42,
+		Decision:            ManualTransferStatusApproved,
+		Reason:              sql.NullString{String: "ok", Valid: true},
 	}
 	if err := ValidateManualTransferApprovalReplay(&requested, requested); err != nil {
 		t.Fatalf("ValidateManualTransferApprovalReplay() error = %v", err)
@@ -995,7 +977,7 @@ func TestValidateManualTransferApprovalReplay(t *testing.T) {
 	}{
 		{"tenant", func(a *ManualTransferApproval) { a.TenantID = "other" }},
 		{"transfer", func(a *ManualTransferApproval) { a.ManualTransferID = 2 }},
-		{"approver", func(a *ManualTransferApproval) { a.ApproverID = 99 }},
+		{"approver", func(a *ManualTransferApproval) { a.DecidedByOperatorID = 99 }},
 		{"decision", func(a *ManualTransferApproval) { a.Decision = ManualTransferStatusRejected }},
 		{"reason", func(a *ManualTransferApproval) { a.Reason = sql.NullString{String: "other", Valid: true} }},
 	}
@@ -1011,21 +993,17 @@ func TestValidateManualTransferApprovalReplay(t *testing.T) {
 
 func TestValidateManualTransferApprovalTarget(t *testing.T) {
 	transfer := &ManualTransfer{
-		ID:          11,
-		TenantID:    "tenant",
-		Status:      ManualTransferStatusPending,
-		RequestedBy: sql.NullInt64{Int64: 7, Valid: true},
+		ID:                    11,
+		TenantID:              "tenant",
+		Status:                ManualTransferStatusPending,
+		RequestedByOperatorID: 7,
 	}
-	approver := &AdminUser{
-		ID:       42,
-		TenantID: "tenant",
-		IsActive: true,
-	}
+	approver := &OperatorIdentity{ID: 42, Issuer: "https://identity.example/realms/noebs", Subject: "approver"}
 	approval := ManualTransferApproval{
-		TenantID:         "tenant",
-		ManualTransferID: 11,
-		ApproverID:       42,
-		Decision:         ManualTransferStatusApproved,
+		TenantID:            "tenant",
+		ManualTransferID:    11,
+		DecidedByOperatorID: 42,
+		Decision:            ManualTransferStatusApproved,
 	}
 	if err := ValidateManualTransferApprovalTarget(transfer, approver, approval); err != nil {
 		t.Fatalf("ValidateManualTransferApprovalTarget() error = %v", err)
@@ -1039,26 +1017,18 @@ func TestValidateManualTransferApprovalTarget(t *testing.T) {
 	otherTransfer.ID = 12
 	assertErrorIs(t, ValidateManualTransferApprovalTarget(&otherTransfer, approver, approval), ErrManualTransferNotFound)
 
-	foreignApprover := *approver
-	foreignApprover.TenantID = "other"
-	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, &foreignApprover, approval), ErrAdminUserNotFound)
-
-	inactiveApprover := *approver
-	inactiveApprover.IsActive = false
-	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, &inactiveApprover, approval), ErrAdminUserNotFound)
-
 	terminalTransfer := *transfer
 	terminalTransfer.Status = ManualTransferStatusApproved
 	assertErrorIs(t, ValidateManualTransferApprovalTarget(&terminalTransfer, approver, approval), ErrInvalidStatusTransition)
 
 	selfApproval := approval
-	selfApproval.ApproverID = transfer.RequestedBy.Int64
+	selfApproval.DecidedByOperatorID = transfer.RequestedByOperatorID
 	requester := *approver
-	requester.ID = transfer.RequestedBy.Int64
+	requester.ID = transfer.RequestedByOperatorID
 	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, &requester, selfApproval), ErrApproverIsRequester)
 
 	assertErrorIs(t, ValidateManualTransferApprovalTarget(nil, approver, approval), ErrManualTransferNotFound)
-	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, nil, approval), ErrAdminUserNotFound)
+	assertErrorIs(t, ValidateManualTransferApprovalTarget(transfer, nil, approval), ErrOperatorIdentityNotFound)
 }
 
 func TestGetManualTransferByWorkflowValidation(t *testing.T) {
@@ -2465,14 +2435,15 @@ func TestGetFeeConfigForAmountValidation(t *testing.T) {
 func TestCreateFeeConfigValidation(t *testing.T) {
 	s := &Store{}
 	cfg := FeeConfig{
-		TenantID:        "tenant",
-		TransactionType: "deposit",
-		Currency:        "USD",
-		TierMin:         0,
-		PercentageFee:   decimal.NewFromFloat(1.5),
-		FlatFee:         0,
-		MinFee:          0,
-		IsActive:        true,
+		TenantID:            "tenant",
+		TransactionType:     "deposit",
+		Currency:            "USD",
+		TierMin:             0,
+		PercentageFee:       decimal.NewFromFloat(1.5),
+		FlatFee:             0,
+		MinFee:              0,
+		IsActive:            true,
+		CreatedByOperatorID: 1,
 	}
 
 	_, err := s.CreateFeeConfig(t.Context(), FeeConfig{})
@@ -2502,6 +2473,11 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 	bad.PercentageFee = decimal.NewFromFloat(-1)
 	_, err = s.CreateFeeConfig(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidPercentage)
+
+	bad = cfg
+	bad.CreatedByOperatorID = 0
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingOperatorID)
 }
 
 func TestGetLimitsValidation(t *testing.T) {
@@ -2585,13 +2561,13 @@ func TestGetActiveRateValidation(t *testing.T) {
 func TestCreateExchangeRateValidation(t *testing.T) {
 	s := &Store{}
 	rate := ExchangeRate{
-		TenantID:      "tenant",
-		BaseCurrency:  "USD",
-		QuoteCurrency: "EUR",
-		BuyRate:       decimal.NewFromFloat(1.1),
-		SellRate:      decimal.NewFromFloat(1.2),
-		SetBy:         "admin",
-		EffectiveFrom: time.Now().UTC(),
+		TenantID:        "tenant",
+		BaseCurrency:    "USD",
+		QuoteCurrency:   "EUR",
+		BuyRate:         decimal.NewFromFloat(1.1),
+		SellRate:        decimal.NewFromFloat(1.2),
+		SetByOperatorID: 1,
+		EffectiveFrom:   time.Now().UTC(),
 	}
 
 	_, err := s.CreateExchangeRate(t.Context(), ExchangeRate{})
@@ -2613,9 +2589,9 @@ func TestCreateExchangeRateValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingQuoteCurrency)
 
 	bad = rate
-	bad.SetBy = ""
+	bad.SetByOperatorID = 0
 	_, err = s.CreateExchangeRate(t.Context(), bad)
-	assertErrorIs(t, err, ErrMissingSetBy)
+	assertErrorIs(t, err, ErrMissingOperatorID)
 
 	bad = rate
 	bad.EffectiveFrom = time.Time{}
@@ -3036,25 +3012,18 @@ func TestUserTwoFAValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingUsageTime)
 }
 
-func TestAdminLookupValidation(t *testing.T) {
+func TestOperatorIdentityValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.GetAdminRoleByName(t.Context(), "", "owner")
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.GetAdminRoleByName(t.Context(), "default", "owner")
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.GetAdminRoleByName(t.Context(), "tenant", "")
-	assertErrorIs(t, err, ErrMissingRoleName)
-
-	_, err = s.GetAdminUserByEmail(t.Context(), "", "admin@example.test")
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.GetAdminUserByEmail(t.Context(), "default", "admin@example.test")
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.GetAdminUserByEmail(t.Context(), "tenant", "")
-	assertErrorIs(t, err, ErrMissingAdminEmail)
+	_, err := s.GetOperatorIdentity(t.Context(), "", "subject")
+	assertErrorIs(t, err, ErrMissingOperatorIssuer)
+	_, err = s.GetOperatorIdentity(t.Context(), " https://identity.example ", "subject")
+	assertErrorIs(t, err, ErrInvalidOperatorIssuer)
+	_, err = s.GetOperatorIdentity(t.Context(), "https://identity.example", "")
+	assertErrorIs(t, err, ErrMissingOperatorSubject)
+	_, err = s.GetOperatorIdentity(t.Context(), "https://identity.example", " subject ")
+	assertErrorIs(t, err, ErrInvalidOperatorSubject)
+	_, err = s.GetOperatorIdentityByID(t.Context(), 0)
+	assertErrorIs(t, err, ErrMissingOperatorID)
 }
 
 func TestGetPSPConfigOverrideValidation(t *testing.T) {

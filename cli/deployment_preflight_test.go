@@ -1,11 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/store"
 	"gopkg.in/yaml.v3"
@@ -78,7 +80,7 @@ func TestValidateDeploymentRootRejectsMissingDockerServiceConfig(t *testing.T) {
 func TestValidateDeploymentRootRejectsUnexpectedDockerServiceSecret(t *testing.T) {
 	root := writePreflightRoot(t, preflightRootOptions{})
 	writePreflightFile(t, root, "deploy/docker/secrets/monolith.secrets.yaml", `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-cutover
 `)
 
 	err := validateDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
@@ -110,68 +112,11 @@ func TestValidateDeploymentRootRejectsPlaceholders(t *testing.T) {
 	}
 }
 
-func TestValidateReleaseSMSGateway(t *testing.T) {
-	tests := []struct {
-		name    string
-		gateway string
-		wantErr string
-	}{
-		{name: "clean endpoint", gateway: "https://sms-gateway.noebs.sd/send"},
-		{name: "query start", gateway: "https://sms-gateway.noebs.sd/send?"},
-		{name: "existing query", gateway: "https://sms-gateway.noebs.sd/send?version=1"},
-		{name: "http", gateway: "http://sms-gateway.noebs.sd/send?", wantErr: "must use https"},
-		{name: "reserved invalid", gateway: "https://dummy-sms.invalid/send?", wantErr: "reserved for non-production use"},
-		{name: "reserved example", gateway: "https://sms.example/send?", wantErr: "reserved for non-production use"},
-		{name: "placeholder label", gateway: "https://placeholder.sms-provider.net/send?", wantErr: "placeholder label"},
-		{name: "replacement marker", gateway: "https://sms-provider.net/REPLACE_WITH_PATH?", wantErr: "contains a placeholder"},
-		{name: "malformed query", gateway: "https://sms-provider.net/send?version=%zz", wantErr: "parse"},
-		{name: "credential collision", gateway: "https://sms-provider.net/send?api_key=existing", wantErr: "must not predefine dynamic api_key"},
-		{name: "user info", gateway: "https://user@sms-provider.net/send?", wantErr: "must not contain user info"},
-		{name: "fragment", gateway: "https://sms-provider.net/send?#fragment", wantErr: "must not contain a fragment"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateReleaseSMSGateway(tt.gateway)
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("validateReleaseSMSGateway() error = %v", err)
-				}
-				return
-			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("validateReleaseSMSGateway() error = %v, want %q", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestValidateKubernetesDeploymentRootAcceptsMountedInputs(t *testing.T) {
 	root := writeKubernetesSecretReleaseRoot(t)
 
 	if err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret); err != nil {
 		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v", err)
-	}
-}
-
-func TestValidateKubernetesDeploymentRootRejectsDummySMSGateway(t *testing.T) {
-	root := writeKubernetesSecretReleaseRoot(t)
-	path := filepath.Join(root, "secrets", "identity-auth.secrets.yaml")
-	payload, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read identity-auth secrets: %v", err)
-	}
-	payload = []byte(strings.ReplaceAll(
-		string(payload),
-		`https://sms-gateway.noebs.sd/send?`,
-		`https://dummy-sms.invalid/send?`,
-	))
-	if err := os.WriteFile(path, payload, 0o600); err != nil {
-		t.Fatalf("write identity-auth secrets: %v", err)
-	}
-
-	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
-	if err == nil || !strings.Contains(err.Error(), "identity-auth sms_gateway") || !strings.Contains(err.Error(), "reserved for non-production use") {
-		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want dummy SMS gateway rejection", err)
 	}
 }
 
@@ -277,6 +222,117 @@ func TestValidateKubernetesDeploymentRootRejectsUnexpectedSOPSFile(t *testing.T)
 	}
 }
 
+func TestValidateKubernetesDeploymentRootRejectsSplicedKeycloakDatabaseCredential(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	path := filepath.Join(root, "platform", "keycloak.conf")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload = []byte(strings.Replace(string(payload), "db-password=keycloak-postgres-password", "db-password=another-valid-password", 1))
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatal(err)
+	}
+
+	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "does not match the release credential") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want credential coherence rejection", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsSplicedKeycloakPostgresIdentity(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	path := filepath.Join(root, "platform", "internal-transport.secrets.yaml")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var credentials internalTransportPlatformCredentials
+	if err := yaml.Unmarshal(payload, &credentials); err != nil {
+		t.Fatal(err)
+	}
+	credentials.KeycloakPostgresCertificate = credentials.PostgresCertificate
+	credentials.KeycloakPostgresPrivateKey = credentials.PostgresPrivateKey
+	payload, err = yaml.Marshal(credentials)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "validate Keycloak Postgres transport identity") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want Keycloak Postgres identity rejection", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsSplicedBackofficeCredential(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	setNoebsSecretField(t, filepath.Join(root, "secrets", "api-gateway.secrets.yaml"), "backoffice_client_secret", testCanonicalReleaseSecret(9))
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatal(err)
+	}
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "does not match the Keycloak managed credential") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want back-office credential coherence rejection", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsSplicedGatewayRoleCredential(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	setNoebsSecretField(t, filepath.Join(root, "secrets", "api-gateway.secrets.yaml"), "service_databases", map[string]interface{}{
+		"api-gateway": gatewayAuthDatabaseURL("gateway_auth_runtime", testCanonicalReleaseSecret(9)),
+	})
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatal(err)
+	}
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "does not match its release role credential") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want gateway role credential coherence rejection", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootRejectsTenantOutsideCatalog(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	setNoebsSecretField(t, filepath.Join(root, "secrets", "wallet-api.secrets.yaml"), "default_tenant_id", "tenant-unknown")
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatal(err)
+	}
+
+	err := validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "unknown tenant") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want catalog membership rejection", err)
+	}
+}
+
+func TestValidateKubernetesDeploymentRootConstructsBackofficeOIDCRuntime(t *testing.T) {
+	root := writeKubernetesSecretReleaseRoot(t)
+	path := filepath.Join(root, "config.yaml")
+	config := readYAMLMapFileMust(t, path)
+	getMap(config, "noebs")["backoffice_redirect_url"] = "https://api.noebs.sd/wrong-callback"
+	payload, err := yaml.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeKubernetesReleaseManifest(root); err != nil {
+		t.Fatal(err)
+	}
+
+	err = validateKubernetesDeploymentRootWithDecrypt(root, readPlainPreflightSecret)
+	if err == nil || !strings.Contains(err.Error(), "back-office OIDC runtime") {
+		t.Fatalf("validateKubernetesDeploymentRootWithDecrypt() error = %v, want constructed OIDC runtime rejection", err)
+	}
+}
+
 type preflightRootOptions struct {
 	defaultTenantID         string
 	omitEBSConsumerEndpoint bool
@@ -290,7 +346,7 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 	root := t.TempDir()
 	defaultTenantID := opts.defaultTenantID
 	if defaultTenantID == "" {
-		defaultTenantID = "tenant_1"
+		defaultTenantID = "tenant-cutover"
 	}
 	keycloakPassword := opts.keycloakPassword
 	if keycloakPassword == "" {
@@ -338,8 +394,27 @@ func writePreflightRoot(t *testing.T, opts preflightRootOptions) string {
 `)
 	writePreflightFile(t, root, "deploy/docker/temporal/postgres-password.txt", "temporal-postgres-password\n")
 	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-password.txt", keycloakPassword+"\n")
-	writePreflightFile(t, root, "deploy/docker/keycloak/keycloak.conf", `http-enabled=true
-http-port=8080
+	now := time.Now().UTC()
+	transport, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
+	if err != nil {
+		t.Fatalf("prepare Keycloak Postgres transport identity: %v", err)
+	}
+	keycloakPostgres := transport.platform["keycloak-postgres"]
+	keycloak := transport.platform["keycloak"]
+	writePreflightFile(t, root, "deploy/docker/keycloak/ca.pem", transport.caCertificate)
+	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-tls.crt", keycloakPostgres.Certificate)
+	writePreflightFile(t, root, "deploy/docker/keycloak/postgres-tls.key", keycloakPostgres.PrivateKey)
+	writePreflightFile(t, root, "deploy/docker/keycloak/tls.crt", keycloak.Certificate)
+	writePreflightFile(t, root, "deploy/docker/keycloak/tls.key", keycloak.PrivateKey)
+	writePreflightFile(t, root, "deploy/docker/keycloak/keycloak.conf", `http-enabled=false
+http-relative-path=/auth
+https-port=8443
+https-certificate-file=/opt/keycloak/conf/tls.crt
+https-certificate-key-file=/opt/keycloak/conf/tls.key
+https-protocols=TLSv1.3
+http-management-scheme=http
+http-management-port=9000
+http-management-relative-path=/
 hostname-strict=false
 proxy-headers=xforwarded
 health-enabled=true
@@ -349,6 +424,8 @@ db=postgres
 db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
 db-username=keycloak
 db-password=`+keycloakPassword+`
+db-tls-mode=verify-server
+db-tls-trust-store-file=/opt/keycloak/conf/db-ca.pem
 `)
 	return root
 }
@@ -364,6 +441,26 @@ func removeNoebsSecretField(t *testing.T, path, field string) {
 		t.Fatalf("parse %s: %v", path, err)
 	}
 	delete(getMap(document, "noebs"), field)
+	payload, err = yaml.Marshal(document)
+	if err != nil {
+		t.Fatalf("marshal %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, payload, 0o600); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func setNoebsSecretField(t *testing.T, path, field string, value interface{}) {
+	t.Helper()
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	var document map[string]interface{}
+	if err := yaml.Unmarshal(payload, &document); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	getMap(document, "noebs")[field] = value
 	payload, err = yaml.Marshal(document)
 	if err != nil {
 		t.Fatalf("marshal %s: %v", path, err)

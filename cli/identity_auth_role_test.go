@@ -6,207 +6,133 @@ import (
 	"testing"
 )
 
-func TestIdentityRoutesAreProxiedByAPIGateway(t *testing.T) {
-	ensureInit()
-	configureGatewayProxyForTest(t)
-	authorization := testAuthorizationHeader(t)
-	adminKey := setAdminKeyForTest(t)
-	route := GetMainEngine()
-
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "login", method: http.MethodPost, path: "/consumer/login"},
-		{name: "recovery request", method: http.MethodPost, path: "/consumer/recovery/request"},
-		{name: "recovery verify", method: http.MethodPost, path: "/consumer/recovery/verify"},
-		{name: "recovery reset", method: http.MethodPost, path: "/consumer/recovery/reset"},
-		{name: "oauth", method: http.MethodPost, path: "/consumer/auth/google"},
-		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
-		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
-		{name: "kyc", method: http.MethodPost, path: "/consumer/kyc"},
-		{name: "api key", method: http.MethodPost, path: "/generate_api_key"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
-			req.Header.Set("X-Tenant-ID", "test-tenant")
-			req.Header.Set("X-Admin-Key", adminKey)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			assertGatewayProxied(t, resp)
-		})
+func identityAuthActiveRoutes() []gatewayRouteExpectation {
+	return []gatewayRouteExpectation{
+		{method: http.MethodPost, path: "/consumer/auth/profile", auth: gatewayAuthMobilePrincipal},
+		{method: http.MethodPost, path: "/consumer/kyc", auth: gatewayAuthMobileUser},
+		{method: http.MethodGet, path: "/consumer/user", auth: gatewayAuthMobileUser},
+		{method: http.MethodPut, path: "/consumer/user", auth: gatewayAuthMobileUser},
+		{method: http.MethodGet, path: "/consumer/user/lang", auth: gatewayAuthMobileUser},
+		{method: http.MethodPut, path: "/consumer/user/lang", auth: gatewayAuthMobileUser},
+		{method: http.MethodPost, path: "/consumer/user/device", auth: gatewayAuthMobileUser},
 	}
 }
 
-func TestIdentityRoutesAreOwnedByIdentityAuth(t *testing.T) {
+func identityAuthRemovedRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "registration", method: http.MethodPost, path: "/consumer/register"},
+		{name: "login", method: http.MethodPost, path: "/consumer/login"},
+		{name: "refresh", method: http.MethodPost, path: "/consumer/refresh"},
+		{name: "OTP generation", method: http.MethodPost, path: "/consumer/otp/generate"},
+		{name: "OTP login", method: http.MethodPost, path: "/consumer/otp/login"},
+		{name: "OTP verification", method: http.MethodPost, path: "/consumer/otp/verify"},
+		{name: "insecure OTP generation", method: http.MethodPost, path: "/consumer/otp/generate_insecure"},
+		{name: "recovery request", method: http.MethodPost, path: "/consumer/recovery/request"},
+		{name: "recovery verification", method: http.MethodPost, path: "/consumer/recovery/verify"},
+		{name: "recovery reset", method: http.MethodPost, path: "/consumer/recovery/reset"},
+		{name: "Google auth", method: http.MethodPost, path: "/consumer/auth/google"},
+		{name: "mobile user lookup", method: http.MethodPost, path: "/consumer/check_user"},
+		{name: "profile completion", method: http.MethodPost, path: "/consumer/auth/complete_profile"},
+		{name: "local auth profile", method: http.MethodGet, path: "/consumer/auth/me"},
+		{name: "password change", method: http.MethodPost, path: "/consumer/change_password"},
+		{name: "API key", method: http.MethodPost, path: "/generate_api_key"},
+	}
+}
+
+func identityAuthRemovedInternalRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "completed card registration user", method: http.MethodPost, path: "/internal/identity-auth/card-registration/users"},
+		{name: "register-with-card identity", method: http.MethodPost, path: "/internal/identity-auth/register-with-card/users"},
+		{name: "recovery credential", method: http.MethodPost, path: "/internal/identity-auth/recovery-credential"},
+		{name: "session validation", method: http.MethodPost, path: "/internal/identity-auth/sessions/validate"},
+		{name: "user by mobile", method: http.MethodPost, path: "/internal/identity-auth/users/by-mobile"},
+		{name: "batch mobile resolution", method: http.MethodPost, path: "/internal/identity-auth/users/resolve-batch"},
+	}
+}
+
+func TestIdentityAuthGatewayCatalogIsExact(t *testing.T) {
+	assertGatewayRoleCatalogExact(t, serviceRoleIdentityAuth, identityAuthActiveRoutes())
+}
+
+func TestIdentityAuthActiveRoutesAreOwnedByIdentityAuth(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
-	route := GetMainEngine()
+	app := GetMainEngine()
 
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "login", method: http.MethodPost, path: "/consumer/login"},
-		{name: "recovery request", method: http.MethodPost, path: "/consumer/recovery/request"},
-		{name: "recovery verify", method: http.MethodPost, path: "/consumer/recovery/verify"},
-		{name: "recovery reset", method: http.MethodPost, path: "/consumer/recovery/reset"},
-		{name: "oauth", method: http.MethodPost, path: "/consumer/auth/google"},
-		{name: "profile", method: http.MethodGet, path: "/consumer/auth/me"},
-		{name: "device token", method: http.MethodPost, path: "/consumer/user/device"},
-		{name: "kyc", method: http.MethodPost, path: "/consumer/kyc"},
-		{name: "api key", method: http.MethodPost, path: "/generate_api_key"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusNotFound {
-				t.Fatalf("identity-auth did not register %s", tt.path)
-			}
+	for _, route := range identityAuthActiveRoutes() {
+		t.Run(route.method+" "+route.path, func(t *testing.T) {
+			assertFiberRoutePresent(t, app, route.method, route.path)
 		})
 	}
+	assertFiberRoutePresent(t, app, http.MethodPost, "/internal/identity-auth/principals/resolve")
 }
 
-func TestIdentityAuthKYCRejectsMissingGatewayIdentity(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleIdentityAuth)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodPost, "/consumer/kyc", nil)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-	}
-}
-
-func TestLegacyInsecureOTPRouteIsNotExposed(t *testing.T) {
-	ensureInit()
-	for _, spec := range gatewayProxyRouteSpecs() {
-		if spec.method == http.MethodPost && spec.path == "/consumer/otp/generate_insecure" {
-			t.Fatalf("%s must not be proxied by api-gateway", spec.path)
-		}
+func TestIdentityAuthRemovedRoutesAreAbsent(t *testing.T) {
+	for _, route := range identityAuthRemovedRoutes() {
+		assertGatewayCatalogAbsent(t, route.method, route.path)
 	}
 
 	tests := []struct {
 		name  string
 		setup func(*testing.T)
 	}{
-		{
-			name: "api gateway",
-			setup: func(t *testing.T) {
-				t.Helper()
-				configureGatewayProxyForTest(t)
-			},
-		},
-		{
-			name: "identity auth",
-			setup: func(t *testing.T) {
-				t.Helper()
-				setServiceRoleForTest(t, serviceRoleIdentityAuth)
-			},
-		},
+		{name: "gateway", setup: configureGatewayProxyForTest},
+		{name: "service", setup: func(t *testing.T) { setServiceRoleForTest(t, serviceRoleIdentityAuth) }},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setup(t)
-			route := GetMainEngine()
-			for _, registered := range route.GetRoutes(true) {
-				if registered.Method == http.MethodPost && registered.Path == "/consumer/otp/generate_insecure" {
-					t.Fatalf("%s registered by %s", registered.Path, tt.name)
-				}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ensureInit()
+			test.setup(t)
+			app := GetMainEngine()
+			for _, route := range identityAuthRemovedRoutes() {
+				t.Run(route.name, func(t *testing.T) {
+					assertFiberRouteAbsent(t, app, route)
+				})
 			}
 		})
 	}
 }
 
-func TestIdentityAuthOwnsCardRegistrationInternalCommand(t *testing.T) {
+func TestIdentityAuthRemovedInternalRoutesAreAbsent(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
-	route := GetMainEngine()
+	app := GetMainEngine()
 
-	tests := []struct {
-		name string
-		path string
-	}{
-		{name: "completed card registration user", path: "/internal/identity-auth/card-registration/users"},
-		{name: "register with card identity", path: "/internal/identity-auth/register-with-card/users"},
-		{name: "recovery credential", path: "/internal/identity-auth/recovery-credential"},
-		{name: "session validation", path: "/internal/identity-auth/sessions/validate"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
-			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			assertFiberRouteRegistered(t, resp, http.MethodPost, tt.path)
+	for _, route := range identityAuthRemovedInternalRoutes() {
+		t.Run(route.name, func(t *testing.T) {
+			assertFiberRouteAbsent(t, app, route)
 		})
 	}
 }
 
-func TestIdentityAuthDoesNotExposeMobileIdentityContracts(t *testing.T) {
+func TestIdentityAuthKYCRequiresGatewayUserIdentity(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
-	route := GetMainEngine()
-	retired := map[string]bool{
-		"/consumer/check_user":                        true,
-		"/internal/identity-auth/users/by-mobile":     true,
-		"/internal/identity-auth/users/resolve-batch": true,
+	app := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/consumer/kyc", nil)
+	resp, err := app.Test(req, routeTestTimeout)
+	if err != nil {
+		t.Fatalf("route.Test() error = %v", err)
 	}
-	for _, registered := range route.GetRoutes(true) {
-		if registered.Method == http.MethodPost && retired[registered.Path] {
-			t.Fatalf("identity-auth registered retired mobile identity route %s", registered.Path)
-		}
+	defer closeResponseBody(t, resp.Body)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
 	}
 }
 
 func TestIdentityAuthDoesNotOwnEBSOrCardRoutes(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleIdentityAuth)
-	route := GetMainEngine()
+	app := GetMainEngine()
 
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "ebs balance", method: http.MethodPost, path: "/consumer/balance"},
-		{name: "recovery balance", method: http.MethodPost, path: "/consumer/otp/balance"},
-		{name: "register with card", method: http.MethodPost, path: "/consumer/register_with_card"},
-		{name: "card list", method: http.MethodGet, path: "/consumer/get_cards"},
-		{name: "payment token", method: http.MethodPost, path: "/consumer/payment_token"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-			}
+	for _, route := range []roleRoute{
+		{name: "EBS balance", method: http.MethodPost, path: "/consumer/balance"},
+		{name: "EBS enrollment", method: http.MethodPost, path: "/consumer/cards/enrollment-intents"},
+		{name: "card list", method: http.MethodGet, path: "/consumer/cards"},
+	} {
+		t.Run(route.name, func(t *testing.T) {
+			assertFiberRouteAbsent(t, app, route)
 		})
 	}
 }

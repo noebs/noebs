@@ -23,8 +23,6 @@ var (
 	errGRPCNotEnabled      = errors.New("grpc_enabled required for service role")
 	errMissingGRPCPort     = errors.New("missing noebs.grpc_port")
 	errMissingGRPCGateway  = errors.New("missing noebs.grpc_gateway_port")
-	errMissingGatewayAuth  = errors.New("missing api-gateway auth runtime config")
-	errMissingIdentityAuth = errors.New("missing identity-auth runtime config")
 	errInvalidWalletConfig = errors.New("invalid wallet runtime config")
 	errMissingEBSConfig    = errors.New("missing ebs-adapter runtime config")
 	errLegacyEBSConfig     = errors.New("legacy ebs-adapter runtime selector not allowed")
@@ -43,12 +41,13 @@ const (
 	serviceRoleAdminReporting          serviceRole = "admin-reporting"
 	serviceRoleAdminReportingProjector serviceRole = "admin-reporting-projector"
 	serviceRoleNotification            serviceRole = "notification-chat"
-	serviceRoleBeneficiary             serviceRole = "consumer-beneficiary"
 	serviceRoleWalletAPI               serviceRole = "wallet-api"
 	serviceRoleWalletLedger            serviceRole = "wallet-ledger"
 	serviceRoleWalletWorker            serviceRole = "wallet-worker"
 	serviceRoleWorkloadAuthMigrate     serviceRole = "workload-auth-migrate"
 	serviceRoleWorkloadAuthCleanup     serviceRole = "workload-auth-cleanup"
+	serviceRoleGatewayAuthMigrate      serviceRole = "gateway-auth-migrate"
+	serviceRoleGatewayAuthCleanup      serviceRole = "gateway-auth-cleanup"
 
 	serviceRoleIdentityAuthMigrate   serviceRole = "identity-auth-migrate"
 	serviceRoleCardVaultMigrate      serviceRole = "card-vault-migrate"
@@ -56,7 +55,6 @@ const (
 	serviceRolePSPWebhookMigrate     serviceRole = "psp-webhook-migrate"
 	serviceRoleAdminReportingMigrate serviceRole = "admin-reporting-migrate"
 	serviceRoleNotificationMigrate   serviceRole = "notification-chat-migrate"
-	serviceRoleBeneficiaryMigrate    serviceRole = "consumer-beneficiary-migrate"
 	serviceRoleWalletLedgerMigrate   serviceRole = "wallet-ledger-migrate"
 )
 
@@ -78,19 +76,19 @@ func parseServiceRole(value string) (serviceRole, error) {
 		serviceRoleAdminReporting,
 		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
 		serviceRoleWorkloadAuthMigrate,
 		serviceRoleWorkloadAuthCleanup,
+		serviceRoleGatewayAuthMigrate,
+		serviceRoleGatewayAuthCleanup,
 		serviceRoleIdentityAuthMigrate,
 		serviceRoleCardVaultMigrate,
 		serviceRoleEBSAdapterMigrate,
 		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
-		serviceRoleBeneficiaryMigrate,
 		serviceRoleWalletLedgerMigrate:
 		return role, nil
 	default:
@@ -99,7 +97,7 @@ func parseServiceRole(value string) (serviceRole, error) {
 }
 
 func (r serviceRole) startsHTTP() bool {
-	return r == serviceRoleAPIGateway || r == serviceRoleIdentityAuth || r == serviceRoleCardVault || r == serviceRoleEBSAdapter || r == serviceRolePSPWebhook || r == serviceRoleAdminReporting || r == serviceRoleNotification || r == serviceRoleBeneficiary || r == serviceRoleWalletAPI
+	return r == serviceRoleAPIGateway || r == serviceRoleIdentityAuth || r == serviceRoleCardVault || r == serviceRoleEBSAdapter || r == serviceRolePSPWebhook || r == serviceRoleAdminReporting || r == serviceRoleNotification || r == serviceRoleWalletAPI
 }
 
 func (r serviceRole) startsGRPC() bool {
@@ -128,6 +126,10 @@ func (r serviceRole) startsChat() bool {
 
 func (r serviceRole) cleansWorkloadAuthNonces() bool {
 	return r == serviceRoleWorkloadAuthCleanup
+}
+
+func (r serviceRole) cleansGatewayAuthSessions() bool {
+	return r == serviceRoleGatewayAuthCleanup
 }
 
 func (r serviceRole) opensDatabase() bool {
@@ -169,14 +171,18 @@ func validateRoleRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) err
 	if err := validateOTelRuntimeConfig(role, cfg); err != nil {
 		return err
 	}
+	if role == serviceRoleAPIGateway {
+		if err := validateBackofficeRuntimeConfig(cfg); err != nil {
+			return fmt.Errorf("back-office OIDC runtime: %w", err)
+		}
+		if err := validatePSPWebhookRoutes(cfg.PSPWebhookRoutes); err != nil {
+			return err
+		}
+	} else if len(cfg.PSPWebhookRoutes) != 0 {
+		return errors.New("noebs.psp_webhook_routes is allowed only for api-gateway")
+	}
 	if roleRequiresDataKey(role) && strings.TrimSpace(cfg.DataKey) == "" {
 		return fmt.Errorf("%w: %s", store.ErrMissingDataKey, role)
-	}
-	if err := validateGatewayAuthRuntimeConfig(role, cfg); err != nil {
-		return err
-	}
-	if err := validateIdentityAuthRuntimeConfig(role, cfg); err != nil {
-		return err
 	}
 	if err := validateEBSRuntimeConfig(role, cfg); err != nil {
 		return err
@@ -281,52 +287,6 @@ func roleRequiresDataKey(role serviceRole) bool {
 	return role == serviceRoleCardVault || role == serviceRoleCardVaultMigrate
 }
 
-func validateGatewayAuthRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
-	if role != serviceRoleAPIGateway {
-		return nil
-	}
-	required := []struct {
-		key   string
-		value string
-	}{
-		{key: "jwt_secret", value: cfg.JWTKey},
-		{key: "admin_key", value: cfg.AdminKey},
-		{key: "admin_user", value: cfg.AdminUser},
-		{key: "admin_password", value: cfg.AdminPassword},
-	}
-	for _, field := range required {
-		if strings.TrimSpace(field.value) == "" {
-			return fmt.Errorf("%w: noebs.%s", errMissingGatewayAuth, field.key)
-		}
-	}
-	return nil
-}
-
-func validateIdentityAuthRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
-	if role != serviceRoleIdentityAuth {
-		return nil
-	}
-	required := []struct {
-		key   string
-		value string
-	}{
-		{key: "jwt_secret", value: cfg.JWTKey},
-		{key: "sms_key", value: cfg.SMSAPIKey},
-		{key: "sms_sender", value: cfg.SMSSender},
-		{key: "sms_gateway", value: cfg.SMSGateway},
-		{key: "sms_message", value: cfg.SMSMessage},
-		{key: "google_client_id", value: cfg.GoogleClientID},
-		{key: "google_client_secret", value: cfg.GoogleClientSecret},
-		{key: "google_redirect_url", value: cfg.GoogleRedirectURL},
-	}
-	for _, field := range required {
-		if strings.TrimSpace(field.value) == "" {
-			return fmt.Errorf("%w: noebs.%s", errMissingIdentityAuth, field.key)
-		}
-	}
-	return nil
-}
-
 func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 	if role != serviceRoleEBSAdapter {
 		return nil
@@ -376,15 +336,6 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 		if strings.TrimSpace(value) == "" {
 			return fmt.Errorf("%w: noebs.%s", errMissingEBSConfig, key)
 		}
-	}
-	if cfg.EBSDynamicFees.CardTransferfees <= 0 {
-		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.p2p_fees", errMissingEBSConfig)
-	}
-	if cfg.EBSDynamicFees.SpecialPaymentFees <= 0 {
-		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.special_payment_fees", errMissingEBSConfig)
-	}
-	if cfg.EBSDynamicFees.CustomFees <= 0 {
-		return fmt.Errorf("%w: noebs.ebs_dynamic_fees.custom_fees", errMissingEBSConfig)
 	}
 	return nil
 }
@@ -481,12 +432,12 @@ func (r serviceRole) databaseOwnerRole() (serviceRole, bool) {
 		return serviceRoleAdminReporting, true
 	case serviceRoleNotification, serviceRoleNotificationMigrate:
 		return serviceRoleNotification, true
-	case serviceRoleBeneficiary, serviceRoleBeneficiaryMigrate:
-		return serviceRoleBeneficiary, true
 	case serviceRoleWalletLedger, serviceRoleWalletLedgerMigrate, serviceRoleWalletWorker:
 		return serviceRoleWalletLedger, true
 	case serviceRoleWorkloadAuthMigrate, serviceRoleWorkloadAuthCleanup:
 		return serviceRoleWorkloadAuthMigrate, true
+	case serviceRoleAPIGateway, serviceRoleGatewayAuthMigrate, serviceRoleGatewayAuthCleanup:
+		return serviceRoleAPIGateway, true
 	default:
 		return "", false
 	}
@@ -506,12 +457,12 @@ func (r serviceRole) migrationScope() (string, bool) {
 		return store.MigrationScopeAdminReporting, true
 	case serviceRoleNotificationMigrate:
 		return store.MigrationScopeNotificationChat, true
-	case serviceRoleBeneficiaryMigrate:
-		return store.MigrationScopeConsumerBeneficiary, true
 	case serviceRoleWalletLedgerMigrate:
 		return store.MigrationScopeWalletLedger, true
 	case serviceRoleWorkloadAuthMigrate:
 		return store.MigrationScopeWorkloadAuth, true
+	case serviceRoleGatewayAuthMigrate:
+		return store.MigrationScopeGatewayAuth, true
 	default:
 		return "", false
 	}

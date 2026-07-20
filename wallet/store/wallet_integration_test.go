@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,20 +127,20 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ensure manual transfer wallet: %v", err)
 	}
-	requesterID := insertWalletAdmin(t, ctx, store, tenantID, "requester@example.test")
-	approverID := insertWalletAdmin(t, ctx, store, tenantID, "approver@example.test")
+	requesterID := insertWalletOperator(t, ctx, store, "requester")
+	approverID := insertWalletOperator(t, ctx, store, "approver")
 
 	transfer := ManualTransfer{
-		TenantID:       tenantID,
-		WorkflowID:     "wf-1",
-		IdempotencyKey: "idem-1",
-		TransferType:   ManualTransferTypeDebit,
-		WalletID:       sql.NullString{String: wallet.ID.String(), Valid: true},
-		Amount:         100,
-		Currency:       "USD",
-		Reason:         "manual adjustment",
-		Status:         ManualTransferStatusPending,
-		RequestedBy:    sqlNullInt64(requesterID),
+		TenantID:              tenantID,
+		WorkflowID:            "wf-1",
+		IdempotencyKey:        "idem-1",
+		TransferType:          ManualTransferTypeDebit,
+		WalletID:              sql.NullString{String: wallet.ID.String(), Valid: true},
+		Amount:                100,
+		Currency:              "USD",
+		Reason:                "manual adjustment",
+		Status:                ManualTransferStatusPending,
+		RequestedByOperatorID: requesterID,
 	}
 	created, err := store.CreateManualTransfer(ctx, transfer)
 	if err != nil {
@@ -183,20 +184,11 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 		t.Fatalf("foreign wallet manual transfer error = %v, want %v", err, ErrWalletNotFound)
 	}
 
-	foreignRequesterID := insertWalletAdmin(t, ctx, store, "other-tenant", "foreign-requester@example.test")
-	foreignRequesterTransfer := transfer
-	foreignRequesterTransfer.WorkflowID = "wf-foreign-requester"
-	foreignRequesterTransfer.IdempotencyKey = "idem-foreign-requester"
-	foreignRequesterTransfer.RequestedBy = sqlNullInt64(foreignRequesterID)
-	if _, err := store.CreateManualTransfer(ctx, foreignRequesterTransfer); !errors.Is(err, ErrAdminUserNotFound) {
-		t.Fatalf("foreign requester manual transfer error = %v, want %v", err, ErrAdminUserNotFound)
-	}
-
 	approval := ManualTransferApproval{
-		TenantID:         tenantID,
-		ManualTransferID: created.ID,
-		ApproverID:       approverID,
-		Decision:         ManualTransferStatusApproved,
+		TenantID:            tenantID,
+		ManualTransferID:    created.ID,
+		DecidedByOperatorID: approverID,
+		Decision:            ManualTransferStatusApproved,
 	}
 	storedApproval, err := store.AddManualTransferApproval(ctx, approval)
 	if err != nil {
@@ -216,31 +208,24 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	}
 
 	selfApproval := approval
-	selfApproval.ApproverID = requesterID
+	selfApproval.DecidedByOperatorID = requesterID
 	if _, err := store.AddManualTransferApproval(ctx, selfApproval); !errors.Is(err, ErrApproverIsRequester) {
 		t.Fatalf("self manual approval error = %v, want %v", err, ErrApproverIsRequester)
 	}
 
-	foreignApproverID := insertWalletAdmin(t, ctx, store, "other-tenant", "foreign-approver@example.test")
-	foreignApproval := approval
-	foreignApproval.ApproverID = foreignApproverID
-	if _, err := store.AddManualTransferApproval(ctx, foreignApproval); !errors.Is(err, ErrAdminUserNotFound) {
-		t.Fatalf("foreign approver error = %v, want %v", err, ErrAdminUserNotFound)
-	}
-
-	terminalApproverID := insertWalletAdmin(t, ctx, store, tenantID, "terminal-approver@example.test")
+	terminalDecidedByOperatorID := insertWalletOperator(t, ctx, store, "terminal-approver")
 	approvedAt := time.Now().UTC()
 	proofOfPayment := "receipt-1"
 	if err := store.UpdateManualTransferStatus(ctx, tenantID, transfer.WorkflowID, ManualTransferStatusUpdate{
-		Status:         ManualTransferStatusApproved,
-		ApprovedBy:     sql.NullInt64{Int64: approverID, Valid: true},
-		ApprovedAt:     sql.NullTime{Time: approvedAt, Valid: true},
-		ProofOfPayment: sql.NullString{String: proofOfPayment, Valid: true},
+		Status:               ManualTransferStatusApproved,
+		ApprovedByOperatorID: sql.NullInt64{Int64: approverID, Valid: true},
+		ApprovedAt:           sql.NullTime{Time: approvedAt, Valid: true},
+		ProofOfPayment:       sql.NullString{String: proofOfPayment, Valid: true},
 	}); err != nil {
 		t.Fatalf("approve manual transfer: %v", err)
 	}
 	terminalApproval := approval
-	terminalApproval.ApproverID = terminalApproverID
+	terminalApproval.DecidedByOperatorID = terminalDecidedByOperatorID
 	if _, err := store.AddManualTransferApproval(ctx, terminalApproval); !errors.Is(err, ErrInvalidStatusTransition) {
 		t.Fatalf("terminal transfer approval error = %v, want %v", err, ErrInvalidStatusTransition)
 	}
@@ -259,8 +244,8 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	if completed.Status != ManualTransferStatusCompleted {
 		t.Fatalf("completed transfer status = %s, want %s", completed.Status, ManualTransferStatusCompleted)
 	}
-	if !completed.ApprovedBy.Valid || completed.ApprovedBy.Int64 != approverID {
-		t.Fatalf("completed transfer approved_by = %+v, want %d", completed.ApprovedBy, approverID)
+	if !completed.ApprovedByOperatorID.Valid || completed.ApprovedByOperatorID.Int64 != approverID {
+		t.Fatalf("completed transfer approved_by = %+v, want %d", completed.ApprovedByOperatorID, approverID)
 	}
 	if !sameManualTransferNullTime(completed.ApprovedAt, sql.NullTime{Time: approvedAt, Valid: true}) {
 		t.Fatalf("completed transfer approved_at = %+v, want %s", completed.ApprovedAt, approvedAt)
@@ -270,6 +255,74 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	}
 	if !sameManualTransferNullTime(completed.CompletedAt, sql.NullTime{Time: completedAt, Valid: true}) {
 		t.Fatalf("completed transfer completed_at = %+v, want %s", completed.CompletedAt, completedAt)
+	}
+}
+
+func TestResolveOperatorIdentityIsImmutableAndConcurrent(t *testing.T) {
+	ctx, store, _ := newWalletStoreIntegration(t)
+	const callers = 32
+	ids := make(chan int64, callers)
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			operator, err := store.ResolveOperatorIdentity(ctx, "https://identity.example/realms/noebs", "operator-1")
+			if err != nil {
+				errs <- err
+				return
+			}
+			ids <- operator.ID
+		}()
+	}
+	wg.Wait()
+	close(ids)
+	close(errs)
+	for err := range errs {
+		t.Fatalf("resolve concurrent operator: %v", err)
+	}
+	var operatorID int64
+	for id := range ids {
+		if operatorID == 0 {
+			operatorID = id
+		}
+		if id != operatorID {
+			t.Fatalf("operator id = %d, want stable id %d", id, operatorID)
+		}
+	}
+	otherIssuer, err := store.ResolveOperatorIdentity(ctx, "https://other-identity.example/realms/noebs", "operator-1")
+	if err != nil {
+		t.Fatalf("resolve other issuer: %v", err)
+	}
+	otherSubject, err := store.ResolveOperatorIdentity(ctx, "https://identity.example/realms/noebs", "operator-2")
+	if err != nil {
+		t.Fatalf("resolve other subject: %v", err)
+	}
+	if otherIssuer.ID == operatorID || otherSubject.ID == operatorID || otherIssuer.ID == otherSubject.ID {
+		t.Fatalf("distinct immutable identities collapsed: %d, %d, %d", operatorID, otherIssuer.ID, otherSubject.ID)
+	}
+
+	db, err := store.ensureDB()
+	if err != nil {
+		t.Fatalf("ensure db: %v", err)
+	}
+	var count int
+	if err := db.GetContext(ctx, &count, `SELECT COUNT(*) FROM operator_identities
+		WHERE issuer = $1 AND subject = $2`, "https://identity.example/realms/noebs", "operator-1"); err != nil {
+		t.Fatalf("count operator projection: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("operator projection rows = %d, want 1", count)
+	}
+	for _, table := range []string{"admin_users", "admin_roles"} {
+		var exists bool
+		if err := db.GetContext(ctx, &exists, `SELECT to_regclass($1) IS NOT NULL`, table); err != nil {
+			t.Fatalf("inspect legacy table %s: %v", table, err)
+		}
+		if exists {
+			t.Fatalf("legacy credential table %s exists", table)
+		}
 	}
 }
 
@@ -308,34 +361,17 @@ func newWalletStoreIntegration(t *testing.T) (context.Context, *Store, string) {
 	})
 
 	tenantID := "tenant"
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopeWalletLedger); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 	return ctx, New(db), tenantID
 }
 
-func insertWalletAdmin(t *testing.T, ctx context.Context, store *Store, tenantID, email string) int64 {
+func insertWalletOperator(t *testing.T, ctx context.Context, store *Store, subject string) int64 {
 	t.Helper()
-
-	db, err := store.ensureDB()
+	operator, err := store.ResolveOperatorIdentity(ctx, "https://identity.example/realms/noebs", subject)
 	if err != nil {
-		t.Fatalf("ensure db: %v", err)
+		t.Fatalf("resolve operator identity: %v", err)
 	}
-	var roleID int64
-	roleStmt := db.Rebind(`INSERT INTO admin_roles(tenant_id, role_name, role_level, permissions)
-		VALUES(?, ?, 1, '[]') RETURNING id`)
-	if err := db.GetContext(ctx, &roleID, roleStmt, tenantID, email+"-role"); err != nil {
-		t.Fatalf("insert admin role: %v", err)
-	}
-	var adminID int64
-	adminStmt := db.Rebind(`INSERT INTO admin_users(tenant_id, email, password_hash, role_id)
-		VALUES(?, ?, 'hash', ?) RETURNING id`)
-	if err := db.GetContext(ctx, &adminID, adminStmt, tenantID, email, roleID); err != nil {
-		t.Fatalf("insert admin user: %v", err)
-	}
-	return adminID
-}
-
-func sqlNullInt64(value int64) sql.NullInt64 {
-	return sql.NullInt64{Int64: value, Valid: true}
+	return operator.ID
 }

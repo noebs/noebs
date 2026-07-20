@@ -87,13 +87,13 @@ variable "noebs_repo_url" {
 }
 
 variable "noebs_target_revision" {
-  description = "Git revision used by Argo CD."
+  description = "Exact lowercase 40-hex Git commit used by both Argo CD Applications."
   type        = string
   nullable    = false
 
   validation {
-    condition     = trimspace(var.noebs_target_revision) != ""
-    error_message = "noebs_target_revision must be explicit."
+    condition     = can(regex("^[0-9a-f]{40}$", var.noebs_target_revision))
+    error_message = "noebs_target_revision must be an exact lowercase 40-hex Git commit."
   }
 }
 
@@ -121,6 +121,12 @@ variable "edge_manifest_path" {
 
 variable "create_noebs_application" {
   description = "Whether to create the Noebs Argo CD Application after the explicit release Secrets exist."
+  type        = bool
+  nullable    = false
+}
+
+variable "noebs_automated_sync" {
+  description = "Whether the Noebs Argo CD Application may prune and self-heal automatically. Set false for an explicit maintenance window."
   type        = bool
   nullable    = false
 }

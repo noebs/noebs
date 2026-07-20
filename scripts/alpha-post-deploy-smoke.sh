@@ -35,17 +35,22 @@ fail() {
     exit 1
 }
 
-command -v kubectl >/dev/null 2>&1 || fail "kubectl is unavailable"
+command -v sudo >/dev/null 2>&1 || fail "sudo is unavailable"
+command -v k3s >/dev/null 2>&1 || fail "k3s is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
+sudo -n true >/dev/null 2>&1 || fail "passwordless sudo is unavailable"
+kubectl_cmd=(sudo -n k3s kubectl)
 
 assert_application_ready() {
     local name="$1"
-    local application actual_revision sync_status health_status
-    application="$(kubectl -n argocd get application "$name" -o json)"
+    local application target_revision actual_revision sync_status health_status
+    application="$("${kubectl_cmd[@]}" -n argocd get application "$name" -o json)"
+    target_revision="$(jq -r '.spec.source.targetRevision // ""' <<<"$application")"
     actual_revision="$(jq -r '.status.sync.revision // ""' <<<"$application")"
     sync_status="$(jq -r '.status.sync.status // ""' <<<"$application")"
     health_status="$(jq -r '.status.health.status // ""' <<<"$application")"
 
+    [[ "$target_revision" == "$expected_revision" ]] || fail "$name Argo target revision $target_revision does not match $expected_revision"
     [[ "$actual_revision" == "$expected_revision" ]] || fail "$name Argo revision $actual_revision does not match $expected_revision"
     [[ "$sync_status" == Synced ]] || fail "$name Argo sync status is $sync_status"
     [[ "$health_status" == Healthy ]] || fail "$name Argo health status is $health_status"
@@ -55,12 +60,12 @@ assert_application_ready noebs
 assert_application_ready noebs-edge
 
 while IFS= read -r workload; do
-    kubectl -n "$namespace" rollout status "$workload" --timeout=5m >/dev/null
-done < <(kubectl -n "$namespace" get deployment,statefulset -o name | sort)
+    "${kubectl_cmd[@]}" -n "$namespace" rollout status "$workload" --timeout=5m >/dev/null
+done < <("${kubectl_cmd[@]}" -n "$namespace" get deployment,statefulset -o name | sort)
 
-kubectl -n edge rollout status deployment/caddy --timeout=2m >/dev/null
+"${kubectl_cmd[@]}" -n edge rollout status deployment/caddy --timeout=2m >/dev/null
 expected_caddy_digest="sha256:834468128c7696cec0ceea6172f7d692daf645ae51983ca76e39da54a97c570d"
-caddy_pod="$(kubectl -n edge get pods -l app.kubernetes.io/name=caddy -o json)"
+caddy_pod="$("${kubectl_cmd[@]}" -n edge get pods -l app.kubernetes.io/name=caddy -o json)"
 [[ "$(jq '.items | length' <<<"$caddy_pod")" == 1 ]] || fail "edge must have exactly one Caddy pod"
 [[ "$(jq -r '.items[0].spec.containers[0].image' <<<"$caddy_pod")" == "caddy@$expected_caddy_digest" ]] || fail "edge Caddy declaration is not pinned to the release digest"
 [[ "$(jq -r '.items[0].status.containerStatuses[0].imageID' <<<"$caddy_pod")" == *@"$expected_caddy_digest" ]] || fail "running edge Caddy digest does not match its declaration"
@@ -68,7 +73,12 @@ caddy_pod="$(kubectl -n edge get pods -l app.kubernetes.io/name=caddy -o json)"
 [[ "$(jq -r '.items[0].status.containerStatuses[0].restartCount' <<<"$caddy_pod")" == 0 ]] || fail "edge Caddy restarted after rollout"
 [[ "$(jq -r '.items[0].status.qosClass' <<<"$caddy_pod")" != BestEffort ]] || fail "edge Caddy is BestEffort"
 
-caddy_deployment="$(kubectl -n edge get deployment caddy -o json)"
+caddy_deployment="$("${kubectl_cmd[@]}" -n edge get deployment caddy -o json)"
+caddy_config_name="$(jq -r '.spec.template.spec.volumes[] | select(.name == "config") | .configMap.name' <<<"$caddy_deployment")"
+[[ "$caddy_config_name" =~ ^caddy-config-[a-z0-9]+$ ]] || fail "edge Caddy does not reference a content-addressed ConfigMap: $caddy_config_name"
+if "${kubectl_cmd[@]}" -n edge get configmap caddy-config >/dev/null 2>&1; then
+    fail "obsolete un-hashed edge/caddy-config remains"
+fi
 caddy_missing_resources="$(jq -r '
   .spec.template.spec.containers[]
   | select(
@@ -82,7 +92,7 @@ caddy_missing_resources="$(jq -r '
 [[ -z "$caddy_missing_resources" ]] || fail "edge Caddy lacks CPU/memory requests or limits"
 
 expected_image="ghcr.io/noebs/noebs@$expected_digest"
-pods="$(kubectl -n "$namespace" get pods -o json)"
+pods="$("${kubectl_cmd[@]}" -n "$namespace" get pods -o json)"
 
 wrong_declared_images="$(
     jq -r --arg expected "$expected_image" '
@@ -129,7 +139,7 @@ restarted="$(
 )"
 [[ -z "$restarted" ]] || fail "post-rollout containers have restarted: $restarted"
 
-workloads="$(kubectl -n "$namespace" get deployment,statefulset -o json)"
+workloads="$("${kubectl_cmd[@]}" -n "$namespace" get deployment,statefulset -o json)"
 missing_resources="$(
     jq -r '
       .items[]
@@ -147,10 +157,27 @@ missing_resources="$(
 )"
 [[ -z "$missing_resources" ]] || fail "workloads lack CPU/memory requests or limits: $missing_resources"
 
+if "${kubectl_cmd[@]}" -n "$namespace" get ingress api-gateway >/dev/null 2>&1; then
+    fail "obsolete api-gateway Ingress remains"
+fi
+if "${kubectl_cmd[@]}" -n "$namespace" get secret noebs-tls >/dev/null 2>&1; then
+    fail "obsolete noebs-tls Secret remains"
+fi
+for retired in \
+    deployment/consumer-beneficiary \
+    service/consumer-beneficiary \
+    secret/consumer-beneficiary-secrets \
+    secret/consumer-beneficiary-migrate-secrets
+do
+    if "${kubectl_cmd[@]}" -n "$namespace" get "$retired" >/dev/null 2>&1; then
+        fail "retired resource remains: $retired"
+    fi
+done
+
 database_version() {
     local database="$1"
     local table="$2"
-    kubectl -n "$namespace" exec postgres-0 -- sh -ceu '
+    "${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- sh -ceu '
       export PGPASSWORD="$(tr -d "\r\n" < /opt/noebs-postgres/secrets/password)"
       exec psql -U noebs -d "$1" -XAtqc "SELECT COALESCE(MAX(version_id) FILTER (WHERE is_applied), 0) FROM $2"
     ' sh "$database" "$table"
@@ -158,8 +185,14 @@ database_version() {
 
 identity_version="$(database_version identity_auth goose_db_version_identity_auth)"
 card_vault_version="$(database_version card_vault goose_db_version_card_vault)"
-[[ "$identity_version" =~ ^[0-9]+$ && "$identity_version" -ge 103 ]] || fail "identity-auth migration version is $identity_version, want at least 103"
+consumer_beneficiary_count="$("${kubectl_cmd[@]}" -n "$namespace" exec postgres-0 -- sh -ceu '
+  export PGPASSWORD="$(tr -d "\r\n" < /opt/noebs-postgres/secrets/password)"
+  exec psql -U noebs -d postgres -XAtqc \
+    "SELECT count(*) FROM pg_database WHERE datname = '\''consumer_beneficiary'\''"
+')"
+[[ "$identity_version" == 101 ]] || fail "identity-auth migration version is $identity_version, want exactly 101"
 [[ "$card_vault_version" =~ ^[0-9]+$ && "$card_vault_version" -ge 104 ]] || fail "card-vault migration version is $card_vault_version, want at least 104"
+[[ "$consumer_beneficiary_count" == 0 ]] || fail "retired consumer_beneficiary database remains"
 
 printf 'alpha post-deploy smoke (cluster): PASS revision=%s image=%s identity=%s card-vault=%s\n' \
     "$expected_revision" "$expected_digest" "$identity_version" "$card_vault_version"
@@ -185,7 +218,7 @@ for forbidden in ("jwt", "admin_key", "password", "secret", "private_key"):
     assert forbidden not in serialized
 ' <<<"$app_config" || die "/app/config is malformed or exposes a private field"
 
-python3 - "$api_origin" <<'PY' || die "Android App Links or payment-link fallback is invalid"
+python3 - "$api_origin" <<'PY' || die "Android App Links configuration is invalid"
 import json
 import sys
 import urllib.request
@@ -208,16 +241,99 @@ assert links == [{
     },
 }]
 
-payment_url = origin + "/pay/00000000-0000-4000-8000-000000000000"
-with urllib.request.urlopen(payment_url, timeout=15) as response:
-    assert response.status == 200
-    assert response.headers.get_content_type() == "text/html"
-    assert response.headers.get("Cache-Control") == "no-store"
-    assert response.headers.get("Content-Security-Policy") == "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
-    body = response.read(64 * 1024).decode("utf-8")
+PY
 
-assert "Open this link with TutiPay Alpha" in body
-assert "<form" not in body.lower()
+python3 - "$api_origin" <<'PY' || die "Keycloak discovery or JWKS contract is invalid"
+import json
+import sys
+import urllib.request
+
+origin = sys.argv[1].rstrip("/")
+issuer = origin + "/auth/realms/noebs"
+with urllib.request.urlopen(issuer + "/.well-known/openid-configuration", timeout=15) as response:
+    assert response.status == 200
+    assert response.headers.get_content_type() == "application/json"
+    discovery = json.load(response)
+
+assert discovery["issuer"] == issuer
+assert discovery["authorization_endpoint"] == issuer + "/protocol/openid-connect/auth"
+assert discovery["token_endpoint"] == issuer + "/protocol/openid-connect/token"
+assert discovery["jwks_uri"] == issuer + "/protocol/openid-connect/certs"
+assert "RS256" in discovery["id_token_signing_alg_values_supported"]
+
+with urllib.request.urlopen(discovery["jwks_uri"], timeout=15) as response:
+    assert response.status == 200
+    assert response.headers.get_content_type() == "application/json"
+    jwks = json.load(response)
+
+assert any(
+    key.get("kty") == "RSA"
+    and key.get("use") == "sig"
+    and key.get("alg") == "RS256"
+    and isinstance(key.get("kid"), str)
+    and key["kid"]
+    for key in jwks.get("keys", [])
+)
+PY
+
+python3 - "$api_origin" <<'PY' || die "Keycloak authorization-code browser surface is invalid"
+import http.cookiejar
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+        return None
+
+
+def open_without_redirect(opener, request):
+    try:
+        return opener.open(request, timeout=15)
+    except urllib.error.HTTPError as error:
+        return error
+
+
+origin = sys.argv[1].rstrip("/")
+issuer = origin + "/auth/realms/noebs"
+authorization = issuer + "/protocol/openid-connect/auth?" + urllib.parse.urlencode({
+    "client_id": "noebs-mobile",
+    "redirect_uri": origin + "/mobile/oauth/callback",
+    "response_type": "code",
+    "response_mode": "query",
+    "scope": "openid organization:*",
+    "state": "post-deploy-state",
+    "nonce": "post-deploy-nonce",
+    "code_challenge": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "code_challenge_method": "S256",
+})
+
+opener = urllib.request.build_opener(
+    urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+    NoRedirect(),
+)
+response = open_without_redirect(opener, authorization)
+assert response.status in (302, 303)
+assert b'name="username"' not in response.read(1024 * 1024)
+broker_login = urllib.parse.urljoin(authorization, response.headers["Location"])
+parsed_broker = urllib.parse.urlparse(broker_login)
+assert parsed_broker.scheme + "://" + parsed_broker.netloc == origin
+assert parsed_broker.path == "/auth/realms/noebs/broker/google/login"
+
+provider_response = open_without_redirect(opener, broker_login)
+assert provider_response.status in (302, 303)
+assert b'name="password"' not in provider_response.read(1024 * 1024)
+provider_url = urllib.parse.urlparse(provider_response.headers["Location"])
+assert provider_url.scheme == "https" and provider_url.netloc == "accounts.google.com"
+provider_query = urllib.parse.parse_qs(provider_url.query)
+assert provider_query["redirect_uri"] == [issuer + "/broker/google/endpoint"]
+
+required_action = issuer + "/login-actions/required-action"
+assert open_without_redirect(opener, required_action).status == 400
+required_post = urllib.request.Request(required_action, data=b"", method="POST")
+assert open_without_redirect(opener, required_post).status == 400
 PY
 
 http_status() {
@@ -228,8 +344,29 @@ http_status() {
 }
 
 [[ "$(http_status GET "$api_origin/consumer/user")" == 401 ]] || die "protected user route did not reject an anonymous request"
-[[ "$(http_status GET "$api_origin/metrics")" == 401 ]] || die "gateway metrics did not reject an anonymous request"
+[[ "$(http_status GET "$api_origin/metrics")" == 404 ]] || die "gateway exposed a metrics route"
 [[ "$(http_status POST "$api_origin/consumer/payment_request")" == 404 ]] || die "removed payment_request route is still exposed"
+[[ "$(http_status GET "$api_origin/auth/admin/")" == 404 ]] || die "Keycloak Admin API is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/master/.well-known/openid-configuration")" == 404 ]] || die "non-noebs Keycloak realm is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/clients-registrations/openid-connect")" == 404 ]] || die "Keycloak client registration is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/clients-registrations/default")" == 404 ]] || die "Keycloak default client registration is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/clients-registrations/saml2-entity-descriptor")" == 404 ]] || die "Keycloak SAML client registration is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/saml")" == 404 ]] || die "unused Keycloak SAML endpoint is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/account")" == 404 ]] || die "Keycloak account console is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/.well-known/uma2-configuration")" == 404 ]] || die "unused Keycloak UMA discovery is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/openid-connect/token")" == 404 ]] || die "Keycloak token endpoint accepts a public GET route"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/auth")" == 404 ]] || die "Keycloak authorization endpoint accepts a public POST route"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/openid-connect/userinfo")" == 404 ]] || die "unused Keycloak userinfo endpoint is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/token/introspect")" == 404 ]] || die "unused Keycloak introspection endpoint is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/revoke")" == 404 ]] || die "unused Keycloak revocation endpoint is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/auth/device")" == 404 ]] || die "unused Keycloak device authorization endpoint is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/ext/par/request")" == 404 ]] || die "unused Keycloak pushed authorization endpoint is publicly reachable"
+[[ "$(http_status POST "$api_origin/auth/realms/noebs/protocol/openid-connect/ext/ciba/auth")" == 404 ]] || die "unused Keycloak CIBA endpoint is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/protocol/openid-connect/login-status-iframe.html")" == 404 ]] || die "unused Keycloak login-status endpoint is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/login-actions/registration")" == 404 ]] || die "Keycloak self-registration action is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/login-actions/reset-credentials")" == 404 ]] || die "Keycloak password-reset action is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/broker/google/link")" == 404 ]] || die "Keycloak broker account-linking endpoint is publicly reachable"
+[[ "$(http_status GET "$api_origin/auth/realms/noebs/broker/google/token")" == 404 ]] || die "Keycloak broker external-token endpoint is publicly reachable"
 
 printf 'alpha post-deploy smoke: PASS revision=%s image=%s edge=%s\n' \
     "$expected_revision" "$expected_digest" "$api_origin"

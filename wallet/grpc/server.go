@@ -17,7 +17,6 @@ import (
 )
 
 type Server struct {
-	walletv1.UnimplementedWalletInternalServiceServer
 	walletv1.UnimplementedWalletPublicServiceServer
 	walletv1.UnimplementedWalletAdminServiceServer
 	Service         *wallet.Service
@@ -29,13 +28,6 @@ type Server struct {
 
 func NewServer(service *wallet.Service) *Server {
 	return &Server{Service: service}
-}
-
-func (s *Server) GetWallet(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
-	if err := s.requireAdminForInternalRPC(ctx); err != nil {
-		return nil, err
-	}
-	return s.getWallet(ctx, req)
 }
 
 func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
@@ -67,13 +59,6 @@ func (s *Server) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletReq
 	return toWalletProto(w), nil
 }
 
-func (s *Server) EnsureWallet(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
-	if err := s.requireAdminForInternalRPC(ctx); err != nil {
-		return nil, err
-	}
-	return s.ensureWallet(ctx, req)
-}
-
 func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
 	claims, err := s.requireGatewayClaims(ctx)
 	if err != nil {
@@ -96,93 +81,6 @@ func (s *Server) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWal
 		Currency: req.Currency,
 	}
 	return s.ensureWallet(ctx, boundReq)
-}
-
-func (s *Server) ValidateP2P(ctx context.Context, req *walletv1.ValidateP2PRequest) (*walletv1.ValidateP2PResponse, error) {
-	if s == nil || s.Service == nil || s.Service.Store == nil {
-		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
-	}
-	if err := s.requireAdminForInternalRPC(ctx); err != nil {
-		return nil, err
-	}
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "missing request")
-	}
-	tenantID, err := validateGRPCTenantID(req.TenantId)
-	if err != nil {
-		return nil, err
-	}
-	if req.FromWalletId == "" || req.ToWalletId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
-	}
-	if req.Currency == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingCurrency.Error())
-	}
-	if req.Amount <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
-	}
-	fromID, err := uuid.Parse(req.FromWalletId)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
-	}
-	toID, err := uuid.Parse(req.ToWalletId)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
-	}
-
-	validator := walletvalidation.Service{Store: s.Service.Store}
-	result, err := validator.ValidateP2P(ctx, walletvalidation.P2PValidationRequest{
-		TenantID:        tenantID,
-		TransactionType: "p2p",
-		FromWalletID:    fromID,
-		ToWalletID:      toID,
-		Currency:        req.Currency,
-		Amount:          req.Amount,
-	})
-	if err != nil {
-		if isP2PRejection(err) {
-			return &walletv1.ValidateP2PResponse{
-				Allowed: false,
-				Reason:  err.Error(),
-			}, nil
-		}
-		return nil, mapError(err)
-	}
-
-	fee := int64(0)
-	if result.Fee != nil {
-		fee = result.Fee.TotalFee
-	}
-	return &walletv1.ValidateP2PResponse{
-		Allowed:    true,
-		TotalDebit: result.TotalDebit,
-		Fee:        fee,
-	}, nil
-}
-
-func (s *Server) getWallet(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
-	if s == nil || s.Service == nil || s.Service.Store == nil {
-		return nil, status.Error(codes.FailedPrecondition, wallet.ErrMissingStore.Error())
-	}
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "missing request")
-	}
-	tenantID, err := validateGRPCTenantID(req.TenantId)
-	if err != nil {
-		return nil, err
-	}
-	if req.WalletId == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
-	}
-	walletID, err := uuid.Parse(req.WalletId)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
-	}
-	w, err := s.Service.GetWallet(ctx, tenantID, walletID)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return toWalletProto(w), nil
 }
 
 func (s *Server) ensureWallet(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
@@ -235,8 +133,7 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrPSPConfigNotFound),
 		errors.Is(err, walletstore.ErrPSPConfigOverrideNotFound),
 		errors.Is(err, walletstore.ErrTransactionLimitNotFound),
-		errors.Is(err, walletstore.ErrAdminUserNotFound),
-		errors.Is(err, walletstore.ErrAdminRoleNotFound),
+		errors.Is(err, walletstore.ErrOperatorIdentityNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
 		errors.Is(err, walletstore.ErrLedgerEntryNotFound),
@@ -259,6 +156,11 @@ func mapError(err error) error {
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),
+		errors.Is(err, walletstore.ErrMissingOperatorID),
+		errors.Is(err, walletstore.ErrMissingOperatorIssuer),
+		errors.Is(err, walletstore.ErrInvalidOperatorIssuer),
+		errors.Is(err, walletstore.ErrMissingOperatorSubject),
+		errors.Is(err, walletstore.ErrInvalidOperatorSubject),
 		errors.Is(err, walletstore.ErrMissingCurrency),
 		errors.Is(err, walletstore.ErrMissingWalletID),
 		errors.Is(err, walletstore.ErrMissingOwnerID),
@@ -346,13 +248,4 @@ func mapError(err error) error {
 	default:
 		return status.Error(codes.Internal, err.Error())
 	}
-}
-
-func isP2PRejection(err error) bool {
-	return errors.Is(err, walletvalidation.ErrLimitExceeded) ||
-		errors.Is(err, walletstore.ErrWalletInactive) ||
-		errors.Is(err, walletvalidation.ErrWalletInactive) ||
-		errors.Is(err, walletvalidation.ErrWalletOwnerMismatch) ||
-		errors.Is(err, walletstore.ErrInsufficientFunds) ||
-		errors.Is(err, walletstore.ErrCurrencyMismatch)
 }

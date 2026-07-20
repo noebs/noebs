@@ -153,7 +153,7 @@ func (s *Store) SetProfileDeviceToken(ctx context.Context, tenantID string, user
 		return err
 	}
 	if !validOptionalProfileValue(deviceToken) || deviceToken == "" {
-		return ErrMissingToken
+		return ErrMissingDeviceToken
 	}
 	db, err := s.ensureDB()
 	if err != nil {

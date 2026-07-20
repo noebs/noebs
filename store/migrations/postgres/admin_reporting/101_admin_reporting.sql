@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE TABLE IF NOT EXISTS transactions (
   id BIGSERIAL PRIMARY KEY,
   tenant_id TEXT NOT NULL CHECK (lower(btrim(tenant_id)) <> 'default'),
-  token_id BIGINT,
   uuid TEXT,
   response_code INTEGER,
   response_message TEXT,

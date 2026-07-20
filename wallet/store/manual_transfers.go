@@ -39,7 +39,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if transfer.Status != ManualTransferStatusPending {
 		return nil, ErrInvalidStatus
 	}
-	if transfer.ApprovedBy.Valid ||
+	if transfer.ApprovedByOperatorID.Valid ||
 		transfer.ApprovedAt.Valid ||
 		transfer.CompletedAt.Valid ||
 		transfer.ProofOfPayment.Valid ||
@@ -50,7 +50,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if err != nil {
 		return nil, err
 	}
-	if !transfer.RequestedBy.Valid || transfer.RequestedBy.Int64 <= 0 {
+	if transfer.RequestedByOperatorID <= 0 {
 		return nil, ErrMissingRequesterID
 	}
 	db, err := s.ensureDB()
@@ -61,7 +61,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if err != nil {
 		return nil, err
 	}
-	requester, err := s.getAdminUserByID(ctx, tenantID, transfer.RequestedBy.Int64)
+	requester, err := s.GetOperatorIdentityByID(ctx, transfer.RequestedByOperatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO manual_transfers(
 		tenant_id, workflow_id, idempotency_key, transfer_type, wallet_id, amount, currency,
-		reason, status, requested_by, approved_by, proof_of_payment, psp_provider, psp_reference,
+		reason, status, requested_by_operator_id, approved_by_operator_id, proof_of_payment, psp_provider, psp_reference,
 		rejection_reason, requested_at, approved_at, completed_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT DO NOTHING
@@ -89,8 +89,8 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		transfer.Currency,
 		transfer.Reason,
 		transfer.Status,
-		transfer.RequestedBy,
-		transfer.ApprovedBy,
+		transfer.RequestedByOperatorID,
+		transfer.ApprovedByOperatorID,
 		transfer.ProofOfPayment,
 		transfer.PSPProvider,
 		transfer.PSPReference,
@@ -131,22 +131,6 @@ func (s *Store) getManualTransferByID(ctx context.Context, tenantID string, manu
 	return &transfer, nil
 }
 
-func (s *Store) getAdminUserByID(ctx context.Context, tenantID string, adminID int64) (*AdminUser, error) {
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := db.Rebind("SELECT * FROM admin_users WHERE tenant_id = ? AND id = ?")
-	var user AdminUser
-	if err := db.GetContext(ctx, &user, stmt, tenantID, adminID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrAdminUserNotFound
-		}
-		return nil, err
-	}
-	return &user, nil
-}
-
 func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTransferApproval) (*ManualTransferApproval, error) {
 	tenantID, err := ValidateTenantID(approval.TenantID)
 	if err != nil {
@@ -155,7 +139,7 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	if approval.ManualTransferID <= 0 {
 		return nil, ErrMissingManualTransferID
 	}
-	if approval.ApproverID <= 0 {
+	if approval.DecidedByOperatorID <= 0 {
 		return nil, ErrMissingApproverID
 	}
 	if err := ValidateManualTransferDecision(approval.Decision); err != nil {
@@ -169,7 +153,7 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	if err != nil {
 		return nil, err
 	}
-	approver, err := s.getAdminUserByID(ctx, tenantID, approval.ApproverID)
+	approver, err := s.GetOperatorIdentityByID(ctx, approval.DecidedByOperatorID)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +164,7 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 
 	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO manual_transfer_approvals(
-		tenant_id, manual_transfer_id, approver_id, decision, reason, decided_at
+		tenant_id, manual_transfer_id, decided_by_operator_id, decision, reason, decided_at
 	) VALUES(?, ?, ?, ?, ?, ?)
 	ON CONFLICT DO NOTHING
 	RETURNING *`)
@@ -188,13 +172,13 @@ func (s *Store) AddManualTransferApproval(ctx context.Context, approval ManualTr
 	if err := db.GetContext(ctx, &stored, stmt,
 		tenantID,
 		approval.ManualTransferID,
-		approval.ApproverID,
+		approval.DecidedByOperatorID,
 		approval.Decision,
 		approval.Reason,
 		now,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			existing, getErr := s.getManualTransferApproval(ctx, tenantID, approval.ManualTransferID, approval.ApproverID)
+			existing, getErr := s.getManualTransferApproval(ctx, tenantID, approval.ManualTransferID, approval.DecidedByOperatorID)
 			if getErr != nil {
 				return nil, getErr
 			}
@@ -224,25 +208,6 @@ func (s *Store) GetManualTransferByWorkflow(ctx context.Context, tenantID, workf
 	stmt := db.Rebind("SELECT * FROM manual_transfers WHERE tenant_id = ? AND workflow_id = ?")
 	var transfer ManualTransfer
 	if err := db.GetContext(ctx, &transfer, stmt, tenantID, workflowID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ErrManualTransferNotFound
-		}
-		return nil, err
-	}
-	return &transfer, nil
-}
-
-func (s *Store) GetManualTransferByWorkflowID(ctx context.Context, workflowID string) (*ManualTransfer, error) {
-	if workflowID == "" {
-		return nil, ErrMissingWorkflowID
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return nil, err
-	}
-	stmt := db.Rebind("SELECT * FROM manual_transfers WHERE workflow_id = ?")
-	var transfer ManualTransfer
-	if err := db.GetContext(ctx, &transfer, stmt, workflowID); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrManualTransferNotFound
 		}
@@ -284,7 +249,7 @@ func (s *Store) getManualTransferApproval(ctx context.Context, tenantID string, 
 		return nil, err
 	}
 	stmt := db.Rebind(`SELECT * FROM manual_transfer_approvals
-		WHERE tenant_id = ? AND manual_transfer_id = ? AND approver_id = ?`)
+		WHERE tenant_id = ? AND manual_transfer_id = ? AND decided_by_operator_id = ?`)
 	var approval ManualTransferApproval
 	if err := db.GetContext(ctx, &approval, stmt, tenantID, manualTransferID, approverID); err != nil {
 		if err == sql.ErrNoRows {
@@ -305,7 +270,7 @@ func ValidateManualTransferCreateReplay(existing *ManualTransfer, requested Manu
 		existing.Amount != requested.Amount ||
 		existing.Currency != requested.Currency ||
 		existing.Reason != requested.Reason ||
-		!nullInt64Equal(existing.RequestedBy, requested.RequestedBy) ||
+		existing.RequestedByOperatorID != requested.RequestedByOperatorID ||
 		!nullStringEqual(existing.PSPProvider, requested.PSPProvider) ||
 		!nullStringEqual(existing.PSPReference, requested.PSPReference) {
 		return ErrDuplicateManualTransfer
@@ -317,7 +282,7 @@ func ValidateManualTransferApprovalReplay(existing *ManualTransferApproval, requ
 	if existing == nil ||
 		existing.TenantID != requested.TenantID ||
 		existing.ManualTransferID != requested.ManualTransferID ||
-		existing.ApproverID != requested.ApproverID ||
+		existing.DecidedByOperatorID != requested.DecidedByOperatorID ||
 		existing.Decision != requested.Decision ||
 		!nullStringEqual(existing.Reason, requested.Reason) {
 		return ErrDuplicateManualApproval
@@ -336,7 +301,7 @@ func manualTransferWalletID(walletID sql.NullString) (uuid.UUID, error) {
 	return parsed, nil
 }
 
-func ValidateManualTransferCreateTarget(wallet *Wallet, requester *AdminUser, transfer ManualTransfer) error {
+func ValidateManualTransferCreateTarget(wallet *Wallet, requester *OperatorIdentity, transfer ManualTransfer) error {
 	walletID, err := manualTransferWalletID(transfer.WalletID)
 	if err != nil {
 		return err
@@ -352,34 +317,28 @@ func ValidateManualTransferCreateTarget(wallet *Wallet, requester *AdminUser, tr
 	if wallet.Currency != transfer.Currency {
 		return ErrCurrencyMismatch
 	}
-	if !transfer.RequestedBy.Valid || transfer.RequestedBy.Int64 <= 0 {
+	if transfer.RequestedByOperatorID <= 0 {
 		return ErrMissingRequesterID
 	}
-	if requester == nil ||
-		requester.TenantID != transfer.TenantID ||
-		requester.ID != transfer.RequestedBy.Int64 ||
-		!requester.IsActive {
-		return ErrAdminUserNotFound
+	if requester == nil || requester.ID != transfer.RequestedByOperatorID {
+		return ErrOperatorIdentityNotFound
 	}
 	return nil
 }
 
-func ValidateManualTransferApprovalTarget(transfer *ManualTransfer, approver *AdminUser, approval ManualTransferApproval) error {
+func ValidateManualTransferApprovalTarget(transfer *ManualTransfer, approver *OperatorIdentity, approval ManualTransferApproval) error {
 	if transfer == nil ||
 		transfer.TenantID != approval.TenantID ||
 		transfer.ID != approval.ManualTransferID {
 		return ErrManualTransferNotFound
 	}
-	if approver == nil ||
-		approver.TenantID != approval.TenantID ||
-		approver.ID != approval.ApproverID ||
-		!approver.IsActive {
-		return ErrAdminUserNotFound
+	if approver == nil || approver.ID != approval.DecidedByOperatorID {
+		return ErrOperatorIdentityNotFound
 	}
 	if transfer.Status != ManualTransferStatusPending {
 		return ErrInvalidStatusTransition
 	}
-	if transfer.RequestedBy.Valid && transfer.RequestedBy.Int64 == approval.ApproverID {
+	if transfer.RequestedByOperatorID == approval.DecidedByOperatorID {
 		return ErrApproverIsRequester
 	}
 	return nil
@@ -408,7 +367,7 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 		return err
 	}
 	if update.Status == ManualTransferStatusApproved {
-		approval, err := s.getManualTransferApproval(ctx, tenantID, current.ID, update.ApprovedBy.Int64)
+		approval, err := s.getManualTransferApproval(ctx, tenantID, current.ID, update.ApprovedByOperatorID.Int64)
 		if err != nil {
 			return err
 		}
@@ -418,12 +377,12 @@ func (s *Store) UpdateManualTransferStatus(ctx context.Context, tenantID, workfl
 	}
 	update = mergeManualTransferStatusUpdate(current, update)
 	stmt := db.Rebind(`UPDATE manual_transfers
-		SET status = ?, approved_by = ?, approved_at = ?, completed_at = ?,
+		SET status = ?, approved_by_operator_id = ?, approved_at = ?, completed_at = ?,
 			proof_of_payment = ?, rejection_reason = ?
 		WHERE tenant_id = ? AND workflow_id = ? AND status = ?`)
 	result, err := db.ExecContext(ctx, stmt,
 		update.Status,
-		update.ApprovedBy,
+		update.ApprovedByOperatorID,
 		update.ApprovedAt,
 		update.CompletedAt,
 		update.ProofOfPayment,
@@ -470,7 +429,7 @@ func ValidateManualTransferStatusTransition(current *ManualTransfer, update Manu
 }
 
 func validateManualTransferStoredStatusShape(current *ManualTransfer) error {
-	if !current.RequestedBy.Valid || current.RequestedBy.Int64 <= 0 {
+	if current.RequestedByOperatorID <= 0 {
 		return ErrMissingRequesterID
 	}
 	if err := ValidateManualTransferStatus(current.Status); err != nil {
@@ -478,7 +437,7 @@ func validateManualTransferStoredStatusShape(current *ManualTransfer) error {
 	}
 	switch current.Status {
 	case ManualTransferStatusPending:
-		if current.ApprovedBy.Valid ||
+		if current.ApprovedByOperatorID.Valid ||
 			current.ApprovedAt.Valid ||
 			current.CompletedAt.Valid ||
 			current.ProofOfPayment.Valid ||
@@ -496,7 +455,7 @@ func validateManualTransferStoredStatusShape(current *ManualTransfer) error {
 		if !validManualTransferText(current.RejectionReason) {
 			return ErrMissingReason
 		}
-		if current.ApprovedBy.Valid ||
+		if current.ApprovedByOperatorID.Valid ||
 			current.ApprovedAt.Valid ||
 			current.CompletedAt.Valid ||
 			current.ProofOfPayment.Valid {
@@ -517,10 +476,10 @@ func validateManualTransferStoredStatusShape(current *ManualTransfer) error {
 }
 
 func validateManualTransferStoredApprovalEvidence(current *ManualTransfer) error {
-	if !current.ApprovedBy.Valid || current.ApprovedBy.Int64 <= 0 {
+	if !current.ApprovedByOperatorID.Valid || current.ApprovedByOperatorID.Int64 <= 0 {
 		return ErrMissingApproverID
 	}
-	if current.RequestedBy.Int64 == current.ApprovedBy.Int64 {
+	if current.RequestedByOperatorID == current.ApprovedByOperatorID.Int64 {
 		return ErrApproverIsRequester
 	}
 	if !validManualTransferTime(current.ApprovedAt) {
@@ -536,10 +495,10 @@ func validateManualTransferApprovalStatusUpdate(current *ManualTransfer, update 
 	if current.Status != ManualTransferStatusPending && current.Status != ManualTransferStatusApproved {
 		return ErrInvalidStatusTransition
 	}
-	if !update.ApprovedBy.Valid || update.ApprovedBy.Int64 <= 0 {
+	if !update.ApprovedByOperatorID.Valid || update.ApprovedByOperatorID.Int64 <= 0 {
 		return ErrMissingApproverID
 	}
-	if current.RequestedBy.Valid && current.RequestedBy.Int64 == update.ApprovedBy.Int64 {
+	if current.RequestedByOperatorID == update.ApprovedByOperatorID.Int64 {
 		return ErrApproverIsRequester
 	}
 	if !validManualTransferTime(update.ApprovedAt) {
@@ -564,7 +523,7 @@ func validateManualTransferRejectionStatusUpdate(current *ManualTransfer, update
 	if !validManualTransferText(update.RejectionReason) {
 		return ErrMissingReason
 	}
-	if update.ApprovedBy.Valid || update.ApprovedAt.Valid || update.CompletedAt.Valid || update.ProofOfPayment.Valid {
+	if update.ApprovedByOperatorID.Valid || update.ApprovedAt.Valid || update.CompletedAt.Valid || update.ProofOfPayment.Valid {
 		return ErrInvalidStatus
 	}
 	if current.Status == ManualTransferStatusRejected && !manualTransferRejectionReplayMatches(current, update) {
@@ -583,7 +542,7 @@ func validateManualTransferCompletionStatusUpdate(current *ManualTransfer, updat
 	if update.RejectionReason.Valid {
 		return ErrInvalidStatus
 	}
-	if !current.ApprovedBy.Valid || current.ApprovedBy.Int64 <= 0 {
+	if !current.ApprovedByOperatorID.Valid || current.ApprovedByOperatorID.Int64 <= 0 {
 		return ErrMissingApproverID
 	}
 	if !validManualTransferTime(current.ApprovedAt) {
@@ -592,7 +551,7 @@ func validateManualTransferCompletionStatusUpdate(current *ManualTransfer, updat
 	if !validManualTransferText(current.ProofOfPayment) {
 		return ErrMissingProofOfPayment
 	}
-	if update.ApprovedBy.Valid && update.ApprovedBy.Int64 != current.ApprovedBy.Int64 {
+	if update.ApprovedByOperatorID.Valid && update.ApprovedByOperatorID.Int64 != current.ApprovedByOperatorID.Int64 {
 		return ErrInvalidStatus
 	}
 	if update.ApprovedAt.Valid && !sameManualTransferTime(update.ApprovedAt.Time, current.ApprovedAt.Time) {
@@ -611,8 +570,8 @@ func mergeManualTransferStatusUpdate(current *ManualTransfer, update ManualTrans
 	if current == nil {
 		return update
 	}
-	if !update.ApprovedBy.Valid {
-		update.ApprovedBy = current.ApprovedBy
+	if !update.ApprovedByOperatorID.Valid {
+		update.ApprovedByOperatorID = current.ApprovedByOperatorID
 	}
 	if !update.ApprovedAt.Valid {
 		update.ApprovedAt = current.ApprovedAt
@@ -630,8 +589,8 @@ func mergeManualTransferStatusUpdate(current *ManualTransfer, update ManualTrans
 }
 
 func manualTransferApprovalReplayMatches(current *ManualTransfer, update ManualTransferStatusUpdate) bool {
-	return current.ApprovedBy.Valid &&
-		current.ApprovedBy.Int64 == update.ApprovedBy.Int64 &&
+	return current.ApprovedByOperatorID.Valid &&
+		current.ApprovedByOperatorID.Int64 == update.ApprovedByOperatorID.Int64 &&
 		sameManualTransferNullTime(current.ApprovedAt, update.ApprovedAt) &&
 		nullStringEqual(current.ProofOfPayment, update.ProofOfPayment)
 }
@@ -707,9 +666,9 @@ func (s *Store) ListManualTransfers(ctx context.Context, filter ManualTransferFi
 		query += " AND wallet_id = ?"
 		args = append(args, filter.WalletID)
 	}
-	if filter.RequestedBy > 0 {
-		query += " AND requested_by = ?"
-		args = append(args, filter.RequestedBy)
+	if filter.RequesterOperatorID > 0 {
+		query += " AND requested_by_operator_id = ?"
+		args = append(args, filter.RequesterOperatorID)
 	}
 	if !filter.Start.IsZero() && !filter.End.IsZero() {
 		query += " AND requested_at >= ? AND requested_at <= ?"

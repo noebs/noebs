@@ -12,10 +12,9 @@ var (
 // Principal is scoped to exactly one selected organization. Tenant roles from
 // other organizations in the token are never visible through this type.
 type Principal struct {
-	identity      Identity
-	tenant        string
-	organization  Organization
-	platformAdmin bool
+	identity     Identity
+	tenant       string
+	organization Organization
 }
 
 // Policy is an immutable any-of role policy. Roles are validated once when the
@@ -59,11 +58,13 @@ func SelectTenant(claims Claims, activeTenant string) (Principal, error) {
 	if !exists {
 		return Principal{}, ErrUnknownTenant
 	}
+	if organization.invalidRole {
+		return Principal{}, ErrInvalidRole
+	}
 	return Principal{
-		identity:      claims.identity,
-		tenant:        activeTenant,
-		organization:  organization,
-		platformAdmin: claims.platformAdmin,
+		identity:     claims.identity,
+		tenant:       activeTenant,
+		organization: organization,
 	}, nil
 }
 
@@ -107,9 +108,6 @@ func (p Principal) Roles() []Role { return p.organization.Roles() }
 func (p Principal) Permissions() []Permission { return p.organization.Permissions() }
 
 func (p Principal) HasRole(role Role) bool {
-	if role == RolePlatformAdmin {
-		return p.platformAdmin
-	}
 	return p.organization.has(role)
 }
 
@@ -118,9 +116,6 @@ func (p Principal) HasPermission(permission Permission) bool {
 }
 
 func validAuthorizationRole(role Role) bool {
-	if role == RolePlatformAdmin {
-		return true
-	}
 	_, err := ParseTenantRole(string(role))
 	return err == nil
 }

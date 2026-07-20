@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -51,73 +50,5 @@ func TestGetIpinPubKeyReturnsTypedEBSCallError(t *testing.T) {
 	}
 	if !errors.Is(err, store.ErrMissingUUID) {
 		t.Fatalf("GetIpinPubKey() error = %v, want missing UUID record error", err)
-	}
-}
-
-func TestService_Notifications(t *testing.T) {
-
-	env := newTestEnv(t)
-
-	const mobile = "0129751986"
-	seed := PushData{UUID: "uuid-1", Body: "test me", UserMobile: mobile, Phone: mobile}
-	if err := env.Store.CreatePushData(context.Background(), env.Tenant, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
-		t.Fatalf("seed notification: %v", err)
-	}
-
-	var data []PushData
-	records, err := env.Service.Notifications(context.Background(), env.Tenant, mobile)
-	if err != nil {
-		t.Fatalf("notifications: %v", err)
-	}
-	for _, rec := range records {
-		data = append(data, PushData(rec))
-	}
-	if len(data) == 0 {
-		t.Errorf("no response")
-	}
-	if data[0].Body != "test me" {
-		t.Error("wrong data")
-	}
-}
-
-func TestService_NotificationsUseNotificationScopeOnly(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeNotificationChat})
-	service := &Service{Store: storeSvc}
-	mobile := "0129751986"
-	seed := PushData{UUID: "uuid-notification-only", Body: "notification scope", UserMobile: mobile}
-	if err := storeSvc.CreatePushData(context.Background(), tenantID, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
-		t.Fatalf("seed notification: %v", err)
-	}
-
-	records, err := service.Notifications(context.Background(), tenantID, mobile)
-	if err != nil {
-		t.Fatalf("notifications: %v", err)
-	}
-	if len(records) != 1 {
-		t.Fatalf("records len = %d, want 1", len(records))
-	}
-	if records[0].Body != "notification scope" {
-		t.Fatalf("body = %q", records[0].Body)
-	}
-}
-
-func TestService_NotificationsMatchExplicitPhone(t *testing.T) {
-	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeNotificationChat})
-	service := &Service{Store: storeSvc}
-	mobile := "0129751986"
-	seed := PushData{UUID: "uuid-phone-notification", Body: "phone scope", Phone: mobile}
-	if err := storeSvc.CreatePushData(context.Background(), tenantID, (*ebs_fields.PushDataRecord)(&seed)); err != nil {
-		t.Fatalf("seed notification: %v", err)
-	}
-
-	records, err := service.Notifications(context.Background(), tenantID, mobile)
-	if err != nil {
-		t.Fatalf("notifications: %v", err)
-	}
-	if len(records) != 1 {
-		t.Fatalf("records len = %d, want 1", len(records))
-	}
-	if records[0].Body != "phone scope" {
-		t.Fatalf("body = %q", records[0].Body)
 	}
 }

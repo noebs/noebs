@@ -96,17 +96,6 @@ func TimeFormatter(t time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-type merchantsIssues struct {
-	TerminalID string    `json:"terminalId" binding:"required" db:"terminal_id"`
-	Latitude   float32   `json:"lat" db:"latitude"`
-	Longitude  float32   `json:"long" db:"longitude"`
-	Time       time.Time `json:"time" db:"reported_at"`
-}
-
-func (m *merchantsIssues) MarshalBinary() ([]byte, error) {
-	return json.Marshal(m)
-}
-
 func sortTable(db *sqlx.DB, tenantID, searchField, search, sortField, sortCase string, offset, pageSize int) ([]ebs_fields.EBSResponse, int, error) {
 	var err error
 	searchField, err = normalizeSearchField(searchField, search != "")

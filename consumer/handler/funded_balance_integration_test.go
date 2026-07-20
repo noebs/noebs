@@ -53,14 +53,12 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 
 	const tenantID = "tenant-funded-balance"
 	for _, scope := range []string{store.MigrationScopeCardVault, store.MigrationScopeEBSAdapter} {
-		if err := store.MigrateScope(ctx, db, tenantID, scope); err != nil {
+		if err := store.MigrateScope(ctx, db, scope); err != nil {
 			t.Fatalf("migrate %s: %v", scope, err)
 		}
 	}
 	storeSvc := store.New(db, store.WithDataKey("funded-balance-test-data-key"))
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionHandlerTestTenant(t, ctx, storeSvc, tenantID, "Funded Balance Tenant")
 	vaultService := &consumer.Service{Store: storeSvc}
 	first := enrollHandlerTestCard(t, vaultService, tenantID, 101, "4242420000004242", "Daily")
 	second := enrollHandlerTestCard(t, vaultService, tenantID, 101, "4242421111114242", "Backup")
@@ -74,8 +72,8 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 	vaultApp.Use(func(c *fiber.Ctx) error {
 		if c.Path() == "/internal/card-vault/funded-operations/claim" {
 			vaultClaims.Add(1)
-			if c.Get(gateway.GatewayAdminIdentityHeader) != "" ||
-				c.Get(gateway.GatewayAdminRoleHeader) != "" {
+			if c.Get("X-Noebs-Admin-Identity") != "" ||
+				c.Get("X-Noebs-Admin-Role") != "" {
 				return c.SendStatus(http.StatusUnauthorized)
 			}
 		}

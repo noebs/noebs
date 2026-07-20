@@ -23,13 +23,6 @@ func authenticatedEBS(next fiber.Handler) fiber.Handler {
 	}
 }
 
-func publicEBS(next fiber.Handler) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		c.SetUserContext(consumer.WithNoConsumerTransactionParticipants(c.UserContext()))
-		return next(c)
-	}
-}
-
 func ebsErrorDetails(res ebs_fields.EBSParserFields) ebs_fields.ErrorDetails {
 	return ebs_fields.ErrorDetails{
 		Code:    res.ResponseCode,

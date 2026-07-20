@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/internal/testdb"
 )
 
@@ -69,63 +71,107 @@ func newValidationDB(t *testing.T) *DB {
 	return db
 }
 
-func TestStore_EnsureTenant_MissingTenantID(t *testing.T) {
-	s := newTestStore(t)
-	err := s.EnsureTenant(context.Background(), "")
-	if !errors.Is(err, ErrMissingTenantID) {
-		t.Fatalf("expected ErrMissingTenantID, got %v", err)
+func TestStoreProvisionTenantCatalogIsIdempotent(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	if err := MigrateScope(ctx, db, MigrationScopeIdentityAuth); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := tenantcatalog.New([]tenantcatalog.Tenant{
+		{ID: "tenant-cutover", Name: "Tenant Cutover"},
+		{ID: "tenant-sandbox", Name: "Tenant Sandbox"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := New(db)
+	if err := store.ProvisionTenantCatalog(ctx, catalog); err != nil {
+		t.Fatal(err)
+	}
+	first := tenantCatalogSnapshot(t, ctx, db)
+	if err := store.ProvisionTenantCatalog(ctx, catalog); err != nil {
+		t.Fatal(err)
+	}
+	if second := tenantCatalogSnapshot(t, ctx, db); !reflect.DeepEqual(second, first) {
+		t.Fatalf("second provision changed rows: first=%#v second=%#v", first, second)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE tenants SET name = 'drifted' WHERE id = 'tenant-sandbox'"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ProvisionTenantCatalog(ctx, catalog); err != nil {
+		t.Fatal(err)
+	}
+	converged := tenantCatalogSnapshot(t, ctx, db)
+	if err := store.ProvisionTenantCatalog(ctx, catalog); err != nil {
+		t.Fatal(err)
+	}
+	if steady := tenantCatalogSnapshot(t, ctx, db); !reflect.DeepEqual(steady, converged) {
+		t.Fatalf("steady provision changed rows: converged=%#v steady=%#v", converged, steady)
+	}
+	want := []tenantCatalogRow{
+		{ID: "tenant-cutover", Name: "Tenant Cutover", Version: converged[0].Version},
+		{ID: "tenant-sandbox", Name: "Tenant Sandbox", Version: converged[1].Version},
+	}
+	if !reflect.DeepEqual(converged, want) {
+		t.Fatalf("tenants = %#v, want %#v", converged, want)
 	}
 }
 
-func TestStore_EnsureTenant_RejectsReservedTenantID(t *testing.T) {
-	s := newTestStore(t)
-	err := s.EnsureTenant(context.Background(), "default")
-	if !errors.Is(err, ErrInvalidTenantID) {
-		t.Fatalf("expected ErrInvalidTenantID, got %v", err)
+func TestStoreProvisionTenantCatalogRejectsExtraDatabaseTenantAtomically(t *testing.T) {
+	ctx := context.Background()
+	db := newValidationDB(t)
+	if err := MigrateScope(ctx, db, MigrationScopeIdentityAuth); err != nil {
+		t.Fatal(err)
 	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO tenants(id, name, created_at) VALUES ('tenant-extra', 'Extra Tenant', NOW())"); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := tenantcatalog.New([]tenantcatalog.Tenant{
+		{ID: "tenant-cutover", Name: "Tenant Cutover"},
+		{ID: "tenant-sandbox", Name: "Tenant Sandbox"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := New(db).ProvisionTenantCatalog(ctx, catalog); !errors.Is(err, ErrTenantCatalogMismatch) {
+		t.Fatalf("ProvisionTenantCatalog() error = %v, want ErrTenantCatalogMismatch", err)
+	}
+	rows := tenantCatalogSnapshot(t, ctx, db)
+	if len(rows) != 1 || rows[0].ID != "tenant-extra" || rows[0].Name != "Extra Tenant" {
+		t.Fatalf("failed provision was not atomic: %#v", rows)
+	}
+}
+
+type tenantCatalogRow struct {
+	ID      string `db:"id"`
+	Name    string `db:"name"`
+	Version string `db:"version"`
+}
+
+func tenantCatalogSnapshot(t testing.TB, ctx context.Context, db *DB) []tenantCatalogRow {
+	t.Helper()
+	var rows []tenantCatalogRow
+	if err := db.SelectContext(ctx, &rows, "SELECT id, name, xmin::text AS version FROM tenants ORDER BY id"); err != nil {
+		t.Fatal(err)
+	}
+	return rows
 }
 
 func TestValidateTenantID(t *testing.T) {
-	got, err := ValidateTenantID(" tenant_1 ")
+	got, err := ValidateTenantID("tenant-cutover")
 	if err != nil {
 		t.Fatalf("ValidateTenantID() error = %v", err)
 	}
-	if got != "tenant_1" {
-		t.Fatalf("tenantID = %q, want tenant_1", got)
+	if got != "tenant-cutover" {
+		t.Fatalf("tenantID = %q, want tenant-cutover", got)
 	}
-	for _, tenantID := range []string{"", "   "} {
-		if _, err := ValidateTenantID(tenantID); !errors.Is(err, ErrMissingTenantID) {
-			t.Fatalf("ValidateTenantID(%q) = %v, want ErrMissingTenantID", tenantID, err)
-		}
+	if _, err := ValidateTenantID(""); !errors.Is(err, ErrMissingTenantID) {
+		t.Fatalf("ValidateTenantID(\"\") = %v, want ErrMissingTenantID", err)
 	}
-	for _, tenantID := range []string{"default", "Default", " default "} {
+	for _, tenantID := range []string{"   ", " tenant-cutover ", "tenant_1", "Tenant-Cutover", "default", "Default", " default "} {
 		if _, err := ValidateTenantID(tenantID); !errors.Is(err, ErrInvalidTenantID) {
 			t.Fatalf("ValidateTenantID(%q) = %v, want ErrInvalidTenantID", tenantID, err)
 		}
-	}
-}
-
-func TestStore_CreateToken_MissingTenantID(t *testing.T) {
-	s := &Store{}
-	err := s.CreateToken(context.Background(), "", &ebs_fields.Token{UUID: "u1"})
-	if !errors.Is(err, ErrMissingTenantID) {
-		t.Fatalf("expected ErrMissingTenantID, got %v", err)
-	}
-}
-
-func TestStore_CreateToken_RequiresExplicitFields(t *testing.T) {
-	s := &Store{}
-	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{})
-	if !errors.Is(err, ErrMissingUUID) {
-		t.Fatalf("expected ErrMissingUUID, got %v", err)
-	}
-	err = s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1"})
-	if !errors.Is(err, ErrInvalidUserID) {
-		t.Fatalf("expected ErrInvalidUserID, got %v", err)
-	}
-	err = s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", UserID: 1, Amount: -1})
-	if !errors.Is(err, ErrInvalidAmount) {
-		t.Fatalf("expected ErrInvalidAmount, got %v", err)
 	}
 }
 
@@ -170,14 +216,14 @@ func (fn execFunc) ExecContext(ctx context.Context, stmt string, args ...any) (s
 func TestExecContextRequireRowsAffected(t *testing.T) {
 	err := execContextRequireRowsAffected(context.Background(), execFunc(func(context.Context, string, ...any) (sql.Result, error) {
 		return rowsAffectedResult(1), nil
-	}), "UPDATE tokens SET is_paid = TRUE")
+	}), "UPDATE users SET language = 'en'")
 	if err != nil {
 		t.Fatalf("execContextRequireRowsAffected() error = %v", err)
 	}
 
 	err = execContextRequireRowsAffected(context.Background(), execFunc(func(context.Context, string, ...any) (sql.Result, error) {
 		return rowsAffectedResult(0), nil
-	}), "UPDATE tokens SET is_paid = TRUE")
+	}), "UPDATE users SET language = 'en'")
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("zero rows error = %v, want %v", err, sql.ErrNoRows)
 	}
@@ -192,23 +238,6 @@ func TestErrNotFoundOnlyMatchesNoRows(t *testing.T) {
 	}
 	if ErrNotFound(errors.New("database file not found")) {
 		t.Fatalf("ErrNotFound(non-store error) = true, want false")
-	}
-}
-
-func TestStore_GenericBeneficiaryOperationsAreTerminal(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	operations := []func() error{
-		func() error { _, err := s.ListBeneficiaries(ctx, "tenant", 42); return err },
-		func() error {
-			return s.UpsertBeneficiary(ctx, "tenant", 42, ebs_fields.Beneficiary{Data: "6011000073184629", BillType: "mobile"})
-		},
-		func() error { return s.DeleteBeneficiary(ctx, "tenant", 42, "6011000073184629") },
-	}
-	for index, operation := range operations {
-		if err := operation(); !errors.Is(err, ErrBeneficiaryRetired) {
-			t.Fatalf("operation %d error = %v, want %v", index, err, ErrBeneficiaryRetired)
-		}
 	}
 }
 
@@ -239,34 +268,10 @@ func TestStore_CacheBillerRequiresExplicitFields(t *testing.T) {
 	}
 }
 
-func TestStore_CreateToken_RequiresDataKeyForDestinationPAN(t *testing.T) {
-	s := &Store{}
-	err := s.CreateToken(context.Background(), "t1", &ebs_fields.Token{UUID: "u1", UserID: 1, Amount: 1, ToCard: "9222081700000000"})
-	if !errors.Is(err, ErrMissingDataKey) {
-		t.Fatalf("expected ErrMissingDataKey, got %v", err)
-	}
-}
-
-func TestStore_GetNotifications_MissingMobile(t *testing.T) {
-	s := newTestStore(t)
-	_, err := s.GetNotifications(context.Background(), "t1", "")
-	if !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("expected ErrMissingMobile, got %v", err)
-	}
-}
-
-func TestStore_MarkNotificationsRead_MissingMobile(t *testing.T) {
-	s := newTestStore(t)
-	err := s.MarkNotificationsRead(context.Background(), "t1", "")
-	if !errors.Is(err, ErrMissingMobile) {
-		t.Fatalf("expected ErrMissingMobile, got %v", err)
-	}
-}
-
 func newIdentityAuthTestStore(t *testing.T, ctx context.Context) *Store {
 	t.Helper()
 	db := newValidationDB(t)
-	if err := MigrateScope(ctx, db, "tenant", MigrationScopeIdentityAuth); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeIdentityAuth); err != nil {
 		t.Fatalf("migrate identity-auth scope: %v", err)
 	}
 	return New(db)
@@ -286,16 +291,6 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 			_, err := s.GetCacheBiller(ctx, tenantID, "0990000000")
 			return err
 		}},
-		{"CreateToken", func(tenantID string) error {
-			return s.CreateToken(ctx, tenantID, &ebs_fields.Token{UUID: "token-uuid"})
-		}},
-		{"GetTokenByUUID", func(tenantID string) error {
-			_, err := s.GetTokenByUUID(ctx, tenantID, "token-uuid")
-			return err
-		}},
-		{"MarkTokenPaid", func(tenantID string) error {
-			return s.MarkTokenPaid(ctx, tenantID, "token-uuid", "rail-uuid", 1)
-		}},
 		{"CreateTransaction", func(tenantID string) error {
 			return s.CreateTransaction(ctx, tenantID, ebs_fields.EBSResponse{UUID: "transaction-uuid"})
 		}},
@@ -314,27 +309,9 @@ func TestStore_CoreTenantValidationFailsBeforeDB(t *testing.T) {
 		{"CreatePushData", func(tenantID string) error {
 			return s.CreatePushData(ctx, tenantID, &ebs_fields.PushDataRecord{UUID: "push-uuid"})
 		}},
-		{"GetNotifications", func(tenantID string) error {
-			_, err := s.GetNotifications(ctx, tenantID, "0990000000")
-			return err
-		}},
-		{"MarkNotificationsRead", func(tenantID string) error {
-			return s.MarkNotificationsRead(ctx, tenantID, "0990000000")
-		}},
 		{"GetMeterName", func(tenantID string) error {
 			_, err := s.GetMeterName(ctx, tenantID, "nec")
 			return err
-		}},
-		{"GetAllTokensByUserID", func(tenantID string) error {
-			_, err := s.GetAllTokensByUserID(ctx, tenantID, 1)
-			return err
-		}},
-		{"GetAllTokensByUserIDAndCartID", func(tenantID string) error {
-			_, err := s.GetAllTokensByUserIDAndCartID(ctx, tenantID, 1, "cart")
-			return err
-		}},
-		{"UpdateTokenCard", func(tenantID string) error {
-			return s.UpdateTokenCard(ctx, tenantID, "token-uuid", "9222081700000000")
 		}},
 		{"UpdatePaymentRequest", func(tenantID string) error {
 			return s.UpdatePaymentRequest(ctx, tenantID, "push-uuid", ebs_fields.QrData{})
@@ -363,15 +340,13 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)
 	tenantID := "tenant-targeted-updates"
-	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeCardVault, MigrationScopeNotificationChat} {
-		if err := MigrateScope(ctx, db, tenantID, scope); err != nil {
+	for _, scope := range []string{MigrationScopeIdentityAuth, MigrationScopeNotificationChat} {
+		if err := MigrateScope(ctx, db, scope); err != nil {
 			t.Fatalf("migrate %s: %v", scope, err)
 		}
 	}
 	s := New(db, WithDataKey("test-data-key"))
-	if err := s.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionTestTenant(t, ctx, s, tenantID, "Missing User Tenant")
 	fullname := "Missing User"
 	tests := []struct {
 		name string
@@ -383,17 +358,8 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 		{"SetProfileDeviceToken", func() error {
 			return s.SetProfileDeviceToken(ctx, tenantID, 999, "device-token")
 		}},
-		{"MarkTokenPaid", func() error {
-			return s.MarkTokenPaid(ctx, tenantID, "missing-token", "rail-uuid", 1)
-		}},
-		{"UpdateTokenCard", func() error {
-			return s.UpdateTokenCard(ctx, tenantID, "missing-token", "")
-		}},
 		{"UpdatePaymentRequest", func() error {
 			return s.UpdatePaymentRequest(ctx, tenantID, "missing-push", ebs_fields.QrData{UUID: "payment-1"})
-		}},
-		{"updateTokenCard", func() error {
-			return s.updateTokenCard(ctx, tenantID, "missing-token", "hash:missing-token-card", "enc:missing-token-card")
 		}},
 	}
 	for _, tt := range tests {
@@ -402,26 +368,5 @@ func TestStoreTargetedUpdatesReportMissingRows(t *testing.T) {
 				t.Fatalf("%s error = %v, want %v", tt.name, err, sql.ErrNoRows)
 			}
 		})
-	}
-}
-
-func TestLegacyCardStoreOperationsAreTerminal(t *testing.T) {
-	s := &Store{}
-	ctx := context.Background()
-	operations := []func() error{
-		func() error { _, err := s.ListCardsByUserID(ctx, "tenant", 1); return err },
-		func() error { _, err := s.ListCardsByMobile(ctx, "tenant", "0912141660"); return err },
-		func() error { return s.AddCards(ctx, "tenant", 1, nil) },
-		func() error { return s.UpdateCard(ctx, "tenant", 1, ebs_fields.Card{}) },
-		func() error { return s.DeleteCard(ctx, "tenant", 1, "9222081700000000") },
-		func() error { return s.SetMainCard(ctx, "tenant", 1, "9222081700000000") },
-		func() error { _, err := s.GetPanByMobile(ctx, "tenant", "0912141660"); return err },
-		func() error { _, err := s.CardExists(ctx, "tenant", "9222081700000000"); return err },
-		func() error { _, err := s.GetDeviceIDsByPan(ctx, "tenant", "9222081700000000"); return err },
-	}
-	for index, operation := range operations {
-		if err := operation(); !errors.Is(err, ErrLegacyCardOperation) {
-			t.Fatalf("legacy operation %d error = %v, want %v", index, err, ErrLegacyCardOperation)
-		}
 	}
 }

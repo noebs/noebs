@@ -1,0 +1,7 @@
+api_version: noebs.sd/keycloak-memberships/v1
+subject: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+memberships:
+  - tenant: tenant-cutover
+    class: user
+  - tenant: tenant-sandbox
+    class: backoffice

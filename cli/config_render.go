@@ -40,12 +40,12 @@ func isRenderKubernetesSecretsCommand() bool {
 	return len(os.Args) > 1 && os.Args[1] == "render-kubernetes-secrets"
 }
 
-func isPrepareKubernetesReleaseCommand() bool {
-	return len(os.Args) > 1 && os.Args[1] == "prepare-kubernetes-release"
+func isRenderKeycloakTransportCACommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "render-keycloak-transport-ca"
 }
 
-func isRenderKubernetesReleaseInputTemplateCommand() bool {
-	return len(os.Args) > 1 && os.Args[1] == "render-kubernetes-release-input-template"
+func isPrepareKubernetesReleaseCommand() bool {
+	return len(os.Args) > 1 && os.Args[1] == "prepare-kubernetes-release"
 }
 
 func isConfigUtilityCommand() bool {
@@ -54,12 +54,14 @@ func isConfigUtilityCommand() bool {
 		isValidateDeploymentCommand() ||
 		isValidateKubernetesDeploymentCommand() ||
 		isRenderKubernetesSecretsCommand() ||
+		isRenderKeycloakTransportCACommand() ||
+		isRenderKeycloakBootstrapSecretsCommand() ||
 		isPrepareKubernetesReleaseCommand() ||
 		isReconcileKeycloakCommand() ||
+		isAssignKeycloakMembershipsCommand() ||
+		isLookupKeycloakSubjectCommand() ||
 		isDeleteKeycloakBootstrapCommand() ||
-		isInternalHealthcheckCommand() ||
-		isRenderKubernetesReleaseInputTemplateCommand() ||
-		isAuditKubernetesReleaseInputsCommand()
+		isInternalHealthcheckCommand()
 }
 
 func renderConfigFiles() error {
@@ -68,6 +70,9 @@ func renderConfigFiles() error {
 		return err
 	}
 
+	if err := rejectRetiredHumanAuthConfig(noebs); err != nil {
+		return err
+	}
 	role, err := parseServiceRole(firstString(noebs, "service_role"))
 	if err != nil {
 		return err

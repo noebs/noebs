@@ -17,10 +17,9 @@ var (
 type Role string
 
 const (
-	RoleUser          Role = "user"
-	RoleBackoffice    Role = "backoffice"
-	RoleTenantAdmin   Role = "tenant-admin"
-	RolePlatformAdmin Role = "platform-admin"
+	RoleUser        Role = "user"
+	RoleBackoffice  Role = "backoffice"
+	RoleTenantAdmin Role = "tenant-admin"
 )
 
 // Permission names are noebs-api client roles attached to organization
@@ -39,8 +38,6 @@ const (
 	PermissionWalletWorkflowReject  Permission = "wallet:workflow:reject"
 )
 
-// ParseTenantRole accepts only tenant-scoped roles. PlatformAdmin is a realm
-// role and must never be accepted from an organization's resource access.
 func ParseTenantRole(raw string) (Role, error) {
 	switch Role(raw) {
 	case RoleUser, RoleBackoffice, RoleTenantAdmin:
@@ -72,6 +69,7 @@ type Organization struct {
 	id          string
 	roles       []Role
 	permissions []Permission
+	invalidRole bool
 }
 
 func NewOrganization(id string, roles []Role, permissions []Permission) (Organization, error) {
@@ -107,6 +105,29 @@ func NewOrganization(id string, roles []Role, permissions []Permission) (Organiz
 	return Organization{id: id, roles: copyRoles, permissions: copyPermissions}, nil
 }
 
+// NewOrganizationClaim parses one noebs-api resource_access entry. Unknown
+// values make only this membership unusable; SelectTenant reports ErrInvalidRole
+// if the caller selects it.
+func NewOrganizationClaim(id string, access []string) (Organization, error) {
+	if id == "" {
+		return Organization{}, ErrInvalidClaims
+	}
+	roles := make([]Role, 0, len(access))
+	permissions := make([]Permission, 0, len(access))
+	for _, raw := range access {
+		if role, err := ParseTenantRole(raw); err == nil {
+			roles = append(roles, role)
+			continue
+		}
+		if permission, err := ParsePermission(raw); err == nil {
+			permissions = append(permissions, permission)
+			continue
+		}
+		return Organization{id: id, invalidRole: true}, nil
+	}
+	return NewOrganization(id, roles, permissions)
+}
+
 func (o Organization) ID() string { return o.id }
 
 func (o Organization) Roles() []Role { return slices.Clone(o.roles) }
@@ -136,7 +157,6 @@ type Identity struct {
 type Claims struct {
 	identity      Identity
 	organizations map[string]Organization
-	platformAdmin bool
 }
 
 type Membership struct {
@@ -146,7 +166,7 @@ type Membership struct {
 	Permissions    []Permission
 }
 
-func NewClaims(identity Identity, organizations map[string]Organization, platformAdmin bool) (Claims, error) {
+func NewClaims(identity Identity, organizations map[string]Organization) (Claims, error) {
 	if identity.Issuer == "" || identity.Subject == "" || identity.AuthorizedParty == "" ||
 		identity.IssuedAt.IsZero() || identity.ExpiresAt.IsZero() || !identity.ExpiresAt.After(identity.IssuedAt) {
 		return Claims{}, ErrInvalidClaims
@@ -160,18 +180,16 @@ func NewClaims(identity Identity, organizations map[string]Organization, platfor
 			id:          organization.id,
 			roles:       slices.Clone(organization.roles),
 			permissions: slices.Clone(organization.permissions),
+			invalidRole: organization.invalidRole,
 		}
 	}
 	return Claims{
 		identity:      identity,
 		organizations: copyOrganizations,
-		platformAdmin: platformAdmin,
 	}, nil
 }
 
 func (c Claims) Identity() Identity { return c.identity }
-
-func (c Claims) PlatformAdmin() bool { return c.platformAdmin }
 
 func (c Claims) Memberships() []Membership {
 	tenants := make([]string, 0, len(c.organizations))
@@ -182,6 +200,9 @@ func (c Claims) Memberships() []Membership {
 	memberships := make([]Membership, 0, len(tenants))
 	for _, tenant := range tenants {
 		organization := c.organizations[tenant]
+		if organization.invalidRole {
+			continue
+		}
 		memberships = append(memberships, Membership{
 			TenantID:       tenant,
 			OrganizationID: organization.id,

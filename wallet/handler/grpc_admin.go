@@ -5,8 +5,10 @@ import (
 	"strings"
 
 	gateway "github.com/adonese/noebs/apigateway"
+	"github.com/adonese/noebs/apperr"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
-	"github.com/adonese/noebs/wallet/rbac"
+	"github.com/adonese/noebs/internal/backofficeauth"
+	"github.com/adonese/noebs/internal/tenantauth"
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/grpc/metadata"
 )
@@ -80,30 +82,18 @@ func (h *GRPCAdminHandler) ManualTransferDetail(c *fiber.Ctx) error {
 }
 
 func (h *GRPCAdminHandler) Fees(c *fiber.Ctx) error {
-	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
-		return jsonResponse(c, 0, err)
-	}
 	return h.render(c, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_FEES, nil)
 }
 
 func (h *GRPCAdminHandler) CreateFeeConfig(c *fiber.Ctx) error {
-	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
-		return jsonResponse(c, 0, err)
-	}
 	return h.render(c, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE, nil)
 }
 
 func (h *GRPCAdminHandler) Rates(c *fiber.Ctx) error {
-	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
-		return jsonResponse(c, 0, err)
-	}
 	return h.render(c, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_RATES, nil)
 }
 
 func (h *GRPCAdminHandler) CreateRate(c *fiber.Ctx) error {
-	if err := requirePermission(c, rbac.PermManageConfig); err != nil {
-		return jsonResponse(c, 0, err)
-	}
 	return h.render(c, walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE, nil)
 }
 
@@ -119,6 +109,9 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 	if err := authenticatedAdminIdentity(c); err != nil {
 		return jsonResponse(c, 0, err)
 	}
+	if err := requirePermission(c, adminActionPermission(action)); err != nil {
+		return jsonResponse(c, 0, err)
+	}
 	tenantID, err := authenticatedTenantID(c)
 	if err != nil {
 		return jsonResponse(c, 0, err)
@@ -129,7 +122,11 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 		Form:   formArgs(c),
 		Path:   stringMap(path),
 	}
-	resp, err := h.Client.RenderWalletAdmin(adminOutgoingContext(c, tenantID), req)
+	outgoing, err := adminOutgoingContext(c, tenantID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	resp, err := h.Client.RenderWalletAdmin(outgoing, req)
 	if err != nil {
 		return jsonResponse(c, 0, mapWalletGRPCError(err))
 	}
@@ -143,14 +140,40 @@ func (h *GRPCAdminHandler) render(c *fiber.Ctx, action walletv1.AdminWalletActio
 	return c.Status(statusCode).Send(resp.GetBody())
 }
 
-func adminOutgoingContext(c *fiber.Ctx, tenantID string) context.Context {
-	return metadata.AppendToOutgoingContext(
-		c.UserContext(),
-		strings.ToLower(gateway.GatewayAdminIdentityHeader),
-		gateway.GatewayAdminIdentityValue,
-		strings.ToLower(gateway.GatewayTenantIDHeader),
-		tenantID,
-	)
+func adminOutgoingContext(c *fiber.Ctx, tenantID string) (context.Context, error) {
+	principal, ok := gateway.InternalPrincipalIdentity(c)
+	if !ok || principal.TenantID != tenantID {
+		return nil, apperr.ErrUnauthorized
+	}
+	values := c.Request().Header.PeekAll(backofficeauth.HeaderCSRFToken)
+	if len(values) != 1 {
+		return nil, apperr.ErrUnauthorized
+	}
+	csrfToken := string(values[0])
+	if err := backofficeauth.ValidateCSRFToken(csrfToken); err != nil {
+		return nil, apperr.ErrUnauthorized
+	}
+	ctx := principalOutgoingContext(c.UserContext(), principal)
+	return metadata.AppendToOutgoingContext(ctx, strings.ToLower(backofficeauth.HeaderCSRFToken), csrfToken), nil
+}
+
+func adminActionPermission(action walletv1.AdminWalletAction) tenantauth.Permission {
+	switch action {
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_AUDIT_EVENTS:
+		return tenantauth.PermissionWalletAuditRead
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER:
+		return tenantauth.PermissionWalletManualCreate
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE:
+		return tenantauth.PermissionWalletFeesWrite
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE:
+		return tenantauth.PermissionWalletRatesWrite
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER:
+		return tenantauth.PermissionWalletWorkflowApprove
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_REJECT_TRANSFER:
+		return tenantauth.PermissionWalletWorkflowReject
+	default:
+		return tenantauth.PermissionWalletRead
+	}
 }
 
 func queryArgs(c *fiber.Ctx) map[string]string {

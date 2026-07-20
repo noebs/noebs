@@ -15,11 +15,8 @@ import (
 )
 
 func bindJSON(c *fiber.Ctx, dst interface{}) error {
-	if len(c.Body()) == 0 {
-		return apperr.ErrEmptyBody
-	}
-	if err := json.Unmarshal(c.Body(), dst); err != nil {
-		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	if err := decodeJSON(c, dst); err != nil {
+		return err
 	}
 	if err := ebs_fields.ValidateStruct(dst); err != nil {
 		return apperr.Wrap(err, apperr.ErrValidation, err.Error())
@@ -27,7 +24,11 @@ func bindJSON(c *fiber.Ctx, dst interface{}) error {
 	return nil
 }
 
-func bindStrictJSON(c *fiber.Ctx, dst interface{}) error {
+func parseJSON(c *fiber.Ctx, dst interface{}) error {
+	return decodeJSON(c, dst)
+}
+
+func decodeJSON(c *fiber.Ctx, dst interface{}) error {
 	if len(c.Body()) == 0 {
 		return apperr.ErrEmptyBody
 	}
@@ -40,19 +41,6 @@ func bindStrictJSON(c *fiber.Ctx, dst interface{}) error {
 		if err == nil {
 			err = errors.New("request body must contain one JSON value")
 		}
-		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
-	}
-	if err := ebs_fields.ValidateStruct(dst); err != nil {
-		return apperr.Wrap(err, apperr.ErrValidation, err.Error())
-	}
-	return nil
-}
-
-func parseJSON(c *fiber.Ctx, dst interface{}) error {
-	if len(c.Body()) == 0 {
-		return apperr.ErrEmptyBody
-	}
-	if err := json.Unmarshal(c.Body(), dst); err != nil {
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	}
 	return nil
@@ -70,15 +58,6 @@ func jsonResponse(c *fiber.Ctx, code int, payload interface{}) error {
 		code = http.StatusOK
 	}
 	return c.Status(code).JSON(payload)
-}
-
-func getMobile(c *fiber.Ctx) string {
-	if v := c.Locals("mobile"); v != nil {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
 }
 
 func getUserID(c *fiber.Ctx) int64 {
@@ -127,18 +106,13 @@ func statusForError(err error) int {
 		errors.Is(err, store.ErrEnrollmentClaimMismatch),
 		errors.Is(err, store.ErrFundedClaimMismatch):
 		return http.StatusConflict
-	case errors.Is(err, store.ErrEnrollmentIntentExpired),
-		errors.Is(err, consumer.ErrUpgradeRequired):
+	case errors.Is(err, store.ErrEnrollmentIntentExpired):
 		return http.StatusGone
-	case errors.Is(err, store.ErrPaymentTokenUnavailable):
-		return http.StatusConflict
 	case errors.Is(err, store.ErrMissingTenantID),
 		errors.Is(err, store.ErrInvalidTenantID),
-		errors.Is(err, store.ErrMissingToken),
+		errors.Is(err, store.ErrMissingDeviceToken),
 		errors.Is(err, store.ErrMissingUUID),
 		errors.Is(err, store.ErrInvalidUserID),
-		errors.Is(err, store.ErrInvalidAmount),
-		errors.Is(err, store.ErrInvalidPaymentTokenStatus),
 		errors.Is(err, store.ErrMissingMobile),
 		errors.Is(err, store.ErrInvalidMobile),
 		errors.Is(err, store.ErrMissingPAN),
@@ -157,12 +131,6 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrMissingMobile),
 		errors.Is(err, consumer.ErrMissingCardExpiry),
 		errors.Is(err, consumer.ErrMissingUUID),
-		errors.Is(err, consumer.ErrAmountMismatch),
-		errors.Is(err, consumer.ErrCardNotMatched),
-		errors.Is(err, consumer.ErrInvalidPaymentToken),
-		errors.Is(err, consumer.ErrAmbiguousPaymentToken),
-		errors.Is(err, consumer.ErrInvalidQuickPaymentRequest),
-		errors.Is(err, consumer.ErrReceiverHasNoCard),
 		errors.Is(err, consumer.ErrMissingBillerID),
 		errors.Is(err, consumer.ErrMissingMerchantID),
 		errors.Is(err, consumer.ErrInvalidMerchantID),
@@ -181,11 +149,8 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, consumer.ErrCardVaultCommand),
 		errors.Is(err, consumer.ErrNotificationCommand),
-		errors.Is(err, consumer.ErrBillerHookPost),
 		errors.Is(err, consumer.ErrInvalidPaymentInfo),
 		errors.Is(err, consumer.ErrMissingIssuedPAN):
-		return http.StatusBadGateway
-	case errors.Is(err, consumer.ErrPaymentOutcomeUnknown):
 		return http.StatusBadGateway
 	case errors.Is(err, consumer.ErrEnrollmentOutcomeUnknown):
 		return http.StatusBadGateway
@@ -200,7 +165,6 @@ func statusForError(err error) int {
 		errors.Is(err, consumer.ErrInvalidCardVault),
 		errors.Is(err, consumer.ErrMissingNotification),
 		errors.Is(err, consumer.ErrInvalidNotification),
-		errors.Is(err, consumer.ErrInvalidBillerHookEndpoint),
 		errors.Is(err, store.ErrMissingDataKey),
 		errors.Is(err, consumer.ErrMissingEnrollmentPublicKey),
 		errors.Is(err, consumer.ErrInvalidEnrollmentPublicKey),

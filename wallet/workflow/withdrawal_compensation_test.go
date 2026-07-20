@@ -77,9 +77,9 @@ func TestWithdrawalApprovalRejectionReturnsHoldReleaseError(t *testing.T) {
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(WithdrawalApprovalSignal, WithdrawalApprovalDecision{
-			Approved:   false,
-			ApproverID: 42,
-			Reason:     "risk",
+			Approved:            false,
+			DecidedByOperatorID: 42,
+			Reason:              "risk",
 		})
 	}, time.Second)
 

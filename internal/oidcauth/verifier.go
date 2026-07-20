@@ -111,7 +111,6 @@ type wireClaims struct {
 	AuthorizedParty string                      `json:"azp"`
 	TokenType       string                      `json:"typ"`
 	Organization    map[string]wireOrganization `json:"organization"`
-	RealmAccess     wireRoleAccess              `json:"realm_access"`
 }
 
 type wireOrganization struct {
@@ -179,31 +178,14 @@ func (v *Verifier) validateClaims(claims *wireClaims) error {
 func (v *Verifier) domainClaims(claims *wireClaims) (tenantauth.Claims, error) {
 	organizations := make(map[string]tenantauth.Organization, len(claims.Organization))
 	for tenant, wireOrganization := range claims.Organization {
-		roles := make([]tenantauth.Role, 0)
-		permissions := make([]tenantauth.Permission, 0)
-		for _, rawRole := range wireOrganization.ResourceAccess[v.audience].Roles {
-			role, err := tenantauth.ParseTenantRole(rawRole)
-			if err == nil {
-				roles = append(roles, role)
-				continue
-			}
-			permission, err := tenantauth.ParsePermission(rawRole)
-			if err == nil {
-				permissions = append(permissions, permission)
-			}
-		}
-		organization, err := tenantauth.NewOrganization(wireOrganization.ID, roles, permissions)
+		organization, err := tenantauth.NewOrganizationClaim(
+			wireOrganization.ID,
+			wireOrganization.ResourceAccess[v.audience].Roles,
+		)
 		if err != nil || tenant == "" {
 			return tenantauth.Claims{}, ErrInvalidToken
 		}
 		organizations[tenant] = organization
-	}
-	platformAdmin := false
-	for _, role := range claims.RealmAccess.Roles {
-		if role == string(tenantauth.RolePlatformAdmin) {
-			platformAdmin = true
-			break
-		}
 	}
 	verified, err := tenantauth.NewClaims(tenantauth.Identity{
 		Issuer:          claims.Issuer,
@@ -211,7 +193,7 @@ func (v *Verifier) domainClaims(claims *wireClaims) (tenantauth.Claims, error) {
 		AuthorizedParty: claims.AuthorizedParty,
 		IssuedAt:        claims.IssuedAt.Time,
 		ExpiresAt:       claims.ExpiresAt.Time,
-	}, organizations, platformAdmin)
+	}, organizations)
 	if err != nil {
 		return tenantauth.Claims{}, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}

@@ -76,10 +76,6 @@ func TestParsePositiveQueryInt(t *testing.T) {
 func TestDashboardPaginationRejectsInvalidInputsBeforeDB(t *testing.T) {
 	service := Service{}
 	app := fiber.New()
-	app.Get("/merchant/:id", func(c *fiber.Ctx) error {
-		service.MerchantViews(c)
-		return nil
-	})
 	app.Get("/transactions", func(c *fiber.Ctx) error {
 		service.GetAll(c)
 		return nil
@@ -90,7 +86,6 @@ func TestDashboardPaginationRejectsInvalidInputsBeforeDB(t *testing.T) {
 	})
 
 	tests := []string{
-		"/merchant/terminal?page=abc",
 		"/transactions?page=0",
 		"/transactions?size=-1",
 		"/transactions?perPage=-1",
@@ -168,7 +163,7 @@ func TestBrowserDashboardRejectsMalformedSearchBeforeDB(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/browser", strings.NewReader("{"))
-	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	req.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	resp, err := app.Test(req)
 	if err != nil {
@@ -200,14 +195,14 @@ func TestResolveTenantIDUsesValidatedTenantIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveTenantID() error = %v", err)
 		}
-		if tenantID != "tenant_1" {
-			t.Fatalf("tenantID = %q, want tenant_1", tenantID)
+		if tenantID != "tenant-1" {
+			t.Fatalf("tenantID = %q, want tenant-1", tenantID)
 		}
 		return c.SendStatus(http.StatusNoContent)
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(gateway.GatewayTenantIDHeader, " tenant_1 ")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -226,7 +221,7 @@ func TestResolveTenantIDDoesNotReadGatewayTenantHeaderDirectly(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -245,7 +240,7 @@ func TestResolveTenantIDIgnoresPublicTenantHeader(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("X-Tenant-ID", "tenant_1")
+	req.Header.Set("X-Tenant-ID", "tenant-1")
 	resp, err := app.Test(req)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -264,7 +259,7 @@ func TestMerchantTransactionsEndpointReturnsQueryErrors(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/merchant-transactions?terminal=terminal-a", nil)
-	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant_1")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant-1")
 	resp, err := app.Test(req, 1000)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)

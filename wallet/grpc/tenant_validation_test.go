@@ -1,7 +1,6 @@
 package walletgrpc
 
 import (
-	"context"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -10,16 +9,15 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-func TestWorkflowRequestsValidateTenantBeforeTemporal(t *testing.T) {
+func TestWorkflowRequestsRejectInvalidOrMismatchedTenantBeforeTemporal(t *testing.T) {
 	server := NewServer(&wallet.Service{
 		Store:  &walletstore.Store{},
 		Config: ebs_fields.NoebsConfig{},
 	})
-	ctx := context.Background()
+	ctx := walletGatewayIdentityContext(42, "tenant")
 	cases := []struct {
 		name string
 		run  func(string) error
@@ -46,24 +44,9 @@ func TestWorkflowRequestsValidateTenantBeforeTemporal(t *testing.T) {
 				ToWalletId:     uuid.NewString(),
 				Amount:         100,
 				FromOwnerType:  "user",
-				FromOwnerId:    "1",
+				FromOwnerId:    "42",
 				ToOwnerType:    "user",
 				ToOwnerId:      "2",
-			})
-			return err
-		}},
-		{"manual_transfer", func(tenantID string) error {
-			adminCtx := metadata.NewIncomingContext(ctx, adminMetadata())
-			_, err := server.RequestManualTransfer(adminCtx, &walletv1.ManualTransferRequest{
-				TenantId:               tenantID,
-				IdempotencyKey:         "manual-ref",
-				TransferType:           "manual_debit",
-				WalletId:               uuid.NewString(),
-				Amount:                 100,
-				Currency:               "USD",
-				Reason:                 "test",
-				RequestedBy:            10,
-				ApprovalTimeoutSeconds: 60,
 			})
 			return err
 		}},
@@ -84,19 +67,20 @@ func TestWorkflowRequestsValidateTenantBeforeTemporal(t *testing.T) {
 	}
 	tenantCases := []struct {
 		tenantID string
+		wantCode codes.Code
 		wantErr  error
 	}{
-		{"", walletstore.ErrMissingTenantID},
-		{"default", walletstore.ErrInvalidTenantID},
+		{"default", codes.InvalidArgument, walletstore.ErrInvalidTenantID},
+		{"other-tenant", codes.PermissionDenied, nil},
 	}
 	for _, tc := range cases {
 		for _, tenantCase := range tenantCases {
 			t.Run(tc.name+"/"+tenantCase.tenantID, func(t *testing.T) {
 				err := tc.run(tenantCase.tenantID)
-				if status.Code(err) != codes.InvalidArgument {
-					t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
+				if status.Code(err) != tenantCase.wantCode {
+					t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), tenantCase.wantCode)
 				}
-				if status.Convert(err).Message() != tenantCase.wantErr.Error() {
+				if tenantCase.wantErr != nil && status.Convert(err).Message() != tenantCase.wantErr.Error() {
 					t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), tenantCase.wantErr.Error())
 				}
 			})
@@ -111,7 +95,7 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 			Config: cfg,
 		})
 	}
-	ctx := context.Background()
+	ctx := walletGatewayIdentityContext(42, "tenant")
 
 	cases := []struct {
 		name    string
@@ -222,7 +206,7 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 					ToWalletId:     uuid.NewString(),
 					Amount:         100,
 					FromOwnerType:  "user",
-					FromOwnerId:    "1",
+					FromOwnerId:    "42",
 					ToOwnerType:    "user",
 					ToOwnerId:      "2",
 				})
@@ -241,7 +225,7 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 					ToWalletId:     uuid.NewString(),
 					Amount:         100,
 					FromOwnerType:  "user",
-					FromOwnerId:    "1",
+					FromOwnerId:    "42",
 					ToOwnerType:    " \t ",
 					ToOwnerId:      "2",
 				})

@@ -16,10 +16,6 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 		name string
 		run  func(string) error
 	}{
-		{"GetCardsByUserID", func(tenantID string) error {
-			_, _, err := service.GetCardsByUserID(ctx, tenantID, 1)
-			return err
-		}},
 		{"AddDeviceToken", func(tenantID string) error {
 			return service.AddDeviceToken(ctx, tenantID, 1, "device-token")
 		}},
@@ -59,25 +55,14 @@ func TestUserServiceTenantValidationFailsBeforeDB(t *testing.T) {
 	}
 }
 
-func TestLegacyUserServiceCardWritesAreTerminal(t *testing.T) {
-	service := &Service{Store: &store.Store{}}
-	ctx := context.Background()
-	if err := service.AddCardsForUserID(ctx, "tenant", 1, "0990000000", []ebs_fields.Card{{Pan: " "}}); !errors.Is(err, store.ErrLegacyCardOperation) {
-		t.Fatalf("AddCardsForUserID error = %v, want %v", err, store.ErrLegacyCardOperation)
-	}
-	if err := service.EditCardForUserID(ctx, "tenant", 1, ebs_fields.Card{CardIdx: "9222081700000000", Pan: " "}); !errors.Is(err, store.ErrLegacyCardOperation) {
-		t.Fatalf("EditCardForUserID error = %v, want %v", err, store.ErrLegacyCardOperation)
-	}
-}
-
 func TestUserServiceRequiresExactProfileInputs(t *testing.T) {
 	service := &Service{Store: &store.Store{}}
 	ctx := context.Background()
 	if err := service.AddDeviceToken(ctx, "tenant", 0, "device-token"); !errors.Is(err, store.ErrInvalidUserID) {
 		t.Fatalf("invalid device-token user error = %v, want %v", err, store.ErrInvalidUserID)
 	}
-	if err := service.AddDeviceToken(ctx, "tenant", 1, " "); !errors.Is(err, store.ErrMissingToken) {
-		t.Fatalf("blank device token error = %v, want %v", err, store.ErrMissingToken)
+	if err := service.AddDeviceToken(ctx, "tenant", 1, " "); !errors.Is(err, store.ErrMissingDeviceToken) {
+		t.Fatalf("blank device token error = %v, want %v", err, store.ErrMissingDeviceToken)
 	}
 	if err := service.SetUserLanguage(ctx, "tenant", 1, " "); !errors.Is(err, store.ErrMissingLanguage) {
 		t.Fatalf("blank language error = %v, want %v", err, store.ErrMissingLanguage)

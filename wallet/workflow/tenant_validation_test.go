@@ -85,7 +85,7 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 					Amount:                 100,
 					Currency:               "USD",
 					Reason:                 "test",
-					RequestedBy:            10,
+					RequestedByOperatorID:  10,
 					ApprovalTimeoutSeconds: 60,
 				}
 			},
@@ -122,7 +122,7 @@ func TestWalletWorkflowsValidateTenantBeforeActivities(t *testing.T) {
 		wantErr  error
 	}{
 		{name: "missing", tenantID: "", wantErr: walletstore.ErrMissingTenantID},
-		{name: "blank", tenantID: "   ", wantErr: walletstore.ErrMissingTenantID},
+		{name: "noncanonical", tenantID: "   ", wantErr: walletstore.ErrInvalidTenantID},
 		{name: "reserved", tenantID: "default", wantErr: walletstore.ErrInvalidTenantID},
 	}
 
@@ -449,7 +449,7 @@ func TestManualTransferWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			Amount:                 100,
 			Currency:               "USD",
 			Reason:                 "test",
-			RequestedBy:            10,
+			RequestedByOperatorID:  10,
 			ApprovalTimeoutSeconds: 60,
 		}
 	}

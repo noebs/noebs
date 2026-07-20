@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/internal/testdb"
 	basestore "github.com/adonese/noebs/store"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -114,11 +115,15 @@ func newWalletActivityStore(t *testing.T) (*walletstore.Store, string) {
 	})
 
 	tenantID := "tenant-a"
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopeWalletLedger); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate wallet ledger scope: %v", err)
 	}
-	if err := basestore.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
+	catalog, err := tenantcatalog.New([]tenantcatalog.Tenant{{ID: tenantcatalog.ID(tenantID), Name: "Wallet Activity Tenant"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := basestore.New(db).ProvisionTenantCatalog(ctx, catalog); err != nil {
+		t.Fatalf("provision tenant: %v", err)
 	}
 	return walletstore.New(db), tenantID
 }

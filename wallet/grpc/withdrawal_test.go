@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/internal/testdb"
@@ -21,7 +20,6 @@ import (
 	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -67,7 +65,7 @@ func TestRequestWithdrawalRequiresPin(t *testing.T) {
 		VerificationTimeoutSeconds: 60,
 	}
 
-	_, err := server.RequestWithdrawal(context.Background(), req)
+	_, err := server.RequestWithdrawal(walletGatewayIdentityContext(42, "tenant"), req)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -79,129 +77,23 @@ func TestRequestWithdrawalRequiresPin(t *testing.T) {
 	}
 }
 
-func TestWithdrawalSignalsRequireAdminAuth(t *testing.T) {
-	svc := &wallet.Service{
-		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{},
-	}
-	server := NewServer(svc)
-
-	if _, err := server.SignalWithdrawalApproval(context.Background(), &walletv1.WithdrawalApprovalRequest{}); status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("expected permission denied for approval signal, got %v", status.Code(err))
-	}
-
-	if _, err := server.SignalWithdrawalVerification(context.Background(), &walletv1.WithdrawalDestinationVerificationRequest{}); status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("expected permission denied for verification signal, got %v", status.Code(err))
-	}
-}
-
-func TestWithdrawalSignalsValidateAfterAdminAuth(t *testing.T) {
-	svc := &wallet.Service{
-		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{},
-	}
-	server := NewServer(svc)
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-noebs-admin-identity", gateway.GatewayAdminIdentityValue))
-
-	if _, err := server.SignalWithdrawalApproval(ctx, &walletv1.WithdrawalApprovalRequest{}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected invalid argument for approval signal, got %v", status.Code(err))
-	}
-
-	if _, err := server.SignalWithdrawalVerification(ctx, &walletv1.WithdrawalDestinationVerificationRequest{}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected invalid argument for verification signal, got %v", status.Code(err))
-	}
-}
-
-func TestWithdrawalSignalsRejectBlankRequiredText(t *testing.T) {
-	svc := &wallet.Service{
-		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{},
-	}
-	server := NewServer(svc)
-	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-noebs-admin-identity", gateway.GatewayAdminIdentityValue))
-
-	approvalCases := []struct {
+func TestSignalWithdrawalApprovalValidatesCommand(t *testing.T) {
+	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+	tests := []struct {
 		name    string
-		req     *walletv1.WithdrawalApprovalRequest
-		wantErr error
+		command withdrawalApprovalCommand
+		want    error
 	}{
-		{
-			name: "workflow",
-			req: &walletv1.WithdrawalApprovalRequest{
-				WorkflowId: " \t ",
-				Approved:   false,
-				ApproverId: 22,
-				Reason:     "risk",
-			},
-			wantErr: walletstore.ErrMissingWorkflowID,
-		},
-		{
-			name: "rejection reason",
-			req: &walletv1.WithdrawalApprovalRequest{
-				WorkflowId: "wf-1",
-				Approved:   false,
-				ApproverId: 22,
-				Reason:     " \t ",
-			},
-			wantErr: walletstore.ErrMissingApprovalReason,
-		},
-		{
-			name: "approval proof",
-			req: &walletv1.WithdrawalApprovalRequest{
-				WorkflowId:     "wf-1",
-				Approved:       true,
-				ApproverId:     22,
-				ProofOfPayment: " \t ",
-			},
-			wantErr: walletstore.ErrMissingProofOfPayment,
-		},
+		{name: "workflow", command: withdrawalApprovalCommand{OperatorID: 1}, want: walletstore.ErrMissingWorkflowID},
+		{name: "operator", command: withdrawalApprovalCommand{WorkflowID: "wallet-withdrawal-tenant-ref"}, want: walletstore.ErrMissingApproverID},
+		{name: "approval proof", command: withdrawalApprovalCommand{WorkflowID: "wallet-withdrawal-tenant-ref", OperatorID: 1, Approved: true}, want: walletstore.ErrMissingProofOfPayment},
+		{name: "rejection reason", command: withdrawalApprovalCommand{WorkflowID: "wallet-withdrawal-tenant-ref", OperatorID: 1}, want: walletstore.ErrMissingApprovalReason},
 	}
-	for _, tc := range approvalCases {
-		t.Run("approval/"+tc.name, func(t *testing.T) {
-			_, err := server.SignalWithdrawalApproval(ctx, tc.req)
-			if status.Code(err) != codes.InvalidArgument {
-				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
-			}
-			if status.Convert(err).Message() != tc.wantErr.Error() {
-				t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), tc.wantErr.Error())
-			}
-		})
-	}
-
-	verificationCases := []struct {
-		name    string
-		req     *walletv1.WithdrawalDestinationVerificationRequest
-		wantErr error
-	}{
-		{
-			name: "workflow",
-			req: &walletv1.WithdrawalDestinationVerificationRequest{
-				WorkflowId:     " \t ",
-				VerificationId: 1,
-				Verified:       false,
-				Reason:         "risk",
-			},
-			wantErr: walletstore.ErrMissingWorkflowID,
-		},
-		{
-			name: "rejection reason",
-			req: &walletv1.WithdrawalDestinationVerificationRequest{
-				WorkflowId:     "wf-1",
-				VerificationId: 1,
-				Verified:       false,
-				Reason:         " \t ",
-			},
-			wantErr: walletstore.ErrMissingReason,
-		},
-	}
-	for _, tc := range verificationCases {
-		t.Run("verification/"+tc.name, func(t *testing.T) {
-			_, err := server.SignalWithdrawalVerification(ctx, tc.req)
-			if status.Code(err) != codes.InvalidArgument {
-				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
-			}
-			if status.Convert(err).Message() != tc.wantErr.Error() {
-				t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), tc.wantErr.Error())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := server.signalWithdrawalApproval(t.Context(), tt.command)
+			if status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != tt.want.Error() {
+				t.Fatalf("error = %v, want invalid argument %q", err, tt.want)
 			}
 		})
 	}
@@ -240,10 +132,10 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}()
 
 	tenantID := "tenant"
-	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopeWalletLedger); err != nil {
+	if err := store.MigrateScope(ctx, db, store.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate wallet-ledger db: %v", err)
 	}
-	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopePSPWebhook); err != nil {
+	if err := store.MigrateScope(ctx, db, store.MigrationScopePSPWebhook); err != nil {
 		t.Fatalf("migrate psp-webhook db: %v", err)
 	}
 
@@ -256,9 +148,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}
 	svc := wallet.NewService(db, cfg)
 	server := NewServer(svc)
-	if err := store.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "Withdrawal Tenant")
 	walletRow, err := svc.EnsureUserWallet(ctx, tenantID, 42, "USD")
 	if err != nil {
 		t.Fatalf("ensure user wallet: %v", err)
@@ -321,7 +211,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		VerificationTimeoutSeconds: 0,
 	}
 
-	resp, err := server.RequestWithdrawal(ctx, req)
+	resp, err := server.RequestWithdrawal(walletGatewayIdentityContext(42, "tenant"), req)
 	if err != nil {
 		t.Fatalf("request withdrawal: %v", err)
 	}

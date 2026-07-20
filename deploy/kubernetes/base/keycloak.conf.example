@@ -1,12 +1,17 @@
-http-enabled=true
-http-port=8080
+http-enabled=false
 http-relative-path=/auth
+https-port=8443
+https-certificate-file=/opt/keycloak/conf/tls.crt
+https-certificate-key-file=/opt/keycloak/conf/tls.key
+https-protocols=TLSv1.3
+http-management-scheme=http
+http-management-port=9000
 http-management-relative-path=/
 hostname=https://api.noebs.sd/auth
 hostname-strict=true
 hostname-backchannel-dynamic=false
 proxy-headers=xforwarded
-proxy-trusted-addresses=10.42.0.0/16
+proxy-trusted-addresses=10.42.0.1/32
 health-enabled=true
 metrics-enabled=true
 
@@ -14,3 +19,5 @@ db=postgres
 db-url=jdbc:postgresql://keycloak-postgres:5432/keycloak
 db-username=keycloak
 db-password=REPLACE_WITH_KEYCLOAK_POSTGRES_PASSWORD
+db-tls-mode=verify-server
+db-tls-trust-store-file=/opt/keycloak/conf/db-ca.pem

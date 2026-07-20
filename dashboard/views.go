@@ -19,11 +19,6 @@ type DashboardTableView struct {
 	SumFees        float32
 }
 
-type MerchantView struct {
-	Transactions []ebs_fields.EBSResponse
-	Issues       []merchantsIssues
-}
-
 type QRStatusView struct {
 	Transactions []ebs_fields.EBSResponse
 	PageCount    int

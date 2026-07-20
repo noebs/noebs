@@ -44,6 +44,11 @@ secrets.decrypted.yaml
 # Local Docker Compose runtime secrets/config. Kubernetes uses Secrets instead.
 /deploy/docker/keycloak/keycloak.conf
 /deploy/docker/keycloak/postgres-password.txt
+/deploy/docker/keycloak/ca.pem
+/deploy/docker/keycloak/postgres-tls.crt
+/deploy/docker/keycloak/postgres-tls.key
+/deploy/docker/keycloak/tls.crt
+/deploy/docker/keycloak/tls.key
 /deploy/docker/temporal/postgres-password.txt
 /deploy/docker/postgres/bootstrap.secrets.yaml
 /deploy/docker/secrets/*.secrets.yaml

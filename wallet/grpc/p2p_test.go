@@ -38,7 +38,7 @@ func TestRequestP2PTransferRequiresIdempotency(t *testing.T) {
 		ToOwnerId:     "2",
 	}
 
-	_, err := server.RequestP2PTransfer(context.Background(), req)
+	_, err := server.RequestP2PTransfer(walletGatewayIdentityContext(1, "tenant"), req)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -67,7 +67,7 @@ func TestRequestP2PTransferRequiresPIN(t *testing.T) {
 		ToOwnerId:      "2",
 	}
 
-	_, err := server.RequestP2PTransfer(context.Background(), req)
+	_, err := server.RequestP2PTransfer(walletGatewayIdentityContext(1, "tenant"), req)
 	if err == nil {
 		t.Fatalf("expected validation error")
 	}
@@ -104,7 +104,6 @@ func TestRequestP2PTransferPublicRequiresGatewayIdentity(t *testing.T) {
 }
 
 func TestRequestP2PTransferValidatesWalletsBeforeTemporal(t *testing.T) {
-	ctx := context.Background()
 	server, tenantID, _ := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 
 	ctrl := gomock.NewController(t)
@@ -124,7 +123,7 @@ func TestRequestP2PTransferValidatesWalletsBeforeTemporal(t *testing.T) {
 		ToOwnerId:      "2",
 	}
 
-	_, err := server.RequestP2PTransfer(ctx, req)
+	_, err := server.RequestP2PTransfer(walletGatewayIdentityContext(1, tenantID), req)
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.NotFound)
 	}
@@ -136,9 +135,7 @@ func TestRequestP2PTransferValidatesWalletsBeforeTemporal(t *testing.T) {
 func TestRequestP2PTransferRejectsInsufficientFundsBeforeTemporal(t *testing.T) {
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
-	if err := basestore.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "P2P Tenant")
 	fromWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 1, "USD")
 	if err != nil {
 		t.Fatalf("ensure from wallet: %v", err)
@@ -167,7 +164,7 @@ func TestRequestP2PTransferRejectsInsufficientFundsBeforeTemporal(t *testing.T) 
 		ToOwnerId:      "2",
 	}
 
-	_, err = server.RequestP2PTransfer(ctx, req)
+	_, err = server.RequestP2PTransfer(walletGatewayIdentityContext(1, tenantID), req)
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.FailedPrecondition)
 	}
@@ -179,9 +176,7 @@ func TestRequestP2PTransferRejectsInsufficientFundsBeforeTemporal(t *testing.T) 
 func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
-	if err := basestore.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "P2P Tenant")
 	fromWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 1, "USD")
 	if err != nil {
 		t.Fatalf("ensure from wallet: %v", err)
@@ -241,7 +236,7 @@ func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 		ToOwnerId:      "2",
 	}
 
-	resp, err := server.RequestP2PTransfer(ctx, req)
+	resp, err := server.RequestP2PTransfer(walletGatewayIdentityContext(1, tenantID), req)
 	if err != nil {
 		t.Fatalf("request P2P transfer: %v", err)
 	}

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -25,14 +23,17 @@ type appWalletConfig struct {
 }
 
 type appOAuthConfig struct {
-	GoogleClientID string `json:"google_client_id,omitempty"`
+	Issuer      string   `json:"issuer"`
+	ClientID    string   `json:"client_id"`
+	Audience    string   `json:"audience"`
+	Scopes      []string `json:"scopes"`
+	RedirectURI string   `json:"redirect_uri"`
 }
 
 type appFeatureConfig struct {
 	OpaqueCardManagement bool `json:"opaque_card_management"`
 	OpaqueBalance        bool `json:"opaque_balance"`
 	Chat                 bool `json:"chat"`
-	Notifications        bool `json:"notifications"`
 }
 
 func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
@@ -48,13 +49,16 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 			PINRequired:     cfg.WalletPINRequired,
 		},
 		OAuth: appOAuthConfig{
-			GoogleClientID: strings.TrimSpace(cfg.GoogleClientID),
+			Issuer:      strings.TrimSpace(cfg.OIDC.Issuer),
+			ClientID:    "noebs-mobile",
+			Audience:    strings.TrimSpace(cfg.OIDC.Audience),
+			Scopes:      []string{"openid", "organization:*"},
+			RedirectURI: "https://api.noebs.sd/mobile/oauth/callback",
 		},
 		Features: appFeatureConfig{
 			OpaqueCardManagement: cfg.OpaqueCardManagementEnabled,
 			OpaqueBalance:        cfg.OpaqueBalanceEnabled,
 			Chat:                 cfg.ChatEnabled,
-			Notifications:        cfg.NotificationsEnabled,
 		},
 	}, nil
 }
@@ -65,22 +69,6 @@ func configuredTenantID(cfg ebs_fields.NoebsConfig) (string, error) {
 
 func validateTenantID(tenantID string) (string, error) {
 	return store.ValidateTenantID(tenantID)
-}
-
-func ensureNoReservedTenant(ctx context.Context, s *store.Store) error {
-	if s == nil {
-		return nil
-	}
-	tenants, err := s.ListTenants(ctx)
-	if err != nil {
-		return err
-	}
-	for _, tenantID := range tenants {
-		if store.IsReservedTenantID(tenantID) {
-			return fmt.Errorf("%w: reserved tenant_id %q exists", store.ErrInvalidTenantID, strings.TrimSpace(tenantID))
-		}
-	}
-	return nil
 }
 
 func appConfigHandler(c *fiber.Ctx) error {

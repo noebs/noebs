@@ -66,7 +66,11 @@ func (h *GRPCUserHandler) EnsureWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(err))
 	}
 
-	w, err := h.Client.EnsureWalletPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.EnsureWalletRequest{
+	outgoing, err := walletOutgoingContext(c, tenantID, userID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	w, err := h.Client.EnsureWalletPublic(outgoing, &walletv1.EnsureWalletRequest{
 		TenantId: tenantID,
 		UserId:   userID,
 		Currency: currency,
@@ -107,7 +111,11 @@ func (h *GRPCUserHandler) GetWallet(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, err)
 	}
 
-	w, err := h.Client.GetWalletPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.GetWalletRequest{
+	outgoing, err := walletOutgoingContext(c, tenantID, userID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	w, err := h.Client.GetWalletPublic(outgoing, &walletv1.GetWalletRequest{
 		TenantId: tenantID,
 		WalletId: walletID.String(),
 	})
@@ -155,7 +163,11 @@ func (h *GRPCUserHandler) ListWalletTransactions(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
 
-	entries, err := h.Client.ListWalletTransactionsPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.ListWalletTransactionsRequest{
+	outgoing, err := walletOutgoingContext(c, tenantID, userID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	entries, err := h.Client.ListWalletTransactionsPublic(outgoing, &walletv1.ListWalletTransactionsRequest{
 		TenantId:  tenantID,
 		WalletId:  walletID.String(),
 		EntryType: c.Query("entry_type"),
@@ -204,7 +216,11 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 		return jsonResponse(c, 0, mapWalletError(walletstore.ErrInvalidOffset))
 	}
 
-	methods, err := h.Client.ListPaymentMethodsPublic(walletOutgoingContext(c, tenantID, userID), &walletv1.ListPaymentMethodsRequest{
+	outgoing, err := walletOutgoingContext(c, tenantID, userID)
+	if err != nil {
+		return jsonResponse(c, 0, err)
+	}
+	methods, err := h.Client.ListPaymentMethodsPublic(outgoing, &walletv1.ListPaymentMethodsRequest{
 		TenantId:  tenantID,
 		Direction: c.Query("direction"),
 		Currency:  c.Query("currency"),
@@ -223,15 +239,28 @@ func (h *GRPCUserHandler) ListPaymentMethods(c *fiber.Ctx) error {
 	return jsonResponse(c, http.StatusOK, fiber.Map{"methods": resp})
 }
 
-func walletOutgoingContext(c *fiber.Ctx, tenantID string, userID int64) context.Context {
-	values := []string{
-		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,
-		strings.ToLower(gateway.GatewayUserIDHeader), strconv.FormatInt(userID, 10),
+func walletOutgoingContext(c *fiber.Ctx, tenantID string, userID int64) (context.Context, error) {
+	principal, ok := gateway.InternalPrincipalIdentity(c)
+	if !ok || principal.TenantID != tenantID || principal.UserID != userID {
+		return nil, apperr.ErrUnauthorized
 	}
-	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
-		values = append(values, strings.ToLower(gateway.GatewayMobileHeader), mobile)
-	}
-	return metadata.AppendToOutgoingContext(c.UserContext(), values...)
+	return principalOutgoingContext(c.UserContext(), principal), nil
+}
+
+func principalOutgoingContext(ctx context.Context, principal gateway.PrincipalIdentity) context.Context {
+	values := principal.HeaderValues()
+	return metadata.NewOutgoingContext(ctx, metadata.Pairs(
+		strings.ToLower(gateway.GatewayTenantIDHeader), values.TenantID,
+		strings.ToLower(gateway.GatewayIssuerHeader), values.Issuer,
+		strings.ToLower(gateway.GatewaySubjectHeader), values.Subject,
+		strings.ToLower(gateway.GatewayOrganizationIDHeader), values.OrganizationID,
+		strings.ToLower(gateway.GatewayAuthorizedPartyHeader), values.AuthorizedParty,
+		strings.ToLower(gateway.GatewayRolesHeader), values.Roles,
+		strings.ToLower(gateway.GatewayPermissionHeader), values.Permission,
+		strings.ToLower(gateway.GatewayUserIDHeader), values.UserID,
+		strings.ToLower(gateway.GatewaySourceIPHeader), values.SourceIP,
+		strings.ToLower(gateway.GatewayTokenExpiresAtHeader), values.TokenExpiresAt,
+	))
 }
 
 func walletResponseFromProto(w *walletv1.Wallet) (walletResponse, error) {

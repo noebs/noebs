@@ -19,9 +19,17 @@ func initOIDCVerifier(role serviceRole, cfg ebs_fields.NoebsConfig) error {
 	if role != serviceRoleAPIGateway {
 		return nil
 	}
+	if err := requireHTTPSKeycloakEndpoint(cfg.OIDC.JWKSURL); err != nil {
+		return fmt.Errorf("noebs.oidc: %w", err)
+	}
+	tlsConfig, err := keycloakClientTLSConfig(cfg.KeycloakCACertificate)
+	if err != nil {
+		return fmt.Errorf("noebs.keycloak_ca_certificate: %w", err)
+	}
 	client := httpclient.New(
 		httpclient.WithTimeout(oidcHTTPTimeout),
 		httpclient.WithResponseHeaderTimeout(5*time.Second),
+		httpclient.WithTLSConfig(tlsConfig),
 	)
 	client.CheckRedirect = func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse

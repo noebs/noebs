@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -75,7 +76,14 @@ type manifestPodSpec struct {
 }
 
 type manifestLabelSelector struct {
-	MatchLabels map[string]string `yaml:"matchLabels"`
+	MatchLabels      map[string]string                  `yaml:"matchLabels"`
+	MatchExpressions []manifestLabelSelectorRequirement `yaml:"matchExpressions"`
+}
+
+type manifestLabelSelectorRequirement struct {
+	Key      string   `yaml:"key"`
+	Operator string   `yaml:"operator"`
+	Values   []string `yaml:"values"`
 }
 
 type manifestNetworkPolicyIngress struct {
@@ -85,6 +93,10 @@ type manifestNetworkPolicyIngress struct {
 
 type manifestNetworkPolicyPeer struct {
 	PodSelector *manifestLabelSelector `yaml:"podSelector"`
+	IPBlock     *struct {
+		CIDR   string   `yaml:"cidr"`
+		Except []string `yaml:"except"`
+	} `yaml:"ipBlock"`
 }
 
 type manifestNetworkPolicyPort struct {
@@ -157,9 +169,11 @@ type manifestSecret struct {
 type composeDocument struct {
 	Services map[string]composeService `yaml:"services"`
 	Secrets  map[string]composeSecret  `yaml:"secrets"`
+	Volumes  map[string]any            `yaml:"volumes"`
 }
 
 type composeService struct {
+	Image       string              `yaml:"image"`
 	Environment any                 `yaml:"environment"`
 	EnvFile     any                 `yaml:"env_file"`
 	Entrypoint  []string            `yaml:"entrypoint"`
@@ -202,49 +216,34 @@ type currentHostKustomization struct {
 
 type mountedNoebsConfig struct {
 	Noebs struct {
-		DatabaseDriver                             string                `yaml:"db_driver"`
-		OtelServiceName                            string                `yaml:"otel_service_name"`
-		PaymentLinkBase                            string                `yaml:"payment_link_base"`
-		ServiceDiscovery                           map[string]string     `yaml:"service_discovery"`
-		GRPCServiceDiscovery                       map[string]string     `yaml:"grpc_service_discovery"`
-		KafkaBrokers                               []string              `yaml:"kafka_brokers"`
-		KafkaTransactionTopic                      string                `yaml:"kafka_transaction_topic"`
-		AdminReportingKafkaConsumerGroup           string                `yaml:"admin_reporting_kafka_consumer_group"`
-		EBSTransactionEventPublisherBatchSize      int                   `yaml:"ebs_transaction_event_publisher_batch_size"`
-		EBSTransactionEventPublisherPollIntervalMs int                   `yaml:"ebs_transaction_event_publisher_poll_interval_ms"`
-		EBSDynamicFees                             mountedEBSDynamicFees `yaml:"ebs_dynamic_fees"`
-		TemporalHost                               string                `yaml:"temporal_host"`
-		TemporalPort                               string                `yaml:"temporal_port"`
-		RenderDBPasswordFile                       string                `yaml:"render_db_password_file"`
-		WalletEnabled                              bool                  `yaml:"wallet_enabled"`
-		WalletPINRequired                          bool                  `yaml:"wallet_pin_required"`
-		Wallet2FAThreshold                         int64                 `yaml:"wallet_2fa_threshold"`
-		WalletApprovalThreshold                    int64                 `yaml:"wallet_approval_threshold"`
-		WalletDefaultCurrency                      string                `yaml:"wallet_default_currency"`
-		WalletHoldExpirySeconds                    int                   `yaml:"wallet_hold_expiry_seconds"`
-		WalletApprovalTimeoutSeconds               int                   `yaml:"wallet_approval_timeout_seconds"`
-		WalletVerificationTimeoutSeconds           int                   `yaml:"wallet_verification_timeout_seconds"`
-		WalletManualTransferApprovalTimeoutSeconds int                   `yaml:"wallet_manual_approval_timeout_seconds"`
-		WalletPSPPollerCron                        string                `yaml:"wallet_psp_poller_cron"`
-		WalletPSPPollerBatchSize                   int                   `yaml:"wallet_psp_poller_batch_size"`
-		WalletPSPPollerIntervalSeconds             int                   `yaml:"wallet_psp_poller_interval_seconds"`
-		WalletReconciliationCron                   string                `yaml:"wallet_reconciliation_cron"`
-		WalletReconciliationBatchSize              int                   `yaml:"wallet_reconciliation_batch_size"`
-		WalletReconciliationLookbackHours          int                   `yaml:"wallet_reconciliation_lookback_hours"`
+		DatabaseDriver                             string            `yaml:"db_driver"`
+		OtelServiceName                            string            `yaml:"otel_service_name"`
+		ServiceDiscovery                           map[string]string `yaml:"service_discovery"`
+		GRPCServiceDiscovery                       map[string]string `yaml:"grpc_service_discovery"`
+		KafkaBrokers                               []string          `yaml:"kafka_brokers"`
+		KafkaTransactionTopic                      string            `yaml:"kafka_transaction_topic"`
+		AdminReportingKafkaConsumerGroup           string            `yaml:"admin_reporting_kafka_consumer_group"`
+		EBSTransactionEventPublisherBatchSize      int               `yaml:"ebs_transaction_event_publisher_batch_size"`
+		EBSTransactionEventPublisherPollIntervalMs int               `yaml:"ebs_transaction_event_publisher_poll_interval_ms"`
+		TemporalHost                               string            `yaml:"temporal_host"`
+		TemporalPort                               string            `yaml:"temporal_port"`
+		RenderDBPasswordFile                       string            `yaml:"render_db_password_file"`
+		WalletEnabled                              bool              `yaml:"wallet_enabled"`
+		WalletPINRequired                          bool              `yaml:"wallet_pin_required"`
+		Wallet2FAThreshold                         int64             `yaml:"wallet_2fa_threshold"`
+		WalletApprovalThreshold                    int64             `yaml:"wallet_approval_threshold"`
+		WalletDefaultCurrency                      string            `yaml:"wallet_default_currency"`
+		WalletHoldExpirySeconds                    int               `yaml:"wallet_hold_expiry_seconds"`
+		WalletApprovalTimeoutSeconds               int               `yaml:"wallet_approval_timeout_seconds"`
+		WalletVerificationTimeoutSeconds           int               `yaml:"wallet_verification_timeout_seconds"`
+		WalletManualTransferApprovalTimeoutSeconds int               `yaml:"wallet_manual_approval_timeout_seconds"`
+		WalletPSPPollerCron                        string            `yaml:"wallet_psp_poller_cron"`
+		WalletPSPPollerBatchSize                   int               `yaml:"wallet_psp_poller_batch_size"`
+		WalletPSPPollerIntervalSeconds             int               `yaml:"wallet_psp_poller_interval_seconds"`
+		WalletReconciliationCron                   string            `yaml:"wallet_reconciliation_cron"`
+		WalletReconciliationBatchSize              int               `yaml:"wallet_reconciliation_batch_size"`
+		WalletReconciliationLookbackHours          int               `yaml:"wallet_reconciliation_lookback_hours"`
 	} `yaml:"noebs"`
-}
-
-func TestKubernetesPaymentLinksUseVerifiedHTTPSOrigin(t *testing.T) {
-	config := decodeKubernetesBaseNoebsConfig(t)
-	if got, want := config.Noebs.PaymentLinkBase, "https://api.noebs.sd/pay/"; got != want {
-		t.Fatalf("payment_link_base = %q, want %q", got, want)
-	}
-}
-
-type mountedEBSDynamicFees struct {
-	CardTransferfees   float32 `yaml:"p2p_fees"`
-	CustomFees         float32 `yaml:"custom_fees"`
-	SpecialPaymentFees float32 `yaml:"special_payment_fees"`
 }
 
 type mountedNoebsServiceConfig struct {
@@ -303,7 +302,7 @@ func TestNoebsKubernetesServicesUseMountedConfigFiles(t *testing.T) {
 				if !strings.Contains(container.Image, "ghcr.io/noebs/noebs") {
 					continue
 				}
-				if object.Kind == "Job" && object.Metadata.Name == "noebs-deployment-preflight" {
+				if object.Kind == "Job" && (object.Metadata.Name == "noebs-deployment-preflight" || object.Metadata.Name == "noebs-keycloak-reconciler") {
 					continue
 				}
 				checked++
@@ -475,45 +474,112 @@ func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 	}
 }
 
-func TestCIWorkflowPublishesKubernetesNoebsImage(t *testing.T) {
+func TestKubernetesNoebsImageReleaseIsLocalAndImmutable(t *testing.T) {
 	workflowPath := filepath.Join("..", ".github", "workflows", "main.yml")
-	workflow, err := os.ReadFile(workflowPath)
+	if _, err := os.Stat(workflowPath); err == nil {
+		t.Fatalf("%s must not define test or release authority", workflowPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stat %s: %v", workflowPath, err)
+	}
+
+	documentPath := filepath.Join("..", "docs", "alpha-image-release.md")
+	document, err := os.ReadFile(documentPath)
 	if err != nil {
-		t.Fatalf("read %s: %v", workflowPath, err)
+		t.Fatalf("read %s: %v", documentPath, err)
 	}
-	workflowText := string(workflow)
-	required := []string{
-		"needs: test",
-		"permissions:",
-		"packages: write",
-		"docker/setup-buildx-action@v3",
-		"docker/login-action@v3",
-		"docker/build-push-action@v6",
-		"push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}",
-		"ghcr.io/noebs/noebs:${{ github.sha }}",
-	}
-	for _, text := range required {
-		if !strings.Contains(workflowText, text) {
-			t.Fatalf("%s must contain %q", workflowPath, text)
+	for _, required := range []string{
+		"without relying on GitHub Actions",
+		"`git archive`",
+		"write-once",
+		"full-SHA tag",
+		"verified digest",
+		"separate GitOps commit",
+	} {
+		if !strings.Contains(string(document), required) {
+			t.Fatalf("%s must contain %q", documentPath, required)
 		}
 	}
 
-	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
-	images := map[string]bool{}
-	for _, object := range objects {
-		podSpec := manifestPodSpecForObject(object)
-		for _, container := range append(podSpec.Containers, podSpec.InitContainers...) {
-			if strings.HasPrefix(container.Image, "ghcr.io/noebs/noebs:") {
-				images[container.Image] = true
-			}
+	scriptPath := filepath.Join("..", "scripts", "publish-alpha-image.sh")
+	script, err := os.ReadFile(scriptPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", scriptPath, err)
+	}
+	for _, required := range []string{
+		`source SHA must be exactly 40 lowercase hexadecimal characters`,
+		`git -C "$repo_root" archive --format=tar "$source_sha"`,
+		`immutable release tag already exists`,
+		`[[ $registry_digest == "$build_digest" ]]`,
+		`schema_version: 1,`,
+	} {
+		if !strings.Contains(string(script), required) {
+			t.Fatalf("%s must contain %q", scriptPath, required)
 		}
 	}
-	if len(images) == 0 {
-		t.Fatalf("no Kubernetes Noebs images were found")
+	for _, forbidden := range []string{"docker login", ":master", "GITHUB_TOKEN"} {
+		if strings.Contains(string(script), forbidden) {
+			t.Fatalf("%s contains forbidden release behavior %q", scriptPath, forbidden)
+		}
 	}
-	for image := range images {
-		if !strings.Contains(workflowText, image) {
-			t.Fatalf("Kubernetes image %q is not published by %s", image, workflowPath)
+}
+
+func TestK3sExistingClusterEncryptionRunbookPreservesRecoveryAndOrdering(t *testing.T) {
+	path := filepath.Join("..", "deploy", "host", "README.md")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(payload)
+	steps := []string{
+		`[[ "$k3s_version" =~ ^v1\.35\.([0-9]+)\+k3s[0-9]+$ ]]`,
+		`((BASH_REMATCH[1] >= 3))`,
+		`sudo systemctl stop k3s`,
+		`sudo cp -a /var/lib/rancher/k3s/server/db "$backup_dir/db"`,
+		`sudo install -m 0600 /var/lib/rancher/k3s/server/token`,
+		`sudo test -s "$backup_dir/db/state.db"`,
+		`sudo test -s "$backup_dir/server-token"`,
+		`sudo systemctl start k3s`,
+		`wait_for_k3s`,
+		`test "$encryption_status" = 'Encryption Status: Disabled, no configuration file found'`,
+		`sudo k3s secrets-encrypt enable`,
+		`sudo install -m 0600 deploy/host/k3s-config.yaml`,
+		`sudo systemctl restart k3s`,
+		`wait_for_k3s`,
+		`grep -Fx 'Current Rotation Stage: start'`,
+		`.hashmatch == true`,
+		`and any(.inactivekeys[]?;`,
+		`sudo k3s secrets-encrypt rotate-keys`,
+		`sudo systemctl restart k3s`,
+		`wait_for_k3s`,
+		`grep -Fx 'Current Rotation Stage: reencrypt_finished'`,
+		`.activekey | startswith("XSalsa20-POLY1305 secretboxkey-")`,
+	}
+	cursor := 0
+	for _, step := range steps {
+		index := strings.Index(text[cursor:], step)
+		if index < 0 {
+			t.Fatalf("%s must contain %q after the preceding transition step", path, step)
+		}
+		cursor += index + len(step)
+	}
+	for _, command := range []string{"cat", "head", "tail", "less", "more", "echo", "printf", "sha256sum"} {
+		forbidden := command + " /var/lib/rancher/k3s/server/token"
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("%s exposes the K3s server token with %q", path, forbidden)
+		}
+	}
+	for _, required := range []string{
+		`sudo k3s kubectl get --raw=/readyz`,
+		`sudo k3s kubectl wait --for=condition=Ready node --all`,
+		`keys == ["activekey", "stage"]`,
+		`grep -Fx 'Encryption Status: Disabled'`,
+		`grep -Fx 'Server Encryption Hashes: All hashes match'`,
+		`grep -Fx 'Encryption Status: Enabled'`,
+		"https://docs.k3s.io/cli/secrets-encrypt#enable-secrets-encryption-on-an-existing-cluster",
+		"https://docs.k3s.io/datastore/backup-restore",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("%s must cite %s", path, required)
 		}
 	}
 }
@@ -702,17 +768,16 @@ func TestDockerComposeSecretExamplesMatchServiceOwnership(t *testing.T) {
 	}
 
 	expectedDatabaseOwners := map[string][]string{
-		"api-gateway":          nil,
-		"identity-auth":        {"identity-auth"},
-		"card-vault":           {"card-vault"},
-		"ebs-adapter":          {"ebs-adapter"},
-		"psp-webhook":          {"psp-webhook"},
-		"admin-reporting":      {"admin-reporting"},
-		"notification-chat":    {"notification-chat"},
-		"consumer-beneficiary": {"consumer-beneficiary"},
-		"wallet-api":           nil,
-		"wallet-ledger":        {"wallet-ledger"},
-		"wallet-worker":        {"wallet-ledger"},
+		"api-gateway":       {"api-gateway"},
+		"identity-auth":     {"identity-auth"},
+		"card-vault":        {"card-vault"},
+		"ebs-adapter":       {"ebs-adapter"},
+		"psp-webhook":       {"psp-webhook"},
+		"admin-reporting":   {"admin-reporting"},
+		"notification-chat": {"notification-chat"},
+		"wallet-api":        nil,
+		"wallet-ledger":     {"wallet-ledger"},
+		"wallet-worker":     {"wallet-ledger"},
 	}
 	for serviceName, owners := range expectedDatabaseOwners {
 		path := filepath.Join("..", "deploy", "docker", "secrets", serviceName+".secrets.yaml.example")
@@ -787,11 +852,165 @@ func TestRepositoryDoesNotCarryDirectVMDeploymentScripts(t *testing.T) {
 	}
 }
 
+func TestPostDeploySmokeCoversTheKeycloakAndRetiredEdgeBoundaries(t *testing.T) {
+	path := filepath.Join("..", "scripts", "alpha-post-deploy-smoke.sh")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(payload)
+	for _, required := range []string{
+		`.spec.source.targetRevision // ""`,
+		`.status.sync.revision // ""`,
+		`issuer = origin + "/auth/realms/noebs"`,
+		`issuer + "/.well-known/openid-configuration"`,
+		`/auth/realms/master/.well-known/openid-configuration`,
+		`/auth/admin/`,
+		`id_token_signing_alg_values_supported`,
+		`key.get("alg") == "RS256"`,
+		`get ingress api-gateway`,
+		`get secret noebs-tls`,
+		`get configmap caddy-config`,
+		`^caddy-config-[a-z0-9]+$`,
+		`deployment/consumer-beneficiary`,
+		`service/consumer-beneficiary`,
+		`secret/consumer-beneficiary-secrets`,
+		`secret/consumer-beneficiary-migrate-secrets`,
+		`consumer_beneficiary database remains`,
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("%s missing auth cutover assertion %q", path, required)
+		}
+	}
+}
+
+func TestKeycloakEmptyStateCutoverHasOneExactDestructiveBoundary(t *testing.T) {
+	path := filepath.Join("..", "deploy", "host", "keycloak-empty-state-cutover.md")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(payload)
+	steps := []string{
+		`reencrypt_finished`,
+		`create_noebs_application = false`,
+		`tofu -chdir="$foundation_root" apply "$pause_plan"`,
+		`scale deployment,statefulset --all --replicas=0`,
+		`-replace=kubernetes_namespace_v1.noebs`,
+		`test "$new_namespace_uid" != "$old_namespace_uid"`,
+		`apply -f "$steady_secrets"`,
+		`apply -f "$bootstrap_secrets"`,
+		`noebs_manifest_path      = "deploy/kubernetes/overlays/bootstrap-current-host"`,
+		`create_edge_application  = true`,
+		`sudo install -d -m 0700 /var/lib/docker/volumes/noebs_caddy_data/_data /var/lib/docker/volumes/noebs_caddy_config/_data`,
+		`sudo chown -R -- 10001:10001 /var/lib/docker/volumes/noebs_caddy_data/_data /var/lib/docker/volumes/noebs_caddy_config/_data`,
+		`caddy_wrong_owner="$(sudo find`,
+		`test -z "$caddy_wrong_owner"`,
+		`sudo stat --format='%u:%g %a %n'`,
+		`test "$caddy_host_path_status" = "$expected_caddy_host_path_status"`,
+		`tofu -chdir="$foundation_root" apply "$bootstrap_plan"`,
+		`noebs-keycloak-delete-bootstrap-client`,
+		`test "$token_status" = 401`,
+		`noebs_manifest_path = "deploy/kubernetes/overlays/current-host"`,
+		`noebs-keycloak-reconciler`,
+		`keycloak-bootstrap-admin keycloak-bootstrap-reconciler-credentials`,
+		`delete configmap caddy-config --ignore-not-found`,
+		`deployment/consumer-beneficiary`,
+		`consumer_beneficiary_count`,
+		`scripts/alpha-post-deploy-smoke.sh "$RELEASE_COMMIT" "$RELEASE_DIGEST"`,
+	}
+	cursor := 0
+	for _, step := range steps {
+		index := strings.Index(text[cursor:], step)
+		if index < 0 {
+			t.Fatalf("%s must contain %q after the preceding cutover step", path, step)
+		}
+		cursor += index + len(step)
+	}
+	for _, explanation := range []string{"POSTGRES_PASSWORD_FILE", "empty `PGDATA`", "main, Keycloak, and Temporal PostgreSQL claims"} {
+		if !strings.Contains(text, explanation) {
+			t.Fatalf("%s missing empty-state rationale %q", path, explanation)
+		}
+	}
+	for _, gate := range []string{
+		`: "${RELEASE_REPO_ROOT:?set the reviewed release checkout}"`,
+		`foundation_root="$RELEASE_REPO_ROOT/foundation/terraform"`,
+		`test -s "$foundation_root/terraform.tfstate"`,
+		`grep -Fx 'Encryption Status: Enabled'`,
+		`grep -Fx 'Current Rotation Stage: reencrypt_finished'`,
+		`grep -Fx 'Server Encryption Hashes: All hashes match'`,
+		`.activekey | startswith("XSalsa20-POLY1305 secretboxkey-")`,
+		`"${kubectl[@]}" get --raw=/readyz`,
+		`"${kubectl[@]}" wait --for=condition=Ready node --all`,
+		`deploy/kubernetes/overlays/current-host/kustomization.yaml`,
+		`deploy/kubernetes/overlays/bootstrap-current-host/kustomization.yaml`,
+		`deploy/kubernetes/operations/lookup/kustomization.yaml`,
+		`deploy/kubernetes/operations/memberships/base/kustomization.yaml`,
+		`test "$pinned_digest" = "$RELEASE_DIGEST"`,
+		`10001:10001 700 /var/lib/docker/volumes/noebs_caddy_data/_data`,
+		`10001:10001 700 /var/lib/docker/volumes/noebs_caddy_config/_data`,
+		`client_id=noebs-keycloak-bootstrap`,
+		`/realms/master/protocol/openid-connect/token`,
+	} {
+		if !strings.Contains(text, gate) {
+			t.Fatalf("%s missing fail-closed cutover gate %q", path, gate)
+		}
+	}
+	if strings.Contains(text, "delete pvc") {
+		t.Fatal("cutover must replace the foundation-owned namespace instead of juggling individual PVCs")
+	}
+}
+
+func TestFoundationRunbookSanitizesLegacySecretStateWithoutPrintingIt(t *testing.T) {
+	path := filepath.Join("..", "foundation", "terraform", "README.md")
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(payload)
+	for _, required := range []string{
+		`legacy_foundation_root=/home/adonese/src/noebs-foundation/foundation/terraform`,
+		`release_foundation_root="$RELEASE_REPO_ROOT/foundation/terraform"`,
+		`test -s "$legacy_foundation_root/terraform.tfstate"`,
+		`test -s "$legacy_foundation_root/terraform.tfvars.example"`,
+		`test -s "$release_foundation_root/terraform.tfvars.example"`,
+		`git -C "$legacy_repo_root" ls-files --error-unmatch`,
+		`git -C "$RELEASE_REPO_ROOT" ls-files --error-unmatch`,
+		`test ! -e "$release_foundation_root/terraform.tfstate"`,
+		`test ! -e "$STATE_QUARANTINE"`,
+		`mv -- "$legacy_foundation_root/terraform.tfstate"`,
+		`chmod 0600 "$release_foundation_root/terraform.tfstate"`,
+		`cmp -s "$STATE_QUARANTINE/pre-relocation.tfstate"`,
+		`! -name 'terraform.tfvars.example'`,
+		`tofu -chdir="$release_foundation_root" state pull`,
+		`grep -Fx 'kubernetes_namespace_v1.noebs'`,
+		`grep -Fx 'kubernetes_manifest.noebs_project'`,
+		`awk '/(^|\.)data\.kubernetes_secret_v1\./'`,
+		`state rm -dry-run`,
+		`-backup="$STATE_QUARANTINE/state-rm.automatic-backup.tfstate"`,
+		`"kubernetes_secret", "kubernetes_secret_v1"`,
+		`! rg -n 'data "kubernetes_secret(_v1)?"' "$release_foundation_root"/*.tf`,
+		`post-removal.tfplan`,
+		`an empty-state plan is a hard stop`,
+		`filesystem snapshots and external backups`,
+		`cryptographic erasure`,
+		"Do not run `tofu state show`, `tofu show`, `jq`",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("%s missing protected state migration contract %q", path, required)
+		}
+	}
+	if strings.Count(text, `git -C "$RELEASE_REPO_ROOT" diff --quiet`) < 2 {
+		t.Fatalf("%s must recheck the tracked release tree after artifact quarantine", path)
+	}
+}
+
 func TestRepositoryDoesNotCarryLegacySingleHostDeploymentArtifacts(t *testing.T) {
 	for _, path := range []string{
 		"fly.toml",
 		"litefs.yml",
 		"litefs.static-lease.yml",
+		"noebs-fly-litefs.conf",
 	} {
 		if _, err := os.Stat(filepath.Join("..", path)); err == nil {
 			t.Fatalf("%s is a legacy single-host deployment artifact; deployment must go through Kubernetes/k3s and Argo CD", path)
@@ -948,22 +1167,22 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 		port           int
 		allowedSources []string
 	}{
-		"api-gateway-ingress":          {targetPod: "api-gateway", port: 8080},
-		"postgres-ingress":             {targetPod: "postgres", port: 5432},
-		"kafka-ingress":                {targetPod: "kafka", port: 9092, allowedSources: []string{"ebs-adapter-events", "admin-reporting-projector", "kafka-topics"}},
-		"temporal-postgres-ingress":    {targetPod: "temporal-postgres", port: 5432, allowedSources: []string{"temporal", "temporal-schema-migrate"}},
-		"temporal-frontend-ingress":    {targetPod: "temporal", port: 7233, allowedSources: []string{"psp-webhook", "wallet-ledger", "wallet-worker", "temporal-namespace-bootstrap", "temporal-ui"}},
-		"keycloak-postgres-ingress":    {targetPod: "keycloak-postgres", port: 5432, allowedSources: []string{"keycloak"}},
-		"keycloak-http-ingress":        {targetPod: "keycloak", port: 8080, allowedSources: []string{"caddy", "api-gateway", "keycloak-reconciler"}},
-		"identity-auth-ingress":        {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "notification-chat"}},
-		"card-vault-ingress":           {targetPod: "card-vault", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
-		"ebs-adapter-ingress":          {targetPod: "ebs-adapter", port: 8080, allowedSources: []string{"api-gateway"}},
-		"psp-webhook-ingress":          {targetPod: "psp-webhook", port: 8080, allowedSources: []string{"api-gateway"}},
-		"admin-reporting-ingress":      {targetPod: "admin-reporting", port: 8080, allowedSources: []string{"api-gateway"}},
-		"notification-chat-ingress":    {targetPod: "notification-chat", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
-		"consumer-beneficiary-ingress": {targetPod: "consumer-beneficiary", port: 8080, allowedSources: []string{"api-gateway"}},
-		"wallet-api-ingress":           {targetPod: "wallet-api", port: 8080, allowedSources: []string{"api-gateway"}},
-		"wallet-ledger-grpc-ingress":   {targetPod: "wallet-ledger", port: 9090, allowedSources: []string{"wallet-api"}},
+		"api-gateway-ingress":         {targetPod: "api-gateway", port: 8080, allowedSources: []string{"ip:10.42.0.1/32"}},
+		"postgres-ingress":            {targetPod: "postgres", port: 5432},
+		"kafka-ingress":               {targetPod: "kafka", port: 9092, allowedSources: []string{"ebs-adapter-events", "admin-reporting-projector", "kafka-topics"}},
+		"temporal-postgres-ingress":   {targetPod: "temporal-postgres", port: 5432, allowedSources: []string{"temporal", "temporal-schema-migrate"}},
+		"temporal-frontend-ingress":   {targetPod: "temporal", port: 7233, allowedSources: []string{"psp-webhook", "wallet-ledger", "wallet-worker", "temporal-namespace-bootstrap", "temporal-ui"}},
+		"keycloak-postgres-ingress":   {targetPod: "keycloak-postgres", port: 5432, allowedSources: []string{"keycloak"}},
+		"keycloak-https-ingress":      {targetPod: "keycloak", port: 8443, allowedSources: []string{"ip:10.42.0.1/32", "api-gateway", "keycloak-reconciler"}},
+		"keycloak-management-ingress": {targetPod: "keycloak", port: 9000, allowedSources: []string{"ip:10.42.0.1/32"}},
+		"identity-auth-ingress":       {targetPod: "identity-auth", port: 8080, allowedSources: []string{"api-gateway", "notification-chat"}},
+		"card-vault-ingress":          {targetPod: "card-vault", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
+		"ebs-adapter-ingress":         {targetPod: "ebs-adapter", port: 8080, allowedSources: []string{"api-gateway"}},
+		"psp-webhook-ingress":         {targetPod: "psp-webhook", port: 8080, allowedSources: []string{"api-gateway"}},
+		"admin-reporting-ingress":     {targetPod: "admin-reporting", port: 8080, allowedSources: []string{"api-gateway"}},
+		"notification-chat-ingress":   {targetPod: "notification-chat", port: 8080, allowedSources: []string{"api-gateway", "ebs-adapter"}},
+		"wallet-api-ingress":          {targetPod: "wallet-api", port: 8080, allowedSources: []string{"api-gateway"}},
+		"wallet-ledger-grpc-ingress":  {targetPod: "wallet-ledger", port: 9090, allowedSources: []string{"wallet-api"}},
 	}
 	defaultDenyFound := false
 	found := map[string]bool{}
@@ -992,6 +1211,54 @@ func TestKubernetesNetworkPoliciesDeclareIngressPorts(t *testing.T) {
 		if !found[name] {
 			t.Fatalf("missing NetworkPolicy %q", name)
 		}
+	}
+}
+
+func TestPostgresNetworkPolicyMatchesExactDatabaseConsumers(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	want := []string{
+		"identity-auth",
+		"api-gateway",
+		"card-vault",
+		"ebs-adapter",
+		"ebs-adapter-events",
+		"psp-webhook",
+		"admin-reporting",
+		"admin-reporting-projector",
+		"notification-chat",
+		"wallet-ledger",
+		"wallet-worker",
+		"noebs-workload-auth-migrate",
+		"noebs-workload-auth-cleanup",
+		"noebs-gateway-auth-migrate",
+		"noebs-gateway-auth-cleanup",
+		"noebs-identity-auth-migrate",
+		"noebs-card-vault-migrate",
+		"noebs-ebs-adapter-migrate",
+		"noebs-psp-webhook-migrate",
+		"noebs-admin-reporting-migrate",
+		"noebs-notification-chat-migrate",
+		"noebs-wallet-ledger-migrate",
+	}
+
+	var ingressConsumers []string
+	var egressConsumers []string
+	for _, object := range objects {
+		switch object.Metadata.Name {
+		case "postgres-ingress":
+			if len(object.Spec.Ingress) != 1 || len(object.Spec.Ingress[0].From) != 1 || object.Spec.Ingress[0].From[0].PodSelector == nil {
+				t.Fatalf("postgres ingress peers = %#v", object.Spec.Ingress)
+			}
+			ingressConsumers = exactNetworkPolicySelectorValues(t, "postgres ingress", *object.Spec.Ingress[0].From[0].PodSelector)
+		case "postgres-egress":
+			egressConsumers = exactNetworkPolicySelectorValues(t, "postgres egress", object.Spec.PodSelector)
+		}
+	}
+	if !slices.Equal(ingressConsumers, want) {
+		t.Fatalf("postgres ingress consumers = %v, want %v", ingressConsumers, want)
+	}
+	if !slices.Equal(egressConsumers, want) {
+		t.Fatalf("postgres egress consumers = %v, want %v", egressConsumers, want)
 	}
 }
 
@@ -1081,11 +1348,19 @@ func TestFoundationDatabaseCatalogDeclaresOwnedDatabases(t *testing.T) {
 
 	for _, database := range serviceDatabases {
 		serviceName := strings.ReplaceAll(database, "_", "-")
-		if serviceName == "workload-auth" {
+		switch serviceName {
+		case "workload-auth":
 			requireTerraformDatabaseCatalogEntry(t, catalog, serviceName, terraformDatabaseCatalogEntry{
 				Database:      database,
 				SecretName:    "workload-auth-migrate-secrets",
 				MigrationRole: "workload-auth-migrate",
+			})
+			continue
+		case "gateway-auth":
+			requireTerraformDatabaseCatalogEntry(t, catalog, "api-gateway", terraformDatabaseCatalogEntry{
+				Database:      database,
+				SecretName:    "api-gateway-secrets",
+				MigrationRole: "gateway-auth-migrate",
 			})
 			continue
 		}
@@ -1120,13 +1395,16 @@ func TestFoundationDatabaseCatalogDeclaresOwnedDatabases(t *testing.T) {
 
 func TestRequiredKubernetesSecretDocsListEveryCutoverSecret(t *testing.T) {
 	required := map[string]string{
-		"sops-age-key":                  "age-key.txt",
-		"postgres-credentials":          "password",
-		"temporal-postgres-credentials": "password",
-		"keycloak-postgres-credentials": "password",
-		"keycloak-secrets":              "keycloak.conf",
-		"ghcr-credentials":              ".dockerconfigjson",
-		"noebs-tls":                     "",
+		"sops-age-key":                    "age-key.txt",
+		"postgres-credentials":            "password",
+		"workload-auth-postgres-roles":    "roles.yaml",
+		"gateway-auth-postgres-roles":     "roles.yaml",
+		"internal-transport-platform":     "credentials.yaml",
+		"temporal-postgres-credentials":   "password",
+		"keycloak-postgres-credentials":   "password",
+		"keycloak-secrets":                "keycloak.conf",
+		"keycloak-reconciler-credentials": "config.yaml",
+		"ghcr-credentials":                ".dockerconfigjson",
 	}
 	for _, source := range kubernetesServiceSecretSources {
 		required[source.secretName] = "secrets.yaml"
@@ -1180,8 +1458,8 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 				t.Fatalf("keycloak-postgres containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
 			}
 			container := object.Spec.Template.Spec.Containers[0]
-			if container.Image != "postgres:16" {
-				t.Fatalf("keycloak-postgres image = %q, want postgres:16", container.Image)
+			if container.Image != "postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20" {
+				t.Fatalf("keycloak-postgres image is not the tested immutable digest: %q", container.Image)
 			}
 			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
 				t.Fatalf("keycloak-postgres must use mounted bootstrap files instead of env/envFrom")
@@ -1200,8 +1478,8 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 			t.Fatalf("keycloak containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
 		}
 		container := object.Spec.Template.Spec.Containers[0]
-		if container.Image != "quay.io/keycloak/keycloak:26.7.0" {
-			t.Fatalf("keycloak image = %q, want quay.io/keycloak/keycloak:26.7.0", container.Image)
+		if container.Image != "quay.io/keycloak/keycloak@sha256:2eb3cd316835c990e69e26ade292ffa78f6fb0db7d5fc6377463c162e1979ac0" {
+			t.Fatalf("keycloak image is not the tested immutable digest: %q", container.Image)
 		}
 		if !containsString(container.Args, "start") {
 			t.Fatalf("keycloak args = %v, want start", container.Args)
@@ -1210,10 +1488,14 @@ func TestKeycloakKubernetesDeploymentIsIndependent(t *testing.T) {
 			t.Fatalf("keycloak must use mounted keycloak.conf instead of env/envFrom")
 		}
 		requireMount(t, "keycloak", container, "/opt/keycloak/conf/keycloak.conf", "keycloak.conf")
+		requireMount(t, "keycloak", container, "/opt/keycloak/conf/tls.crt", "tls.crt")
+		requireMount(t, "keycloak", container, "/opt/keycloak/conf/tls.key", "tls.key")
 	}
 
-	requireKubernetesServicePort(t, services, "keycloak", 8080)
-	requireKubernetesServicePort(t, services, "keycloak", 9000)
+	requireKubernetesServicePort(t, services, "keycloak", 8443)
+	if services["keycloak"][8080] || services["keycloak"][9000] {
+		t.Fatalf("Keycloak Service exposes plaintext application or management ports: %v", services["keycloak"])
+	}
 	requireKubernetesServicePort(t, services, "keycloak-postgres", 5432)
 	if !foundKeycloakDeployment {
 		t.Fatalf("keycloak Deployment not found")
@@ -1305,18 +1587,234 @@ func TestKeycloakBootstrapCredentialsAreIsolatedFromSteadyDeployment(t *testing.
 	}
 }
 
-func TestCurrentHostKeycloakTrustsOnlyTheClusterPodNetworkProxy(t *testing.T) {
-	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml")
-	payload, err := os.ReadFile(path)
+func TestBootstrapOverlayRendersOnlyImmutableWorkloadImages(t *testing.T) {
+	objects := renderKustomizationImagesForTest(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host"))
+	wantNoebsImage := "ghcr.io/noebs/noebs@" + readOperationImageDigest(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml"))
+	foundDeleteJob := false
+	for _, object := range objects {
+		metadata := getMap(object, "metadata")
+		name := firstString(metadata, "name")
+		for _, image := range manifestImagesForTest(object) {
+			if !strings.Contains(image, "@sha256:") {
+				t.Fatalf("rendered workload %s uses mutable image %q", name, image)
+			}
+			if name == "noebs-keycloak-delete-bootstrap-client" {
+				foundDeleteJob = true
+				if image != wantNoebsImage {
+					t.Fatalf("bootstrap deletion Job image = %q, want %q", image, wantNoebsImage)
+				}
+			}
+		}
+	}
+	if !foundDeleteJob {
+		t.Fatal("rendered bootstrap deletion Job not found")
+	}
+}
+
+func TestBootstrapOverlayRendersEveryObjectIntoNoebsNamespace(t *testing.T) {
+	objects := renderKustomizationImagesForTest(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host"))
+	for _, object := range objects {
+		metadata := getMap(object, "metadata")
+		name := firstString(metadata, "name")
+		if namespace := firstString(metadata, "namespace"); namespace != "noebs" {
+			t.Fatalf("rendered %s %s namespace = %q, want noebs", firstString(object, "kind"), name, namespace)
+		}
+	}
+}
+
+type testKustomizationImage struct {
+	Name    string `yaml:"name"`
+	NewName string `yaml:"newName"`
+	Digest  string `yaml:"digest"`
+}
+
+func renderKustomizationImagesForTest(t *testing.T, root string) []map[string]interface{} {
+	t.Helper()
+	payload, err := os.ReadFile(filepath.Join(root, "kustomization.yaml"))
 	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
+		t.Fatalf("read kustomization %s: %v", root, err)
 	}
-	text := string(payload)
-	if !strings.Contains(text, "--proxy-trusted-addresses=10.42.0.0/16") {
-		t.Fatalf("%s must trust the K3s pod CIDR seen from the Caddy pod", path)
+	var kustomization struct {
+		Resources []string                 `yaml:"resources"`
+		Images    []testKustomizationImage `yaml:"images"`
+		Namespace string                   `yaml:"namespace"`
 	}
-	if strings.Contains(text, "--proxy-trusted-addresses=213.199.63.78/32") {
-		t.Fatalf("%s trusts the host public address instead of the proxy pod source", path)
+	if err := yaml.Unmarshal(payload, &kustomization); err != nil {
+		t.Fatalf("parse kustomization %s: %v", root, err)
+	}
+	objects := make([]map[string]interface{}, 0)
+	for _, resource := range kustomization.Resources {
+		path := filepath.Join(root, resource)
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat kustomization resource %s: %v", path, err)
+		}
+		if info.IsDir() {
+			objects = append(objects, renderKustomizationImagesForTest(t, path)...)
+			continue
+		}
+		filePayload, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read kustomization resource %s: %v", path, err)
+		}
+		decoder := yaml.NewDecoder(bytes.NewReader(filePayload))
+		for {
+			object := map[string]interface{}{}
+			if err := decoder.Decode(&object); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				t.Fatalf("decode kustomization resource %s: %v", path, err)
+			}
+			if len(object) != 0 {
+				objects = append(objects, object)
+			}
+		}
+	}
+	for _, object := range objects {
+		applyKustomizationImagesForTest(object, kustomization.Images)
+		if kustomization.Namespace != "" {
+			metadata := getMap(object, "metadata")
+			metadata["namespace"] = kustomization.Namespace
+		}
+	}
+	return objects
+}
+
+func applyKustomizationImagesForTest(value interface{}, images []testKustomizationImage) {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, child := range typed {
+			if key == "image" {
+				raw, ok := child.(string)
+				if !ok {
+					continue
+				}
+				for _, image := range images {
+					base := strings.SplitN(raw, "@", 2)[0]
+					if colon := strings.LastIndex(base, ":"); colon > strings.LastIndex(base, "/") {
+						base = base[:colon]
+					}
+					if base == image.Name || base == image.NewName {
+						typed[key] = image.NewName + "@" + image.Digest
+						break
+					}
+				}
+				continue
+			}
+			applyKustomizationImagesForTest(child, images)
+		}
+	case []interface{}:
+		for _, child := range typed {
+			applyKustomizationImagesForTest(child, images)
+		}
+	}
+}
+
+func manifestImagesForTest(value interface{}) []string {
+	images := make([]string, 0)
+	var visit func(interface{})
+	visit = func(current interface{}) {
+		switch typed := current.(type) {
+		case map[string]interface{}:
+			for key, child := range typed {
+				if key == "image" {
+					if image, ok := child.(string); ok {
+						images = append(images, image)
+					}
+					continue
+				}
+				visit(child)
+			}
+		case []interface{}:
+			for _, child := range typed {
+				visit(child)
+			}
+		}
+	}
+	visit(value)
+	return images
+}
+
+func TestKeycloakReconciliationSequenceAndMountedAuthority(t *testing.T) {
+	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
+	var keycloakWave string
+	var reconciler *manifestObject
+	for index := range objects {
+		object := &objects[index]
+		switch {
+		case object.Kind == "Deployment" && object.Metadata.Name == "keycloak":
+			keycloakWave = object.Metadata.Annotations["argocd.argoproj.io/sync-wave"]
+		case object.Kind == "Job" && object.Metadata.Name == "noebs-keycloak-reconciler":
+			reconciler = object
+		}
+	}
+	if keycloakWave != "3" {
+		t.Fatalf("Keycloak sync-wave = %q, want 3", keycloakWave)
+	}
+	if reconciler == nil {
+		t.Fatal("noebs-keycloak-reconciler Job not found")
+	}
+	if reconciler.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "5" {
+		t.Fatalf("Keycloak reconciler sync-wave = %q, want 5", reconciler.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+	}
+	pod := manifestPodSpecForObject(*reconciler)
+	if pod.ServiceAccountName != "keycloak-reconciler" {
+		t.Fatalf("Keycloak reconciler serviceAccountName = %q", pod.ServiceAccountName)
+	}
+	if len(pod.Containers) != 1 {
+		t.Fatalf("Keycloak reconciler containers = %d, want 1", len(pod.Containers))
+	}
+	container := pod.Containers[0]
+	requireMount(t, "noebs-keycloak-reconciler", container, "/etc/noebs-keycloak/desired-state.yaml", "keycloak-desired-state.yaml")
+	requireMount(t, "noebs-keycloak-reconciler", container, "/etc/noebs-keycloak-reconciler/config.yaml", "config.yaml")
+	requireSecretVolume(t, "noebs-keycloak-reconciler", pod.Volumes, "credentials", "keycloak-reconciler-credentials")
+
+	bootstrapPath := filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "kustomization.yaml")
+	bootstrap, err := os.ReadFile(bootstrapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"name: noebs-keycloak-reconciler", "keycloak-bootstrap-reconciler-credentials"} {
+		if !strings.Contains(string(bootstrap), required) {
+			t.Fatalf("%s missing %q", bootstrapPath, required)
+		}
+	}
+	deleteObjects := decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "delete-bootstrap-client-job.yaml"))
+	if len(deleteObjects) != 1 || deleteObjects[0].Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "6" {
+		t.Fatalf("bootstrap delete Job sequence = %#v, want one wave-6 Job", deleteObjects)
+	}
+}
+
+func TestKeycloakBackofficeCallbacksMatchGatewayLifecycle(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("..", "deploy", "kubernetes", "keycloak-authority", "keycloak-desired-state.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	configData, err := readNoebsKubernetesConfigMapData("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	texts := map[string]string{
+		"Keycloak desired state": string(payload),
+		"gateway config":         configData["config.yaml"],
+	}
+	for _, required := range []string{
+		"https://api.noebs.sd/backoffice/oauth/callback",
+		"https://api.noebs.sd/backoffice/oauth/logout/callback",
+	} {
+		for name, text := range texts {
+			if !strings.Contains(text, required) {
+				t.Fatalf("%s missing %q", name, required)
+			}
+		}
+	}
+	for _, forbidden := range []string{"https://api.noebs.sd/backoffice/callback", "https://api.noebs.sd/backoffice/logged-out"} {
+		for name, text := range texts {
+			if strings.Contains(text, forbidden) {
+				t.Fatalf("%s contains retired callback %q", name, forbidden)
+			}
+		}
 	}
 }
 
@@ -1339,8 +1837,8 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 			t.Fatalf("postgres containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
 		}
 		container := object.Spec.Template.Spec.Containers[0]
-		if container.Image != "postgres:16" {
-			t.Fatalf("postgres image = %q, want postgres:16", container.Image)
+		if container.Image != "postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20" {
+			t.Fatalf("postgres image is not the tested immutable digest: %q", container.Image)
 		}
 		if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
 			t.Fatalf("postgres must use mounted bootstrap files instead of env/envFrom")
@@ -1351,6 +1849,8 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 		requireMount(t, "postgres", container, "/opt/noebs-postgres/bin/start.sh", "start.sh")
 		requireMount(t, "postgres", container, "/opt/noebs-postgres/init/001-service-databases.sql", "001-service-databases.sql")
 		requireMount(t, "postgres", container, "/opt/noebs-postgres/secrets/password", "password")
+		requireMount(t, "postgres", container, "/opt/noebs-postgres/secrets/tls.crt", "tls.crt")
+		requireMount(t, "postgres", container, "/opt/noebs-postgres/secrets/tls.key", "tls.key")
 		requireExecProbeDatabase(t, "postgres", "readinessProbe", container.ReadinessProbe, "postgres")
 		requireExecProbeDatabase(t, "postgres", "livenessProbe", container.LivenessProbe, "postgres")
 	}
@@ -1361,23 +1861,25 @@ func TestNoebsPostgresKubernetesUsesMountedBootstrapFiles(t *testing.T) {
 		t.Fatalf("postgres-bootstrap ConfigMap missing start.sh")
 	}
 	for _, required := range []string{
+		"'/^[[:space:]]*host[[:space:]]/d'",
+		"'/^[[:space:]]*hostssl[[:space:]]/d'",
+		"'/^[[:space:]]*hostnossl[[:space:]]/d'",
 		"hostssl all all all scram-sha-256",
 		"hostnossl all all all reject",
 		"ssl_min_protocol_version=TLSv1.3",
+		"ssl_max_protocol_version=TLSv1.3",
 	} {
 		if !strings.Contains(bootstrapScript, required) {
 			t.Fatalf("Postgres bootstrap script missing %q", required)
 		}
 	}
+	for _, forbidden := range []string{"tls_enabled", "host all all all scram-sha-256", "ssl=off"} {
+		if strings.Contains(bootstrapScript, forbidden) {
+			t.Fatalf("Postgres bootstrap script contains plaintext fallback %q", forbidden)
+		}
+	}
 	if serviceDatabaseSQL == "" {
 		t.Fatalf("postgres-bootstrap ConfigMap missing 001-service-databases.sql")
-	}
-	dockerBootstrap, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "postgres", "postgres-start.sh"))
-	if err != nil {
-		t.Fatalf("read docker Postgres bootstrap: %v", err)
-	}
-	if bootstrapScript != string(dockerBootstrap) {
-		t.Fatalf("Kubernetes and Docker Noebs Postgres bootstrap scripts differ")
 	}
 	dockerSQL, err := os.ReadFile(filepath.Join("..", "deploy", "docker", "postgres", "001-service-databases.sql"))
 	if err != nil {
@@ -1411,7 +1913,11 @@ func TestNoebsDatabaseResetIsOfflineOnly(t *testing.T) {
 		"<postgres-host> <postgres-port> <postgres-user> <password-file> <service-database-sql>",
 		"DROP DATABASE IF EXISTS noebs WITH (FORCE);",
 		"DROP DATABASE IF EXISTS identity_auth WITH (FORCE);",
+		"'consumer_beneficiary',",
+		"DROP DATABASE IF EXISTS consumer_beneficiary WITH (FORCE);",
 		"DROP DATABASE IF EXISTS wallet_ledger WITH (FORCE);",
+		"DROP DATABASE IF EXISTS workload_auth WITH (FORCE);",
+		"DROP DATABASE IF EXISTS gateway_auth WITH (FORCE);",
 		"psql \"$connection\" --set=ON_ERROR_STOP=1 --file=\"$service_database_sql\"",
 	} {
 		if !strings.Contains(text, required) {
@@ -1461,8 +1967,8 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 				t.Fatalf("temporal-postgres containers = %d, want 1", len(object.Spec.Template.Spec.Containers))
 			}
 			container := object.Spec.Template.Spec.Containers[0]
-			if container.Image != "postgres:16" {
-				t.Fatalf("temporal-postgres image = %q, want postgres:16", container.Image)
+			if container.Image != "postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20" {
+				t.Fatalf("temporal-postgres image is not the tested immutable digest: %q", container.Image)
 			}
 			if len(container.Env) != 0 || len(container.EnvFrom) != 0 {
 				t.Fatalf("temporal-postgres must use mounted bootstrap files instead of env/envFrom")
@@ -1612,35 +2118,13 @@ func TestTemporalKubernetesUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireKubernetesConfigMapDataMatchesFile(t, "temporal-ui-config development.yaml", temporalUIConfig, filepath.Join("..", "deploy", "docker", "temporal", "ui.yaml"))
 }
 
-func TestCurrentHostIngressTargetsOnlyAPIGateway(t *testing.T) {
-	objects := decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "ingress.yaml"))
-
-	checkedPaths := 0
-	for _, object := range objects {
-		if object.Kind != "Ingress" {
-			continue
-		}
-		if len(object.Spec.Rules) == 0 {
-			t.Fatalf("%s Ingress has no rules", object.Metadata.Name)
-		}
-		for _, rule := range object.Spec.Rules {
-			if len(rule.HTTP.Paths) == 0 {
-				t.Fatalf("%s Ingress host %s has no HTTP paths", object.Metadata.Name, rule.Host)
-			}
-			for _, ingressPath := range rule.HTTP.Paths {
-				checkedPaths++
-				serviceName := ingressPath.Backend.Service.Name
-				if serviceName == "" {
-					t.Fatalf("%s Ingress host %s path %s has no backend service", object.Metadata.Name, rule.Host, ingressPath.Path)
-				}
-				if serviceName != "api-gateway" {
-					t.Fatalf("%s Ingress host %s path %s targets %q, want api-gateway", object.Metadata.Name, rule.Host, ingressPath.Path, serviceName)
-				}
-			}
-		}
+func TestCurrentHostHasNoSecondaryIngressAuthority(t *testing.T) {
+	overlay, err := os.ReadFile(filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if checkedPaths == 0 {
-		t.Fatalf("current-host overlay has no Ingress backend paths")
+	if strings.Contains(string(overlay), "ingress.yaml") {
+		t.Fatal("current-host overlay must leave public ingress and TLS authority to edge Caddy")
 	}
 }
 
@@ -1962,29 +2446,6 @@ func TestDockerComposeKafkaRuntimeConfigMatchesKubernetes(t *testing.T) {
 	}
 }
 
-func TestDockerComposeEBSRuntimeConfigMatchesKubernetes(t *testing.T) {
-	dockerConfig := decodeMountedNoebsConfigFile(t, filepath.Join("..", "config.docker.yaml"))
-	kubernetesConfig := decodeKubernetesBaseNoebsConfig(t)
-
-	checks := []struct {
-		name   string
-		docker float32
-		k8s    float32
-	}{
-		{"p2p_fees", dockerConfig.Noebs.EBSDynamicFees.CardTransferfees, kubernetesConfig.Noebs.EBSDynamicFees.CardTransferfees},
-		{"custom_fees", dockerConfig.Noebs.EBSDynamicFees.CustomFees, kubernetesConfig.Noebs.EBSDynamicFees.CustomFees},
-		{"special_payment_fees", dockerConfig.Noebs.EBSDynamicFees.SpecialPaymentFees, kubernetesConfig.Noebs.EBSDynamicFees.SpecialPaymentFees},
-	}
-	for _, check := range checks {
-		if check.docker <= 0 {
-			t.Fatalf("config.docker.yaml ebs_dynamic_fees.%s = %v, want positive explicit fee", check.name, check.docker)
-		}
-		if check.docker != check.k8s {
-			t.Fatalf("config.docker.yaml ebs_dynamic_fees.%s = %v, want Kubernetes value %v", check.name, check.docker, check.k8s)
-		}
-	}
-}
-
 func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 
@@ -2078,54 +2539,6 @@ func TestTemporalDockerComposeUsesMountedConfigAndSchemaJob(t *testing.T) {
 	requireComposeTopLevelSecret(t, compose.Secrets, "temporal_postgres_password", "./deploy/docker/temporal/postgres-password.txt")
 }
 
-func TestCaddyEdgeProxyTargetsOnlyAPIGateway(t *testing.T) {
-	path := filepath.Join("..", "Caddyfile")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-
-	foundProxy := false
-	for lineIndex, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") || !strings.HasPrefix(trimmed, "reverse_proxy") {
-			continue
-		}
-		foundProxy = true
-		fields := strings.Fields(trimmed)
-		if len(fields) != 2 {
-			t.Fatalf("%s:%d reverse_proxy = %q, want exactly one upstream", path, lineIndex+1, trimmed)
-		}
-		if fields[1] != "api-gateway:8080" {
-			t.Fatalf("%s:%d reverse_proxy upstream = %q, want api-gateway:8080", path, lineIndex+1, fields[1])
-		}
-	}
-	if !foundProxy {
-		t.Fatalf("%s has no reverse_proxy directive", path)
-	}
-}
-
-func TestCaddyServesAlphaAppLinksWithoutProxyingPaymentCapabilityURLs(t *testing.T) {
-	path := filepath.Join("..", "Caddyfile")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	config := string(data)
-	for _, required := range []string{
-		`path /.well-known/assetlinks.json`,
-		`"package_name":"com.tutipay.app.alpha"`,
-		`B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE`,
-		`path_regexp payment_link ^/pay/`,
-		`Cache-Control "no-store"`,
-		`Strict-Transport-Security "max-age=31536000; includeSubDomains"`,
-	} {
-		if !strings.Contains(config, required) {
-			t.Errorf("%s missing %q", path, required)
-		}
-	}
-}
-
 func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 	edgeRoot := filepath.Join("..", "deploy", "kubernetes", "edge")
 	read := func(name string) string {
@@ -2139,6 +2552,9 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 	}
 
 	caddyfile := read("Caddyfile")
+	const keycloakMetadataMatcher = "@keycloak_metadata {\n\t\t\tmethod GET HEAD\n\t\t\tpath /auth/realms/noebs/.well-known/openid-configuration /auth/realms/noebs/protocol/openid-connect/certs /auth/resources/*\n\t\t}"
+	const keycloakBrowserGETMatcher = "@keycloak_browser_get {\n\t\t\tmethod GET\n\t\t\tpath /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login\n\t\t}"
+	const keycloakBrowserPOSTMatcher = "@keycloak_browser_post {\n\t\t\tmethod POST\n\t\t\tpath /auth/realms/noebs/protocol/openid-connect/token /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/required-action /auth/realms/noebs/login-actions/first-broker-login\n\t\t}"
 	for _, required := range []string{
 		`api.noebs.sd`,
 		`dsa.adonese.sd`,
@@ -2146,9 +2562,19 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 		`unido.noebs.sd`,
 		`iptv.2t.sd`,
 		`path /.well-known/assetlinks.json`,
-		`path_regexp payment_link ^/pay/`,
-		`@keycloak_public path /auth/realms/noebs`,
-		`reverse_proxy @keycloak_public keycloak.noebs.svc.cluster.local:8080`,
+		`route {`,
+		keycloakMetadataMatcher,
+		keycloakBrowserGETMatcher,
+		keycloakBrowserPOSTMatcher,
+		`reverse_proxy @keycloak_metadata https://keycloak.noebs.svc.cluster.local:8443`,
+		`reverse_proxy @keycloak_browser_get https://keycloak.noebs.svc.cluster.local:8443`,
+		`reverse_proxy @keycloak_browser_post https://keycloak.noebs.svc.cluster.local:8443`,
+		`tls_trust_pool file /etc/noebs-keycloak/ca.pem`,
+		`tls_server_name keycloak.noebs.svc.cluster.local`,
+		`header_up X-Forwarded-For {remote_host}`,
+		`header_up X-Forwarded-Host {host}`,
+		`header_up X-Forwarded-Port 443`,
+		`@keycloak_private path /auth /auth/*`,
 		`respond @keycloak_private 404`,
 		`Strict-Transport-Security "max-age=31536000; includeSubDomains"`,
 	} {
@@ -2156,10 +2582,55 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 			t.Errorf("edge Caddyfile missing %q", required)
 		}
 	}
+	unmatchedKeycloakSurface := caddyfile
+	for _, matcher := range []string{keycloakMetadataMatcher, keycloakBrowserGETMatcher, keycloakBrowserPOSTMatcher} {
+		if strings.Count(caddyfile, matcher) != 1 {
+			t.Fatalf("edge Caddyfile must define each exact Keycloak matcher once")
+		}
+		unmatchedKeycloakSurface = strings.Replace(unmatchedKeycloakSurface, matcher, "", 1)
+	}
+	if strings.Contains(unmatchedKeycloakSurface, "/auth/realms/noebs") {
+		t.Error("edge Caddyfile contains a Keycloak realm path outside the exact public matchers")
+	}
+	if strings.Count(caddyfile, "keycloak.noebs.svc.cluster.local:8443") != 3 {
+		t.Error("edge Caddyfile must proxy only the three exact Keycloak matcher classes")
+	}
+	for _, exact := range []string{
+		"tls_trust_pool file /etc/noebs-keycloak/ca.pem",
+		"tls_server_name keycloak.noebs.svc.cluster.local",
+	} {
+		if strings.Count(caddyfile, exact) != 3 {
+			t.Errorf("edge Caddyfile must configure %q on all three Keycloak upstreams", exact)
+		}
+	}
+	for _, forbidden := range []string{
+		`/auth/realms/noebs/.well-known/*`,
+		`/auth/realms/noebs/protocol/openid-connect/*`,
+		`/auth/realms/noebs/login-actions/*`,
+		`/auth/realms/noebs/broker/*`,
+		`/auth/realms/noebs/clients-registrations`,
+		`/auth/realms/noebs/protocol/saml`,
+		`/auth/realms/noebs/protocol/openid-connect/userinfo`,
+		`/auth/realms/noebs/protocol/openid-connect/introspect`,
+		`/auth/realms/noebs/protocol/openid-connect/revoke`,
+		`/auth/realms/noebs/protocol/openid-connect/auth/device`,
+		`/auth/realms/noebs/protocol/openid-connect/ext/par/request`,
+		`/auth/realms/noebs/broker/google/link`,
+		`/auth/realms/noebs/broker/google/token`,
+		`/auth/realms/noebs/login-actions/registration`,
+		`/auth/realms/noebs/login-actions/reset-credentials`,
+		`tls_insecure_skip_verify`,
+		`tls_versions`,
+		`http://keycloak`,
+	} {
+		if strings.Contains(caddyfile, forbidden) {
+			t.Errorf("edge Caddyfile exposes forbidden Keycloak surface %q", forbidden)
+		}
+	}
 
 	kustomization := read("kustomization.yaml")
-	if !strings.Contains(kustomization, "disableNameSuffixHash: true") {
-		t.Error("edge ConfigMap name must remain stable for the existing deployment")
+	if strings.Contains(kustomization, "disableNameSuffixHash") {
+		t.Error("edge ConfigMap must be content-addressed so configuration changes roll Caddy")
 	}
 
 	deployment := read("deployment.yaml")
@@ -2169,12 +2640,33 @@ func TestCurrentHostEdgeCaddyIsCompleteAndImmutable(t *testing.T) {
 	if strings.Contains(deployment, "image: caddy:2-alpine") {
 		t.Error("edge deployment must not use a mutable Caddy tag")
 	}
-	if strings.Contains(deployment, "hostNetwork: true") || strings.Contains(deployment, "ClusterFirstWithHostNet") {
-		t.Error("edge deployment must use ordinary pod networking so NetworkPolicy can identify Caddy")
+	for _, forbidden := range []string{"hostNetwork: false", "dnsPolicy: ClusterFirst\n", "hostPort:"} {
+		if strings.Contains(deployment, forbidden) {
+			t.Errorf("edge deployment contains incompatible networking %q", forbidden)
+		}
 	}
-	for _, required := range []string{"hostNetwork: false", "dnsPolicy: ClusterFirst", "hostPort: 80", "hostPort: 443"} {
+	for _, required := range []string{"hostNetwork: true", "dnsPolicy: ClusterFirstWithHostNet"} {
 		if !strings.Contains(deployment, required) {
 			t.Errorf("edge deployment missing %q", required)
+		}
+	}
+	for _, required := range []string{
+		"automountServiceAccountToken: false",
+		"allowPrivilegeEscalation: false",
+		"readOnlyRootFilesystem: true",
+		"drop: [ALL]",
+		"add: [NET_BIND_SERVICE]",
+		"type: RuntimeDefault",
+		"secretName: keycloak-transport-ca",
+		"mountPath: /etc/noebs-keycloak/ca.pem",
+	} {
+		if !strings.Contains(deployment, required) {
+			t.Errorf("edge deployment missing security boundary %q", required)
+		}
+	}
+	for _, hostUpstream := range []string{"127.0.0.1:8080", "127.0.0.1:18081"} {
+		if !strings.Contains(caddyfile, hostUpstream) {
+			t.Errorf("edge Caddyfile missing host-loopback upstream %q", hostUpstream)
 		}
 	}
 }
@@ -2214,8 +2706,16 @@ func TestKeycloakDockerComposeUsesMountedConfigSecret(t *testing.T) {
 	if keycloak.EnvFile != nil {
 		t.Fatalf("keycloak defines env_file; keycloak config must be file-mounted")
 	}
+	const keycloakImage = "quay.io/keycloak/keycloak@sha256:2eb3cd316835c990e69e26ade292ffa78f6fb0db7d5fc6377463c162e1979ac0"
+	if keycloak.Image != keycloakImage {
+		t.Fatalf("keycloak image = %q, want 26.7 release image %q", keycloak.Image, keycloakImage)
+	}
 	requireComposeSecret(t, "keycloak", keycloak.Secrets, "keycloak_config", "/opt/keycloak/conf/keycloak.conf")
+	requireComposeSecret(t, "keycloak", keycloak.Secrets, "keycloak_tls_certificate", "/opt/keycloak/conf/tls.crt")
+	requireComposeSecret(t, "keycloak", keycloak.Secrets, "keycloak_tls_private_key", "/opt/keycloak/conf/tls.key")
 	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_config", "./deploy/docker/keycloak/keycloak.conf")
+	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_tls_certificate", "./deploy/docker/keycloak/tls.crt")
+	requireComposeTopLevelSecret(t, compose.Secrets, "keycloak_tls_private_key", "./deploy/docker/keycloak/tls.key")
 	rejectComposePublishedPorts(t, "keycloak", keycloak.Ports)
 
 	keycloakPostgres, ok := compose.Services["keycloak-postgres"]
@@ -2237,7 +2737,7 @@ func TestDockerComposePublishesOnlyAPIGatewayByDefault(t *testing.T) {
 	compose := decodeComposeDocument(t, filepath.Join("..", "docker-compose.yml"))
 
 	for serviceName, service := range compose.Services {
-		if serviceName == "api-gateway" || serviceName == "caddy" {
+		if serviceName == "api-gateway" {
 			continue
 		}
 		rejectComposePublishedPorts(t, serviceName, service.Ports)
@@ -2247,16 +2747,19 @@ func TestDockerComposePublishesOnlyAPIGatewayByDefault(t *testing.T) {
 	if !ok {
 		t.Fatalf("docker-compose.yml missing api-gateway service")
 	}
-	if !containsString(apiGateway.Ports, "0.0.0.0:8081:8080") {
-		t.Fatalf("api-gateway ports = %v, want host publication on 0.0.0.0:8081", apiGateway.Ports)
+	if len(apiGateway.Ports) != 1 || apiGateway.Ports[0] != "127.0.0.1:8081:8080" {
+		t.Fatalf("api-gateway ports = %v, want only loopback publication on 127.0.0.1:8081", apiGateway.Ports)
 	}
-
-	caddy, ok := compose.Services["caddy"]
-	if !ok {
-		t.Fatalf("docker-compose.yml missing caddy service")
+	if _, exists := compose.Services["caddy"]; exists {
+		t.Fatal("docker-compose.yml must not define a second Caddy edge")
 	}
-	if !containsString(caddy.Profiles, "edge") {
-		t.Fatalf("caddy profiles = %v, want edge profile", caddy.Profiles)
+	for _, volume := range []string{"caddy_data", "caddy_config"} {
+		if _, exists := compose.Volumes[volume]; exists {
+			t.Fatalf("docker-compose.yml retains obsolete edge volume %q", volume)
+		}
+	}
+	if _, err := os.Stat(filepath.Join("..", "Caddyfile")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("root Caddyfile must not exist: %v", err)
 	}
 }
 
@@ -2275,9 +2778,6 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 		`count = var.argocd_installation_mode == "existing" ? 1 : 0`,
 		`resource "helm_release" "argocd"`,
 		`resource "kubernetes_manifest" "noebs_project"`,
-		`data "kubernetes_secret_v1" "noebs_required"`,
-		`for_each = var.create_noebs_application ? toset(local.noebs_required_kubernetes_secrets) : toset([])`,
-		`name      = each.key`,
 		`resource "kubernetes_manifest" "noebs_application"`,
 		`count = var.create_noebs_application ? 1 : 0`,
 		`resource "kubernetes_manifest" "noebs_edge_application"`,
@@ -2292,6 +2792,7 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 		`namespace = kubernetes_namespace_v1.noebs.metadata[0].name`,
 		`namespace = var.edge_namespace`,
 		`server    = "https://kubernetes.default.svc"`,
+		`var.noebs_automated_sync ? {`,
 		`prune    = true`,
 		`selfHeal = true`,
 		`"CreateNamespace=true"`,
@@ -2299,7 +2800,6 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 		`depends_on = [
     kubernetes_manifest.noebs_project,
     kubernetes_namespace_v1.noebs,
-    data.kubernetes_secret_v1.noebs_required,
   ]`,
 	}
 	for _, snippet := range required {
@@ -2345,6 +2845,11 @@ func TestFoundationOwnsArgoCDApplication(t *testing.T) {
 	if argocdModeMatch[1] != "existing" {
 		t.Fatalf("argocd_installation_mode = %q, want existing for current host", argocdModeMatch[1])
 	}
+	automatedSyncRe := regexp.MustCompile(`(?m)^\s*noebs_automated_sync\s*=\s*(true|false)\s*$`)
+	automatedSyncMatch := automatedSyncRe.FindStringSubmatch(string(tfvarsExample))
+	if len(automatedSyncMatch) != 2 || automatedSyncMatch[1] != "false" {
+		t.Fatalf("%s must explicitly pause noebs_automated_sync", tfvarsExamplePath)
+	}
 	if _, err := os.Stat(filepath.Join("..", filepath.FromSlash(match[1]), "kustomization.yaml")); err != nil {
 		t.Fatalf("noebs_manifest_path does not contain kustomization.yaml: %v", err)
 	}
@@ -2382,26 +2887,26 @@ func TestArgoCDApplicationIsOwnedByFoundationOnly(t *testing.T) {
 func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	expectedJobs := map[string]bool{
-		"noebs-workload-auth-migrate":        false,
-		"noebs-identity-auth-migrate":        false,
-		"noebs-card-vault-migrate":           false,
-		"noebs-ebs-adapter-migrate":          false,
-		"noebs-psp-webhook-migrate":          false,
-		"noebs-admin-reporting-migrate":      false,
-		"noebs-notification-chat-migrate":    false,
-		"noebs-consumer-beneficiary-migrate": false,
-		"noebs-wallet-ledger-migrate":        false,
+		"noebs-workload-auth-migrate":     false,
+		"noebs-gateway-auth-migrate":      false,
+		"noebs-identity-auth-migrate":     false,
+		"noebs-card-vault-migrate":        false,
+		"noebs-ebs-adapter-migrate":       false,
+		"noebs-psp-webhook-migrate":       false,
+		"noebs-admin-reporting-migrate":   false,
+		"noebs-notification-chat-migrate": false,
+		"noebs-wallet-ledger-migrate":     false,
 	}
 	expectedMigrationWaves := map[string]string{
-		"noebs-workload-auth-migrate":        "9",
-		"noebs-identity-auth-migrate":        "10",
-		"noebs-card-vault-migrate":           "11",
-		"noebs-ebs-adapter-migrate":          "12",
-		"noebs-psp-webhook-migrate":          "13",
-		"noebs-admin-reporting-migrate":      "14",
-		"noebs-notification-chat-migrate":    "15",
-		"noebs-consumer-beneficiary-migrate": "16",
-		"noebs-wallet-ledger-migrate":        "17",
+		"noebs-workload-auth-migrate":     "9",
+		"noebs-gateway-auth-migrate":      "18",
+		"noebs-identity-auth-migrate":     "10",
+		"noebs-card-vault-migrate":        "11",
+		"noebs-ebs-adapter-migrate":       "12",
+		"noebs-psp-webhook-migrate":       "13",
+		"noebs-admin-reporting-migrate":   "14",
+		"noebs-notification-chat-migrate": "15",
+		"noebs-wallet-ledger-migrate":     "16",
 	}
 	expectedRuntimeDeployments := map[string]bool{
 		"api-gateway":               false,
@@ -2413,7 +2918,6 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"admin-reporting":           false,
 		"admin-reporting-projector": false,
 		"notification-chat":         false,
-		"consumer-beneficiary":      false,
 		"wallet-api":                false,
 		"wallet-ledger":             false,
 		"wallet-worker":             false,
@@ -2423,7 +2927,10 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 		"admin-reporting-projector": true,
 		"wallet-worker":             true,
 	}
-	cleanupFound := false
+	expectedCleanup := map[string]bool{
+		"noebs-workload-auth-cleanup": false,
+		"noebs-gateway-auth-cleanup":  false,
+	}
 
 	for _, object := range objects {
 		switch object.Kind {
@@ -2463,7 +2970,7 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			if !strings.HasPrefix(object.Metadata.Name, "noebs-") {
 				continue
 			}
-			if object.Metadata.Name == "noebs-deployment-preflight" {
+			if object.Metadata.Name == "noebs-deployment-preflight" || object.Metadata.Name == "noebs-keycloak-reconciler" {
 				continue
 			}
 			if _, ok := expectedJobs[object.Metadata.Name]; !ok {
@@ -2503,12 +3010,12 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			requireMount(t, object.Metadata.Name, container, "/app/config.yaml", "config.yaml")
 			requireMount(t, object.Metadata.Name, container, "/app/secrets.yaml", "secrets.yaml")
 		case "CronJob":
-			if object.Metadata.Name != "noebs-workload-auth-cleanup" {
+			if _, ok := expectedCleanup[object.Metadata.Name]; !ok {
 				continue
 			}
-			cleanupFound = true
+			expectedCleanup[object.Metadata.Name] = true
 			if object.Metadata.Annotations["argocd.argoproj.io/sync-wave"] != "19" {
-				t.Fatalf("workload auth cleanup sync-wave = %q, want 19", object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
+				t.Fatalf("%s sync-wave = %q, want 19", object.Metadata.Name, object.Metadata.Annotations["argocd.argoproj.io/sync-wave"])
 			}
 		}
 	}
@@ -2523,37 +3030,39 @@ func TestMigrationJobsRunBeforeNoebsRuntimeWorkloads(t *testing.T) {
 			t.Fatalf("runtime Deployment %q not found", deployment)
 		}
 	}
-	if !cleanupFound {
-		t.Fatal("workload authentication cleanup CronJob not found")
+	for cleanup, found := range expectedCleanup {
+		if !found {
+			t.Fatalf("cleanup CronJob %q not found", cleanup)
+		}
 	}
 }
 
 func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
 	serviceConfigs := map[string]string{
-		"api-gateway":                  "api-gateway.service.yaml",
-		"identity-auth":                "identity-auth.service.yaml",
-		"card-vault":                   "card-vault.service.yaml",
-		"ebs-adapter":                  "ebs-adapter.service.yaml",
-		"ebs-adapter-events":           "ebs-adapter-events.service.yaml",
-		"psp-webhook":                  "psp-webhook.service.yaml",
-		"admin-reporting":              "admin-reporting.service.yaml",
-		"admin-reporting-projector":    "admin-reporting-projector.service.yaml",
-		"notification-chat":            "notification-chat.service.yaml",
-		"consumer-beneficiary":         "consumer-beneficiary.service.yaml",
-		"wallet-api":                   "wallet-api.service.yaml",
-		"wallet-ledger":                "wallet-ledger.service.yaml",
-		"wallet-worker":                "wallet-worker.service.yaml",
-		"workload-auth-migrate":        "workload-auth-migrate.service.yaml",
-		"workload-auth-cleanup":        "workload-auth-cleanup.service.yaml",
-		"identity-auth-migrate":        "identity-auth-migrate.service.yaml",
-		"card-vault-migrate":           "card-vault-migrate.service.yaml",
-		"ebs-adapter-migrate":          "ebs-adapter-migrate.service.yaml",
-		"psp-webhook-migrate":          "psp-webhook-migrate.service.yaml",
-		"admin-reporting-migrate":      "admin-reporting-migrate.service.yaml",
-		"notification-chat-migrate":    "notification-chat-migrate.service.yaml",
-		"consumer-beneficiary-migrate": "consumer-beneficiary-migrate.service.yaml",
-		"wallet-ledger-migrate":        "wallet-ledger-migrate.service.yaml",
+		"api-gateway":               "api-gateway.service.yaml",
+		"identity-auth":             "identity-auth.service.yaml",
+		"card-vault":                "card-vault.service.yaml",
+		"ebs-adapter":               "ebs-adapter.service.yaml",
+		"ebs-adapter-events":        "ebs-adapter-events.service.yaml",
+		"psp-webhook":               "psp-webhook.service.yaml",
+		"admin-reporting":           "admin-reporting.service.yaml",
+		"admin-reporting-projector": "admin-reporting-projector.service.yaml",
+		"notification-chat":         "notification-chat.service.yaml",
+		"wallet-api":                "wallet-api.service.yaml",
+		"wallet-ledger":             "wallet-ledger.service.yaml",
+		"wallet-worker":             "wallet-worker.service.yaml",
+		"workload-auth-migrate":     "workload-auth-migrate.service.yaml",
+		"workload-auth-cleanup":     "workload-auth-cleanup.service.yaml",
+		"gateway-auth-migrate":      "gateway-auth-migrate.service.yaml",
+		"gateway-auth-cleanup":      "gateway-auth-cleanup.service.yaml",
+		"identity-auth-migrate":     "identity-auth-migrate.service.yaml",
+		"card-vault-migrate":        "card-vault-migrate.service.yaml",
+		"ebs-adapter-migrate":       "ebs-adapter-migrate.service.yaml",
+		"psp-webhook-migrate":       "psp-webhook-migrate.service.yaml",
+		"admin-reporting-migrate":   "admin-reporting-migrate.service.yaml",
+		"notification-chat-migrate": "notification-chat-migrate.service.yaml",
+		"wallet-ledger-migrate":     "wallet-ledger-migrate.service.yaml",
 	}
 	rendererServiceConfigs := map[string]bool{}
 	for _, serviceName := range kubernetesSecretReleaseServiceNames {
@@ -2621,12 +3130,16 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak-postgres-password.txt", "password")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/ghcr-dockerconfigjson", ".dockerconfigjson")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak.conf", "keycloak.conf")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/keycloak-reconciler-config.yaml", "config.yaml")
 		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/workload-auth-postgres-roles.secrets.yaml", "roles.yaml")
+		requireMount(t, "noebs-deployment-preflight", container, "/preflight/platform/gateway-auth-postgres-roles.secrets.yaml", "roles.yaml")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "postgres-credentials", "postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "temporal-postgres-credentials", "temporal-postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-postgres-credentials", "keycloak-postgres-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "ghcr-credentials", "ghcr-credentials")
 		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-secrets", "keycloak-secrets")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "keycloak-reconciler-credentials", "keycloak-reconciler-credentials")
+		requireSecretVolume(t, "noebs-deployment-preflight", object.Spec.Template.Spec.Volumes, "gateway-auth-postgres-roles", "gateway-auth-postgres-roles")
 
 		for serviceName, subPath := range serviceConfigs {
 			requireMount(t, "noebs-deployment-preflight", container, "/preflight/services/"+serviceName+".yaml", subPath)
@@ -2643,7 +3156,6 @@ func TestDeploymentPreflightJobRunsBeforeMigrations(t *testing.T) {
 
 func TestKubernetesSecretRendererCoversManifestSecretReferences(t *testing.T) {
 	objects := decodeManifestObjectsFromDir(t, filepath.Join("..", "deploy", "kubernetes", "base"))
-	objects = append(objects, decodeManifestObjects(t, filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "ingress.yaml"))...)
 
 	referencedSecrets := map[string]bool{}
 	for _, object := range objects {
@@ -2776,6 +3288,7 @@ func TestFoundationTerraformVariablesRequireExplicitInputs(t *testing.T) {
 		"noebs_manifest_path",
 		"edge_manifest_path",
 		"create_noebs_application",
+		"noebs_automated_sync",
 		"create_edge_application",
 	}
 	defaultRe := regexp.MustCompile(`(?m)^\s*default\s*=`)
@@ -2796,19 +3309,31 @@ func TestFoundationTerraformVariablesRequireExplicitInputs(t *testing.T) {
 			t.Fatalf("%s must assign %q", tfvarsExamplePath, name)
 		}
 	}
+	revisionBlock := blocks["noebs_target_revision"]
+	if !strings.Contains(revisionBlock, `can(regex("^[0-9a-f]{40}$", var.noebs_target_revision))`) {
+		t.Fatal("noebs_target_revision must reject branches, tags, uppercase SHAs, and abbreviated commits")
+	}
+	revisionAssignmentRe := regexp.MustCompile(`(?m)^\s*noebs_target_revision\s*=\s*"([^"]+)"\s*$`)
+	revisionAssignment := revisionAssignmentRe.FindStringSubmatch(tfvarsExampleText)
+	if len(revisionAssignment) != 2 || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(revisionAssignment[1]) {
+		t.Fatalf("%s noebs_target_revision must be an exact lowercase 40-hex commit", tfvarsExamplePath)
+	}
 }
 
 func renderedKubernetesSecretNames() map[string]bool {
 	secrets := map[string]bool{
-		"sops-age-key":                  true,
-		"postgres-credentials":          true,
-		"workload-auth-postgres-roles":  true,
-		"internal-transport-platform":   true,
-		"temporal-postgres-credentials": true,
-		"keycloak-postgres-credentials": true,
-		"keycloak-secrets":              true,
-		"ghcr-credentials":              true,
-		"noebs-tls":                     true,
+		"noebs-release-manifest":          true,
+		"sops-age-key":                    true,
+		"postgres-credentials":            true,
+		"workload-auth-postgres-roles":    true,
+		"gateway-auth-postgres-roles":     true,
+		"internal-transport-platform":     true,
+		"temporal-postgres-credentials":   true,
+		"keycloak-postgres-credentials":   true,
+		"keycloak-secrets":                true,
+		"keycloak-transport-ca":           true,
+		"keycloak-reconciler-credentials": true,
+		"ghcr-credentials":                true,
 	}
 	for _, source := range kubernetesServiceSecretSources {
 		secrets[source.secretName] = true
@@ -2818,15 +3343,18 @@ func renderedKubernetesSecretNames() map[string]bool {
 
 func renderedKubernetesSecretKeys() map[string]map[string]bool {
 	secrets := map[string]map[string]bool{
-		"sops-age-key":                  {"age-key.txt": true},
-		"postgres-credentials":          {"password": true, "tls.crt": true, "tls.key": true},
-		"workload-auth-postgres-roles":  {"migrate-password": true, "runtime-password": true, "cleanup-password": true, "roles.yaml": true},
-		"internal-transport-platform":   {"credentials.yaml": true},
-		"temporal-postgres-credentials": {"password": true},
-		"keycloak-postgres-credentials": {"password": true},
-		"keycloak-secrets":              {"keycloak.conf": true},
-		"ghcr-credentials":              {".dockerconfigjson": true},
-		"noebs-tls":                     {"tls.crt": true, "tls.key": true},
+		"noebs-release-manifest":          {kubernetesReleaseManifestFile: true},
+		"sops-age-key":                    {"age-key.txt": true},
+		"postgres-credentials":            {"password": true, "tls.crt": true, "tls.key": true},
+		"workload-auth-postgres-roles":    {"migrate-password": true, "runtime-password": true, "cleanup-password": true, "roles.yaml": true},
+		"gateway-auth-postgres-roles":     {"migrate-password": true, "runtime-password": true, "cleanup-password": true, "roles.yaml": true},
+		"internal-transport-platform":     {"credentials.yaml": true},
+		"temporal-postgres-credentials":   {"password": true},
+		"keycloak-postgres-credentials":   {"password": true, "tls.crt": true, "tls.key": true},
+		"keycloak-secrets":                {"keycloak.conf": true, "db-ca.pem": true, "tls.crt": true, "tls.key": true},
+		"keycloak-transport-ca":           {"ca.pem": true},
+		"keycloak-reconciler-credentials": {"config.yaml": true},
+		"ghcr-credentials":                {".dockerconfigjson": true},
 	}
 	for _, source := range kubernetesServiceSecretSources {
 		secrets[source.secretName] = map[string]bool{"secrets.yaml": true}
@@ -3253,10 +3781,21 @@ func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, 
 		wantedSources[source] = true
 	}
 	for _, peer := range rule.From {
-		if peer.PodSelector == nil || len(peer.PodSelector.MatchLabels) != 1 {
-			t.Fatalf("%s ingress peer must use one exact pod label: %+v", object.Metadata.Name, peer)
+		source := ""
+		switch {
+		case peer.PodSelector != nil && peer.IPBlock == nil:
+			if len(peer.PodSelector.MatchLabels) != 1 {
+				t.Fatalf("%s ingress peer must use one exact pod label: %+v", object.Metadata.Name, peer)
+			}
+			source = peer.PodSelector.MatchLabels["app.kubernetes.io/name"]
+		case peer.PodSelector == nil && peer.IPBlock != nil:
+			if len(peer.IPBlock.Except) != 0 {
+				t.Fatalf("%s ingress IP peer has exceptions: %+v", object.Metadata.Name, peer.IPBlock.Except)
+			}
+			source = "ip:" + peer.IPBlock.CIDR
+		default:
+			t.Fatalf("%s ingress peer must use one exact pod label or IP block: %+v", object.Metadata.Name, peer)
 		}
-		source := peer.PodSelector.MatchLabels["app.kubernetes.io/name"]
 		if !wantedSources[source] {
 			t.Fatalf("%s ingress peer %q is not allowed", object.Metadata.Name, source)
 		}
@@ -3265,6 +3804,18 @@ func requirePortScopedIngressNetworkPolicy(t *testing.T, object manifestObject, 
 	if len(wantedSources) != 0 {
 		t.Fatalf("%s missing ingress peers: %v", object.Metadata.Name, wantedSources)
 	}
+}
+
+func exactNetworkPolicySelectorValues(t *testing.T, label string, selector manifestLabelSelector) []string {
+	t.Helper()
+	if len(selector.MatchLabels) != 0 || len(selector.MatchExpressions) != 1 {
+		t.Fatalf("%s selector = %#v, want one exact set expression", label, selector)
+	}
+	requirement := selector.MatchExpressions[0]
+	if requirement.Key != "app.kubernetes.io/name" || requirement.Operator != "In" || len(requirement.Values) == 0 {
+		t.Fatalf("%s selector requirement = %#v", label, requirement)
+	}
+	return requirement.Values
 }
 
 func networkPoliciesByTargetPod(objects []manifestObject) map[string]manifestObject {
@@ -3796,7 +4347,7 @@ func parseNoebsServiceDatabases(t *testing.T, path string) []string {
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	databaseRe := regexp.MustCompile(`CREATE DATABASE ([a-z_]+) OWNER noebs`)
+	databaseRe := regexp.MustCompile(`CREATE DATABASE ([a-z_]+) OWNER [a-z_]+`)
 	matches := databaseRe.FindAllStringSubmatch(string(data), -1)
 	if len(matches) == 0 {
 		t.Fatalf("%s declares no noebs service databases", path)

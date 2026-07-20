@@ -21,7 +21,6 @@ func TestWorkloadAuthRuntimeConfigAcceptsExactRoleMatrix(t *testing.T) {
 		serviceRoleAdminReporting,
 		serviceRoleAdminReportingProjector,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 		serviceRoleWalletWorker,
@@ -32,7 +31,6 @@ func TestWorkloadAuthRuntimeConfigAcceptsExactRoleMatrix(t *testing.T) {
 		serviceRolePSPWebhookMigrate,
 		serviceRoleAdminReportingMigrate,
 		serviceRoleNotificationMigrate,
-		serviceRoleBeneficiaryMigrate,
 		serviceRoleWalletLedgerMigrate,
 	}
 	for _, role := range roles {

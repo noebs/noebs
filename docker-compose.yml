@@ -93,13 +93,6 @@ x-notification-chat-secret: &notification-chat-secret
   gid: "10001"
   mode: 0400
 
-x-consumer-beneficiary-secret: &consumer-beneficiary-secret
-  source: consumer-beneficiary-secrets
-  target: /app/secrets.yaml
-  uid: "10001"
-  gid: "10001"
-  mode: 0400
-
 x-wallet-api-secret: &wallet-api-secret
   source: wallet-api-secrets
   target: /app/secrets.yaml
@@ -150,7 +143,7 @@ services:
 
   db:
     <<: *service-defaults
-    image: postgres:16
+    image: postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     init: true
     depends_on:
       secrets-init:
@@ -214,7 +207,7 @@ services:
 
   temporal-postgres:
     <<: *service-defaults
-    image: postgres:16
+    image: postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     init: true
     entrypoint: ["/bin/bash", "/opt/temporal-postgres/bin/start.sh"]
     volumes:
@@ -300,7 +293,7 @@ services:
 
   keycloak-postgres:
     <<: *service-defaults
-    image: postgres:16
+    image: postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
     init: true
     entrypoint: ["/bin/bash", "/opt/keycloak-postgres/bin/start.sh"]
     volumes:
@@ -309,6 +302,10 @@ services:
     secrets:
       - source: keycloak_postgres_password
         target: /opt/keycloak-postgres/secrets/password
+      - source: keycloak_postgres_tls_certificate
+        target: /opt/keycloak-postgres/secrets/tls.crt
+      - source: keycloak_postgres_tls_private_key
+        target: /opt/keycloak-postgres/secrets/tls.key
     networks:
       - backend
     healthcheck:
@@ -320,7 +317,7 @@ services:
 
   keycloak:
     <<: [*service-defaults, *web-hardening]
-    image: quay.io/keycloak/keycloak:26.6.1
+    image: quay.io/keycloak/keycloak@sha256:2eb3cd316835c990e69e26ade292ffa78f6fb0db7d5fc6377463c162e1979ac0
     init: true
     depends_on:
       keycloak-postgres:
@@ -329,6 +326,21 @@ services:
     secrets:
       - source: keycloak_config
         target: /opt/keycloak/conf/keycloak.conf
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+      - source: keycloak_transport_ca_certificate
+        target: /opt/keycloak/conf/db-ca.pem
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+      - source: keycloak_tls_certificate
+        target: /opt/keycloak/conf/tls.crt
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+      - source: keycloak_tls_private_key
+        target: /opt/keycloak/conf/tls.key
         uid: "1000"
         gid: "1000"
         mode: 0400
@@ -365,6 +377,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/identity-auth-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: identity-auth-migrate-secrets
         target: /app/secrets.yaml
@@ -375,6 +388,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/card-vault-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: card-vault-migrate-secrets
         target: /app/secrets.yaml
@@ -385,6 +399,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/ebs-adapter-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: ebs-adapter-migrate-secrets
         target: /app/secrets.yaml
@@ -395,6 +410,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/psp-webhook-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: psp-webhook-migrate-secrets
         target: /app/secrets.yaml
@@ -405,6 +421,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/admin-reporting-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: admin-reporting-migrate-secrets
         target: /app/secrets.yaml
@@ -415,18 +432,9 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/notification-chat-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: notification-chat-migrate-secrets
-        target: /app/secrets.yaml
-      - *sops-age-key-secret
-
-  consumer-beneficiary-migrate:
-    <<: *migrate-defaults
-    volumes:
-      - "./config.docker.yaml:/app/config.yaml:ro"
-      - "./deploy/docker/services/consumer-beneficiary-migrate.yaml:/app/service.yaml:ro"
-    secrets:
-      - source: consumer-beneficiary-migrate-secrets
         target: /app/secrets.yaml
       - *sops-age-key-secret
 
@@ -435,6 +443,7 @@ services:
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/wallet-ledger-migrate.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - source: wallet-ledger-migrate-secrets
         target: /app/secrets.yaml
@@ -447,11 +456,12 @@ services:
     init: true
     ports:
       # `:8080` is a common host port and is already used on our server.
-      # Keep the app listening on `:8080` in-container, but publish it on `:8081` on the host.
-      - "0.0.0.0:8081:8080"
+      # Keep the local stack reachable without creating another public edge.
+      - "127.0.0.1:8081:8080"
     volumes:
       - "./config.docker.yaml:/app/config.yaml:ro"
       - "./deploy/docker/services/api-gateway.yaml:/app/service.yaml:ro"
+      - "./deploy/kubernetes/keycloak-authority/tenant-catalog.yaml:/app/tenant-catalog.yaml:ro"
     secrets:
       - *api-gateway-secret
       - *sops-age-key-secret
@@ -702,31 +712,6 @@ services:
       start_period: 10s
     user: "10001:10001"
 
-  consumer-beneficiary:
-    <<: [*service-defaults, *web-hardening]
-    build:
-      context: .
-    init: true
-    depends_on:
-      consumer-beneficiary-migrate:
-        condition: service_completed_successfully
-    volumes:
-      - "./config.docker.yaml:/app/config.yaml:ro"
-      - "./deploy/docker/services/consumer-beneficiary.yaml:/app/service.yaml:ro"
-    secrets:
-      - *consumer-beneficiary-secret
-      - *sops-age-key-secret
-    networks:
-      - backend
-    stop_grace_period: 30s
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/test || exit 1"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    user: "10001:10001"
-
   wallet-ledger:
     <<: [*service-defaults, *web-hardening]
     build:
@@ -781,48 +766,12 @@ services:
       start_period: 10s
     user: "10001:10001"
 
-  caddy:
-    <<: *service-defaults
-    image: caddy:2-alpine
-    profiles: ["edge"]
-    depends_on:
-      api-gateway:
-        condition: service_healthy
-      identity-auth:
-        condition: service_healthy
-      card-vault:
-        condition: service_healthy
-      ebs-adapter:
-        condition: service_healthy
-      wallet-api:
-        condition: service_healthy
-      psp-webhook:
-        condition: service_healthy
-      admin-reporting:
-        condition: service_healthy
-      notification-chat:
-        condition: service_healthy
-      consumer-beneficiary:
-        condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - "./Caddyfile:/etc/caddy/Caddyfile:ro"
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - public
-      - backend
-
 volumes:
   noebs-postgres:
   noebs-runtime:
   kafka-data:
   temporal-postgres:
   keycloak-postgres-data:
-  caddy_data:
-  caddy_config:
 
 secrets:
   postgres-bootstrap-secrets:
@@ -847,8 +796,6 @@ secrets:
     file: ./deploy/docker/secrets/admin-reporting.secrets.yaml
   notification-chat-secrets:
     file: ./deploy/docker/secrets/notification-chat.secrets.yaml
-  consumer-beneficiary-secrets:
-    file: ./deploy/docker/secrets/consumer-beneficiary.secrets.yaml
   wallet-api-secrets:
     file: ./deploy/docker/secrets/wallet-api.secrets.yaml
   wallet-ledger-secrets:
@@ -875,8 +822,6 @@ secrets:
     file: ./deploy/docker/secrets/admin-reporting-migrate.secrets.yaml
   notification-chat-migrate-secrets:
     file: ./deploy/docker/secrets/notification-chat-migrate.secrets.yaml
-  consumer-beneficiary-migrate-secrets:
-    file: ./deploy/docker/secrets/consumer-beneficiary-migrate.secrets.yaml
   wallet-ledger-migrate-secrets:
     file: ./deploy/docker/secrets/wallet-ledger-migrate.secrets.yaml
   sops_age_key:
@@ -885,6 +830,16 @@ secrets:
     file: ./deploy/docker/keycloak/keycloak.conf
   keycloak_postgres_password:
     file: ./deploy/docker/keycloak/postgres-password.txt
+  keycloak_postgres_tls_certificate:
+    file: ./deploy/docker/keycloak/postgres-tls.crt
+  keycloak_postgres_tls_private_key:
+    file: ./deploy/docker/keycloak/postgres-tls.key
+  keycloak_transport_ca_certificate:
+    file: ./deploy/docker/keycloak/ca.pem
+  keycloak_tls_certificate:
+    file: ./deploy/docker/keycloak/tls.crt
+  keycloak_tls_private_key:
+    file: ./deploy/docker/keycloak/tls.key
   temporal_postgres_password:
     file: ./deploy/docker/temporal/postgres-password.txt
 

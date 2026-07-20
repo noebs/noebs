@@ -8,70 +8,35 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE TABLE IF NOT EXISTS cards (
   id BIGSERIAL PRIMARY KEY,
   tenant_id TEXT NOT NULL CHECK (lower(btrim(tenant_id)) <> 'default'),
-  user_id BIGINT NOT NULL,
-  pan TEXT NOT NULL,
-  pan_enc TEXT,
-  expiry TEXT,
-  name TEXT,
-  ipin TEXT,
-  ipin_enc TEXT,
+  card_id UUID NOT NULL,
+  user_id BIGINT NOT NULL CHECK (user_id > 0),
+  pan_fingerprint TEXT NOT NULL,
+  pan_ciphertext TEXT NOT NULL,
+  pan_key_version INTEGER NOT NULL CHECK (pan_key_version > 0),
+  masked_pan TEXT NOT NULL CHECK (masked_pan ~ '^\*{4}[0-9]{4}$'),
+  expiry TEXT NOT NULL CHECK (expiry ~ '^[0-9]{4}$'),
+  name TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL CHECK (status IN ('active', 'retired', 'blocked')),
   is_main BOOLEAN NOT NULL DEFAULT FALSE,
-  is_valid BOOLEAN,
+  verification_method TEXT NOT NULL,
+  verified_at TIMESTAMPTZ NOT NULL,
+  retired_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
-  deleted_at TIMESTAMPTZ,
-  UNIQUE(tenant_id, user_id, pan)
-);
-CREATE INDEX IF NOT EXISTS idx_card_vault_cards_user ON cards(tenant_id, user_id);
-CREATE INDEX IF NOT EXISTS idx_card_vault_cards_pan ON cards(tenant_id, pan);
-
-CREATE TABLE IF NOT EXISTS cache_cards (
-  id BIGSERIAL PRIMARY KEY,
-  tenant_id TEXT NOT NULL CHECK (lower(btrim(tenant_id)) <> 'default'),
-  pan TEXT NOT NULL,
-  pan_enc TEXT,
-  expiry TEXT,
-  name TEXT,
-  is_valid BOOLEAN,
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
-  UNIQUE(tenant_id, pan)
+  UNIQUE (tenant_id, card_id),
+  CHECK ((status = 'retired') = (retired_at IS NOT NULL))
 );
 
-CREATE TABLE IF NOT EXISTS tokens (
-  id BIGSERIAL PRIMARY KEY,
-  tenant_id TEXT NOT NULL CHECK (lower(btrim(tenant_id)) <> 'default'),
-  user_id BIGINT NOT NULL,
-  amount INTEGER,
-  cart_id TEXT,
-  uuid TEXT NOT NULL,
-  note TEXT,
-  to_card TEXT,
-  to_card_enc TEXT,
-  is_paid BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
-  UNIQUE(tenant_id, uuid)
-);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_card_vault_cards_active_fingerprint
+  ON cards(tenant_id, pan_fingerprint)
+  WHERE status = 'active';
 
-CREATE TABLE IF NOT EXISTS push_data (
-  uuid TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL CHECK (lower(btrim(tenant_id)) <> 'default'),
-  type TEXT,
-  date BIGINT,
-  to_device TEXT,
-  title TEXT,
-  body TEXT,
-  call_to_action TEXT,
-  phone TEXT,
-  is_read BOOLEAN NOT NULL DEFAULT FALSE,
-  device_id TEXT,
-  user_mobile TEXT,
-  ebs_uuid TEXT,
-  payment_request JSONB,
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL,
-  deleted_at TIMESTAMPTZ
-);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_card_vault_cards_active_main
+  ON cards(tenant_id, user_id)
+  WHERE status = 'active' AND is_main = TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_card_vault_cards_active_user
+  ON cards(tenant_id, user_id, is_main DESC, created_at, card_id)
+  WHERE status = 'active';
 
 -- +goose Down

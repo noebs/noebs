@@ -12,7 +12,7 @@ func TestInitOIDCVerifierRequiresExplicitGatewayContract(t *testing.T) {
 	previous := oidcVerifier
 	t.Cleanup(func() { oidcVerifier = previous })
 
-	config := ebs_fields.NoebsConfig{OIDC: validOIDCRuntimeConfig()}
+	config := ebs_fields.NoebsConfig{OIDC: validOIDCRuntimeConfig(), KeycloakCACertificate: testKeycloakCACertificate}
 	if err := initOIDCVerifier(serviceRoleAPIGateway, config); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestInitOIDCVerifierDoesNotInitializeOtherRoles(t *testing.T) {
 func validOIDCRuntimeConfig() oidcauth.RuntimeConfig {
 	return oidcauth.RuntimeConfig{
 		Issuer:                           "https://api.noebs.sd/auth/realms/noebs",
-		JWKSURL:                          "http://keycloak:8080/auth/realms/noebs/protocol/openid-connect/certs",
+		JWKSURL:                          "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/protocol/openid-connect/certs",
 		Audience:                         "noebs-api",
 		AllowedClients:                   []string{"noebs-mobile", "noebs-backoffice"},
 		AccessTokenType:                  "Bearer",

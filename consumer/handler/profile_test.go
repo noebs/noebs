@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -87,13 +88,11 @@ func TestCreateProfileProjectionRequiresTrustedPrincipalBoundary(t *testing.T) {
 			_ = postgres.DropDatabase(context.Background(), databaseName)
 			_ = postgres.Terminate(context.Background())
 		})
-		if err := store.MigrateScope(ctx, db, profileTestTenant, store.MigrationScopeIdentityAuth); err != nil {
+		if err := store.MigrateScope(ctx, db, store.MigrationScopeIdentityAuth); err != nil {
 			t.Fatalf("migrate identity auth: %v", err)
 		}
 		storeSvc := store.New(db)
-		if err := storeSvc.EnsureTenant(ctx, profileTestTenant); err != nil {
-			t.Fatalf("ensure tenant: %v", err)
-		}
+		provisionHandlerTestTenant(t, ctx, storeSvc, profileTestTenant, "Profile Handler Tenant")
 
 		app := fiber.New()
 		h := &Handler{Service: &consumer.Service{Store: storeSvc}}
@@ -129,6 +128,11 @@ func performProfileCreateRequest(t *testing.T, app *fiber.App, body []byte) *htt
 	req.Header.Set(gateway.GatewayTenantIDHeader, profileTestTenant)
 	req.Header.Set(gateway.GatewayIssuerHeader, profileTestIssuer)
 	req.Header.Set(gateway.GatewaySubjectHeader, profileTestSubject)
+	req.Header.Set(gateway.GatewayOrganizationIDHeader, "org-"+profileTestTenant)
+	req.Header.Set(gateway.GatewayAuthorizedPartyHeader, "noebs-mobile")
+	req.Header.Set(gateway.GatewayRolesHeader, "user")
+	req.Header.Set(gateway.GatewaySourceIPHeader, "203.0.113.10")
+	req.Header.Set(gateway.GatewayTokenExpiresAtHeader, strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))
 	resp, err := app.Test(req, int((30 * time.Second).Milliseconds()))
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)

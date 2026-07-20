@@ -32,6 +32,9 @@ data:
     migrate_password_source="/run/secrets/workload-auth-migrate-password"
     runtime_password_source="/run/secrets/workload-auth-runtime-password"
     cleanup_password_source="/run/secrets/workload-auth-cleanup-password"
+    gateway_migrate_password_source="/run/secrets/gateway-auth-migrate-password"
+    gateway_runtime_password_source="/run/secrets/gateway-auth-runtime-password"
+    gateway_cleanup_password_source="/run/secrets/gateway-auth-cleanup-password"
     password_runtime="/tmp/noebs-postgres-password"
     service_database_sql="/opt/noebs-postgres/init/001-service-databases.sql"
     pgpass="/var/lib/postgresql/.pgpass"
@@ -52,9 +55,15 @@ data:
       echo "missing Noebs Postgres password file: $password_source" >&2
       exit 1
     fi
-    for role_password_source in "$migrate_password_source" "$runtime_password_source" "$cleanup_password_source"; do
+    for role_password_source in \
+      "$migrate_password_source" \
+      "$runtime_password_source" \
+      "$cleanup_password_source" \
+      "$gateway_migrate_password_source" \
+      "$gateway_runtime_password_source" \
+      "$gateway_cleanup_password_source"; do
       if [ ! -s "$role_password_source" ]; then
-        echo "missing workload authentication Postgres role password file: $role_password_source" >&2
+        echo "missing Postgres role password file: $role_password_source" >&2
         exit 1
       fi
     done
@@ -63,13 +72,9 @@ data:
       exit 1
     fi
 
-    tls_enabled=false
-    if [ -s "$tls_certificate_source" ] || [ -s "$tls_private_key_source" ]; then
-      if [ ! -s "$tls_certificate_source" ] || [ ! -s "$tls_private_key_source" ]; then
-        echo "Noebs Postgres TLS certificate and private key must be supplied together" >&2
-        exit 1
-      fi
-      tls_enabled=true
+    if [ ! -s "$tls_certificate_source" ] || [ ! -s "$tls_private_key_source" ]; then
+      echo "missing Noebs Postgres TLS certificate or private key" >&2
+      exit 1
     fi
 
     install -d -o postgres -g postgres -m 0700 "$pgdata"
@@ -77,6 +82,9 @@ data:
     export NOEBS_WORKLOAD_AUTH_MIGRATE_PASSWORD="$(tr -d '\r\n' < "$migrate_password_source")"
     export NOEBS_WORKLOAD_AUTH_RUNTIME_PASSWORD="$(tr -d '\r\n' < "$runtime_password_source")"
     export NOEBS_WORKLOAD_AUTH_CLEANUP_PASSWORD="$(tr -d '\r\n' < "$cleanup_password_source")"
+    export NOEBS_GATEWAY_AUTH_MIGRATE_PASSWORD="$(tr -d '\r\n' < "$gateway_migrate_password_source")"
+    export NOEBS_GATEWAY_AUTH_RUNTIME_PASSWORD="$(tr -d '\r\n' < "$gateway_runtime_password_source")"
+    export NOEBS_GATEWAY_AUTH_CLEANUP_PASSWORD="$(tr -d '\r\n' < "$gateway_cleanup_password_source")"
 
     if [ ! -s "$pgdata/PG_VERSION" ]; then
       printf '%s\n' "$password" > "$password_runtime"
@@ -94,16 +102,14 @@ data:
 
     sed -i \
       -e '/^# noebs managed host auth begin$/,/^# noebs managed host auth end$/d' \
-      -e '/^host all all all scram-sha-256$/d' \
+      -e '/^[[:space:]]*host[[:space:]]/d' \
+      -e '/^[[:space:]]*hostssl[[:space:]]/d' \
+      -e '/^[[:space:]]*hostnossl[[:space:]]/d' \
       "$pgdata/pg_hba.conf"
     {
       echo "# noebs managed host auth begin"
-      if [ "$tls_enabled" = true ]; then
-        echo "hostssl all all all scram-sha-256"
-        echo "hostnossl all all all reject"
-      else
-        echo "host all all all scram-sha-256"
-      fi
+      echo "hostssl all all all scram-sha-256"
+      echo "hostnossl all all all reject"
       echo "# noebs managed host auth end"
     } >> "$pgdata/pg_hba.conf"
 
@@ -124,22 +130,25 @@ data:
     unset NOEBS_WORKLOAD_AUTH_MIGRATE_PASSWORD
     unset NOEBS_WORKLOAD_AUTH_RUNTIME_PASSWORD
     unset NOEBS_WORKLOAD_AUTH_CLEANUP_PASSWORD
+    unset NOEBS_GATEWAY_AUTH_MIGRATE_PASSWORD
+    unset NOEBS_GATEWAY_AUTH_RUNTIME_PASSWORD
+    unset NOEBS_GATEWAY_AUTH_CLEANUP_PASSWORD
 
-    postgres_args=(-D "$pgdata" -c "listen_addresses=*")
-    if [ "$tls_enabled" = true ]; then
-      postgres_args+=(
-        -c "ssl=on"
-        -c "ssl_min_protocol_version=TLSv1.3"
-        -c "ssl_cert_file=$tls_certificate_source"
-        -c "ssl_key_file=$tls_private_key_source"
-      )
-    fi
-
-    exec gosu postgres postgres "${postgres_args[@]}"
+    exec gosu postgres postgres \
+      -D "$pgdata" \
+      -c "listen_addresses=*" \
+      -c "ssl=on" \
+      -c "ssl_min_protocol_version=TLSv1.3" \
+      -c "ssl_max_protocol_version=TLSv1.3" \
+      -c "ssl_cert_file=$tls_certificate_source" \
+      -c "ssl_key_file=$tls_private_key_source"
   001-service-databases.sql: |
     \getenv workload_auth_migrate_password NOEBS_WORKLOAD_AUTH_MIGRATE_PASSWORD
     \getenv workload_auth_runtime_password NOEBS_WORKLOAD_AUTH_RUNTIME_PASSWORD
     \getenv workload_auth_cleanup_password NOEBS_WORKLOAD_AUTH_CLEANUP_PASSWORD
+    \getenv gateway_auth_migrate_password NOEBS_GATEWAY_AUTH_MIGRATE_PASSWORD
+    \getenv gateway_auth_runtime_password NOEBS_GATEWAY_AUTH_RUNTIME_PASSWORD
+    \getenv gateway_auth_cleanup_password NOEBS_GATEWAY_AUTH_CLEANUP_PASSWORD
 
     SELECT format('CREATE ROLE workload_auth_migrate LOGIN PASSWORD %L', :'workload_auth_migrate_password')
     WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'workload_auth_migrate')\gexec
@@ -150,6 +159,16 @@ data:
     SELECT format('CREATE ROLE workload_auth_cleanup LOGIN PASSWORD %L', :'workload_auth_cleanup_password')
     WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'workload_auth_cleanup')\gexec
     SELECT format('ALTER ROLE workload_auth_cleanup WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L', :'workload_auth_cleanup_password')\gexec
+
+    SELECT format('CREATE ROLE gateway_auth_migrate LOGIN PASSWORD %L', :'gateway_auth_migrate_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_migrate')\gexec
+    SELECT format('ALTER ROLE gateway_auth_migrate WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L', :'gateway_auth_migrate_password')\gexec
+    SELECT format('CREATE ROLE gateway_auth_runtime LOGIN PASSWORD %L', :'gateway_auth_runtime_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_runtime')\gexec
+    SELECT format('ALTER ROLE gateway_auth_runtime WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L', :'gateway_auth_runtime_password')\gexec
+    SELECT format('CREATE ROLE gateway_auth_cleanup LOGIN PASSWORD %L', :'gateway_auth_cleanup_password')
+    WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'gateway_auth_cleanup')\gexec
+    SELECT format('ALTER ROLE gateway_auth_cleanup WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L', :'gateway_auth_cleanup_password')\gexec
 
     SELECT 'CREATE DATABASE identity_auth OWNER noebs'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'identity_auth')\gexec
@@ -163,13 +182,14 @@ data:
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'admin_reporting')\gexec
     SELECT 'CREATE DATABASE notification_chat OWNER noebs'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'notification_chat')\gexec
-    SELECT 'CREATE DATABASE consumer_beneficiary OWNER noebs'
-    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'consumer_beneficiary')\gexec
     SELECT 'CREATE DATABASE wallet_ledger OWNER noebs'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'wallet_ledger')\gexec
     SELECT 'CREATE DATABASE workload_auth OWNER workload_auth_migrate'
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'workload_auth')\gexec
     GRANT CONNECT ON DATABASE workload_auth TO workload_auth_runtime, workload_auth_cleanup;
+    SELECT 'CREATE DATABASE gateway_auth OWNER gateway_auth_migrate'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'gateway_auth')\gexec
+    GRANT CONNECT ON DATABASE gateway_auth TO gateway_auth_runtime, gateway_auth_cleanup;
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -194,7 +214,7 @@ spec:
         fsGroup: 999
       containers:
         - name: postgres
-          image: postgres:16
+          image: postgres@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
@@ -268,6 +288,18 @@ spec:
               mountPath: /run/secrets/workload-auth-cleanup-password
               subPath: cleanup-password
               readOnly: true
+            - name: gateway-auth-postgres-roles
+              mountPath: /run/secrets/gateway-auth-migrate-password
+              subPath: migrate-password
+              readOnly: true
+            - name: gateway-auth-postgres-roles
+              mountPath: /run/secrets/gateway-auth-runtime-password
+              subPath: runtime-password
+              readOnly: true
+            - name: gateway-auth-postgres-roles
+              mountPath: /run/secrets/gateway-auth-cleanup-password
+              subPath: cleanup-password
+              readOnly: true
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
       volumes:
@@ -282,6 +314,9 @@ spec:
         - name: workload-auth-postgres-roles
           secret:
             secretName: workload-auth-postgres-roles
+        - name: gateway-auth-postgres-roles
+          secret:
+            secretName: gateway-auth-postgres-roles
   volumeClaimTemplates:
     - metadata:
         name: postgres-data

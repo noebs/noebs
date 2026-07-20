@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -14,8 +15,10 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/backofficeauth"
+	"github.com/adonese/noebs/internal/tenantauth"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/internal/workloadauth"
-	"github.com/adonese/noebs/store"
 	fastws "github.com/fasthttp/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/proxy"
@@ -26,29 +29,43 @@ type gatewayAuthMode int
 
 const (
 	gatewayAuthPublic gatewayAuthMode = iota
-	gatewayAuthPublicTenant
-	gatewayAuthPublicQueryTenant
-	gatewayAuthUser
-	gatewayAuthAdmin
-	gatewayAuthAdminTenant
-	gatewayAuthAdminWalletQueryTenant
-	gatewayAuthAdminWalletFormTenant
+	gatewayAuthMobilePrincipal
+	gatewayAuthMobileUser
+	gatewayAuthTenantWebhook
 )
 
 type gatewayRouteSpec struct {
-	method    string
-	path      string
-	role      serviceRole
-	auth      gatewayAuthMode
-	websocket bool
+	method         string
+	path           string
+	upstreamPath   string
+	capabilityPath string
+	role           serviceRole
+	auth           gatewayAuthMode
+	websocket      bool
 }
 
 const gatewayWebSocketHandshakeTimeout = 10 * time.Second
 
-func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig, jwt gateway.JWTAuth, adminGuard fiber.Handler) error {
-	publicTenantID, err := store.ValidateTenantID(cfg.DefaultTenantID)
+func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig, catalog tenantcatalog.Catalog) error {
+	if oidcVerifier == nil {
+		return errors.New("OIDC verifier is not initialized")
+	}
+	mobileAuth, err := gateway.NewOIDCAuthMiddleware(gateway.OIDCAuthConfig{
+		Verifier:       oidcVerifier,
+		SelectTenant:   selectActiveTenant(catalog),
+		AllowedClients: []string{"noebs-mobile"},
+		AllowedRoles:   []tenantauth.Role{tenantauth.RoleUser},
+	})
 	if err != nil {
-		return fmt.Errorf("noebs.default_tenant_id: %w", err)
+		return fmt.Errorf("configure mobile OIDC authorization: %w", err)
+	}
+	profileResolver, err := newIdentityProfileProjectionResolver(cfg, workloadSigners)
+	if err != nil {
+		return fmt.Errorf("configure identity profile projection resolver: %w", err)
+	}
+	webhookResolver, err := newGatewayWebhookResolver(cfg.PSPWebhookRoutes, catalog)
+	if err != nil {
+		return fmt.Errorf("configure PSP webhook routes: %w", err)
 	}
 	proxies := map[serviceRole]fiber.Handler{}
 	for _, spec := range gatewayProxyRouteSpecs() {
@@ -69,27 +86,22 @@ func registerAPIGatewayProxyRoutes(route *fiber.App, cfg ebs_fields.NoebsConfig,
 			handler = gatewayWebSocketProxyHandler(target, internalTransportClientTLS)
 		}
 
-		handlers := make([]fiber.Handler, 0, 3)
+		handlers := make([]fiber.Handler, 0, 6)
 		handlers = append(handlers, clearGatewayIdentityHeaders)
 		switch spec.auth {
 		case gatewayAuthPublic:
 			handlers = append(handlers, clearPublicCredentialHeaders)
-		case gatewayAuthPublicTenant:
-			handlers = append(handlers, propagateGatewayPublicTenant(publicTenantID))
-		case gatewayAuthPublicQueryTenant:
-			handlers = append(handlers, propagateGatewayPublicQueryTenant(publicTenantID))
-		case gatewayAuthUser:
-			handlers = append(handlers, jwt.AuthMiddleware(), propagateGatewayUserIdentity)
-		case gatewayAuthAdmin:
-			handlers = append(handlers, adminGuard, propagateGatewayAdminIdentity)
-		case gatewayAuthAdminTenant:
-			handlers = append(handlers, adminGuard, propagateGatewayAdminTenantIdentity)
-		case gatewayAuthAdminWalletQueryTenant:
-			handlers = append(handlers, adminGuard, propagateGatewayAdminWalletQueryTenantIdentity)
-		case gatewayAuthAdminWalletFormTenant:
-			handlers = append(handlers, adminGuard, propagateGatewayAdminWalletFormTenantIdentity)
+		case gatewayAuthMobilePrincipal:
+			handlers = append(handlers, mobileAuth, propagateGatewayOIDCPrincipal(nil))
+		case gatewayAuthMobileUser:
+			handlers = append(handlers, mobileAuth, propagateGatewayOIDCPrincipal(profileResolver))
+		case gatewayAuthTenantWebhook:
+			handlers = append(handlers, clearPublicCredentialHeaders, webhookResolver.Resolve)
 		default:
 			return fmt.Errorf("unknown gateway auth mode %d for %s %s", spec.auth, spec.method, spec.path)
+		}
+		if spec.upstreamPath != "" {
+			handlers = append(handlers, rewriteGatewayPath(spec.upstreamPath))
 		}
 		handlers = append(handlers, signGatewayWorkload(string(spec.role), workloadSigners))
 		handlers = append(handlers, handler)
@@ -116,18 +128,14 @@ func gatewayWebSocketProxyHandler(endpoint string, tlsConfig *tls.Config) fiber.
 			return fiber.NewError(http.StatusBadGateway, "invalid websocket upstream")
 		}
 
+		expiresUnix, err := strconv.ParseInt(c.Get(gateway.GatewayTokenExpiresAtHeader), 10, 64)
+		if err != nil {
+			return fiber.NewError(http.StatusUnauthorized, "invalid gateway token expiry")
+		}
 		headers := make(http.Header)
-		for _, name := range []string{
-			workloadauth.HeaderRequestID,
-			gateway.GatewayTenantIDHeader,
-			gateway.GatewayUserIDHeader,
-			gateway.GatewayMobileHeader,
-			gateway.GatewaySessionEpochHeader,
-			gateway.GatewaySourceIPHeader,
-		} {
-			if value := strings.TrimSpace(c.Get(name)); value != "" {
-				headers.Set(name, value)
-			}
+		headers.Set(workloadauth.HeaderRequestID, c.Get(workloadauth.HeaderRequestID))
+		for _, name := range workloadauth.IdentityHeaderNames() {
+			headers.Set(name, c.Get(name))
 		}
 		for _, name := range workloadauth.WorkloadHeaderNames() {
 			if value := strings.TrimSpace(c.Get(name)); value != "" {
@@ -159,7 +167,7 @@ func gatewayWebSocketProxyHandler(endpoint string, tlsConfig *tls.Config) fiber.
 			CheckOrigin:      func(*fasthttp.RequestCtx) bool { return true },
 		}
 		if err := upgrader.Upgrade(c.Context(), func(client *fastws.Conn) {
-			proxyWebSocketConnections(client, upstream)
+			proxyWebSocketConnections(client, upstream, time.Unix(expiresUnix, 0))
 		}); err != nil {
 			_ = upstream.Close()
 			return err
@@ -178,14 +186,33 @@ func splitWebSocketSubprotocols(raw string) []string {
 	return protocols
 }
 
-func proxyWebSocketConnections(client, upstream *fastws.Conn) {
+func proxyWebSocketConnections(client, upstream *fastws.Conn, expiresAt time.Time) {
 	done := make(chan error, 2)
 	go func() { done <- relayWebSocket(upstream, client) }()
 	go func() { done <- relayWebSocket(client, upstream) }()
-	<-done
+	timer := time.NewTimer(time.Until(expiresAt))
+	completed := 0
+	select {
+	case <-done:
+		completed = 1
+	case <-timer.C:
+		deadline := time.Now().Add(time.Second)
+		message := fastws.FormatCloseMessage(fastws.ClosePolicyViolation, "access token expired")
+		_ = client.WriteControl(fastws.CloseMessage, message, deadline)
+		_ = upstream.WriteControl(fastws.CloseMessage, message, deadline)
+	}
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
 	_ = client.Close()
 	_ = upstream.Close()
-	<-done
+	for completed < 2 {
+		<-done
+		completed++
+	}
 }
 
 func relayWebSocket(destination, source *fastws.Conn) error {
@@ -248,7 +275,7 @@ func gatewayProxyHandler(endpoint string, tlsConfig *tls.Config) fiber.Handler {
 		TLSConfig:                cloneTLSConfig(tlsConfig),
 	}
 	return func(c *fiber.Ctx) error {
-		target := endpoint + c.OriginalURL()
+		target := endpoint + string(c.Context().RequestURI())
 		if err := proxy.Do(c, target, client); err != nil {
 			return fiber.NewError(http.StatusBadGateway, err.Error())
 		}
@@ -267,15 +294,10 @@ func clearGatewayIdentityHeaders(c *fiber.Ctx) error {
 	for _, name := range workloadauth.WorkloadHeaderNames() {
 		c.Request().Header.Del(name)
 	}
-	c.Request().Header.Del(gateway.GatewayTenantIDHeader)
-	c.Request().Header.Del(gateway.GatewayUserIDHeader)
-	c.Request().Header.Del(gateway.GatewayMobileHeader)
-	c.Request().Header.Del(gateway.GatewaySessionEpochHeader)
-	c.Request().Header.Del(gateway.GatewaySessionTokenHeader)
-	c.Request().Header.Del(gateway.GatewaySourceIPHeader)
-	c.Request().Header.Del(gateway.GatewayAdminIdentityHeader)
-	c.Request().Header.Del(gateway.GatewayAdminRoleHeader)
-	c.Request().Header.Del(gateway.GatewayAdminPermissionsHeader)
+	for _, name := range workloadauth.IdentityHeaderNames() {
+		c.Request().Header.Del(name)
+	}
+	c.Request().Header.Del(backofficeauth.HeaderCSRFToken)
 	return c.Next()
 }
 
@@ -302,262 +324,201 @@ func clearPublicCredentialHeaders(c *fiber.Ctx) error {
 
 func stripPublicCredentialHeaders(c *fiber.Ctx) {
 	c.Request().Header.Del("Authorization")
+	c.Request().Header.Del("X-Active-Tenant")
 	c.Request().Header.Del("X-Tenant-ID")
 	c.Request().Header.Del("X-Admin-Key")
 	c.Request().Header.Del("X-Admin-Role")
 	c.Request().Header.Del("X-Admin-Permissions")
 }
 
-func propagateGatewayPublicTenant(publicTenantID string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		tenantID, err := requirePublicTenant(c.Get("X-Tenant-ID"), publicTenantID)
-		if err != nil {
-			return tenantValidationError(c, err)
+func selectActiveTenant(catalog tenantcatalog.Catalog) func(*fiber.Ctx) (string, error) {
+	return func(c *fiber.Ctx) (string, error) {
+		values := c.Request().Header.PeekAll("X-Active-Tenant")
+		if len(values) != 1 {
+			return "", tenantauth.ErrMissingTenant
 		}
-		c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-		c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
-		stripPublicCredentialHeaders(c)
-		return c.Next()
+		tenantID, err := canonicalTenantID(catalog, string(values[0]))
+		if err != nil {
+			return "", tenantauth.ErrUnknownTenant
+		}
+		return tenantID, nil
 	}
 }
 
-func propagateGatewayPublicQueryTenant(publicTenantID string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		tenantID, err := requirePublicTenant(string(c.Request().URI().QueryArgs().Peek("tenant_id")), publicTenantID)
-		if err != nil {
-			return tenantValidationError(c, err)
-		}
-		c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-		c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
-		stripPublicCredentialHeaders(c)
-		return c.Next()
-	}
-}
-
-func requirePublicTenant(requested, configured string) (string, error) {
-	tenantID, err := store.ValidateTenantID(requested)
+func canonicalTenantID(catalog tenantcatalog.Catalog, raw string) (string, error) {
+	tenant, err := catalog.Require(raw)
 	if err != nil {
 		return "", err
 	}
-	if tenantID != configured {
-		return "", store.ErrInvalidTenantID
-	}
-	return tenantID, nil
+	return string(tenant.ID), nil
 }
 
-func tenantValidationError(c *fiber.Ctx, err error) error {
-	code := "invalid_tenant_id"
-	if errors.Is(err, store.ErrMissingTenantID) {
-		code = "missing_tenant_id"
-	}
-	return c.Status(http.StatusBadRequest).JSON(fiber.Map{"code": code, "message": err.Error()})
-}
-
-func propagateGatewayUserIdentity(c *fiber.Ctx) error {
-	if c.Request().URI().QueryArgs().Has("tenant_id") {
-		return unexpectedTenantIDError(c)
-	}
-	tenantID, ok := c.Locals("tenant_id").(string)
-	if !ok || strings.TrimSpace(tenantID) == "" {
-		return fiber.NewError(http.StatusUnauthorized, "missing gateway tenant identity")
-	}
-	userID, ok := c.Locals("user_id").(int64)
-	if !ok || userID <= 0 {
-		return fiber.NewError(http.StatusUnauthorized, "missing gateway user identity")
-	}
-	sessionEpoch, ok := c.Locals("session_epoch").(int64)
-	if !ok || sessionEpoch <= 0 {
-		return fiber.NewError(http.StatusUnauthorized, "missing gateway session identity")
-	}
-	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-	c.Request().Header.Set(gateway.GatewayUserIDHeader, strconv.FormatInt(userID, 10))
-	c.Request().Header.Set(gateway.GatewaySessionEpochHeader, strconv.FormatInt(sessionEpoch, 10))
-	c.Request().Header.Set(gateway.GatewaySourceIPHeader, gatewayRequestSource(c))
-	if mobile, ok := c.Locals("mobile").(string); ok && strings.TrimSpace(mobile) != "" {
-		c.Request().Header.Set(gateway.GatewayMobileHeader, mobile)
-	}
-	stripPublicCredentialHeaders(c)
-	return c.Next()
-}
-
-func gatewayRequestSource(c *fiber.Ctx) string {
-	forwarded := strings.Split(c.Get(fiber.HeaderXForwardedFor), ",")
-	for i := len(forwarded) - 1; i >= 0; i-- {
-		if ip := net.ParseIP(strings.TrimSpace(forwarded[i])); ip != nil {
-			return ip.String()
+func propagateGatewayOIDCPrincipal(resolver profileProjectionResolver) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if c.Request().URI().QueryArgs().Has("tenant_id") || c.Request().PostArgs().Has("tenant_id") {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+				"code":    "unexpected_tenant_id",
+				"message": "tenant_id is not accepted on authenticated routes",
+			})
 		}
+		principal, ok := gateway.OIDCPrincipal(c)
+		if !ok {
+			return fiber.NewError(http.StatusUnauthorized, "missing OIDC principal")
+		}
+		sourceIP, err := gatewayRequestSource(c)
+		if err != nil {
+			return fiber.NewError(http.StatusBadRequest, "invalid request source")
+		}
+		userID := int64(0)
+		if resolver != nil {
+			resolved, err := resolver.Resolve(
+				c.UserContext(),
+				principal,
+				c.Get(workloadauth.HeaderRequestID),
+				sourceIP,
+			)
+			if errors.Is(err, errProfileProjectionNotFound) {
+				return c.Status(http.StatusForbidden).JSON(fiber.Map{
+					"code":    "profile_required",
+					"message": "profile projection is required",
+				})
+			}
+			if err != nil {
+				return fiber.NewError(http.StatusBadGateway, "identity profile projection unavailable")
+			}
+			userID = resolved
+		}
+		headers := make(http.Header)
+		if err := setGatewayPrincipalHeaders(headers, principal, "", userID, sourceIP); err != nil {
+			return fiber.NewError(http.StatusUnauthorized, "invalid OIDC principal")
+		}
+		for _, name := range workloadauth.IdentityHeaderNames() {
+			c.Request().Header.Set(name, headers.Get(name))
+		}
+		stripPublicCredentialHeaders(c)
+		return c.Next()
 	}
-	if ip := net.ParseIP(strings.TrimSpace(c.IP())); ip != nil {
-		return ip.String()
+}
+
+type gatewayWebhookResolver struct {
+	routes map[string]ebs_fields.PSPWebhookRoute
+}
+
+func newGatewayWebhookResolver(routes map[string]ebs_fields.PSPWebhookRoute, catalog tenantcatalog.Catalog) (*gatewayWebhookResolver, error) {
+	if err := validatePSPWebhookRoutes(routes); err != nil {
+		return nil, err
 	}
-	return net.IPv4zero.String()
+	cloned := make(map[string]ebs_fields.PSPWebhookRoute, len(routes))
+	for callbackID, route := range routes {
+		if _, err := catalog.Require(route.TenantID); err != nil {
+			return nil, fmt.Errorf("PSP webhook callback %q has unknown tenant: %w", callbackID, err)
+		}
+		cloned[callbackID] = route
+	}
+	return &gatewayWebhookResolver{routes: cloned}, nil
 }
 
-func unexpectedTenantIDError(c *fiber.Ctx) error {
-	return c.Status(http.StatusBadRequest).JSON(fiber.Map{
-		"code":    "unexpected_tenant_id",
-		"message": "tenant_id is not accepted on authenticated routes",
-	})
+func validatePSPWebhookRoutes(routes map[string]ebs_fields.PSPWebhookRoute) error {
+	if len(routes) == 0 {
+		return errors.New("noebs.psp_webhook_routes is required")
+	}
+	pairs := make(map[string]struct{}, len(routes))
+	for callbackID, route := range routes {
+		decoded, err := base64.RawURLEncoding.DecodeString(callbackID)
+		if err != nil || len(decoded) != 32 || base64.RawURLEncoding.EncodeToString(decoded) != callbackID {
+			return errors.New("PSP webhook callback IDs must be canonical 32-byte base64url values")
+		}
+		tenantID, err := tenantcatalog.ParseID(route.TenantID)
+		if err != nil || string(tenantID) != route.TenantID {
+			return fmt.Errorf("PSP webhook callback %q has invalid tenant", callbackID)
+		}
+		providerID, err := tenantcatalog.ParseID(route.ProviderCode)
+		if err != nil || string(providerID) != route.ProviderCode {
+			return fmt.Errorf("PSP webhook callback %q has invalid provider", callbackID)
+		}
+		pair := route.TenantID + "\x00" + route.ProviderCode
+		if _, exists := pairs[pair]; exists {
+			return fmt.Errorf("PSP webhook route %s/%s has more than one callback", route.TenantID, route.ProviderCode)
+		}
+		pairs[pair] = struct{}{}
+	}
+	return nil
 }
 
-func propagateGatewayAdminIdentity(c *fiber.Ctx) error {
-	stripPublicCredentialHeaders(c)
-	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
-	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
-	return c.Next()
-}
-
-func propagateGatewayAdminTenantIdentity(c *fiber.Ctx) error {
-	tenantID, err := store.ValidateTenantID(c.Get("X-Tenant-ID"))
+func (r *gatewayWebhookResolver) Resolve(c *fiber.Ctx) error {
+	if len(c.Request().URI().QueryString()) != 0 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{
+			"code":    "unexpected_webhook_query",
+			"message": "webhook query parameters are not accepted",
+		})
+	}
+	callbackID := c.Params("callback_id")
+	route, ok := r.routes[callbackID]
+	if !ok {
+		return c.SendStatus(http.StatusNotFound)
+	}
+	c.Request().Header.Set(workloadauth.HeaderTenantID, route.TenantID)
+	sourceIP, err := gatewayRequestSource(c)
 	if err != nil {
-		return tenantValidationError(c, err)
+		return fiber.NewError(http.StatusBadRequest, "invalid request source")
 	}
-	stripPublicCredentialHeaders(c)
-	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
-	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
+	c.Request().Header.Set(workloadauth.HeaderSourceIP, sourceIP)
+	c.Request().SetRequestURI("/psp/webhooks/" + url.PathEscape(route.ProviderCode))
 	return c.Next()
 }
 
-func propagateGatewayAdminWalletQueryTenantIdentity(c *fiber.Ctx) error {
-	return propagateGatewayAdminWalletTenantIdentity(c, string(c.Request().URI().QueryArgs().Peek("tenant_id")))
-}
-
-func propagateGatewayAdminWalletFormTenantIdentity(c *fiber.Ctx) error {
-	return propagateGatewayAdminWalletTenantIdentity(c, string(c.Request().PostArgs().Peek("tenant_id")))
-}
-
-func propagateGatewayAdminWalletTenantIdentity(c *fiber.Ctx, rawTenantID string) error {
-	tenantID, err := store.ValidateTenantID(rawTenantID)
-	if err != nil {
-		return tenantValidationError(c, err)
+func gatewayRequestSource(c *fiber.Ctx) (string, error) {
+	values := c.Request().Header.PeekAll(fiber.HeaderXForwardedFor)
+	if len(values) != 1 {
+		return "", errors.New("gateway request source must have one value")
 	}
-	stripPublicCredentialHeaders(c)
-	c.Request().Header.Set(gateway.GatewayTenantIDHeader, tenantID)
-	c.Request().Header.Set(gateway.GatewayAdminIdentityHeader, gateway.GatewayAdminIdentityValue)
-	c.Request().Header.Set(gateway.GatewayAdminRoleHeader, gateway.GatewayAdminRoleValue)
-	return c.Next()
+	source := string(values[0])
+	ip := net.ParseIP(source)
+	if ip == nil || ip.String() != source {
+		return "", errors.New("gateway request source must be a canonical IP address")
+	}
+	return source, nil
 }
 
 func gatewayProxyRouteSpecs() []gatewayRouteSpec {
 	return []gatewayRouteSpec{
-		{method: fiber.MethodPost, path: "/generate_api_key", role: serviceRoleIdentityAuth, auth: gatewayAuthAdmin},
-		{method: fiber.MethodPost, path: "/consumer/register", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/refresh", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/otp/generate", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/otp/login", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/otp/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/recovery/request", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/recovery/verify", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/recovery/reset", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/auth/google", role: serviceRoleIdentityAuth, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/check_user", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/auth/complete_profile", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/auth/me", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodPut, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/user/lang", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodPut, path: "/consumer/user/lang", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/user/device", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/change_password", role: serviceRoleIdentityAuth, auth: gatewayAuthUser},
+		{method: fiber.MethodPost, path: "/consumer/auth/profile", role: serviceRoleIdentityAuth, auth: gatewayAuthMobilePrincipal},
+		{method: fiber.MethodPost, path: "/consumer/kyc", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPut, path: "/consumer/user", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/user/lang", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPut, path: "/consumer/user/lang", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/user/device", role: serviceRoleIdentityAuth, auth: gatewayAuthMobileUser},
 
-		{method: fiber.MethodGet, path: "/consumer/cards", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPatch, path: "/consumer/cards/:card_id", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodDelete, path: "/consumer/cards/:card_id", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPut, path: "/consumer/cards/:card_id/main", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/cards/enrollment-intents", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/cards/enrollment-intents/:enrollment_id/confirm", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
+		{method: fiber.MethodGet, path: "/consumer/cards", role: serviceRoleCardVault, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPatch, path: "/consumer/cards/:card_id", role: serviceRoleCardVault, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodDelete, path: "/consumer/cards/:card_id", role: serviceRoleCardVault, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPut, path: "/consumer/cards/:card_id/main", role: serviceRoleCardVault, auth: gatewayAuthMobileUser},
 
-		{method: fiber.MethodGet, path: "/consumer/get_cards", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/add_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPut, path: "/consumer/edit_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodDelete, path: "/consumer/delete_card", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/cards/set_main", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/payment_token", role: serviceRoleCardVault, auth: gatewayAuthUser},
+		{method: fiber.MethodPost, path: "/consumer/cards/enrollment-intents", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/cards/enrollment-intents/:enrollment_id/confirm", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/status", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/is_alive", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/biller", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/n/status", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/nec2name", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/generate_qr", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/qr_status", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/qr_refund", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/consumer/qr_complete", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/transaction", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/consumer/transactions", role: serviceRoleEBSAdapter, auth: gatewayAuthMobileUser},
 
-		{method: fiber.MethodPost, path: "/consumer/card_info", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/otp/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/register_with_card", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/cards/new", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/cards/complete", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodGet, path: "/consumer/nec2name", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/balance", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/status", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/is_alive", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/bill_payment", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/bills", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/biller", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/bill_inquiry", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/p2p", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/cashIn", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/cashOut", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/account", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/purchase", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/n/status", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/key", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/generate_qr", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/qr_payment", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/qr_status", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/qr_refund", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/qr_complete", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/ipin_key", role: serviceRoleEBSAdapter, auth: gatewayAuthPublicTenant},
-		{method: fiber.MethodPost, path: "/consumer/generate_ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/complete_ipin", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/vouchers/generate", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/transaction", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/transactions", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/p2p_mobile", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/payment_token/quick_pay", role: serviceRoleEBSAdapter, auth: gatewayAuthUser},
+		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthMobileUser, websocket: true},
 
-		{method: fiber.MethodPost, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
-		{method: fiber.MethodDelete, path: "/consumer/beneficiary", role: serviceRoleBeneficiary, auth: gatewayAuthUser},
+		{method: fiber.MethodPost, path: "/psp/webhooks/:callback_id", capabilityPath: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthTenantWebhook},
 
-		{method: fiber.MethodGet, path: "/ws", role: serviceRoleNotification, auth: gatewayAuthUser, websocket: true},
-		{method: fiber.MethodGet, path: "/consumer/notifications", role: serviceRoleNotification, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/consumer/submit_contacts", role: serviceRoleNotification, auth: gatewayAuthUser},
+		{method: fiber.MethodGet, path: "/wallet/methods", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodPost, path: "/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/wallets/:id/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
+		{method: fiber.MethodGet, path: "/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthMobileUser},
 
-		{method: fiber.MethodPost, path: "/psp/webhooks/:provider", role: serviceRolePSPWebhook, auth: gatewayAuthPublicQueryTenant},
-
-		{method: fiber.MethodGet, path: "/wallet/methods", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
-		{method: fiber.MethodPost, path: "/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/wallet/wallets/:id/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthUser},
-		{method: fiber.MethodGet, path: "/admin/wallet", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/wallets", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/wallets/:id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/transactions", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/transactions/:client_reference", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/pending", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/manual", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodPost, path: "/admin/wallet/manual", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/manual/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/fees", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodPost, path: "/admin/wallet/fees", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/rates", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-		{method: fiber.MethodPost, path: "/admin/wallet/rates", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
-		{method: fiber.MethodPost, path: "/admin/wallet/approve/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
-		{method: fiber.MethodPost, path: "/admin/wallet/reject/:workflow_id", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletFormTenant},
-		{method: fiber.MethodGet, path: "/admin/wallet/audit", role: serviceRoleWalletAPI, auth: gatewayAuthAdminWalletQueryTenant},
-
-		{method: fiber.MethodGet, path: "/dashboard/assets/*", role: serviceRoleAdminReporting, auth: gatewayAuthPublic},
-		{method: fiber.MethodGet, path: "/dashboard", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/get_tid", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/get", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/all", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/all/:id", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/count", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/settlement", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/merchant", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/merchant/:id", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/status", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/test_browser", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
-		{method: fiber.MethodGet, path: "/dashboard/stream", role: serviceRoleAdminReporting, auth: gatewayAuthAdminTenant},
+		{method: fiber.MethodGet, path: "/backoffice/assets/*", upstreamPath: "/dashboard/assets/*", role: serviceRoleAdminReporting, auth: gatewayAuthPublic},
 	}
 }

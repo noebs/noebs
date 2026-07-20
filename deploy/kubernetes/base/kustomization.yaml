@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: noebs
 
 resources:
+  - ../keycloak-authority
   - configmap.yaml
   - service-accounts.yaml
   - postgres.yaml
@@ -15,6 +16,7 @@ resources:
   - preflight-job.yaml
   - migrate-job.yaml
   - workload-auth-cleanup.yaml
+  - gateway-auth-cleanup.yaml
   - api-gateway.yaml
   - identity-auth.yaml
   - card-vault.yaml
@@ -24,7 +26,6 @@ resources:
   - admin-reporting.yaml
   - admin-reporting-projector.yaml
   - notification-chat.yaml
-  - consumer-beneficiary.yaml
   - wallet-api.yaml
   - wallet-ledger.yaml
   - wallet-worker.yaml
@@ -33,7 +34,38 @@ labels:
   - pairs:
       app.kubernetes.io/part-of: noebs
 
-configMapGenerator:
-  - name: keycloak-desired-state
-    files:
-      - keycloak-desired-state.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: api-gateway
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: tenant-catalog
+          mountPath: /app/tenant-catalog.yaml
+          subPath: tenant-catalog.yaml
+          readOnly: true
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: tenant-catalog
+          configMap:
+            name: tenant-catalog
+  - target:
+      kind: Job
+      name: noebs-(identity-auth|card-vault|ebs-adapter|psp-webhook|admin-reporting|notification-chat|wallet-ledger)-migrate
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value:
+          name: tenant-catalog
+          mountPath: /app/tenant-catalog.yaml
+          subPath: tenant-catalog.yaml
+          readOnly: true
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value:
+          name: tenant-catalog
+          configMap:
+            name: tenant-catalog

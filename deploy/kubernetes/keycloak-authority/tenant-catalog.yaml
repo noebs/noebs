@@ -1,0 +1,6 @@
+api_version: noebs.sd/tenants/v1
+tenants:
+  - id: tenant-cutover
+    name: Tenant Cutover
+  - id: tenant-sandbox
+    name: Tenant Sandbox

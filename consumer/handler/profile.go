@@ -28,7 +28,7 @@ func (h *Handler) CreateProfileProjection(c *fiber.Ctx) error {
 		return jsonResponse(c, http.StatusUnauthorized, fiber.Map{"code": "authentication_failed", "message": "verified principal is required"})
 	}
 	var request createProfileProjectionRequest
-	if err := bindStrictJSON(c, &request); err != nil {
+	if err := bindJSON(c, &request); err != nil {
 		return jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "bad_request", "message": err.Error()})
 	}
 	request.Fullname = strings.TrimSpace(request.Fullname)

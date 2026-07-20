@@ -10,7 +10,7 @@ import (
 )
 
 func TestValidateManualTransferDecision(t *testing.T) {
-	decision := ManualTransferDecision{ApproverID: 10}
+	decision := ManualTransferDecision{DecidedByOperatorID: 10}
 	if err := validateManualTransferDecision(10, decision); err != walletstore.ErrApproverIsRequester {
 		t.Fatalf("expected maker-checker error, got %v", err)
 	}
@@ -107,23 +107,23 @@ func TestAwaitManualTransferDecisionIgnoresRequesterSignals(t *testing.T) {
 	env.RegisterWorkflow(waitForManualTransferDecisionTestWorkflow)
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(ManualTransferDecisionSignal, ManualTransferDecision{
-			Approved:       true,
-			ApproverID:     0,
-			ProofOfPayment: "missing approver",
+			Approved:            true,
+			DecidedByOperatorID: 0,
+			ProofOfPayment:      "missing approver",
 		})
 	}, time.Second)
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(ManualTransferDecisionSignal, ManualTransferDecision{
-			Approved:       true,
-			ApproverID:     10,
-			ProofOfPayment: "requester approval",
+			Approved:            true,
+			DecidedByOperatorID: 10,
+			ProofOfPayment:      "requester approval",
 		})
 	}, 2*time.Second)
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(ManualTransferDecisionSignal, ManualTransferDecision{
-			Approved:       true,
-			ApproverID:     11,
-			ProofOfPayment: "maker-checker approval",
+			Approved:            true,
+			DecidedByOperatorID: 11,
+			ProofOfPayment:      "maker-checker approval",
 		})
 	}, 3*time.Second)
 
@@ -139,14 +139,14 @@ func TestAwaitManualTransferDecisionIgnoresRequesterSignals(t *testing.T) {
 	if err := env.GetWorkflowResult(&decision); err != nil {
 		t.Fatalf("workflow result: %v", err)
 	}
-	if decision.ApproverID != 11 || decision.ProofOfPayment != "maker-checker approval" {
+	if decision.DecidedByOperatorID != 11 || decision.ProofOfPayment != "maker-checker approval" {
 		t.Fatalf("unexpected manual transfer decision: %+v", decision)
 	}
 }
 
 func waitForManualTransferDecisionTestWorkflow(ctx workflow.Context) (ManualTransferDecision, error) {
 	return awaitManualTransferDecision(ctx, ManualTransferParams{
-		RequestedBy:            10,
+		RequestedByOperatorID:  10,
 		ApprovalTimeoutSeconds: 30,
 	})
 }

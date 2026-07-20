@@ -31,14 +31,6 @@ func TestEBSAdapterTenantValidationFailsBeforeDBOrHTTP(t *testing.T) {
 			_, err := service.GetBiller(ctx, tenantID, "0990000000")
 			return err
 		}},
-		{"CardTransfer", func(tenantID string) error {
-			_, err := service.CardTransfer(ctx, tenantID, ebs_fields.ConsumerCardTransferAndMobileFields{})
-			return err
-		}},
-		{"MobileTransfer", func(tenantID string) error {
-			_, err := service.MobileTransfer(ctx, tenantID, ebs_fields.ConsumerMobileTransferFields{Mobile: "0990000000"})
-			return err
-		}},
 		{"GenerateVoucher", func(tenantID string) error {
 			_, err := service.GenerateVoucher(ctx, tenantID, ebs_fields.ConsumerGenerateVoucherFields{})
 			return err

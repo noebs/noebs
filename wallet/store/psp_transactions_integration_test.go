@@ -46,7 +46,7 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		_ = container.DropDatabase(dropCtx, dbName)
 	}()
 
-	if err := basestore.MigrateScope(ctx, db, "tenant", basestore.MigrationScopePSPWebhook); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 
@@ -324,7 +324,7 @@ func TestListAvailablePSPMethodsPaginatesAfterScopedEligibility(t *testing.T) {
 		_ = container.DropDatabase(dropCtx, dbName)
 	}()
 
-	if err := basestore.MigrateScope(ctx, db, "tenant", basestore.MigrationScopePSPWebhook); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
 		t.Fatalf("migrate db: %v", err)
 	}
 

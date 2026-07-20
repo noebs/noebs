@@ -13,13 +13,11 @@ func TestStoreCreateTransactionWithEventOutboxLifecycle(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)
 	tenantID := "tenant-events"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeEBSAdapter); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeEBSAdapter); err != nil {
 		t.Fatalf("migrate ebs-adapter: %v", err)
 	}
 	storeSvc := New(db)
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionTestTenant(t, ctx, storeSvc, tenantID, "Event Tenant")
 
 	event := TransactionEventCreate{
 		Topic:     "noebs-ebs-transactions-v1",
@@ -119,13 +117,11 @@ func TestStoreUpsertTransactionProjection(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)
 	tenantID := "tenant-projection"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeAdminReporting); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeAdminReporting); err != nil {
 		t.Fatalf("migrate admin-reporting: %v", err)
 	}
 	storeSvc := New(db)
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionTestTenant(t, ctx, storeSvc, tenantID, "Projection Tenant")
 
 	first := ebs_fields.EBSResponse{UUID: "projection-1", TerminalID: "terminal-a", PAN: "9222081700009999"}
 	if err := storeSvc.UpsertTransactionProjection(ctx, tenantID, first); err != nil {

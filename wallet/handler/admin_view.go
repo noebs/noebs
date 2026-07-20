@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"net/url"
 	"strconv"
@@ -10,6 +11,17 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/shopspring/decimal"
 )
+
+type adminCSRFContextKey struct{}
+
+func WithAdminCSRFToken(ctx context.Context, token string) context.Context {
+	return context.WithValue(ctx, adminCSRFContextKey{}, token)
+}
+
+func backofficeCSRF(ctx context.Context) string {
+	token, _ := ctx.Value(adminCSRFContextKey{}).(string)
+	return token
+}
 
 type WalletDashboardView struct {
 	TenantID string
@@ -91,7 +103,6 @@ type ManualTransferFormValues struct {
 	Amount         string
 	Currency       string
 	Reason         string
-	RequestedBy    string
 	PSPProvider    string
 	PSPReference   string
 	ApprovalTTL    string
@@ -101,7 +112,6 @@ type ManualTransferFilterView struct {
 	Status       string
 	TransferType string
 	WalletID     string
-	RequestedBy  string
 	Start        string
 	End          string
 	Limit        int
@@ -163,7 +173,6 @@ type RateFormValues struct {
 	BuyRate       string
 	SellRate      string
 	Spread        string
-	SetBy         string
 	EffectiveFrom string
 }
 
@@ -222,8 +231,8 @@ func formatNullDecimal(nd decimal.NullDecimal) string {
 	return nd.Decimal.String()
 }
 
-func tenantQuery(tenantID string) string {
-	return "?tenant_id=" + url.QueryEscape(tenantID)
+func adminWalletPath(tenantID, suffix string) string {
+	return "/backoffice/t/" + url.PathEscape(tenantID) + "/wallet" + suffix
 }
 
 func displayTenant(tenantID string) string {

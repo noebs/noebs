@@ -63,7 +63,6 @@ func expectedHTTPServiceDiscoveryKeys() []string {
 		string(serviceRolePSPWebhook),
 		string(serviceRoleAdminReporting),
 		string(serviceRoleNotification),
-		string(serviceRoleBeneficiary),
 		string(serviceRoleWalletAPI),
 	}
 }

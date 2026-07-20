@@ -14,13 +14,11 @@ func TestTransactionParticipantsIsolateMaskedPANCollisionsWithoutCardOwnershipSt
 	ctx := context.Background()
 	db := newValidationDB(t)
 	tenantID := "tenant-participant-isolation"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeEBSAdapter); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeEBSAdapter); err != nil {
 		t.Fatalf("migrate %s: %v", MigrationScopeEBSAdapter, err)
 	}
 	storeSvc := New(db, WithDataKey("participant-test-data-key"))
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionTestTenant(t, ctx, storeSvc, tenantID, "Participant Isolation Tenant")
 
 	const (
 		firstUserID  int64 = 101

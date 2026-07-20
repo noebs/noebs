@@ -45,12 +45,10 @@ func TestOwnershipVerificationCreateReplaysAreExact(t *testing.T) {
 	}()
 
 	const tenantID = "tenant-ownership"
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopeWalletLedger); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate wallet ledger: %v", err)
 	}
-	if err := basestore.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletStoreTestTenant(t, ctx, db, tenantID, "Ownership Tenant")
 
 	store := New(db)
 	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{

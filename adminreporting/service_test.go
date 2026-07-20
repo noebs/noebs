@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/adonese/noebs/ebs_fields"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/internal/testdb"
 	"github.com/adonese/noebs/store"
 )
@@ -41,12 +42,16 @@ func TestStoreTransactionProjectionUsesAdminReportingScope(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	tenantID := "tenant-a"
-	if err := store.MigrateScope(ctx, db, tenantID, store.MigrationScopeAdminReporting); err != nil {
+	if err := store.MigrateScope(ctx, db, store.MigrationScopeAdminReporting); err != nil {
 		t.Fatalf("migrate admin-reporting scope: %v", err)
 	}
 	storeSvc := store.New(db)
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
+	catalog, err := tenantcatalog.New([]tenantcatalog.Tenant{{ID: tenantcatalog.ID(tenantID), Name: "Admin Reporting Tenant"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := storeSvc.ProvisionTenantCatalog(ctx, catalog); err != nil {
+		t.Fatalf("provision tenant: %v", err)
 	}
 
 	service := &Service{Store: storeSvc}

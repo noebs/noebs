@@ -31,7 +31,7 @@ func TestRequestDepositValidatesWalletBeforePersistingPSPTransaction(t *testing.
 		Currency:        "USD",
 	}
 
-	_, err := server.RequestDeposit(context.Background(), req)
+	_, err := server.RequestDeposit(walletGatewayIdentityContext(42, tenantID), req)
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.NotFound)
 	}
@@ -57,7 +57,7 @@ func TestRequestWithdrawalValidatesWalletBeforePersistingPSPTransaction(t *testi
 		HoldExpirySeconds: 60,
 	}
 
-	_, err := server.RequestWithdrawal(context.Background(), req)
+	_, err := server.RequestWithdrawal(walletGatewayIdentityContext(42, tenantID), req)
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.NotFound)
 	}
@@ -104,10 +104,10 @@ func newWalletPSPTestServer(t *testing.T, cfg ebs_fields.NoebsConfig) (*Server, 
 	})
 
 	tenantID := "tenant"
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopeWalletLedger); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopeWalletLedger); err != nil {
 		t.Fatalf("migrate wallet-ledger db: %v", err)
 	}
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopePSPWebhook); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
 		t.Fatalf("migrate psp-webhook db: %v", err)
 	}
 	return NewServer(wallet.NewService(db, cfg)), tenantID, db

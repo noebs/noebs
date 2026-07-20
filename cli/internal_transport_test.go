@@ -2,10 +2,14 @@ package main
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,20 +21,10 @@ import (
 
 func TestInternalTransportSigningCAKeyIsInputOnly(t *testing.T) {
 	now := time.Now().UTC()
-	_, caKey, caCertificate, err := prepareInternalTransportCA(kubernetesReleaseInternalTransportInputs{}, rand.Reader, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	caKeyDER, err := x509.MarshalECPrivateKey(caKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	caPrivateKey := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER})
+	inputs := newTestInternalTransportInputs(t, now)
+	caPrivateKey := []byte(inputs.CAPrivateKey)
 
-	prepared, err := prepareInternalTransportRelease(kubernetesReleaseInternalTransportInputs{
-		CACertificate: caCertificate,
-		CAPrivateKey:  string(caPrivateKey),
-	}, rand.Reader, now)
+	prepared, err := prepareInternalTransportRelease(inputs, rand.Reader, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,9 +41,13 @@ func TestInternalTransportSigningCAKeyIsInputOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]bool{
-		"ca_certificate":       true,
-		"postgres_certificate": true,
-		"postgres_private_key": true,
+		"ca_certificate":                true,
+		"postgres_certificate":          true,
+		"postgres_private_key":          true,
+		"keycloak_postgres_certificate": true,
+		"keycloak_postgres_private_key": true,
+		"keycloak_certificate":          true,
+		"keycloak_private_key":          true,
 	}
 	if len(values) != len(want) {
 		t.Fatalf("platform credential keys = %v, want %v", values, want)
@@ -61,8 +59,36 @@ func TestInternalTransportSigningCAKeyIsInputOnly(t *testing.T) {
 	}
 }
 
+func TestGeneratedInternalTransportHasDistinctPlatformIdentities(t *testing.T) {
+	now := time.Now().UTC()
+	prepared, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postgres := prepared.platform["postgres"]
+	keycloakPostgres := prepared.platform["keycloak-postgres"]
+	keycloak := prepared.platform["keycloak"]
+	if err := postgres.ValidateIdentity("postgres"); err != nil {
+		t.Fatalf("validate Postgres identity: %v", err)
+	}
+	if err := keycloakPostgres.ValidateIdentity("keycloak-postgres"); err != nil {
+		t.Fatalf("validate Keycloak Postgres identity: %v", err)
+	}
+	if err := keycloak.ValidateIdentity("keycloak"); err != nil {
+		t.Fatalf("validate Keycloak identity: %v", err)
+	}
+	if postgres.Certificate == keycloakPostgres.Certificate || postgres.PrivateKey == keycloakPostgres.PrivateKey ||
+		keycloak.Certificate == keycloakPostgres.Certificate || keycloak.PrivateKey == keycloakPostgres.PrivateKey {
+		t.Fatal("Postgres platform identities share certificate material")
+	}
+	if err := postgres.ValidateIdentity("keycloak-postgres"); err == nil {
+		t.Fatal("Noebs Postgres certificate is valid for Keycloak Postgres")
+	}
+}
+
 func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
-	prepared, err := prepareInternalTransportRelease(kubernetesReleaseInternalTransportInputs{}, rand.Reader, time.Now().UTC())
+	now := time.Now().UTC()
+	prepared, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +116,9 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mTLS request failed: %v", err)
 	}
-	response.Body.Close()
+	if err := response.Body.Close(); err != nil {
+		t.Fatalf("close mTLS response body: %v", err)
+	}
 	if response.StatusCode != http.StatusNoContent {
 		t.Fatalf("mTLS response = %s, want 204", response.Status)
 	}
@@ -102,7 +130,9 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 	otherServiceTLS.ServerName = string(serviceRoleWalletLedger)
 	otherService := &http.Client{Transport: &http.Transport{TLSClientConfig: otherServiceTLS}}
 	if response, err := otherService.Get(server.URL); err == nil {
-		response.Body.Close()
+		if err := response.Body.Close(); err != nil {
+			t.Fatalf("close unexpected mTLS response body: %v", err)
+		}
 		t.Fatal("wallet-ledger accepted a CA-issued certificate for identity-auth")
 	}
 
@@ -110,9 +140,49 @@ func TestGeneratedInternalTransportPerformsMutualTLS(t *testing.T) {
 	unauthenticatedTLS.Certificates = nil
 	unauthenticated := &http.Client{Transport: &http.Transport{TLSClientConfig: unauthenticatedTLS}}
 	if response, err := unauthenticated.Get(server.URL); err == nil {
-		response.Body.Close()
+		if err := response.Body.Close(); err != nil {
+			t.Fatalf("close unexpected unauthenticated response body: %v", err)
+		}
 		t.Fatal("server accepted a client without a workload certificate")
 	}
+}
+
+func newTestInternalTransportInputs(t *testing.T, now time.Time) kubernetesReleaseInternalTransportInputs {
+	t.Helper()
+	inputs, err := generateTestInternalTransportInputs(now)
+	if err != nil {
+		t.Fatalf("generate test transport CA: %v", err)
+	}
+	return inputs
+}
+
+func generateTestInternalTransportInputs(now time.Time) (kubernetesReleaseInternalTransportInputs, error) {
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return kubernetesReleaseInternalTransportInputs{}, err
+	}
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Noebs test transport CA"},
+		NotBefore:             now.Add(-time.Minute),
+		NotAfter:              now.Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		MaxPathLenZero:        true,
+	}
+	certificateDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return kubernetesReleaseInternalTransportInputs{}, err
+	}
+	privateKeyDER, err := x509.MarshalECPrivateKey(privateKey)
+	if err != nil {
+		return kubernetesReleaseInternalTransportInputs{}, err
+	}
+	return kubernetesReleaseInternalTransportInputs{
+		CACertificate: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDER})),
+		CAPrivateKey:  string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privateKeyDER})),
+	}, nil
 }
 
 func TestWalletLedgerTransportAllowsOnlyWalletAPI(t *testing.T) {
@@ -123,7 +193,8 @@ func TestWalletLedgerTransportAllowsOnlyWalletAPI(t *testing.T) {
 }
 
 func TestInternalTransportServerRequiresPeerAllowlist(t *testing.T) {
-	prepared, err := prepareInternalTransportRelease(kubernetesReleaseInternalTransportInputs{}, rand.Reader, time.Now().UTC())
+	now := time.Now().UTC()
+	prepared, err := prepareInternalTransportRelease(newTestInternalTransportInputs(t, now), rand.Reader, now)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -32,7 +32,7 @@ func prepareInternalTransportRelease(inputs kubernetesReleaseInternalTransportIn
 	if random == nil || now.IsZero() {
 		return preparedInternalTransportRelease{}, errors.New("internal transport generation inputs are required")
 	}
-	ca, caKey, caPEM, err := prepareInternalTransportCA(inputs, random, now.UTC())
+	ca, caKey, caPEM, err := prepareInternalTransportCA(inputs)
 	if err != nil {
 		return preparedInternalTransportRelease{}, err
 	}
@@ -56,7 +56,7 @@ func prepareInternalTransportRelease(inputs kubernetesReleaseInternalTransportIn
 		}
 		prepared.services[role] = config
 	}
-	for _, identity := range []string{"postgres"} {
+	for _, identity := range []string{"postgres", "keycloak-postgres", "keycloak"} {
 		certificate, privateKey, err := generateInternalTransportIdentity(serviceRole(identity), ca, caKey, random, now.UTC())
 		if err != nil {
 			return preparedInternalTransportRelease{}, err
@@ -79,49 +79,18 @@ func internalTransportServiceRoles() []serviceRole {
 		serviceRolePSPWebhook,
 		serviceRoleAdminReporting,
 		serviceRoleNotification,
-		serviceRoleBeneficiary,
 		serviceRoleWalletAPI,
 		serviceRoleWalletLedger,
 	}
 }
 
-func prepareInternalTransportCA(inputs kubernetesReleaseInternalTransportInputs, random io.Reader, now time.Time) (*x509.Certificate, *ecdsa.PrivateKey, string, error) {
+func prepareInternalTransportCA(inputs kubernetesReleaseInternalTransportInputs) (*x509.Certificate, *ecdsa.PrivateKey, string, error) {
 	certificatePEM := strings.TrimSpace(inputs.CACertificate)
 	privateKeyPEM := strings.TrimSpace(inputs.CAPrivateKey)
-	if (certificatePEM == "") != (privateKeyPEM == "") {
+	if certificatePEM == "" || privateKeyPEM == "" {
 		return nil, nil, "", errors.New("internal transport requires both ca_certificate and ca_private_key")
 	}
-	if certificatePEM != "" {
-		return parseInternalTransportCA(certificatePEM, privateKeyPEM)
-	}
-
-	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), random)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("generate internal transport CA key: %w", err)
-	}
-	serial, err := randomCertificateSerial(random)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	template := &x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: "Noebs internal transport CA"},
-		NotBefore:             now.Add(-5 * time.Minute),
-		NotAfter:              now.AddDate(2, 0, 0),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		MaxPathLenZero:        true,
-	}
-	der, err := x509.CreateCertificate(random, template, template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("create internal transport CA: %w", err)
-	}
-	certificate, err := x509.ParseCertificate(der)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("parse generated internal transport CA: %w", err)
-	}
-	return certificate, privateKey, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), nil
+	return parseInternalTransportCA(certificatePEM, privateKeyPEM)
 }
 
 func parseInternalTransportCA(certificatePEM, privateKeyPEM string) (*x509.Certificate, *ecdsa.PrivateKey, string, error) {
@@ -211,9 +180,15 @@ func (r preparedInternalTransportRelease) platformConfig(identity string) (trans
 
 func (r preparedInternalTransportRelease) platformSecret() map[string]interface{} {
 	postgres := r.platform["postgres"]
+	keycloakPostgres := r.platform["keycloak-postgres"]
+	keycloak := r.platform["keycloak"]
 	return map[string]interface{}{
-		"ca_certificate":       r.caCertificate,
-		"postgres_certificate": postgres.Certificate,
-		"postgres_private_key": postgres.PrivateKey,
+		"ca_certificate":                r.caCertificate,
+		"postgres_certificate":          postgres.Certificate,
+		"postgres_private_key":          postgres.PrivateKey,
+		"keycloak_postgres_certificate": keycloakPostgres.Certificate,
+		"keycloak_postgres_private_key": keycloakPostgres.PrivateKey,
+		"keycloak_certificate":          keycloak.Certificate,
+		"keycloak_private_key":          keycloak.PrivateKey,
 	}
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/adonese/noebs/parsing"
 	"github.com/adonese/noebs/store"
 	"github.com/gofiber/fiber/v2"
-	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
 )
 
@@ -49,58 +48,6 @@ func rejectInvalidPagination(c *fiber.Ctx, err error) {
 
 func rejectInvalidDashboardQuery(c *fiber.Ctx, err error) {
 	jsonResponse(c, http.StatusBadRequest, fiber.Map{"code": "invalid_query", "message": err.Error()})
-}
-
-// MerchantViews deprecated in favor of using the react-based dashboard features.
-func (s *Service) MerchantViews(c *fiber.Ctx) {
-	pageSize := 50
-	page, err := parsePositiveQueryInt(c.Query("page", ""), 1)
-	if err != nil {
-		rejectInvalidPagination(c, err)
-		return
-	}
-	offset := (page - 1) * pageSize
-
-	db, err := s.ensureDB()
-	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
-	}
-	terminal := c.Params("id")
-	tenantID, ok := s.requireTenantID(c)
-	if !ok {
-		return
-	}
-
-	tran, err := fetchTransactions(
-		c.UserContext(),
-		db,
-		`SELECT id, created_at, updated_at, payload FROM transactions
-		 WHERE tenant_id = ? AND terminal_id LIKE ? AND approval_code != ''
-		 ORDER BY id DESC LIMIT ? OFFSET ?`,
-		tenantID,
-		"%"+terminal+"%",
-		pageSize,
-		offset,
-	)
-	if err != nil {
-		jsonResponse(c, http.StatusInternalServerError, fiber.Map{"message": err.Error()})
-		return
-	}
-
-	issues, err := listIssues(c.UserContext(), db, tenantID, terminal)
-	if err != nil {
-		log.WithFields(logrus.Fields{"code": err.Error()}).Info("error loading issues")
-	}
-
-	view := MerchantView{
-		Transactions: tran,
-		Issues:       issues,
-	}
-	renderComponent(c, http.StatusOK, MerchantPage(view))
-
-	//TODO get merchant profile
-
 }
 
 func (s *Service) TransactionsCount(c *fiber.Ctx) {
@@ -475,16 +422,6 @@ func (s *Service) Stream(c *fiber.Ctx) {
 
 }
 
-type purchasesSum map[string]interface{}
-
-// This endpoint is highly experimental. It has many security issues and it is only
-// used by us for testing and prototyping only. YOU HAVE TO USE PROPER AUTHENTICATION system
-// if you decide to go with it. See apigateway package if you are interested.
-// DEPRECATED as it is not being used and needs proper maintainance
-func (s *Service) DailySettlement(c *fiber.Ctx) {
-	// get the results from DB
-}
-
 func (s *Service) MerchantTransactionsEndpoint(c *fiber.Ctx) {
 	tid := c.Query("terminal")
 	if tid == "" {
@@ -527,19 +464,4 @@ func computeSum(m []merchantStats) float32 {
 		s += v.Amount
 	}
 	return s
-}
-
-func listIssues(ctx context.Context, db *sqlx.DB, tenantID, terminalID string) ([]merchantsIssues, error) {
-	query := "SELECT terminal_id, latitude, longitude, reported_at FROM merchant_issues WHERE tenant_id = ?"
-	args := []any{tenantID}
-	if terminalID != "" {
-		query += " AND terminal_id = ?"
-		args = append(args, terminalID)
-	}
-	query += " ORDER BY reported_at DESC"
-	var issues []merchantsIssues
-	if err := db.SelectContext(ctx, &issues, db.Rebind(query), args...); err != nil {
-		return nil, err
-	}
-	return issues, nil
 }

@@ -53,23 +53,3 @@ func TestUpsertTransactionProjectionRejectsUnmarshalablePayloadBeforeDB(t *testi
 		t.Fatalf("UpsertTransactionProjection() error = %v, want marshal context", err)
 	}
 }
-
-func TestDecodePaymentRequestPayloadRejectsMalformedJSON(t *testing.T) {
-	_, err := decodePaymentRequestPayload("{", "push-1")
-	if err == nil {
-		t.Fatal("decodePaymentRequestPayload() error = nil, want malformed JSON error")
-	}
-	if !strings.Contains(err.Error(), "push-1") {
-		t.Fatalf("decodePaymentRequestPayload() error = %v, want notification uuid context", err)
-	}
-}
-
-func TestDecodePaymentRequestPayloadDecodesValidJSON(t *testing.T) {
-	got, err := decodePaymentRequestPayload(`{"uuid":"payment-1","amount":25}`, "push-1")
-	if err != nil {
-		t.Fatalf("decodePaymentRequestPayload() error = %v", err)
-	}
-	if got.UUID != "payment-1" || got.Amount != 25 {
-		t.Fatalf("payment request = %+v", got)
-	}
-}

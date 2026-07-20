@@ -16,9 +16,11 @@ func TestValidateTenantIDRejectsMissingAndDefault(t *testing.T) {
 		want error
 	}{
 		{name: "missing", in: "", want: store.ErrMissingTenantID},
-		{name: "blank", in: "   ", want: store.ErrMissingTenantID},
+		{name: "blank", in: "   ", want: store.ErrInvalidTenantID},
 		{name: "default", in: "default", want: store.ErrInvalidTenantID},
 		{name: "case insensitive default", in: "Default", want: store.ErrInvalidTenantID},
+		{name: "surrounding whitespace", in: " tenant-cutover ", want: store.ErrInvalidTenantID},
+		{name: "underscore", in: "tenant_1", want: store.ErrInvalidTenantID},
 	}
 
 	for _, tt := range tests {
@@ -52,10 +54,12 @@ func TestRenderConfigFilesRejectsDefaultTenantAfterMerge(t *testing.T) {
 
 func TestRenderConfigFilesRejectsBlankTenantOverrideAfterMerge(t *testing.T) {
 	renderConfigTempDirWithService(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
 `, `noebs:
   service_role: api-gateway
+  service_databases:
+    api-gateway: postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable
   default_tenant_id: ""
 `)
 	if err := renderConfigFiles(); !errors.Is(err, store.ErrMissingTenantID) {
@@ -65,7 +69,7 @@ func TestRenderConfigFilesRejectsBlankTenantOverrideAfterMerge(t *testing.T) {
 
 func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
 `)
 	if err != nil {
@@ -75,7 +79,7 @@ func TestRenderConfigFilesAcceptsExplicitTenantAfterMerge(t *testing.T) {
 
 func TestRenderConfigFilesRejectsMissingServiceConfig(t *testing.T) {
 	renderConfigTempDirWithService(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
 `, "")
 	if err := renderConfigFiles(); err == nil {
@@ -85,7 +89,7 @@ func TestRenderConfigFilesRejectsMissingServiceConfig(t *testing.T) {
 
 func TestRenderConfigFilesRejectsInvalidServiceRole(t *testing.T) {
 	renderConfigTempDirWithService(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
 `, `noebs:
   service_role: no-such-service
@@ -97,7 +101,7 @@ func TestRenderConfigFilesRejectsInvalidServiceRole(t *testing.T) {
 
 func TestRenderConfigFilesValidatesRoleDatabaseConfig(t *testing.T) {
 	renderConfigTempDirWithService(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
 `, `noebs:
   service_role: identity-auth
@@ -109,7 +113,7 @@ func TestRenderConfigFilesValidatesRoleDatabaseConfig(t *testing.T) {
 
 func TestRenderConfigFilesRejectsLegacyDatabasePath(t *testing.T) {
 	err := renderConfigInTempDir(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
   db_path: /tmp/noebs.db
 `)
@@ -138,7 +142,7 @@ func TestRenderDatabasePasswordFileDoesNotRunRuntimeValidation(t *testing.T) {
 
 func TestRenderConfigFilesDoesNotRenderLegacyLitestreamArtifacts(t *testing.T) {
 	tmp := renderConfigTempDir(t, `noebs:
-  default_tenant_id: tenant_1
+  default_tenant_id: tenant-1
   db_driver: pgx
 litestream:
   dbs:
@@ -161,21 +165,21 @@ litestream:
 func TestMergeConfigDoesNotIgnoreExplicitEmptyValues(t *testing.T) {
 	base := map[string]interface{}{
 		"noebs": map[string]interface{}{
-			"admin_key": "existing-key",
-			"cors":      []interface{}{"*"},
+			"data_key": "existing-key",
+			"cors":     []interface{}{"*"},
 		},
 	}
 	override := map[string]interface{}{
 		"noebs": map[string]interface{}{
-			"admin_key": "",
-			"cors":      []interface{}{},
+			"data_key": "",
+			"cors":     []interface{}{},
 		},
 	}
 
 	merged := mergeConfig(base, override).(map[string]interface{})
 	noebs := merged["noebs"].(map[string]interface{})
-	if got, ok := noebs["admin_key"].(string); !ok || got != "" {
-		t.Fatalf("admin_key = %#v, want explicit empty string", noebs["admin_key"])
+	if got, ok := noebs["data_key"].(string); !ok || got != "" {
+		t.Fatalf("data_key = %#v, want explicit empty string", noebs["data_key"])
 	}
 	cors, ok := noebs["cors"].([]interface{})
 	if !ok {
@@ -205,6 +209,8 @@ func renderConfigTempDir(t *testing.T, payload string) string {
 	t.Helper()
 	return renderConfigTempDirWithService(t, payload, `noebs:
   service_role: api-gateway
+  service_databases:
+    api-gateway: postgres://noebs:noebs@postgres:5432/gateway_auth?sslmode=disable
 `)
 }
 
@@ -233,11 +239,11 @@ func renderConfigTempDirWithService(t *testing.T, payload, servicePayload string
 }
 
 func TestValidateTenantIDAcceptsExplicitTenant(t *testing.T) {
-	got, err := validateTenantID(" tenant_1 ")
+	got, err := validateTenantID("tenant-cutover")
 	if err != nil {
 		t.Fatalf("validateTenantID() error = %v", err)
 	}
-	if got != "tenant_1" {
-		t.Fatalf("tenantID = %q, want tenant_1", got)
+	if got != "tenant-cutover" {
+		t.Fatalf("tenantID = %q, want tenant-cutover", got)
 	}
 }

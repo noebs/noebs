@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: noebs-keycloak-reconcile
+  name: noebs-keycloak-reconciler
   annotations:
     argocd.argoproj.io/hook: Sync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
@@ -35,8 +35,12 @@ spec:
             - reconcile-keycloak
             - --desired-state
             - /etc/noebs-keycloak/desired-state.yaml
+            - --tenant-catalog
+            - /etc/noebs-keycloak/tenant-catalog.yaml
             - --config
             - /etc/noebs-keycloak-reconciler/config.yaml
+            - --ca
+            - /etc/noebs-keycloak/ca.pem
           resources:
             requests:
               cpu: 25m
@@ -55,14 +59,28 @@ spec:
               mountPath: /etc/noebs-keycloak/desired-state.yaml
               subPath: keycloak-desired-state.yaml
               readOnly: true
+            - name: tenant-catalog
+              mountPath: /etc/noebs-keycloak/tenant-catalog.yaml
+              subPath: tenant-catalog.yaml
+              readOnly: true
             - name: credentials
               mountPath: /etc/noebs-keycloak-reconciler/config.yaml
               subPath: config.yaml
+              readOnly: true
+            - name: transport-ca
+              mountPath: /etc/noebs-keycloak/ca.pem
+              subPath: ca.pem
               readOnly: true
       volumes:
         - name: desired-state
           configMap:
             name: keycloak-desired-state
+        - name: tenant-catalog
+          configMap:
+            name: tenant-catalog
         - name: credentials
           secret:
             secretName: keycloak-reconciler-credentials
+        - name: transport-ca
+          secret:
+            secretName: keycloak-transport-ca

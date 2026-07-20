@@ -7,134 +7,63 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	gateway "github.com/adonese/noebs/apigateway"
 	chat "github.com/tutipay/ws"
 )
 
-func testAuthorizationHeader(t *testing.T) string {
-	t.Helper()
-	previousConfig := noebsConfig
-	previousAuth := auth
-	noebsConfig.JWTKey = "test-key"
-	auth.NoebsConfig = noebsConfig
-	auth.Init()
-	t.Cleanup(func() {
-		noebsConfig = previousConfig
-		auth = previousAuth
+func notificationRemovedRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "notification pull", method: http.MethodGet, path: "/consumer/notifications"},
+		{name: "mobile contact discovery", method: http.MethodPost, path: "/consumer/submit_contacts"},
+	}
+}
+
+func TestNotificationChatGatewayCatalogIsExact(t *testing.T) {
+	assertGatewayRoleCatalogExact(t, serviceRoleNotification, []gatewayRouteExpectation{
+		{method: http.MethodGet, path: "/ws", auth: gatewayAuthMobileUser, websocket: true},
 	})
-	token, err := auth.GenerateJWT(1, "0912345678", "test-tenant")
-	if err != nil {
-		t.Fatalf("GenerateJWT() error = %v", err)
-	}
-	return "Bearer " + token
 }
 
-func TestNotificationRoutesAreProxiedByAPIGateway(t *testing.T) {
-	ensureInit()
-	configureGatewayProxyForTest(t)
-	authorization := testAuthorizationHeader(t)
-	route := GetMainEngine()
-
-	tests := []struct {
-		name       string
-		method     string
-		path       string
-		wantStatus int
-	}{
-		{name: "websocket requires upgrade", method: http.MethodGet, path: "/ws", wantStatus: http.StatusUpgradeRequired},
-		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", authorization)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			if tt.wantStatus != 0 {
-				defer resp.Body.Close()
-				if resp.StatusCode != tt.wantStatus {
-					t.Fatalf("status = %d, want %d", resp.StatusCode, tt.wantStatus)
-				}
-				return
-			}
-			assertGatewayProxied(t, resp)
-		})
-	}
-}
-
-func TestNotificationRoutesAreOwnedByNotificationChat(t *testing.T) {
+func TestNotificationChatOwnsWebsocketRoute(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleNotification)
-	route := GetMainEngine()
-
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "notifications", method: http.MethodGet, path: "/consumer/notifications"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setTestGatewayUserIdentityHeaders(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusNotFound {
-				t.Fatalf("notification-chat did not register %s", tt.path)
-			}
-		})
-	}
+	app := GetMainEngine()
+	assertFiberRoutePresent(t, app, http.MethodGet, "/ws")
 }
 
-func TestNotificationChatDoesNotExposeMobileContactDiscovery(t *testing.T) {
+func TestNotificationRemovedRoutesAreAbsent(t *testing.T) {
+	for _, route := range notificationRemovedRoutes() {
+		assertGatewayCatalogAbsent(t, route.method, route.path)
+	}
+
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleNotification)
-	route := GetMainEngine()
-	for _, registered := range route.GetRoutes(true) {
-		if registered.Method == http.MethodPost && registered.Path == "/consumer/submit_contacts" {
-			t.Fatalf("notification-chat registered retired route %s", registered.Path)
-		}
+	app := GetMainEngine()
+	for _, route := range notificationRemovedRoutes() {
+		t.Run(route.name, func(t *testing.T) {
+			assertFiberRouteAbsent(t, app, route)
+		})
 	}
 }
 
 func TestNotificationChatOwnsInternalCommands(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleNotification)
-	route := GetMainEngine()
+	app := GetMainEngine()
 
-	tests := []string{
-		"/internal/notification-chat/push-data",
-		"/internal/notification-chat/biller-hook",
-	}
-	for _, path := range tests {
+	for _, path := range []string{"/internal/notification-chat/push-data"} {
 		t.Run(path, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, path, nil)
-			setGatewayAdminTenantIdentityHeaders(req, "test-tenant")
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-			assertFiberRouteRegistered(t, resp, http.MethodPost, path)
+			assertFiberRoutePresent(t, app, http.MethodPost, path)
 		})
 	}
 }
 
-func TestNotificationWebsocketRejectsBearerWithoutGatewayIdentity(t *testing.T) {
+func TestNotificationWebsocketRequiresGatewayUserIdentity(t *testing.T) {
 	ensureInit()
-	authorization := testAuthorizationHeader(t)
 	setServiceRoleForTest(t, serviceRoleNotification)
-	route := GetMainEngine()
+	app := GetMainEngine()
 
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
-	req.Header.Set("Authorization", authorization)
-	resp, err := route.Test(req, routeTestTimeout)
+	resp, err := app.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
@@ -146,26 +75,21 @@ func TestNotificationWebsocketRejectsBearerWithoutGatewayIdentity(t *testing.T) 
 
 func TestChatClientIdentityUsesGatewayIdentity(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
-	req.Header.Set("Authorization", testAuthorizationHeader(t))
+	req.Header.Set("Authorization", "Bearer caller-controlled-token")
 	if _, err := chatClientIdentityFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
 		t.Fatalf("bearer-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
 	}
 
-	setGatewayUserIdentityHeaders(req, 1, "test-tenant", "0912345678")
+	setGatewayUserIdentityHeaders(req, 1, "test-tenant", "")
 	if _, err := chatClientIdentityFromGatewayIdentity(req); !errors.Is(err, chat.ErrUnauthorized) {
 		t.Fatalf("header-only chat identity error = %v, want %v", err, chat.ErrUnauthorized)
 	}
 	req = req.WithContext(context.WithValue(req.Context(), chatGatewayIdentityContextKey{}, chatGatewayIdentity{
-		UserIdentity: gateway.UserIdentity{
-			TenantID:     "test-tenant",
-			UserID:       1,
-			Mobile:       "0912345678",
-			SessionEpoch: 1,
-		},
+		PrincipalIdentity: testGatewayPrincipalIdentity("test-tenant", "user", "", 1),
 	}))
 	got, err := chatClientIdentityFromGatewayIdentity(req)
 	if err != nil {
-		t.Fatalf("chatClientIDFromGatewayIdentity() error = %v", err)
+		t.Fatalf("chatClientIdentityFromGatewayIdentity() error = %v", err)
 	}
 	want := (chat.ClientIdentity{TenantID: "test-tenant", UserID: 1})
 	if got != want {
@@ -176,16 +100,10 @@ func TestChatClientIdentityUsesGatewayIdentity(t *testing.T) {
 func TestDeviceTokenRouteIsNotOwnedByNotificationChat(t *testing.T) {
 	ensureInit()
 	setServiceRoleForTest(t, serviceRoleNotification)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodPost, "/consumer/user/device", nil)
-	setTestGatewayUserIdentityHeaders(req)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-	}
+	app := GetMainEngine()
+	assertFiberRouteAbsent(t, app, roleRoute{
+		name:   "identity device token",
+		method: http.MethodPost,
+		path:   "/consumer/user/device",
+	})
 }

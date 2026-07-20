@@ -1,20 +1,14 @@
 package store
 
-import "strings"
-
-const reservedTenantID = "default"
+import "github.com/adonese/noebs/internal/tenantcatalog"
 
 func ValidateTenantID(tenantID string) (string, error) {
-	tenantID = strings.TrimSpace(tenantID)
 	if tenantID == "" {
 		return "", ErrMissingTenantID
 	}
-	if IsReservedTenantID(tenantID) {
+	id, err := tenantcatalog.ParseID(tenantID)
+	if err != nil {
 		return "", ErrInvalidTenantID
 	}
-	return tenantID, nil
-}
-
-func IsReservedTenantID(tenantID string) bool {
-	return strings.EqualFold(strings.TrimSpace(tenantID), reservedTenantID)
+	return string(id), nil
 }

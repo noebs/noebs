@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -81,24 +80,12 @@ func TestOpaqueCardOperationsUseOnlyCardVaultSchema(t *testing.T) {
 		t.Fatalf("cards after main retirement = %+v, %v", cards, err)
 	}
 
-	if err := service.AddCardsForUserID(ctx, tenantID, userID, "0912141660", []ebs_fields.Card{{
-		Pan: "4000000000000000", Expiry: "2912", Name: "Legacy",
-	}}); !errors.Is(err, store.ErrLegacyCardOperation) {
-		t.Fatalf("legacy add error = %v, want %v", err, store.ErrLegacyCardOperation)
-	}
-	if _, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, userID, ebs_fields.Token{Amount: 25}); !errors.Is(err, store.ErrLegacyCardOperation) {
-		t.Fatalf("legacy token error = %v, want %v", err, store.ErrLegacyCardOperation)
-	}
-
-	var cardRows, tokenRows int
+	var cardRows int
 	if err := db.GetContext(ctx, &cardRows, "SELECT COUNT(*) FROM cards"); err != nil {
 		t.Fatalf("count card rows: %v", err)
 	}
-	if err := db.GetContext(ctx, &tokenRows, "SELECT COUNT(*) FROM tokens"); err != nil {
-		t.Fatalf("count token rows: %v", err)
-	}
-	if cardRows != 2 || tokenRows != 0 {
-		t.Fatalf("rows after legacy calls: cards=%d tokens=%d", cardRows, tokenRows)
+	if cardRows != 2 {
+		t.Fatalf("card-vault rows: cards=%d", cardRows)
 	}
 	var identityTableExists bool
 	if err := db.GetContext(ctx, &identityTableExists, "SELECT to_regclass('users') IS NOT NULL"); err != nil {
@@ -109,15 +96,6 @@ func TestOpaqueCardOperationsUseOnlyCardVaultSchema(t *testing.T) {
 	}
 }
 
-func TestSetMainCardForUserIDRejectsMissingPAN(t *testing.T) {
-	service := &Service{Store: store.New(&store.DB{})}
-
-	err := service.SetMainCardForUserID(context.Background(), "tenant-1", 42, " ")
-	if !errors.Is(err, store.ErrMissingPAN) {
-		t.Fatalf("expected ErrMissingPAN, got %v", err)
-	}
-}
-
 func TestSetOpaqueMainCardRejectsUnknownCard(t *testing.T) {
 	_, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
 	service := &Service{Store: storeSvc}
@@ -125,58 +103,6 @@ func TestSetOpaqueMainCardRejectsUnknownCard(t *testing.T) {
 	err := service.SetOpaqueMainCardForUserID(context.Background(), tenantID, 42, "0f8fad5b-d9cb-469f-a165-70867728950e")
 	if !errors.Is(err, store.ErrCardNotFound) {
 		t.Fatalf("error = %v, want %v", err, store.ErrCardNotFound)
-	}
-}
-
-func TestLegacyPaymentTokenGenerationFailsClosedWithoutMutation(t *testing.T) {
-	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{Store: storeSvc}
-
-	_, _, _, err := service.GeneratePaymentTokenForUserID(context.Background(), tenantID, 42, ebs_fields.Token{Amount: 25})
-	if !errors.Is(err, store.ErrLegacyCardOperation) {
-		t.Fatalf("error = %v, want %v", err, store.ErrLegacyCardOperation)
-	}
-	var tokens int
-	if err := db.GetContext(context.Background(), &tokens, "SELECT COUNT(*) FROM tokens"); err != nil {
-		t.Fatalf("count tokens: %v", err)
-	}
-	if tokens != 0 {
-		t.Fatalf("legacy generation created %d tokens", tokens)
-	}
-}
-
-func TestLegacyPaymentTokenGenerationFailsClosedConcurrently(t *testing.T) {
-	db, storeSvc, tenantID := newTestDBWithScopes(t, []string{store.MigrationScopeCardVault})
-	service := &Service{Store: storeSvc}
-	ctx := context.Background()
-
-	const callers = 16
-	start := make(chan struct{})
-	results := make(chan error, callers)
-	var ready sync.WaitGroup
-	ready.Add(callers)
-	for range callers {
-		go func() {
-			ready.Done()
-			<-start
-			_, _, _, err := service.GeneratePaymentTokenForUserID(ctx, tenantID, 42, ebs_fields.Token{Amount: 25})
-			results <- err
-		}()
-	}
-	ready.Wait()
-	close(start)
-	for range callers {
-		if err := <-results; !errors.Is(err, store.ErrLegacyCardOperation) {
-			t.Fatalf("concurrent generation error = %v, want %v", err, store.ErrLegacyCardOperation)
-		}
-	}
-
-	var tokens int
-	if err := db.GetContext(ctx, &tokens, "SELECT COUNT(*) FROM tokens"); err != nil {
-		t.Fatalf("count tokens: %v", err)
-	}
-	if tokens != 0 {
-		t.Fatalf("concurrent legacy generation created %d tokens", tokens)
 	}
 }
 

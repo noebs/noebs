@@ -18,10 +18,9 @@ import (
 )
 
 const (
-	CardStatusActive           = "active"
-	CardStatusLegacyUnverified = "legacy_unverified"
-	CardStatusRetired          = "retired"
-	CardStatusBlocked          = "blocked"
+	CardStatusActive  = "active"
+	CardStatusRetired = "retired"
+	CardStatusBlocked = "blocked"
 
 	EnrollmentIntentPending    = "pending"
 	EnrollmentIntentProcessing = "processing"

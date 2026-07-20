@@ -8,63 +8,122 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	gateway "github.com/adonese/noebs/apigateway"
 )
 
-func TestDashboardRouteIsProxiedByAPIGateway(t *testing.T) {
-	ensureInit()
-	configureGatewayProxyForTest(t)
-	adminKey := setAdminKeyForTest(t)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	req.Header.Set("X-Admin-Key", adminKey)
-	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	assertGatewayProxied(t, resp)
-}
-
-func TestDashboardReadRouteIsOwnedByAdminReporting(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	setGatewayAdminIdentityHeader(req)
-	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode == http.StatusNotFound {
-		t.Fatalf("admin-reporting did not register dashboard read route")
+func adminReportingActiveDownstreamRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "dashboard", method: http.MethodGet, path: "/dashboard"},
+		{name: "dashboard slash", method: http.MethodGet, path: "/dashboard/"},
+		{name: "transaction by TID", method: http.MethodGet, path: "/dashboard/get_tid"},
+		{name: "transaction lookup", method: http.MethodGet, path: "/dashboard/get"},
+		{name: "all transactions", method: http.MethodGet, path: "/dashboard/all"},
+		{name: "transaction by ID", method: http.MethodGet, path: "/dashboard/all/:id", requestPath: "/dashboard/all/1"},
+		{name: "transaction count", method: http.MethodGet, path: "/dashboard/count"},
+		{name: "merchant transactions", method: http.MethodGet, path: "/dashboard/merchant"},
+		{name: "QR status", method: http.MethodGet, path: "/dashboard/status"},
+		{name: "test browser", method: http.MethodGet, path: "/dashboard/test_browser"},
+		{name: "stream", method: http.MethodGet, path: "/dashboard/stream"},
 	}
 }
 
-func TestAdminReportingDoesNotExposeInternalTransactionProjectionWrites(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	route := GetMainEngine()
+func adminReportingRemovedRoutes() []roleRoute {
+	return []roleRoute{
+		{name: "dummy transaction", method: http.MethodGet, path: "/dashboard/create"},
+		{name: "merchant issue", method: http.MethodPost, path: "/dashboard/issues"},
+		{name: "projection write", method: http.MethodPost, path: "/internal/admin-reporting/transactions"},
+	}
+}
 
-	req := httptest.NewRequest(http.MethodPost, "/internal/admin-reporting/transactions", nil)
-	setGatewayAdminIdentityHeader(req)
-	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req, routeTestTimeout)
+func TestAdminReportingGatewayCatalogIsExact(t *testing.T) {
+	assertGatewayRoleCatalogExact(t, serviceRoleAdminReporting, []gatewayRouteExpectation{
+		{method: http.MethodGet, path: "/backoffice/assets/*", auth: gatewayAuthPublic},
+	})
+}
+
+func TestAdminReportingDynamicRoutesAreDownstreamOnly(t *testing.T) {
+	for _, route := range adminReportingActiveDownstreamRoutes() {
+		assertGatewayCatalogAbsent(t, route.method, route.path)
+	}
+
+	t.Run("gateway returns 404", func(t *testing.T) {
+		ensureInit()
+		configureGatewayProxyForTest(t)
+		app := GetMainEngine()
+		for _, route := range adminReportingActiveDownstreamRoutes() {
+			t.Run(route.name, func(t *testing.T) {
+				assertFiberRouteAbsent(t, app, route)
+			})
+		}
+	})
+
+	t.Run("service owns route", func(t *testing.T) {
+		ensureInit()
+		setServiceRoleForTest(t, serviceRoleAdminReporting)
+		app := GetMainEngine()
+		for _, route := range adminReportingActiveDownstreamRoutes() {
+			t.Run(route.name, func(t *testing.T) {
+				assertFiberRoutePresent(t, app, route.method, route.path)
+			})
+		}
+	})
+}
+
+func TestAdminReportingServesEmbeddedDashboardAssets(t *testing.T) {
+	ensureInit()
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir temp: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+	setServiceRoleForTest(t, serviceRoleAdminReporting)
+	app := GetMainEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/style.css", nil)
+	resp, err := app.Test(req, routeTestTimeout)
 	if err != nil {
 		t.Fatalf("route.Test() error = %v", err)
 	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	defer closeResponseBody(t, resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !strings.Contains(string(body), "padding-top") {
+		t.Fatalf("embedded dashboard asset body = %q", body)
+	}
+}
+
+func TestAdminReportingRemovedRoutesAreAbsent(t *testing.T) {
+	for _, route := range adminReportingRemovedRoutes() {
+		assertGatewayCatalogAbsent(t, route.method, route.path)
+	}
+
+	tests := []struct {
+		name  string
+		setup func(*testing.T)
+	}{
+		{name: "gateway", setup: configureGatewayProxyForTest},
+		{name: "service", setup: func(t *testing.T) { setServiceRoleForTest(t, serviceRoleAdminReporting) }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ensureInit()
+			test.setup(t)
+			app := GetMainEngine()
+			for _, route := range adminReportingRemovedRoutes() {
+				t.Run(route.name, func(t *testing.T) {
+					assertFiberRouteAbsent(t, app, route)
+				})
+			}
+		})
 	}
 }
 
@@ -96,133 +155,5 @@ func TestPaymentServicesDoNotCommandAdminReporting(t *testing.T) {
 				}
 			}
 		}
-	}
-}
-
-func TestAdminReportingServesEmbeddedDashboardAssets(t *testing.T) {
-	ensureInit()
-	originalWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(t.TempDir()); err != nil {
-		t.Fatalf("chdir temp: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(originalWD)
-	})
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/assets/style.css", nil)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read body: %v", err)
-	}
-	if !strings.Contains(string(body), "padding-top") {
-		t.Fatalf("embedded dashboard asset body = %q", body)
-	}
-}
-
-func TestAdminReportingRequiresExplicitTenantAtHTTPBoundary(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	setGatewayAdminIdentityHeader(req)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-	}
-}
-
-func TestAdminReportingAcceptsGatewayTenantHeader(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	setGatewayAdminIdentityHeader(req)
-	req.Header.Set(gateway.GatewayTenantIDHeader, noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-}
-
-func TestAdminReportingIgnoresPublicTenantHeader(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	route := GetMainEngine()
-
-	req := httptest.NewRequest(http.MethodGet, "/dashboard/count", nil)
-	setGatewayAdminIdentityHeader(req)
-	req.Header.Set("X-Tenant-ID", noebsConfig.DefaultTenantID)
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("route.Test() error = %v", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
-	}
-}
-
-func TestAdminReportingDoesNotOwnDashboardWriteRoutes(t *testing.T) {
-	ensureInit()
-	setServiceRoleForTest(t, serviceRoleAdminReporting)
-	wasDebug := noebsConfig.IsDebug
-	noebsConfig.IsDebug = true
-	t.Cleanup(func() {
-		noebsConfig.IsDebug = wasDebug
-	})
-	route := GetMainEngine()
-
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "dummy transaction", method: http.MethodGet, path: "/dashboard/create"},
-		{name: "merchant issue", method: http.MethodPost, path: "/dashboard/issues"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			setGatewayAdminIdentityHeader(req)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusNotFound {
-				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusNotFound)
-			}
-		})
 	}
 }

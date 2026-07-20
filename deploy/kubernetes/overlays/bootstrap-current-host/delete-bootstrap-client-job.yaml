@@ -35,6 +35,8 @@ spec:
             - delete-keycloak-bootstrap-client
             - --config
             - /etc/noebs-keycloak-bootstrap/config.yaml
+            - --ca
+            - /etc/noebs-keycloak/ca.pem
           resources:
             requests:
               cpu: 25m
@@ -53,7 +55,14 @@ spec:
               mountPath: /etc/noebs-keycloak-bootstrap/config.yaml
               subPath: config.yaml
               readOnly: true
+            - name: transport-ca
+              mountPath: /etc/noebs-keycloak/ca.pem
+              subPath: ca.pem
+              readOnly: true
       volumes:
         - name: credentials
           secret:
             secretName: keycloak-bootstrap-reconciler-credentials
+        - name: transport-ca
+          secret:
+            secretName: keycloak-transport-ca

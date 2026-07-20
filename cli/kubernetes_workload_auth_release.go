@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -20,7 +19,6 @@ var workloadAuthCallerRoles = []serviceRole{
 	serviceRoleAPIGateway,
 	serviceRoleIdentityAuth,
 	serviceRoleEBSAdapter,
-	serviceRoleNotification,
 }
 
 type kubernetesReleaseWorkloadAuthInputs struct {
@@ -54,6 +52,31 @@ type preparedWorkloadDatabase struct {
 	migratePassword string
 	runtimePassword string
 	cleanupPassword string
+}
+
+func requireExplicitWorkloadAuthInputs(inputs kubernetesReleaseWorkloadAuthInputs) error {
+	for _, role := range workloadAuthCallerRoles {
+		caller, ok := inputs.Callers[string(role)]
+		if !ok || strings.TrimSpace(caller.KeyID) == "" || strings.TrimSpace(caller.PrivateKey) == "" {
+			return fmt.Errorf("kubernetes release inputs require workload_auth.callers.%s key_id and private_key", role)
+		}
+		if caller.KeyID != strings.TrimSpace(caller.KeyID) || caller.PrivateKey != strings.TrimSpace(caller.PrivateKey) {
+			return fmt.Errorf("kubernetes release inputs require canonical workload_auth.callers.%s authority", role)
+		}
+	}
+	for label, value := range map[string]string{
+		"migrate_password": inputs.Database.MigratePassword,
+		"runtime_password": inputs.Database.RuntimePassword,
+		"cleanup_password": inputs.Database.CleanupPassword,
+	} {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("kubernetes release inputs require workload_auth.database.%s", label)
+		}
+		if value != strings.TrimSpace(value) {
+			return fmt.Errorf("kubernetes release inputs require canonical workload_auth.database.%s", label)
+		}
+	}
+	return nil
 }
 
 func prepareWorkloadAuthRelease(inputs kubernetesReleaseWorkloadAuthInputs, random io.Reader) (preparedWorkloadAuthRelease, error) {
@@ -195,8 +218,4 @@ func (r preparedWorkloadAuthRelease) databaseCredentialSecret() map[string]inter
 		"runtime_password": r.database.runtimePassword,
 		"cleanup_password": r.database.cleanupPassword,
 	}
-}
-
-func generatePreparedWorkloadAuth(inputs kubernetesReleaseWorkloadAuthInputs) (preparedWorkloadAuthRelease, error) {
-	return prepareWorkloadAuthRelease(inputs, rand.Reader)
 }

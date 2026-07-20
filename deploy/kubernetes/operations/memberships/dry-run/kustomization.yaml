@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../base
+
+patches:
+  - target:
+      group: batch
+      version: v1
+      kind: Job
+      name: noebs-keycloak-membership-assignment
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --dry-run

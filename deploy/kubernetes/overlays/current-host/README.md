@@ -1,78 +1,92 @@
 # current-host Overlay
 
-This overlay targets the existing deployment host `100.102.164.34`.
+This overlay targets the existing deployment host through its Tailscale
+management address `100.102.164.34`. Public edge traffic reaches the same host
+through its `eth0` address `213.199.63.78`.
 
 The `noebs` namespace is owned by `foundation/terraform`; this overlay only renders namespaced runtime resources.
 
 Required DNS records:
 
-- `api.noebs.sd A 100.102.164.34`
-- `dsa.adonese.sd A 100.102.164.34`
+- `api.noebs.sd A 213.199.63.78`
+- `dsa.adonese.sd A 213.199.63.78`
 
 Required Kubernetes Secrets in namespace `noebs`:
 
+- `noebs-release-manifest` with key `release-manifest.yaml`.
 - `api-gateway-secrets` with key `secrets.yaml`.
 - `identity-auth-secrets` with key `secrets.yaml`.
-- `keycloak-secrets` with key `keycloak.conf`.
-- `keycloak-postgres-credentials` with key `password`.
+- `keycloak-secrets` with keys `keycloak.conf`, `db-ca.pem`, `tls.crt`, and `tls.key`.
+- `keycloak-transport-ca` with the public `ca.pem` only.
+- `keycloak-reconciler-credentials` with key `config.yaml`.
+- `keycloak-postgres-credentials` with keys `password`, `tls.crt`, and `tls.key`.
 - `card-vault-secrets` with key `secrets.yaml`.
 - `ebs-adapter-secrets` with key `secrets.yaml`.
 - `psp-webhook-secrets` with key `secrets.yaml`.
 - `admin-reporting-secrets` with key `secrets.yaml`.
 - `notification-chat-secrets` with key `secrets.yaml`.
-- `consumer-beneficiary-secrets` with key `secrets.yaml`.
 - `wallet-api-secrets` with key `secrets.yaml`.
 - `wallet-ledger-secrets` with key `secrets.yaml`.
 - `wallet-worker-secrets` with key `secrets.yaml`.
-- `ebs-adapter-events-secrets`, `admin-reporting-projector-secrets`, `workload-auth-migrate-secrets`, and `workload-auth-cleanup-secrets`, each with key `secrets.yaml`.
-- `identity-auth-migrate-secrets`, `card-vault-migrate-secrets`, `ebs-adapter-migrate-secrets`, `psp-webhook-migrate-secrets`, `admin-reporting-migrate-secrets`, `notification-chat-migrate-secrets`, `consumer-beneficiary-migrate-secrets`, and `wallet-ledger-migrate-secrets`, each with key `secrets.yaml`.
+- `ebs-adapter-events-secrets`, `admin-reporting-projector-secrets`, `workload-auth-migrate-secrets`, `workload-auth-cleanup-secrets`, `gateway-auth-migrate-secrets`, and `gateway-auth-cleanup-secrets`, each with key `secrets.yaml`.
+- `identity-auth-migrate-secrets`, `card-vault-migrate-secrets`, `ebs-adapter-migrate-secrets`, `psp-webhook-migrate-secrets`, `admin-reporting-migrate-secrets`, `notification-chat-migrate-secrets`, and `wallet-ledger-migrate-secrets`, each with key `secrets.yaml`.
 - `workload-auth-postgres-roles` with keys `migrate-password`, `runtime-password`, `cleanup-password`, and `roles.yaml`.
+- `gateway-auth-postgres-roles` with keys `migrate-password`, `runtime-password`, `cleanup-password`, and `roles.yaml`.
 - `internal-transport-platform` with key `credentials.yaml`.
 - `sops-age-key` with key `age-key.txt`.
 - `postgres-credentials` with keys `password`, `tls.crt`, and `tls.key`.
 - `temporal-postgres-credentials` with key `password`.
 - `ghcr-credentials` with key `.dockerconfigjson`.
-- `noebs-tls` TLS secret for `api.noebs.sd` and `dsa.adonese.sd`.
 
-Render these Secrets from the prepared Kubernetes release input directory:
-
-```sh
-noebs prepare-kubernetes-release /path/to/noebs-repo /path/to/current-noebs-root /path/to/kubernetes-release.inputs.yaml /path/to/noebs-kubernetes-release
-```
-
-`kubernetes-release.inputs.yaml.example` documents the required encrypted cutover input shape. The real file must be SOPS-encrypted with the same Age key used by the current Noebs root.
-
-To avoid duplicating values already transformed from the current encrypted root, render a current-secret-aware template first. The template prints placeholders for missing cutover fields only and never prints current secret values:
+Prepare the release from one strict SOPS-encrypted authority input and its
+explicit Age identity:
 
 ```sh
-noebs render-kubernetes-release-input-template /path/to/current-noebs-root > /path/to/kubernetes-release.inputs.yaml.plain
+noebs prepare-kubernetes-release /path/to/noebs-repo /path/to/kubernetes-release.inputs.yaml /path/to/age-key.txt /path/to/noebs-kubernetes-release
 ```
 
-Fill the placeholders, then encrypt the real `kubernetes-release.inputs.yaml` with the current root Age recipient. Do not add values already omitted from the template; those are transformed from the current encrypted root.
-
-The audit/template path reports field names only. `current_secret` means the current encrypted root has a non-empty value that can be transformed; `empty_current_secret` means the key exists there but still needs explicit cutover input because the value is empty; `unsupported_current_secret` means legacy material exists but is intentionally not transformed.
+`kubernetes-release.inputs.yaml.example` documents every required authority.
+The real input must be SOPS-encrypted. Missing authority, unknown fields,
+noncanonical identifiers, and ambiguous YAML fail preparation; the command
+does not inspect another deployment root or generate substitute credentials.
 
 ```sh
-noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs /path/to/tls.crt /path/to/tls.key | kubectl apply -f -
+noebs render-kubernetes-secrets /path/to/noebs-kubernetes-release noebs | kubectl apply -f -
 ```
 
-The preparation command reads the repo Kubernetes config/service role files, transforms values already present in the current encrypted Noebs root, decrypts the explicit encrypted cutover input file for required values absent from the current secret, encrypts generated service secret files with SOPS, and validates the output root. Duplicate non-empty values across the current secret and cutover input are rejected. The renderer then validates the Kubernetes release layout again before it emits Kubernetes `Secret` manifests. The input directory must contain exactly `config.yaml`, `.sops/age-key.txt`, one `services/<role>.yaml` file for every runtime and migration role mounted by the preflight Job, one `secrets/<service>.secrets.yaml` file per service-owned secret, and explicit platform files under `platform/`: `postgres-password.txt`, `temporal-postgres-password.txt`, `keycloak-postgres-password.txt`, `ghcr-dockerconfigjson`, `keycloak.conf`, `workload-auth-postgres-roles.secrets.yaml`, and `internal-transport.secrets.yaml`. Missing files, extra top-level, `.sops`, platform, service config, or service secret entries, placeholders, invalid TLS material, invalid GHCR Docker config JSON, extra or missing service discovery entries, and incomplete service database/EBS/Keycloak inputs fail before any manifest is written.
+The preparation command reads tracked Kubernetes config, service roles, and
+tenant catalog from the repo, decrypts only the named authority input,
+encrypts service secret files with SOPS, fingerprints the complete artifact
+set, and validates the output. The renderer validates that same layout and
+cross-artifact authority before emitting Kubernetes `Secret` manifests. The
+release directory contains exactly `config.yaml`, `tenant-catalog.yaml`,
+`release-manifest.yaml`, `.sops/age-key.txt`, one `services/<role>.yaml` file
+for every runtime and migration role, one `secrets/<service>.secrets.yaml`
+file per service-owned secret, and the explicit platform files under
+`platform/`. Missing or extra artifacts, placeholders, mismatched database
+roles/passwords, Keycloak credentials, CAs, workload keys, PSP routes, tenant
+catalog membership, or invalid OIDC/BFF construction fail before output.
 
-The release generator creates a dedicated internal CA and per-role leaf identities. An operator may instead supply the CA certificate and private key as encrypted preparation input, but the signing key is input-only: it is never written to the prepared release or rendered into Kubernetes. `internal-transport-platform` contains only the public CA plus the Postgres leaf certificate and private key. Rotating a generated CA therefore requires a coordinated full workload cutover; do not roll only part of the identity set.
+The encrypted authority input supplies the internal CA certificate and private
+key. Preparation derives per-role leaf identities, but the CA signing key is
+input-only: it is never written to the prepared release or rendered into
+Kubernetes. `internal-transport-platform` contains only the public CA plus the
+Postgres leaf certificate and private key. Rotating the CA requires a
+coordinated full workload cutover; do not roll only part of the identity set.
 
-Noebs HTTP service discovery, the wallet API-to-ledger gRPC hop, and service connections to the in-cluster Noebs Postgres use TLS 1.3 with the generated identities. Internal HTTP and wallet gRPC servers require a trusted client certificate. Postgres uses `hostssl` authentication and explicitly rejects `hostnossl`. Readiness probes execute an authenticated request against the application health handler rather than checking only whether a port accepts TCP connections. NetworkPolicies default-deny ingress and egress, then allow the exact deployed call graph and platform peers.
+Noebs HTTP service discovery, the wallet API-to-ledger gRPC hop, service connections to both Postgres servers, and every Keycloak application hop use TLS 1.3 with generated identities. Keycloak verifies the distinct `keycloak-postgres` database identity; Caddy, the API gateway, and the reconciliation jobs verify the `keycloak` HTTPS identity. Keycloak has no plaintext application listener. Its HTTP management listener stays pod-local to kubelet probes through a node-only NetworkPolicy. Internal Noebs HTTP and wallet gRPC servers require a trusted client certificate. Both Postgres servers use `hostssl` authentication and explicitly reject `hostnossl`.
 
 Kafka and Temporal remain plaintext single-node platform dependencies for this alpha. Their exposure is constrained to exact namespace peers by NetworkPolicy, but this is residual risk rather than end-to-end transport security. Docker Compose remains a local-development path: its Postgres bootstrap permits plaintext only when no TLS files are mounted, and its workload nonce cleanup service is one-shot rather than scheduled.
 
 Keycloak may open public HTTPS connections for configured identity providers. Kubernetes NetworkPolicy cannot constrain egress by DNS name, so the policy permits TCP 443 to public IPv4 addresses while excluding cluster, private, loopback, carrier-grade NAT, and link-local ranges.
 
-Each noebs service secret must contain the merged secret material expected by that service, including `noebs.default_tenant_id`, JWT/admin keys it owns, EBS credentials it owns, data key material it owns, and PSP secrets it owns. Database-opening service secrets must include `noebs.service_databases` keyed only by the database owner role. Runtime config copies the owner URL into `noebs.db_url` for that role and rejects non-owner database entries. `api-gateway-secrets` and `wallet-api-secrets` must not contain `noebs.db_url` or `noebs.service_databases`. `wallet-worker-secrets` uses the `wallet-ledger` owner key because wallet-ledger owns wallet state; the worker has no separate database or migration scope.
+Each noebs service secret contains only the material owned by that service. Database-opening service secrets include `noebs.service_databases` keyed only by the database owner role. Runtime config copies the owner URL into `noebs.db_url` for that role and rejects non-owner database entries. `api-gateway-secrets` contains the explicit confidential back-office client, session-encryption keyring, opaque PSP callback routing map, and `api-gateway` session database entry; it contains no JWT or static administrator credential. `wallet-api-secrets` has no database entry. `wallet-worker-secrets` uses the `wallet-ledger` owner key because wallet-ledger owns wallet state; the worker has no separate database or migration scope.
 
-`ebs-adapter-secrets` must provide explicit resolved EBS runtime values: `consumer_endpoint`, `merchant_endpoint`, `ipin_endpoint`, `consumer_app_id`, `merchant_app_id`, `ipin_username`, `ipin_password`, `pub_key`, `ipin_key`, `pan`, `pin`, `ipin`, and `exp_date`. The runtime does not pick QA or production endpoints from mode booleans. EBS dynamic fees are explicit shared runtime config in `noebs-config` under `noebs.ebs_dynamic_fees`; do not move them into code defaults.
+`ebs-adapter-secrets` must provide explicit resolved EBS runtime values: `consumer_endpoint`, `merchant_endpoint`, `ipin_endpoint`, `consumer_app_id`, `merchant_app_id`, `ipin_username`, `ipin_password`, `pub_key`, `ipin_key`, `pan`, `pin`, `ipin`, and `exp_date`. The runtime does not pick QA or production endpoints from mode booleans.
 
-`keycloak-secrets` is not a noebs merged secret. It contains the steady Keycloak `keycloak.conf` database, hostname, health, and metrics settings shown in `deploy/kubernetes/base/keycloak.conf.example`; bootstrap admin options are forbidden. Keycloak realm, client, organization, role, and identity-provider state is reconciled from `deploy/kubernetes/base/keycloak-desired-state.yaml`. The one-time service-account bootstrap is isolated in `deploy/kubernetes/overlays/bootstrap-current-host`.
+`keycloak-secrets` is not a noebs merged secret. It contains the steady configuration, the CA used to verify `keycloak-postgres`, and the `keycloak` HTTPS certificate and private key; bootstrap admin options are forbidden. `keycloak-transport-ca` contains only the public CA used by HTTPS clients. `keycloak-reconciler-credentials` contains the realm-local reconciler config rendered by the release preparation command. Keycloak realm, client, organization, role, and identity-provider state is reconciled from `deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml`. The one-time service-account bootstrap is isolated in `deploy/kubernetes/overlays/bootstrap-current-host`.
 
-When using the in-cluster `postgres` StatefulSet, service database URLs should point at the owned database names created by the init script: `identity_auth`, `card_vault`, `ebs_adapter`, `psp_webhook`, `admin_reporting`, `notification_chat`, `consumer_beneficiary`, and `wallet_ledger`.
+When using the in-cluster `postgres` StatefulSet, service database URLs point at the owned database names created by the init script: `gateway_auth`, `workload_auth`, `identity_auth`, `card_vault`, `ebs_adapter`, `psp_webhook`, `admin_reporting`, `notification_chat`, and `wallet_ledger`.
 
 Noebs service roles and OTel service names are selected by mounted config, not environment variables. The base `noebs-config` ConfigMap provides shared `config.yaml` and one `*.service.yaml` key per workload and migration job.
 
@@ -92,45 +106,56 @@ runtime and hook pods must render with both requests and limits; a
 
 ## Immutable alpha release
 
-The CI workflow publishes an image only after a push to `master` passes the
-full test and race-test jobs. It publishes both `ghcr.io/noebs/noebs:master`
-and `ghcr.io/noebs/noebs:<git-sha>` to one OCI manifest digest. Release in two
-Git commits so Argo CD never deploys code merely because `master` moved:
+Release evidence is produced locally; GitHub automation is not part of the
+test, build, or publication path. Follow
+[`docs/alpha-image-release.md`](../../../../docs/alpha-image-release.md) to
+export one reviewed commit, build it on a trusted Docker host, publish only its
+write-once full-SHA tag, verify the registry manifest, and create the release
+receipt.
 
-1. Merge the application release commit and wait for its `CI` workflow to
-   succeed. Record the full source SHA as `RELEASE_SHA`.
-2. Read the `containerimage.digest` emitted by that workflow. With a temporary
-   Docker config containing the existing GHCR pull credential, independently
-   verify that `ghcr.io/noebs/noebs:$RELEASE_SHA` resolves to the same digest.
-3. Change only the Noebs `digest:` value in `kustomization.yaml`. Render the
-   overlay and confirm every Noebs runtime, preflight, and migration image uses
-   `ghcr.io/noebs/noebs@sha256:<digest>`.
-4. Retain that tested digest as the rollback floor and announce a controlled
-   cutover window. Identity migration 103 and card-vault migration 104 are not
-   expand-compatible with the older binary, so the migration-hook-to-wave-20
-   interval can reject requests and the pre-alpha baseline is not a valid
-   post-migration rollback target.
-5. Commit the digest pin, push it to `master`, and let the automated Argo CD
-   sync run its preflight and migration hooks before wave-20 workloads. Do not
-   start the sync unless an operator can watch it through the post-deploy smoke
-   and forward-fix or redeploy the retained schema-aware digest if it fails.
+Use two commits so application content and GitOps promotion remain distinct:
 
-Example verification on the deployment host (the temporary credential file is
-deleted on exit and its contents must never be printed):
+The destructive first Keycloak promotion follows the exact empty-state order
+in [`deploy/host/keycloak-empty-state-cutover.md`](../../../host/keycloak-empty-state-cutover.md).
+Do not improvise individual PVC or password rotations.
+
+1. Finish the application commit and run the required local test, race,
+   migration, manifest, and security gates. Record its full SHA as
+   `RELEASE_SHA`.
+2. Run `scripts/publish-alpha-image.sh` for that SHA. Retain its JSON receipt
+   and verify that the recorded source SHA, source tree, tag, and digest match
+   the reviewed commit and registry result.
+3. In a separate commit, change only the four Noebs `digest:` fields in
+   `overlays/current-host`, `overlays/bootstrap-current-host`,
+   `operations/lookup`, and `operations/memberships/base`. Render all four
+   workflows and require every Noebs runtime, bootstrap, lookup, and membership
+   image to use the receipt's `ghcr.io/noebs/noebs@sha256:<digest>` reference.
+4. Retain the tested digest and receipt as the rollback floor, announce the
+   cutover window, and push the digest-pin commit. Set
+   `noebs_target_revision` to that exact lowercase 40-hex commit and apply the
+   reviewed foundation plan so both Argo CD Applications target it directly.
+5. Watch the preflight and migration hooks, wave-20 rollout, and post-deploy
+   smoke. If the schema boundary has been crossed, forward-fix or redeploy the
+   retained schema-aware digest; never substitute a mutable tag.
+
+Example local publication and manifest verification:
 
 ```sh
-release_sha='<full-git-sha>'
-release_digest='sha256:<64-hex-digest>'
-docker_config="$(mktemp -d)"
-trap 'find "$docker_config" -depth -delete' EXIT
-kubectl -n noebs get secret ghcr-credentials \
-  -o jsonpath='{.data.\.dockerconfigjson}' \
-  | base64 -d > "$docker_config/config.json"
-DOCKER_CONFIG="$docker_config" docker buildx imagetools inspect \
-  "ghcr.io/noebs/noebs:$release_sha"
+release_sha="$(git rev-parse --verify HEAD^{commit})"
+receipt="$HOME/noebs-release-$release_sha.json"
+scripts/publish-alpha-image.sh "$release_sha" "$receipt"
+release_digest="$(jq -er '.digest' "$receipt")"
 kubectl kustomize deploy/kubernetes/overlays/current-host > /tmp/noebs-rendered.yaml
 grep -F "ghcr.io/noebs/noebs@$release_digest" /tmp/noebs-rendered.yaml
 kubectl apply --dry-run=server -f /tmp/noebs-rendered.yaml >/dev/null
+for operation in \
+  deploy/kubernetes/overlays/bootstrap-current-host \
+  deploy/kubernetes/operations/lookup \
+  deploy/kubernetes/operations/memberships/dry-run \
+  deploy/kubernetes/operations/memberships/apply
+do
+  kubectl kustomize "$operation" | grep -F "ghcr.io/noebs/noebs@$release_digest" >/dev/null
+done
 ```
 
 After Argo CD reports `Synced` and `Healthy`, verify that its revision is the
@@ -153,24 +178,28 @@ Argo CD to sync the previous immutable digest. Do not use `kubectl set image`:
 self-heal will overwrite it. Confirm the previous digest still resolves in
 GHCR before starting the release.
 
-Database migrations are a separate boundary. Identity migration 103 adds a
-`users` column and changes the OTP challenge key, while card-vault migration
-104 adds token columns. Pre-alpha binaries use strict `SELECT *` scans and the
-old OTP conflict target, so they are not compatible with either advanced
-schema. The migration Jobs run before the wave-20 workloads, which also means
-this alpha cutover has a bounded service-interruption risk between migration
-and successful rollout. The current-host overlay uses `Recreate` for
-api-gateway, identity-auth, and card-vault so a mixed old/new security or schema
-version cannot keep serving during that cutover. Once either migration has
-run, the baseline digest above is not a safe application rollback target. The
-release must retain a tested, immutable schema-aware digest as its rollback
-floor; after recovery or
-payment traffic starts, prefer a forward fix rather than dropping state. There
-is no automatic down-migration in the Argo CD rollback path.
+Database migration is a separate boundary. The Keycloak cutover deliberately
+resets the resettable Noebs service databases and creates identity projection
+schema `101` with Keycloak as the sole identity authority. A pre-cutover binary
+is incompatible with that schema and trust boundary and is not a rollback
+candidate.
+
+Migration Jobs run before wave-20 workloads, so the coordinated reset and
+rollout have a bounded interruption window. The overlay uses `Recreate` for
+the gateway and schema-coupled identity/card workloads to prevent mixed
+security models from serving concurrently. Retain the immutable image and
+receipt that created and verified the current schemas as the rollback floor.
+For an incompatible schema change, deploy a forward fix; Argo CD rollback does
+not run down migrations or reconstruct removed credential data.
 
 Noebs images are pulled through the explicit `ghcr-credentials` image pull Secret. The release input `noebs.ghcr_dockerconfigjson` must contain a Docker config JSON with `auths.ghcr.io.auth`; the renderer emits it as a `kubernetes.io/dockerconfigjson` Secret with the `.dockerconfigjson` key.
 
-The public Ingress routes both hostnames only to `api-gateway`. Internal HTTP routing is owned by the gateway through `noebs.service_discovery` in the mounted config. Wallet API to wallet ledger gRPC routing uses `noebs.grpc_service_discovery.wallet-ledger`.
+The host-network edge Caddy deployment is the sole public TLS and routing
+authority. It sends Noebs API traffic to `api-gateway` and the explicit public
+Keycloak paths to `keycloak`; this overlay creates no Ingress and no public TLS
+Secret. Internal HTTP routing is owned by the gateway through
+`noebs.service_discovery` in the mounted config. Wallet API to wallet ledger
+gRPC routing uses `noebs.grpc_service_discovery.wallet-ledger`.
 
 Render check:
 

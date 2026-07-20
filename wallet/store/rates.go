@@ -89,8 +89,8 @@ func (s *Store) CreateExchangeRate(ctx context.Context, rate ExchangeRate) (*Exc
 	if rate.QuoteCurrency == "" {
 		return nil, ErrMissingQuoteCurrency
 	}
-	if rate.SetBy == "" {
-		return nil, ErrMissingSetBy
+	if rate.SetByOperatorID <= 0 {
+		return nil, ErrMissingOperatorID
 	}
 	if rate.EffectiveFrom.IsZero() {
 		return nil, ErrMissingStartTime
@@ -105,9 +105,12 @@ func (s *Store) CreateExchangeRate(ctx context.Context, rate ExchangeRate) (*Exc
 	if err != nil {
 		return nil, err
 	}
+	if _, err := s.GetOperatorIdentityByID(ctx, rate.SetByOperatorID); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO exchange_rates(
-		tenant_id, base_currency, quote_currency, buy_rate, sell_rate, spread, set_by,
+		tenant_id, base_currency, quote_currency, buy_rate, sell_rate, spread, set_by_operator_id,
 		effective_from, effective_to, created_at
 	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
@@ -119,7 +122,7 @@ func (s *Store) CreateExchangeRate(ctx context.Context, rate ExchangeRate) (*Exc
 		rate.BuyRate,
 		rate.SellRate,
 		rate.Spread,
-		rate.SetBy,
+		rate.SetByOperatorID,
 		rate.EffectiveFrom,
 		rate.EffectiveTo,
 		now,

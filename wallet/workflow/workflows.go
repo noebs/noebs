@@ -95,24 +95,24 @@ type ManualTransferParams struct {
 	Amount                 int64
 	Currency               string
 	Reason                 string
-	RequestedBy            int64
+	RequestedByOperatorID  int64
 	PSPProvider            string
 	PSPReference           string
 	ApprovalTimeoutSeconds int
 }
 
 type ManualTransferDecision struct {
-	Approved       bool
-	ApproverID     int64
-	Reason         string
-	ProofOfPayment string
+	Approved            bool
+	DecidedByOperatorID int64
+	Reason              string
+	ProofOfPayment      string
 }
 
 type WithdrawalApprovalDecision struct {
-	Approved       bool
-	ApproverID     int64
-	Reason         string
-	ProofOfPayment string
+	Approved            bool
+	DecidedByOperatorID int64
+	Reason              string
+	ProofOfPayment      string
 }
 
 type DestinationVerificationDecision struct {
@@ -722,7 +722,7 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 				"client_reference": params.Request.ClientReference,
 				"amount":           params.Request.Amount,
 				"currency":         params.Request.Currency,
-				"approver_id":      decision.ApproverID,
+				"operator_id":      decision.DecidedByOperatorID,
 				"reason":           decision.Reason,
 			})
 			if err != nil {
@@ -731,8 +731,8 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 			rejectEvent := walletstore.AuditEvent{
 				TenantID:   params.TenantID,
 				EventType:  "wallet.withdrawal",
-				ActorType:  "admin",
-				ActorID:    fmt.Sprintf("%d", decision.ApproverID),
+				ActorType:  "operator",
+				ActorID:    fmt.Sprintf("%d", decision.DecidedByOperatorID),
 				TargetType: sql.NullString{String: "wallet", Valid: true},
 				TargetID:   sql.NullString{String: walletID.String(), Valid: true},
 				Action:     "rejected",
@@ -1225,7 +1225,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	if missingRequiredText(params.Reason) {
 		return walletstore.ErrMissingReason
 	}
-	if params.RequestedBy <= 0 {
+	if params.RequestedByOperatorID <= 0 {
 		return walletstore.ErrMissingRequesterID
 	}
 	if params.ApprovalTimeoutSeconds <= 0 {
@@ -1251,18 +1251,18 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	}
 
 	transfer := walletstore.ManualTransfer{
-		TenantID:       params.TenantID,
-		WorkflowID:     workflowID,
-		IdempotencyKey: params.IdempotencyKey,
-		TransferType:   params.TransferType,
-		WalletID:       sql.NullString{String: params.WalletID, Valid: true},
-		Amount:         params.Amount,
-		Currency:       params.Currency,
-		Reason:         params.Reason,
-		Status:         ManualTransferStatusPending,
-		RequestedBy:    sql.NullInt64{Int64: params.RequestedBy, Valid: true},
-		PSPProvider:    sql.NullString{String: params.PSPProvider, Valid: params.PSPProvider != ""},
-		PSPReference:   sql.NullString{String: params.PSPReference, Valid: params.PSPReference != ""},
+		TenantID:              params.TenantID,
+		WorkflowID:            workflowID,
+		IdempotencyKey:        params.IdempotencyKey,
+		TransferType:          params.TransferType,
+		WalletID:              sql.NullString{String: params.WalletID, Valid: true},
+		Amount:                params.Amount,
+		Currency:              params.Currency,
+		Reason:                params.Reason,
+		Status:                ManualTransferStatusPending,
+		RequestedByOperatorID: params.RequestedByOperatorID,
+		PSPProvider:           sql.NullString{String: params.PSPProvider, Valid: params.PSPProvider != ""},
+		PSPReference:          sql.NullString{String: params.PSPReference, Valid: params.PSPReference != ""},
 	}
 	var stored walletstore.ManualTransfer
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityCreateManualTransfer, transfer).Get(ctx, &stored); err != nil {
@@ -1280,8 +1280,8 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	requestEvent := walletstore.AuditEvent{
 		TenantID:   params.TenantID,
 		EventType:  "wallet.manual_transfer",
-		ActorType:  "admin",
-		ActorID:    fmt.Sprintf("%d", params.RequestedBy),
+		ActorType:  "operator",
+		ActorID:    fmt.Sprintf("%d", params.RequestedByOperatorID),
 		TargetType: sql.NullString{String: "wallet", Valid: true},
 		TargetID:   sql.NullString{String: params.WalletID, Valid: params.WalletID != ""},
 		Action:     "requested",
@@ -1325,7 +1325,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		updateErr := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil)
 		return errors.Join(err, releaseErr, updateErr)
 	}
-	if err := validateManualTransferDecision(params.RequestedBy, decision); err != nil {
+	if err := validateManualTransferDecision(params.RequestedByOperatorID, decision); err != nil {
 		update := walletstore.ManualTransferStatusUpdate{
 			Status:          ManualTransferStatusRejected,
 			RejectionReason: sql.NullString{String: err.Error(), Valid: true},
@@ -1341,20 +1341,20 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 		}
 		approval := walletstore.ManualTransferApproval{
-			TenantID:         params.TenantID,
-			ManualTransferID: stored.ID,
-			ApproverID:       decision.ApproverID,
-			Decision:         ManualTransferStatusApproved,
-			Reason:           sql.NullString{String: decision.Reason, Valid: decision.Reason != ""},
+			TenantID:            params.TenantID,
+			ManualTransferID:    stored.ID,
+			DecidedByOperatorID: decision.DecidedByOperatorID,
+			Decision:            ManualTransferStatusApproved,
+			Reason:              sql.NullString{String: decision.Reason, Valid: decision.Reason != ""},
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, approval).Get(ctx, nil); err != nil {
 			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 		}
 		update := walletstore.ManualTransferStatusUpdate{
-			Status:         ManualTransferStatusApproved,
-			ApprovedBy:     sql.NullInt64{Int64: decision.ApproverID, Valid: true},
-			ApprovedAt:     sql.NullTime{Time: now, Valid: true},
-			ProofOfPayment: sql.NullString{String: decision.ProofOfPayment, Valid: true},
+			Status:               ManualTransferStatusApproved,
+			ApprovedByOperatorID: sql.NullInt64{Int64: decision.DecidedByOperatorID, Valid: true},
+			ApprovedAt:           sql.NullTime{Time: now, Valid: true},
+			ProofOfPayment:       sql.NullString{String: decision.ProofOfPayment, Valid: true},
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityUpdateManualTransferStatus, params.TenantID, workflowID, update).Get(ctx, nil); err != nil {
 			return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
@@ -1424,7 +1424,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 			"transfer_type": params.TransferType,
 			"amount":        params.Amount,
 			"currency":      params.Currency,
-			"approver_id":   decision.ApproverID,
+			"operator_id":   decision.DecidedByOperatorID,
 		})
 		if err != nil {
 			return err
@@ -1432,8 +1432,8 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		completeEvent := walletstore.AuditEvent{
 			TenantID:   params.TenantID,
 			EventType:  "wallet.manual_transfer",
-			ActorType:  "admin",
-			ActorID:    fmt.Sprintf("%d", decision.ApproverID),
+			ActorType:  "operator",
+			ActorID:    fmt.Sprintf("%d", decision.DecidedByOperatorID),
 			TargetType: sql.NullString{String: "wallet", Valid: true},
 			TargetID:   sql.NullString{String: params.WalletID, Valid: params.WalletID != ""},
 			Action:     "completed",
@@ -1448,11 +1448,11 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
 	}
 	rejection := walletstore.ManualTransferApproval{
-		TenantID:         params.TenantID,
-		ManualTransferID: stored.ID,
-		ApproverID:       decision.ApproverID,
-		Decision:         ManualTransferStatusRejected,
-		Reason:           sql.NullString{String: decision.Reason, Valid: true},
+		TenantID:            params.TenantID,
+		ManualTransferID:    stored.ID,
+		DecidedByOperatorID: decision.DecidedByOperatorID,
+		Decision:            ManualTransferStatusRejected,
+		Reason:              sql.NullString{String: decision.Reason, Valid: true},
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityAddManualTransferApproval, rejection).Get(ctx, nil); err != nil {
 		return releaseHoldAndReturn(ctx, params.TenantID, holdID, err)
@@ -1461,7 +1461,7 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		"transfer_type": params.TransferType,
 		"amount":        params.Amount,
 		"currency":      params.Currency,
-		"approver_id":   decision.ApproverID,
+		"operator_id":   decision.DecidedByOperatorID,
 		"reason":        decision.Reason,
 	})
 	if err != nil {
@@ -1470,8 +1470,8 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 	rejectEvent := walletstore.AuditEvent{
 		TenantID:   params.TenantID,
 		EventType:  "wallet.manual_transfer",
-		ActorType:  "admin",
-		ActorID:    fmt.Sprintf("%d", decision.ApproverID),
+		ActorType:  "operator",
+		ActorID:    fmt.Sprintf("%d", decision.DecidedByOperatorID),
 		TargetType: sql.NullString{String: "wallet", Valid: true},
 		TargetID:   sql.NullString{String: params.WalletID, Valid: params.WalletID != ""},
 		Action:     "rejected",
@@ -1899,10 +1899,10 @@ func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferPara
 		if timedOut {
 			return ManualTransferDecision{}, ErrManualTransferTimedOut
 		}
-		if decision.ApproverID <= 0 {
+		if decision.DecidedByOperatorID <= 0 {
 			continue
 		}
-		if err := validateManualTransferDecision(params.RequestedBy, decision); err != nil {
+		if err := validateManualTransferDecision(params.RequestedByOperatorID, decision); err != nil {
 			continue
 		}
 		return decision, nil
@@ -1910,7 +1910,7 @@ func awaitManualTransferDecision(ctx workflow.Context, params ManualTransferPara
 }
 
 func validateManualTransferDecision(requestedBy int64, decision ManualTransferDecision) error {
-	if requestedBy > 0 && decision.ApproverID == requestedBy {
+	if requestedBy > 0 && decision.DecidedByOperatorID == requestedBy {
 		return walletstore.ErrApproverIsRequester
 	}
 	return nil
@@ -1970,7 +1970,7 @@ func awaitWithdrawalApproval(ctx workflow.Context, params WithdrawalParams) (Wit
 	if timedOut {
 		return WithdrawalApprovalDecision{}, ErrWithdrawalApprovalTimedOut
 	}
-	if decision.ApproverID <= 0 {
+	if decision.DecidedByOperatorID <= 0 {
 		return WithdrawalApprovalDecision{}, walletstore.ErrMissingApproverID
 	}
 	return decision, nil

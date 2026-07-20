@@ -111,15 +111,19 @@ resource "kubernetes_manifest" "noebs_application" {
         server    = "https://kubernetes.default.svc"
         namespace = kubernetes_namespace_v1.noebs.metadata[0].name
       }
-      syncPolicy = {
-        automated = {
-          prune    = true
-          selfHeal = true
-        }
-        syncOptions = [
-          "PruneLast=true",
-        ]
-      }
+      syncPolicy = merge(
+        {
+          syncOptions = [
+            "PruneLast=true",
+          ]
+        },
+        var.noebs_automated_sync ? {
+          automated = {
+            prune    = true
+            selfHeal = true
+          }
+        } : {},
+      )
     }
   }
 

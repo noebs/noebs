@@ -1,11 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+namespace: noebs
+
 # This overlay is for the first sync of an empty Keycloak database only. The
 # steady current-host overlay contains no temporary master-realm credential.
 resources:
   - ../current-host
   - delete-bootstrap-client-job.yaml
+
+images:
+  - name: ghcr.io/noebs/noebs
+    newName: ghcr.io/noebs/noebs
+    digest: sha256:dee1f46c6826b741be166fcb04edb0c579af6f495db518c954e887b0bf2d806e
 
 patches:
   - target:
@@ -28,8 +35,16 @@ patches:
       group: batch
       version: v1
       kind: Job
-      name: noebs-keycloak-reconcile
+      name: noebs-keycloak-reconciler
     patch: |-
-      - op: replace
-        path: /spec/template/spec/volumes/1/secret/secretName
-        value: keycloak-bootstrap-reconciler-credentials
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: noebs-keycloak-reconciler
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: credentials
+                secret:
+                  secretName: keycloak-bootstrap-reconciler-credentials

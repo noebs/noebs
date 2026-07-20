@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +18,7 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	"github.com/adonese/noebs/internal/testdb"
+	"github.com/adonese/noebs/internal/workloadauth"
 	basestore "github.com/adonese/noebs/store"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -75,14 +78,20 @@ func TestPSPWebhookRequiresValidatedGatewayTenantIdentity(t *testing.T) {
 	}
 }
 
-func TestPSPWebhookHandlerDoesNotReadPublicTenantQuery(t *testing.T) {
+func TestPSPWebhookHandlerDoesNotReadPublicRoutingSelectors(t *testing.T) {
 	data, err := os.ReadFile("psp_webhook.go")
 	if err != nil {
 		t.Fatalf("read psp_webhook.go: %v", err)
 	}
-	for _, token := range []string{`c.Query("tenant_id")`, `c.Get(gateway.GatewayTenantIDHeader)`} {
+	for _, token := range []string{
+		`c.Query("tenant_id")`,
+		`c.Query("region")`,
+		`c.Query("currency")`,
+		`c.Query("direction")`,
+		`c.Get(gateway.GatewayTenantIDHeader)`,
+	} {
 		if strings.Contains(string(data), token) {
-			t.Fatalf("psp_webhook.go reads %q; webhook tenant must come from validated gateway identity", token)
+			t.Fatalf("psp_webhook.go reads public routing selector %q", token)
 		}
 	}
 }
@@ -256,12 +265,10 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 
 	const tenantID = "tenant"
 	const providerCode = "handler-noop"
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopePSPWebhook); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
 		t.Fatalf("migrate psp webhook db: %v", err)
 	}
-	if err := basestore.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletHandlerTestTenant(t, ctx, db, tenantID, "PSP Webhook Tenant")
 
 	mapping := `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`
 	stmt := db.Rebind(`INSERT INTO psp_configs(
@@ -320,6 +327,101 @@ func TestPSPWebhookRejectsUnknownClientReference(t *testing.T) {
 	}
 	if interactions != 1 {
 		t.Fatalf("interactions = %d, want 1", interactions)
+	}
+}
+
+func TestPSPWebhookBindsCallbackToStoredProvider(t *testing.T) {
+	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
+	signaler := &captureTemporalSignaler{}
+	fixture.createPSPTransactionFor(t, "other-provider", "inbound", "provider-bound-ref", "SDG", "workflow-provider-bound")
+
+	status, body := fixture.postWebhook(t, fixture.app(signaler), `{"ref":"provider-bound-ref","psp_tx":"psp-forged","status":"success","amount":1250,"currency":"SDG","direction":"inbound"}`)
+	if status != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusNotFound, body)
+	}
+	if strings.Contains(body, ErrPSPWebhookProviderMismatch.Error()) {
+		t.Fatalf("response disclosed provider binding: %s", body)
+	}
+	if signaler.calls != 0 {
+		t.Fatalf("temporal signal calls = %d, want 0", signaler.calls)
+	}
+	assertPSPWebhookDidNotMutateTransaction(t, fixture.mustGetPSPTransaction(t, "provider-bound-ref"))
+}
+
+func TestPSPWebhookRejectsCallbackDirectionMismatch(t *testing.T) {
+	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
+	signaler := &captureTemporalSignaler{}
+	fixture.createPSPTransactionFor(t, fixture.providerCode, "inbound", "direction-bound-ref", "SDG", "workflow-direction-bound")
+
+	status, body := fixture.postWebhook(t, fixture.app(signaler), `{"ref":"direction-bound-ref","psp_tx":"psp-forged","status":"success","amount":1250,"currency":"SDG","direction":"outbound"}`)
+	if status != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d, body=%s", status, http.StatusBadRequest, body)
+	}
+	if !strings.Contains(body, ErrPSPWebhookDirectionMismatch.Error()) {
+		t.Fatalf("response body = %s, want direction mismatch", body)
+	}
+	if signaler.calls != 0 {
+		t.Fatalf("temporal signal calls = %d, want 0", signaler.calls)
+	}
+	assertPSPWebhookDidNotMutateTransaction(t, fixture.mustGetPSPTransaction(t, "direction-bound-ref"))
+}
+
+func TestPSPWebhookAcceptsStoredDepositAndWithdrawalDirections(t *testing.T) {
+	fixture := newPSPWebhookTestFixture(t, `{"client_reference":["ref"],"transaction_id":["psp_tx"],"status":["status"],"amount":["amount"],"currency":["currency"],"direction":["direction"]}`)
+	app := fixture.app(nil)
+
+	tests := []struct {
+		name              string
+		storedDirection   string
+		callbackDirection string
+	}{
+		{name: "deposit", storedDirection: "inbound", callbackDirection: "deposit"},
+		{name: "withdrawal", storedDirection: "outbound", callbackDirection: "payout"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			clientReference := "valid-" + test.name + "-ref"
+			fixture.createPSPTransactionFor(t, fixture.providerCode, test.storedDirection, clientReference, "SDG", "")
+			payload := fmt.Sprintf(`{"ref":%q,"psp_tx":%q,"status":"success","amount":1250,"currency":"SDG","direction":%q}`, clientReference, "psp-"+test.name, test.callbackDirection)
+
+			status, body := fixture.postWebhook(t, app, payload)
+			if status != http.StatusOK {
+				t.Fatalf("status = %d, want %d, body=%s", status, http.StatusOK, body)
+			}
+			stored := fixture.mustGetPSPTransaction(t, clientReference)
+			if stored.Status != walletstore.PSPStatusSuccess || !stored.PSPTransactionID.Valid || stored.PSPTransactionID.String != "psp-"+test.name {
+				t.Fatalf("stored transaction = %+v, want successful %s callback", stored, test.name)
+			}
+		})
+	}
+}
+
+func TestValidatePSPWebhookTransactionReturnsTypedBindingErrors(t *testing.T) {
+	stored := &walletstore.PSPTransaction{PSPProvider: "provider-a", Direction: "inbound"}
+	if err := validatePSPWebhookTransaction(stored, "provider-b", "deposit"); !errors.Is(err, ErrPSPWebhookProviderMismatch) {
+		t.Fatalf("provider mismatch error = %v, want %v", err, ErrPSPWebhookProviderMismatch)
+	}
+	if err := validatePSPWebhookTransaction(stored, "provider-a", "withdrawal"); !errors.Is(err, ErrPSPWebhookDirectionMismatch) {
+		t.Fatalf("direction mismatch error = %v, want %v", err, ErrPSPWebhookDirectionMismatch)
+	}
+	if err := validatePSPWebhookTransaction(stored, "provider-a", ""); err != nil {
+		t.Fatalf("callback without a mapped direction error = %v, want nil", err)
+	}
+}
+
+func assertPSPWebhookDidNotMutateTransaction(t *testing.T, stored *walletstore.PSPTransaction) {
+	t.Helper()
+	if stored.Status != walletstore.PSPStatusPending {
+		t.Fatalf("stored status = %q, want pending", stored.Status)
+	}
+	if stored.PSPTransactionID.Valid {
+		t.Fatalf("stored psp transaction id = %q, want unset", stored.PSPTransactionID.String)
+	}
+	if len(stored.RawResponse) != 0 {
+		t.Fatalf("stored raw response = %s, want unset", stored.RawResponse)
+	}
+	if stored.ConfirmedAt.Valid {
+		t.Fatalf("stored confirmed_at = %s, want unset", stored.ConfirmedAt.Time)
 	}
 }
 
@@ -426,14 +528,14 @@ func TestPSPWebhookSignalFailureIsRetriable(t *testing.T) {
 	}
 }
 
-func TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID(t *testing.T) {
+func TestAuthorizeIPAllowedWebhookRequiresMappedPSPTransactionID(t *testing.T) {
 	provider := &acceptingWebhookProvider{code: "handler-noop"}
 	handler := &PSPWebhookHandler{}
 	var authorizeErr error
 
 	app := fiber.New()
-	app.Post("/webhook", func(c *fiber.Ctx) error {
-		_, _, authorizeErr = handler.authorizeUnsignedWebhook(
+	app.Post("/webhook", gateway.InternalTenantIdentityMiddleware(), func(c *fiber.Ctx) error {
+		_, _, authorizeErr = handler.authorizeIPAllowedWebhook(
 			c,
 			&walletpsp.Config{
 				WebhookAuthMode:     "ip_allowlist",
@@ -453,7 +555,8 @@ func TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewBufferString(`{"ref":"client-ref"}`))
-	req.Header.Set(fiber.HeaderXForwardedFor, "192.0.2.10")
+	req.Header.Set(gateway.GatewayTenantIDHeader, "tenant")
+	req.Header.Set(gateway.GatewaySourceIPHeader, "192.0.2.10")
 	resp, err := app.Test(req, pspWebhookRouteTestTimeout)
 	if err != nil {
 		t.Fatalf("app.Test() error = %v", err)
@@ -468,6 +571,218 @@ func TestAuthorizeUnsignedWebhookRequiresMappedPSPTransactionID(t *testing.T) {
 	}
 	if provider.statusCalls != 0 {
 		t.Fatalf("status calls = %d, want 0", provider.statusCalls)
+	}
+}
+
+func TestAuthorizeIPAllowedWebhookUsesAuthenticatedSourceIP(t *testing.T) {
+	tests := []struct {
+		name           string
+		fiber          fiber.Config
+		forwarded      string
+		peer           string
+		sourceIP       string
+		allowedCIDR    string
+		wantAuthorized bool
+	}{
+		{
+			name:           "authenticated source",
+			fiber:          fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor},
+			forwarded:      "192.0.2.10",
+			sourceIP:       "198.51.100.10",
+			allowedCIDR:    "198.51.100.0/24",
+			wantAuthorized: true,
+		},
+		{
+			name:        "forwarded header",
+			fiber:       fiber.Config{ProxyHeader: fiber.HeaderXForwardedFor},
+			forwarded:   "192.0.2.10",
+			sourceIP:    "198.51.100.10",
+			allowedCIDR: "192.0.2.0/24",
+		},
+		{
+			name:        "gateway peer",
+			peer:        "192.0.2.10",
+			sourceIP:    "198.51.100.10",
+			allowedCIDR: "192.0.2.0/24",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var authorizeErr error
+			app := fiber.New(test.fiber)
+			app.Post("/webhook", gateway.InternalTenantIdentityMiddleware(), func(c *fiber.Ctx) error {
+				if test.peer != "" {
+					c.Context().SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP(test.peer)})
+				}
+				if got := c.IP(); got != "192.0.2.10" {
+					t.Fatalf("test request IP = %q, want spoofable/peer IP 192.0.2.10", got)
+				}
+				_, _, authorizeErr = (&PSPWebhookHandler{}).authorizeIPAllowedWebhook(
+					c,
+					&walletpsp.Config{
+						WebhookAuthMode:     "ip_allowlist",
+						WebhookAllowedCIDRs: []string{test.allowedCIDR},
+					},
+					&acceptingWebhookProvider{code: "handler-noop"},
+					"handler-noop",
+					"tenant",
+					"client-ref",
+					"psp-transaction",
+					"deposit",
+					map[string]any{"ref": "client-ref"},
+					[]byte(`{"ref":"client-ref"}`),
+				)
+				return c.SendStatus(http.StatusNoContent)
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/webhook", nil)
+			req.Header.Set(gateway.GatewayTenantIDHeader, "tenant")
+			req.Header.Set(gateway.GatewaySourceIPHeader, test.sourceIP)
+			if test.forwarded != "" {
+				req.Header.Set(fiber.HeaderXForwardedFor, test.forwarded)
+			}
+			resp, err := app.Test(req, pspWebhookRouteTestTimeout)
+			if err != nil {
+				t.Fatalf("app.Test() error = %v", err)
+			}
+			defer closeWalletResponseBody(t, resp.Body)
+			if test.wantAuthorized && authorizeErr != nil {
+				t.Fatalf("authorize error = %v, want authenticated source to be allowed", authorizeErr)
+			}
+			if !test.wantAuthorized && !errors.Is(authorizeErr, walletpsp.ErrPSPWebhookInvalid) {
+				t.Fatalf("authorize error = %v, want %v", authorizeErr, walletpsp.ErrPSPWebhookInvalid)
+			}
+		})
+	}
+}
+
+func TestWebhookAuthorizationModesAreExact(t *testing.T) {
+	tests := []struct {
+		name           string
+		mode           string
+		signatureValid bool
+		sourceIP       string
+		wantAuthorized bool
+	}{
+		{name: "signature accepts signature", mode: "signature", signatureValid: true, sourceIP: "198.51.100.10", wantAuthorized: true},
+		{name: "signature rejects allowed IP", mode: "signature", sourceIP: "192.0.2.10"},
+		{name: "IP rejects valid signature from wrong source", mode: "ip_allowlist", signatureValid: true, sourceIP: "198.51.100.10"},
+		{name: "IP accepts allowed source without signature", mode: "ip_allowlist", sourceIP: "192.0.2.10", wantAuthorized: true},
+		{name: "removed OR mode rejects signature", mode: "signature_or_ip_allowlist", signatureValid: true, sourceIP: "198.51.100.10"},
+		{name: "removed OR mode rejects allowed source", mode: "signature_or_ip_allowlist", sourceIP: "192.0.2.10"},
+		{name: "unknown mode rejects", mode: "unknown", signatureValid: true, sourceIP: "192.0.2.10"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var authorizeErr error
+			app := fiber.New()
+			app.Post("/webhook", func(c *fiber.Ctx) error {
+				c.Locals("request_source", test.sourceIP)
+				_, _, authorizeErr = (&PSPWebhookHandler{}).authorizeWebhook(
+					c,
+					&walletpsp.Config{WebhookAuthMode: test.mode, WebhookAllowedCIDRs: []string{"192.0.2.0/24"}},
+					&acceptingWebhookProvider{code: "handler-noop"},
+					"handler-noop",
+					"tenant",
+					pspWebhookFields{},
+					test.signatureValid,
+					map[string]any{"status": "success"},
+					[]byte(`{"status":"success"}`),
+				)
+				return c.SendStatus(http.StatusNoContent)
+			})
+
+			resp, err := app.Test(httptest.NewRequest(http.MethodPost, "/webhook", nil), pspWebhookRouteTestTimeout)
+			if err != nil {
+				t.Fatalf("app.Test() error = %v", err)
+			}
+			defer closeWalletResponseBody(t, resp.Body)
+			if test.wantAuthorized && authorizeErr != nil {
+				t.Fatalf("authorize error = %v, want success", authorizeErr)
+			}
+			if !test.wantAuthorized && !errors.Is(authorizeErr, walletpsp.ErrPSPWebhookInvalid) {
+				t.Fatalf("authorize error = %v, want %v", authorizeErr, walletpsp.ErrPSPWebhookInvalid)
+			}
+		})
+	}
+}
+
+func TestWebhookAuditHeadersRedactCredentials(t *testing.T) {
+	var captured walletstore.RawJSON
+	app := fiber.New()
+	app.Post("/webhook", func(c *fiber.Ctx) error {
+		var err error
+		captured, err = webhookAuditHeaders(c)
+		if err != nil {
+			return err
+		}
+		return c.SendStatus(http.StatusNoContent)
+	})
+	req := httptest.NewRequest(http.MethodPost, "/webhook", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	req.Header.Set("X-Webhook-Signature", "webhook-secret")
+	req.Header.Set(workloadauth.HeaderSignature, "workload-secret")
+	req.Header.Set(workloadauth.HeaderSubject, "subject-secret")
+	req.Header.Set("X-Provider-Event", "event-123")
+	resp, err := app.Test(req, pspWebhookRouteTestTimeout)
+	if err != nil {
+		t.Fatalf("app.Test() error = %v", err)
+	}
+	defer closeWalletResponseBody(t, resp.Body)
+
+	var headers map[string][]string
+	if err := json.Unmarshal(captured, &headers); err != nil {
+		t.Fatalf("decode audit headers: %v", err)
+	}
+	value := func(name string) string {
+		for key, values := range headers {
+			if strings.EqualFold(key, name) && len(values) != 0 {
+				return values[0]
+			}
+		}
+		return ""
+	}
+	for _, name := range []string{"Authorization", "X-Webhook-Signature", workloadauth.HeaderSignature, workloadauth.HeaderSubject} {
+		if got := value(name); got != "REDACTED" {
+			t.Fatalf("audit header %s = %q, want REDACTED", name, got)
+		}
+	}
+	if got := value("X-Provider-Event"); got != "event-123" {
+		t.Fatalf("benign audit header = %q, want event-123", got)
+	}
+}
+
+func TestWebhookSignatureHasOneCanonicalHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		headers   http.Header
+		wantValue string
+	}{
+		{name: "canonical", headers: http.Header{"X-Webhook-Signature": {"signature"}}, wantValue: "signature"},
+		{name: "legacy alias", headers: http.Header{"X-Signature": {"signature"}}},
+		{name: "duplicate", headers: http.Header{"X-Webhook-Signature": {"one", "two"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got string
+			app := fiber.New()
+			app.Post("/webhook", func(c *fiber.Ctx) error {
+				got = webhookSignature(c)
+				return c.SendStatus(http.StatusNoContent)
+			})
+			req := httptest.NewRequest(http.MethodPost, "/webhook", nil)
+			req.Header = test.headers
+			resp, err := app.Test(req, pspWebhookRouteTestTimeout)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer closeWalletResponseBody(t, resp.Body)
+			if got != test.wantValue {
+				t.Fatalf("webhook signature = %q, want %q", got, test.wantValue)
+			}
+		})
 	}
 }
 
@@ -515,12 +830,10 @@ func newPSPWebhookTestFixture(t *testing.T, mapping string) *pspWebhookTestFixtu
 
 	const tenantID = "tenant"
 	const providerCode = "handler-noop"
-	if err := basestore.MigrateScope(ctx, db, tenantID, basestore.MigrationScopePSPWebhook); err != nil {
+	if err := basestore.MigrateScope(ctx, db, basestore.MigrationScopePSPWebhook); err != nil {
 		t.Fatalf("migrate psp webhook db: %v", err)
 	}
-	if err := basestore.New(db).EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionWalletHandlerTestTenant(t, ctx, db, tenantID, "PSP Replay Tenant")
 
 	stmt := db.Rebind(`INSERT INTO psp_configs(
 		tenant_id, provider_code, provider_name, api_base_url, enabled_currencies,
@@ -561,6 +874,10 @@ func (f *pspWebhookTestFixture) app(signaler TemporalSignaler) *fiber.App {
 }
 
 func (f *pspWebhookTestFixture) createPSPTransaction(t *testing.T, clientReference, currency, workflowID string) {
+	f.createPSPTransactionFor(t, f.providerCode, "inbound", clientReference, currency, workflowID)
+}
+
+func (f *pspWebhookTestFixture) createPSPTransactionFor(t *testing.T, providerCode, direction, clientReference, currency, workflowID string) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -568,10 +885,10 @@ func (f *pspWebhookTestFixture) createPSPTransaction(t *testing.T, clientReferen
 
 	_, err := f.store.CreatePSPTransaction(ctx, walletstore.PSPTransaction{
 		TenantID:        f.tenantID,
-		PSPProvider:     f.providerCode,
+		PSPProvider:     providerCode,
 		IdempotencyKey:  clientReference + "-idempotency",
 		ClientReference: clientReference,
-		Direction:       "inbound",
+		Direction:       direction,
 		Amount:          1250,
 		Currency:        currency,
 		Status:          "pending",

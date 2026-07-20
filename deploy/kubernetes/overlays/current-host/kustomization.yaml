@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - ../../base
-  - ingress.yaml
 
 images:
   - name: ghcr.io/noebs/noebs
@@ -40,7 +39,7 @@ patches:
       group: apps
       version: v1
       kind: Deployment
-      name: (admin-reporting|api-gateway|card-vault|consumer-beneficiary|ebs-adapter|identity-auth|notification-chat|psp-webhook|wallet-api|wallet-ledger)
+      name: (admin-reporting|api-gateway|card-vault|ebs-adapter|identity-auth|notification-chat|psp-webhook|wallet-api|wallet-ledger)
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/resources
@@ -132,17 +131,6 @@ patches:
       kind: Deployment
       name: keycloak
     patch: |-
-      - op: replace
-        path: /spec/template/spec/containers/0/args
-        value:
-          - start
-          - --http-relative-path=/auth
-          - --http-management-relative-path=/
-          - --hostname=https://api.noebs.sd/auth
-          - --hostname-strict=true
-          - --hostname-backchannel-dynamic=false
-          - --proxy-headers=xforwarded
-          - --proxy-trusted-addresses=10.42.0.0/16
       - op: add
         path: /spec/template/spec/containers/0/resources
         value:
@@ -171,7 +159,7 @@ patches:
       group: batch
       version: v1
       kind: Job
-      name: (noebs-deployment-preflight|noebs-.*-migrate)
+      name: (noebs-deployment-preflight|noebs-keycloak-reconciler|noebs-.*-migrate)
     patch: |-
       - op: add
         path: /spec/template/spec/containers/0/resources
@@ -201,7 +189,7 @@ patches:
       group: batch
       version: v1
       kind: CronJob
-      name: noebs-workload-auth-cleanup
+      name: (noebs-workload-auth-cleanup|noebs-gateway-auth-cleanup)
     patch: |-
       - op: add
         path: /spec/jobTemplate/spec/template/spec/containers/0/resources

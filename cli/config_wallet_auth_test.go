@@ -8,14 +8,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
+	"sync"
 	"testing"
+	"time"
 
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
-	walletgrpc "github.com/adonese/noebs/wallet/grpc"
-	"go.temporal.io/sdk/client"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -32,14 +37,87 @@ type walletMethodsRouteResponse struct {
 	Methods []any `json:"methods"`
 }
 
-type walletRouteTemporalClient struct{}
+type walletRouteLedger struct {
+	walletv1.UnimplementedWalletPublicServiceServer
+	walletv1.UnimplementedWalletAdminServiceServer
 
-func (walletRouteTemporalClient) SignalWorkflow(ctx context.Context, workflowID, runID, signalName string, arg interface{}) error {
-	return nil
+	mu      sync.RWMutex
+	wallets map[string]*walletv1.Wallet
 }
 
-func (walletRouteTemporalClient) ExecuteWorkflow(ctx context.Context, options client.StartWorkflowOptions, workflow interface{}, args ...interface{}) (client.WorkflowRun, error) {
-	return nil, nil
+func newWalletRouteLedger() *walletRouteLedger {
+	return &walletRouteLedger{wallets: make(map[string]*walletv1.Wallet)}
+}
+
+func (s *walletRouteLedger) EnsureWalletPublic(ctx context.Context, req *walletv1.EnsureWalletRequest) (*walletv1.Wallet, error) {
+	principal, err := walletRoutePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.GetTenantId() != principal.TenantID || req.GetUserId() != principal.UserID {
+		return nil, status.Error(codes.PermissionDenied, "wallet owner mismatch")
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	wallet := &walletv1.Wallet{
+		Id:        uuid.NewString(),
+		TenantId:  req.GetTenantId(),
+		OwnerType: "user",
+		OwnerId:   strconv.FormatInt(req.GetUserId(), 10),
+		Currency:  req.GetCurrency(),
+		Status:    "active",
+		KycTier:   "basic",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	s.mu.Lock()
+	s.wallets[wallet.GetId()] = wallet
+	s.mu.Unlock()
+	return wallet, nil
+}
+
+func (s *walletRouteLedger) GetWalletPublic(ctx context.Context, req *walletv1.GetWalletRequest) (*walletv1.Wallet, error) {
+	principal, err := walletRoutePrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	wallet := s.wallets[req.GetWalletId()]
+	s.mu.RUnlock()
+	if wallet == nil || wallet.GetTenantId() != principal.TenantID || wallet.GetOwnerId() != strconv.FormatInt(principal.UserID, 10) {
+		return nil, status.Error(codes.NotFound, "wallet not found")
+	}
+	return wallet, nil
+}
+
+func (s *walletRouteLedger) ListWalletTransactionsPublic(ctx context.Context, req *walletv1.ListWalletTransactionsRequest) (*walletv1.WalletLedgerEntryList, error) {
+	if _, err := s.GetWalletPublic(ctx, &walletv1.GetWalletRequest{TenantId: req.GetTenantId(), WalletId: req.GetWalletId()}); err != nil {
+		return nil, err
+	}
+	return &walletv1.WalletLedgerEntryList{Transactions: []*walletv1.WalletLedgerEntry{}}, nil
+}
+
+func (s *walletRouteLedger) ListPaymentMethodsPublic(context.Context, *walletv1.ListPaymentMethodsRequest) (*walletv1.PaymentMethodList, error) {
+	return &walletv1.PaymentMethodList{Methods: []*walletv1.PaymentMethod{}}, nil
+}
+
+func (s *walletRouteLedger) RenderWalletAdmin(context.Context, *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
+	return &walletv1.AdminWalletResponse{
+		StatusCode:  200,
+		ContentType: "text/html; charset=utf-8",
+		Body:        []byte("<!doctype html><title>Wallet</title>"),
+	}, nil
+}
+
+func walletRoutePrincipal(ctx context.Context) (gateway.PrincipalIdentity, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return gateway.PrincipalIdentity{}, status.Error(codes.Unauthenticated, "missing gateway identity")
+	}
+	principal, ok := gatewayPrincipalFromMetadata(md)
+	if !ok {
+		return gateway.PrincipalIdentity{}, status.Error(codes.Unauthenticated, "invalid gateway identity")
+	}
+	return principal, nil
 }
 
 func configureWalletRouteTest(t *testing.T) {
@@ -47,18 +125,8 @@ func configureWalletRouteTest(t *testing.T) {
 	ensureInit()
 	previousRoleServices := captureRoleServices()
 	t.Cleanup(previousRoleServices.restore)
-	if err := initRoleServices(serviceRoleWalletLedger); err != nil {
-		t.Fatalf("init wallet-ledger services: %v", err)
-	}
-	if walletService == nil {
-		t.Fatal("wallet service not initialized")
-	}
 
-	originalAuth := auth
 	originalCfg := noebsConfig
-	originalWalletCfg := walletService.Config
-	originalWorkflowClient := walletWorkflowClient
-	originalWorkflowCloser := walletWorkflowCloser
 	originalWalletPublicClient := walletPublicClient
 	originalWalletAdminClient := walletAdminClient
 	originalWalletLedgerConn := walletLedgerGRPCConn
@@ -76,11 +144,7 @@ func configureWalletRouteTest(t *testing.T) {
 		if testGRPCListener != nil {
 			_ = testGRPCListener.Close()
 		}
-		auth = originalAuth
 		noebsConfig = originalCfg
-		walletService.Config = originalWalletCfg
-		walletWorkflowClient = originalWorkflowClient
-		walletWorkflowCloser = originalWorkflowCloser
 		walletPublicClient = originalWalletPublicClient
 		walletAdminClient = originalWalletAdminClient
 		walletLedgerGRPCConn = originalWalletLedgerConn
@@ -89,19 +153,12 @@ func configureWalletRouteTest(t *testing.T) {
 
 	noebsConfig.WalletEnabled = true
 	noebsConfig.WalletDefaultCurrency = "USD"
-	noebsConfig.JWTKey = "test-key"
 	noebsConfig.ServiceRole = string(serviceRoleWalletAPI)
 	workloadVerifier = roleTestWorkloadVerifier{}
-	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
-	auth.Init()
-	walletService.Config = noebsConfig
-	walletWorkflowClient = walletRouteTemporalClient{}
-	walletWorkflowCloser = nil
 
 	testGRPCListener = bufconn.Listen(1024 * 1024)
 	testGRPCServer = grpc.NewServer(grpc.UnaryInterceptor(requireAuthForWalletMethods))
-	walletSrv := walletgrpc.NewServer(walletService)
-	walletSrv.TemporalClient = walletRouteTemporalClient{}
+	walletSrv := newWalletRouteLedger()
 	walletv1.RegisterWalletPublicServiceServer(testGRPCServer, walletSrv)
 	walletv1.RegisterWalletAdminServiceServer(testGRPCServer, walletSrv)
 	go func() {
@@ -120,15 +177,6 @@ func configureWalletRouteTest(t *testing.T) {
 	walletLedgerGRPCConn = conn
 	walletPublicClient = walletv1.NewWalletPublicServiceClient(conn)
 	walletAdminClient = walletv1.NewWalletAdminServiceClient(conn)
-}
-
-func walletToken(t *testing.T, userID int64) string {
-	t.Helper()
-	token, err := auth.GenerateJWT(userID, "0990000000", noebsConfig.DefaultTenantID)
-	if err != nil {
-		t.Fatalf("GenerateJWT() error = %v", err)
-	}
-	return token
 }
 
 func setWalletGatewayIdentity(req *http.Request, userID int64) {
@@ -192,37 +240,6 @@ func TestWalletRoutesRequireExplicitCurrency(t *testing.T) {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 	_ = resp.Body.Close()
-}
-
-func TestWalletRoutesAreProxiedByAPIGateway(t *testing.T) {
-	configureWalletRouteTest(t)
-	configureGatewayProxyForTest(t)
-	adminKey := setAdminKeyForTest(t)
-
-	token := walletToken(t, 42)
-	route := GetMainEngine()
-
-	tests := []struct {
-		name   string
-		method string
-		path   string
-	}{
-		{name: "user wallet", method: http.MethodPost, path: "/wallet/wallets"},
-		{name: "wallet methods", method: http.MethodGet, path: "/wallet/methods"},
-		{name: "wallet admin", method: http.MethodGet, path: "/admin/wallet?tenant_id=" + url.QueryEscape(noebsConfig.DefaultTenantID)},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
-			req.Header.Set("Authorization", "Bearer "+token)
-			req.Header.Set("X-Admin-Key", adminKey)
-			resp, err := route.Test(req, routeTestTimeout)
-			if err != nil {
-				t.Fatalf("route.Test() error = %v", err)
-			}
-			assertGatewayProxied(t, resp)
-		})
-	}
 }
 
 func TestWalletRoutesTakePrecedenceOverGRPCGateway(t *testing.T) {
@@ -497,6 +514,7 @@ func TestWalletAdminRouteRequiresGatewayTenantIdentity(t *testing.T) {
 	route := GetMainEngine()
 	req := httptest.NewRequest(http.MethodGet, "/admin/wallet/", nil)
 	setGatewayAdminIdentityHeader(req)
+	req.Header.Del(gateway.GatewayTenantIDHeader)
 
 	resp, err := route.Test(req, routeTestTimeout)
 	if err != nil {

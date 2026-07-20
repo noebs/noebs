@@ -103,15 +103,21 @@ func (s *Store) CreateFeeConfig(ctx context.Context, cfg FeeConfig) (*FeeConfig,
 	if cfg.MaxFee.Valid && cfg.MaxFee.Int64 < cfg.MinFee {
 		return nil, ErrInvalidAmount
 	}
+	if cfg.CreatedByOperatorID <= 0 {
+		return nil, ErrMissingOperatorID
+	}
 	db, err := s.ensureDB()
 	if err != nil {
+		return nil, err
+	}
+	if _, err := s.GetOperatorIdentityByID(ctx, cfg.CreatedByOperatorID); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	stmt := db.Rebind(`INSERT INTO fee_configs(
 		tenant_id, transaction_type, currency, tier_min, tier_max, percentage_fee,
-		flat_fee, min_fee, max_fee, fee_account_code, is_active, created_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		flat_fee, min_fee, max_fee, fee_account_code, is_active, created_by_operator_id, created_at
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 	var stored FeeConfig
 	if err := db.GetContext(ctx, &stored, stmt,
@@ -126,6 +132,7 @@ func (s *Store) CreateFeeConfig(ctx context.Context, cfg FeeConfig) (*FeeConfig,
 		cfg.MaxFee,
 		cfg.FeeAccountCode,
 		cfg.IsActive,
+		cfg.CreatedByOperatorID,
 		now,
 	); err != nil {
 		return nil, err

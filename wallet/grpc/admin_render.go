@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/a-h/templ"
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	"github.com/adonese/noebs/internal/backofficeauth"
+	"github.com/adonese/noebs/internal/tenantauth"
 	"github.com/adonese/noebs/parsing"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -32,12 +33,21 @@ import (
 const adminHTMLContentType = "text/html; charset=utf-8"
 
 func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
-	md, _ := metadata.FromIncomingContext(ctx)
-	if err := s.requireAdmin(md); err != nil {
-		return nil, err
-	}
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
+	}
+	md, _ := metadata.FromIncomingContext(ctx)
+	principal, err := s.requireAdminPermission(md, adminWalletActionPermission(req.Action))
+	if err != nil {
+		return nil, err
+	}
+	var operator walletstore.OperatorIdentity
+	if isAdminWalletMutation(req.Action) {
+		resolved, err := s.Service.Store.ResolveOperatorIdentity(ctx, principal.Issuer, principal.Subject)
+		if err != nil {
+			return nil, mapError(err)
+		}
+		operator = *resolved
 	}
 	switch req.Action {
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD:
@@ -57,23 +67,55 @@ func (s *Server) RenderWalletAdmin(ctx context.Context, req *walletv1.AdminWalle
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_MANUAL_TRANSFERS:
 		return s.renderAdminManualTransfers(ctx, req)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER:
-		return s.submitAdminManualTransfer(ctx, req)
+		return s.submitAdminManualTransfer(ctx, req, operator)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_MANUAL_TRANSFER_DETAIL:
 		return s.renderAdminManualTransferDetail(ctx, req)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_FEES:
 		return s.renderAdminFees(ctx, req)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE:
-		return s.createAdminFee(ctx, req)
+		return s.createAdminFee(ctx, req, operator)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_RATES:
 		return s.renderAdminRates(ctx, req)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE:
-		return s.createAdminRate(ctx, req)
+		return s.createAdminRate(ctx, req, operator)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER:
-		return s.signalAdminDecision(ctx, req, true)
+		return s.signalAdminDecision(ctx, req, operator, true)
 	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_REJECT_TRANSFER:
-		return s.signalAdminDecision(ctx, req, false)
+		return s.signalAdminDecision(ctx, req, operator, false)
 	default:
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDecision.Error())
+	}
+}
+
+func isAdminWalletMutation(action walletv1.AdminWalletAction) bool {
+	switch action {
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER,
+		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE,
+		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE,
+		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER,
+		walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_REJECT_TRANSFER:
+		return true
+	default:
+		return false
+	}
+}
+
+func adminWalletActionPermission(action walletv1.AdminWalletAction) tenantauth.Permission {
+	switch action {
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_AUDIT_EVENTS:
+		return tenantauth.PermissionWalletAuditRead
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER:
+		return tenantauth.PermissionWalletManualCreate
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE:
+		return tenantauth.PermissionWalletFeesWrite
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE:
+		return tenantauth.PermissionWalletRatesWrite
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER:
+		return tenantauth.PermissionWalletWorkflowApprove
+	case walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_REJECT_TRANSFER:
+		return tenantauth.PermissionWalletWorkflowReject
+	default:
+		return tenantauth.PermissionWalletRead
 	}
 }
 
@@ -295,14 +337,6 @@ func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.A
 		Limit:        limit,
 		Offset:       offset,
 	}
-	requestedByStr := adminQuery(req, "requested_by")
-	if requestedByStr != "" {
-		requestedBy, err := strconv.ParseInt(requestedByStr, 10, 64)
-		if err != nil || requestedBy <= 0 {
-			return nil, status.Error(codes.InvalidArgument, "invalid requested_by")
-		}
-		filter.RequestedBy = requestedBy
-	}
 	start, end, startStr, endStr, err := adminTimeRange(req.Query)
 	if err != nil {
 		return nil, err
@@ -320,7 +354,6 @@ func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.A
 			Status:       filter.Status,
 			TransferType: filter.TransferType,
 			WalletID:     filter.WalletID,
-			RequestedBy:  requestedByStr,
 			Start:        startStr,
 			End:          endStr,
 			Limit:        limit,
@@ -330,17 +363,13 @@ func (s *Server) renderAdminManualTransfers(ctx context.Context, req *walletv1.A
 	}))
 }
 
-func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
+func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.AdminWalletRequest, operator walletstore.OperatorIdentity) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
 	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	amount, err := adminPositiveInt64(form, "amount", walletstore.ErrInvalidAmount)
-	if err != nil {
-		return nil, err
-	}
-	requestedBy, err := adminPositiveInt64(form, "requested_by", walletstore.ErrMissingRequesterID)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +425,7 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Ad
 		Amount:                 amount,
 		Currency:               currency,
 		Reason:                 reason,
-		RequestedBy:            requestedBy,
+		RequestedByOperatorID:  operator.ID,
 		PSPProvider:            adminForm(form, "psp_provider"),
 		PSPReference:           adminForm(form, "psp_reference"),
 		ApprovalTimeoutSeconds: approvalTimeoutSeconds,
@@ -479,7 +508,7 @@ func (s *Server) renderAdminFees(ctx context.Context, req *walletv1.AdminWalletR
 	}))
 }
 
-func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
+func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRequest, operator walletstore.OperatorIdentity) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
 	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
@@ -523,17 +552,18 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.AdminWalletRe
 		return nil, err
 	}
 	_, err = s.Service.Store.CreateFeeConfig(ctx, walletstore.FeeConfig{
-		TenantID:        tenantID,
-		TransactionType: txType,
-		Currency:        currency,
-		TierMin:         tierMin,
-		TierMax:         tierMax,
-		PercentageFee:   percentageFee,
-		FlatFee:         flatFee,
-		MinFee:          minFee,
-		MaxFee:          maxFee,
-		FeeAccountCode:  sql.NullString{String: feeAccount, Valid: feeAccount != ""},
-		IsActive:        isActive,
+		TenantID:            tenantID,
+		TransactionType:     txType,
+		Currency:            currency,
+		TierMin:             tierMin,
+		TierMax:             tierMax,
+		PercentageFee:       percentageFee,
+		FlatFee:             flatFee,
+		MinFee:              minFee,
+		MaxFee:              maxFee,
+		FeeAccountCode:      sql.NullString{String: feeAccount, Valid: feeAccount != ""},
+		IsActive:            isActive,
+		CreatedByOperatorID: operator.ID,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -579,7 +609,7 @@ func (s *Server) renderAdminRates(ctx context.Context, req *walletv1.AdminWallet
 	}))
 }
 
-func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletRequest) (*walletv1.AdminWalletResponse, error) {
+func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletRequest, operator walletstore.OperatorIdentity) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
 	tenantID, err := adminTenantIDFromContext(ctx)
 	if err != nil {
@@ -609,10 +639,6 @@ func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletR
 		}
 		spread = decimal.NullDecimal{Decimal: value, Valid: true}
 	}
-	setBy := adminForm(form, "set_by")
-	if setBy == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingSetBy.Error())
-	}
 	effectiveFrom := time.Now().UTC()
 	if raw := adminForm(form, "effective_from"); raw != "" {
 		parsed, err := time.Parse(time.RFC3339, raw)
@@ -622,14 +648,14 @@ func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletR
 		effectiveFrom = parsed
 	}
 	_, err = s.Service.Store.CreateExchangeRate(ctx, walletstore.ExchangeRate{
-		TenantID:      tenantID,
-		BaseCurrency:  base,
-		QuoteCurrency: quote,
-		BuyRate:       buyRate,
-		SellRate:      sellRate,
-		Spread:        spread,
-		SetBy:         setBy,
-		EffectiveFrom: effectiveFrom,
+		TenantID:        tenantID,
+		BaseCurrency:    base,
+		QuoteCurrency:   quote,
+		BuyRate:         buyRate,
+		SellRate:        sellRate,
+		Spread:          spread,
+		SetByOperatorID: operator.ID,
+		EffectiveFrom:   effectiveFrom,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -637,7 +663,7 @@ func (s *Server) createAdminRate(ctx context.Context, req *walletv1.AdminWalletR
 	return adminRedirect("/admin/wallet/rates", tenantID), nil
 }
 
-func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWalletRequest, approved bool) (*walletv1.AdminWalletResponse, error) {
+func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWalletRequest, operator walletstore.OperatorIdentity, approved bool) (*walletv1.AdminWalletResponse, error) {
 	form := req.Form
 	workflowID := strings.TrimSpace(adminPath(req, "workflow_id"))
 	if workflowID == "" {
@@ -646,10 +672,6 @@ func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWal
 	kind := adminForm(form, "kind")
 	if kind == "" {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingDecision.Error())
-	}
-	approverID, err := adminPositiveInt64(form, "approver_id", walletstore.ErrMissingApproverID)
-	if err != nil {
-		return nil, err
 	}
 	proof := adminForm(form, "proof_of_payment")
 	if approved && proof == "" {
@@ -666,20 +688,14 @@ func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWal
 
 	switch kind {
 	case "manual_transfer":
-		_, err = s.SignalManualTransferDecision(ctx, &walletv1.ManualTransferDecisionRequest{
-			WorkflowId:     workflowID,
-			Approved:       approved,
-			ApproverId:     approverID,
-			Reason:         reason,
-			ProofOfPayment: proof,
+		err = s.signalManualTransferDecision(ctx, manualTransferDecisionCommand{
+			WorkflowID: workflowID, Approved: approved, OperatorID: operator.ID,
+			Reason: reason, ProofOfPayment: proof,
 		})
 	case "withdrawal":
-		_, err = s.SignalWithdrawalApproval(ctx, &walletv1.WithdrawalApprovalRequest{
-			WorkflowId:     workflowID,
-			Approved:       approved,
-			ApproverId:     approverID,
-			Reason:         reason,
-			ProofOfPayment: proof,
+		err = s.signalWithdrawalApproval(ctx, withdrawalApprovalCommand{
+			WorkflowID: workflowID, Approved: approved, OperatorID: operator.ID,
+			Reason: reason, ProofOfPayment: proof,
 		})
 	default:
 		return nil, status.Error(codes.InvalidArgument, "unsupported decision kind")
@@ -691,6 +707,11 @@ func (s *Server) signalAdminDecision(ctx context.Context, req *walletv1.AdminWal
 }
 
 func adminHTML(ctx context.Context, component templ.Component) (*walletv1.AdminWalletResponse, error) {
+	csrfToken, err := adminCSRFTokenFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx = wallethandler.WithAdminCSRFToken(ctx, csrfToken)
 	var buf bytes.Buffer
 	if err := component.Render(ctx, &buf); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -703,11 +724,23 @@ func adminHTML(ctx context.Context, component templ.Component) (*walletv1.AdminW
 }
 
 func adminRedirect(path, tenantID string) *walletv1.AdminWalletResponse {
-	path += "?tenant_id=" + url.QueryEscape(tenantID)
+	path = "/backoffice/t/" + url.PathEscape(tenantID) + "/wallet" + strings.TrimPrefix(path, "/admin/wallet")
 	return &walletv1.AdminWalletResponse{
 		StatusCode:       http.StatusSeeOther,
 		RedirectLocation: path,
 	}
+}
+
+func adminCSRFTokenFromContext(ctx context.Context) (string, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "missing back-office CSRF context")
+	}
+	values := md.Get(strings.ToLower(backofficeauth.HeaderCSRFToken))
+	if len(values) != 1 || backofficeauth.ValidateCSRFToken(values[0]) != nil {
+		return "", status.Error(codes.Unauthenticated, "missing back-office CSRF context")
+	}
+	return values[0], nil
 }
 
 func adminTenantIDFromContext(ctx context.Context) (string, error) {

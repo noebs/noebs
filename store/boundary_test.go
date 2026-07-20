@@ -33,23 +33,3 @@ func TestOpaqueCardStoreHasNoGenericRailSecretResolver(t *testing.T) {
 		}
 	}
 }
-
-func TestLegacyPANAndIPINPersistenceHelpersStayRemoved(t *testing.T) {
-	data, err := os.ReadFile("token_sensitive.go")
-	if err != nil {
-		t.Fatalf("read token_sensitive.go: %v", err)
-	}
-	source := string(data)
-	for _, token := range []string{
-		"panLookupClause",
-		"panLookupArgs",
-		"encryptCardFields",
-		"hydrateCardFields",
-		"updateCardIPIN",
-		"encryptCacheCardFields",
-	} {
-		if strings.Contains(source, token) {
-			t.Fatalf("token_sensitive.go contains retired helper %q", token)
-		}
-	}
-}

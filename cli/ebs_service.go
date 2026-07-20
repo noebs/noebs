@@ -32,7 +32,6 @@ var storeSvc *store.Store
 var consumerService consumer.Service
 var dataConfigs ebs_fields.Configs
 var service consumer.Service
-var auth gateway.JWTAuth
 var adminReportingService adminreporting.Service
 var dashService dashboard.Service
 var merchantServices = merchant.Service{}
@@ -80,27 +79,39 @@ func main() {
 		}
 		return
 	}
+	if isRenderKeycloakTransportCACommand() {
+		if err := renderKeycloakTransportCACommand(); err != nil {
+			logrusLogger.Fatalf("render Keycloak transport CA failed: %v", err)
+		}
+		return
+	}
+	if isRenderKeycloakBootstrapSecretsCommand() {
+		if err := renderKeycloakBootstrapSecretsCommand(); err != nil {
+			logrusLogger.Fatalf("render Keycloak bootstrap secrets failed: %v", err)
+		}
+		return
+	}
 	if isPrepareKubernetesReleaseCommand() {
 		if err := prepareKubernetesReleaseCommand(); err != nil {
 			logrusLogger.Fatalf("prepare kubernetes release failed: %v", err)
 		}
 		return
 	}
-	if isRenderKubernetesReleaseInputTemplateCommand() {
-		if err := renderKubernetesReleaseInputTemplateCommand(); err != nil {
-			logrusLogger.Fatalf("render kubernetes release input template failed: %v", err)
-		}
-		return
-	}
-	if isAuditKubernetesReleaseInputsCommand() {
-		if err := auditKubernetesReleaseInputsCommand(); err != nil {
-			logrusLogger.Fatalf("audit kubernetes release inputs failed: %v", err)
-		}
-		return
-	}
 	if isReconcileKeycloakCommand() {
 		if err := reconcileKeycloakCommand(); err != nil {
 			logrusLogger.Fatalf("reconcile Keycloak failed: %v", err)
+		}
+		return
+	}
+	if isAssignKeycloakMembershipsCommand() {
+		if err := assignKeycloakMembershipsCommand(); err != nil {
+			logrusLogger.Fatalf("assign Keycloak memberships failed: %v", err)
+		}
+		return
+	}
+	if isLookupKeycloakSubjectCommand() {
+		if err := lookupKeycloakSubjectCommand(); err != nil {
+			logrusLogger.Fatalf("lookup Keycloak subject failed: %v", err)
 		}
 		return
 	}
@@ -140,6 +151,12 @@ func main() {
 	if role.cleansWorkloadAuthNonces() {
 		if err := cleanupExpiredWorkloadNonces(context.Background()); err != nil {
 			logrusLogger.Fatalf("workload nonce cleanup failed: %v", err)
+		}
+		return
+	}
+	if role.cleansGatewayAuthSessions() {
+		if err := cleanupExpiredGatewayAuth(context.Background()); err != nil {
+			logrusLogger.Fatalf("gateway authentication cleanup failed: %v", err)
 		}
 		return
 	}

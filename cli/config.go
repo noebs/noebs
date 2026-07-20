@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +19,7 @@ import (
 	"github.com/adonese/noebs/ebs_fields"
 	"github.com/adonese/noebs/internal/eventing"
 	"github.com/adonese/noebs/internal/httpclient"
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/merchant"
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
@@ -35,7 +35,6 @@ import (
 	"github.com/gofiber/contrib/otelfiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/client"
 	temporalworker "go.temporal.io/sdk/worker"
@@ -47,7 +46,30 @@ import (
 type chatGatewayIdentityContextKey struct{}
 
 type chatGatewayIdentity struct {
-	gateway.UserIdentity
+	gateway.PrincipalIdentity
+}
+
+var errRetiredHumanAuthConfig = errors.New("retired human authentication config")
+
+const applicationTenantCatalogPath = "/app/tenant-catalog.yaml"
+
+var (
+	tenantCatalogFilePath = applicationTenantCatalogPath
+	runtimeTenantCatalog  tenantcatalog.Catalog
+)
+
+var retiredHumanAuthConfigKeys = []string{
+	"jwt_secret",
+	"admin_key",
+	"admin_user",
+	"admin_password",
+	"sms_key",
+	"sms_sender",
+	"sms_gateway",
+	"sms_message",
+	"google_client_id",
+	"google_client_secret",
+	"google_redirect_url",
 }
 
 func isTestRun() bool {
@@ -127,6 +149,9 @@ func loadConfig() ([]byte, error) {
 	if noebs == nil {
 		noebs = map[string]interface{}{}
 	}
+	if err := rejectRetiredHumanAuthConfig(noebs); err != nil {
+		return nil, err
+	}
 	if err := applyServiceDatabaseURL(noebs); err != nil {
 		return nil, err
 	}
@@ -141,6 +166,15 @@ func loadConfig() ([]byte, error) {
 
 	logrusLogger.Printf("Loaded config from %s", configPath)
 	return payload, nil
+}
+
+func rejectRetiredHumanAuthConfig(noebs map[string]interface{}) error {
+	for _, key := range retiredHumanAuthConfigKeys {
+		if _, exists := noebs[key]; exists {
+			return fmt.Errorf("%w: noebs.%s", errRetiredHumanAuthConfig, key)
+		}
+	}
+	return nil
 }
 
 func buildPSPDeps(pspStore *walletstore.Store, secrets map[string]interface{}) (*walletpsp.Registry, *walletpsp.Loader, error) {
@@ -340,8 +374,7 @@ func roleNeedsConsumerService(role serviceRole) bool {
 	return role == serviceRoleIdentityAuth ||
 		role == serviceRoleCardVault ||
 		role == serviceRoleEBSAdapter ||
-		role == serviceRoleNotification ||
-		role == serviceRoleBeneficiary
+		role == serviceRoleNotification
 }
 
 func roleNeedsDashboardService(role serviceRole) bool {
@@ -401,9 +434,7 @@ func registerAdminReportingRoutes(route *fiber.App, tenantIdentity fiber.Handler
 	dashboardGet("/dashboard/all", dashService.GetAll)
 	dashboardGet("/dashboard/all/:id", dashService.GetID)
 	dashboardGet("/dashboard/count", dashService.TransactionsCount)
-	dashboardGet("/dashboard/settlement", dashService.DailySettlement)
 	dashboardGet("/dashboard/merchant", dashService.MerchantTransactionsEndpoint)
-	dashboardGet("/dashboard/merchant/:id", dashService.MerchantViews)
 	dashboardGet("/dashboard/status", dashService.QRStatus)
 	dashboardGet("/dashboard/test_browser", dashService.IndexPage)
 	dashboardGet("/dashboard/stream", dashService.Stream)
@@ -413,9 +444,6 @@ func registerNotificationChatRoutes(route *fiber.App, tenantIdentity fiber.Handl
 	route.Get("/ws", userIdentity, chatWebSocketHandler(hub))
 
 	consumerhandler.RegisterNotificationAdminInternalRoutes(route.Group("/internal/notification-chat", tenantIdentity), consumerHandler)
-
-	cons := route.Group("/consumer", userIdentity)
-	consumerhandler.RegisterNotificationRoutes(cons, consumerHandler)
 }
 
 func chatWebSocketHandler(chatHub *chat.Hub) fiber.Handler {
@@ -429,10 +457,6 @@ func chatWebSocketHandler(chatHub *chat.Hub) fiber.Handler {
 			chat.ServeWs(chatHub, w, r)
 		})(c)
 	}
-}
-
-func registerConsumerBeneficiaryRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	consumerhandler.RegisterBeneficiaryRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
 func chatClientIdentityFromGatewayIdentity(r *http.Request) (chat.ClientIdentity, error) {
@@ -453,27 +477,16 @@ func chatGatewayIdentityFromFiber(c *fiber.Ctx) (chatGatewayIdentity, error) {
 	if c == nil {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
-	tenantID, ok := c.Locals("tenant_id").(string)
-	if !ok {
+	identity, ok := gateway.InternalPrincipalIdentity(c)
+	if !ok || identity.UserID <= 0 {
 		return chatGatewayIdentity{}, chat.ErrUnauthorized
 	}
-	userID, ok := c.Locals("user_id").(int64)
-	if !ok {
-		return chatGatewayIdentity{}, chat.ErrUnauthorized
-	}
-	mobile, ok := c.Locals("mobile").(string)
-	if !ok || strings.TrimSpace(mobile) == "" {
-		return chatGatewayIdentity{}, chat.ErrUnauthorized
-	}
-	identity, err := gateway.ParseInternalUserIdentity(tenantID, strconv.FormatInt(userID, 10), mobile)
-	if err != nil {
-		return chatGatewayIdentity{}, chat.ErrUnauthorized
-	}
-	return chatGatewayIdentity{UserIdentity: identity}, nil
+	return chatGatewayIdentity{PrincipalIdentity: identity}, nil
 }
 
-func registerIdentityAuthRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, adminIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
-	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", tenantIdentity), consumerHandler)
+func registerIdentityAuthRoutes(route *fiber.App, principalIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+	consumerhandler.RegisterIdentityInternalRoutes(route.Group("/internal/identity-auth", principalIdentity), consumerHandler)
+	consumerhandler.RegisterIdentityPrincipalRoutes(route.Group("/consumer", principalIdentity), consumerHandler)
 	consumerhandler.RegisterIdentityAuthedRoutes(route.Group("/consumer", userIdentity), consumerHandler)
 }
 
@@ -484,9 +497,8 @@ func registerCardVaultRoutes(route *fiber.App, tenantIdentity fiber.Handler, use
 	consumerhandler.RegisterCardVaultAdminInternalRoutes(route.Group("/internal/card-vault", tenantIdentity), consumerHandler)
 }
 
-func registerEBSAdapterRoutes(route *fiber.App, tenantIdentity fiber.Handler, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
+func registerEBSAdapterRoutes(route *fiber.App, userIdentity fiber.Handler, consumerHandler *consumerhandler.Handler) {
 	cons := route.Group("/consumer")
-	consumerhandler.RegisterEBSAdapterPublicRoutes(cons.Group("", tenantIdentity), consumerHandler)
 	consumerhandler.RegisterEBSAdapterAuthedRoutes(cons.Group("", userIdentity), consumerHandler)
 }
 
@@ -513,8 +525,9 @@ func GetMainEngine() *fiber.App {
 	route := fiber.New(fiber.Config{})
 	route.Use(gateway.RequestID())
 	tenantIdentity := gateway.InternalTenantIdentityMiddleware()
+	principalIdentity := gateway.InternalPrincipalIdentityMiddleware()
 	userIdentity := gateway.InternalUserIdentityMiddleware()
-	adminIdentity := gateway.InternalAdminIdentityMiddleware()
+	adminIdentity := principalIdentity
 	if otelEnabled {
 		route.Use(otelfiber.Middleware(
 			otelfiber.WithServerName(noebsConfig.OtelServiceName),
@@ -529,24 +542,13 @@ func GetMainEngine() *fiber.App {
 	route.Use(gateway.Instrumentation())
 	route.Use(gateway.RequestLogger(logrusLogger, logSampling))
 	route.Use(gateway.NoebsCors(noebsConfig.Cors))
+	registerAPIGatewayHealthRoute(route, role)
 	if roleReceivesSignedHTTP(role) {
 		route.Get(internalHealthPath, func(c *fiber.Ctx) error {
 			return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
 		})
 	}
 
-	adminGuard := gateway.RequireAdmin(gateway.AdminAuthConfig{
-		Key:      noebsConfig.AdminKey,
-		User:     noebsConfig.AdminUser,
-		Password: noebsConfig.AdminPassword,
-		Debug:    noebsConfig.IsDebug,
-	})
-	route.Get("/test", func(c *fiber.Ctx) error {
-		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
-	})
-	if role == serviceRoleAPIGateway {
-		route.Get("/metrics", adminGuard, adaptor.HTTPHandler(promhttp.Handler()))
-	}
 	if roleReceivesSignedHTTP(role) {
 		route.Use(signedWorkloadBoundary(role, workloadVerifier))
 	}
@@ -565,7 +567,7 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleIdentityAuth {
 		consumerHandler := buildConsumerHandler()
-		registerIdentityAuthRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
+		registerIdentityAuthRoutes(route, principalIdentity, userIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleCardVault {
@@ -575,7 +577,7 @@ func GetMainEngine() *fiber.App {
 	}
 	if role == serviceRoleEBSAdapter {
 		consumerHandler := buildConsumerHandler()
-		registerEBSAdapterRoutes(route, tenantIdentity, userIdentity, consumerHandler)
+		registerEBSAdapterRoutes(route, userIdentity, consumerHandler)
 		return route
 	}
 	if role == serviceRoleAdminReporting {
@@ -587,11 +589,6 @@ func GetMainEngine() *fiber.App {
 		registerNotificationChatRoutes(route, tenantIdentity, userIdentity, adminIdentity, consumerHandler)
 		return route
 	}
-	if role == serviceRoleBeneficiary {
-		consumerHandler := buildConsumerHandler()
-		registerConsumerBeneficiaryRoutes(route, userIdentity, consumerHandler)
-		return route
-	}
 	if role == serviceRoleWalletAPI {
 		registerWalletAPIRoutes(route, tenantIdentity, userIdentity, adminIdentity)
 		return route
@@ -599,7 +596,16 @@ func GetMainEngine() *fiber.App {
 	if role != serviceRoleAPIGateway {
 		logrusLogger.Fatalf("service role %s does not own HTTP routes", role)
 	}
-	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, auth, adminGuard); err != nil {
+	if backofficeAuthHandler == nil {
+		logrusLogger.Fatal("api-gateway back-office authentication is not initialized")
+	}
+	if err := registerBackofficeLifecycleRoutes(route, backofficeAuthHandler); err != nil {
+		logrusLogger.Fatalf("error registering back-office authentication routes: %v", err)
+	}
+	if err := registerBackofficeProxyRoutes(route, noebsConfig, backofficeAuthHandler); err != nil {
+		logrusLogger.Fatalf("error registering back-office proxy routes: %v", err)
+	}
+	if err := registerAPIGatewayProxyRoutes(route, noebsConfig, runtimeTenantCatalog); err != nil {
 		logrusLogger.Fatalf("error in api gateway service discovery: %v", err)
 	}
 
@@ -608,7 +614,18 @@ func GetMainEngine() *fiber.App {
 	return route
 }
 
+func registerAPIGatewayHealthRoute(route *fiber.App, role serviceRole) {
+	if role != serviceRoleAPIGateway {
+		return
+	}
+	route.Get("/test", func(c *fiber.Ctx) error {
+		return c.Status(http.StatusOK).JSON(fiber.Map{"message": true})
+	})
+}
+
 var initOnce sync.Once
+
+var openServiceDatabase = store.OpenFromConfigWithCACertificate
 
 func ensureInit() {
 	initOnce.Do(initConfig)
@@ -651,6 +668,16 @@ func initConfig() {
 	if err := validateRoleDatabaseConfig(role, noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver); err != nil {
 		logrusLogger.Fatalf("error in runtime database config: %v", err)
 	}
+	runtimeTenantCatalog = tenantcatalog.Catalog{}
+	if role == serviceRoleAPIGateway {
+		runtimeTenantCatalog, err = tenantcatalog.LoadFile(tenantCatalogFilePath)
+		if err != nil {
+			logrusLogger.Fatalf("error loading API tenant catalog: %v", err)
+		}
+		if _, err := runtimeTenantCatalog.Require(tenantID); err != nil {
+			logrusLogger.Fatalf("default tenant is not in the API tenant catalog: %v", err)
+		}
+	}
 	if err := validateRoleRuntimeConfig(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error in runtime service config: %v", err)
 	}
@@ -666,7 +693,7 @@ func initConfig() {
 		logrusLogger.Fatalf("error initializing otel: %v", err)
 	}
 	if role.opensDatabase() {
-		database, err = store.OpenFromConfigWithCACertificate(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver, noebsConfig.DatabaseCACertificate)
+		database, err = openServiceDatabase(noebsConfig.DatabaseURL, noebsConfig.DatabaseDriver, noebsConfig.DatabaseCACertificate)
 		if err != nil {
 			logrusLogger.Fatalf("error in connecting to db: %v", err)
 		}
@@ -674,15 +701,19 @@ func initConfig() {
 		migrateCtx, cancelMigrate := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancelMigrate()
 		if migrationScope, ok := role.migrationScope(); ok {
-			if err := store.MigrateScope(migrateCtx, database, tenantID, migrationScope); err != nil {
+			if err := store.MigrateScope(migrateCtx, database, migrationScope); err != nil {
 				logrusLogger.Fatalf("error in migrations: %v", err)
 			}
-			if migrationScope != store.MigrationScopeWorkloadAuth {
-				if err := storeSvc.EnsureTenant(migrateCtx, tenantID); err != nil {
-					logrusLogger.Fatalf("error ensuring tenant: %v", err)
+			if migrationScope != store.MigrationScopeWorkloadAuth && migrationScope != store.MigrationScopeGatewayAuth {
+				catalog, err := tenantcatalog.LoadFile(tenantCatalogFilePath)
+				if err != nil {
+					logrusLogger.Fatalf("error loading tenant catalog: %v", err)
 				}
-				if err := ensureNoReservedTenant(migrateCtx, storeSvc); err != nil {
-					logrusLogger.Fatalf("error validating tenants: %v", err)
+				if _, err := catalog.Require(tenantID); err != nil {
+					logrusLogger.Fatalf("default tenant is not in the tenant catalog: %v", err)
+				}
+				if err := storeSvc.ProvisionTenantCatalog(migrateCtx, catalog); err != nil {
+					logrusLogger.Fatalf("error provisioning tenant catalog: %v", err)
 				}
 			}
 		} else {
@@ -713,6 +744,9 @@ func initConfig() {
 	if err := initOIDCVerifier(role, noebsConfig); err != nil {
 		logrusLogger.Fatalf("error initializing OIDC authentication: %v", err)
 	}
+	if err := initBackofficeAuth(role, noebsConfig, database, runtimeTenantCatalog); err != nil {
+		logrusLogger.Fatalf("error initializing back-office authentication: %v", err)
+	}
 
 	// Initialize sentry
 	// sentry.Init(sentry.ClientOptions{
@@ -722,8 +756,6 @@ func initConfig() {
 	// 	// We recommend adjusting this value in production,
 	// 	TracesSampleRate: 1.0,
 	// })
-	auth = gateway.JWTAuth{NoebsConfig: noebsConfig}
-	auth.Init()
 	if role.startsChat() && database != nil && database.DB != nil {
 		chatCfg := chat.DefaultHubConfig()
 		chatCfg.MaxUnreadMessages = 1000

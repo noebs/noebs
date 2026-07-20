@@ -13,12 +13,6 @@ const (
 	KEY             = "publickey_"
 )
 
-type specialPaymentQueries struct {
-	ID     string `form:"id,omitempty" binding:"required"`    //biller specific ids
-	Token  string `form:"token,omitempty" binding:"required"` //noebs payment token
-	IsJSON bool   `form:"json,omitempty"`
-}
-
 type cashoutFields struct {
 	Name     string   `json:"name,omitempty" binding:"required"`
 	Endpoint string   `json:"endpoint,omitempty" binding:"required"`
@@ -47,20 +41,6 @@ type cashout struct {
 	Amount int    `json:"amount" binding:"required"`
 	ID     string `json:"id" binding:"required"`
 	Card   string `json:"pan"`
-}
-
-type paymentResponse struct {
-	TransactionID string `json:"transaction_id"`
-	ebs_fields.EBSResponse
-}
-
-func (pr *paymentResponse) MarshalBinary() ([]byte, error) {
-	return json.Marshal(pr)
-}
-
-func (pr *paymentResponse) UnmarshalBinary(data []byte) error {
-	// convert data to yours, let's assume its json data
-	return json.Unmarshal(data, pr)
 }
 
 type validationError struct {

@@ -8,6 +8,7 @@ import (
 
 	gateway "github.com/adonese/noebs/apigateway"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
+	"github.com/adonese/noebs/internal/tenantauth"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"google.golang.org/grpc/codes"
@@ -18,7 +19,7 @@ import (
 func TestEnsureWalletRequiresExplicitCurrency(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
 
-	_, err := server.EnsureWallet(context.Background(), &walletv1.EnsureWalletRequest{
+	_, err := server.EnsureWalletPublic(walletGatewayIdentityContext(42, "tenant"), &walletv1.EnsureWalletRequest{
 		TenantId: "tenant",
 		UserId:   42,
 	})
@@ -30,18 +31,18 @@ func TestEnsureWalletRequiresExplicitCurrency(t *testing.T) {
 	}
 }
 
-func TestRenderWalletAdminRequiresExplicitTenant(t *testing.T) {
+func TestRenderWalletAdminRejectsPrincipalWithoutTenant(t *testing.T) {
 	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
-	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
+	ctx := metadata.NewIncomingContext(
+		context.Background(),
+		deletePrincipalMetadata(operatorMetadata(tenantauth.PermissionWalletRead), gateway.GatewayTenantIDHeader),
+	)
 
 	_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{
 		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
 	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
-	}
-	if status.Convert(err).Message() != walletstore.ErrMissingTenantID.Error() {
-		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingTenantID.Error())
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
 	}
 }
 
@@ -53,6 +54,61 @@ func TestRenderWalletAdminRequiresAdminAuth(t *testing.T) {
 	})
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
+	}
+}
+
+func TestRenderWalletAdminRequiresExactActionPermission(t *testing.T) {
+	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
+	tests := []struct {
+		name       string
+		action     walletv1.AdminWalletAction
+		permission tenantauth.Permission
+	}{
+		{
+			name:       "dashboard",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_DASHBOARD,
+			permission: tenantauth.PermissionWalletAuditRead,
+		},
+		{
+			name:       "audit",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_LIST_AUDIT_EVENTS,
+			permission: tenantauth.PermissionWalletRead,
+		},
+		{
+			name:       "manual transfer",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_SUBMIT_MANUAL_TRANSFER,
+			permission: tenantauth.PermissionWalletRead,
+		},
+		{
+			name:       "fee write",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_FEE,
+			permission: tenantauth.PermissionWalletRatesWrite,
+		},
+		{
+			name:       "rate write",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_CREATE_RATE,
+			permission: tenantauth.PermissionWalletFeesWrite,
+		},
+		{
+			name:       "approve",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER,
+			permission: tenantauth.PermissionWalletWorkflowReject,
+		},
+		{
+			name:       "reject",
+			action:     walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_REJECT_TRANSFER,
+			permission: tenantauth.PermissionWalletWorkflowApprove,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := metadata.NewIncomingContext(context.Background(), operatorMetadata(tt.permission))
+			_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{Action: tt.action})
+			if status.Code(err) != codes.PermissionDenied {
+				t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.PermissionDenied)
+			}
+		})
 	}
 }
 
@@ -73,29 +129,6 @@ func TestRenderWalletAdminUsesGatewayTenantMetadata(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.GetBody()), "context-tenant") {
 		t.Fatalf("admin dashboard body does not contain gateway tenant")
-	}
-}
-
-func TestRenderWalletAdminDecisionRequiresExplicitTenant(t *testing.T) {
-	server := NewServer(&wallet.Service{Store: &walletstore.Store{}})
-	ctx := metadata.NewIncomingContext(context.Background(), adminMetadata())
-
-	_, err := server.RenderWalletAdmin(ctx, &walletv1.AdminWalletRequest{
-		Action: walletv1.AdminWalletAction_ADMIN_WALLET_ACTION_APPROVE_TRANSFER,
-		Path: map[string]string{
-			"workflow_id": "manual-transfer-workflow",
-		},
-		Form: map[string]string{
-			"kind":             "manual_transfer",
-			"approver_id":      "42",
-			"proof_of_payment": "proof",
-		},
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.InvalidArgument)
-	}
-	if status.Convert(err).Message() != walletstore.ErrMissingTenantID.Error() {
-		t.Fatalf("status message = %q, want %q", status.Convert(err).Message(), walletstore.ErrMissingTenantID.Error())
 	}
 }
 
@@ -164,8 +197,8 @@ func TestAdminWithdrawalApprovalRejectsMalformedRawRequest(t *testing.T) {
 }
 
 func walletAdminTenantContext(tenantID string) context.Context {
-	return metadata.NewIncomingContext(context.Background(), metadata.Pairs(
-		strings.ToLower(gateway.GatewayTenantIDHeader), tenantID,
-		strings.ToLower(gateway.GatewayAdminIdentityHeader), gateway.GatewayAdminIdentityValue,
-	))
+	return metadata.NewIncomingContext(
+		context.Background(),
+		operatorMetadataForTenant(tenantID, tenantauth.PermissionWalletRead),
+	)
 }

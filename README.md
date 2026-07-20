@@ -1,4 +1,3 @@
-![CI](https://github.com/adonese/noebs/workflows/CI/badge.svg)
 **Keeping' it simple**
 
 # noebs
@@ -8,7 +7,7 @@ Open source payment gateway that implements all of EBS services.
 
 # About this project
 
-noebs has grown from a small side-project to a production system that is used by more than 5 payment companies in Sudan. 
+noebs began as a small side-project and is now an explicit microservice payment platform for Sudan's EBS rails.
 
 
 
@@ -38,9 +37,11 @@ Docker Compose is for local development only. Deployment goes through Kubernetes
 - Open `localhost:8081/test` in your browser to reach the API gateway
 
 ## Deployment
-Production deployment is Kubernetes/k3s plus Argo CD. The current host target is `100.102.164.34`, using `deploy/kubernetes/overlays/current-host` and the foundation OpenTofu root under `foundation/terraform`.
+The supported deployment is Kubernetes/k3s plus Argo CD. The current host target is `100.102.164.34`, using `deploy/kubernetes/overlays/current-host` and the foundation OpenTofu root under `foundation/terraform`.
 
 Noebs service roles are selected by mounted service config files, not environment variables. Service-owned secrets are separate SOPS material per microservice, and migrations run through service-specific Kubernetes Jobs before runtime Deployments.
+
+Images are built and verified locally from one reviewed commit using the [immutable alpha image release](docs/alpha-image-release.md). The resulting digest receipt, not GitHub automation or a mutable tag, is the release artifact pinned by GitOps.
 
 # This project philosophy
 noebs is not meant to be a full e-payment framework (e.g., unlike Morsal). It is meant as a generic e-payment gateway system. Currently, it implements EBS services, but we might add new gateway. Being such, adapts to Unix philosophy; doing one thing and do it good. Also, with our experience with embedded devices, working with authorizations and handling all of these headers and tokens (esp. JWT ones) has proven to be challenging as simply some of the older models cannot handle lengthy headers.
@@ -52,7 +53,7 @@ You can however have this system architecture, suppose that you're building a mo
 - there could be other services e.g., push notifications, SMS, 2FA and plenty of others.
 - logging and the reporting system.
 - rate limiting, geographical blocking and other API gateway protections.
-All of these will be implemented in a microservice architectural design pattern, and it is your decision to choose what services you want. A mobile payment provider can use our payment service inside their application whenever their users are requesting any transactions. _It is not our responsibility to authenticate your users_. This way, we can use this application in virtually any place. Our client consumers are held responsible for providing any kind of authentication for their requests.
+These capabilities run as explicit microservice roles. Human authentication is part of the supported runtime: Keycloak owns credentials, federation, tenant Organizations, memberships, and roles. The API gateway verifies Keycloak OIDC access tokens, requires one explicit active tenant, and propagates only its derived tenant-scoped principal through the signed internal workload boundary. Downstream services do not parse bearer tokens or accept caller-supplied tenant, role, user, or actor identity.
 
 
 ## Services we offer
@@ -61,13 +62,14 @@ All of these will be implemented in a microservice architectural design pattern,
 If YOU are interested in other services, please reach out and we will be more than happy to discuss them with you.
 
 ## Chat WebSocket
-The chat service runs over `/ws` and now requires a JWT in the `Authorization` header (token or `Bearer <token>`). Client IDs are derived from the JWT `mobile` claim.
+The chat service is exposed through the API gateway at `/ws`. The client must provide exactly one Keycloak access token and one canonical tenant selection. The gateway verifies membership in that Keycloak Organization, resolves the local profile projection, removes the public credentials, and signs the resulting principal for `notification-chat`.
 
 Example:
 
 ```
 GET /ws
-Authorization: Bearer <jwt>
+Authorization: Bearer <keycloak-access-token>
+X-Active-Tenant: <organization-alias>
 ```
 
 
@@ -93,18 +95,6 @@ We are extremely very gratitude to our sponsors:
 - ACTS 
 - SolusPay
 - G&I Engineering
-
-# Companies that are using noebs
-
-noebs powers and is used by these companies to process their payments:
-
-- ACTS
-- SolusPay
-- PACT
-- CAT
-- Sahil Ltd.
-- Tuti Tech Investment
-
 
 # Docs
 

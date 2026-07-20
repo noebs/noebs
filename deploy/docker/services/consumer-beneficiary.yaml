@@ -1,4 +1,0 @@
-noebs:
-  service_role: consumer-beneficiary
-  otel_service_name: consumer-beneficiary
-  db_driver: pgx

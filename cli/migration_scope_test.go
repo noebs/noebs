@@ -7,34 +7,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adonese/noebs/internal/tenantcatalog"
 	"github.com/adonese/noebs/store"
 )
 
 func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 	if testPostgres == nil {
-		t.Fatalf("postgres testcontainer not started")
+		t.Skip("PostgreSQL test environment unavailable")
+	}
+	catalog, err := tenantcatalog.LoadFile("../deploy/kubernetes/keycloak-authority/tenant-catalog.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
 	roles := map[serviceRole][]string{
 		serviceRoleIdentityAuthMigrate: {
 			"tenants",
 			"users",
-			"auth_accounts",
-			"api_keys",
-			"login_metrics",
-			"auth_rate_limits",
-			"otp_challenges",
-			"used_refresh_tokens",
-			"password_recovery_credentials",
 			"kyc",
 			"passports",
 		},
 		serviceRoleCardVaultMigrate: {
 			"tenants",
 			"cards",
-			"legacy_card_quarantine",
 			"card_enrollment_intents",
 			"card_funded_operation_claims",
-			"tokens",
 		},
 		serviceRoleEBSAdapterMigrate: {
 			"tenants",
@@ -61,9 +57,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"contacts_v2",
 			"push_data",
 		},
-		serviceRoleBeneficiaryMigrate: {
-			"tenants",
-		},
 		serviceRoleWalletLedgerMigrate: {
 			"tenants",
 			"wallets",
@@ -76,12 +69,14 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 		},
 	}
 	forbiddenTables := map[serviceRole][]string{
-		serviceRoleCardVaultMigrate: {
-			"cache_cards",
-			"push_data",
-		},
-		serviceRoleBeneficiaryMigrate: {
-			"beneficiaries",
+		serviceRoleIdentityAuthMigrate: {
+			"auth_accounts",
+			"api_keys",
+			"login_metrics",
+			"auth_rate_limits",
+			"otp_challenges",
+			"used_refresh_tokens",
+			"password_recovery_credentials",
 		},
 		serviceRoleNotificationMigrate: {
 			"chats",
@@ -118,12 +113,13 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			if !ok {
 				t.Fatalf("%s has no migration scope", role)
 			}
-			if err := store.MigrateScope(ctx, db, "test-tenant", scope); err != nil {
+			if err := store.MigrateScope(ctx, db, scope); err != nil {
 				t.Fatalf("MigrateScope() error = %v", err)
 			}
-			if err := store.New(db).EnsureTenant(ctx, "test-tenant"); err != nil {
-				t.Fatalf("EnsureTenant() error = %v", err)
+			if err := store.New(db).ProvisionTenantCatalog(ctx, catalog); err != nil {
+				t.Fatalf("ProvisionTenantCatalog() error = %v", err)
 			}
+			assertProvisionedTenantCatalog(t, ctx, db, catalog)
 			for _, table := range tables {
 				if !postgresTableExists(t, ctx, db, table) {
 					t.Fatalf("expected table %s", table)
@@ -143,6 +139,26 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 				assertNoColumnDefault(t, ctx, db, "withdrawal_destinations", "ownership_status")
 			}
 		})
+	}
+}
+
+func assertProvisionedTenantCatalog(t *testing.T, ctx context.Context, db *store.DB, catalog tenantcatalog.Catalog) {
+	t.Helper()
+	var rows []struct {
+		ID   string `db:"id"`
+		Name string `db:"name"`
+	}
+	if err := db.SelectContext(ctx, &rows, "SELECT id, name FROM tenants ORDER BY id"); err != nil {
+		t.Fatal(err)
+	}
+	want := catalog.All()
+	if len(rows) != len(want) {
+		t.Fatalf("tenant rows = %#v, want %#v", rows, want)
+	}
+	for index, tenant := range want {
+		if rows[index].ID != string(tenant.ID) || rows[index].Name != tenant.Name {
+			t.Fatalf("tenant rows = %#v, want %#v", rows, want)
+		}
 	}
 }
 

@@ -13,13 +13,11 @@ func TestFundedCardOperationClaimIsOwnedStableAndSingleGrant(t *testing.T) {
 	ctx := context.Background()
 	db := newValidationDB(t)
 	const tenantID = "tenant-funded-claim"
-	if err := MigrateScope(ctx, db, tenantID, MigrationScopeCardVault); err != nil {
+	if err := MigrateScope(ctx, db, MigrationScopeCardVault); err != nil {
 		t.Fatalf("migrate card vault: %v", err)
 	}
 	storeSvc := New(db, WithDataKey("funded-operation-test-key"))
-	if err := storeSvc.EnsureTenant(ctx, tenantID); err != nil {
-		t.Fatalf("ensure tenant: %v", err)
-	}
+	provisionTestTenant(t, ctx, storeSvc, tenantID, "Funded Claim Tenant")
 	now := time.Date(2026, time.July, 18, 12, 0, 0, 0, time.UTC)
 	first := enrollVerifiedCard(t, storeSvc, tenantID, 101, "4242420000004242", "Daily", now)
 	second := enrollVerifiedCard(t, storeSvc, tenantID, 101, "4242421111114242", "Backup", now.Add(time.Minute))

@@ -98,7 +98,6 @@ func exactServiceDiscoveryConfig() ebs_fields.NoebsConfig {
 			string(serviceRolePSPWebhook):     "http://psp-webhook:8080",
 			string(serviceRoleAdminReporting): "http://admin-reporting:8080",
 			string(serviceRoleNotification):   "http://notification-chat:8080",
-			string(serviceRoleBeneficiary):    "http://consumer-beneficiary:8080",
 			string(serviceRoleWalletAPI):      "http://wallet-api:8080",
 		},
 		GRPCServiceDiscovery: map[string]string{

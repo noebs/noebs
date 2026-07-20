@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: noebs-keycloak-subject-lookup
+  labels:
+    app.kubernetes.io/name: keycloak-reconciler
+    app.kubernetes.io/part-of: noebs
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak-reconciler
+        app.kubernetes.io/part-of: noebs
+    spec:
+      serviceAccountName: keycloak-reconciler
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: lookup
+          image: ghcr.io/noebs/noebs:master
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/noebs
+          args:
+            - lookup-keycloak-subject
+            - --email-file
+            - /etc/noebs-keycloak-operation/email
+            - --config
+            - /etc/noebs-keycloak-reconciler/config.yaml
+            - --ca
+            - /etc/noebs-keycloak/ca.pem
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: lookup
+              mountPath: /etc/noebs-keycloak-operation/email
+              subPath: email
+              readOnly: true
+            - name: credentials
+              mountPath: /etc/noebs-keycloak-reconciler/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: transport-ca
+              mountPath: /etc/noebs-keycloak/ca.pem
+              subPath: ca.pem
+              readOnly: true
+      volumes:
+        - name: lookup
+          secret:
+            secretName: keycloak-subject-lookup
+        - name: credentials
+          secret:
+            secretName: keycloak-reconciler-credentials
+        - name: transport-ca
+          secret:
+            secretName: keycloak-transport-ca

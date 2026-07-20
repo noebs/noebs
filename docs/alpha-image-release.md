@@ -1,7 +1,6 @@
 # Alpha image release
 
-`scripts/publish-alpha-image.sh` publishes one reviewed Git commit without relying
-on GitHub Actions. It accepts only a full commit SHA, exports that commit with
+`scripts/publish-alpha-image.sh` publishes one reviewed Git commit without relying on GitHub Actions. It accepts only a full commit SHA, exports that commit with
 `git archive`, and builds the export in a private temporary directory. Modified
 and untracked working-tree files therefore cannot enter the image.
 
@@ -67,10 +66,12 @@ the intended persistent outputs.
 ## Promote by digest
 
 This command never edits Kubernetes manifests and never deploys. Review the
-receipt, then make a separate GitOps commit that replaces the Noebs digest in
-the current-host overlay with the receipt's `digest`. Render and validate that
-commit before allowing Argo CD to reconcile. The coordinated migration and
-rollback boundary remains documented in the
+receipt, then make a separate GitOps commit that replaces the four Noebs digest
+pins in the current-host overlay, bootstrap-current-host overlay, subject lookup
+operation, and membership operation base with the receipt's `digest`. Those
+four pins are one promotion unit: render and validate every workflow before
+setting foundation `noebs_target_revision` to that exact promotion commit and
+allowing Argo CD to reconcile. The coordinated migration and rollback boundary remains documented in the
 [current-host release notes](../deploy/kubernetes/overlays/current-host/README.md).
 
 If the command fails after the push, inspect the full-SHA tag and retained

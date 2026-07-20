@@ -1,7 +1,6 @@
 package walletgrpc
 
 import (
-	"context"
 	"testing"
 
 	"github.com/adonese/noebs/ebs_fields"
@@ -31,7 +30,7 @@ func TestRequestDepositDoesNotGenerateProviderTransactionID(t *testing.T) {
 		Currency:        "USD",
 	}
 
-	_, err := server.RequestDeposit(context.Background(), req)
+	_, err := server.RequestDeposit(walletGatewayIdentityContext(1, "tenant"), req)
 	if err == nil {
 		t.Fatalf("expected temporal precondition error")
 	}

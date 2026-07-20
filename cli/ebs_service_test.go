@@ -26,30 +26,6 @@ func requireIntegration(t *testing.T) {
 	}
 }
 
-func TestWorkingKey(t *testing.T) {
-	workingKeyFields := populateWorkingKeyFields()
-	payload, err := json.Marshal(workingKeyFields)
-	if err != nil {
-		t.Fatalf("marshal working key payload: %v", err)
-	}
-	route := GetMainEngine()
-
-	// well, assuming that the server is running. Eh?
-	// Mock data BTW...
-	req := httptest.NewRequest(http.MethodGet, "/test", bytes.NewBuffer(payload))
-
-	resp, err := route.Test(req, routeTestTimeout)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		t.Errorf("expected: %d, got: %d", 200, resp.StatusCode)
-	}
-	// I'm really not sure why this would ever work.
-	// suddenly, things starting to make sense.
-}
-
 func TestPurchase(t *testing.T) {
 	requireIntegration(t)
 	// always returns t.Fatal...

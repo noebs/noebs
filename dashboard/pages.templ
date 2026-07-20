@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/bradfitz/iter"
@@ -12,14 +11,9 @@ templ dashboardLayout(title string, brand string) {
 	<html lang="en">
 		<head>
 			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<meta property="og:title" content="SolusPay Secure Payments">
-			<meta property="og:description" content="Solus offers the state of the art technologies in payments and financial industry with our long and verstile expertise in this field, we believe that we can transfer your business and help it grows.">
-			<meta property="og:url" content="https://beta.soluspay.net/dashboard/hearout">
-			<meta property="og:site_name" content="SolusPay">
-			<meta property="og:type" content="article">
 			<title>{ title }</title>
 			<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-			<link rel="stylesheet" href="/dashboard/assets/style.css">
+			<link rel="stylesheet" href="/backoffice/assets/style.css">
 		</head>
 		<body>
 			<nav class="navbar navbar-dark fixed-top bg-dark">
@@ -36,52 +30,6 @@ templ dashboardLayout(title string, brand string) {
 templ DashboardIndexPage() {
 	@dashboardLayout("Solus | Secure Payments", "Solus") {
 		<main role="main">
-		</main>
-	}
-}
-
-templ MerchantPage(data MerchantView) {
-	@dashboardLayout("Solus | Secure Payments", "Solus") {
-		<main role="main">
-			<div class="container">
-				<div class="row">
-					<div class="col">
-						<table class="table table-striped table-sm">
-							<thead class="thead-dark">
-								<tr>
-									<th scope="col">ID</th>
-									<th scope="col">Date Time</th>
-									<th scope="col">Amount</th>
-									<th scope="col">Reference Number</th>
-									<th scope="col">Approval Code</th>
-									<th scope="col">Terminal ID</th>
-									<th scope="col">Response Code</th>
-									<th scope="col">Service</th>
-								</tr>
-							</thead>
-							for i, tran := range data.Transactions {
-								<tr>
-									<th scope="row">{ i }</th>
-									<td>{ TimeFormatter(tran.CreatedAt) }</td>
-									<td>{ tran.TranAmount }</td>
-									<td>{ tran.ReferenceNumber }</td>
-									<td>{ tran.ApprovalCode }</td>
-									<td>{ tran.TerminalID }</td>
-									<td>{ tran.ResponseCode }</td>
-									<td>{ tran.EBSServiceName }</td>
-								</tr>
-							}
-						</table>
-					</div>
-				</div>
-
-				<p class="lead">Issues for this merchant</p>
-				<div class="row">
-					for _, issue := range data.Issues {
-						<p>{ fmt.Sprintf("%v", issue) }</p>
-					}
-				</div>
-			</div>
 		</main>
 	}
 }
@@ -164,10 +112,6 @@ templ DashboardTablePage(data DashboardTableView) {
 							for i := range iter.N(data.PageCount) {
 								<li class="page-item"><a class="page-link" href={"?page=" + strconv.Itoa(i)}>{ i }</a></li>
 							}
-						</ul>
-					</div>
-					<div class="col-sm">
-						<ul class="pagination pagination-sm" id="custom-pagination">
 						</ul>
 					</div>
 				</div>
@@ -258,21 +202,6 @@ templ DashboardTablePage(data DashboardTableView) {
 				</div>
 			</div>
 		</main>
-
-		<script>
-			var currentPage = 1;
-			function paginate(index, items) {
-				for (i = index; i <= items; i++) {
-					document.getElementById("custom-pagination").innerHTML += `<li class="page-item"><a class="page-link" href="?page=$i">$i</a></li>`
-				}
-			}
-
-			function updateId(id) {
-				currentPage = id;
-			}
-
-			paginate(currentPage, { data.PageCount });
-		</script>
 	}
 }
 
