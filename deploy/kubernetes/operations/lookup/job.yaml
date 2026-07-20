@@ -22,6 +22,34 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+      initContainers:
+        - name: wait-for-keycloak
+          image: ghcr.io/noebs/noebs:master
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              until curl --fail --silent --cacert /etc/noebs-keycloak/ca.pem --connect-timeout 2 --max-time 5 https://keycloak.noebs.svc.cluster.local:8443/auth/realms/noebs/.well-known/openid-configuration >/dev/null; do
+                sleep 1
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: transport-ca
+              mountPath: /etc/noebs-keycloak/ca.pem
+              subPath: ca.pem
+              readOnly: true
       containers:
         - name: lookup
           image: ghcr.io/noebs/noebs:master

@@ -356,10 +356,18 @@ func TestNoebsKubernetesImagesUseNodeCache(t *testing.T) {
 }
 
 func TestKeycloakJobsGateOnVerifiedServiceAvailability(t *testing.T) {
-	for _, path := range []string{
-		filepath.Join("..", "deploy", "kubernetes", "base", "keycloak-reconcile-job.yaml"),
-		filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "delete-bootstrap-client-job.yaml"),
-	} {
+	tests := []struct {
+		path      string
+		discovery string
+	}{
+		{filepath.Join("..", "deploy", "kubernetes", "base", "keycloak-reconcile-job.yaml"), "master"},
+		{filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "delete-bootstrap-client-job.yaml"), "master"},
+		{filepath.Join("..", "deploy", "kubernetes", "operations", "lookup", "job.yaml"), "noebs"},
+		{filepath.Join("..", "deploy", "kubernetes", "operations", "memberships", "base", "job.yaml"), "noebs"},
+	}
+	for _, test := range tests {
+		path := test.path
+		discovery := "https://keycloak.noebs.svc.cluster.local:8443/auth/realms/" + test.discovery + "/.well-known/openid-configuration"
 		payload, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
@@ -380,7 +388,7 @@ func TestKeycloakJobsGateOnVerifiedServiceAvailability(t *testing.T) {
 		}
 		for _, required := range []string{
 			"curl --fail --silent --cacert /etc/noebs-keycloak/ca.pem",
-			"https://keycloak.noebs.svc.cluster.local:8443/auth/realms/master/.well-known/openid-configuration",
+			discovery,
 			"sleep 1",
 		} {
 			if !strings.Contains(gate.Args[0], required) {
