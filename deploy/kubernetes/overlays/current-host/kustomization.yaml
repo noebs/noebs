@@ -182,3 +182,63 @@ patches:
           limits:
             cpu: 250m
             memory: 128Mi
+  - target:
+      kind: (Deployment|Job)
+      name: (admin-reporting|admin-reporting-projector|api-gateway|card-vault|ebs-adapter|ebs-adapter-events|identity-auth|notification-chat|psp-webhook|wallet-ledger|wallet-worker|noebs-.*-migrate)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/initContainers
+        value:
+          - name: wait-for-postgres
+            image: ghcr.io/noebs/noebs:master
+            imagePullPolicy: IfNotPresent
+            command: [/bin/bash, -ec]
+            args:
+              - |
+                until timeout 2 bash -c 'exec 3<>/dev/tcp/postgres/5432' 2>/dev/null; do
+                  sleep 1
+                done
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 100m
+                memory: 64Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
+  - target:
+      group: batch
+      version: v1
+      kind: CronJob
+      name: (noebs-workload-auth-cleanup|noebs-gateway-auth-cleanup)
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/initContainers
+        value:
+          - name: wait-for-postgres
+            image: ghcr.io/noebs/noebs:master
+            imagePullPolicy: IfNotPresent
+            command: [/bin/bash, -ec]
+            args:
+              - |
+                until timeout 2 bash -c 'exec 3<>/dev/tcp/postgres/5432' 2>/dev/null; do
+                  sleep 1
+                done
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                cpu: 100m
+                memory: 64Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true

@@ -394,6 +394,74 @@ func TestKeycloakJobsGateOnVerifiedServiceAvailability(t *testing.T) {
 	}
 }
 
+func TestCurrentHostDatabaseConsumersWaitForPostgres(t *testing.T) {
+	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host")
+	payload, err := exec.Command("kustomize", "build", path).CombinedOutput()
+	if err != nil {
+		t.Fatalf("kustomize build %s: %v\n%s", path, err, payload)
+	}
+	expected := map[string]bool{
+		"admin-reporting":                 false,
+		"admin-reporting-projector":       false,
+		"api-gateway":                     false,
+		"card-vault":                      false,
+		"ebs-adapter":                     false,
+		"ebs-adapter-events":              false,
+		"identity-auth":                   false,
+		"notification-chat":               false,
+		"psp-webhook":                     false,
+		"wallet-ledger":                   false,
+		"wallet-worker":                   false,
+		"noebs-workload-auth-migrate":     false,
+		"noebs-gateway-auth-migrate":      false,
+		"noebs-identity-auth-migrate":     false,
+		"noebs-card-vault-migrate":        false,
+		"noebs-ebs-adapter-migrate":       false,
+		"noebs-admin-reporting-migrate":   false,
+		"noebs-notification-chat-migrate": false,
+		"noebs-wallet-ledger-migrate":     false,
+		"noebs-workload-auth-cleanup":     false,
+		"noebs-gateway-auth-cleanup":      false,
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(payload))
+	for {
+		var object manifestObject
+		if err := decoder.Decode(&object); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			t.Fatalf("decode kustomize build %s: %v", path, err)
+		}
+		if !isKubernetesWorkloadKind(object.Kind) {
+			continue
+		}
+		if _, ok := expected[object.Metadata.Name]; !ok {
+			continue
+		}
+		gate := manifestPodSpecForObject(object).InitContainers
+		if len(gate) != 1 || gate[0].Name != "wait-for-postgres" {
+			t.Fatalf("%s/%s init containers = %#v", object.Kind, object.Metadata.Name, gate)
+		}
+		if !strings.HasPrefix(gate[0].Image, "ghcr.io/noebs/noebs@sha256:") || gate[0].ImagePullPolicy != "IfNotPresent" {
+			t.Fatalf("%s/%s Postgres gate image = %q, pull policy = %q", object.Kind, object.Metadata.Name, gate[0].Image, gate[0].ImagePullPolicy)
+		}
+		if !slices.Equal(gate[0].Command, []string{"/bin/bash", "-ec"}) || len(gate[0].Args) != 1 {
+			t.Fatalf("%s/%s Postgres gate command = %v %v", object.Kind, object.Metadata.Name, gate[0].Command, gate[0].Args)
+		}
+		for _, required := range []string{"timeout 2", "/dev/tcp/postgres/5432", "sleep 1"} {
+			if !strings.Contains(gate[0].Args[0], required) {
+				t.Fatalf("%s/%s Postgres gate missing %q", object.Kind, object.Metadata.Name, required)
+			}
+		}
+		expected[object.Metadata.Name] = true
+	}
+	for name, found := range expected {
+		if !found {
+			t.Fatalf("database consumer %s has no rendered Postgres availability gate", name)
+		}
+	}
+}
+
 func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml")
 	payload, err := os.ReadFile(path)
