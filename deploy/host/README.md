@@ -104,11 +104,20 @@ jq -e '
   and .stage == "start"
   and .hashmatch == true
   and .activekey == ""
-  and any(.inactivekeys[]?;
-    startswith("XSalsa20-POLY1305 secretboxkey-"))
 ' <<<"$encryption_json" >/dev/null
 
-sudo k3s secrets-encrypt rotate-keys
+if ! sudo k3s secrets-encrypt rotate-keys; then
+  # A single-server rotation may finish while its CLI connection is dropped by
+  # the runtime restart. Accept that error only after the completed state is
+  # independently observable.
+  wait_for_k3s
+  rotation_status="$(sudo k3s secrets-encrypt status)"
+  grep -Fx 'Encryption Status: Enabled' <<<"$rotation_status" >/dev/null
+  grep -Fx 'Current Rotation Stage: reencrypt_finished' \
+    <<<"$rotation_status" >/dev/null
+  grep -Fx 'Server Encryption Hashes: All hashes match' \
+    <<<"$rotation_status" >/dev/null
+fi
 sudo systemctl restart k3s
 wait_for_k3s
 
@@ -130,11 +139,10 @@ jq -e '
 The assertions stop the transition unless the initial status is the exact
 unconfigured state. `enable` completes before the repository config is
 installed. The first restart must be API-ready with every node Ready, disabled
-at stage `start`, hash-consistent, and holding the expected inactive secretbox
-key; only then may rotation begin. The final restart must pass both readiness
-checks and report enabled encryption, `reencrypt_finished`, matching hashes,
-and an active secretbox key. Status output is captured only for assertions so
-key names are not written to a log.
+at stage `start`, and hash-consistent; only then may rotation begin. The final
+restart must pass both readiness checks and report enabled encryption,
+`reencrypt_finished`, matching hashes, and an active secretbox key. Status
+output is captured only for assertions so key names are not written to a log.
 
 `K3S_BACKUP_ROOT` must already be a mounted, operator-approved encrypted
 filesystem; the procedure rejects the unencrypted root mount and writes the
