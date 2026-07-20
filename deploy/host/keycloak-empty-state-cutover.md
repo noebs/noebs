@@ -47,6 +47,7 @@ pause_plan="$CUTOVER_DIR/pause.tfplan"
 namespace_plan="$CUTOVER_DIR/namespace-replacement.tfplan"
 bootstrap_plan="$CUTOVER_DIR/bootstrap.tfplan"
 steady_plan="$CUTOVER_DIR/steady.tfplan"
+edge_plan="$CUTOVER_DIR/edge.tfplan"
 kubectl=(sudo -n k3s kubectl)
 
 encryption_status="$(sudo k3s secrets-encrypt status)"
@@ -163,28 +164,10 @@ noebs_target_revision    = "RELEASE_COMMIT"
 noebs_manifest_path      = "deploy/kubernetes/overlays/bootstrap-current-host"
 create_noebs_application = true
 noebs_automated_sync     = true
-create_edge_application  = true
+create_edge_application  = false
 ```
 
 ```bash
-sudo install -d -m 0700 /var/lib/docker/volumes/noebs_caddy_data/_data /var/lib/docker/volumes/noebs_caddy_config/_data
-sudo chown -R -- 10001:10001 /var/lib/docker/volumes/noebs_caddy_data/_data /var/lib/docker/volumes/noebs_caddy_config/_data
-caddy_wrong_owner="$(sudo find \
-  /var/lib/docker/volumes/noebs_caddy_data/_data \
-  /var/lib/docker/volumes/noebs_caddy_config/_data \
-  \( ! -uid 10001 -o ! -gid 10001 \) -print -quit)"
-test -z "$caddy_wrong_owner"
-caddy_host_path_status="$(sudo stat --format='%u:%g %a %n' \
-  /var/lib/docker/volumes/noebs_caddy_data/_data \
-  /var/lib/docker/volumes/noebs_caddy_config/_data)"
-expected_caddy_host_path_status=$'10001:10001 700 /var/lib/docker/volumes/noebs_caddy_data/_data\n10001:10001 700 /var/lib/docker/volumes/noebs_caddy_config/_data'
-test "$caddy_host_path_status" = "$expected_caddy_host_path_status"
-
-"${kubectl[@]}" apply -f "$edge_keycloak_ca"
-"${kubectl[@]}" -n edge get secret keycloak-transport-ca \
-  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' \
-  | grep -Fx noebs-release-renderer >/dev/null
-
 tofu -chdir="$foundation_root" plan -out="$bootstrap_plan"
 tofu -chdir="$foundation_root" apply "$bootstrap_plan"
 
@@ -266,11 +249,44 @@ done
   keycloak-bootstrap-admin keycloak-bootstrap-reconciler-credentials
 ```
 
-Wait for `noebs-edge` to report the same declared and resolved commit and a
-healthy sync. Require Caddy to use the generated ConfigMap before deleting the
-unhashed predecessor:
+## Adopt the public edge after steady authority
+
+Only after the steady reconciler has succeeded and the bootstrap credentials
+are gone, enable the edge Application:
+
+```hcl
+create_edge_application = true
+```
+
+Prepare the exact host paths, install the CA-only release Secret, and review a
+separate edge-adoption plan before applying it:
 
 ```bash
+sudo install -d -m 0700 \
+  /var/lib/docker/volumes/noebs_caddy_data/_data \
+  /var/lib/docker/volumes/noebs_caddy_config/_data
+sudo chown -R -- 10001:10001 \
+  /var/lib/docker/volumes/noebs_caddy_data/_data \
+  /var/lib/docker/volumes/noebs_caddy_config/_data
+caddy_wrong_owner="$(sudo find \
+  /var/lib/docker/volumes/noebs_caddy_data/_data \
+  /var/lib/docker/volumes/noebs_caddy_config/_data \
+  \( ! -uid 10001 -o ! -gid 10001 \) -print -quit)"
+test -z "$caddy_wrong_owner"
+caddy_host_path_status="$(sudo stat --format='%u:%g %a %n' \
+  /var/lib/docker/volumes/noebs_caddy_data/_data \
+  /var/lib/docker/volumes/noebs_caddy_config/_data)"
+expected_caddy_host_path_status=$'10001:10001 700 /var/lib/docker/volumes/noebs_caddy_data/_data\n10001:10001 700 /var/lib/docker/volumes/noebs_caddy_config/_data'
+test "$caddy_host_path_status" = "$expected_caddy_host_path_status"
+
+"${kubectl[@]}" apply -f "$edge_keycloak_ca"
+"${kubectl[@]}" -n edge get secret keycloak-transport-ca \
+  -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}' \
+  | grep -Fx noebs-release-renderer >/dev/null
+
+tofu -chdir="$foundation_root" plan -out="$edge_plan"
+tofu -chdir="$foundation_root" apply "$edge_plan"
+
 until edge_application="$("${kubectl[@]}" -n argocd get application noebs-edge -o json)" \
   && jq -e --arg revision "$RELEASE_COMMIT" '
     .spec.source.targetRevision == $revision
@@ -287,6 +303,13 @@ caddy_config="$("${kubectl[@]}" -n edge get deployment caddy \
   -o jsonpath='{.spec.template.spec.volumes[?(@.name=="config")].configMap.name}')"
 [[ "$caddy_config" =~ ^caddy-config-[a-z0-9]+$ ]]
 "${kubectl[@]}" -n edge delete configmap caddy-config --ignore-not-found
+
+curl --fail --silent --show-error \
+  https://api.noebs.sd/auth/realms/noebs/.well-known/openid-configuration \
+  >/dev/null
+curl --fail --silent --show-error \
+  https://api.noebs.sd/.well-known/assetlinks.json \
+  >/dev/null
 ```
 
 ## Prove retired state is gone
