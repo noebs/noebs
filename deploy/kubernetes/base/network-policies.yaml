@@ -333,6 +333,36 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: keycloak-cluster-transport-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 7800}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-cluster-failure-detection-ingress
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 57800}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: postgres-egress
 spec:
   podSelector:
