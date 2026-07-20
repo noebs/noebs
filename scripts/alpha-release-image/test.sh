@@ -63,6 +63,10 @@ assert_absent 'set -x'
   fail "every container stage must use an immutable manifest digest"
 assert_dockerfile_contains 'golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651'
 assert_dockerfile_contains 'debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818'
+assert_dockerfile_contains 'COPY --chmod=0555 scripts/entrypoint.sh /entrypoint.sh'
+if grep -Fq -- 'RUN chmod +x /entrypoint.sh' "$dockerfile"; then
+  fail "entrypoint mode must not depend on the release context umask"
+fi
 if grep -Eq '(^|[^[:alnum:]_-])(sops|age|age-keygen)([^[:alnum:]_-]|$)|/app/\.sops' "$dockerfile"; then
   fail "release-host secret tooling or paths remain in the runtime image"
 fi

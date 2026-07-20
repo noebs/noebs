@@ -23,8 +23,7 @@ RUN useradd -u 10001 -m -s /usr/sbin/nologin -U noebs
 # Copy application binary
 COPY --from=builder /usr/local/bin/noebs /usr/local/bin/noebs
 
-COPY scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY --chmod=0555 scripts/entrypoint.sh /entrypoint.sh
 
 # Create data directory
 RUN mkdir -p /data /app /app/.secrets \
