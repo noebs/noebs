@@ -414,13 +414,22 @@ func exchangeRealAuthorizationCode(t *testing.T, client *http.Client, baseURL, c
 		t.Fatal(err)
 	}
 	var claims struct {
-		ACR string `json:"acr"`
+		ACR                string `json:"acr"`
+		AuthenticationTime int64  `json:"auth_time"`
+		IssuedAt           int64  `json:"iat"`
 	}
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		t.Fatal(err)
 	}
 	if claims.ACR != googleTOTPACR {
 		t.Fatalf("wallet ID token acr = %q, want %q", claims.ACR, googleTOTPACR)
+	}
+	authenticationTime := time.Unix(claims.AuthenticationTime, 0)
+	issuedAt := time.Unix(claims.IssuedAt, 0)
+	now := time.Now()
+	if claims.AuthenticationTime <= 0 || claims.IssuedAt <= 0 || authenticationTime.After(issuedAt) ||
+		authenticationTime.After(now.Add(5*time.Second)) || now.Sub(authenticationTime) > 30*time.Second {
+		t.Fatalf("wallet ID token auth_time = %d and iat = %d, want a fresh step-up authentication", claims.AuthenticationTime, claims.IssuedAt)
 	}
 }
 
