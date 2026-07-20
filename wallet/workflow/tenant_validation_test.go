@@ -256,23 +256,6 @@ func TestWithdrawalWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			mutate:  func(params *WithdrawalParams) { params.Request.Currency = " \t " },
 			wantErr: walletstore.ErrMissingCurrency,
 		},
-		{
-			name: "blank-pin",
-			mutate: func(params *WithdrawalParams) {
-				params.RequirePIN = true
-				params.WalletPIN = " \t "
-			},
-			wantErr: walletstore.ErrMissingWalletPIN,
-		},
-		{
-			name: "blank-2fa-code",
-			mutate: func(params *WithdrawalParams) {
-				params.Require2FA = true
-				params.UserID = 42
-				params.TwoFACode = " \t "
-			},
-			wantErr: walletstore.ErrMissingTwoFACode,
-		},
 	}
 
 	for _, tc := range cases {
@@ -294,9 +277,6 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			FromWalletID:   uuid.NewString(),
 			ToWalletID:     uuid.NewString(),
 			Amount:         100,
-			UserID:         42,
-			WalletPIN:      "1234",
-			TwoFACode:      "123456",
 			FromOwnerType:  "user",
 			FromOwnerID:    "1",
 			ToOwnerType:    "user",
@@ -387,46 +367,6 @@ func TestP2PWorkflowValidatesRequestBeforeActivities(t *testing.T) {
 			name:    "blank-from-owner-id",
 			mutate:  func(params *P2PParams) { params.FromOwnerID = " \t " },
 			wantErr: walletstore.ErrMissingOwnerID,
-		},
-		{
-			name: "missing-pin",
-			mutate: func(params *P2PParams) {
-				params.RequirePIN = true
-				params.WalletPIN = ""
-			},
-			wantErr: walletstore.ErrMissingWalletPIN,
-		},
-		{
-			name: "blank-pin",
-			mutate: func(params *P2PParams) {
-				params.RequirePIN = true
-				params.WalletPIN = " \t "
-			},
-			wantErr: walletstore.ErrMissingWalletPIN,
-		},
-		{
-			name: "missing-2fa-user",
-			mutate: func(params *P2PParams) {
-				params.Require2FA = true
-				params.UserID = 0
-			},
-			wantErr: walletstore.ErrInvalidUserID,
-		},
-		{
-			name: "missing-2fa-code",
-			mutate: func(params *P2PParams) {
-				params.Require2FA = true
-				params.TwoFACode = ""
-			},
-			wantErr: walletstore.ErrMissingTwoFACode,
-		},
-		{
-			name: "blank-2fa-code",
-			mutate: func(params *P2PParams) {
-				params.Require2FA = true
-				params.TwoFACode = " \t "
-			},
-			wantErr: walletstore.ErrMissingTwoFACode,
 		},
 	}
 

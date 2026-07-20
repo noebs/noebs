@@ -2853,24 +2853,6 @@ func TestListPSPTransactionAmountsByKindValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidAmountKind)
 }
 
-func TestUpdateWalletPINValidation(t *testing.T) {
-	s := &Store{}
-	err := s.UpdateWalletPIN(t.Context(), "", uuid.New(), "hash", time.Now().UTC())
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	err = s.UpdateWalletPIN(t.Context(), "default", uuid.New(), "hash", time.Now().UTC())
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.Nil, "hash", time.Now().UTC())
-	assertErrorIs(t, err, ErrMissingWalletID)
-
-	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.New(), "", time.Now().UTC())
-	assertErrorIs(t, err, ErrMissingWalletPIN)
-
-	err = s.UpdateWalletPIN(t.Context(), "tenant", uuid.New(), "hash", time.Time{})
-	assertErrorIs(t, err, ErrMissingUpdatedAt)
-}
-
 func TestDeactivateWithdrawalDestinationValidation(t *testing.T) {
 	s := &Store{}
 	err := s.DeactivateWithdrawalDestination(t.Context(), "", 1, time.Now().UTC())
@@ -2962,54 +2944,6 @@ func TestInsertAuditEventValidation(t *testing.T) {
 	bad.Action = ""
 	err = s.InsertAuditEvent(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingAction)
-}
-
-func TestUserTwoFAValidation(t *testing.T) {
-	s := &Store{}
-	_, err := s.CreateOrResetUserTwoFA(t.Context(), "", 1, "secret")
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.CreateOrResetUserTwoFA(t.Context(), "default", 1, "secret")
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.CreateOrResetUserTwoFA(t.Context(), "tenant", 0, "secret")
-	assertErrorIs(t, err, ErrInvalidUserID)
-
-	_, err = s.CreateOrResetUserTwoFA(t.Context(), "tenant", 1, "")
-	assertErrorIs(t, err, ErrMissingTwoFASecret)
-
-	_, err = s.GetUserTwoFA(t.Context(), "", 1)
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	_, err = s.GetUserTwoFA(t.Context(), "default", 1)
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	_, err = s.GetUserTwoFA(t.Context(), "tenant", 0)
-	assertErrorIs(t, err, ErrInvalidUserID)
-
-	err = s.SetUserTwoFAEnabled(t.Context(), "", 1, true, time.Now().UTC())
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	err = s.SetUserTwoFAEnabled(t.Context(), "default", 1, true, time.Now().UTC())
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	err = s.SetUserTwoFAEnabled(t.Context(), "tenant", 0, true, time.Now().UTC())
-	assertErrorIs(t, err, ErrInvalidUserID)
-
-	err = s.SetUserTwoFAEnabled(t.Context(), "tenant", 1, true, time.Time{})
-	assertErrorIs(t, err, ErrMissingUpdatedAt)
-
-	err = s.TouchUserTwoFALastUsed(t.Context(), "", 1, time.Now().UTC())
-	assertErrorIs(t, err, ErrMissingTenantID)
-
-	err = s.TouchUserTwoFALastUsed(t.Context(), "default", 1, time.Now().UTC())
-	assertErrorIs(t, err, ErrInvalidTenantID)
-
-	err = s.TouchUserTwoFALastUsed(t.Context(), "tenant", 0, time.Now().UTC())
-	assertErrorIs(t, err, ErrInvalidUserID)
-
-	err = s.TouchUserTwoFALastUsed(t.Context(), "tenant", 1, time.Time{})
-	assertErrorIs(t, err, ErrMissingUsageTime)
 }
 
 func TestOperatorIdentityValidation(t *testing.T) {

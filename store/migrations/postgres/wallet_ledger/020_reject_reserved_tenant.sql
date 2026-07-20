@@ -27,11 +27,8 @@ ALTER TABLE withdrawal_destinations
   ADD CONSTRAINT tenant_id_not_reserved CHECK (lower(btrim(tenant_id)) <> 'default');
 ALTER TABLE ownership_verifications
   ADD CONSTRAINT tenant_id_not_reserved CHECK (lower(btrim(tenant_id)) <> 'default');
-ALTER TABLE wallet_user_2fa
-  ADD CONSTRAINT tenant_id_not_reserved CHECK (lower(btrim(tenant_id)) <> 'default');
 
 -- +goose Down
-ALTER TABLE wallet_user_2fa DROP CONSTRAINT tenant_id_not_reserved;
 ALTER TABLE ownership_verifications DROP CONSTRAINT tenant_id_not_reserved;
 ALTER TABLE withdrawal_destinations DROP CONSTRAINT tenant_id_not_reserved;
 ALTER TABLE ledger_funding_links DROP CONSTRAINT tenant_id_not_reserved;

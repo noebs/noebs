@@ -25,8 +25,6 @@ var activityNames = []string{
 	"VerifyDeposit",
 	"SendPayout",
 	"GetTransactionStatus",
-	"VerifyWalletPIN",
-	"VerifyUserTOTP",
 	"EnsureSystemWallet",
 	"RecordFundingSource",
 	"LinkLedgerToFundingSource",

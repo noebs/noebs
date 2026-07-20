@@ -138,7 +138,6 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
 		errors.Is(err, walletstore.ErrLedgerEntryNotFound),
 		errors.Is(err, walletstore.ErrVerificationNotFound),
-		errors.Is(err, walletstore.ErrUserTwoFANotFound),
 		errors.Is(err, walletstore.ErrManualTransferNotFound),
 		errors.Is(err, walletstore.ErrFeeConfigNotFound),
 		errors.Is(err, walletstore.ErrExchangeRateNotFound):
@@ -185,11 +184,6 @@ func mapError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidOffset),
 		errors.Is(err, walletstore.ErrMissingReferenceType),
 		errors.Is(err, walletstore.ErrMissingReferenceID),
-		errors.Is(err, walletstore.ErrMissingWalletPIN),
-		errors.Is(err, walletstore.ErrInvalidWalletPIN),
-		errors.Is(err, walletstore.ErrMissingTwoFACode),
-		errors.Is(err, walletstore.ErrInvalidTwoFACode),
-		errors.Is(err, walletstore.ErrMissingTwoFASecret),
 		errors.Is(err, walletstore.ErrMissingApprovalTimeout),
 		errors.Is(err, walletstore.ErrMissingApprovalReason),
 		errors.Is(err, walletstore.ErrMissingApprovalTime),
@@ -241,8 +235,6 @@ func mapError(err error) error {
 		errors.Is(err, walletvalidation.ErrWalletInactive),
 		errors.Is(err, walletstore.ErrInsufficientFunds),
 		errors.Is(err, walletvalidation.ErrLimitExceeded),
-		errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled),
-		errors.Is(err, walletstore.ErrUserTwoFANotEnabled),
 		errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	default:

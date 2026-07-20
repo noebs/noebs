@@ -229,8 +229,6 @@ type mountedNoebsConfig struct {
 		TemporalPort                               string            `yaml:"temporal_port"`
 		RenderDBPasswordFile                       string            `yaml:"render_db_password_file"`
 		WalletEnabled                              bool              `yaml:"wallet_enabled"`
-		WalletPINRequired                          bool              `yaml:"wallet_pin_required"`
-		Wallet2FAThreshold                         int64             `yaml:"wallet_2fa_threshold"`
 		WalletApprovalThreshold                    int64             `yaml:"wallet_approval_threshold"`
 		WalletDefaultCurrency                      string            `yaml:"wallet_default_currency"`
 		WalletHoldExpirySeconds                    int               `yaml:"wallet_hold_expiry_seconds"`
@@ -2394,8 +2392,6 @@ func TestDockerComposeWalletRuntimeConfigMatchesKubernetes(t *testing.T) {
 		k8s    any
 	}{
 		{"wallet_enabled", dockerConfig.Noebs.WalletEnabled, kubernetesConfig.Noebs.WalletEnabled},
-		{"wallet_pin_required", dockerConfig.Noebs.WalletPINRequired, kubernetesConfig.Noebs.WalletPINRequired},
-		{"wallet_2fa_threshold", dockerConfig.Noebs.Wallet2FAThreshold, kubernetesConfig.Noebs.Wallet2FAThreshold},
 		{"wallet_approval_threshold", dockerConfig.Noebs.WalletApprovalThreshold, kubernetesConfig.Noebs.WalletApprovalThreshold},
 		{"wallet_default_currency", dockerConfig.Noebs.WalletDefaultCurrency, kubernetesConfig.Noebs.WalletDefaultCurrency},
 		{"wallet_hold_expiry_seconds", dockerConfig.Noebs.WalletHoldExpirySeconds, kubernetesConfig.Noebs.WalletHoldExpirySeconds},

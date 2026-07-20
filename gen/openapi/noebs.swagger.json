@@ -303,125 +303,6 @@
         ]
       }
     },
-    "/wallet/users/{userId}/2fa/confirm": {
-      "post": {
-        "operationId": "WalletPublicService_ConfirmUser2FA",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceConfirmUser2FABody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
-    "/wallet/users/{userId}/2fa/disable": {
-      "post": {
-        "operationId": "WalletPublicService_DisableUser2FA",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceDisableUser2FABody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
-    "/wallet/users/{userId}/2fa/enroll": {
-      "post": {
-        "operationId": "WalletPublicService_EnrollUser2FA",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1User2FASetup"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "userId",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "format": "int64"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceEnrollUser2FABody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
     "/wallet/withdrawals": {
       "post": {
         "operationId": "WalletPublicService_RequestWithdrawal",
@@ -604,45 +485,6 @@
         ]
       }
     },
-    "/wallet/{walletId}/pin": {
-      "post": {
-        "operationId": "WalletPublicService_SetWalletPIN",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "type": "object",
-              "properties": {}
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "walletId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/WalletPublicServiceSetWalletPINBody"
-            }
-          }
-        ],
-        "tags": [
-          "WalletPublicService"
-        ]
-      }
-    },
     "/wallet/{walletId}/transactions": {
       "get": {
         "operationId": "WalletPublicService_ListWalletTransactionsPublic",
@@ -715,17 +557,6 @@
         }
       }
     },
-    "WalletPublicServiceConfirmUser2FABody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        }
-      }
-    },
     "WalletPublicServiceCreateWithdrawalDestinationBody": {
       "type": "object",
       "properties": {
@@ -770,25 +601,6 @@
         }
       }
     },
-    "WalletPublicServiceDisableUser2FABody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        }
-      }
-    },
-    "WalletPublicServiceEnrollUser2FABody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        }
-      }
-    },
     "WalletPublicServiceRequestOwnershipVerificationBody": {
       "type": "object",
       "properties": {
@@ -806,20 +618,6 @@
           "type": "string"
         },
         "referenceId": {
-          "type": "string"
-        }
-      }
-    },
-    "WalletPublicServiceSetWalletPINBody": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "newPin": {
-          "type": "string"
-        },
-        "currentPin": {
           "type": "string"
         }
       }
@@ -1101,16 +899,6 @@
         },
         "toOwnerId": {
           "type": "string"
-        },
-        "userId": {
-          "type": "string",
-          "format": "int64"
-        },
-        "walletPin": {
-          "type": "string"
-        },
-        "twoFaCode": {
-          "type": "string"
         }
       }
     },
@@ -1175,27 +963,6 @@
             "type": "object",
             "$ref": "#/definitions/v1PaymentMethod"
           }
-        }
-      }
-    },
-    "v1User2FASetup": {
-      "type": "object",
-      "properties": {
-        "tenantId": {
-          "type": "string"
-        },
-        "userId": {
-          "type": "string",
-          "format": "int64"
-        },
-        "secret": {
-          "type": "string"
-        },
-        "otpAuthUrl": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "boolean"
         }
       }
     },
@@ -1393,10 +1160,6 @@
         "currency": {
           "type": "string"
         },
-        "userId": {
-          "type": "string",
-          "format": "int64"
-        },
         "ownerType": {
           "type": "string"
         },
@@ -1409,12 +1172,6 @@
         },
         "allowReturnToSource": {
           "type": "boolean"
-        },
-        "walletPin": {
-          "type": "string"
-        },
-        "twoFaCode": {
-          "type": "string"
         },
         "holdExpirySeconds": {
           "type": "integer",

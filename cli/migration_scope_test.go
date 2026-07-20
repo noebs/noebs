@@ -65,7 +65,6 @@ func TestServiceMigrationRolesRunOwnedScopes(t *testing.T) {
 			"balance_holds",
 			"fee_configs",
 			"funding_sources",
-			"wallet_user_2fa",
 		},
 	}
 	forbiddenTables := map[serviceRole][]string{

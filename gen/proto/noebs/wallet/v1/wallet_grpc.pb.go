@@ -33,10 +33,6 @@ const (
 	WalletPublicService_DeactivateWithdrawalDestination_FullMethodName = "/noebs.wallet.v1.WalletPublicService/DeactivateWithdrawalDestination"
 	WalletPublicService_RequestOwnershipVerification_FullMethodName    = "/noebs.wallet.v1.WalletPublicService/RequestOwnershipVerification"
 	WalletPublicService_CompleteOwnershipVerification_FullMethodName   = "/noebs.wallet.v1.WalletPublicService/CompleteOwnershipVerification"
-	WalletPublicService_SetWalletPIN_FullMethodName                    = "/noebs.wallet.v1.WalletPublicService/SetWalletPIN"
-	WalletPublicService_EnrollUser2FA_FullMethodName                   = "/noebs.wallet.v1.WalletPublicService/EnrollUser2FA"
-	WalletPublicService_ConfirmUser2FA_FullMethodName                  = "/noebs.wallet.v1.WalletPublicService/ConfirmUser2FA"
-	WalletPublicService_DisableUser2FA_FullMethodName                  = "/noebs.wallet.v1.WalletPublicService/DisableUser2FA"
 )
 
 // WalletPublicServiceClient is the client API for WalletPublicService service.
@@ -56,10 +52,6 @@ type WalletPublicServiceClient interface {
 	DeactivateWithdrawalDestination(ctx context.Context, in *DeactivateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	RequestOwnershipVerification(ctx context.Context, in *RequestOwnershipVerificationRequest, opts ...grpc.CallOption) (*OwnershipVerification, error)
 	CompleteOwnershipVerification(ctx context.Context, in *CompleteOwnershipVerificationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	SetWalletPIN(ctx context.Context, in *SetWalletPINRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	EnrollUser2FA(ctx context.Context, in *EnrollUser2FARequest, opts ...grpc.CallOption) (*User2FASetup, error)
-	ConfirmUser2FA(ctx context.Context, in *ConfirmUser2FARequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	DisableUser2FA(ctx context.Context, in *DisableUser2FARequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type walletPublicServiceClient struct {
@@ -200,46 +192,6 @@ func (c *walletPublicServiceClient) CompleteOwnershipVerification(ctx context.Co
 	return out, nil
 }
 
-func (c *walletPublicServiceClient) SetWalletPIN(ctx context.Context, in *SetWalletPINRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, WalletPublicService_SetWalletPIN_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *walletPublicServiceClient) EnrollUser2FA(ctx context.Context, in *EnrollUser2FARequest, opts ...grpc.CallOption) (*User2FASetup, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(User2FASetup)
-	err := c.cc.Invoke(ctx, WalletPublicService_EnrollUser2FA_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *walletPublicServiceClient) ConfirmUser2FA(ctx context.Context, in *ConfirmUser2FARequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, WalletPublicService_ConfirmUser2FA_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *walletPublicServiceClient) DisableUser2FA(ctx context.Context, in *DisableUser2FARequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, WalletPublicService_DisableUser2FA_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // WalletPublicServiceServer is the server API for WalletPublicService service.
 // All implementations must embed UnimplementedWalletPublicServiceServer
 // for forward compatibility.
@@ -257,10 +209,6 @@ type WalletPublicServiceServer interface {
 	DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*emptypb.Empty, error)
 	RequestOwnershipVerification(context.Context, *RequestOwnershipVerificationRequest) (*OwnershipVerification, error)
 	CompleteOwnershipVerification(context.Context, *CompleteOwnershipVerificationRequest) (*emptypb.Empty, error)
-	SetWalletPIN(context.Context, *SetWalletPINRequest) (*emptypb.Empty, error)
-	EnrollUser2FA(context.Context, *EnrollUser2FARequest) (*User2FASetup, error)
-	ConfirmUser2FA(context.Context, *ConfirmUser2FARequest) (*emptypb.Empty, error)
-	DisableUser2FA(context.Context, *DisableUser2FARequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedWalletPublicServiceServer()
 }
 
@@ -309,18 +257,6 @@ func (UnimplementedWalletPublicServiceServer) RequestOwnershipVerification(conte
 }
 func (UnimplementedWalletPublicServiceServer) CompleteOwnershipVerification(context.Context, *CompleteOwnershipVerificationRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CompleteOwnershipVerification not implemented")
-}
-func (UnimplementedWalletPublicServiceServer) SetWalletPIN(context.Context, *SetWalletPINRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetWalletPIN not implemented")
-}
-func (UnimplementedWalletPublicServiceServer) EnrollUser2FA(context.Context, *EnrollUser2FARequest) (*User2FASetup, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method EnrollUser2FA not implemented")
-}
-func (UnimplementedWalletPublicServiceServer) ConfirmUser2FA(context.Context, *ConfirmUser2FARequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ConfirmUser2FA not implemented")
-}
-func (UnimplementedWalletPublicServiceServer) DisableUser2FA(context.Context, *DisableUser2FARequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DisableUser2FA not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) mustEmbedUnimplementedWalletPublicServiceServer() {}
 func (UnimplementedWalletPublicServiceServer) testEmbeddedByValue()                             {}
@@ -577,78 +513,6 @@ func _WalletPublicService_CompleteOwnershipVerification_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WalletPublicService_SetWalletPIN_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetWalletPINRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletPublicServiceServer).SetWalletPIN(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WalletPublicService_SetWalletPIN_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).SetWalletPIN(ctx, req.(*SetWalletPINRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WalletPublicService_EnrollUser2FA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnrollUser2FARequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletPublicServiceServer).EnrollUser2FA(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WalletPublicService_EnrollUser2FA_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).EnrollUser2FA(ctx, req.(*EnrollUser2FARequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WalletPublicService_ConfirmUser2FA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfirmUser2FARequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletPublicServiceServer).ConfirmUser2FA(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WalletPublicService_ConfirmUser2FA_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).ConfirmUser2FA(ctx, req.(*ConfirmUser2FARequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WalletPublicService_DisableUser2FA_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DisableUser2FARequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletPublicServiceServer).DisableUser2FA(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WalletPublicService_DisableUser2FA_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletPublicServiceServer).DisableUser2FA(ctx, req.(*DisableUser2FARequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // WalletPublicService_ServiceDesc is the grpc.ServiceDesc for WalletPublicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -707,22 +571,6 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteOwnershipVerification",
 			Handler:    _WalletPublicService_CompleteOwnershipVerification_Handler,
-		},
-		{
-			MethodName: "SetWalletPIN",
-			Handler:    _WalletPublicService_SetWalletPIN_Handler,
-		},
-		{
-			MethodName: "EnrollUser2FA",
-			Handler:    _WalletPublicService_EnrollUser2FA_Handler,
-		},
-		{
-			MethodName: "ConfirmUser2FA",
-			Handler:    _WalletPublicService_ConfirmUser2FA_Handler,
-		},
-		{
-			MethodName: "DisableUser2FA",
-			Handler:    _WalletPublicService_DisableUser2FA_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

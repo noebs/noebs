@@ -71,13 +71,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if req.DestinationId > 0 && verificationTimeoutSeconds <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingVerificationTimeout.Error())
 	}
-	requirePIN, require2FA, approvalRequired := withdrawalRequirements(s.Service.Config, req.Amount)
-	if requirePIN && missingRequiredText(req.WalletPin) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
-	}
-	if require2FA && missingRequiredText(req.TwoFaCode) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
-	}
+	approvalRequired := withdrawalApprovalRequired(s.Service.Config, req.Amount)
 	approvalTimeoutSeconds := int(req.ApprovalTimeoutSeconds)
 	if approvalRequired && approvalTimeoutSeconds <= 0 {
 		approvalTimeoutSeconds = s.Service.Config.WalletApprovalTimeoutSeconds
@@ -93,10 +87,6 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	if err != nil {
 		return nil, err
 	}
-	userID, err := bindUserIDToClaims(req.UserId, claims)
-	if err != nil {
-		return nil, err
-	}
 	ownerType, ownerID, err := bindOwnerToClaims(req.OwnerType, req.OwnerId, claims)
 	if err != nil {
 		return nil, err
@@ -108,16 +98,12 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingOwnerID.Error())
 	}
 	req.TenantId = tenantID
-	req.UserId = userID
 	req.OwnerType = ownerType
 	req.OwnerId = ownerID
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
 	}
 
-	if require2FA && req.UserId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
-	}
 	if err := s.validateWithdrawalRequest(ctx, req, walletID); err != nil {
 		return nil, mapError(err)
 	}
@@ -130,7 +116,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 	workflowID := withdrawalWorkflowID(req.TenantId, req.ClientReference)
 	idempotencyKey := textOrDefault(req.IdempotencyKey, req.ClientReference)
 	metadata := metadataFromStruct(req.Metadata)
-	rawRequest, err := withdrawalRawRequest(req, allowReturnToSource, requirePIN, require2FA, approvalRequired, metadata)
+	rawRequest, err := withdrawalRawRequest(req, allowReturnToSource, approvalRequired, metadata)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -170,11 +156,6 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.Withdrawal
 		WalletID:                   req.WalletId,
 		OwnerType:                  req.OwnerType,
 		OwnerID:                    req.OwnerId,
-		UserID:                     req.UserId,
-		WalletPIN:                  req.WalletPin,
-		RequirePIN:                 requirePIN,
-		TwoFACode:                  req.TwoFaCode,
-		Require2FA:                 require2FA,
 		DestinationID:              req.DestinationId,
 		AllowReturnToSource:        allowReturnToSource,
 		ApprovalRequired:           approvalRequired,
@@ -275,21 +256,8 @@ func (s *Server) signalWithdrawalApproval(ctx context.Context, command withdrawa
 	))
 }
 
-func withdrawalRequirements(cfg ebs_fields.NoebsConfig, amount int64) (bool, bool, bool) {
-	requirePIN := cfg.WalletPINRequired
-	require2FA := false
-	approvalRequired := false
-
-	if cfg.Wallet2FAThreshold > 0 && amount >= cfg.Wallet2FAThreshold {
-		require2FA = true
-		requirePIN = true
-	}
-	if cfg.WalletApprovalThreshold > 0 && amount >= cfg.WalletApprovalThreshold {
-		approvalRequired = true
-		requirePIN = true
-		require2FA = true
-	}
-	return requirePIN, require2FA, approvalRequired
+func withdrawalApprovalRequired(cfg ebs_fields.NoebsConfig, amount int64) bool {
+	return cfg.WalletApprovalThreshold > 0 && amount >= cfg.WalletApprovalThreshold
 }
 
 func withdrawalWorkflowID(tenantID, clientReference string) string {
@@ -300,7 +268,7 @@ func withdrawalWorkflowIDPrefix(tenantID string) string {
 	return fmt.Sprintf("wallet-withdrawal-%s-", tenantID)
 }
 
-func withdrawalRawRequest(req *walletv1.WithdrawalRequest, allowReturnToSource, requirePIN, require2FA, approvalRequired bool, metadata map[string]any) (json.RawMessage, error) {
+func withdrawalRawRequest(req *walletv1.WithdrawalRequest, allowReturnToSource, approvalRequired bool, metadata map[string]any) (json.RawMessage, error) {
 	payload := map[string]any{
 		"tenant_id":              req.TenantId,
 		"client_reference":       req.ClientReference,
@@ -308,13 +276,10 @@ func withdrawalRawRequest(req *walletv1.WithdrawalRequest, allowReturnToSource, 
 		"wallet_id":              req.WalletId,
 		"amount":                 req.Amount,
 		"currency":               req.Currency,
-		"user_id":                req.UserId,
 		"owner_type":             req.OwnerType,
 		"owner_id":               req.OwnerId,
 		"destination_id":         req.DestinationId,
 		"allow_return_to_source": allowReturnToSource,
-		"require_pin":            requirePIN,
-		"require_2fa":            require2FA,
 		"approval_required":      approvalRequired,
 		"region":                 req.Region,
 		"metadata":               metadata,

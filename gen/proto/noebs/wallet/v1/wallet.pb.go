@@ -1105,9 +1105,6 @@ type P2PTransferRequest struct {
 	FromOwnerId    string                 `protobuf:"bytes,10,opt,name=from_owner_id,json=fromOwnerId,proto3" json:"from_owner_id,omitempty"`
 	ToOwnerType    string                 `protobuf:"bytes,11,opt,name=to_owner_type,json=toOwnerType,proto3" json:"to_owner_type,omitempty"`
 	ToOwnerId      string                 `protobuf:"bytes,12,opt,name=to_owner_id,json=toOwnerId,proto3" json:"to_owner_id,omitempty"`
-	UserId         int64                  `protobuf:"varint,13,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	WalletPin      string                 `protobuf:"bytes,14,opt,name=wallet_pin,json=walletPin,proto3" json:"wallet_pin,omitempty"`
-	TwoFaCode      string                 `protobuf:"bytes,15,opt,name=two_fa_code,json=twoFaCode,proto3" json:"two_fa_code,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1222,27 +1219,6 @@ func (x *P2PTransferRequest) GetToOwnerType() string {
 func (x *P2PTransferRequest) GetToOwnerId() string {
 	if x != nil {
 		return x.ToOwnerId
-	}
-	return ""
-}
-
-func (x *P2PTransferRequest) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
-func (x *P2PTransferRequest) GetWalletPin() string {
-	if x != nil {
-		return x.WalletPin
-	}
-	return ""
-}
-
-func (x *P2PTransferRequest) GetTwoFaCode() string {
-	if x != nil {
-		return x.TwoFaCode
 	}
 	return ""
 }
@@ -1403,13 +1379,10 @@ type WithdrawalRequest struct {
 	WalletId                   string                 `protobuf:"bytes,4,opt,name=wallet_id,json=walletId,proto3" json:"wallet_id,omitempty"`
 	Amount                     int64                  `protobuf:"varint,5,opt,name=amount,proto3" json:"amount,omitempty"`
 	Currency                   string                 `protobuf:"bytes,6,opt,name=currency,proto3" json:"currency,omitempty"`
-	UserId                     int64                  `protobuf:"varint,7,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	OwnerType                  string                 `protobuf:"bytes,8,opt,name=owner_type,json=ownerType,proto3" json:"owner_type,omitempty"`
 	OwnerId                    string                 `protobuf:"bytes,9,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
 	DestinationId              int64                  `protobuf:"varint,10,opt,name=destination_id,json=destinationId,proto3" json:"destination_id,omitempty"`
 	AllowReturnToSource        *bool                  `protobuf:"varint,11,opt,name=allow_return_to_source,json=allowReturnToSource,proto3,oneof" json:"allow_return_to_source,omitempty"`
-	WalletPin                  string                 `protobuf:"bytes,12,opt,name=wallet_pin,json=walletPin,proto3" json:"wallet_pin,omitempty"`
-	TwoFaCode                  string                 `protobuf:"bytes,13,opt,name=two_fa_code,json=twoFaCode,proto3" json:"two_fa_code,omitempty"`
 	HoldExpirySeconds          int32                  `protobuf:"varint,14,opt,name=hold_expiry_seconds,json=holdExpirySeconds,proto3" json:"hold_expiry_seconds,omitempty"`
 	ApprovalTimeoutSeconds     int32                  `protobuf:"varint,15,opt,name=approval_timeout_seconds,json=approvalTimeoutSeconds,proto3" json:"approval_timeout_seconds,omitempty"`
 	VerificationTimeoutSeconds int32                  `protobuf:"varint,16,opt,name=verification_timeout_seconds,json=verificationTimeoutSeconds,proto3" json:"verification_timeout_seconds,omitempty"`
@@ -1492,13 +1465,6 @@ func (x *WithdrawalRequest) GetCurrency() string {
 	return ""
 }
 
-func (x *WithdrawalRequest) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
 func (x *WithdrawalRequest) GetOwnerType() string {
 	if x != nil {
 		return x.OwnerType
@@ -1525,20 +1491,6 @@ func (x *WithdrawalRequest) GetAllowReturnToSource() bool {
 		return *x.AllowReturnToSource
 	}
 	return false
-}
-
-func (x *WithdrawalRequest) GetWalletPin() string {
-	if x != nil {
-		return x.WalletPin
-	}
-	return ""
-}
-
-func (x *WithdrawalRequest) GetTwoFaCode() string {
-	if x != nil {
-		return x.TwoFaCode
-	}
-	return ""
 }
 
 func (x *WithdrawalRequest) GetHoldExpirySeconds() int32 {
@@ -2631,390 +2583,6 @@ func (x *CompleteOwnershipVerificationRequest) GetReason() string {
 	return ""
 }
 
-type SetWalletPINRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	WalletId      string                 `protobuf:"bytes,2,opt,name=wallet_id,json=walletId,proto3" json:"wallet_id,omitempty"`
-	NewPin        string                 `protobuf:"bytes,3,opt,name=new_pin,json=newPin,proto3" json:"new_pin,omitempty"`
-	CurrentPin    string                 `protobuf:"bytes,4,opt,name=current_pin,json=currentPin,proto3" json:"current_pin,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *SetWalletPINRequest) Reset() {
-	*x = SetWalletPINRequest{}
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[27]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *SetWalletPINRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*SetWalletPINRequest) ProtoMessage() {}
-
-func (x *SetWalletPINRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[27]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use SetWalletPINRequest.ProtoReflect.Descriptor instead.
-func (*SetWalletPINRequest) Descriptor() ([]byte, []int) {
-	return file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{27}
-}
-
-func (x *SetWalletPINRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *SetWalletPINRequest) GetWalletId() string {
-	if x != nil {
-		return x.WalletId
-	}
-	return ""
-}
-
-func (x *SetWalletPINRequest) GetNewPin() string {
-	if x != nil {
-		return x.NewPin
-	}
-	return ""
-}
-
-func (x *SetWalletPINRequest) GetCurrentPin() string {
-	if x != nil {
-		return x.CurrentPin
-	}
-	return ""
-}
-
-type ResetWalletPINRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	WalletId      string                 `protobuf:"bytes,2,opt,name=wallet_id,json=walletId,proto3" json:"wallet_id,omitempty"`
-	NewPin        string                 `protobuf:"bytes,3,opt,name=new_pin,json=newPin,proto3" json:"new_pin,omitempty"`
-	AdminId       int64                  `protobuf:"varint,4,opt,name=admin_id,json=adminId,proto3" json:"admin_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ResetWalletPINRequest) Reset() {
-	*x = ResetWalletPINRequest{}
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[28]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ResetWalletPINRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ResetWalletPINRequest) ProtoMessage() {}
-
-func (x *ResetWalletPINRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[28]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ResetWalletPINRequest.ProtoReflect.Descriptor instead.
-func (*ResetWalletPINRequest) Descriptor() ([]byte, []int) {
-	return file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{28}
-}
-
-func (x *ResetWalletPINRequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ResetWalletPINRequest) GetWalletId() string {
-	if x != nil {
-		return x.WalletId
-	}
-	return ""
-}
-
-func (x *ResetWalletPINRequest) GetNewPin() string {
-	if x != nil {
-		return x.NewPin
-	}
-	return ""
-}
-
-func (x *ResetWalletPINRequest) GetAdminId() int64 {
-	if x != nil {
-		return x.AdminId
-	}
-	return 0
-}
-
-type EnrollUser2FARequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *EnrollUser2FARequest) Reset() {
-	*x = EnrollUser2FARequest{}
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[29]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *EnrollUser2FARequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*EnrollUser2FARequest) ProtoMessage() {}
-
-func (x *EnrollUser2FARequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[29]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use EnrollUser2FARequest.ProtoReflect.Descriptor instead.
-func (*EnrollUser2FARequest) Descriptor() ([]byte, []int) {
-	return file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{29}
-}
-
-func (x *EnrollUser2FARequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *EnrollUser2FARequest) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
-type User2FASetup struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Secret        string                 `protobuf:"bytes,3,opt,name=secret,proto3" json:"secret,omitempty"`
-	OtpAuthUrl    string                 `protobuf:"bytes,4,opt,name=otp_auth_url,json=otpAuthUrl,proto3" json:"otp_auth_url,omitempty"`
-	Enabled       bool                   `protobuf:"varint,5,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *User2FASetup) Reset() {
-	*x = User2FASetup{}
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[30]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *User2FASetup) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*User2FASetup) ProtoMessage() {}
-
-func (x *User2FASetup) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[30]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use User2FASetup.ProtoReflect.Descriptor instead.
-func (*User2FASetup) Descriptor() ([]byte, []int) {
-	return file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{30}
-}
-
-func (x *User2FASetup) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *User2FASetup) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
-func (x *User2FASetup) GetSecret() string {
-	if x != nil {
-		return x.Secret
-	}
-	return ""
-}
-
-func (x *User2FASetup) GetOtpAuthUrl() string {
-	if x != nil {
-		return x.OtpAuthUrl
-	}
-	return ""
-}
-
-func (x *User2FASetup) GetEnabled() bool {
-	if x != nil {
-		return x.Enabled
-	}
-	return false
-}
-
-type ConfirmUser2FARequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Code          string                 `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ConfirmUser2FARequest) Reset() {
-	*x = ConfirmUser2FARequest{}
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[31]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ConfirmUser2FARequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ConfirmUser2FARequest) ProtoMessage() {}
-
-func (x *ConfirmUser2FARequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[31]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ConfirmUser2FARequest.ProtoReflect.Descriptor instead.
-func (*ConfirmUser2FARequest) Descriptor() ([]byte, []int) {
-	return file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{31}
-}
-
-func (x *ConfirmUser2FARequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *ConfirmUser2FARequest) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
-func (x *ConfirmUser2FARequest) GetCode() string {
-	if x != nil {
-		return x.Code
-	}
-	return ""
-}
-
-type DisableUser2FARequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TenantId      string                 `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Code          string                 `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DisableUser2FARequest) Reset() {
-	*x = DisableUser2FARequest{}
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[32]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DisableUser2FARequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DisableUser2FARequest) ProtoMessage() {}
-
-func (x *DisableUser2FARequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_noebs_wallet_v1_wallet_proto_msgTypes[32]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DisableUser2FARequest.ProtoReflect.Descriptor instead.
-func (*DisableUser2FARequest) Descriptor() ([]byte, []int) {
-	return file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP(), []int{32}
-}
-
-func (x *DisableUser2FARequest) GetTenantId() string {
-	if x != nil {
-		return x.TenantId
-	}
-	return ""
-}
-
-func (x *DisableUser2FARequest) GetUserId() int64 {
-	if x != nil {
-		return x.UserId
-	}
-	return 0
-}
-
-func (x *DisableUser2FARequest) GetCode() string {
-	if x != nil {
-		return x.Code
-	}
-	return ""
-}
-
 var File_proto_noebs_wallet_v1_wallet_proto protoreflect.FileDescriptor
 
 const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
@@ -3129,7 +2697,7 @@ const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\vWorkflowRun\x12\x1f\n" +
 	"\vworkflow_id\x18\x01 \x01(\tR\n" +
 	"workflowId\x12\x15\n" +
-	"\x06run_id\x18\x02 \x01(\tR\x05runId\"\x83\x04\n" +
+	"\x06run_id\x18\x02 \x01(\tR\x05runId\"\xab\x03\n" +
 	"\x12P2PTransferRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12'\n" +
 	"\x0fidempotency_key\x18\x02 \x01(\tR\x0eidempotencyKey\x12\x1a\n" +
@@ -3144,11 +2712,7 @@ const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\rfrom_owner_id\x18\n" +
 	" \x01(\tR\vfromOwnerId\x12\"\n" +
 	"\rto_owner_type\x18\v \x01(\tR\vtoOwnerType\x12\x1e\n" +
-	"\vto_owner_id\x18\f \x01(\tR\ttoOwnerId\x12\x17\n" +
-	"\auser_id\x18\r \x01(\x03R\x06userId\x12\x1d\n" +
-	"\n" +
-	"wallet_pin\x18\x0e \x01(\tR\twalletPin\x12\x1e\n" +
-	"\vtwo_fa_code\x18\x0f \x01(\tR\ttwoFaCode\"\x92\x04\n" +
+	"\vto_owner_id\x18\f \x01(\tR\ttoOwnerId\"\x92\x04\n" +
 	"\x0eDepositRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12)\n" +
 	"\x10client_reference\x18\x02 \x01(\tR\x0fclientReference\x12#\n" +
@@ -3169,24 +2733,20 @@ const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\bmetadata\x18\r \x01(\v2\x17.google.protobuf.StructR\bmetadata\x12\x16\n" +
 	"\x06region\x18\x0e \x01(\tR\x06regionB\r\n" +
 	"\v_fee_amountB\r\n" +
-	"\v_net_amount\"\x81\x06\n" +
+	"\v_net_amount\"\xa9\x05\n" +
 	"\x11WithdrawalRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12)\n" +
 	"\x10client_reference\x18\x02 \x01(\tR\x0fclientReference\x12#\n" +
 	"\rprovider_code\x18\x03 \x01(\tR\fproviderCode\x12\x1b\n" +
 	"\twallet_id\x18\x04 \x01(\tR\bwalletId\x12\x16\n" +
 	"\x06amount\x18\x05 \x01(\x03R\x06amount\x12\x1a\n" +
-	"\bcurrency\x18\x06 \x01(\tR\bcurrency\x12\x17\n" +
-	"\auser_id\x18\a \x01(\x03R\x06userId\x12\x1d\n" +
+	"\bcurrency\x18\x06 \x01(\tR\bcurrency\x12\x1d\n" +
 	"\n" +
 	"owner_type\x18\b \x01(\tR\townerType\x12\x19\n" +
 	"\bowner_id\x18\t \x01(\tR\aownerId\x12%\n" +
 	"\x0edestination_id\x18\n" +
 	" \x01(\x03R\rdestinationId\x128\n" +
-	"\x16allow_return_to_source\x18\v \x01(\bH\x00R\x13allowReturnToSource\x88\x01\x01\x12\x1d\n" +
-	"\n" +
-	"wallet_pin\x18\f \x01(\tR\twalletPin\x12\x1e\n" +
-	"\vtwo_fa_code\x18\r \x01(\tR\ttwoFaCode\x12.\n" +
+	"\x16allow_return_to_source\x18\v \x01(\bH\x00R\x13allowReturnToSource\x88\x01\x01\x12.\n" +
 	"\x13hold_expiry_seconds\x18\x0e \x01(\x05R\x11holdExpirySeconds\x128\n" +
 	"\x18approval_timeout_seconds\x18\x0f \x01(\x05R\x16approvalTimeoutSeconds\x12@\n" +
 	"\x1cverification_timeout_seconds\x18\x10 \x01(\x05R\x1averificationTimeoutSeconds\x12'\n" +
@@ -3291,36 +2851,7 @@ const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12'\n" +
 	"\x0fverification_id\x18\x02 \x01(\x03R\x0everificationId\x12\x1a\n" +
 	"\bverified\x18\x03 \x01(\bR\bverified\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x89\x01\n" +
-	"\x13SetWalletPINRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1b\n" +
-	"\twallet_id\x18\x02 \x01(\tR\bwalletId\x12\x17\n" +
-	"\anew_pin\x18\x03 \x01(\tR\x06newPin\x12\x1f\n" +
-	"\vcurrent_pin\x18\x04 \x01(\tR\n" +
-	"currentPin\"\x85\x01\n" +
-	"\x15ResetWalletPINRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1b\n" +
-	"\twallet_id\x18\x02 \x01(\tR\bwalletId\x12\x17\n" +
-	"\anew_pin\x18\x03 \x01(\tR\x06newPin\x12\x19\n" +
-	"\badmin_id\x18\x04 \x01(\x03R\aadminId\"L\n" +
-	"\x14EnrollUser2FARequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\"\x98\x01\n" +
-	"\fUser2FASetup\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x16\n" +
-	"\x06secret\x18\x03 \x01(\tR\x06secret\x12 \n" +
-	"\fotp_auth_url\x18\x04 \x01(\tR\n" +
-	"otpAuthUrl\x12\x18\n" +
-	"\aenabled\x18\x05 \x01(\bR\aenabled\"a\n" +
-	"\x15ConfirmUser2FARequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
-	"\x04code\x18\x03 \x01(\tR\x04code\"a\n" +
-	"\x15DisableUser2FARequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x12\n" +
-	"\x04code\x18\x03 \x01(\tR\x04code*\xc7\x05\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason*\xc7\x05\n" +
 	"\x11AdminWalletAction\x12#\n" +
 	"\x1fADMIN_WALLET_ACTION_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dADMIN_WALLET_ACTION_DASHBOARD\x10\x01\x12$\n" +
@@ -3339,7 +2870,7 @@ const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\x1eADMIN_WALLET_ACTION_LIST_RATES\x10\r\x12#\n" +
 	"\x1fADMIN_WALLET_ACTION_CREATE_RATE\x10\x0e\x12(\n" +
 	"$ADMIN_WALLET_ACTION_APPROVE_TRANSFER\x10\x0f\x12'\n" +
-	"#ADMIN_WALLET_ACTION_REJECT_TRANSFER\x10\x102\xf1\x12\n" +
+	"#ADMIN_WALLET_ACTION_REJECT_TRANSFER\x10\x102\xf2\x0e\n" +
 	"\x13WalletPublicService\x12j\n" +
 	"\x0fGetWalletPublic\x12!.noebs.wallet.v1.GetWalletRequest\x1a\x17.noebs.wallet.v1.Wallet\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/wallet/{wallet_id}\x12g\n" +
 	"\x12EnsureWalletPublic\x12$.noebs.wallet.v1.EnsureWalletRequest\x1a\x17.noebs.wallet.v1.Wallet\"\x12\x82\xd3\xe4\x93\x02\f:\x01*\"\a/wallet\x12\x83\x01\n" +
@@ -3353,11 +2884,7 @@ const file_proto_noebs_wallet_v1_wallet_proto_rawDesc = "" +
 	"\x1aListWithdrawalDestinations\x122.noebs.wallet.v1.ListWithdrawalDestinationsRequest\x1a*.noebs.wallet.v1.WithdrawalDestinationList\"(\x82\xd3\xe4\x93\x02\"\x12 /wallet/{wallet_id}/destinations\x12\xaf\x01\n" +
 	"\x1fDeactivateWithdrawalDestination\x127.noebs.wallet.v1.DeactivateWithdrawalDestinationRequest\x1a\x16.google.protobuf.Empty\";\x82\xd3\xe4\x93\x025:\x01*\"0/wallet/destinations/{destination_id}/deactivate\x12\xb5\x01\n" +
 	"\x1cRequestOwnershipVerification\x124.noebs.wallet.v1.RequestOwnershipVerificationRequest\x1a&.noebs.wallet.v1.OwnershipVerification\"7\x82\xd3\xe4\x93\x021:\x01*\",/wallet/destinations/{destination_id}/verify\x12\xb5\x01\n" +
-	"\x1dCompleteOwnershipVerification\x125.noebs.wallet.v1.CompleteOwnershipVerificationRequest\x1a\x16.google.protobuf.Empty\"E\x82\xd3\xe4\x93\x02?:\x01*\":/wallet/ownership_verifications/{verification_id}/complete\x12p\n" +
-	"\fSetWalletPIN\x12$.noebs.wallet.v1.SetWalletPINRequest\x1a\x16.google.protobuf.Empty\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/wallet/{wallet_id}/pin\x12\x84\x01\n" +
-	"\rEnrollUser2FA\x12%.noebs.wallet.v1.EnrollUser2FARequest\x1a\x1d.noebs.wallet.v1.User2FASetup\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/wallet/users/{user_id}/2fa/enroll\x12\x80\x01\n" +
-	"\x0eConfirmUser2FA\x12&.noebs.wallet.v1.ConfirmUser2FARequest\x1a\x16.google.protobuf.Empty\".\x82\xd3\xe4\x93\x02(:\x01*\"#/wallet/users/{user_id}/2fa/confirm\x12\x80\x01\n" +
-	"\x0eDisableUser2FA\x12&.noebs.wallet.v1.DisableUser2FARequest\x1a\x16.google.protobuf.Empty\".\x82\xd3\xe4\x93\x02(:\x01*\"#/wallet/users/{user_id}/2fa/disable2v\n" +
+	"\x1dCompleteOwnershipVerification\x125.noebs.wallet.v1.CompleteOwnershipVerificationRequest\x1a\x16.google.protobuf.Empty\"E\x82\xd3\xe4\x93\x02?:\x01*\":/wallet/ownership_verifications/{verification_id}/complete2v\n" +
 	"\x12WalletAdminService\x12`\n" +
 	"\x11RenderWalletAdmin\x12#.noebs.wallet.v1.AdminWalletRequest\x1a$.noebs.wallet.v1.AdminWalletResponse\"\x00B=Z;github.com/adonese/noebs/gen/proto/noebs/wallet/v1;walletv1b\x06proto3"
 
@@ -3374,7 +2901,7 @@ func file_proto_noebs_wallet_v1_wallet_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_noebs_wallet_v1_wallet_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_noebs_wallet_v1_wallet_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_proto_noebs_wallet_v1_wallet_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_proto_noebs_wallet_v1_wallet_proto_goTypes = []any{
 	(AdminWalletAction)(0),                         // 0: noebs.wallet.v1.AdminWalletAction
 	(*AdminWalletRequest)(nil),                     // 1: noebs.wallet.v1.AdminWalletRequest
@@ -3404,35 +2931,29 @@ var file_proto_noebs_wallet_v1_wallet_proto_goTypes = []any{
 	(*OwnershipVerification)(nil),                  // 25: noebs.wallet.v1.OwnershipVerification
 	(*RequestOwnershipVerificationRequest)(nil),    // 26: noebs.wallet.v1.RequestOwnershipVerificationRequest
 	(*CompleteOwnershipVerificationRequest)(nil),   // 27: noebs.wallet.v1.CompleteOwnershipVerificationRequest
-	(*SetWalletPINRequest)(nil),                    // 28: noebs.wallet.v1.SetWalletPINRequest
-	(*ResetWalletPINRequest)(nil),                  // 29: noebs.wallet.v1.ResetWalletPINRequest
-	(*EnrollUser2FARequest)(nil),                   // 30: noebs.wallet.v1.EnrollUser2FARequest
-	(*User2FASetup)(nil),                           // 31: noebs.wallet.v1.User2FASetup
-	(*ConfirmUser2FARequest)(nil),                  // 32: noebs.wallet.v1.ConfirmUser2FARequest
-	(*DisableUser2FARequest)(nil),                  // 33: noebs.wallet.v1.DisableUser2FARequest
-	nil,                                            // 34: noebs.wallet.v1.AdminWalletRequest.QueryEntry
-	nil,                                            // 35: noebs.wallet.v1.AdminWalletRequest.FormEntry
-	nil,                                            // 36: noebs.wallet.v1.AdminWalletRequest.PathEntry
-	(*structpb.Struct)(nil),                        // 37: google.protobuf.Struct
-	(*emptypb.Empty)(nil),                          // 38: google.protobuf.Empty
+	nil,                     // 28: noebs.wallet.v1.AdminWalletRequest.QueryEntry
+	nil,                     // 29: noebs.wallet.v1.AdminWalletRequest.FormEntry
+	nil,                     // 30: noebs.wallet.v1.AdminWalletRequest.PathEntry
+	(*structpb.Struct)(nil), // 31: google.protobuf.Struct
+	(*emptypb.Empty)(nil),   // 32: google.protobuf.Empty
 }
 var file_proto_noebs_wallet_v1_wallet_proto_depIdxs = []int32{
 	0,  // 0: noebs.wallet.v1.AdminWalletRequest.action:type_name -> noebs.wallet.v1.AdminWalletAction
-	34, // 1: noebs.wallet.v1.AdminWalletRequest.query:type_name -> noebs.wallet.v1.AdminWalletRequest.QueryEntry
-	35, // 2: noebs.wallet.v1.AdminWalletRequest.form:type_name -> noebs.wallet.v1.AdminWalletRequest.FormEntry
-	36, // 3: noebs.wallet.v1.AdminWalletRequest.path:type_name -> noebs.wallet.v1.AdminWalletRequest.PathEntry
+	28, // 1: noebs.wallet.v1.AdminWalletRequest.query:type_name -> noebs.wallet.v1.AdminWalletRequest.QueryEntry
+	29, // 2: noebs.wallet.v1.AdminWalletRequest.form:type_name -> noebs.wallet.v1.AdminWalletRequest.FormEntry
+	30, // 3: noebs.wallet.v1.AdminWalletRequest.path:type_name -> noebs.wallet.v1.AdminWalletRequest.PathEntry
 	7,  // 4: noebs.wallet.v1.PaymentMethodList.methods:type_name -> noebs.wallet.v1.PaymentMethod
 	10, // 5: noebs.wallet.v1.WalletLedgerEntryList.transactions:type_name -> noebs.wallet.v1.WalletLedgerEntry
-	37, // 6: noebs.wallet.v1.DepositRequest.metadata:type_name -> google.protobuf.Struct
-	37, // 7: noebs.wallet.v1.WithdrawalRequest.metadata:type_name -> google.protobuf.Struct
-	37, // 8: noebs.wallet.v1.FundingSource.source_details:type_name -> google.protobuf.Struct
-	37, // 9: noebs.wallet.v1.FundingSource.withdrawal_method:type_name -> google.protobuf.Struct
+	31, // 6: noebs.wallet.v1.DepositRequest.metadata:type_name -> google.protobuf.Struct
+	31, // 7: noebs.wallet.v1.WithdrawalRequest.metadata:type_name -> google.protobuf.Struct
+	31, // 8: noebs.wallet.v1.FundingSource.source_details:type_name -> google.protobuf.Struct
+	31, // 9: noebs.wallet.v1.FundingSource.withdrawal_method:type_name -> google.protobuf.Struct
 	16, // 10: noebs.wallet.v1.FundingSourceList.sources:type_name -> noebs.wallet.v1.FundingSource
-	37, // 11: noebs.wallet.v1.CreateFundingSourceRequest.source_details:type_name -> google.protobuf.Struct
-	37, // 12: noebs.wallet.v1.CreateFundingSourceRequest.withdrawal_method:type_name -> google.protobuf.Struct
-	37, // 13: noebs.wallet.v1.WithdrawalDestination.destination_details:type_name -> google.protobuf.Struct
+	31, // 11: noebs.wallet.v1.CreateFundingSourceRequest.source_details:type_name -> google.protobuf.Struct
+	31, // 12: noebs.wallet.v1.CreateFundingSourceRequest.withdrawal_method:type_name -> google.protobuf.Struct
+	31, // 13: noebs.wallet.v1.WithdrawalDestination.destination_details:type_name -> google.protobuf.Struct
 	20, // 14: noebs.wallet.v1.WithdrawalDestinationList.destinations:type_name -> noebs.wallet.v1.WithdrawalDestination
-	37, // 15: noebs.wallet.v1.CreateWithdrawalDestinationRequest.destination_details:type_name -> google.protobuf.Struct
+	31, // 15: noebs.wallet.v1.CreateWithdrawalDestinationRequest.destination_details:type_name -> google.protobuf.Struct
 	4,  // 16: noebs.wallet.v1.WalletPublicService.GetWalletPublic:input_type -> noebs.wallet.v1.GetWalletRequest
 	5,  // 17: noebs.wallet.v1.WalletPublicService.EnsureWalletPublic:input_type -> noebs.wallet.v1.EnsureWalletRequest
 	6,  // 18: noebs.wallet.v1.WalletPublicService.ListPaymentMethodsPublic:input_type -> noebs.wallet.v1.ListPaymentMethodsRequest
@@ -3446,31 +2967,23 @@ var file_proto_noebs_wallet_v1_wallet_proto_depIdxs = []int32{
 	24, // 26: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:input_type -> noebs.wallet.v1.DeactivateWithdrawalDestinationRequest
 	26, // 27: noebs.wallet.v1.WalletPublicService.RequestOwnershipVerification:input_type -> noebs.wallet.v1.RequestOwnershipVerificationRequest
 	27, // 28: noebs.wallet.v1.WalletPublicService.CompleteOwnershipVerification:input_type -> noebs.wallet.v1.CompleteOwnershipVerificationRequest
-	28, // 29: noebs.wallet.v1.WalletPublicService.SetWalletPIN:input_type -> noebs.wallet.v1.SetWalletPINRequest
-	30, // 30: noebs.wallet.v1.WalletPublicService.EnrollUser2FA:input_type -> noebs.wallet.v1.EnrollUser2FARequest
-	32, // 31: noebs.wallet.v1.WalletPublicService.ConfirmUser2FA:input_type -> noebs.wallet.v1.ConfirmUser2FARequest
-	33, // 32: noebs.wallet.v1.WalletPublicService.DisableUser2FA:input_type -> noebs.wallet.v1.DisableUser2FARequest
-	1,  // 33: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:input_type -> noebs.wallet.v1.AdminWalletRequest
-	3,  // 34: noebs.wallet.v1.WalletPublicService.GetWalletPublic:output_type -> noebs.wallet.v1.Wallet
-	3,  // 35: noebs.wallet.v1.WalletPublicService.EnsureWalletPublic:output_type -> noebs.wallet.v1.Wallet
-	8,  // 36: noebs.wallet.v1.WalletPublicService.ListPaymentMethodsPublic:output_type -> noebs.wallet.v1.PaymentMethodList
-	11, // 37: noebs.wallet.v1.WalletPublicService.ListWalletTransactionsPublic:output_type -> noebs.wallet.v1.WalletLedgerEntryList
-	12, // 38: noebs.wallet.v1.WalletPublicService.RequestP2PTransfer:output_type -> noebs.wallet.v1.WorkflowRun
-	12, // 39: noebs.wallet.v1.WalletPublicService.RequestDeposit:output_type -> noebs.wallet.v1.WorkflowRun
-	12, // 40: noebs.wallet.v1.WalletPublicService.RequestWithdrawal:output_type -> noebs.wallet.v1.WorkflowRun
-	17, // 41: noebs.wallet.v1.WalletPublicService.ListFundingSources:output_type -> noebs.wallet.v1.FundingSourceList
-	20, // 42: noebs.wallet.v1.WalletPublicService.CreateWithdrawalDestination:output_type -> noebs.wallet.v1.WithdrawalDestination
-	21, // 43: noebs.wallet.v1.WalletPublicService.ListWithdrawalDestinations:output_type -> noebs.wallet.v1.WithdrawalDestinationList
-	38, // 44: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:output_type -> google.protobuf.Empty
-	25, // 45: noebs.wallet.v1.WalletPublicService.RequestOwnershipVerification:output_type -> noebs.wallet.v1.OwnershipVerification
-	38, // 46: noebs.wallet.v1.WalletPublicService.CompleteOwnershipVerification:output_type -> google.protobuf.Empty
-	38, // 47: noebs.wallet.v1.WalletPublicService.SetWalletPIN:output_type -> google.protobuf.Empty
-	31, // 48: noebs.wallet.v1.WalletPublicService.EnrollUser2FA:output_type -> noebs.wallet.v1.User2FASetup
-	38, // 49: noebs.wallet.v1.WalletPublicService.ConfirmUser2FA:output_type -> google.protobuf.Empty
-	38, // 50: noebs.wallet.v1.WalletPublicService.DisableUser2FA:output_type -> google.protobuf.Empty
-	2,  // 51: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:output_type -> noebs.wallet.v1.AdminWalletResponse
-	34, // [34:52] is the sub-list for method output_type
-	16, // [16:34] is the sub-list for method input_type
+	1,  // 29: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:input_type -> noebs.wallet.v1.AdminWalletRequest
+	3,  // 30: noebs.wallet.v1.WalletPublicService.GetWalletPublic:output_type -> noebs.wallet.v1.Wallet
+	3,  // 31: noebs.wallet.v1.WalletPublicService.EnsureWalletPublic:output_type -> noebs.wallet.v1.Wallet
+	8,  // 32: noebs.wallet.v1.WalletPublicService.ListPaymentMethodsPublic:output_type -> noebs.wallet.v1.PaymentMethodList
+	11, // 33: noebs.wallet.v1.WalletPublicService.ListWalletTransactionsPublic:output_type -> noebs.wallet.v1.WalletLedgerEntryList
+	12, // 34: noebs.wallet.v1.WalletPublicService.RequestP2PTransfer:output_type -> noebs.wallet.v1.WorkflowRun
+	12, // 35: noebs.wallet.v1.WalletPublicService.RequestDeposit:output_type -> noebs.wallet.v1.WorkflowRun
+	12, // 36: noebs.wallet.v1.WalletPublicService.RequestWithdrawal:output_type -> noebs.wallet.v1.WorkflowRun
+	17, // 37: noebs.wallet.v1.WalletPublicService.ListFundingSources:output_type -> noebs.wallet.v1.FundingSourceList
+	20, // 38: noebs.wallet.v1.WalletPublicService.CreateWithdrawalDestination:output_type -> noebs.wallet.v1.WithdrawalDestination
+	21, // 39: noebs.wallet.v1.WalletPublicService.ListWithdrawalDestinations:output_type -> noebs.wallet.v1.WithdrawalDestinationList
+	32, // 40: noebs.wallet.v1.WalletPublicService.DeactivateWithdrawalDestination:output_type -> google.protobuf.Empty
+	25, // 41: noebs.wallet.v1.WalletPublicService.RequestOwnershipVerification:output_type -> noebs.wallet.v1.OwnershipVerification
+	32, // 42: noebs.wallet.v1.WalletPublicService.CompleteOwnershipVerification:output_type -> google.protobuf.Empty
+	2,  // 43: noebs.wallet.v1.WalletAdminService.RenderWalletAdmin:output_type -> noebs.wallet.v1.AdminWalletResponse
+	30, // [30:44] is the sub-list for method output_type
+	16, // [16:30] is the sub-list for method input_type
 	16, // [16:16] is the sub-list for extension type_name
 	16, // [16:16] is the sub-list for extension extendee
 	0,  // [0:16] is the sub-list for field type_name
@@ -3491,7 +3004,7 @@ func file_proto_noebs_wallet_v1_wallet_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_noebs_wallet_v1_wallet_proto_rawDesc), len(file_proto_noebs_wallet_v1_wallet_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   36,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

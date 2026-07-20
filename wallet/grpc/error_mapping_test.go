@@ -23,7 +23,6 @@ func TestMapErrorMapsPSPValidationFailures(t *testing.T) {
 		{"invalid-verification-time", walletstore.ErrInvalidVerificationTime, codes.InvalidArgument},
 		{"invalid-verification-type", walletstore.ErrInvalidVerificationType, codes.InvalidArgument},
 		{"missing-status-timeout", walletstore.ErrMissingStatusTimeout, codes.InvalidArgument},
-		{"2fa-not-enabled", walletstore.ErrUserTwoFANotEnabled, codes.FailedPrecondition},
 	}
 
 	for _, tc := range cases {

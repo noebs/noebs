@@ -82,30 +82,6 @@ service WalletPublicService {
       body: "*"
     };
   }
-  rpc SetWalletPIN(SetWalletPINRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      post: "/wallet/{wallet_id}/pin"
-      body: "*"
-    };
-  }
-  rpc EnrollUser2FA(EnrollUser2FARequest) returns (User2FASetup) {
-    option (google.api.http) = {
-      post: "/wallet/users/{user_id}/2fa/enroll"
-      body: "*"
-    };
-  }
-  rpc ConfirmUser2FA(ConfirmUser2FARequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      post: "/wallet/users/{user_id}/2fa/confirm"
-      body: "*"
-    };
-  }
-  rpc DisableUser2FA(DisableUser2FARequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      post: "/wallet/users/{user_id}/2fa/disable"
-      body: "*"
-    };
-  }
 }
 
 service WalletAdminService {
@@ -249,9 +225,6 @@ message P2PTransferRequest {
   string from_owner_id = 10;
   string to_owner_type = 11;
   string to_owner_id = 12;
-  int64 user_id = 13;
-  string wallet_pin = 14;
-  string two_fa_code = 15;
 }
 
 message DepositRequest {
@@ -278,13 +251,10 @@ message WithdrawalRequest {
   string wallet_id = 4;
   int64 amount = 5;
   string currency = 6;
-  int64 user_id = 7;
   string owner_type = 8;
   string owner_id = 9;
   int64 destination_id = 10;
   optional bool allow_return_to_source = 11;
-  string wallet_pin = 12;
-  string two_fa_code = 13;
   int32 hold_expiry_seconds = 14;
   int32 approval_timeout_seconds = 15;
   int32 verification_timeout_seconds = 16;
@@ -404,43 +374,4 @@ message CompleteOwnershipVerificationRequest {
   int64 verification_id = 2;
   bool verified = 3;
   string reason = 4;
-}
-
-message SetWalletPINRequest {
-  string tenant_id = 1;
-  string wallet_id = 2;
-  string new_pin = 3;
-  string current_pin = 4;
-}
-
-message ResetWalletPINRequest {
-  string tenant_id = 1;
-  string wallet_id = 2;
-  string new_pin = 3;
-  int64 admin_id = 4;
-}
-
-message EnrollUser2FARequest {
-  string tenant_id = 1;
-  int64 user_id = 2;
-}
-
-message User2FASetup {
-  string tenant_id = 1;
-  int64 user_id = 2;
-  string secret = 3;
-  string otp_auth_url = 4;
-  bool enabled = 5;
-}
-
-message ConfirmUser2FARequest {
-  string tenant_id = 1;
-  int64 user_id = 2;
-  string code = 3;
-}
-
-message DisableUser2FARequest {
-  string tenant_id = 1;
-  int64 user_id = 2;
-  string code = 3;
 }

@@ -30,7 +30,6 @@ func TestTenantConstraintsBelongToTheirMigrationScope(t *testing.T) {
 				"ledger_funding_links",
 				"withdrawal_destinations",
 				"ownership_verifications",
-				"wallet_user_2fa",
 				"ledger_withdrawal_destination_links",
 			},
 		},

@@ -24,7 +24,6 @@ func TestAppConfigEndpointReturnsPublicConfig(t *testing.T) {
 	noebsConfig.DefaultTenantID = "tenant-1"
 	noebsConfig.WalletEnabled = true
 	noebsConfig.WalletDefaultCurrency = "SDG"
-	noebsConfig.WalletPINRequired = true
 	noebsConfig.OpaqueCardManagementEnabled = true
 	noebsConfig.OpaqueBalanceEnabled = false
 	noebsConfig.ChatEnabled = true

@@ -199,36 +199,3 @@ func ValidateEnsureWalletReplay(existing *Wallet, params EnsureWalletParams) err
 	}
 	return nil
 }
-
-func (s *Store) UpdateWalletPIN(ctx context.Context, tenantID string, walletID uuid.UUID, pinHash string, updatedAt time.Time) error {
-	tenantID, err := ValidateTenantID(tenantID)
-	if err != nil {
-		return err
-	}
-	if walletID == uuid.Nil {
-		return ErrMissingWalletID
-	}
-	if pinHash == "" {
-		return ErrMissingWalletPIN
-	}
-	if updatedAt.IsZero() {
-		return ErrMissingUpdatedAt
-	}
-	db, err := s.ensureDB()
-	if err != nil {
-		return err
-	}
-	stmt := s.DB.Rebind(`UPDATE wallets SET wallet_pin_hash = ?, updated_at = ? WHERE tenant_id = ? AND id = ?`)
-	result, err := db.ExecContext(ctx, stmt, pinHash, updatedAt, tenantID, walletID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		return ErrWalletNotFound
-	}
-	return nil
-}

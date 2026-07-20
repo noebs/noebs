@@ -47,35 +47,6 @@ func TestRequestP2PTransferRequiresIdempotency(t *testing.T) {
 	}
 }
 
-func TestRequestP2PTransferRequiresPIN(t *testing.T) {
-	svc := &wallet.Service{
-		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{WalletPINRequired: true},
-	}
-	server := NewServer(svc)
-
-	req := &walletv1.P2PTransferRequest{
-		TenantId:       "tenant",
-		IdempotencyKey: "p2p-1",
-		Currency:       "USD",
-		FromWalletId:   uuid.NewString(),
-		ToWalletId:     uuid.NewString(),
-		Amount:         100,
-		FromOwnerType:  "user",
-		FromOwnerId:    "1",
-		ToOwnerType:    "user",
-		ToOwnerId:      "2",
-	}
-
-	_, err := server.RequestP2PTransfer(walletGatewayIdentityContext(1, "tenant"), req)
-	if err == nil {
-		t.Fatalf("expected validation error")
-	}
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected invalid argument, got %v", status.Code(err))
-	}
-}
-
 func TestRequestP2PTransferPublicRequiresGatewayIdentity(t *testing.T) {
 	svc := &wallet.Service{
 		Store:  &walletstore.Store{},

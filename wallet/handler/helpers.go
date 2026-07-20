@@ -51,10 +51,6 @@ func mapWalletError(err error) error {
 		return nil
 	case errors.Is(err, wallet.ErrMissingStore):
 		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
-	case errors.Is(err, walletstore.ErrUserTwoFAAlreadyEnabled):
-		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
-	case errors.Is(err, walletstore.ErrUserTwoFANotEnabled):
-		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	case errors.Is(err, walletstore.ErrInvalidStatusTransition):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrDuplicateWallet),
@@ -67,8 +63,7 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrDestinationNotFound),
 		errors.Is(err, walletstore.ErrVerificationNotFound),
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
-		errors.Is(err, walletstore.ErrPSPTransactionNotFound),
-		errors.Is(err, walletstore.ErrUserTwoFANotFound):
+		errors.Is(err, walletstore.ErrPSPTransactionNotFound):
 		return apperr.Wrap(err, apperr.ErrNotFound, err.Error())
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),
@@ -104,11 +99,6 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidPercentage),
 		errors.Is(err, walletstore.ErrInvalidRate),
 		errors.Is(err, walletstore.ErrInvalidWalletPair),
-		errors.Is(err, walletstore.ErrMissingWalletPIN),
-		errors.Is(err, walletstore.ErrInvalidWalletPIN),
-		errors.Is(err, walletstore.ErrMissingTwoFACode),
-		errors.Is(err, walletstore.ErrInvalidTwoFACode),
-		errors.Is(err, walletstore.ErrMissingTwoFASecret),
 		errors.Is(err, walletstore.ErrMissingRequesterID),
 		errors.Is(err, walletstore.ErrMissingApproverID),
 		errors.Is(err, walletstore.ErrMissingDecision),

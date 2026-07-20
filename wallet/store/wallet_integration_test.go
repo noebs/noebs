@@ -55,65 +55,6 @@ func TestEnsureWalletRejectsMismatchedReplay(t *testing.T) {
 	}
 }
 
-func TestCreateOrResetUserTwoFADoesNotDisableEnabledSecret(t *testing.T) {
-	ctx, store, tenantID := newWalletStoreIntegration(t)
-
-	userID := int64(42)
-	original, err := store.CreateOrResetUserTwoFA(ctx, tenantID, userID, "secret-1")
-	if err != nil {
-		t.Fatalf("create 2fa: %v", err)
-	}
-	if original.Enabled {
-		t.Fatal("new 2fa record should start disabled")
-	}
-	enabledAt := time.Now().UTC()
-	if err := store.SetUserTwoFAEnabled(ctx, tenantID, userID, true, enabledAt); err != nil {
-		t.Fatalf("enable 2fa: %v", err)
-	}
-	if err := store.TouchUserTwoFALastUsed(ctx, tenantID, userID, enabledAt.Add(time.Second)); err != nil {
-		t.Fatalf("touch 2fa last used: %v", err)
-	}
-
-	if _, err := store.CreateOrResetUserTwoFA(ctx, tenantID, userID, "secret-2"); !errors.Is(err, ErrUserTwoFAAlreadyEnabled) {
-		t.Fatalf("reset enabled 2fa error = %v, want %v", err, ErrUserTwoFAAlreadyEnabled)
-	}
-	record, err := store.GetUserTwoFA(ctx, tenantID, userID)
-	if err != nil {
-		t.Fatalf("get 2fa after rejected reset: %v", err)
-	}
-	if !record.Enabled || record.Secret != "secret-1" {
-		t.Fatalf("enabled 2fa mutated on rejected reset: enabled=%v secret=%q", record.Enabled, record.Secret)
-	}
-	if !record.LastUsedAt.Valid {
-		t.Fatal("last_used_at should remain after rejected reset")
-	}
-
-	disabledAt := enabledAt.Add(2 * time.Second)
-	if err := store.SetUserTwoFAEnabled(ctx, tenantID, userID, false, disabledAt); err != nil {
-		t.Fatalf("disable 2fa: %v", err)
-	}
-	if err := store.TouchUserTwoFALastUsed(ctx, tenantID, userID, disabledAt.Add(time.Second)); !errors.Is(err, ErrUserTwoFANotEnabled) {
-		t.Fatalf("touch disabled 2fa error = %v, want %v", err, ErrUserTwoFANotEnabled)
-	}
-	disabledRecord, err := store.GetUserTwoFA(ctx, tenantID, userID)
-	if err != nil {
-		t.Fatalf("get disabled 2fa: %v", err)
-	}
-	if !disabledRecord.LastUsedAt.Valid || !timeEqualAtDBPrecision(disabledRecord.LastUsedAt.Time, enabledAt.Add(time.Second)) {
-		t.Fatalf("disabled 2fa last_used_at = %+v, want previous successful use", disabledRecord.LastUsedAt)
-	}
-	reset, err := store.CreateOrResetUserTwoFA(ctx, tenantID, userID, "secret-2")
-	if err != nil {
-		t.Fatalf("reset disabled 2fa: %v", err)
-	}
-	if reset.Enabled || reset.Secret != "secret-2" {
-		t.Fatalf("disabled reset record = enabled:%v secret:%q", reset.Enabled, reset.Secret)
-	}
-	if reset.EnabledAt.Valid || reset.DisabledAt.Valid || reset.LastUsedAt.Valid {
-		t.Fatalf("reset 2fa should clear enabled/disabled/last-used timestamps: %+v", reset)
-	}
-}
-
 func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
 	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{

@@ -19,8 +19,6 @@ func TestActivityNamesAreNonEmptySDKStrings(t *testing.T) {
 		ActivityVerifyDeposit,
 		ActivitySendPayout,
 		ActivityGetTransactionStatus,
-		ActivityVerifyWalletPIN,
-		ActivityVerifyUserTOTP,
 		ActivityEnsureSystemWallet,
 		ActivityRecordFundingSource,
 		ActivityLinkLedgerToFundingSource,

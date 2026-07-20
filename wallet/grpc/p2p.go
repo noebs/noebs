@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/adonese/noebs/ebs_fields"
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -37,13 +36,6 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if req.Amount <= 0 {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidAmount.Error())
 	}
-	requirePIN, require2FA := p2pRequirements(s.Service.Config, req.Amount)
-	if requirePIN && missingRequiredText(req.WalletPin) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletPIN.Error())
-	}
-	if require2FA && missingRequiredText(req.TwoFaCode) {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingTwoFACode.Error())
-	}
 	idempotencyKey, referenceID, err := resolveIdempotencyAndReference(req.IdempotencyKey, req.ReferenceId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -56,16 +48,11 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 	if err != nil {
 		return nil, err
 	}
-	userID, err := bindUserIDToClaims(req.UserId, claims)
-	if err != nil {
-		return nil, err
-	}
 	fromOwnerType, fromOwnerID, err := bindOwnerToClaims(req.FromOwnerType, req.FromOwnerId, claims)
 	if err != nil {
 		return nil, err
 	}
 	req.TenantId = tenantID
-	req.UserId = userID
 	req.FromOwnerType = fromOwnerType
 	req.FromOwnerId = fromOwnerID
 	if missingRequiredText(req.FromOwnerType) || missingRequiredText(req.ToOwnerType) {
@@ -86,9 +73,6 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 		return nil, err
 	}
 
-	if require2FA && req.UserId <= 0 {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrInvalidUserID.Error())
-	}
 	if err := s.validateP2PTransferRequest(ctx, req, fromWalletID, toWalletID); err != nil {
 		return nil, mapError(err)
 	}
@@ -111,11 +95,6 @@ func (s *Server) RequestP2PTransfer(ctx context.Context, req *walletv1.P2PTransf
 		FromWalletID:   req.FromWalletId,
 		ToWalletID:     req.ToWalletId,
 		Amount:         req.Amount,
-		UserID:         req.UserId,
-		WalletPIN:      req.WalletPin,
-		RequirePIN:     requirePIN,
-		TwoFACode:      req.TwoFaCode,
-		Require2FA:     require2FA,
 		Description:    req.Description,
 		ReferenceID:    referenceID,
 		FromOwnerType:  req.FromOwnerType,
@@ -160,15 +139,4 @@ func (s *Server) validateP2PTransferRequest(ctx context.Context, req *walletv1.P
 
 func p2pWorkflowID(tenantID, idempotencyKey string) string {
 	return fmt.Sprintf("wallet-p2p-%s-%s", tenantID, idempotencyKey)
-}
-
-func p2pRequirements(cfg ebs_fields.NoebsConfig, amount int64) (bool, bool) {
-	requirePIN := cfg.WalletPINRequired
-	require2FA := false
-
-	if cfg.Wallet2FAThreshold > 0 && amount >= cfg.Wallet2FAThreshold {
-		require2FA = true
-		requirePIN = true
-	}
-	return requirePIN, require2FA
 }

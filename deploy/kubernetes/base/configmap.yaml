@@ -31,8 +31,6 @@ data:
       temporal_port: "7233"
       temporal_namespace: "default"
       wallet_enabled: true
-      wallet_pin_required: true
-      wallet_2fa_threshold: 10000
       wallet_approval_threshold: 100000
       wallet_default_currency: "SDG"
       wallet_hold_expiry_seconds: 3600

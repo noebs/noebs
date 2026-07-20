@@ -212,7 +212,6 @@ wallet = payload.get("wallet")
 assert isinstance(wallet, dict)
 assert isinstance(wallet.get("enabled"), bool)
 assert isinstance(wallet.get("default_currency"), str) and wallet["default_currency"]
-assert isinstance(wallet.get("pin_required"), bool)
 serialized = json.dumps(payload).lower()
 for forbidden in ("jwt", "admin_key", "password", "secret", "private_key"):
     assert forbidden not in serialized

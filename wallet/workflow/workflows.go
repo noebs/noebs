@@ -52,11 +52,6 @@ type WithdrawalParams struct {
 	WalletID                   string
 	OwnerType                  string
 	OwnerID                    string
-	UserID                     int64
-	WalletPIN                  string
-	RequirePIN                 bool
-	TwoFACode                  string
-	Require2FA                 bool
 	DestinationID              int64
 	AllowReturnToSource        bool
 	ApprovalRequired           bool
@@ -74,11 +69,6 @@ type P2PParams struct {
 	FromWalletID   string
 	ToWalletID     string
 	Amount         int64
-	UserID         int64
-	WalletPIN      string
-	RequirePIN     bool
-	TwoFACode      string
-	Require2FA     bool
 	Description    string
 	ReferenceID    string
 	FromOwnerType  string
@@ -457,17 +447,6 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	if params.Request.Amount <= 0 {
 		return walletstore.ErrInvalidAmount
 	}
-	if params.RequirePIN && missingRequiredText(params.WalletPIN) {
-		return walletstore.ErrMissingWalletPIN
-	}
-	if params.Require2FA {
-		if params.UserID <= 0 {
-			return walletstore.ErrInvalidUserID
-		}
-		if missingRequiredText(params.TwoFACode) {
-			return walletstore.ErrMissingTwoFACode
-		}
-	}
 	if params.HoldExpirySeconds <= 0 {
 		return walletstore.ErrMissingHoldExpiry
 	}
@@ -499,25 +478,6 @@ func Withdrawal(ctx workflow.Context, params WithdrawalParams) error {
 	}
 
 	providerCode := params.ProviderCode
-
-	if params.RequirePIN {
-		var ok bool
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyWalletPIN, params.TenantID, walletID, params.WalletPIN).Get(ctx, &ok); err != nil {
-			return err
-		}
-		if !ok {
-			return walletstore.ErrInvalidWalletPIN
-		}
-	}
-	if params.Require2FA {
-		var ok bool
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyUserTOTP, params.TenantID, params.UserID, params.TwoFACode).Get(ctx, &ok); err != nil {
-			return err
-		}
-		if !ok {
-			return walletstore.ErrInvalidTwoFACode
-		}
-	}
 
 	validationReq := walletvalidation.WithdrawalValidationRequest{
 		TenantID:        params.TenantID,
@@ -1035,18 +995,6 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	if missingRequiredText(params.FromOwnerID) || missingRequiredText(params.ToOwnerID) {
 		return walletstore.ErrMissingOwnerID
 	}
-	if params.RequirePIN && missingRequiredText(params.WalletPIN) {
-		return walletstore.ErrMissingWalletPIN
-	}
-	if params.Require2FA {
-		if params.UserID <= 0 {
-			return walletstore.ErrInvalidUserID
-		}
-		if missingRequiredText(params.TwoFACode) {
-			return walletstore.ErrMissingTwoFACode
-		}
-	}
-
 	fromID, err := uuid.Parse(params.FromWalletID)
 	if err != nil {
 		return walletstore.ErrMissingWalletID
@@ -1067,25 +1015,6 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
 	})
-
-	if params.RequirePIN {
-		var ok bool
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyWalletPIN, params.TenantID, fromID, params.WalletPIN).Get(ctx, &ok); err != nil {
-			return err
-		}
-		if !ok {
-			return walletstore.ErrInvalidWalletPIN
-		}
-	}
-	if params.Require2FA {
-		var ok bool
-		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityVerifyUserTOTP, params.TenantID, params.UserID, params.TwoFACode).Get(ctx, &ok); err != nil {
-			return err
-		}
-		if !ok {
-			return walletstore.ErrInvalidTwoFACode
-		}
-	}
 
 	activityParams := walletstore.DoubleEntryParams{
 		TenantID:       params.TenantID,

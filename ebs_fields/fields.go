@@ -1018,8 +1018,6 @@ type NoebsConfig struct {
 
 	// Wallet
 	WalletEnabled                              bool   `json:"wallet_enabled"`
-	WalletPINRequired                          bool   `json:"wallet_pin_required"`
-	Wallet2FAThreshold                         int64  `json:"wallet_2fa_threshold"`
 	WalletApprovalThreshold                    int64  `json:"wallet_approval_threshold"`
 	WalletDefaultCurrency                      string `json:"wallet_default_currency"`
 	WalletHoldExpirySeconds                    int    `json:"wallet_hold_expiry_seconds"`

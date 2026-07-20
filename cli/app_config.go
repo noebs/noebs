@@ -19,7 +19,6 @@ type appConfigResponse struct {
 type appWalletConfig struct {
 	Enabled         bool   `json:"enabled"`
 	DefaultCurrency string `json:"default_currency"`
-	PINRequired     bool   `json:"pin_required"`
 }
 
 type appOAuthConfig struct {
@@ -46,7 +45,6 @@ func publicAppConfig(cfg ebs_fields.NoebsConfig) (appConfigResponse, error) {
 		Wallet: appWalletConfig{
 			Enabled:         cfg.WalletEnabled,
 			DefaultCurrency: strings.TrimSpace(cfg.WalletDefaultCurrency),
-			PINRequired:     cfg.WalletPINRequired,
 		},
 		OAuth: appOAuthConfig{
 			Issuer:      strings.TrimSpace(cfg.OIDC.Issuer),

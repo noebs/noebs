@@ -155,46 +155,6 @@ func TestWorkflowRequestsRejectBlankRequiredTextBeforeTemporal(t *testing.T) {
 			wantErr: walletstore.ErrMissingCurrency,
 		},
 		{
-			name: "withdrawal-pin",
-			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{WalletPINRequired: true}).RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
-					TenantId:          "tenant",
-					ClientReference:   "withdrawal-ref",
-					ProviderCode:      "noop",
-					WalletId:          uuid.NewString(),
-					Amount:            100,
-					Currency:          "USD",
-					OwnerType:         "user",
-					OwnerId:           "42",
-					WalletPin:         " \t ",
-					HoldExpirySeconds: 60,
-				})
-				return err
-			},
-			wantErr: walletstore.ErrMissingWalletPIN,
-		},
-		{
-			name: "withdrawal-2fa",
-			run: func() error {
-				_, err := baseServer(ebs_fields.NoebsConfig{Wallet2FAThreshold: 1}).RequestWithdrawal(ctx, &walletv1.WithdrawalRequest{
-					TenantId:          "tenant",
-					ClientReference:   "withdrawal-ref",
-					ProviderCode:      "noop",
-					WalletId:          uuid.NewString(),
-					Amount:            100,
-					Currency:          "USD",
-					UserId:            42,
-					OwnerType:         "user",
-					OwnerId:           "42",
-					WalletPin:         "1234",
-					TwoFaCode:         " \t ",
-					HoldExpirySeconds: 60,
-				})
-				return err
-			},
-			wantErr: walletstore.ErrMissingTwoFACode,
-		},
-		{
 			name: "p2p-idempotency-and-reference",
 			run: func() error {
 				_, err := baseServer(ebs_fields.NoebsConfig{}).RequestP2PTransfer(ctx, &walletv1.P2PTransferRequest{

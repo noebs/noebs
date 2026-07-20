@@ -17,7 +17,6 @@ import (
 	walletworker "github.com/adonese/noebs/wallet/worker"
 	walletworkflow "github.com/adonese/noebs/wallet/workflow"
 	"github.com/golang/mock/gomock"
-	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -44,36 +43,16 @@ func (s stubWorkflowRun) GetWithOptions(ctx context.Context, valuePtr interface{
 	return nil
 }
 
-func TestRequestWithdrawalRequiresPin(t *testing.T) {
-	svc := &wallet.Service{
-		Store:  &walletstore.Store{},
-		Config: ebs_fields.NoebsConfig{WalletPINRequired: true},
+func TestWithdrawalApprovalRequiredAtThreshold(t *testing.T) {
+	cfg := ebs_fields.NoebsConfig{WalletApprovalThreshold: 500}
+	if withdrawalApprovalRequired(cfg, 499) {
+		t.Fatal("approval required below threshold")
 	}
-	server := NewServer(svc)
-
-	req := &walletv1.WithdrawalRequest{
-		TenantId:                   "tenant",
-		ClientReference:            "ref-1",
-		ProviderCode:               "noop",
-		WalletId:                   uuid.NewString(),
-		Amount:                     500,
-		Currency:                   "USD",
-		OwnerType:                  "user",
-		OwnerId:                    "42",
-		DestinationId:              10,
-		HoldExpirySeconds:          60,
-		VerificationTimeoutSeconds: 60,
+	if !withdrawalApprovalRequired(cfg, 500) {
+		t.Fatal("approval not required at threshold")
 	}
-
-	_, err := server.RequestWithdrawal(walletGatewayIdentityContext(42, "tenant"), req)
-	if err == nil {
-		t.Fatalf("expected validation error")
-	}
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected invalid argument, got %v", status.Code(err))
-	}
-	if err.Error() == "" {
-		t.Fatalf("expected error message")
+	if withdrawalApprovalRequired(ebs_fields.NoebsConfig{}, 500) {
+		t.Fatal("approval required when threshold is disabled")
 	}
 }
 
@@ -140,9 +119,8 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	}
 
 	cfg := ebs_fields.NoebsConfig{
-		WalletPINRequired:                true,
-		Wallet2FAThreshold:               1,
-		WalletApprovalThreshold:          0,
+		WalletApprovalThreshold:          100,
+		WalletApprovalTimeoutSeconds:     120,
 		WalletHoldExpirySeconds:          3600,
 		WalletVerificationTimeoutSeconds: 300,
 	}
@@ -188,6 +166,9 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 			if params.VerificationTimeoutSeconds != cfg.WalletVerificationTimeoutSeconds {
 				t.Fatalf("expected verification timeout %d, got %d", cfg.WalletVerificationTimeoutSeconds, params.VerificationTimeoutSeconds)
 			}
+			if !params.ApprovalRequired || params.ApprovalTimeoutSeconds != cfg.WalletApprovalTimeoutSeconds {
+				t.Fatalf("approval controls = required:%v timeout:%d", params.ApprovalRequired, params.ApprovalTimeoutSeconds)
+			}
 			return run, nil
 		})
 
@@ -200,13 +181,10 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		WalletId:                   walletRow.ID.String(),
 		Amount:                     500,
 		Currency:                   "USD",
-		UserId:                     42,
 		OwnerType:                  "user",
 		OwnerId:                    "42",
 		DestinationId:              10,
 		AllowReturnToSource:        &allowReturn,
-		WalletPin:                  "1234",
-		TwoFaCode:                  "000000",
 		HoldExpirySeconds:          0,
 		ApprovalTimeoutSeconds:     0,
 		VerificationTimeoutSeconds: 0,
@@ -238,10 +216,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	if err := json.Unmarshal(stored.RawRequest, &raw); err != nil {
 		t.Fatalf("decode raw request: %v", err)
 	}
-	if _, ok := raw["wallet_pin"]; ok {
-		t.Fatalf("wallet_pin should not be stored")
-	}
-	if _, ok := raw["two_fa_code"]; ok {
-		t.Fatalf("two_fa_code should not be stored")
+	if approvalRequired, ok := raw["approval_required"].(bool); !ok || !approvalRequired {
+		t.Fatalf("approval_required = %#v, want true", raw["approval_required"])
 	}
 }

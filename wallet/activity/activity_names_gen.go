@@ -20,8 +20,6 @@ const (
 	ActivityVerifyDeposit                      ActivityName = "VerifyDeposit"
 	ActivitySendPayout                         ActivityName = "SendPayout"
 	ActivityGetTransactionStatus               ActivityName = "GetTransactionStatus"
-	ActivityVerifyWalletPIN                    ActivityName = "VerifyWalletPIN"
-	ActivityVerifyUserTOTP                     ActivityName = "VerifyUserTOTP"
 	ActivityEnsureSystemWallet                 ActivityName = "EnsureSystemWallet"
 	ActivityRecordFundingSource                ActivityName = "RecordFundingSource"
 	ActivityLinkLedgerToFundingSource          ActivityName = "LinkLedgerToFundingSource"

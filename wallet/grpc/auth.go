@@ -54,11 +54,7 @@ func (s *Server) requireAdminForInternalRPC(ctx context.Context) error {
 		walletv1.WalletPublicService_ListWithdrawalDestinations_FullMethodName,
 		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName,
 		walletv1.WalletPublicService_RequestOwnershipVerification_FullMethodName,
-		walletv1.WalletPublicService_CompleteOwnershipVerification_FullMethodName,
-		walletv1.WalletPublicService_SetWalletPIN_FullMethodName,
-		walletv1.WalletPublicService_EnrollUser2FA_FullMethodName,
-		walletv1.WalletPublicService_ConfirmUser2FA_FullMethodName,
-		walletv1.WalletPublicService_DisableUser2FA_FullMethodName:
+		walletv1.WalletPublicService_CompleteOwnershipVerification_FullMethodName:
 		return nil
 	default:
 		return status.Error(codes.PermissionDenied, "wallet method is outside the public service")
