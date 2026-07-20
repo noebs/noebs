@@ -113,7 +113,7 @@ func newWalletPSPTestServer(t *testing.T, cfg ebs_fields.NoebsConfig) (*Server, 
 	return NewServer(wallet.NewService(db, cfg)), tenantID, db
 }
 
-func seedWalletValidationRules(t *testing.T, ctx context.Context, db *basestore.DB, tenantID, providerCode, currency string, supportsDeposit, supportsWithdrawal bool) {
+func seedWalletValidationRules(t *testing.T, ctx context.Context, db *basestore.DB, tenantID, providerCode, currency string, operatorID int64, supportsDeposit, supportsWithdrawal bool) {
 	t.Helper()
 
 	pspStmt := db.Rebind(`INSERT INTO psp_configs(
@@ -128,10 +128,11 @@ func seedWalletValidationRules(t *testing.T, ctx context.Context, db *basestore.
 
 	for _, txType := range []string{"deposit", "withdrawal"} {
 		feeStmt := db.Rebind(`INSERT INTO fee_configs(
-			tenant_id, transaction_type, currency, tier_min, percentage_fee, flat_fee, min_fee, is_active
-		) VALUES(?, ?, ?, 0, 0, 0, 0, TRUE)
+			tenant_id, transaction_type, currency, tier_min, percentage_fee, flat_fee, min_fee, is_active,
+			created_by_operator_id
+		) VALUES(?, ?, ?, 0, 0, 0, 0, TRUE, ?)
 		ON CONFLICT (tenant_id, transaction_type, currency, tier_min) DO NOTHING`)
-		if _, err := db.ExecContext(ctx, feeStmt, tenantID, txType, currency); err != nil {
+		if _, err := db.ExecContext(ctx, feeStmt, tenantID, txType, currency, operatorID); err != nil {
 			t.Fatalf("seed %s fee config: %v", txType, err)
 		}
 

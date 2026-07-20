@@ -145,7 +145,8 @@ func TestRequestP2PTransferRejectsInsufficientFundsBeforeTemporal(t *testing.T) 
 		t.Fatalf("ensure to wallet: %v", err)
 	}
 	setWalletBalances(t, ctx, db, tenantID, fromWallet.ID, 50, 50)
-	seedP2PValidationRules(t, ctx, db, tenantID, "USD")
+	operatorID := resolveWalletGRPCTestOperator(t, ctx, db, "p2p-validation")
+	seedP2PValidationRules(t, ctx, db, tenantID, "USD", operatorID)
 
 	ctrl := gomock.NewController(t)
 	server.TemporalClient = walletgrpcmock.NewMocktemporalClient(ctrl)
@@ -186,7 +187,8 @@ func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 		t.Fatalf("ensure to wallet: %v", err)
 	}
 	setWalletBalances(t, ctx, db, tenantID, fromWallet.ID, 10_000, 10_000)
-	seedP2PValidationRules(t, ctx, db, tenantID, "USD")
+	operatorID := resolveWalletGRPCTestOperator(t, ctx, db, "p2p-validation")
+	seedP2PValidationRules(t, ctx, db, tenantID, "USD", operatorID)
 
 	ctrl := gomock.NewController(t)
 	mockTemporal := walletgrpcmock.NewMocktemporalClient(ctrl)
@@ -245,14 +247,15 @@ func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 	}
 }
 
-func seedP2PValidationRules(t *testing.T, ctx context.Context, db *basestore.DB, tenantID, currency string) {
+func seedP2PValidationRules(t *testing.T, ctx context.Context, db *basestore.DB, tenantID, currency string, operatorID int64) {
 	t.Helper()
 
 	feeStmt := db.Rebind(`INSERT INTO fee_configs(
-		tenant_id, transaction_type, currency, tier_min, percentage_fee, flat_fee, min_fee, is_active
-	) VALUES(?, 'p2p', ?, 0, 0, 0, 0, TRUE)
+		tenant_id, transaction_type, currency, tier_min, percentage_fee, flat_fee, min_fee, is_active,
+		created_by_operator_id
+	) VALUES(?, 'p2p', ?, 0, 0, 0, 0, TRUE, ?)
 	ON CONFLICT (tenant_id, transaction_type, currency, tier_min) DO NOTHING`)
-	if _, err := db.ExecContext(ctx, feeStmt, tenantID, currency); err != nil {
+	if _, err := db.ExecContext(ctx, feeStmt, tenantID, currency, operatorID); err != nil {
 		t.Fatalf("seed p2p fee config: %v", err)
 	}
 

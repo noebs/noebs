@@ -154,7 +154,8 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 		t.Fatalf("ensure user wallet: %v", err)
 	}
 	setWalletBalances(t, ctx, db, tenantID, walletRow.ID, 10_000, 10_000)
-	seedWalletValidationRules(t, ctx, db, tenantID, "noop", "USD", true, true)
+	operatorID := resolveWalletGRPCTestOperator(t, ctx, db, "withdrawal-validation")
+	seedWalletValidationRules(t, ctx, db, tenantID, "noop", "USD", operatorID, true, true)
 
 	ctrl := gomock.NewController(t)
 	mockTemporal := walletgrpcmock.NewMocktemporalClient(ctrl)
