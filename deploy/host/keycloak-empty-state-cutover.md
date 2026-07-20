@@ -81,7 +81,6 @@ for pin_path in "${pin_paths[@]}"; do
   test "$pinned_digest" = "$RELEASE_DIGEST"
 done
 
-noebs validate-kubernetes-deployment "$RELEASE_ROOT"
 noebs render-kubernetes-secrets "$RELEASE_ROOT" noebs > "$steady_secrets"
 noebs render-edge-internal-transport "$RELEASE_ROOT" edge > "$edge_internal_transport"
 noebs render-keycloak-bootstrap-secrets \
@@ -99,6 +98,10 @@ do
     | "${kubectl[@]}" apply --dry-run=server -f - >/dev/null
 done
 ```
+
+The render commands validate the encrypted prepared release before emitting
+plaintext manifests. `validate-kubernetes-deployment` is reserved for the
+rendered files mounted by the in-cluster preflight Job.
 
 All four Noebs digest pins must equal `RELEASE_DIGEST`. Keep
 `noebs_target_revision` at `CURRENT_COMMIT` while stopping the old application.
