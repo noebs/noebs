@@ -7,7 +7,7 @@ resources:
 images:
   - name: ghcr.io/noebs/noebs
     newName: ghcr.io/noebs/noebs
-    digest: sha256:ffa2c99346fc222ecfcc150b9d7fd6e3ae305897c56fc25820bcfcfec7b5eb5b
+    digest: sha256:42c3c3336782bad0bc70476c510b909188e11c8a424e83832dbf2b6c8b63554a
   - name: postgres
     newName: docker.io/library/postgres
     digest: sha256:4b7183ac05f8ef417db21fd72d71047a4238340c261d3cc3ddb6d579ab5071ae
