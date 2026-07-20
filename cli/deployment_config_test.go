@@ -410,6 +410,7 @@ func TestCurrentHostDatabaseConsumersWaitForPostgres(t *testing.T) {
 		"identity-auth":                   false,
 		"notification-chat":               false,
 		"psp-webhook":                     false,
+		"wallet-api":                      false,
 		"wallet-ledger":                   false,
 		"wallet-worker":                   false,
 		"noebs-workload-auth-migrate":     false,

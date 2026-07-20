@@ -184,7 +184,7 @@ patches:
             memory: 128Mi
   - target:
       kind: (Deployment|Job)
-      name: (admin-reporting|admin-reporting-projector|api-gateway|card-vault|ebs-adapter|ebs-adapter-events|identity-auth|notification-chat|psp-webhook|wallet-ledger|wallet-worker|noebs-.*-migrate)
+      name: (admin-reporting|admin-reporting-projector|api-gateway|card-vault|ebs-adapter|ebs-adapter-events|identity-auth|notification-chat|psp-webhook|wallet-api|wallet-ledger|wallet-worker|noebs-.*-migrate)
     patch: |-
       - op: add
         path: /spec/template/spec/initContainers
