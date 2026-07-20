@@ -582,6 +582,7 @@ func desiredRealmRepresentation(state DesiredState) realmRepresentation {
 			"xRobotsTag":                      "none",
 		},
 		Attributes: stringPointerMap(map[string]string{
+			"acr.loa.map":                      acrLoAMap,
 			"cibaAuthRequestedUserHint":        "login_hint",
 			"cibaBackchannelTokenDeliveryMode": "poll",
 			"cibaExpiresIn":                    "120",
@@ -705,9 +706,14 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 	clients := make([]clientRepresentation, 0, len(state.InteractiveClients))
 	for _, desired := range state.InteractiveClients {
 		publicClient := desired.AccessType == "public"
+		authenticationACR := state.Authentication.Levels[desired.AuthenticationLevel-1].ACR
 		attributes := managedClientAttributes()
 		attributes["access.token.signed.response.alg"] = "RS256"
+		attributes["id.token.signed.response.alg"] = "RS256"
 		attributes["pkce.code.challenge.method"] = "S256"
+		// The default handles omitted acr_values; the minimum rejects caller downgrade.
+		attributes["default.acr.values"] = authenticationACR
+		attributes["minimum.acr.value"] = authenticationACR
 		if len(desired.PostLogoutRedirectURIs) != 0 {
 			attributes["post.logout.redirect.uris"] = strings.Join(desired.PostLogoutRedirectURIs, "##")
 		}
@@ -779,13 +785,19 @@ func reconcileInteractiveClients(ctx context.Context, session *adminSession, sta
 				return nil, err
 			}
 		}
-		if err := reconcileExactClientProtocolMappers(ctx, session, state.Realm.Name, existing, []protocolMapperRepresentation{audienceMapper(state.ResourceClient.ClientID), subjectMapper()}, result); err != nil {
+		mappers := []protocolMapperRepresentation{audienceMapper(state.ResourceClient.ClientID), subjectMapper()}
+		optionalScopes := []string{state.OrganizationClaim.ClientScope}
+		if desired.ClientID == walletAuthorizerClientID {
+			mappers = nil
+			optionalScopes = nil
+		}
+		if err := reconcileExactClientProtocolMappers(ctx, session, state.Realm.Name, existing, mappers, result); err != nil {
 			return nil, err
 		}
-		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, existing, "default", nil, result); err != nil {
+		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, existing, "default", []string{"acr"}, result); err != nil {
 			return nil, err
 		}
-		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, existing, "optional", []string{state.OrganizationClaim.ClientScope}, result); err != nil {
+		if err := reconcileExactClientScopes(ctx, session, state.Realm.Name, existing, "optional", optionalScopes, result); err != nil {
 			return nil, err
 		}
 		clients = append(clients, existing)

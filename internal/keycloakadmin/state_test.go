@@ -30,6 +30,19 @@ func TestRepositoryDesiredStateContract(t *testing.T) {
 	if clients["noebs-backoffice"].AccessType != "confidential" || clients["noebs-backoffice"].Credential == "" {
 		t.Fatalf("noebs-backoffice contract = %#v", clients["noebs-backoffice"])
 	}
+	authorizer := clients[walletAuthorizerClientID]
+	if authorizer.AccessType != "confidential" || authorizer.Credential != walletAuthorizerClientID ||
+		authorizer.AuthenticationLevel != 2 || !equalStrings(authorizer.RedirectURIs, []string{walletAuthorizationCallbackURI}) ||
+		len(authorizer.PostLogoutRedirectURIs) != 0 || len(authorizer.WebOrigins) != 0 {
+		t.Fatalf("wallet authorizer contract = %#v", authorizer)
+	}
+	if len(state.Authentication.Levels) != 2 || state.Authentication.Levels[0] != (AuthenticationLevel{ACR: googleACR, Level: 1, MaxAgeSeconds: state.Realm.SSOSessionMaxLifespanSeconds}) ||
+		state.Authentication.Levels[1] != (AuthenticationLevel{ACR: googleTOTPACR, Level: 2, MaxAgeSeconds: 0}) {
+		t.Fatalf("authentication levels = %#v", state.Authentication.Levels)
+	}
+	if got := state.IdentityProviders[0].Config["forwardParameters"]; got != "login_hint" {
+		t.Fatalf("Google forwarded parameters = %q", got)
+	}
 	if !exactStringSet(stringSliceSet(state.ReconcilerClient.RealmManagementRoles), "realm-admin") {
 		t.Fatalf("reconciler realm roles = %v", state.ReconcilerClient.RealmManagementRoles)
 	}
@@ -59,6 +72,115 @@ func TestDesiredStateRejectsPublicBackofficeClient(t *testing.T) {
 	}
 	if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
 		t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+	}
+}
+
+func TestDesiredStateRequiresExactAuthenticationLevels(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*DesiredState)
+	}{
+		{name: "missing LoA2", mutate: func(state *DesiredState) {
+			state.Authentication.Levels = state.Authentication.Levels[:1]
+		}},
+		{name: "numeric LoA1 ACR", mutate: func(state *DesiredState) {
+			state.Authentication.Levels[0].ACR = "1"
+		}},
+		{name: "LoA1 outlives policy", mutate: func(state *DesiredState) {
+			state.Authentication.Levels[0].MaxAgeSeconds++
+		}},
+		{name: "LoA2 reusable", mutate: func(state *DesiredState) {
+			state.Authentication.Levels[1].MaxAgeSeconds = 1
+		}},
+		{name: "reversed", mutate: func(state *DesiredState) {
+			state.Authentication.Levels[0], state.Authentication.Levels[1] = state.Authentication.Levels[1], state.Authentication.Levels[0]
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state := repositoryDesiredState(t)
+			test.mutate(&state)
+			if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
+				t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+			}
+		})
+	}
+}
+
+func TestDesiredStateRequiresExactWalletAuthorizer(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*InteractiveClient)
+	}{
+		{name: "public", mutate: func(client *InteractiveClient) {
+			client.AccessType = "public"
+			client.Credential = ""
+		}},
+		{name: "wrong credential", mutate: func(client *InteractiveClient) {
+			client.Credential = "noebs-backoffice"
+		}},
+		{name: "LoA1", mutate: func(client *InteractiveClient) {
+			client.AuthenticationLevel = 1
+		}},
+		{name: "wrong callback", mutate: func(client *InteractiveClient) {
+			client.RedirectURIs = []string{"https://api.noebs.sd/wallet/authorization/oauth/callback"}
+		}},
+		{name: "extra callback", mutate: func(client *InteractiveClient) {
+			client.RedirectURIs = append(client.RedirectURIs, "https://api.noebs.sd/wallet/authorizations/oauth/other")
+		}},
+		{name: "web origin", mutate: func(client *InteractiveClient) {
+			client.WebOrigins = []string{"https://api.noebs.sd"}
+		}},
+		{name: "logout callback", mutate: func(client *InteractiveClient) {
+			client.PostLogoutRedirectURIs = []string{walletAuthorizationCallbackURI}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			state := repositoryDesiredState(t)
+			for index := range state.InteractiveClients {
+				if state.InteractiveClients[index].ClientID == walletAuthorizerClientID {
+					test.mutate(&state.InteractiveClients[index])
+				}
+			}
+			if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
+				t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+			}
+		})
+	}
+}
+
+func TestDesiredStateRejectsGoogleForwardingDrift(t *testing.T) {
+	for _, value := range []string{"", "acr_values", "max_age", "login_hint,acr_values"} {
+		t.Run(value, func(t *testing.T) {
+			state := repositoryDesiredState(t)
+			state.IdentityProviders[0].Config["forwardParameters"] = value
+			if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
+				t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+			}
+		})
+	}
+	t.Run("missing", func(t *testing.T) {
+		state := repositoryDesiredState(t)
+		delete(state.IdentityProviders[0].Config, "forwardParameters")
+		if err := state.Validate(); !errors.Is(err, ErrInvalidDesiredState) {
+			t.Fatalf("Validate() error = %v, want ErrInvalidDesiredState", err)
+		}
+	})
+}
+
+func TestDesiredStateRejectsLegacyPostBrokerFlow(t *testing.T) {
+	data, err := os.ReadFile("../../deploy/kubernetes/keycloak-authority/keycloak-desired-state.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := strings.Replace(string(data),
+		"  post_broker_login_flow: noebs-google-post-broker\n",
+		"  post_broker_login_flow: noebs-google-otp\n",
+		1,
+	)
+	if _, err := LoadDesiredState(strings.NewReader(legacy), repositoryTenantCatalog(t)); !errors.Is(err, ErrInvalidDesiredState) {
+		t.Fatalf("LoadDesiredState() error = %v, want ErrInvalidDesiredState", err)
 	}
 }
 
@@ -131,6 +253,34 @@ func TestConfigRejectsPermanentMasterRealmClient(t *testing.T) {
 	}
 }
 
+func TestConfigRequiresExactWalletAuthorizerCredential(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(Config) Config
+	}{
+		{name: "missing", mutate: func(config Config) Config {
+			delete(config.ClientCredentials, walletAuthorizerClientID)
+			return config
+		}},
+		{name: "empty", mutate: func(config Config) Config {
+			config.ClientCredentials[walletAuthorizerClientID] = ClientCredential{}
+			return config
+		}},
+		{name: "extra", mutate: func(config Config) Config {
+			config.ClientCredentials["legacy-wallet-client"] = ClientCredential{ClientSecret: "legacy-secret"}
+			return config
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := test.mutate(validTestConfig("https://keycloak.test"))
+			if err := config.Validate(); !errors.Is(err, ErrInvalidConfig) {
+				t.Fatalf("Validate() error = %v, want ErrInvalidConfig", err)
+			}
+		})
+	}
+}
+
 func TestSteadyRealmLocalConfig(t *testing.T) {
 	config := validTestConfig("https://keycloak.test")
 	config.AdminRealm = "noebs"
@@ -173,6 +323,7 @@ func validTestConfig(baseURL string) Config {
 		ClientCredentials: map[string]ClientCredential{
 			"noebs-keycloak-reconciler": {ClientSecret: "steady-reconciler-secret"},
 			"noebs-backoffice":          {ClientSecret: "backoffice-secret"},
+			walletAuthorizerClientID:    {ClientSecret: "wallet-authorizer-secret"},
 		},
 		IdentityProviders: map[string]IdentityProviderCredential{
 			"google": {ClientID: "google-client", ClientSecret: "google-secret"},

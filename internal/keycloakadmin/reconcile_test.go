@@ -56,6 +56,7 @@ func TestReconcileEmptyRealmThenNoOp(t *testing.T) {
 	if len(backoffice.WebOrigins) != 0 {
 		t.Fatalf("backoffice web origins = %v", backoffice.WebOrigins)
 	}
+	assertWalletAuthorizerExact(t, fake, state)
 	if !fake.serviceAccountHasRole("noebs-keycloak-reconciler", "realm-management", "realm-admin") {
 		t.Fatal("steady reconciler service account does not have realm-management/realm-admin")
 	}
@@ -192,6 +193,7 @@ func TestReconcilePrunesKeycloakStateOutsideExactAuthority(t *testing.T) {
 		"noebs-api":                 {},
 		"noebs-mobile":              {audienceMapperName, subjectMapperName},
 		"noebs-backoffice":          {audienceMapperName, subjectMapperName},
+		walletAuthorizerClientID:    {},
 	} {
 		if got := fake.clientMapperNames(clientID); !equalStrings(got, want) {
 			t.Fatalf("client %s protocol mappers = %v, want %v", clientID, got, want)
@@ -269,7 +271,7 @@ func TestReconcilePrunesScopeAndRoleMappingDrift(t *testing.T) {
 	}
 
 	fake.addRealmRole("platform-admin")
-	for _, clientID := range []string{"noebs-mobile", "noebs-backoffice"} {
+	for _, clientID := range []string{"noebs-mobile", "noebs-backoffice", walletAuthorizerClientID} {
 		fake.assignClientScope(clientID, "default", "email")
 		fake.assignClientScope(clientID, "optional", "offline_access")
 	}
@@ -301,8 +303,9 @@ func TestReconcilePrunesScopeAndRoleMappingDrift(t *testing.T) {
 	}{
 		"noebs-keycloak-reconciler": {defaults: []string{"roles"}},
 		"noebs-api":                 {},
-		"noebs-mobile":              {optional: []string{"organization"}},
-		"noebs-backoffice":          {optional: []string{"organization"}},
+		"noebs-mobile":              {defaults: []string{"acr"}, optional: []string{"organization"}},
+		"noebs-backoffice":          {defaults: []string{"acr"}, optional: []string{"organization"}},
+		walletAuthorizerClientID:    {defaults: []string{"acr"}},
 	} {
 		if got := fake.clientScopeNames(clientID, "default"); !equalStrings(got, assignments.defaults) {
 			t.Fatalf("client %s default scopes = %v, want %v", clientID, got, assignments.defaults)
@@ -311,7 +314,7 @@ func TestReconcilePrunesScopeAndRoleMappingDrift(t *testing.T) {
 			t.Fatalf("client %s optional scopes = %v, want %v", clientID, got, assignments.optional)
 		}
 	}
-	for _, clientID := range []string{"noebs-api", "noebs-mobile", "noebs-backoffice"} {
+	for _, clientID := range []string{"noebs-api", "noebs-mobile", "noebs-backoffice", walletAuthorizerClientID} {
 		mappings := fake.clientScopeRoleMappings(clientID)
 		if len(mappings.RealmMappings) != 0 || len(mappings.ClientMappings) != 0 {
 			t.Fatalf("client %s role scope mappings = %#v", clientID, mappings)
@@ -516,7 +519,7 @@ func TestReconcileRestoresKeycloakBuiltinClientDrift(t *testing.T) {
 	}
 }
 
-func TestReconcileOwnsGoogleOnlyAuthenticationAndOTP(t *testing.T) {
+func TestReconcileOwnsGoogleLoAAndTOTP(t *testing.T) {
 	fake := newFakeKeycloak()
 	server := httptest.NewTLSServer(fake)
 	defer server.Close()
@@ -562,6 +565,41 @@ func TestReconcileRepairsHostileAuthenticationDriftThenConverges(t *testing.T) {
 	}
 }
 
+func TestReconcileRepairsWalletAuthorizerDriftThenConverges(t *testing.T) {
+	fake := newFakeKeycloak()
+	server := httptest.NewTLSServer(fake)
+	defer server.Close()
+	reconciler, err := New(validTestConfig(server.URL), server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := repositoryDesiredState(t)
+	if _, err := reconciler.Reconcile(context.Background(), state); err != nil {
+		t.Fatalf("initial Reconcile() error = %v", err)
+	}
+	fake.injectWalletAuthorizerDrift()
+	fake.addClientMapper(walletAuthorizerClientID, "hostile-wallet-claim", "oidc-hardcoded-claim-mapper")
+	fake.assignClientScope(walletAuthorizerClientID, "default", "email")
+	fake.assignClientScope(walletAuthorizerClientID, "optional", "organization")
+	fake.addClientScopeRole(walletAuthorizerClientID, "realm-management", "realm-admin")
+
+	result, err := reconciler.Reconcile(context.Background(), state)
+	if err != nil {
+		t.Fatalf("drift Reconcile() error = %v", err)
+	}
+	if !result.Changed() {
+		t.Fatal("wallet authorizer drift was not reported")
+	}
+	assertWalletAuthorizerExact(t, fake, state)
+	result, err = reconciler.Reconcile(context.Background(), state)
+	if err != nil {
+		t.Fatalf("steady Reconcile() error = %v", err)
+	}
+	if result.Changed() {
+		t.Fatalf("steady Reconcile() result = %#v", result)
+	}
+}
+
 func TestReconcileReadsAndRestoresManagedClientSecrets(t *testing.T) {
 	fake := newFakeKeycloak()
 	server := httptest.NewTLSServer(fake)
@@ -576,19 +614,23 @@ func TestReconcileReadsAndRestoresManagedClientSecrets(t *testing.T) {
 	}
 	fake.injectClientSecret("noebs-keycloak-reconciler", "hostile-reconciler-secret")
 	fake.injectClientSecret("noebs-backoffice", "hostile-backoffice-secret")
+	fake.injectClientSecret(walletAuthorizerClientID, "hostile-wallet-authorizer-secret")
 
 	result, err := reconciler.Reconcile(context.Background(), state)
 	if err != nil {
 		t.Fatalf("secret Reconcile() error = %v", err)
 	}
-	if result != (Result{Updated: 2}) {
-		t.Fatalf("secret Reconcile() result = %#v, want two client updates", result)
+	if result != (Result{Updated: 3}) {
+		t.Fatalf("secret Reconcile() result = %#v, want three client updates", result)
 	}
 	if got := fake.clientSecret("noebs-keycloak-reconciler"); got != "steady-reconciler-secret" {
 		t.Fatal("reconciler client secret was not restored")
 	}
 	if got := fake.clientSecret("noebs-backoffice"); got != "backoffice-secret" {
 		t.Fatal("backoffice client secret was not restored")
+	}
+	if got := fake.clientSecret(walletAuthorizerClientID); got != "wallet-authorizer-secret" {
+		t.Fatal("wallet authorizer client secret was not restored")
 	}
 	result, err = reconciler.Reconcile(context.Background(), state)
 	if err != nil {
@@ -726,6 +768,10 @@ func assertHumanAuthenticationExact(t *testing.T, fake *fakeKeycloak, state Desi
 			t.Fatalf("authentication flow %s is outside desired state", alias)
 		}
 	}
+	assertLoAConditionExact(t, fake, googleLoA1FlowAlias, "1", "28800")
+	assertLoAConditionExact(t, fake, googleTOTPLoA2FlowAlias, "2", "0")
+	assertLoAConditionExact(t, fake, googlePostBrokerLoA1FlowAlias, "1", "28800")
+	assertLoAConditionExact(t, fake, googlePostBrokerLoA2FlowAlias, "2", "0")
 	for _, executions := range fake.authenticationExecutions {
 		for _, execution := range executions {
 			if execution.ProviderID == "auth-username-password-form" || execution.ProviderID == "idp-username-password-form" {
@@ -759,6 +805,78 @@ func assertHumanAuthenticationExact(t *testing.T, fake *fakeKeycloak, state Desi
 	if provider.FirstBrokerLoginFlowAlias != state.Authentication.FirstBrokerLoginFlow ||
 		provider.PostBrokerLoginFlowAlias != state.Authentication.PostBrokerLoginFlow {
 		t.Fatalf("Google broker flow bindings = %#v", provider)
+	}
+	if provider.Config["forwardParameters"] != "login_hint" {
+		t.Fatalf("Google forwarded parameters = %q", provider.Config["forwardParameters"])
+	}
+}
+
+func assertLoAConditionExact(t *testing.T, fake *fakeKeycloak, flowAlias, level, maxAge string) {
+	t.Helper()
+	flowID := fake.authenticationFlowIDByAlias(flowAlias)
+	for _, execution := range fake.authenticationExecutions[flowID] {
+		if execution.ProviderID != "conditional-level-of-authentication" {
+			continue
+		}
+		config := fake.authenticatorConfigs[execution.AuthenticationConfig]
+		if execution.Requirement != "REQUIRED" || config.Alias != flowAlias || !equalStringMap(config.Config, map[string]string{
+			"loa-condition-level": level,
+			"loa-max-age":         maxAge,
+		}) {
+			t.Fatalf("LoA condition %s = execution %#v config %#v", flowAlias, execution, config)
+		}
+		return
+	}
+	t.Fatalf("LoA condition %s is missing", flowAlias)
+}
+
+func assertWalletAuthorizerExact(t *testing.T, fake *fakeKeycloak, state DesiredState) {
+	t.Helper()
+	client, found := fake.clientByClientID(walletAuthorizerClientID)
+	if !found {
+		t.Fatal("wallet authorizer client is missing")
+	}
+	attributes := managedClientAttributes()
+	attributes["access.token.signed.response.alg"] = "RS256"
+	attributes["id.token.signed.response.alg"] = "RS256"
+	attributes["pkce.code.challenge.method"] = "S256"
+	attributes["default.acr.values"] = googleTOTPACR
+	attributes["minimum.acr.value"] = googleTOTPACR
+	attributes[managedClientSecretHash] = secretHash("wallet-authorizer-secret")
+	wanted := clientRepresentation{
+		ClientID:                           walletAuthorizerClientID,
+		Name:                               "Noebs Wallet Authorizer",
+		Enabled:                            true,
+		Protocol:                           "openid-connect",
+		ClientAuthenticatorType:            "client-secret",
+		StandardFlowEnabled:                true,
+		RedirectURIs:                       []string{walletAuthorizationCallbackURI},
+		WebOrigins:                         []string{},
+		Attributes:                         attributes,
+		NodeReRegistrationTimeout:          -1,
+		AuthenticationFlowBindingOverrides: map[string]string{},
+	}
+	if !clientMatches(client, wanted) {
+		t.Fatalf("wallet authorizer client = %#v, want %#v", client, wanted)
+	}
+	if fake.clientSecret(walletAuthorizerClientID) != "wallet-authorizer-secret" {
+		t.Fatal("wallet authorizer secret differs from authority")
+	}
+	if mappers := fake.clientMapperNames(walletAuthorizerClientID); len(mappers) != 0 {
+		t.Fatalf("wallet authorizer protocol mappers = %v, want none", mappers)
+	}
+	if scopes := fake.clientScopeNames(walletAuthorizerClientID, "default"); !equalStrings(scopes, []string{"acr"}) {
+		t.Fatalf("wallet authorizer default scopes = %v, want acr", scopes)
+	}
+	if scopes := fake.clientScopeNames(walletAuthorizerClientID, "optional"); len(scopes) != 0 {
+		t.Fatalf("wallet authorizer optional scopes = %v, want none", scopes)
+	}
+	mappings := fake.clientScopeRoleMappings(walletAuthorizerClientID)
+	if len(mappings.RealmMappings) != 0 || len(mappings.ClientMappings) != 0 {
+		t.Fatalf("wallet authorizer role scope mappings = %#v, want none", mappings)
+	}
+	if state.Authentication.Levels[1].MaxAgeSeconds != 0 {
+		t.Fatalf("wallet authorizer LoA2 max age = %d, want zero", state.Authentication.Levels[1].MaxAgeSeconds)
 	}
 }
 
@@ -2319,6 +2437,31 @@ func (f *fakeKeycloak) injectClientAttribute(clientID, key, value string) {
 	}
 }
 
+func (f *fakeKeycloak) injectWalletAuthorizerDrift() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, client := range f.clients {
+		if client.ClientID != walletAuthorizerClientID {
+			continue
+		}
+		client.StandardFlowEnabled = false
+		client.ImplicitFlowEnabled = true
+		client.DirectAccessGrantsEnabled = true
+		client.ServiceAccountsEnabled = true
+		client.AuthorizationServicesEnabled = true
+		client.FullScopeAllowed = true
+		client.RedirectURIs = []string{"https://hostile.invalid/callback"}
+		client.WebOrigins = []string{"https://hostile.invalid"}
+		client.Attributes = cloneStringMap(client.Attributes)
+		client.Attributes["pkce.code.challenge.method"] = "plain"
+		client.Attributes["default.acr.values"] = googleACR
+		client.Attributes["minimum.acr.value"] = googleACR
+		client.Attributes["hostile.attribute"] = "true"
+		f.clients[id] = client
+		return
+	}
+}
+
 func (f *fakeKeycloak) injectRealmDrift() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -2344,10 +2487,14 @@ func (f *fakeKeycloak) injectAuthenticationDrift(state DesiredState) {
 	f.realm.FirstBrokerLoginFlow = "first broker login"
 	f.realm.OTPPolicyAlgorithm = "HmacSHA1"
 	f.realm.OTPPolicyCodeReusable = true
+	f.realm.Attributes = cloneStringPointerMap(f.realm.Attributes)
+	hostileACRMap := `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":1}`
+	f.realm.Attributes["acr.loa.map"] = &hostileACRMap
 
 	browserID := f.authenticationFlowIDByAlias(state.Authentication.BrowserFlow)
-	for index := range f.authenticationExecutions[browserID] {
-		execution := &f.authenticationExecutions[browserID][index]
+	loa1ID := f.authenticationFlowIDByAlias(googleLoA1FlowAlias)
+	for index := range f.authenticationExecutions[loa1ID] {
+		execution := &f.authenticationExecutions[loa1ID][index]
 		if execution.ProviderID == "identity-provider-redirector" {
 			f.authenticatorConfigs[execution.AuthenticationConfig] = authenticatorConfigRepresentation{
 				ID: execution.AuthenticationConfig, Alias: "hostile-redirect", Config: map[string]string{"defaultProvider": "hostile"},
@@ -2357,10 +2504,25 @@ func (f *fakeKeycloak) injectAuthenticationDrift(state DesiredState) {
 	f.authenticationExecutions[browserID] = append(f.authenticationExecutions[browserID], authenticationExecutionInfoRepresentation{
 		ID: f.id("hostile-execution"), ProviderID: "auth-username-password-form", Requirement: "ALTERNATIVE", Priority: 30,
 	})
-	postID := f.authenticationFlowIDByAlias(state.Authentication.PostBrokerLoginFlow)
-	f.authenticationExecutions[postID] = []authenticationExecutionInfoRepresentation{{
-		ID: f.id("hostile-execution"), ProviderID: "idp-username-password-form", Requirement: "REQUIRED", Priority: 10,
-	}}
+	for _, alias := range []string{googleTOTPLoA2FlowAlias, googlePostBrokerLoA2FlowAlias} {
+		loa2ID := f.authenticationFlowIDByAlias(alias)
+		for index := range f.authenticationExecutions[loa2ID] {
+			execution := &f.authenticationExecutions[loa2ID][index]
+			if execution.ProviderID != "conditional-level-of-authentication" {
+				continue
+			}
+			execution.Requirement = "DISABLED"
+			f.authenticatorConfigs[execution.AuthenticationConfig] = authenticatorConfigRepresentation{
+				ID: execution.AuthenticationConfig, Alias: "hostile-loa2", Config: map[string]string{
+					"loa-condition-level": "1",
+					"loa-max-age":         "300",
+				},
+			}
+		}
+		f.authenticationExecutions[loa2ID] = append(f.authenticationExecutions[loa2ID], authenticationExecutionInfoRepresentation{
+			ID: f.id("hostile-execution"), ProviderID: "idp-username-password-form", Requirement: "REQUIRED", Priority: 10,
+		})
+	}
 	f.requiredActions[configureTOTPProvider] = requiredActionProviderRepresentation{
 		Alias: configureTOTPProvider, Name: "Hostile OTP", ProviderID: configureTOTPProvider,
 		Enabled: false, DefaultAction: false, Priority: 999, Config: map[string]string{"hostile": "true"},
@@ -2378,7 +2540,9 @@ func (f *fakeKeycloak) injectAuthenticationDrift(state DesiredState) {
 	}}
 	google := f.identityProviders["google"]
 	google.FirstBrokerLoginFlowAlias = "first broker login"
-	google.PostBrokerLoginFlowAlias = ""
+	google.PostBrokerLoginFlowAlias = "hostile-password-flow"
+	google.Config = cloneStringMap(google.Config)
+	google.Config["forwardParameters"] = "acr_values"
 	f.identityProviders["google"] = google
 
 	for id, client := range f.clients {

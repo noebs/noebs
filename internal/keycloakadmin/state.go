@@ -11,7 +11,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const DesiredStateAPIVersion = "noebs.sd/keycloak/v1"
+const (
+	DesiredStateAPIVersion         = "noebs.sd/keycloak/v1"
+	walletAuthorizerClientID       = "noebs-wallet-authorizer"
+	walletAuthorizationCallbackURI = "https://api.noebs.sd/wallet/authorizations/oauth/callback"
+	googleACR                      = "urn:noebs:acr:google"
+	googleTOTPACR                  = "urn:noebs:acr:google-totp"
+	acrLoAMap                      = `{"urn:noebs:acr:google":1,"urn:noebs:acr:google-totp":2}`
+)
 
 var (
 	ErrInvalidConfig       = errors.New("invalid Keycloak reconciler config")
@@ -70,10 +77,17 @@ type Realm struct {
 }
 
 type Authentication struct {
-	BrowserFlow          string    `yaml:"browser_flow"`
-	FirstBrokerLoginFlow string    `yaml:"first_broker_login_flow"`
-	PostBrokerLoginFlow  string    `yaml:"post_broker_login_flow"`
-	OTP                  OTPPolicy `yaml:"otp"`
+	BrowserFlow          string                `yaml:"browser_flow"`
+	FirstBrokerLoginFlow string                `yaml:"first_broker_login_flow"`
+	PostBrokerLoginFlow  string                `yaml:"post_broker_login_flow"`
+	Levels               []AuthenticationLevel `yaml:"levels"`
+	OTP                  OTPPolicy             `yaml:"otp"`
+}
+
+type AuthenticationLevel struct {
+	ACR           string `yaml:"acr"`
+	Level         int    `yaml:"level"`
+	MaxAgeSeconds int    `yaml:"max_age_seconds"`
 }
 
 type OTPPolicy struct {
@@ -105,6 +119,7 @@ type InteractiveClient struct {
 	Name                   string   `yaml:"name"`
 	AccessType             string   `yaml:"access_type"`
 	Credential             string   `yaml:"credential"`
+	AuthenticationLevel    int      `yaml:"authentication_level"`
 	RedirectURIs           []string `yaml:"redirect_uris"`
 	PostLogoutRedirectURIs []string `yaml:"post_logout_redirect_uris"`
 	WebOrigins             []string `yaml:"web_origins"`
@@ -204,10 +219,10 @@ func (c Config) Validate() error {
 	for name := range c.ClientCredentials {
 		clientNames[name] = struct{}{}
 	}
-	if !exactStringSet(clientNames, "noebs-keycloak-reconciler", "noebs-backoffice") {
-		return fmt.Errorf("%w: client_credentials must contain only noebs-keycloak-reconciler and noebs-backoffice", ErrInvalidConfig)
+	if !exactStringSet(clientNames, "noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID) {
+		return fmt.Errorf("%w: client_credentials must contain only noebs-keycloak-reconciler, noebs-backoffice, and %s", ErrInvalidConfig, walletAuthorizerClientID)
 	}
-	for _, name := range []string{"noebs-keycloak-reconciler", "noebs-backoffice"} {
+	for _, name := range []string{"noebs-keycloak-reconciler", "noebs-backoffice", walletAuthorizerClientID} {
 		credential := c.ClientCredentials[name]
 		if err := validateValue("client_credentials."+name+".client_secret", credential.ClientSecret); err != nil {
 			return fmt.Errorf("%w: %v", ErrInvalidConfig, err)
@@ -269,8 +284,14 @@ func (s DesiredState) Validate() error {
 	}
 	if s.Authentication.BrowserFlow != "noebs-browser" ||
 		s.Authentication.FirstBrokerLoginFlow != "noebs-first-broker-login" ||
-		s.Authentication.PostBrokerLoginFlow != "noebs-google-otp" {
+		s.Authentication.PostBrokerLoginFlow != "noebs-google-post-broker" {
 		return fmt.Errorf("%w: authentication must bind the repository-owned browser, first-broker, and Google post-broker flows", ErrInvalidDesiredState)
+	}
+	levels := s.Authentication.Levels
+	if len(levels) != 2 ||
+		levels[0].ACR != googleACR || levels[0].Level != 1 || levels[0].MaxAgeSeconds != s.Realm.SSOSessionMaxLifespanSeconds ||
+		levels[1].ACR != googleTOTPACR || levels[1].Level != 2 || levels[1].MaxAgeSeconds != 0 {
+		return fmt.Errorf("%w: authentication.levels must declare reusable LoA1 followed by one-request LoA2 with max age zero", ErrInvalidDesiredState)
 	}
 	otp := s.Authentication.OTP
 	if otp.Type != "totp" || otp.Algorithm != "HmacSHA256" || otp.InitialCounter != 0 ||
@@ -365,27 +386,33 @@ func (s DesiredState) Validate() error {
 			return err
 		}
 	}
-	for _, requiredClient := range []string{"noebs-mobile", "noebs-backoffice"} {
+	for _, requiredClient := range []string{"noebs-mobile", "noebs-backoffice", walletAuthorizerClientID} {
 		if _, exists := interactiveClientIDs[requiredClient]; !exists {
 			return fmt.Errorf("%w: interactive client %q is required", ErrInvalidDesiredState, requiredClient)
 		}
 	}
-	if len(interactiveClientIDs) != 2 {
-		return fmt.Errorf("%w: interactive_clients must contain only noebs-mobile and noebs-backoffice", ErrInvalidDesiredState)
+	if len(interactiveClientIDs) != 3 {
+		return fmt.Errorf("%w: interactive_clients must contain only noebs-mobile, noebs-backoffice, and %s", ErrInvalidDesiredState, walletAuthorizerClientID)
 	}
 	for _, client := range s.InteractiveClients {
-		if client.ClientID == "noebs-mobile" && client.AccessType != "public" {
-			return fmt.Errorf("%w: noebs-mobile must be a public client", ErrInvalidDesiredState)
-		}
-		if client.ClientID == "noebs-backoffice" && client.AccessType != "confidential" {
-			return fmt.Errorf("%w: noebs-backoffice must be a confidential client", ErrInvalidDesiredState)
-		}
-		if client.ClientID == "noebs-backoffice" {
-			if len(client.WebOrigins) != 0 {
-				return fmt.Errorf("%w: noebs-backoffice must not declare browser web origins", ErrInvalidDesiredState)
+		switch client.ClientID {
+		case "noebs-mobile":
+			if client.Name != "Noebs Mobile" || client.AccessType != "public" || client.Credential != "" || client.AuthenticationLevel != 1 ||
+				!equalStrings(client.RedirectURIs, []string{"https://api.noebs.sd/mobile/oauth/callback"}) ||
+				len(client.PostLogoutRedirectURIs) != 0 || len(client.WebOrigins) != 0 {
+				return fmt.Errorf("%w: noebs-mobile must declare the exact public LoA1 client", ErrInvalidDesiredState)
 			}
-			if len(client.PostLogoutRedirectURIs) != 1 || client.PostLogoutRedirectURIs[0] != "https://api.noebs.sd/backoffice/oauth/logout/callback" {
-				return fmt.Errorf("%w: noebs-backoffice must declare the exact post-logout callback", ErrInvalidDesiredState)
+		case "noebs-backoffice":
+			if client.Name != "Noebs Backoffice" || client.AccessType != "confidential" || client.Credential != "noebs-backoffice" || client.AuthenticationLevel != 1 ||
+				!equalStrings(client.RedirectURIs, []string{"https://api.noebs.sd/backoffice/oauth/callback"}) ||
+				!equalStrings(client.PostLogoutRedirectURIs, []string{"https://api.noebs.sd/backoffice/oauth/logout/callback"}) || len(client.WebOrigins) != 0 {
+				return fmt.Errorf("%w: noebs-backoffice must declare the exact confidential LoA1 client", ErrInvalidDesiredState)
+			}
+		case walletAuthorizerClientID:
+			if client.Name != "Noebs Wallet Authorizer" || client.AccessType != "confidential" || client.Credential != walletAuthorizerClientID || client.AuthenticationLevel != 2 ||
+				!equalStrings(client.RedirectURIs, []string{walletAuthorizationCallbackURI}) ||
+				len(client.PostLogoutRedirectURIs) != 0 || len(client.WebOrigins) != 0 {
+				return fmt.Errorf("%w: %s must declare the exact confidential one-request LoA2 client", ErrInvalidDesiredState, walletAuthorizerClientID)
 			}
 		}
 	}
@@ -432,11 +459,12 @@ func (s DesiredState) Validate() error {
 		return fmt.Errorf("%w: google identity provider alias, provider_id, and credential must all be %q", ErrInvalidDesiredState, "google")
 	}
 	if !exactStringMap(provider.Config, map[string]string{
-		"defaultScope": "openid profile email",
-		"issuer":       "https://accounts.google.com",
-		"syncMode":     "IMPORT",
+		"defaultScope":      "openid profile email",
+		"forwardParameters": "login_hint",
+		"issuer":            "https://accounts.google.com",
+		"syncMode":          "IMPORT",
 	}) {
-		return fmt.Errorf("%w: google identity provider config must declare the exact issuer, scopes, and import mode", ErrInvalidDesiredState)
+		return fmt.Errorf("%w: google identity provider config must declare the exact issuer, scopes, forwarding allowlist, and import mode", ErrInvalidDesiredState)
 	}
 	if len(s.Organizations) == 0 {
 		return fmt.Errorf("%w: organizations is required", ErrInvalidDesiredState)

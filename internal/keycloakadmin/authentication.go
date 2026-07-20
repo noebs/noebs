@@ -5,9 +5,17 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 )
 
-const configureTOTPProvider = "CONFIGURE_TOTP"
+const (
+	configureTOTPProvider         = "CONFIGURE_TOTP"
+	authenticationLevelsFlowAlias = "noebs-authentication-levels"
+	googleLoA1FlowAlias           = "noebs-google-loa1"
+	googleTOTPLoA2FlowAlias       = "noebs-google-totp-loa2"
+	googlePostBrokerLoA1FlowAlias = "noebs-google-post-broker-loa1"
+	googlePostBrokerLoA2FlowAlias = "noebs-google-post-broker-totp-loa2"
+)
 
 type authenticationFlowRepresentation struct {
 	ID          string `json:"id,omitempty"`
@@ -67,15 +75,37 @@ type managedAuthenticationExecution struct {
 }
 
 func desiredAuthenticationFlows(state DesiredState) []managedAuthenticationFlow {
+	loa1 := state.Authentication.Levels[0]
+	loa2 := state.Authentication.Levels[1]
+	loa1Flow := authenticationLevelFlow(
+		googleLoA1FlowAlias,
+		"Google federation establishes reusable LoA1",
+		loa1,
+		managedAuthenticationExecution{
+			ProviderID: "identity-provider-redirector", Requirement: "REQUIRED", Priority: 20,
+			ConfigAlias: "noebs-google-redirect", Config: map[string]string{"defaultProvider": "google"},
+		},
+	)
+	loa2Flow := authenticationLevelFlow(
+		googleTOTPLoA2FlowAlias,
+		"TOTP establishes LoA2 for the current authorization only",
+		loa2,
+		managedAuthenticationExecution{ProviderID: "auth-otp-form", Requirement: "REQUIRED", Priority: 20},
+	)
+	levelsFlow := managedAuthenticationFlow{
+		Alias:       authenticationLevelsFlowAlias,
+		Description: "Noebs ordered levels of authentication",
+		Executions: []managedAuthenticationExecution{
+			{Requirement: "CONDITIONAL", Priority: 10, Flow: &loa1Flow},
+			{Requirement: "CONDITIONAL", Priority: 20, Flow: &loa2Flow},
+		},
+	}
 	browser := managedAuthenticationFlow{
 		Alias:       state.Authentication.BrowserFlow,
-		Description: "Noebs Google-only browser authentication",
+		Description: "Reusable Google LoA1 with one-request TOTP LoA2 step-up",
 		Executions: []managedAuthenticationExecution{
 			{ProviderID: "auth-cookie", Requirement: "ALTERNATIVE", Priority: 10},
-			{
-				ProviderID: "identity-provider-redirector", Requirement: "ALTERNATIVE", Priority: 20,
-				ConfigAlias: "noebs-google-redirect", Config: map[string]string{"defaultProvider": "google"},
-			},
+			{Requirement: "ALTERNATIVE", Priority: 20, Flow: &levelsFlow},
 		},
 	}
 	firstBroker := managedAuthenticationFlow{
@@ -85,14 +115,45 @@ func desiredAuthenticationFlows(state DesiredState) []managedAuthenticationFlow 
 			{ProviderID: "idp-create-user-if-unique", Requirement: "REQUIRED", Priority: 10},
 		},
 	}
+	postBrokerLoA1 := authenticationLevelFlow(
+		googlePostBrokerLoA1FlowAlias,
+		"Google broker authentication establishes reusable LoA1",
+		loa1,
+		managedAuthenticationExecution{ProviderID: "allow-access-authenticator", Requirement: "REQUIRED", Priority: 20},
+	)
+	postBrokerLoA2 := authenticationLevelFlow(
+		googlePostBrokerLoA2FlowAlias,
+		"TOTP establishes brokered LoA2 for the current authorization only",
+		loa2,
+		managedAuthenticationExecution{ProviderID: "auth-otp-form", Requirement: "REQUIRED", Priority: 20},
+	)
 	postBroker := managedAuthenticationFlow{
 		Alias:       state.Authentication.PostBrokerLoginFlow,
-		Description: "Mandatory OTP after every Google login",
+		Description: "Establish requested Noebs authentication levels after Google returns",
 		Executions: []managedAuthenticationExecution{
-			{ProviderID: "auth-otp-form", Requirement: "REQUIRED", Priority: 10},
+			{Requirement: "CONDITIONAL", Priority: 10, Flow: &postBrokerLoA1},
+			{Requirement: "CONDITIONAL", Priority: 20, Flow: &postBrokerLoA2},
 		},
 	}
 	return []managedAuthenticationFlow{browser, firstBroker, postBroker}
+}
+
+func authenticationLevelFlow(alias, description string, level AuthenticationLevel, authenticator managedAuthenticationExecution) managedAuthenticationFlow {
+	return managedAuthenticationFlow{
+		Alias:       alias,
+		Description: description,
+		Executions: []managedAuthenticationExecution{
+			{
+				ProviderID: "conditional-level-of-authentication", Requirement: "REQUIRED", Priority: 10,
+				ConfigAlias: alias,
+				Config: map[string]string{
+					"loa-condition-level": strconv.Itoa(level.Level),
+					"loa-max-age":         strconv.Itoa(level.MaxAgeSeconds),
+				},
+			},
+			authenticator,
+		},
+	}
 }
 
 func reconcileHumanAuthentication(ctx context.Context, session *adminSession, state DesiredState, result *Result) error {

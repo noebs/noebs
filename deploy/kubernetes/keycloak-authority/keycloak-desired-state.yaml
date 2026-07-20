@@ -10,7 +10,15 @@ realm:
 authentication:
   browser_flow: noebs-browser
   first_broker_login_flow: noebs-first-broker-login
-  post_broker_login_flow: noebs-google-otp
+  post_broker_login_flow: noebs-google-post-broker
+  levels:
+    - acr: urn:noebs:acr:google
+      level: 1
+      max_age_seconds: 28800
+    - acr: urn:noebs:acr:google-totp
+      level: 2
+      # Current authorization only; never persisted into the SSO session.
+      max_age_seconds: 0
   otp:
     type: totp
     algorithm: HmacSHA256
@@ -61,6 +69,7 @@ interactive_clients:
     name: Noebs Mobile
     access_type: public
     credential: ""
+    authentication_level: 1
     redirect_uris:
       - https://api.noebs.sd/mobile/oauth/callback
     post_logout_redirect_uris: []
@@ -69,10 +78,20 @@ interactive_clients:
     name: Noebs Backoffice
     access_type: confidential
     credential: noebs-backoffice
+    authentication_level: 1
     redirect_uris:
       - https://api.noebs.sd/backoffice/oauth/callback
     post_logout_redirect_uris:
       - https://api.noebs.sd/backoffice/oauth/logout/callback
+    web_origins: []
+  - client_id: noebs-wallet-authorizer
+    name: Noebs Wallet Authorizer
+    access_type: confidential
+    credential: noebs-wallet-authorizer
+    authentication_level: 2
+    redirect_uris:
+      - https://api.noebs.sd/wallet/authorizations/oauth/callback
+    post_logout_redirect_uris: []
     web_origins: []
 realm_roles: []
 organization_claim:
@@ -93,6 +112,8 @@ identity_providers:
     credential: google
     config:
       defaultScope: openid profile email
+      # Never forward the Noebs-local acr_values vocabulary to Google.
+      forwardParameters: login_hint
       issuer: https://accounts.google.com
       syncMode: IMPORT
 organizations:
