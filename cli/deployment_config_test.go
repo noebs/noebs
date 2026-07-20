@@ -355,6 +355,45 @@ func TestNoebsKubernetesImagesUseNodeCache(t *testing.T) {
 	}
 }
 
+func TestKeycloakJobsGateOnVerifiedServiceAvailability(t *testing.T) {
+	for _, path := range []string{
+		filepath.Join("..", "deploy", "kubernetes", "base", "keycloak-reconcile-job.yaml"),
+		filepath.Join("..", "deploy", "kubernetes", "overlays", "bootstrap-current-host", "delete-bootstrap-client-job.yaml"),
+	} {
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		var object manifestObject
+		if err := yaml.Unmarshal(payload, &object); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		if len(object.Spec.Template.Spec.InitContainers) != 1 {
+			t.Fatalf("%s init containers = %d, want one Keycloak availability gate", path, len(object.Spec.Template.Spec.InitContainers))
+		}
+		gate := object.Spec.Template.Spec.InitContainers[0]
+		if gate.Name != "wait-for-keycloak" || gate.ImagePullPolicy != "IfNotPresent" {
+			t.Fatalf("%s Keycloak availability gate = %#v", path, gate)
+		}
+		if len(gate.Args) != 1 {
+			t.Fatalf("%s Keycloak availability gate args = %v", path, gate.Args)
+		}
+		for _, required := range []string{
+			"curl --fail --silent --cacert /etc/noebs-keycloak/ca.pem",
+			"https://keycloak.noebs.svc.cluster.local:8443/auth/realms/master/.well-known/openid-configuration",
+			"sleep 1",
+		} {
+			if !strings.Contains(gate.Args[0], required) {
+				t.Fatalf("%s Keycloak availability gate missing %q", path, required)
+			}
+		}
+		if strings.Contains(gate.Args[0], "--insecure") {
+			t.Fatalf("%s Keycloak availability gate disables TLS verification", path)
+		}
+		requireMount(t, object.Metadata.Name, gate, "/etc/noebs-keycloak/ca.pem", "ca.pem")
+	}
+}
+
 func TestCurrentHostOverlayPinsImagesAndBudgetsEveryWorkload(t *testing.T) {
 	path := filepath.Join("..", "deploy", "kubernetes", "overlays", "current-host", "kustomization.yaml")
 	payload, err := os.ReadFile(path)
