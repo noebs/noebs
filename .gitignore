@@ -20,6 +20,15 @@ cli/cli
 litestream.yml
 .db_path
 **/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/*.tfvars.*
+**/*.tfplan
+**/*.tfplan.*
+**/*.plan
+**/*.plan.*
+!**/terraform.tfvars.example
 
 # SOPS/age secrets - NEVER commit these
 .sops/age-key.txt
