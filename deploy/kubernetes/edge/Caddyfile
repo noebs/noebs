@@ -21,33 +21,59 @@ dsa.adonese.sd {
 api.noebs.sd {
 	import common_headers
 
-	@assetlinks path /.well-known/assetlinks.json
-	header @assetlinks Content-Type application/json
-	header @assetlinks Cache-Control "public, max-age=3600"
-	respond @assetlinks `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.tutipay.app.alpha","sha256_cert_fingerprints":["B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE"]}}]` 200
+	route {
+		@assetlinks path /.well-known/assetlinks.json
+		header @assetlinks Content-Type application/json
+		header @assetlinks Cache-Control "public, max-age=3600"
+		respond @assetlinks `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.tutipay.app.alpha","sha256_cert_fingerprints":["B4:45:C2:79:FE:FB:B0:95:AA:33:4F:67:42:4D:EA:6B:52:77:38:EA:FF:A5:EF:FB:80:B5:E2:F5:9B:66:1C:AE"]}}]` 200
 
-	@payment_link {
-		method GET HEAD
-		path_regexp payment_link ^/pay/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+		@keycloak_metadata {
+			method GET HEAD
+			path /auth/realms/noebs/.well-known/openid-configuration /auth/realms/noebs/protocol/openid-connect/certs /auth/resources/*
+		}
+		reverse_proxy @keycloak_metadata keycloak.noebs.svc.cluster.local:8080 {
+			header_up X-Forwarded-Proto https
+		}
+
+		@keycloak_browser_get {
+			method GET
+			path /auth/realms/noebs/protocol/openid-connect/auth /auth/realms/noebs/protocol/openid-connect/logout /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/restart /auth/realms/noebs/login-actions/first-broker-login /auth/realms/noebs/broker/google/login /auth/realms/noebs/broker/google/endpoint /auth/realms/noebs/broker/after-first-broker-login
+		}
+		reverse_proxy @keycloak_browser_get keycloak.noebs.svc.cluster.local:8080 {
+			header_up X-Forwarded-Proto https
+		}
+
+		@keycloak_browser_post {
+			method POST
+			path /auth/realms/noebs/protocol/openid-connect/token /auth/realms/noebs/login-actions/authenticate /auth/realms/noebs/login-actions/first-broker-login
+		}
+		reverse_proxy @keycloak_browser_post keycloak.noebs.svc.cluster.local:8080 {
+			header_up X-Forwarded-Proto https
+		}
+
+		@keycloak_private path /auth /auth/*
+		respond @keycloak_private 404
+
+		reverse_proxy api-gateway.noebs.svc.cluster.local:8080
 	}
-	header @payment_link Content-Type "text/html; charset=utf-8"
-	header @payment_link Cache-Control "no-store"
-	header @payment_link Content-Security-Policy "default-src 'none'; base-uri 'none'; frame-ancestors 'none'"
-	respond @payment_link `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutiPay payment link</title><h1>Open this link with TutiPay Alpha</h1><p>The TutiPay app completes payment securely. Never enter card or PIN details in a browser.</p></html>` 200
-
-	@keycloak_public path /auth/realms/noebs /auth/realms/noebs/* /auth/resources/* /auth/robots.txt
-	reverse_proxy @keycloak_public keycloak.noebs.svc.cluster.local:8080 {
-		header_up X-Forwarded-Proto https
-	}
-
-	@keycloak_private path /auth /auth/*
-	respond @keycloak_private 404
-
-	reverse_proxy api-gateway.noebs.svc.cluster.local:8080
 
 	log {
 		output stdout
-		format json
+		format filter {
+			request>uri query {
+				replace code REDACTED
+				replace state REDACTED
+				replace session_state REDACTED
+				replace session_code REDACTED
+				replace client_data REDACTED
+				replace id_token_hint REDACTED
+				replace nonce REDACTED
+				replace code_challenge REDACTED
+				replace tab_id REDACTED
+				replace execution REDACTED
+			}
+			wrap json
+		}
 	}
 }
 
