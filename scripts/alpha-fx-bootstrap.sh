@@ -120,6 +120,12 @@ response=$(
     'fail' \
     'silent' \
     'show-error' \
+    'retry = 5' \
+    'retry-delay = 1' \
+    'retry-max-time = 45' \
+    'retry-connrefused' \
+    'connect-timeout = 5' \
+    'max-time = 60' \
     'cacert = "/etc/noebs-keycloak/ca.pem"' \
     "user = \"noebs-temporal-namespace-bootstrap:$client_secret\"" \
     'data-urlencode = "grant_type=client_credentials"' \
