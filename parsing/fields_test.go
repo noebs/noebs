@@ -23,6 +23,27 @@ func TestStringOrDefault(t *testing.T) {
 	}
 }
 
+func TestTextParsing(t *testing.T) {
+	if got, ok := Text(" noebs "); got != "noebs" || !ok {
+		t.Fatalf("Text() = %q, %v; want noebs, true", got, ok)
+	}
+	if got, ok := Text(" \t "); got != "" || ok {
+		t.Fatalf("Text(blank) = %q, %v; want empty, false", got, ok)
+	}
+	if !MissingText(" \t ") {
+		t.Fatal("MissingText(blank) = false, want true")
+	}
+	if MissingText(" value ") {
+		t.Fatal("MissingText(value) = true, want false")
+	}
+	if got := TextOrDefault(" explicit ", "fallback"); got != "explicit" {
+		t.Fatalf("TextOrDefault(value) = %q, want explicit", got)
+	}
+	if got := TextOrDefault(" \t ", "fallback"); got != "fallback" {
+		t.Fatalf("TextOrDefault(blank) = %q, want fallback", got)
+	}
+}
+
 func TestRequiredString(t *testing.T) {
 	got, err := RequiredString(map[string]any{"name": "noebs"}, "name")
 	if err != nil {

@@ -2,7 +2,6 @@ package walletgrpc
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
@@ -23,10 +22,11 @@ func (s *Server) ListFundingSources(ctx context.Context, req *walletv1.ListFundi
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.WalletId == "" {
+	walletIDText, ok := textValue(req.WalletId)
+	if !ok {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	walletID, err := uuid.Parse(req.WalletId)
+	walletID, err := uuid.Parse(walletIDText)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
@@ -124,9 +124,9 @@ func (s *Server) CreateWithdrawalDestination(ctx context.Context, req *walletv1.
 		DestinationType:       source.SourceType,
 		PSPProvider:           source.PSPProvider,
 		DestinationDetails:    source.WithdrawalMethod,
-		DisplayName:           sql.NullString{String: req.DisplayName, Valid: req.DisplayName != ""},
+		DisplayName:           textNullString(req.DisplayName),
 		Currency:              source.Currency,
-		Country:               sql.NullString{String: req.Country, Valid: req.Country != ""},
+		Country:               textNullString(req.Country),
 		LinkedFundingSourceID: source.ID,
 		IsActive:              true,
 	}
@@ -151,10 +151,11 @@ func (s *Server) ListWithdrawalDestinations(ctx context.Context, req *walletv1.L
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing request")
 	}
-	if req.WalletId == "" {
+	walletIDText, ok := textValue(req.WalletId)
+	if !ok {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}
-	walletID, err := uuid.Parse(req.WalletId)
+	walletID, err := uuid.Parse(walletIDText)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
 	}

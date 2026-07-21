@@ -11,8 +11,8 @@ func TestTextOrDefaultTreatsBlankAsOmitted(t *testing.T) {
 	if got := textOrDefault(" \t ", "fallback"); got != "fallback" {
 		t.Fatalf("textOrDefault(blank) = %q, want fallback", got)
 	}
-	if got := textOrDefault(" explicit ", "fallback"); got != " explicit " {
-		t.Fatalf("textOrDefault(value) = %q, want explicit value unchanged", got)
+	if got := textOrDefault(" explicit ", "fallback"); got != "explicit" {
+		t.Fatalf("textOrDefault(value) = %q, want explicit", got)
 	}
 }
 

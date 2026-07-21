@@ -37,6 +37,27 @@ func StringOrDefault(fields map[string]any, key, fallback string) (string, bool)
 	return text, true
 }
 
+func Text(value string) (string, bool) {
+	text := strings.TrimSpace(value)
+	if text == "" {
+		return "", false
+	}
+	return text, true
+}
+
+func MissingText(value string) bool {
+	_, ok := Text(value)
+	return !ok
+}
+
+func TextOrDefault(value, fallback string) string {
+	text, ok := Text(value)
+	if !ok {
+		return fallback
+	}
+	return text
+}
+
 func RequiredString(fields map[string]any, key string) (string, error) {
 	if fields == nil {
 		return "", fmt.Errorf("%w: %s", ErrMissingField, key)

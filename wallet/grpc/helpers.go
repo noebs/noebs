@@ -3,8 +3,8 @@ package walletgrpc
 import (
 	"database/sql"
 	"encoding/json"
-	"strings"
 
+	"github.com/adonese/noebs/parsing"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -52,15 +52,21 @@ func nullInt64Value(value sql.NullInt64) int64 {
 	return 0
 }
 
+func textNullString(value string) sql.NullString {
+	text, ok := parsing.Text(value)
+	return sql.NullString{String: text, Valid: ok}
+}
+
+func textValue(value string) (string, bool) {
+	return parsing.Text(value)
+}
+
 func missingRequiredText(value string) bool {
-	return strings.TrimSpace(value) == ""
+	return parsing.MissingText(value)
 }
 
 func textOrDefault(value, fallback string) string {
-	if missingRequiredText(value) {
-		return fallback
-	}
-	return value
+	return parsing.TextOrDefault(value, fallback)
 }
 
 func resolveIdempotencyAndReference(idempotencyKey, referenceID string) (string, string, error) {
