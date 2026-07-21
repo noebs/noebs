@@ -22,6 +22,7 @@ type DepositIntent struct {
 	OwnerID         string         `db:"owner_id"`
 	Amount          int64          `db:"amount"`
 	Currency        string         `db:"currency"`
+	CurrencyUnitID  int64          `db:"currency_unit_version_id"`
 	IdempotencyKey  string         `db:"idempotency_key"`
 	WorkflowID      string         `db:"workflow_id"`
 	RunID           sql.NullString `db:"run_id"`
@@ -90,6 +91,16 @@ func (s *Store) ReserveDepositIntent(ctx context.Context, requested DepositInten
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateCurrencyUnitIdentity(ctx, requested.Currency, requested.CurrencyUnitID); err != nil {
+		return nil, err
+	}
+	wallet, err := s.GetWallet(ctx, tenantID, requested.WalletID)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateDepositIntentWallet(wallet, requested); err != nil {
+		return nil, err
+	}
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -98,8 +109,8 @@ func (s *Store) ReserveDepositIntent(ctx context.Context, requested DepositInten
 
 	stmt := tx.Rebind(`INSERT INTO deposit_intents(
 			tenant_id, intent_reference, provider_code, wallet_id, owner_type, owner_id,
-			amount, currency, idempotency_key, workflow_id, metadata, region, raw_request
-		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			amount, currency, currency_unit_version_id, idempotency_key, workflow_id, metadata, region, raw_request
+		) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT DO NOTHING
 		RETURNING *`)
 	var stored DepositIntent
@@ -112,6 +123,7 @@ func (s *Store) ReserveDepositIntent(ctx context.Context, requested DepositInten
 		requested.OwnerID,
 		requested.Amount,
 		requested.Currency,
+		requested.CurrencyUnitID,
 		requested.IdempotencyKey,
 		requested.WorkflowID,
 		requested.Metadata,
@@ -140,8 +152,8 @@ func (s *Store) ReserveDepositIntent(ctx context.Context, requested DepositInten
 
 	insertPSP := tx.Rebind(`INSERT INTO psp_transactions(
 			tenant_id, psp_provider, idempotency_key, client_reference, direction,
-			amount, currency, status, workflow_id, raw_request, deposit_intent_id
-		) VALUES(?, ?, ?, ?, 'inbound', ?, ?, 'initiated', ?, ?, ?)
+			amount, currency, currency_unit_version_id, status, workflow_id, raw_request, deposit_intent_id
+		) VALUES(?, ?, ?, ?, 'inbound', ?, ?, ?, 'initiated', ?, ?, ?)
 		ON CONFLICT (tenant_id, client_reference) DO NOTHING`)
 	if _, err := tx.ExecContext(ctx, insertPSP,
 		stored.TenantID,
@@ -150,6 +162,7 @@ func (s *Store) ReserveDepositIntent(ctx context.Context, requested DepositInten
 		stored.IntentReference,
 		stored.Amount,
 		stored.Currency,
+		stored.CurrencyUnitID,
 		stored.WorkflowID,
 		stored.RawRequest,
 		stored.ID,
@@ -170,6 +183,25 @@ func (s *Store) ReserveDepositIntent(ctx context.Context, requested DepositInten
 		return nil, err
 	}
 	return &stored, nil
+}
+
+func ValidateDepositIntentWallet(wallet *Wallet, requested DepositIntent) error {
+	if wallet == nil || wallet.TenantID != requested.TenantID || wallet.ID != requested.WalletID {
+		return ErrWalletNotFound
+	}
+	if wallet.OwnerType != requested.OwnerType || wallet.OwnerID != requested.OwnerID {
+		return ErrInvalidDepositIntent
+	}
+	if err := ValidateCurrencyUnitID(requested.CurrencyUnitID); err != nil {
+		return err
+	}
+	if err := ValidateCurrencyUnitID(wallet.CurrencyUnitID); err != nil {
+		return err
+	}
+	if wallet.Currency != requested.Currency || wallet.CurrencyUnitID != requested.CurrencyUnitID {
+		return ErrCurrencyMismatch
+	}
+	return nil
 }
 
 func (s *Store) RecordDepositIntentRun(ctx context.Context, tenantID, reference, workflowID, runID string) (*DepositIntent, error) {
@@ -214,6 +246,7 @@ func ValidateDepositIntentReplay(existing *DepositIntent, requested DepositInten
 		existing.OwnerID != requested.OwnerID ||
 		existing.Amount != requested.Amount ||
 		existing.Currency != requested.Currency ||
+		existing.CurrencyUnitID != requested.CurrencyUnitID ||
 		existing.IdempotencyKey != requested.IdempotencyKey ||
 		existing.Region != requested.Region ||
 		!rawJSONMatches(existing.Metadata, requested.Metadata) ||
@@ -233,6 +266,7 @@ func ValidateDepositIntentTransaction(intent *DepositIntent, transaction *PSPTra
 		transaction.Direction != "inbound" ||
 		transaction.Amount != intent.Amount ||
 		transaction.Currency != intent.Currency ||
+		transaction.CurrencyUnitID != intent.CurrencyUnitID ||
 		!transaction.WorkflowID.Valid || transaction.WorkflowID.String != intent.WorkflowID {
 		return ErrInvalidDepositIntent
 	}
@@ -267,6 +301,9 @@ func validateDepositIntent(intent DepositIntent) (string, error) {
 	}
 	if intent.Currency == "" {
 		return "", ErrMissingCurrency
+	}
+	if err := ValidateCurrencyUnitID(intent.CurrencyUnitID); err != nil {
+		return "", err
 	}
 	if err := validateBoundedIdentifier(intent.IdempotencyKey, 256, ErrMissingIdempotencyKey, ErrInvalidIdempotencyKey); err != nil {
 		return "", err

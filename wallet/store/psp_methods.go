@@ -20,6 +20,25 @@ func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFil
 	if filter.Amount < 0 {
 		return nil, ErrInvalidAmount
 	}
+	if filter.Currency == "" {
+		if filter.CurrencyUnitID != 0 {
+			return nil, ErrMissingCurrency
+		}
+		if filter.Amount > 0 {
+			return nil, ErrMissingCurrency
+		}
+	} else {
+		filter.Currency, err = ValidateCurrencyCode(filter.Currency)
+		if err != nil {
+			return nil, err
+		}
+		if err := ValidateCurrencyUnitID(filter.CurrencyUnitID); err != nil {
+			return nil, err
+		}
+		if err := s.validateCurrencyUnitIdentity(ctx, filter.Currency, filter.CurrencyUnitID); err != nil {
+			return nil, err
+		}
+	}
 	if filter.Limit <= 0 {
 		return nil, ErrInvalidLimit
 	}
@@ -40,9 +59,10 @@ func (s *Store) ListAvailablePSPMethods(ctx context.Context, filter PSPMethodFil
 
 	resolved := make([]*PSPConfig, 0, len(configs))
 	scope := PSPConfigScope{
-		Region:    filter.Region,
-		Currency:  filter.Currency,
-		Direction: direction,
+		Region:         filter.Region,
+		Currency:       filter.Currency,
+		CurrencyUnitID: filter.CurrencyUnitID,
+		Direction:      direction,
 	}
 	for i := range configs {
 		cfg, _, err := s.resolvePSPConfigFromBase(ctx, &configs[i], scope)
@@ -100,6 +120,7 @@ func pspPaymentMethodFromConfig(cfg *PSPConfig, direction, currency string) PSPP
 		Regions:          []string(cfg.SupportedRegions),
 		MinAmount:        cfg.MinAmount,
 		MaxAmount:        cfg.MaxAmount,
+		CurrencyUnitID:   cfg.AmountCurrencyUnitID,
 		Presentation:     cfg.PresentationSchema,
 		SupportsDeposit:  cfg.SupportsDeposit,
 		SupportsWithdraw: cfg.SupportsWithdrawal,

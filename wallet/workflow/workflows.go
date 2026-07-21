@@ -15,6 +15,7 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -139,6 +140,12 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateDeposit, validationReq).Get(ctx, &validation); err != nil {
 		return err
 	}
+	if err := validateRequiredCurrencyUnitIDs(intent.CurrencyUnitID, validation.CurrencyUnitID); err != nil {
+		return err
+	}
+	if validation.Currency != intent.Currency || validation.CurrencyUnitID != intent.CurrencyUnitID {
+		return walletstore.ErrCurrencyMismatch
+	}
 	pspTxn, err := loadPSPTransaction(ctx, intent.TenantID, intent.IntentReference)
 	if err != nil {
 		return err
@@ -162,8 +169,9 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 		return err
 	}
 	createParams := walletactivity.CreateDepositParams{
-		TenantID:     intent.TenantID,
-		ProviderCode: intent.ProviderCode,
+		TenantID:       intent.TenantID,
+		ProviderCode:   intent.ProviderCode,
+		CurrencyUnitID: intent.CurrencyUnitID,
 		Request: walletpsp.DepositRequest{
 			ClientReference: intent.IntentReference,
 			IdempotencyKey:  intent.IdempotencyKey,
@@ -236,19 +244,22 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 
 	amounts := []walletstore.PSPTransactionAmountInput{
 		{
-			AmountKind: walletstore.PSPAmountRequested,
-			Amount:     intent.Amount,
-			Currency:   intent.Currency,
+			AmountKind:     walletstore.PSPAmountRequested,
+			Amount:         intent.Amount,
+			Currency:       intent.Currency,
+			CurrencyUnitID: intent.CurrencyUnitID,
 		},
 		{
-			AmountKind: walletstore.PSPAmountSettlement,
-			Amount:     finalStatus.Amount,
-			Currency:   finalStatus.Currency,
+			AmountKind:     walletstore.PSPAmountSettlement,
+			Amount:         finalStatus.Amount,
+			Currency:       finalStatus.Currency,
+			CurrencyUnitID: intent.CurrencyUnitID,
 		},
 		{
-			AmountKind: walletstore.PSPAmountWalletCredit,
-			Amount:     intent.Amount,
-			Currency:   intent.Currency,
+			AmountKind:     walletstore.PSPAmountWalletCredit,
+			Amount:         intent.Amount,
+			Currency:       intent.Currency,
+			CurrencyUnitID: intent.CurrencyUnitID,
 		},
 	}
 	feeAmount := int64(0)
@@ -257,14 +268,16 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	}
 	if feeAmount > 0 {
 		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
-			AmountKind: walletstore.PSPAmountFee,
-			Amount:     feeAmount,
-			Currency:   intent.Currency,
+			AmountKind:     walletstore.PSPAmountFee,
+			Amount:         feeAmount,
+			Currency:       intent.Currency,
+			CurrencyUnitID: intent.CurrencyUnitID,
 		})
 		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
-			AmountKind: walletstore.PSPAmountNet,
-			Amount:     validation.NetAmount,
-			Currency:   intent.Currency,
+			AmountKind:     walletstore.PSPAmountNet,
+			Amount:         validation.NetAmount,
+			Currency:       intent.Currency,
+			CurrencyUnitID: intent.CurrencyUnitID,
 		})
 	}
 	if err := recordPSPAmounts(ctx, intent.TenantID, pspTxn.ID, amounts); err != nil {
@@ -273,10 +286,11 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 
 	var treasury walletstore.Wallet
 	treasuryParams := walletactivity.EnsureSystemWalletParams{
-		TenantID:   intent.TenantID,
-		Currency:   intent.Currency,
-		WalletCode: walletstore.SystemTreasury,
-		KYCTier:    walletstore.KYCTierUnverified,
+		TenantID:       intent.TenantID,
+		Currency:       intent.Currency,
+		CurrencyUnitID: intent.CurrencyUnitID,
+		WalletCode:     walletstore.SystemTreasury,
+		KYCTier:        walletstore.KYCTierUnverified,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
 		return err
@@ -291,10 +305,11 @@ func Deposit(ctx workflow.Context, params DepositParams) error {
 	if feeAmount > 0 {
 		var feesWallet walletstore.Wallet
 		feesParams := walletactivity.EnsureSystemWalletParams{
-			TenantID:   intent.TenantID,
-			Currency:   intent.Currency,
-			WalletCode: walletstore.SystemFees,
-			KYCTier:    walletstore.KYCTierUnverified,
+			TenantID:       intent.TenantID,
+			Currency:       intent.Currency,
+			CurrencyUnitID: intent.CurrencyUnitID,
+			WalletCode:     walletstore.SystemFees,
+			KYCTier:        walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
 			return err
@@ -438,6 +453,7 @@ func executeWithdrawal(ctx workflow.Context, params withdrawalExecutionParams, p
 		ProviderCode:    providerCode,
 		WalletID:        walletID,
 		Currency:        params.Request.Currency,
+		CurrencyUnitID:  pspTxn.CurrencyUnitID,
 		Amount:          params.Request.Amount,
 		OwnerType:       params.OwnerType,
 		OwnerID:         params.OwnerID,
@@ -446,6 +462,16 @@ func executeWithdrawal(ctx workflow.Context, params withdrawalExecutionParams, p
 	var validation walletvalidation.WithdrawalValidationResult
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateWithdrawal, validationReq).Get(ctx, &validation); err != nil {
 		return err
+	}
+	if err := validateRequiredCurrencyUnitIDs(
+		pspTxn.CurrencyUnitID,
+		validation.PayoutCurrencyUnitID,
+		validation.WalletCurrencyUnitID,
+	); err != nil {
+		return err
+	}
+	if validation.PayoutCurrency != pspTxn.Currency || validation.PayoutCurrencyUnitID != pspTxn.CurrencyUnitID {
+		return walletstore.ErrCurrencyMismatch
 	}
 
 	var destination walletstore.WithdrawalDestination
@@ -630,10 +656,11 @@ func executeWithdrawal(ctx workflow.Context, params withdrawalExecutionParams, p
 	payout.Metadata["funding_source_id"] = fundingSource.ID
 
 	payoutParams := walletactivity.SendPayoutParams{
-		TenantID:     params.TenantID,
-		ProviderCode: providerCode,
-		Request:      payout,
-		Region:       params.Region,
+		TenantID:       params.TenantID,
+		ProviderCode:   providerCode,
+		CurrencyUnitID: pspTxn.CurrencyUnitID,
+		Request:        payout,
+		Region:         params.Region,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityCommitHold, params.TenantID, holdID).Get(ctx, nil); err != nil {
 		return releaseHold(err)
@@ -745,36 +772,52 @@ func executeWithdrawal(ctx workflow.Context, params withdrawalExecutionParams, p
 	if err := validateSuccessfulPayoutStatus(finalStatus, params.Request); err != nil {
 		return err
 	}
+	var fxRateNumerator, fxRateDenominator decimal.NullDecimal
+	if validation.AppliedFXRate.Valid {
+		fxRateNumerator, fxRateDenominator, err = walletstore.CanonicalFXRateFraction(validation.AppliedFXRate)
+		if err != nil {
+			return err
+		}
+	}
 	amounts := []walletstore.PSPTransactionAmountInput{
 		{
-			AmountKind: walletstore.PSPAmountRequested,
-			Amount:     params.Request.Amount,
-			Currency:   params.Request.Currency,
+			AmountKind:     walletstore.PSPAmountRequested,
+			Amount:         params.Request.Amount,
+			Currency:       params.Request.Currency,
+			CurrencyUnitID: pspTxn.CurrencyUnitID,
 		},
 		{
-			AmountKind: walletstore.PSPAmountWalletDebit,
-			Amount:     validation.WalletDebitAmount,
-			Currency:   validation.Currency,
-			FxRate:     validation.AppliedFXRate,
-			FxSource:   validation.AppliedFXSource,
+			AmountKind:        walletstore.PSPAmountWalletDebit,
+			Amount:            validation.WalletDebitAmount,
+			Currency:          validation.Currency,
+			CurrencyUnitID:    validation.WalletCurrencyUnitID,
+			FxRate:            validation.AppliedFXRate,
+			FxRateNumerator:   fxRateNumerator,
+			FxRateDenominator: fxRateDenominator,
+			FxSource:          validation.AppliedFXSource,
+			FxConversionAt:    validation.AppliedFXConversionAt,
 		},
 	}
 	if validation.AppliedFXRate.Valid {
 		amounts[1].FxBaseCurrency = validation.PayoutCurrency
 		amounts[1].FxQuoteCurrency = validation.WalletCurrency
+		amounts[1].FxBaseCurrencyUnitID = validation.PayoutCurrencyUnitID
+		amounts[1].FxQuoteCurrencyUnitID = validation.WalletCurrencyUnitID
 	}
 	if pspTxn.FeeAmount.Valid && pspTxn.FeeAmount.Int64 > 0 {
 		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
-			AmountKind: walletstore.PSPAmountFee,
-			Amount:     pspTxn.FeeAmount.Int64,
-			Currency:   pspTxn.Currency,
+			AmountKind:     walletstore.PSPAmountFee,
+			Amount:         pspTxn.FeeAmount.Int64,
+			Currency:       pspTxn.Currency,
+			CurrencyUnitID: pspTxn.CurrencyUnitID,
 		})
 	}
 	if pspTxn.NetAmount.Valid && pspTxn.NetAmount.Int64 > 0 {
 		amounts = append(amounts, walletstore.PSPTransactionAmountInput{
-			AmountKind: walletstore.PSPAmountNet,
-			Amount:     pspTxn.NetAmount.Int64,
-			Currency:   pspTxn.Currency,
+			AmountKind:     walletstore.PSPAmountNet,
+			Amount:         pspTxn.NetAmount.Int64,
+			Currency:       pspTxn.Currency,
+			CurrencyUnitID: pspTxn.CurrencyUnitID,
 		})
 	}
 	if err := recordPSPAmounts(ctx, params.TenantID, pspTxn.ID, amounts); err != nil {
@@ -783,10 +826,11 @@ func executeWithdrawal(ctx workflow.Context, params withdrawalExecutionParams, p
 
 	var treasury walletstore.Wallet
 	treasuryParams := walletactivity.EnsureSystemWalletParams{
-		TenantID:   params.TenantID,
-		Currency:   validation.Currency,
-		WalletCode: walletstore.SystemTreasury,
-		KYCTier:    walletstore.KYCTierUnverified,
+		TenantID:       params.TenantID,
+		Currency:       validation.Currency,
+		CurrencyUnitID: validation.WalletCurrencyUnitID,
+		WalletCode:     walletstore.SystemTreasury,
+		KYCTier:        walletstore.KYCTierUnverified,
 	}
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
 		return err
@@ -805,10 +849,11 @@ func executeWithdrawal(ctx workflow.Context, params withdrawalExecutionParams, p
 	if feeAmount > 0 {
 		var feesWallet walletstore.Wallet
 		feesParams := walletactivity.EnsureSystemWalletParams{
-			TenantID:   params.TenantID,
-			Currency:   validation.Currency,
-			WalletCode: walletstore.SystemFees,
-			KYCTier:    walletstore.KYCTierUnverified,
+			TenantID:       params.TenantID,
+			Currency:       validation.Currency,
+			CurrencyUnitID: validation.WalletCurrencyUnitID,
+			WalletCode:     walletstore.SystemFees,
+			KYCTier:        walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
 			return err
@@ -986,6 +1031,9 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityValidateP2PTransfer, validationReq).Get(ctx, &validation); err != nil {
 		return err
 	}
+	if err := validateRequiredCurrencyUnitIDs(validation.CurrencyUnitID); err != nil {
+		return err
+	}
 	feeAmount := int64(0)
 	if validation.Fee != nil {
 		feeAmount = validation.Fee.TotalFee
@@ -999,10 +1047,11 @@ func P2P(ctx workflow.Context, params P2PParams) error {
 	if feeAmount > 0 {
 		var feesWallet walletstore.Wallet
 		feesParams := walletactivity.EnsureSystemWalletParams{
-			TenantID:   params.TenantID,
-			Currency:   command.Currency,
-			WalletCode: walletstore.SystemFees,
-			KYCTier:    walletstore.KYCTierUnverified,
+			TenantID:       params.TenantID,
+			Currency:       command.Currency,
+			CurrencyUnitID: validation.CurrencyUnitID,
+			WalletCode:     walletstore.SystemFees,
+			KYCTier:        walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, feesParams).Get(ctx, &feesWallet); err != nil {
 			return err
@@ -1117,6 +1166,9 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		stored.IdempotencyKey != params.IdempotencyKey {
 		return walletstore.ErrDuplicateManualTransfer
 	}
+	if err := validateRequiredCurrencyUnitIDs(stored.CurrencyUnitID); err != nil {
+		return err
+	}
 	walletID, err := uuid.Parse(stored.WalletID.String)
 	if err != nil || !stored.WalletID.Valid || walletID == uuid.Nil {
 		return walletstore.ErrMissingWalletID
@@ -1230,10 +1282,11 @@ func ManualTransfer(ctx workflow.Context, params ManualTransferParams) error {
 		}
 		var treasury walletstore.Wallet
 		treasuryParams := walletactivity.EnsureSystemWalletParams{
-			TenantID:   stored.TenantID,
-			Currency:   stored.Currency,
-			WalletCode: walletstore.SystemTreasury,
-			KYCTier:    walletstore.KYCTierUnverified,
+			TenantID:       stored.TenantID,
+			Currency:       stored.Currency,
+			CurrencyUnitID: stored.CurrencyUnitID,
+			WalletCode:     walletstore.SystemTreasury,
+			KYCTier:        walletstore.KYCTierUnverified,
 		}
 		if err := workflow.ExecuteActivity(ctx, walletactivity.ActivityEnsureSystemWallet, treasuryParams).Get(ctx, &treasury); err != nil {
 			return releaseHoldAndReturn(ctx, stored.TenantID, holdID, err)
@@ -1545,9 +1598,9 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 			}
 			continue
 		}
-		direction := "deposit"
-		if txn.Direction == "outbound" {
-			direction = "withdrawal"
+		direction, err := pspStatusScopeDirection(txn.Direction)
+		if err != nil {
+			return err
 		}
 		statusParams := walletactivity.GetStatusParams{
 			TenantID:        params.TenantID,
@@ -1557,6 +1610,7 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 			ClientReference: txn.ClientReference,
 			Amount:          txn.Amount,
 			Currency:        txn.Currency,
+			CurrencyUnitID:  txn.CurrencyUnitID,
 			Direction:       direction,
 			Region:          regionFromRawRequest(txn.RawRequest),
 		}
@@ -1621,6 +1675,19 @@ func PSPStatusPoller(ctx workflow.Context, params PSPStatusPollerParams) error {
 		}
 	}
 	return nil
+}
+
+func pspStatusScopeDirection(direction string) (string, error) {
+	switch direction {
+	case "inbound":
+		return "deposit", nil
+	case "outbound":
+		return "withdrawal", nil
+	case "":
+		return "", walletstore.ErrMissingDirection
+	default:
+		return "", walletstore.ErrInvalidDirection
+	}
 }
 
 func deliverPSPStatusSignal(ctx workflow.Context, txn walletstore.PSPTransaction, lockToken string, deliveredAt time.Time) (bool, error) {

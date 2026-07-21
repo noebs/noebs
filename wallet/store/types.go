@@ -28,6 +28,7 @@ type Wallet struct {
 	OwnerID          string        `db:"owner_id"`
 	UserID           sql.NullInt64 `db:"user_id"`
 	Currency         string        `db:"currency"`
+	CurrencyUnitID   int64         `db:"currency_unit_version_id"`
 	Balance          int64         `db:"balance"`
 	AvailableBalance int64         `db:"available_balance"`
 	Status           string        `db:"status"`
@@ -42,6 +43,7 @@ type LedgerTransaction struct {
 	TenantID       string         `db:"tenant_id"`
 	IdempotencyKey string         `db:"idempotency_key"`
 	Currency       string         `db:"currency"`
+	CurrencyUnitID int64          `db:"currency_unit_version_id"`
 	ReferenceType  string         `db:"reference_type"`
 	ReferenceID    sql.NullString `db:"reference_id"`
 	Status         string         `db:"status"`
@@ -50,20 +52,21 @@ type LedgerTransaction struct {
 }
 
 type LedgerEntry struct {
-	ID            int64          `db:"id"`
-	TenantID      string         `db:"tenant_id"`
-	TransactionID int64          `db:"transaction_id"`
-	WalletID      uuid.UUID      `db:"wallet_id"`
-	EntryType     string         `db:"entry_type"`
-	Amount        int64          `db:"amount"`
-	Currency      string         `db:"currency"`
-	BalanceAfter  int64          `db:"balance_after"`
-	WalletSeq     int64          `db:"wallet_sequence"`
-	Status        string         `db:"status"`
-	CounterID     sql.NullInt64  `db:"counter_entry_id"`
-	Description   sql.NullString `db:"description"`
-	Metadata      RawJSON        `db:"metadata"`
-	CreatedAt     time.Time      `db:"created_at"`
+	ID             int64          `db:"id"`
+	TenantID       string         `db:"tenant_id"`
+	TransactionID  int64          `db:"transaction_id"`
+	WalletID       uuid.UUID      `db:"wallet_id"`
+	EntryType      string         `db:"entry_type"`
+	Amount         int64          `db:"amount"`
+	Currency       string         `db:"currency"`
+	CurrencyUnitID int64          `db:"currency_unit_version_id"`
+	BalanceAfter   int64          `db:"balance_after"`
+	WalletSeq      int64          `db:"wallet_sequence"`
+	Status         string         `db:"status"`
+	CounterID      sql.NullInt64  `db:"counter_entry_id"`
+	Description    sql.NullString `db:"description"`
+	Metadata       RawJSON        `db:"metadata"`
+	CreatedAt      time.Time      `db:"created_at"`
 }
 
 type BalanceHold struct {

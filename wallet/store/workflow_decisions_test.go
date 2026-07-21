@@ -211,7 +211,7 @@ func TestManualWorkflowDecisionExactReplaySurvivesTerminalTarget(t *testing.T) {
 	operatorID := insertWalletOperator(t, ctx, walletStore, "manual-decision-operator")
 	wallet, err := walletStore.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "manual-decision-user",
-		UserID: 51, Currency: "USD", KYCTier: KYCTierUnverified,
+		UserID: 51, Currency: "USD", CurrencyUnitID: testCurrencyUnitID(t, ctx, walletStore, "USD"), KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure wallet: %v", err)
@@ -219,7 +219,8 @@ func TestManualWorkflowDecisionExactReplaySurvivesTerminalTarget(t *testing.T) {
 	transfer, err := walletStore.CreateManualTransfer(ctx, ManualTransfer{
 		TenantID: tenantID, WorkflowID: "manual-decision-terminal", IdempotencyKey: "manual-decision-terminal",
 		TransferType: ManualTransferTypeDebit, WalletID: sql.NullString{String: wallet.ID.String(), Valid: true},
-		Amount: 100, Currency: "USD", Reason: "operator correction", Status: ManualTransferStatusPending,
+		Amount: 100, Currency: "USD", CurrencyUnitID: wallet.CurrencyUnitID,
+		Reason: "operator correction", Status: ManualTransferStatusPending,
 		RequestedByOperatorID: requesterID, ApprovalTimeoutSeconds: 3600,
 	})
 	if err != nil {
@@ -262,7 +263,7 @@ func TestWorkflowDecisionReservationRejectsPersistedExpiredWindows(t *testing.T)
 		operatorID := insertWalletOperator(t, ctx, walletStore, "expired-manual-operator")
 		wallet, err := walletStore.EnsureWallet(ctx, EnsureWalletParams{
 			TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "expired-manual-user",
-			UserID: 61, Currency: "USD", KYCTier: KYCTierUnverified,
+			UserID: 61, Currency: "USD", CurrencyUnitID: testCurrencyUnitID(t, ctx, walletStore, "USD"), KYCTier: KYCTierUnverified,
 		})
 		if err != nil {
 			t.Fatalf("ensure wallet: %v", err)
@@ -270,7 +271,8 @@ func TestWorkflowDecisionReservationRejectsPersistedExpiredWindows(t *testing.T)
 		transfer, err := walletStore.CreateManualTransfer(ctx, ManualTransfer{
 			TenantID: tenantID, WorkflowID: "expired-manual", IdempotencyKey: "expired-manual",
 			TransferType: ManualTransferTypeDebit, WalletID: sql.NullString{String: wallet.ID.String(), Valid: true},
-			Amount: 100, Currency: "USD", Reason: "review required", Status: ManualTransferStatusPending,
+			Amount: 100, Currency: "USD", CurrencyUnitID: wallet.CurrencyUnitID,
+			Reason: "review required", Status: ManualTransferStatusPending,
 			RequestedByOperatorID: requesterID, ApprovalTimeoutSeconds: 3600,
 		})
 		if err != nil {
@@ -425,7 +427,7 @@ func createApprovalPSPTransaction(t *testing.T, ctx context.Context, walletStore
 	}
 	wallet, err := walletStore.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeSystem, OwnerID: workflowID,
-		Currency: "AED", KYCTier: KYCTierUnverified,
+		Currency: "AED", CurrencyUnitID: testCurrencyUnitID(t, ctx, walletStore, "AED"), KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure approval wallet: %v", err)
@@ -433,6 +435,7 @@ func createApprovalPSPTransaction(t *testing.T, ctx context.Context, walletStore
 	transaction, err := walletStore.CreatePSPTransaction(ctx, PSPTransaction{
 		TenantID: tenantID, PSPProvider: "test", IdempotencyKey: workflowID,
 		ClientReference: workflowID, Direction: "outbound", Amount: 100, Currency: "AED",
+		CurrencyUnitID:      wallet.CurrencyUnitID,
 		WalletID:            uuid.NullUUID{UUID: wallet.ID, Valid: true},
 		OwnerType:           sql.NullString{String: wallet.OwnerType, Valid: true},
 		OwnerID:             sql.NullString{String: wallet.OwnerID, Valid: true},

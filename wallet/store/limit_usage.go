@@ -224,8 +224,11 @@ func (s *Store) reserveLimitUsageInTx(
 	if wallet.Currency != params.Currency {
 		return nil, ErrCurrencyMismatch
 	}
+	if err := ValidateCurrencyUnitID(wallet.CurrencyUnitID); err != nil {
+		return nil, err
+	}
 
-	limit, err := s.loadActiveTransactionLimit(ctx, tx, params, wallet.KYCTier)
+	limit, err := s.loadActiveTransactionLimit(ctx, tx, params, wallet.KYCTier, wallet.CurrencyUnitID)
 	if err != nil {
 		return nil, err
 	}
@@ -350,15 +353,21 @@ func (s *Store) loadActiveTransactionLimit(
 	tx *sqlx.Tx,
 	params LimitUsageParams,
 	kycTier string,
+	currencyUnitID int64,
 ) (*TransactionLimit, error) {
+	if err := ValidateCurrencyUnitID(currencyUnitID); err != nil {
+		return nil, err
+	}
 	stmt := s.DB.Rebind(`SELECT * FROM transaction_limits
-		WHERE tenant_id = ? AND kyc_tier = ? AND transaction_type = ? AND currency = ? AND is_active = TRUE`)
+		WHERE tenant_id = ? AND kyc_tier = ? AND transaction_type = ? AND currency = ?
+		AND currency_unit_version_id = ? AND is_active = TRUE`)
 	var limit TransactionLimit
 	if err := tx.GetContext(ctx, &limit, stmt,
 		params.TenantID,
 		kycTier,
 		params.TransactionType,
 		params.Currency,
+		currencyUnitID,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrTransactionLimitNotFound

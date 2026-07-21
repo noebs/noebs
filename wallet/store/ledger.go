@@ -125,19 +125,31 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 		}
 	}
 
+	wallets, err := s.lockWallets(ctx, tx, params.TenantID, params.DebitWalletID, params.CreditWalletID)
+	if err != nil {
+		return nil, err
+	}
+	debitWallet := wallets[params.DebitWalletID]
+	creditWallet := wallets[params.CreditWalletID]
+	if err := validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, mode); err != nil {
+		return nil, err
+	}
+
 	now := time.Now().UTC()
 	refID := sql.NullString{String: params.ReferenceID, Valid: params.ReferenceID != ""}
 
 	var txID int64
 	insertTx := db.Rebind(`INSERT INTO ledger_transactions(
-		tenant_id, idempotency_key, currency, reference_type, reference_id, status, metadata, created_at
-	) VALUES(?, ?, ?, ?, ?, 'completed', ?, ?)
+		tenant_id, idempotency_key, currency, currency_unit_version_id,
+		reference_type, reference_id, status, metadata, created_at
+	) VALUES(?, ?, ?, ?, ?, ?, 'completed', ?, ?)
 	ON CONFLICT(tenant_id, idempotency_key) DO NOTHING
 	RETURNING id`)
 	err = tx.GetContext(ctx, &txID, insertTx,
 		params.TenantID,
 		params.IdempotencyKey,
 		params.Currency,
+		debitWallet.CurrencyUnitID,
 		params.ReferenceType,
 		refID,
 		params.Metadata,
@@ -157,15 +169,6 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 		return nil, err
 	}
 
-	wallets, err := s.lockWallets(ctx, tx, params.TenantID, params.DebitWalletID, params.CreditWalletID)
-	if err != nil {
-		return nil, err
-	}
-	debitWallet := wallets[params.DebitWalletID]
-	creditWallet := wallets[params.CreditWalletID]
-	if err := validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, mode); err != nil {
-		return nil, err
-	}
 	if debitHold == nil && !mode.AllowSystemDebitOverdraft && debitWallet.AvailableBalance < params.Amount {
 		return nil, ErrInsufficientFunds
 	}
@@ -216,36 +219,38 @@ func (s *Store) postDoubleEntry(ctx context.Context, params DoubleEntryParams, m
 	}
 
 	debitEntry, err := s.insertEntry(ctx, tx, LedgerEntry{
-		TenantID:      params.TenantID,
-		TransactionID: txID,
-		WalletID:      debitWallet.ID,
-		EntryType:     "debit",
-		Amount:        params.Amount,
-		Currency:      params.Currency,
-		BalanceAfter:  debitWallet.Balance,
-		WalletSeq:     debitSeq,
-		Status:        "completed",
-		Description:   sql.NullString{String: params.Description, Valid: params.Description != ""},
-		Metadata:      RawJSON(params.Metadata),
-		CreatedAt:     now,
+		TenantID:       params.TenantID,
+		TransactionID:  txID,
+		WalletID:       debitWallet.ID,
+		EntryType:      "debit",
+		Amount:         params.Amount,
+		Currency:       params.Currency,
+		CurrencyUnitID: debitWallet.CurrencyUnitID,
+		BalanceAfter:   debitWallet.Balance,
+		WalletSeq:      debitSeq,
+		Status:         "completed",
+		Description:    sql.NullString{String: params.Description, Valid: params.Description != ""},
+		Metadata:       RawJSON(params.Metadata),
+		CreatedAt:      now,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	creditEntry, err := s.insertEntry(ctx, tx, LedgerEntry{
-		TenantID:      params.TenantID,
-		TransactionID: txID,
-		WalletID:      creditWallet.ID,
-		EntryType:     "credit",
-		Amount:        params.Amount,
-		Currency:      params.Currency,
-		BalanceAfter:  creditWallet.Balance,
-		WalletSeq:     creditSeq,
-		Status:        "completed",
-		Description:   sql.NullString{String: params.Description, Valid: params.Description != ""},
-		Metadata:      RawJSON(params.Metadata),
-		CreatedAt:     now,
+		TenantID:       params.TenantID,
+		TransactionID:  txID,
+		WalletID:       creditWallet.ID,
+		EntryType:      "credit",
+		Amount:         params.Amount,
+		Currency:       params.Currency,
+		CurrencyUnitID: creditWallet.CurrencyUnitID,
+		BalanceAfter:   creditWallet.Balance,
+		WalletSeq:      creditSeq,
+		Status:         "completed",
+		Description:    sql.NullString{String: params.Description, Valid: params.Description != ""},
+		Metadata:       RawJSON(params.Metadata),
+		CreatedAt:      now,
 	})
 	if err != nil {
 		return nil, err
@@ -312,6 +317,15 @@ func validateDoubleEntryWalletTargets(debitWallet, creditWallet *Wallet, params 
 		return ErrWalletInactive
 	}
 	if debitWallet.Currency != params.Currency || creditWallet.Currency != params.Currency {
+		return ErrCurrencyMismatch
+	}
+	if err := ValidateCurrencyUnitID(debitWallet.CurrencyUnitID); err != nil {
+		return err
+	}
+	if err := ValidateCurrencyUnitID(creditWallet.CurrencyUnitID); err != nil {
+		return err
+	}
+	if debitWallet.CurrencyUnitID != creditWallet.CurrencyUnitID {
 		return ErrCurrencyMismatch
 	}
 	if mode.AllowSystemDebitOverdraft && debitWallet.OwnerType != OwnerTypeSystem {
@@ -426,6 +440,9 @@ func existingDoubleEntryMatches(txn LedgerTransaction, result *DoubleEntryResult
 		result.CreditEntry.Amount == params.Amount &&
 		result.DebitEntry.Currency == params.Currency &&
 		result.CreditEntry.Currency == params.Currency &&
+		txn.CurrencyUnitID > 0 &&
+		result.DebitEntry.CurrencyUnitID == txn.CurrencyUnitID &&
+		result.CreditEntry.CurrencyUnitID == txn.CurrencyUnitID &&
 		result.DebitEntry.EntryType == "debit" &&
 		result.CreditEntry.EntryType == "credit" &&
 		result.DebitEntry.Status == "completed" &&
@@ -486,9 +503,9 @@ func (s *Store) nextWalletSequence(ctx context.Context, tx *sqlx.Tx, tenantID st
 
 func (s *Store) insertEntry(ctx context.Context, tx *sqlx.Tx, entry LedgerEntry) (*LedgerEntry, error) {
 	stmt := s.DB.Rebind(`INSERT INTO ledger_entries(
-		tenant_id, transaction_id, wallet_id, entry_type, amount, currency,
+		tenant_id, transaction_id, wallet_id, entry_type, amount, currency, currency_unit_version_id,
 		balance_after, wallet_sequence, status, description, metadata, created_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 	var stored LedgerEntry
 	if err := tx.GetContext(ctx, &stored, stmt,
@@ -498,6 +515,7 @@ func (s *Store) insertEntry(ctx context.Context, tx *sqlx.Tx, entry LedgerEntry)
 		entry.EntryType,
 		entry.Amount,
 		entry.Currency,
+		entry.CurrencyUnitID,
 		entry.BalanceAfter,
 		entry.WalletSeq,
 		entry.Status,

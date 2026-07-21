@@ -11,7 +11,7 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 		"result": map[string]any{
 			"provider_id": "psp-123",
 			"state":       "SUCCESS",
-			"minor_units": float64(2500),
+			"minor_units": json.Number("2500"),
 			"currency":    "AED",
 			"direction":   "inbound",
 			"message":     "accepted",
@@ -57,7 +57,7 @@ func TestMapResponseUsesConfiguredPaths(t *testing.T) {
 func TestMapResponseDoesNotDefaultMissingCurrency(t *testing.T) {
 	payload := map[string]any{
 		"result": map[string]any{
-			"minor_units": float64(2500),
+			"minor_units": json.Number("2500"),
 		},
 	}
 	mapped, err := MapResponse(payload, ResponseMapping{
@@ -95,8 +95,8 @@ func TestMapResponseRequiresConfiguredPaths(t *testing.T) {
 
 func TestMapResponsePreservesNumericStringFields(t *testing.T) {
 	payload := map[string]any{
-		"client_reference": float64(1000),
-		"provider_id":      float64(2500),
+		"client_reference": json.Number("1000"),
+		"provider_id":      json.Number("2500"),
 		"message":          json.Number("9000"),
 	}
 	mapped, err := MapResponse(payload, ResponseMapping{
@@ -125,8 +125,15 @@ func TestMapResponseRejectsInvalidConfiguredAmount(t *testing.T) {
 	}{
 		{name: "missing", value: nil},
 		{name: "fractional string", value: "12.34"},
+		{name: "surrounding whitespace", value: " 1200 "},
+		{name: "integral float", value: float64(12)},
 		{name: "fractional float", value: float64(12.5)},
+		{name: "float32", value: float32(12)},
 		{name: "json decimal", value: json.Number("12.5")},
+		{name: "json exponent", value: json.Number("12e3")},
+		{name: "above int64", value: json.Number("9223372036854775808")},
+		{name: "below int64", value: json.Number("-9223372036854775809")},
+		{name: "unsigned above int64", value: uint64(9223372036854775808)},
 		{name: "object", value: map[string]any{"amount": 1200}},
 	}
 	for _, tt := range tests {
@@ -138,6 +145,33 @@ func TestMapResponseRejectsInvalidConfiguredAmount(t *testing.T) {
 			_, err := MapResponse(payload, ResponseMapping{Amount: []string{"result.minor_units"}})
 			if !errors.Is(err, ErrPSPResponseInvalid) {
 				t.Fatalf("MapResponse() error = %v, want %v", err, ErrPSPResponseInvalid)
+			}
+		})
+	}
+}
+
+func TestMapResponsePreservesExactConfiguredAmountBoundaries(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+		want  int64
+	}{
+		{name: "above JavaScript exact integer limit", value: json.Number("9007199254740993"), want: 9007199254740993},
+		{name: "maximum int64", value: json.Number("9223372036854775807"), want: 9223372036854775807},
+		{name: "minimum int64", value: json.Number("-9223372036854775808"), want: -9223372036854775808},
+		{name: "maximum int64 string", value: "9223372036854775807", want: 9223372036854775807},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mapped, err := MapResponse(
+				map[string]any{"result": map[string]any{"minor_units": tt.value}},
+				ResponseMapping{Amount: []string{"result.minor_units"}},
+			)
+			if err != nil {
+				t.Fatalf("MapResponse() error = %v", err)
+			}
+			if mapped.Amount != tt.want {
+				t.Fatalf("MapResponse().Amount = %d, want %d", mapped.Amount, tt.want)
 			}
 		})
 	}

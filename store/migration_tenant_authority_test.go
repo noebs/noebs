@@ -220,8 +220,12 @@ func TestTenantScopedTablesRejectUnknownTenants(t *testing.T) {
 			tenant_id, owner_user_id, contact_user_id
 		) VALUES ('tenant-missing', 1, 2)`,
 		MigrationScopeWalletLedger: `INSERT INTO wallets(
-			tenant_id, owner_type, owner_id, currency, kyc_tier
-		) VALUES ('tenant-missing', 'user', 'subject', 'AED', 'unverified')`,
+			tenant_id, owner_type, owner_id, currency, currency_unit_version_id, kyc_tier
+		) VALUES (
+			'tenant-missing', 'user', 'subject', 'AED',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'AED' AND valid_to IS NULL),
+			'unverified'
+		)`,
 		MigrationScopeGatewayAuth: `INSERT INTO wallet_transaction_authorization_intents(
 			intent_hash, browser_start_hash, tenant_id, issuer, subject, operation, request_digest,
 			idempotency_key, created_at, expires_at
@@ -299,10 +303,18 @@ func TestCompositeTenantForeignKeysRejectCrossTenantParents(t *testing.T) {
 			walletB = "30000000-0000-0000-0000-000000000002"
 		)
 		if _, err := db.ExecContext(t.Context(), `INSERT INTO wallets(
-			id, tenant_id, owner_type, owner_id, currency, kyc_tier
+			id, tenant_id, owner_type, owner_id, currency, currency_unit_version_id, kyc_tier
 		) VALUES
-			($1, 'tenant-a', 'user', 'subject-a', 'AED', 'unverified'),
-			($2, 'tenant-b', 'user', 'subject-b', 'AED', 'unverified')`, walletA, walletB); err != nil {
+			(
+				$1, 'tenant-a', 'user', 'subject-a', 'AED',
+				(SELECT id FROM currency_unit_versions WHERE currency_code = 'AED' AND valid_to IS NULL),
+				'unverified'
+			),
+			(
+				$2, 'tenant-b', 'user', 'subject-b', 'AED',
+				(SELECT id FROM currency_unit_versions WHERE currency_code = 'AED' AND valid_to IS NULL),
+				'unverified'
+			)`, walletA, walletB); err != nil {
 			t.Fatal(err)
 		}
 		_, err := db.ExecContext(t.Context(), `INSERT INTO p2p_commands(
@@ -321,9 +333,10 @@ func TestCompositeTenantForeignKeysRejectCrossTenantParents(t *testing.T) {
 		}
 		_, err = db.ExecContext(t.Context(), `INSERT INTO psp_transactions(
 			tenant_id, psp_provider, idempotency_key, client_reference, direction, amount, currency,
-			status, wallet_id, owner_type, owner_id, allow_return_to_source
+			currency_unit_version_id, status, wallet_id, owner_type, owner_id, allow_return_to_source
 		) VALUES (
 			'tenant-b', 'provider-b', 'cross-withdrawal', 'cross-withdrawal', 'outbound', 100, 'AED',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'AED' AND valid_to IS NULL),
 			'initiated', $1, 'user', 'subject-a', TRUE
 		)`, walletA)
 		assertForeignKeyViolation(t, err)

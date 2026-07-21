@@ -19,52 +19,57 @@ func TestEnsureWalletValidation(t *testing.T) {
 	}{
 		{
 			name:    "missing-tenant",
-			params:  EnsureWalletParams{OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingTenantID,
 		},
 		{
 			name:    "invalid-tenant",
-			params:  EnsureWalletParams{TenantID: "default", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "default", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidTenantID,
 		},
 		{
 			name:    "missing-owner-type",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerID: "user-1", UserID: validUserID, Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingOwnerType,
 		},
 		{
 			name:    "invalid-owner-type",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: "unknown", OwnerID: "user-1", Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: "unknown", OwnerID: "user-1", Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidOwnerType,
 		},
 		{
 			name:    "missing-owner-id",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, UserID: validUserID, Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingOwnerID,
 		},
 		{
 			name:    "missing-currency",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrMissingCurrency,
 		},
 		{
+			name:    "missing-currency-unit-id",
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
+			wantErr: ErrMissingCurrencyUnitID,
+		},
+		{
 			name:    "missing-kyc-tier",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD"},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: validUserID, Currency: "USD", CurrencyUnitID: 1},
 			wantErr: ErrMissingKYCTier,
 		},
 		{
 			name:    "missing-user-id",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidUserID,
 		},
 		{
 			name:    "invalid-user-id",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: -1, Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeUser, OwnerID: "user-1", UserID: -1, Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidUserID,
 		},
 		{
 			name:    "user-id-on-system",
-			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeSystem, OwnerID: "treasury", UserID: validUserID, Currency: "USD", KYCTier: KYCTierUnverified},
+			params:  EnsureWalletParams{TenantID: "tenant", OwnerType: OwnerTypeSystem, OwnerID: "treasury", UserID: validUserID, Currency: "USD", CurrencyUnitID: 1, KYCTier: KYCTierUnverified},
 			wantErr: ErrInvalidUserID,
 		},
 	}
@@ -79,20 +84,22 @@ func TestEnsureWalletValidation(t *testing.T) {
 
 func TestValidateEnsureWalletReplay(t *testing.T) {
 	params := EnsureWalletParams{
-		TenantID:  "tenant",
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "user-42",
-		UserID:    42,
-		Currency:  "USD",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       "tenant",
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "user-42",
+		UserID:         42,
+		Currency:       "USD",
+		CurrencyUnitID: 11,
+		KYCTier:        KYCTierUnverified,
 	}
 	existing := Wallet{
-		TenantID:  params.TenantID,
-		OwnerType: params.OwnerType,
-		OwnerID:   params.OwnerID,
-		UserID:    sql.NullInt64{Int64: params.UserID, Valid: true},
-		Currency:  params.Currency,
-		KYCTier:   params.KYCTier,
+		TenantID:       params.TenantID,
+		OwnerType:      params.OwnerType,
+		OwnerID:        params.OwnerID,
+		UserID:         sql.NullInt64{Int64: params.UserID, Valid: true},
+		Currency:       params.Currency,
+		CurrencyUnitID: params.CurrencyUnitID,
+		KYCTier:        params.KYCTier,
 	}
 	if err := ValidateEnsureWalletReplay(&existing, params); err != nil {
 		t.Fatalf("ValidateEnsureWalletReplay() error = %v", err)
@@ -107,6 +114,7 @@ func TestValidateEnsureWalletReplay(t *testing.T) {
 		{"owner-id", func(p *EnsureWalletParams) { p.OwnerID = "user-99" }},
 		{"user-id", func(p *EnsureWalletParams) { p.UserID = 99 }},
 		{"currency", func(p *EnsureWalletParams) { p.Currency = "AED" }},
+		{"currency-unit", func(p *EnsureWalletParams) { p.CurrencyUnitID++ }},
 		{"kyc-tier", func(p *EnsureWalletParams) { p.KYCTier = "verified" }},
 	}
 	for _, tc := range cases {
@@ -120,18 +128,20 @@ func TestValidateEnsureWalletReplay(t *testing.T) {
 	assertErrorIs(t, ValidateEnsureWalletReplay(nil, params), ErrDuplicateWallet)
 
 	systemParams := EnsureWalletParams{
-		TenantID:  "tenant",
-		OwnerType: OwnerTypeSystem,
-		OwnerID:   SystemTreasury,
-		Currency:  "USD",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       "tenant",
+		OwnerType:      OwnerTypeSystem,
+		OwnerID:        SystemTreasury,
+		Currency:       "USD",
+		CurrencyUnitID: 11,
+		KYCTier:        KYCTierUnverified,
 	}
 	systemWallet := Wallet{
-		TenantID:  systemParams.TenantID,
-		OwnerType: systemParams.OwnerType,
-		OwnerID:   systemParams.OwnerID,
-		Currency:  systemParams.Currency,
-		KYCTier:   systemParams.KYCTier,
+		TenantID:       systemParams.TenantID,
+		OwnerType:      systemParams.OwnerType,
+		OwnerID:        systemParams.OwnerID,
+		Currency:       systemParams.Currency,
+		CurrencyUnitID: systemParams.CurrencyUnitID,
+		KYCTier:        systemParams.KYCTier,
 	}
 	if err := ValidateEnsureWalletReplay(&systemWallet, systemParams); err != nil {
 		t.Fatalf("ValidateEnsureWalletReplay(system) error = %v", err)
@@ -154,16 +164,19 @@ func TestGetWalletValidation(t *testing.T) {
 
 func TestEnsureSystemWalletsValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.EnsureSystemWallets(t.Context(), "", "USD", KYCTierUnverified)
+	_, err := s.EnsureSystemWallets(t.Context(), "", "USD", 1, KYCTierUnverified)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	_, err = s.EnsureSystemWallets(t.Context(), "default", "USD", KYCTierUnverified)
+	_, err = s.EnsureSystemWallets(t.Context(), "default", "USD", 1, KYCTierUnverified)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "", KYCTierUnverified)
+	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "", 1, KYCTierUnverified)
 	assertErrorIs(t, err, ErrMissingCurrency)
 
-	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "USD", "")
+	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "USD", 0, KYCTierUnverified)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
+
+	_, err = s.EnsureSystemWallets(t.Context(), "tenant", "USD", 1, "")
 	assertErrorIs(t, err, ErrMissingKYCTier)
 }
 
@@ -287,18 +300,20 @@ func TestValidateDoubleEntryWalletTargets(t *testing.T) {
 		Amount:         100,
 	}
 	debitWallet := &Wallet{
-		ID:        debitID,
-		TenantID:  "tenant",
-		OwnerType: OwnerTypeUser,
-		Currency:  "USD",
-		Status:    WalletStatusActive,
+		ID:             debitID,
+		TenantID:       "tenant",
+		OwnerType:      OwnerTypeUser,
+		Currency:       "USD",
+		CurrencyUnitID: 11,
+		Status:         WalletStatusActive,
 	}
 	creditWallet := &Wallet{
-		ID:        creditID,
-		TenantID:  "tenant",
-		OwnerType: OwnerTypeUser,
-		Currency:  "USD",
-		Status:    WalletStatusActive,
+		ID:             creditID,
+		TenantID:       "tenant",
+		OwnerType:      OwnerTypeUser,
+		Currency:       "USD",
+		CurrencyUnitID: 11,
+		Status:         WalletStatusActive,
 	}
 	if err := validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, doubleEntryMode{}); err != nil {
 		t.Fatalf("validateDoubleEntryWalletTargets() error = %v", err)
@@ -323,6 +338,10 @@ func TestValidateDoubleEntryWalletTargets(t *testing.T) {
 	otherCurrency := *creditWallet
 	otherCurrency.Currency = "AED"
 	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, &otherCurrency, params, doubleEntryMode{}), ErrCurrencyMismatch)
+
+	otherCurrencyUnit := *creditWallet
+	otherCurrencyUnit.CurrencyUnitID++
+	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, &otherCurrencyUnit, params, doubleEntryMode{}), ErrCurrencyMismatch)
 
 	assertErrorIs(t, validateDoubleEntryWalletTargets(debitWallet, creditWallet, params, doubleEntryMode{AllowSystemDebitOverdraft: true}), ErrSystemDebitWalletRequired)
 
@@ -738,6 +757,7 @@ func TestCreateManualTransferValidation(t *testing.T) {
 		WalletID:               sql.NullString{String: uuid.NewString(), Valid: true},
 		Amount:                 100,
 		Currency:               "USD",
+		CurrencyUnitID:         11,
 		Reason:                 "withdrawal",
 		Status:                 "pending",
 		RequestedByOperatorID:  42,
@@ -781,6 +801,11 @@ func TestCreateManualTransferValidation(t *testing.T) {
 	bad.Currency = ""
 	_, err = s.CreateManualTransfer(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingCurrency)
+
+	bad = transfer
+	bad.CurrencyUnitID = 0
+	_, err = s.CreateManualTransfer(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
 
 	bad = transfer
 	bad.Reason = ""
@@ -842,6 +867,7 @@ func TestValidateManualTransferCreateReplay(t *testing.T) {
 		WalletID:               sql.NullString{String: uuid.NewString(), Valid: true},
 		Amount:                 100,
 		Currency:               "USD",
+		CurrencyUnitID:         11,
 		Reason:                 "withdrawal",
 		Status:                 ManualTransferStatusPending,
 		RequestedByOperatorID:  42,
@@ -867,6 +893,7 @@ func TestValidateManualTransferCreateReplay(t *testing.T) {
 		{"wallet", func(t *ManualTransfer) { t.WalletID = sql.NullString{String: uuid.NewString(), Valid: true} }},
 		{"amount", func(t *ManualTransfer) { t.Amount++ }},
 		{"currency", func(t *ManualTransfer) { t.Currency = "AED" }},
+		{"currency-unit", func(t *ManualTransfer) { t.CurrencyUnitID++ }},
 		{"reason", func(t *ManualTransfer) { t.Reason = "other" }},
 		{"requested-by", func(t *ManualTransfer) { t.RequestedByOperatorID = 99 }},
 		{"psp-provider", func(t *ManualTransfer) { t.PSPProvider = sql.NullString{String: "other", Valid: true} }},
@@ -891,16 +918,18 @@ func TestValidateManualTransferCreateReplay(t *testing.T) {
 func TestValidateManualTransferCreateTarget(t *testing.T) {
 	walletID := uuid.New()
 	wallet := &Wallet{
-		ID:       walletID,
-		TenantID: "tenant",
-		Currency: "USD",
-		Status:   WalletStatusActive,
+		ID:             walletID,
+		TenantID:       "tenant",
+		Currency:       "USD",
+		CurrencyUnitID: 11,
+		Status:         WalletStatusActive,
 	}
 	requester := &OperatorIdentity{ID: 42, Issuer: "https://identity.example/realms/noebs", Subject: "requester"}
 	transfer := ManualTransfer{
 		TenantID:              "tenant",
 		WalletID:              sql.NullString{String: walletID.String(), Valid: true},
 		Currency:              "USD",
+		CurrencyUnitID:        11,
 		RequestedByOperatorID: requester.ID,
 	}
 	if err := ValidateManualTransferCreateTarget(wallet, requester, transfer); err != nil {
@@ -1111,6 +1140,7 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 		Direction:       "inbound",
 		Amount:          100,
 		Currency:        "USD",
+		CurrencyUnitID:  11,
 		Status:          "initiated",
 	}
 
@@ -1126,7 +1156,10 @@ func TestCreatePSPTransactionValidation(t *testing.T) {
 		{"missing-reference", func(txn *PSPTransaction) { txn.ClientReference = "" }, ErrMissingClientReference},
 		{"missing-direction", func(txn *PSPTransaction) { txn.Direction = "" }, ErrMissingDirection},
 		{"invalid-amount", func(txn *PSPTransaction) { txn.Amount = 0 }, ErrInvalidAmount},
+		{"negative-fee", func(txn *PSPTransaction) { txn.FeeAmount = sql.NullInt64{Int64: -1, Valid: true} }, ErrInvalidAmount},
+		{"negative-net", func(txn *PSPTransaction) { txn.NetAmount = sql.NullInt64{Int64: -1, Valid: true} }, ErrInvalidAmount},
 		{"missing-currency", func(txn *PSPTransaction) { txn.Currency = "" }, ErrMissingCurrency},
+		{"missing-currency-unit", func(txn *PSPTransaction) { txn.CurrencyUnitID = 0 }, ErrMissingCurrencyUnitID},
 		{"missing-status", func(txn *PSPTransaction) { txn.Status = "" }, ErrMissingStatus},
 		{"invalid-status", func(txn *PSPTransaction) { txn.Status = "complete" }, ErrInvalidStatus},
 	}
@@ -1302,6 +1335,7 @@ func TestValidatePSPTransactionCreateReplay(t *testing.T) {
 		FeeAmount:        sql.NullInt64{Int64: 5, Valid: true},
 		NetAmount:        sql.NullInt64{Int64: 95, Valid: true},
 		Currency:         "USD",
+		CurrencyUnitID:   11,
 		Status:           "initiated",
 		WorkflowID:       sql.NullString{String: "workflow-1", Valid: true},
 		RawRequest:       RawJSON(`{"client_reference":"ref-1","amount":100}`),
@@ -1330,6 +1364,7 @@ func TestValidatePSPTransactionCreateReplay(t *testing.T) {
 		{"amount", func(txn *PSPTransaction) { txn.Amount++ }},
 		{"fee", func(txn *PSPTransaction) { txn.FeeAmount = sql.NullInt64{} }},
 		{"currency", func(txn *PSPTransaction) { txn.Currency = "AED" }},
+		{"currency-unit", func(txn *PSPTransaction) { txn.CurrencyUnitID++ }},
 		{"workflow", func(txn *PSPTransaction) { txn.WorkflowID = sql.NullString{String: "other", Valid: true} }},
 		{"raw request", func(txn *PSPTransaction) { txn.RawRequest = RawJSON(`{"client_reference":"ref-1","amount":101}`) }},
 	}
@@ -2208,26 +2243,38 @@ func TestListFeeConfigsValidation(t *testing.T) {
 
 	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", Limit: 10, Offset: -1})
 	assertErrorIs(t, err, ErrInvalidOffset)
+
+	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", Currency: "usd", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidCurrency)
+
+	_, err = s.ListFeeConfigs(t.Context(), FeeConfigFilter{TenantID: "tenant", CurrencyUnitID: -1, Limit: 10})
+	assertErrorIs(t, err, ErrInvalidCurrencyUnitID)
 }
 
 func TestGetFeeConfigForAmountValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.GetFeeConfigForAmount(t.Context(), "", "deposit", "USD", 100)
+	_, err := s.GetFeeConfigForAmount(t.Context(), "", "deposit", "USD", 1, 100)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	_, err = s.GetFeeConfigForAmount(t.Context(), "default", "deposit", "USD", 100)
+	_, err = s.GetFeeConfigForAmount(t.Context(), "default", "deposit", "USD", 1, 100)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "", "USD", 100)
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "", "USD", 1, 100)
 	assertErrorIs(t, err, ErrMissingTransactionType)
 
-	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "", 100)
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "", 1, 100)
 	assertErrorIs(t, err, ErrMissingCurrency)
 
-	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", 0)
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "usd", 1, 100)
+	assertErrorIs(t, err, ErrInvalidCurrency)
+
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", 0, 100)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
+
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", 1, 0)
 	assertErrorIs(t, err, ErrInvalidAmount)
 
-	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", -1)
+	_, err = s.GetFeeConfigForAmount(t.Context(), "tenant", "deposit", "USD", 1, -1)
 	assertErrorIs(t, err, ErrInvalidAmount)
 }
 
@@ -2237,6 +2284,7 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 		TenantID:            "tenant",
 		TransactionType:     "deposit",
 		Currency:            "USD",
+		CurrencyUnitID:      1,
 		TierMin:             0,
 		PercentageFee:       decimal.NewFromFloat(1.5),
 		FlatFee:             0,
@@ -2264,6 +2312,11 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingCurrency)
 
 	bad = cfg
+	bad.CurrencyUnitID = 0
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
+
+	bad = cfg
 	bad.TierMin = -1
 	_, err = s.CreateFeeConfig(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidAmount)
@@ -2274,6 +2327,16 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrInvalidPercentage)
 
 	bad = cfg
+	bad.PercentageFee = decimal.RequireFromString("0.00001")
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrFeePercentageNotRepresentable)
+
+	bad = cfg
+	bad.PercentageFee = decimal.RequireFromString("10000")
+	_, err = s.CreateFeeConfig(t.Context(), bad)
+	assertErrorIs(t, err, ErrFeePercentageNotRepresentable)
+
+	bad = cfg
 	bad.CreatedByOperatorID = 0
 	_, err = s.CreateFeeConfig(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingOperatorID)
@@ -2281,20 +2344,26 @@ func TestCreateFeeConfigValidation(t *testing.T) {
 
 func TestGetLimitsValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.GetLimits(t.Context(), "", "basic", "withdrawal", "USD")
+	_, err := s.GetLimits(t.Context(), "", "basic", "withdrawal", "USD", 1)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	_, err = s.GetLimits(t.Context(), "default", "basic", "withdrawal", "USD")
+	_, err = s.GetLimits(t.Context(), "default", "basic", "withdrawal", "USD", 1)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	_, err = s.GetLimits(t.Context(), "tenant", "", "withdrawal", "USD")
+	_, err = s.GetLimits(t.Context(), "tenant", "", "withdrawal", "USD", 1)
 	assertErrorIs(t, err, ErrMissingKYCTier)
 
-	_, err = s.GetLimits(t.Context(), "tenant", "basic", "", "USD")
+	_, err = s.GetLimits(t.Context(), "tenant", "basic", "", "USD", 1)
 	assertErrorIs(t, err, ErrMissingTransactionType)
 
-	_, err = s.GetLimits(t.Context(), "tenant", "basic", "withdrawal", "")
+	_, err = s.GetLimits(t.Context(), "tenant", "basic", "withdrawal", "", 1)
 	assertErrorIs(t, err, ErrMissingCurrency)
+
+	_, err = s.GetLimits(t.Context(), "tenant", "basic", "withdrawal", "usd", 1)
+	assertErrorIs(t, err, ErrInvalidCurrency)
+
+	_, err = s.GetLimits(t.Context(), "tenant", "basic", "withdrawal", "USD", 0)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
 }
 
 func TestListExchangeRatesValidation(t *testing.T) {
@@ -2310,33 +2379,54 @@ func TestListExchangeRatesValidation(t *testing.T) {
 
 	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", Limit: 10, Offset: -1})
 	assertErrorIs(t, err, ErrInvalidOffset)
+
+	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", BaseCurrency: "usd", Limit: 10})
+	assertErrorIs(t, err, ErrInvalidCurrency)
+
+	_, err = s.ListExchangeRates(t.Context(), ExchangeRateFilter{TenantID: "tenant", BaseCurrency: "USD", QuoteCurrency: "USD", Limit: 10})
+	assertErrorIs(t, err, ErrIdenticalCurrencies)
 }
 
 func TestGetActiveRateValidation(t *testing.T) {
 	s := &Store{}
-	_, err := s.GetActiveRate(t.Context(), "", "USD", "EUR")
+	now := time.Now().UTC()
+	_, err := s.GetActiveRateForUnitsAt(t.Context(), "", "USD", 1, "EUR", 2, now)
 	assertErrorIs(t, err, ErrMissingTenantID)
 
-	_, err = s.GetActiveRate(t.Context(), "default", "USD", "EUR")
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "default", "USD", 1, "EUR", 2, now)
 	assertErrorIs(t, err, ErrInvalidTenantID)
 
-	_, err = s.GetActiveRate(t.Context(), "tenant", "", "EUR")
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "tenant", "", 1, "EUR", 2, now)
 	assertErrorIs(t, err, ErrMissingBaseCurrency)
 
-	_, err = s.GetActiveRate(t.Context(), "tenant", "USD", "")
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "tenant", "USD", 1, "", 2, now)
 	assertErrorIs(t, err, ErrMissingQuoteCurrency)
+
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "tenant", "usd", 1, "EUR", 2, now)
+	assertErrorIs(t, err, ErrInvalidCurrency)
+
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "tenant", "USD", 1, "USD", 1, now)
+	assertErrorIs(t, err, ErrIdenticalCurrencies)
+
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "tenant", "USD", 0, "EUR", 2, now)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
+
+	_, err = s.GetActiveRateForUnitsAt(t.Context(), "tenant", "USD", 1, "EUR", 2, time.Time{})
+	assertErrorIs(t, err, ErrMissingStartTime)
 }
 
 func TestCreateExchangeRateValidation(t *testing.T) {
 	s := &Store{}
 	rate := ExchangeRate{
-		TenantID:        "tenant",
-		BaseCurrency:    "USD",
-		QuoteCurrency:   "EUR",
-		BuyRate:         decimal.NewFromFloat(1.1),
-		SellRate:        decimal.NewFromFloat(1.2),
-		SetByOperatorID: 1,
-		EffectiveFrom:   time.Now().UTC(),
+		TenantID:            "tenant",
+		BaseCurrency:        "USD",
+		BaseCurrencyUnitID:  1,
+		QuoteCurrency:       "EUR",
+		QuoteCurrencyUnitID: 2,
+		BuyRate:             decimal.NewFromFloat(1.1),
+		SellRate:            decimal.NewFromFloat(1.2),
+		SetByOperatorID:     1,
+		EffectiveFrom:       time.Now().UTC(),
 	}
 
 	_, err := s.CreateExchangeRate(t.Context(), ExchangeRate{})
@@ -2358,6 +2448,26 @@ func TestCreateExchangeRateValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingQuoteCurrency)
 
 	bad = rate
+	bad.BaseCurrencyUnitID = 0
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
+
+	bad = rate
+	bad.QuoteCurrencyUnitID = 0
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrMissingCurrencyUnitID)
+
+	bad = rate
+	bad.BaseCurrency = "usd"
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidCurrency)
+
+	bad = rate
+	bad.QuoteCurrency = "USD"
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrIdenticalCurrencies)
+
+	bad = rate
 	bad.SetByOperatorID = 0
 	_, err = s.CreateExchangeRate(t.Context(), bad)
 	assertErrorIs(t, err, ErrMissingOperatorID)
@@ -2368,9 +2478,34 @@ func TestCreateExchangeRateValidation(t *testing.T) {
 	assertErrorIs(t, err, ErrMissingStartTime)
 
 	bad = rate
+	bad.EffectiveTo = sql.NullTime{Time: bad.EffectiveFrom, Valid: true}
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrInvalidTimeRange)
+
+	bad = rate
 	bad.BuyRate = decimal.NewFromInt(0)
 	_, err = s.CreateExchangeRate(t.Context(), bad)
 	assertErrorIs(t, err, ErrInvalidRate)
+
+	bad = rate
+	bad.BuyRate = decimal.RequireFromString("1.000000001")
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrLegacyRateNotRepresentable)
+
+	bad = rate
+	bad.SellRate = decimal.RequireFromString("10000000000")
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrLegacyRateNotRepresentable)
+
+	bad = rate
+	bad.Spread = decimal.NullDecimal{Decimal: decimal.RequireFromString("0.00001"), Valid: true}
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrSpreadNotRepresentable)
+
+	bad = rate
+	bad.Spread = decimal.NullDecimal{Decimal: decimal.RequireFromString("10000"), Valid: true}
+	_, err = s.CreateExchangeRate(t.Context(), bad)
+	assertErrorIs(t, err, ErrSpreadNotRepresentable)
 }
 
 func TestAddPSPTransactionAmountValidation(t *testing.T) {
@@ -2381,6 +2516,7 @@ func TestAddPSPTransactionAmountValidation(t *testing.T) {
 		AmountKind:       PSPAmountReported,
 		Amount:           100,
 		Currency:         "USD",
+		CurrencyUnitID:   11,
 	}
 
 	cases := []struct {
@@ -2395,6 +2531,7 @@ func TestAddPSPTransactionAmountValidation(t *testing.T) {
 		{"invalid-kind", func(a *PSPTransactionAmount) { a.AmountKind = PSPAmountKind("bogus") }, ErrInvalidAmountKind},
 		{"invalid-amount", func(a *PSPTransactionAmount) { a.Amount = 0 }, ErrInvalidAmount},
 		{"missing-currency", func(a *PSPTransactionAmount) { a.Currency = "" }, ErrMissingCurrency},
+		{"missing-currency-unit", func(a *PSPTransactionAmount) { a.CurrencyUnitID = 0 }, ErrMissingCurrencyUnitID},
 	}
 
 	for _, tc := range cases {
@@ -2415,9 +2552,10 @@ func TestAddPSPTransactionAmountFXValidation(t *testing.T) {
 		AmountKind:       PSPAmountReported,
 		Amount:           100,
 		Currency:         "USD",
+		CurrencyUnitID:   11,
 	}
 
-	amount.FxRate = decimal.NullDecimal{Valid: true}
+	amount.FxRate = decimal.NullDecimal{Decimal: decimal.NewFromInt(1), Valid: true}
 	_, err := s.AddPSPTransactionAmount(t.Context(), amount)
 	assertErrorIs(t, err, ErrMissingFXCurrency)
 
@@ -2427,6 +2565,7 @@ func TestAddPSPTransactionAmountFXValidation(t *testing.T) {
 		AmountKind:       PSPAmountReported,
 		Amount:           100,
 		Currency:         "USD",
+		CurrencyUnitID:   11,
 		FxBaseCurrency:   sql.NullString{String: "USD", Valid: true},
 		FxQuoteCurrency:  sql.NullString{String: "EUR", Valid: true},
 	}
@@ -2438,9 +2577,10 @@ func TestAddPSPTransactionAmountsValidation(t *testing.T) {
 	s := &Store{}
 	inputs := []PSPTransactionAmountInput{
 		{
-			AmountKind: PSPAmountReported,
-			Amount:     100,
-			Currency:   "USD",
+			AmountKind:     PSPAmountReported,
+			Amount:         100,
+			Currency:       "USD",
+			CurrencyUnitID: 11,
 		},
 	}
 
@@ -2469,15 +2609,19 @@ func TestAddPSPTransactionAmountsValidation(t *testing.T) {
 
 func TestValidatePSPTransactionAmountReplay(t *testing.T) {
 	existing := PSPTransactionAmount{
-		TenantID:         "tenant",
-		PSPTransactionID: 1,
-		AmountKind:       PSPAmountReported,
-		Amount:           100,
-		Currency:         "USD",
-		FxRate:           decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true},
-		FxBaseCurrency:   sql.NullString{String: "USD", Valid: true},
-		FxQuoteCurrency:  sql.NullString{String: "AED", Valid: true},
-		FxSource:         sql.NullString{String: "provider", Valid: true},
+		TenantID:              "tenant",
+		PSPTransactionID:      1,
+		AmountKind:            PSPAmountReported,
+		Amount:                100,
+		Currency:              "USD",
+		CurrencyUnitID:        11,
+		FxRate:                decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true},
+		FxBaseCurrency:        sql.NullString{String: "USD", Valid: true},
+		FxQuoteCurrency:       sql.NullString{String: "AED", Valid: true},
+		FxBaseCurrencyUnitID:  sql.NullInt64{Int64: 11, Valid: true},
+		FxQuoteCurrencyUnitID: sql.NullInt64{Int64: 12, Valid: true},
+		FxSource:              sql.NullString{String: "provider", Valid: true},
+		FxConversionAt:        sql.NullTime{Time: time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC), Valid: true},
 	}
 	if err := ValidatePSPTransactionAmountReplay(&existing, existing); err != nil {
 		t.Fatalf("ValidatePSPTransactionAmountReplay() error = %v", err)
@@ -2754,6 +2898,38 @@ func TestGetPSPConfigValidation(t *testing.T) {
 
 	_, _, err = s.ResolvePSPConfig(t.Context(), "default", "provider", PSPConfigScope{})
 	assertErrorIs(t, err, ErrInvalidTenantID)
+}
+
+func TestGetActivePSPAmountPolicyRequiresExactScope(t *testing.T) {
+	s := &Store{}
+	valid := PSPConfigScope{
+		Currency:       "USD",
+		CurrencyUnitID: 1,
+		Direction:      "deposit",
+	}
+	tests := []struct {
+		name   string
+		tenant string
+		code   string
+		scope  PSPConfigScope
+		want   error
+	}{
+		{name: "missing tenant", code: "provider", scope: valid, want: ErrMissingTenantID},
+		{name: "reserved tenant", tenant: "default", code: "provider", scope: valid, want: ErrInvalidTenantID},
+		{name: "missing provider", tenant: "tenant", scope: valid, want: ErrMissingProviderCode},
+		{name: "missing currency", tenant: "tenant", code: "provider", scope: PSPConfigScope{CurrencyUnitID: 1, Direction: "deposit"}, want: ErrMissingCurrency},
+		{name: "invalid currency", tenant: "tenant", code: "provider", scope: PSPConfigScope{Currency: "usd", CurrencyUnitID: 1, Direction: "deposit"}, want: ErrInvalidCurrency},
+		{name: "missing unit", tenant: "tenant", code: "provider", scope: PSPConfigScope{Currency: "USD", Direction: "deposit"}, want: ErrMissingCurrencyUnitID},
+		{name: "missing direction", tenant: "tenant", code: "provider", scope: PSPConfigScope{Currency: "USD", CurrencyUnitID: 1}, want: ErrMissingDirection},
+		{name: "invalid direction", tenant: "tenant", code: "provider", scope: PSPConfigScope{Currency: "USD", CurrencyUnitID: 1, Direction: "inbound"}, want: ErrInvalidDirection},
+		{name: "noncanonical region", tenant: "tenant", code: "provider", scope: PSPConfigScope{Currency: "USD", CurrencyUnitID: 1, Direction: "deposit", Region: " AE"}, want: ErrInvalidRegion},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := s.GetActivePSPAmountPolicy(t.Context(), tt.tenant, tt.code, tt.scope)
+			assertErrorIs(t, err, tt.want)
+		})
+	}
 }
 
 func TestListAvailablePSPMethodsValidation(t *testing.T) {

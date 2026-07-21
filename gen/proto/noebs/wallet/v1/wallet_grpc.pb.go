@@ -30,6 +30,13 @@ const (
 	WalletPublicService_CreateWithdrawalDestination_FullMethodName     = "/noebs.wallet.v1.WalletPublicService/CreateWithdrawalDestination"
 	WalletPublicService_ListWithdrawalDestinations_FullMethodName      = "/noebs.wallet.v1.WalletPublicService/ListWithdrawalDestinations"
 	WalletPublicService_DeactivateWithdrawalDestination_FullMethodName = "/noebs.wallet.v1.WalletPublicService/DeactivateWithdrawalDestination"
+	WalletPublicService_ListCurrenciesPublic_FullMethodName            = "/noebs.wallet.v1.WalletPublicService/ListCurrenciesPublic"
+	WalletPublicService_GetCurrencyPublic_FullMethodName               = "/noebs.wallet.v1.WalletPublicService/GetCurrencyPublic"
+	WalletPublicService_ParseMoneyPublic_FullMethodName                = "/noebs.wallet.v1.WalletPublicService/ParseMoneyPublic"
+	WalletPublicService_FormatMoneyPublic_FullMethodName               = "/noebs.wallet.v1.WalletPublicService/FormatMoneyPublic"
+	WalletPublicService_QuoteConversionPublic_FullMethodName           = "/noebs.wallet.v1.WalletPublicService/QuoteConversionPublic"
+	WalletPublicService_GetConversionQuotePublic_FullMethodName        = "/noebs.wallet.v1.WalletPublicService/GetConversionQuotePublic"
+	WalletPublicService_ListFXSourcesPublic_FullMethodName             = "/noebs.wallet.v1.WalletPublicService/ListFXSourcesPublic"
 )
 
 // WalletPublicServiceClient is the client API for WalletPublicService service.
@@ -47,6 +54,13 @@ type WalletPublicServiceClient interface {
 	CreateWithdrawalDestination(ctx context.Context, in *CreateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*CreateWithdrawalDestinationResponse, error)
 	ListWithdrawalDestinations(ctx context.Context, in *ListWithdrawalDestinationsRequest, opts ...grpc.CallOption) (*ListWithdrawalDestinationsResponse, error)
 	DeactivateWithdrawalDestination(ctx context.Context, in *DeactivateWithdrawalDestinationRequest, opts ...grpc.CallOption) (*DeactivateWithdrawalDestinationResponse, error)
+	ListCurrenciesPublic(ctx context.Context, in *ListCurrenciesPublicRequest, opts ...grpc.CallOption) (*ListCurrenciesPublicResponse, error)
+	GetCurrencyPublic(ctx context.Context, in *GetCurrencyPublicRequest, opts ...grpc.CallOption) (*GetCurrencyPublicResponse, error)
+	ParseMoneyPublic(ctx context.Context, in *ParseMoneyPublicRequest, opts ...grpc.CallOption) (*ParseMoneyPublicResponse, error)
+	FormatMoneyPublic(ctx context.Context, in *FormatMoneyPublicRequest, opts ...grpc.CallOption) (*FormatMoneyPublicResponse, error)
+	QuoteConversionPublic(ctx context.Context, in *QuoteConversionPublicRequest, opts ...grpc.CallOption) (*QuoteConversionPublicResponse, error)
+	GetConversionQuotePublic(ctx context.Context, in *GetConversionQuotePublicRequest, opts ...grpc.CallOption) (*GetConversionQuotePublicResponse, error)
+	ListFXSourcesPublic(ctx context.Context, in *ListFXSourcesPublicRequest, opts ...grpc.CallOption) (*ListFXSourcesPublicResponse, error)
 }
 
 type walletPublicServiceClient struct {
@@ -167,6 +181,76 @@ func (c *walletPublicServiceClient) DeactivateWithdrawalDestination(ctx context.
 	return out, nil
 }
 
+func (c *walletPublicServiceClient) ListCurrenciesPublic(ctx context.Context, in *ListCurrenciesPublicRequest, opts ...grpc.CallOption) (*ListCurrenciesPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCurrenciesPublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_ListCurrenciesPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) GetCurrencyPublic(ctx context.Context, in *GetCurrencyPublicRequest, opts ...grpc.CallOption) (*GetCurrencyPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCurrencyPublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_GetCurrencyPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) ParseMoneyPublic(ctx context.Context, in *ParseMoneyPublicRequest, opts ...grpc.CallOption) (*ParseMoneyPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ParseMoneyPublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_ParseMoneyPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) FormatMoneyPublic(ctx context.Context, in *FormatMoneyPublicRequest, opts ...grpc.CallOption) (*FormatMoneyPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FormatMoneyPublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_FormatMoneyPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) QuoteConversionPublic(ctx context.Context, in *QuoteConversionPublicRequest, opts ...grpc.CallOption) (*QuoteConversionPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QuoteConversionPublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_QuoteConversionPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) GetConversionQuotePublic(ctx context.Context, in *GetConversionQuotePublicRequest, opts ...grpc.CallOption) (*GetConversionQuotePublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetConversionQuotePublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_GetConversionQuotePublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *walletPublicServiceClient) ListFXSourcesPublic(ctx context.Context, in *ListFXSourcesPublicRequest, opts ...grpc.CallOption) (*ListFXSourcesPublicResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFXSourcesPublicResponse)
+	err := c.cc.Invoke(ctx, WalletPublicService_ListFXSourcesPublic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WalletPublicServiceServer is the server API for WalletPublicService service.
 // All implementations must embed UnimplementedWalletPublicServiceServer
 // for forward compatibility.
@@ -182,6 +266,13 @@ type WalletPublicServiceServer interface {
 	CreateWithdrawalDestination(context.Context, *CreateWithdrawalDestinationRequest) (*CreateWithdrawalDestinationResponse, error)
 	ListWithdrawalDestinations(context.Context, *ListWithdrawalDestinationsRequest) (*ListWithdrawalDestinationsResponse, error)
 	DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*DeactivateWithdrawalDestinationResponse, error)
+	ListCurrenciesPublic(context.Context, *ListCurrenciesPublicRequest) (*ListCurrenciesPublicResponse, error)
+	GetCurrencyPublic(context.Context, *GetCurrencyPublicRequest) (*GetCurrencyPublicResponse, error)
+	ParseMoneyPublic(context.Context, *ParseMoneyPublicRequest) (*ParseMoneyPublicResponse, error)
+	FormatMoneyPublic(context.Context, *FormatMoneyPublicRequest) (*FormatMoneyPublicResponse, error)
+	QuoteConversionPublic(context.Context, *QuoteConversionPublicRequest) (*QuoteConversionPublicResponse, error)
+	GetConversionQuotePublic(context.Context, *GetConversionQuotePublicRequest) (*GetConversionQuotePublicResponse, error)
+	ListFXSourcesPublic(context.Context, *ListFXSourcesPublicRequest) (*ListFXSourcesPublicResponse, error)
 	mustEmbedUnimplementedWalletPublicServiceServer()
 }
 
@@ -224,6 +315,27 @@ func (UnimplementedWalletPublicServiceServer) ListWithdrawalDestinations(context
 }
 func (UnimplementedWalletPublicServiceServer) DeactivateWithdrawalDestination(context.Context, *DeactivateWithdrawalDestinationRequest) (*DeactivateWithdrawalDestinationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeactivateWithdrawalDestination not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) ListCurrenciesPublic(context.Context, *ListCurrenciesPublicRequest) (*ListCurrenciesPublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListCurrenciesPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) GetCurrencyPublic(context.Context, *GetCurrencyPublicRequest) (*GetCurrencyPublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCurrencyPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) ParseMoneyPublic(context.Context, *ParseMoneyPublicRequest) (*ParseMoneyPublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ParseMoneyPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) FormatMoneyPublic(context.Context, *FormatMoneyPublicRequest) (*FormatMoneyPublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FormatMoneyPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) QuoteConversionPublic(context.Context, *QuoteConversionPublicRequest) (*QuoteConversionPublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuoteConversionPublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) GetConversionQuotePublic(context.Context, *GetConversionQuotePublicRequest) (*GetConversionQuotePublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConversionQuotePublic not implemented")
+}
+func (UnimplementedWalletPublicServiceServer) ListFXSourcesPublic(context.Context, *ListFXSourcesPublicRequest) (*ListFXSourcesPublicResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListFXSourcesPublic not implemented")
 }
 func (UnimplementedWalletPublicServiceServer) mustEmbedUnimplementedWalletPublicServiceServer() {}
 func (UnimplementedWalletPublicServiceServer) testEmbeddedByValue()                             {}
@@ -444,6 +556,132 @@ func _WalletPublicService_DeactivateWithdrawalDestination_Handler(srv interface{
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WalletPublicService_ListCurrenciesPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCurrenciesPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).ListCurrenciesPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_ListCurrenciesPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).ListCurrenciesPublic(ctx, req.(*ListCurrenciesPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_GetCurrencyPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCurrencyPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).GetCurrencyPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_GetCurrencyPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).GetCurrencyPublic(ctx, req.(*GetCurrencyPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_ParseMoneyPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParseMoneyPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).ParseMoneyPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_ParseMoneyPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).ParseMoneyPublic(ctx, req.(*ParseMoneyPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_FormatMoneyPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FormatMoneyPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).FormatMoneyPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_FormatMoneyPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).FormatMoneyPublic(ctx, req.(*FormatMoneyPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_QuoteConversionPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QuoteConversionPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).QuoteConversionPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_QuoteConversionPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).QuoteConversionPublic(ctx, req.(*QuoteConversionPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_GetConversionQuotePublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConversionQuotePublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).GetConversionQuotePublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_GetConversionQuotePublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).GetConversionQuotePublic(ctx, req.(*GetConversionQuotePublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WalletPublicService_ListFXSourcesPublic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFXSourcesPublicRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WalletPublicServiceServer).ListFXSourcesPublic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WalletPublicService_ListFXSourcesPublic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WalletPublicServiceServer).ListFXSourcesPublic(ctx, req.(*ListFXSourcesPublicRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WalletPublicService_ServiceDesc is the grpc.ServiceDesc for WalletPublicService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -494,6 +732,34 @@ var WalletPublicService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeactivateWithdrawalDestination",
 			Handler:    _WalletPublicService_DeactivateWithdrawalDestination_Handler,
+		},
+		{
+			MethodName: "ListCurrenciesPublic",
+			Handler:    _WalletPublicService_ListCurrenciesPublic_Handler,
+		},
+		{
+			MethodName: "GetCurrencyPublic",
+			Handler:    _WalletPublicService_GetCurrencyPublic_Handler,
+		},
+		{
+			MethodName: "ParseMoneyPublic",
+			Handler:    _WalletPublicService_ParseMoneyPublic_Handler,
+		},
+		{
+			MethodName: "FormatMoneyPublic",
+			Handler:    _WalletPublicService_FormatMoneyPublic_Handler,
+		},
+		{
+			MethodName: "QuoteConversionPublic",
+			Handler:    _WalletPublicService_QuoteConversionPublic_Handler,
+		},
+		{
+			MethodName: "GetConversionQuotePublic",
+			Handler:    _WalletPublicService_GetConversionQuotePublic_Handler,
+		},
+		{
+			MethodName: "ListFXSourcesPublic",
+			Handler:    _WalletPublicService_ListFXSourcesPublic_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

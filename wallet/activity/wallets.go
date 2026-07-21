@@ -11,10 +11,11 @@ type WalletActivities struct {
 }
 
 type EnsureSystemWalletParams struct {
-	TenantID   string
-	Currency   string
-	WalletCode string
-	KYCTier    string
+	TenantID       string
+	Currency       string
+	CurrencyUnitID int64
+	WalletCode     string
+	KYCTier        string
 }
 
 func NewWalletActivities(store *walletstore.Store) *WalletActivities {
@@ -25,11 +26,15 @@ func (a *WalletActivities) EnsureSystemWallet(ctx context.Context, params Ensure
 	if a == nil || a.Store == nil {
 		return nil, ErrMissingStore
 	}
+	if err := walletstore.ValidateCurrencyUnitID(params.CurrencyUnitID); err != nil {
+		return nil, err
+	}
 	return a.Store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
-		TenantID:  params.TenantID,
-		OwnerType: walletstore.OwnerTypeSystem,
-		OwnerID:   params.WalletCode,
-		Currency:  params.Currency,
-		KYCTier:   params.KYCTier,
+		TenantID:       params.TenantID,
+		OwnerType:      walletstore.OwnerTypeSystem,
+		OwnerID:        params.WalletCode,
+		Currency:       params.Currency,
+		CurrencyUnitID: params.CurrencyUnitID,
+		KYCTier:        params.KYCTier,
 	})
 }

@@ -309,6 +309,8 @@ func validWalletRuntimeConfig(role serviceRole) ebs_fields.NoebsConfig {
 		WalletHoldExpirySeconds:      3600,
 		WalletApprovalTimeoutSeconds: 3600,
 		WalletManualTransferApprovalTimeoutSeconds: 86400,
+		WalletFXRefreshCron:                        "30 16 * * 1-5",
+		WalletFXQuoteMaxPerUserObservation:         100,
 		WalletPSPPollerCron:                        "*/5 * * * *",
 		WalletPSPPollerBatchSize:                   100,
 		WalletPSPPollerIntervalSeconds:             300,
@@ -316,6 +318,14 @@ func validWalletRuntimeConfig(role serviceRole) ebs_fields.NoebsConfig {
 		WalletReconciliationBatchSize:              500,
 		WalletReconciliationLookbackHours:          24,
 	})
+}
+
+func TestServiceRoleRuntimeConfigRequiresExplicitFXQuoteQuota(t *testing.T) {
+	cfg := validWalletRuntimeConfig(serviceRoleWalletLedger)
+	cfg.WalletFXQuoteMaxPerUserObservation = 0
+	if err := validateRoleRuntimeConfig(serviceRoleWalletLedger, cfg); !errors.Is(err, errInvalidWalletConfig) {
+		t.Fatalf("wallet quote quota error = %v, want %v", err, errInvalidWalletConfig)
+	}
 }
 
 func validWalletWorkerRuntimeConfig() ebs_fields.NoebsConfig {
@@ -643,6 +653,7 @@ func TestServiceRoleRuntimeConfigRequiresExplicitWalletWorkerSchedules(t *testin
 		mutate func(*ebs_fields.NoebsConfig)
 		want   error
 	}{
+		{name: "fx_refresh_cron", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletFXRefreshCron = "" }, want: errMissingWalletWorkflowCron},
 		{name: "poller_cron", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletPSPPollerCron = "" }, want: errMissingWalletWorkflowCron},
 		{name: "poller_batch", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletPSPPollerBatchSize = 0 }, want: errInvalidWalletConfig},
 		{name: "poller_interval", mutate: func(cfg *ebs_fields.NoebsConfig) { cfg.WalletPSPPollerIntervalSeconds = 0 }, want: errInvalidWalletConfig},

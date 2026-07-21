@@ -406,8 +406,19 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Re
 	if err := walletstore.ValidateManualTransferType(transferType); err != nil {
 		return nil, mapError(err)
 	}
-	if _, err := adminUUID(walletID); err != nil {
+	parsedWalletID, err := adminUUID(walletID)
+	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingWalletID.Error())
+	}
+	walletRow, err := s.Service.Store.GetWallet(ctx, tenantID, parsedWalletID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if err := validatePublicCurrencyUnitID(walletRow.CurrencyUnitID); err != nil {
+		return nil, mapError(err)
+	}
+	if walletRow.Currency != currency {
+		return nil, mapError(walletstore.ErrCurrencyMismatch)
 	}
 
 	temporalClient, err := s.ensureTemporalClient()
@@ -427,6 +438,7 @@ func (s *Server) submitAdminManualTransfer(ctx context.Context, req *walletv1.Re
 		WalletID:               sql.NullString{String: walletID, Valid: true},
 		Amount:                 amount,
 		Currency:               currency,
+		CurrencyUnitID:         walletRow.CurrencyUnitID,
 		Reason:                 reason,
 		Status:                 walletstore.ManualTransferStatusPending,
 		RequestedByOperatorID:  operator.ID,
@@ -562,10 +574,15 @@ func (s *Server) createAdminFee(ctx context.Context, req *walletv1.RenderWalletA
 	if err != nil {
 		return nil, err
 	}
+	currencyUnit, err := s.Service.Store.GetCurrencyUnit(ctx, currency, time.Now().UTC())
+	if err != nil {
+		return nil, mapError(err)
+	}
 	_, err = s.Service.Store.CreateFeeConfig(ctx, walletstore.FeeConfig{
 		TenantID:            tenantID,
 		TransactionType:     txType,
 		Currency:            currency,
+		CurrencyUnitID:      currencyUnit.ID,
 		TierMin:             tierMin,
 		TierMax:             tierMax,
 		PercentageFee:       percentageFee,
@@ -626,13 +643,16 @@ func (s *Server) createAdminRate(ctx context.Context, req *walletv1.RenderWallet
 	if err != nil {
 		return nil, err
 	}
-	base := adminForm(form, "base_currency")
-	if base == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingBaseCurrency.Error())
+	base, err := adminRateCurrency(adminForm(form, "base_currency"), walletstore.ErrMissingBaseCurrency)
+	if err != nil {
+		return nil, mapError(err)
 	}
-	quote := adminForm(form, "quote_currency")
-	if quote == "" {
-		return nil, status.Error(codes.InvalidArgument, walletstore.ErrMissingQuoteCurrency.Error())
+	quote, err := adminRateCurrency(adminForm(form, "quote_currency"), walletstore.ErrMissingQuoteCurrency)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if base == quote {
+		return nil, mapError(walletstore.ErrIdenticalCurrencies)
 	}
 	buyRate, err := decimal.NewFromString(adminForm(form, "buy_rate"))
 	if err != nil {
@@ -658,15 +678,25 @@ func (s *Server) createAdminRate(ctx context.Context, req *walletv1.RenderWallet
 		}
 		effectiveFrom = parsed
 	}
+	baseUnit, err := s.Service.Store.GetCurrencyUnit(ctx, base, effectiveFrom)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	quoteUnit, err := s.Service.Store.GetCurrencyUnit(ctx, quote, effectiveFrom)
+	if err != nil {
+		return nil, mapError(err)
+	}
 	_, err = s.Service.Store.CreateExchangeRate(ctx, walletstore.ExchangeRate{
-		TenantID:        tenantID,
-		BaseCurrency:    base,
-		QuoteCurrency:   quote,
-		BuyRate:         buyRate,
-		SellRate:        sellRate,
-		Spread:          spread,
-		SetByOperatorID: operator.ID,
-		EffectiveFrom:   effectiveFrom,
+		TenantID:            tenantID,
+		BaseCurrency:        base,
+		BaseCurrencyUnitID:  baseUnit.ID,
+		QuoteCurrency:       quote,
+		QuoteCurrencyUnitID: quoteUnit.ID,
+		BuyRate:             buyRate,
+		SellRate:            sellRate,
+		Spread:              spread,
+		SetByOperatorID:     operator.ID,
+		EffectiveFrom:       effectiveFrom,
 	})
 	if err != nil {
 		return nil, mapError(err)
@@ -776,10 +806,15 @@ func adminTenantID(tenantID string) (string, error) {
 
 func adminCurrency(currency string) (string, error) {
 	currency = strings.TrimSpace(currency)
+	return walletstore.ValidateCurrencyCode(currency)
+}
+
+func adminRateCurrency(currency string, missingErr error) (string, error) {
+	currency = strings.TrimSpace(currency)
 	if currency == "" {
-		return "", walletstore.ErrMissingCurrency
+		return "", missingErr
 	}
-	return currency, nil
+	return walletstore.ValidateCurrencyCode(currency)
 }
 
 func adminQuery(req *walletv1.RenderWalletAdminRequest, key string) string {

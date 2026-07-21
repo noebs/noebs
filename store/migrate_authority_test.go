@@ -146,19 +146,27 @@ func TestWalletAuthorityClassifiesEveryPublicTable(t *testing.T) {
 	}
 	expected := []string{
 		"balance_holds",
+		"currencies",
+		"currency_unit_versions",
 		"deposit_intents",
 		"exchange_rates",
 		"fee_configs",
 		"funding_source_withdrawal_reservations",
 		"funding_sources",
+		"fx_observations",
+		"fx_source_pair_sides",
+		"fx_source_pairs",
+		"fx_sources",
 		"ledger_entries",
 		"ledger_funding_links",
 		"ledger_transactions",
 		"ledger_withdrawal_destination_links",
 		"manual_transfer_approvals",
 		"manual_transfers",
+		"money_conversion_quotes",
 		"operator_identities",
 		"p2p_commands",
+		"psp_amount_policies",
 		"psp_config_overrides",
 		"psp_configs",
 		"psp_interactions",
@@ -186,11 +194,81 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	if _, err := db.ExecContext(t.Context(), `INSERT INTO tenants(id, name) VALUES ('tenant-authority', 'Authority Test')`); err != nil {
 		t.Fatal(err)
 	}
+	var observationID int64
+	if err := db.GetContext(t.Context(), &observationID, `
+		WITH timing AS (
+			SELECT clock_timestamp() - interval '1 minute' AS observation_at,
+			       clock_timestamp() - interval '30 seconds' AS retrieved_at
+		)
+		INSERT INTO fx_observations(
+			source_id, source_pair_id, external_series,
+			base_currency_code, quote_currency_code,
+			base_currency_unit_id, quote_currency_unit_id,
+			rate, side, purpose, observation_at, published_at,
+			retrieved_at, expires_at, raw_payload_sha256, source_revision
+		)
+		SELECT source.id, pair.id, pair.external_series,
+		       pair.base_currency_code, pair.quote_currency_code,
+		       base_unit.id, quote_unit.id,
+		       1.08, 'mid', source.purpose, timing.observation_at, NULL,
+		       timing.retrieved_at,
+		       timing.observation_at + make_interval(secs => source.max_age_seconds),
+		       repeat('a', 64), 'runtime-authority-fixture'
+		FROM fx_sources source
+		JOIN fx_source_pairs pair ON pair.source_id = source.id
+		JOIN currency_unit_versions base_unit
+		  ON base_unit.currency_code = pair.base_currency_code AND base_unit.valid_to IS NULL
+		JOIN currency_unit_versions quote_unit
+		  ON quote_unit.currency_code = pair.quote_currency_code AND quote_unit.valid_to IS NULL
+		CROSS JOIN timing
+		WHERE source.code = 'ecb-reference'
+		  AND pair.external_series = 'D.USD.EUR.SP00.A'
+		RETURNING id
+	`); err != nil {
+		t.Fatalf("seed runtime quote observation: %v", err)
+	}
 
 	runtime := openMigrationAuthorityRoleDB(t, "wallet_ledger", "wallet_ledger_runtime")
 	t.Cleanup(func() { _ = runtime.Close() })
 	worker := openMigrationAuthorityRoleDB(t, "wallet_ledger", "wallet_ledger_worker")
 	t.Cleanup(func() { _ = worker.Close() })
+	// Quote-backed PSP amount validation reads the referenced quote both in Go
+	// and in the INSERT trigger. Exercise the runtime role grant explicitly so
+	// owner-backed integration tests cannot hide a production permission gap.
+	var quoteCount int
+	if err := worker.GetContext(t.Context(), &quoteCount, `SELECT count(*) FROM money_conversion_quotes`); err != nil {
+		t.Fatalf("worker read money conversion quotes: %v", err)
+	}
+	var quoteID string
+	if err := runtime.GetContext(t.Context(), &quoteID, `
+		INSERT INTO money_conversion_quotes(
+			tenant_id, requested_by_user_id, idempotency_key,
+			observation_id, observation_base_currency_unit_id,
+			observation_quote_currency_unit_id,
+			observation_base_currency_code, observation_quote_currency_code,
+			observation_expires_at, input_currency_unit_id,
+			output_currency_unit_id, input_currency_code, output_currency_code,
+			input_minor_units, output_minor_units, inverse, rounding_mode,
+			conversion_at, expires_at
+		)
+		SELECT 'tenant-authority', 101, 'runtime-authority-quote',
+		       observation.id, observation.base_currency_unit_id,
+		       observation.quote_currency_unit_id,
+		       observation.base_currency_code, observation.quote_currency_code,
+		       observation.expires_at, observation.base_currency_unit_id,
+		       observation.quote_currency_unit_id,
+		       observation.base_currency_code, observation.quote_currency_code,
+		       100, 108, FALSE, 'half_even', observation.created_at,
+		       observation.expires_at
+		FROM fx_observations observation
+		WHERE observation.id = $1
+		RETURNING id::text
+	`, observationID); err != nil {
+		t.Fatalf("runtime insert money conversion quote through snapshot trigger: %v", err)
+	}
+	if quoteID == "" {
+		t.Fatal("runtime quote insert returned an empty id")
+	}
 
 	var operatorID int64
 	if err := runtime.GetContext(t.Context(), &operatorID, `
@@ -210,8 +288,13 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	}
 	var userWalletID string
 	if err := runtime.GetContext(t.Context(), &userWalletID, `
-		INSERT INTO wallets(tenant_id, owner_type, owner_id, user_id, currency, kyc_tier)
-		VALUES ('tenant-authority', 'user', '101', 101, 'USD', 'verified')
+		INSERT INTO wallets(
+			tenant_id, owner_type, owner_id, user_id, currency, currency_unit_version_id, kyc_tier
+		) VALUES (
+			'tenant-authority', 'user', '101', 101, 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			'verified'
+		)
 		RETURNING id::text
 	`); err != nil {
 		t.Fatalf("runtime insert wallet: %v", err)
@@ -219,8 +302,13 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	var configID int64
 	if err := runtime.GetContext(t.Context(), &configID, `
 		INSERT INTO fee_configs(
-			tenant_id, transaction_type, currency, percentage_fee, created_by_operator_id
-		) VALUES ('tenant-authority', 'p2p', 'USD', 0, $1)
+			tenant_id, transaction_type, currency, currency_unit_version_id,
+			percentage_fee, created_by_operator_id
+		) VALUES (
+			'tenant-authority', 'p2p', 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			0, $1
+		)
 		RETURNING id
 	`, operatorID); err != nil {
 		t.Fatalf("runtime insert fee config: %v", err)
@@ -228,17 +316,29 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	var rateID int64
 	if err := runtime.GetContext(t.Context(), &rateID, `
 		INSERT INTO exchange_rates(
-			tenant_id, base_currency, quote_currency, buy_rate, sell_rate, set_by_operator_id
-		) VALUES ('tenant-authority', 'USD', 'AED', 3.67, 3.68, $1)
+			tenant_id, base_currency, base_currency_unit_version_id,
+			quote_currency, quote_currency_unit_version_id,
+			buy_rate, sell_rate, set_by_operator_id
+		) VALUES (
+			'tenant-authority', 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			'AED',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'AED' AND valid_to IS NULL),
+			3.67, 3.68, $1
+		)
 		RETURNING id
 	`, operatorID); err != nil {
 		t.Fatalf("runtime insert exchange rate: %v", err)
 	}
 	if _, err := db.ExecContext(t.Context(), `
 		INSERT INTO transaction_limits(
-			tenant_id, kyc_tier, transaction_type, currency,
+			tenant_id, kyc_tier, transaction_type, currency, currency_unit_version_id,
 			daily_limit, monthly_limit, per_transaction_limit
-		) VALUES ('tenant-authority', 'verified', 'p2p', 'USD', 1000, 10000, 500)
+		) VALUES (
+			'tenant-authority', 'verified', 'p2p', 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			1000, 10000, 500
+		)
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -246,11 +346,13 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	if err := runtime.GetContext(t.Context(), &manualTransferID, `
 		INSERT INTO manual_transfers(
 			tenant_id, workflow_id, idempotency_key, transfer_type, wallet_id,
-			amount, currency, reason, requested_by_operator_id,
+			amount, currency, currency_unit_version_id, reason, requested_by_operator_id,
 			approval_timeout_seconds, decision_deadline_at
 		) VALUES (
 			'tenant-authority', 'manual-authority', 'manual-authority', 'credit', $1,
-			25, 'USD', 'authority test', $2, 300, clock_timestamp() + interval '5 minutes'
+			25, 'USD',
+			(SELECT currency_unit_version_id FROM wallets WHERE tenant_id = 'tenant-authority' AND id = $1),
+			'authority test', $2, 300, clock_timestamp() + interval '5 minutes'
 		)
 		RETURNING id
 	`, userWalletID, operatorID); err != nil {
@@ -297,8 +399,13 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 
 	var systemWalletID string
 	if err := worker.GetContext(t.Context(), &systemWalletID, `
-		INSERT INTO wallets(tenant_id, owner_type, owner_id, currency, kyc_tier)
-		VALUES ('tenant-authority', 'system', 'settlement', 'USD', 'verified')
+		INSERT INTO wallets(
+			tenant_id, owner_type, owner_id, currency, currency_unit_version_id, kyc_tier
+		) VALUES (
+			'tenant-authority', 'system', 'settlement', 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			'verified'
+		)
 		RETURNING id::text
 	`); err != nil {
 		t.Fatalf("worker insert wallet: %v", err)
@@ -341,8 +448,13 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	var ledgerTransactionID int64
 	if err := worker.GetContext(t.Context(), &ledgerTransactionID, `
 		INSERT INTO ledger_transactions(
-			tenant_id, idempotency_key, currency, reference_type, reference_id, status
-		) VALUES ('tenant-authority', 'authority-ledger', 'USD', 'p2p', 'authority-ledger', 'completed')
+			tenant_id, idempotency_key, currency, currency_unit_version_id,
+			reference_type, reference_id, status
+		) VALUES (
+			'tenant-authority', 'authority-ledger', 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			'p2p', 'authority-ledger', 'completed'
+		)
 		RETURNING id
 	`); err != nil {
 		t.Fatalf("worker insert ledger transaction: %v", err)
@@ -351,8 +463,12 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	if err := worker.GetContext(t.Context(), &debitEntryID, `
 		INSERT INTO ledger_entries(
 			tenant_id, transaction_id, wallet_id, entry_type, amount,
-			currency, balance_after, wallet_sequence, status
-		) VALUES ('tenant-authority', $1, $2, 'debit', 100, 'USD', 900, 2, 'completed')
+			currency, currency_unit_version_id, balance_after, wallet_sequence, status
+		) VALUES (
+			'tenant-authority', $1, $2, 'debit', 100, 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			900, 2, 'completed'
+		)
 		RETURNING id
 	`, ledgerTransactionID, userWalletID); err != nil {
 		t.Fatalf("worker insert debit entry: %v", err)
@@ -360,8 +476,12 @@ func TestWalletRuntimeAndWorkerSQLAuthority(t *testing.T) {
 	if err := worker.GetContext(t.Context(), &creditEntryID, `
 		INSERT INTO ledger_entries(
 			tenant_id, transaction_id, wallet_id, entry_type, amount,
-			currency, balance_after, wallet_sequence, status
-		) VALUES ('tenant-authority', $1, $2, 'credit', 100, 'USD', 100, 1, 'completed')
+			currency, currency_unit_version_id, balance_after, wallet_sequence, status
+		) VALUES (
+			'tenant-authority', $1, $2, 'credit', 100, 'USD',
+			(SELECT id FROM currency_unit_versions WHERE currency_code = 'USD' AND valid_to IS NULL),
+			100, 1, 'completed'
+		)
 		RETURNING id
 	`, ledgerTransactionID, systemWalletID); err != nil {
 		t.Fatalf("worker insert credit entry: %v", err)

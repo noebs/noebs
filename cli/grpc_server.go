@@ -138,7 +138,14 @@ func walletMethodAuthRequirement(fullMethod string) walletAuthRequirement {
 		walletv1.WalletPublicService_ListFundingSources_FullMethodName,
 		walletv1.WalletPublicService_CreateWithdrawalDestination_FullMethodName,
 		walletv1.WalletPublicService_ListWithdrawalDestinations_FullMethodName,
-		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName:
+		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName,
+		walletv1.WalletPublicService_ListCurrenciesPublic_FullMethodName,
+		walletv1.WalletPublicService_GetCurrencyPublic_FullMethodName,
+		walletv1.WalletPublicService_ParseMoneyPublic_FullMethodName,
+		walletv1.WalletPublicService_FormatMoneyPublic_FullMethodName,
+		walletv1.WalletPublicService_QuoteConversionPublic_FullMethodName,
+		walletv1.WalletPublicService_GetConversionQuotePublic_FullMethodName,
+		walletv1.WalletPublicService_ListFXSourcesPublic_FullMethodName:
 		return walletAuthUserIdentity
 	default:
 		return walletAuthDeny
@@ -158,6 +165,18 @@ func walletPathAuthRequirement(method, path string) walletAuthRequirement {
 
 	switch method {
 	case http.MethodGet:
+		if path == "/wallet/currencies" {
+			return walletAuthUserIdentity
+		}
+		if path == "/wallet/fx/sources" {
+			return walletAuthUserIdentity
+		}
+		if len(segments) == 3 && segments[0] == "wallet" && segments[1] == "currencies" {
+			return walletAuthUserIdentity
+		}
+		if len(segments) == 4 && segments[0] == "wallet" && segments[1] == "fx" && segments[2] == "quotes" {
+			return walletAuthUserIdentity
+		}
 		if len(segments) == 2 && segments[0] == "wallet" {
 			return walletAuthUserIdentity
 		}
@@ -168,6 +187,9 @@ func walletPathAuthRequirement(method, path string) walletAuthRequirement {
 			}
 		}
 	case http.MethodPost:
+		if path == "/wallet/money/parse" || path == "/wallet/money/format" || path == "/wallet/fx/quotes" {
+			return walletAuthUserIdentity
+		}
 		if path == "/wallet" || path == "/wallet/deposits" || path == "/wallet/destinations" {
 			return walletAuthUserIdentity
 		}

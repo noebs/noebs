@@ -65,9 +65,10 @@ func (l *Loader) resolve(ctx context.Context, tenantID, providerCode string, sco
 		return nil, walletstore.ErrMissingProviderCode
 	}
 	cfg, _, err := l.Store.ResolvePSPConfig(ctx, tenantID, providerCode, walletstore.PSPConfigScope{
-		Region:    scope.Region,
-		Currency:  scope.Currency,
-		Direction: scope.Direction,
+		Region:         scope.Region,
+		Currency:       scope.Currency,
+		CurrencyUnitID: scope.CurrencyUnitID,
+		Direction:      scope.Direction,
 	})
 	if err != nil {
 		if errors.Is(err, walletstore.ErrPSPConfigNotFound) {

@@ -69,6 +69,7 @@ type ManualTransfer struct {
 	WalletID               sql.NullString `db:"wallet_id"`
 	Amount                 int64          `db:"amount"`
 	Currency               string         `db:"currency"`
+	CurrencyUnitID         int64          `db:"currency_unit_version_id"`
 	Reason                 string         `db:"reason"`
 	Status                 string         `db:"status"`
 	RequestedByOperatorID  int64          `db:"requested_by_operator_id"`

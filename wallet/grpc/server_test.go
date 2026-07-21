@@ -136,6 +136,15 @@ func TestAdminCurrencyRequiresExplicitCurrency(t *testing.T) {
 	if _, err := adminCurrency(" "); err != walletstore.ErrMissingCurrency {
 		t.Fatalf("adminCurrency() error = %v, want %v", err, walletstore.ErrMissingCurrency)
 	}
+	if _, err := adminCurrency("usd"); err != walletstore.ErrInvalidCurrency {
+		t.Fatalf("adminCurrency(lowercase) error = %v, want %v", err, walletstore.ErrInvalidCurrency)
+	}
+	if got, err := adminCurrency(" USD "); err != nil || got != "USD" {
+		t.Fatalf("adminCurrency(valid) = %q, %v, want USD, nil", got, err)
+	}
+	if _, err := adminRateCurrency(" ", walletstore.ErrMissingBaseCurrency); err != walletstore.ErrMissingBaseCurrency {
+		t.Fatalf("adminRateCurrency(missing) error = %v, want %v", err, walletstore.ErrMissingBaseCurrency)
+	}
 }
 
 func TestAdminBoolRejectsMalformedValues(t *testing.T) {

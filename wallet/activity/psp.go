@@ -26,17 +26,19 @@ type PSPActivities struct {
 }
 
 type CreateDepositParams struct {
-	TenantID     string
-	ProviderCode string
-	Request      psp.DepositRequest
-	Region       string
+	TenantID       string
+	ProviderCode   string
+	CurrencyUnitID int64
+	Request        psp.DepositRequest
+	Region         string
 }
 
 type SendPayoutParams struct {
-	TenantID     string
-	ProviderCode string
-	Request      psp.PayoutRequest
-	Region       string
+	TenantID       string
+	ProviderCode   string
+	CurrencyUnitID int64
+	Request        psp.PayoutRequest
+	Region         string
 }
 
 type GetStatusParams struct {
@@ -47,6 +49,7 @@ type GetStatusParams struct {
 	ClientReference string
 	Amount          int64
 	Currency        string
+	CurrencyUnitID  int64
 	Direction       string
 	Region          string
 }
@@ -63,7 +66,7 @@ func (a *PSPActivities) CreateDeposit(ctx context.Context, params CreateDepositP
 	if err := validateDispatchIdempotencyKey(params.Request.IdempotencyKey); err != nil {
 		return nil, classifyPSPDispatchError(err)
 	}
-	provider, cfg, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Request.Currency, "deposit", params.Region)
+	provider, cfg, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Request.Currency, params.CurrencyUnitID, "deposit", params.Region)
 	if err != nil {
 		return nil, classifyPSPDispatchPreparationError(err)
 	}
@@ -112,7 +115,7 @@ func (a *PSPActivities) SendPayout(ctx context.Context, params SendPayoutParams)
 	if err := validateDispatchIdempotencyKey(params.Request.IdempotencyKey); err != nil {
 		return nil, classifyPSPDispatchError(err)
 	}
-	provider, cfg, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Request.Currency, "withdrawal", params.Region)
+	provider, cfg, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Request.Currency, params.CurrencyUnitID, "withdrawal", params.Region)
 	if err != nil {
 		return nil, classifyPSPDispatchPreparationError(err)
 	}
@@ -222,7 +225,7 @@ func (a *PSPActivities) GetTransactionStatus(ctx context.Context, params GetStat
 		return nil, psp.ErrPSPRequestInvalid
 	}
 	direction := normalizeScopeDirection(params.Direction)
-	provider, cfg, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Currency, direction, params.Region)
+	provider, cfg, err := a.resolveProvider(ctx, params.TenantID, params.ProviderCode, params.Currency, params.CurrencyUnitID, direction, params.Region)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +283,7 @@ func validateTransactionStatusResult(params GetStatusParams, result *psp.TxStatu
 func normalizeScopeDirection(direction string) string {
 	normalized := strings.ToLower(strings.TrimSpace(direction))
 	switch normalized {
-	case "", "deposit", "inbound":
+	case "deposit", "inbound":
 		return "deposit"
 	case "withdrawal", "outbound", "payout":
 		return "withdrawal"
@@ -289,7 +292,7 @@ func normalizeScopeDirection(direction string) string {
 	}
 }
 
-func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerCode, currency, direction, region string) (psp.Provider, *psp.Config, error) {
+func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerCode, currency string, currencyUnitID int64, direction, region string) (psp.Provider, *psp.Config, error) {
 	if a == nil || a.Loader == nil || a.Registry == nil {
 		return nil, nil, ErrMissingPSPDependencies
 	}
@@ -297,9 +300,10 @@ func (a *PSPActivities) resolveProvider(ctx context.Context, tenantID, providerC
 		return nil, nil, ErrMissingStore
 	}
 	cfg, err := a.Loader.LoadForScope(ctx, tenantID, providerCode, psp.Scope{
-		Region:    region,
-		Currency:  currency,
-		Direction: direction,
+		Region:         region,
+		Currency:       currency,
+		CurrencyUnitID: currencyUnitID,
+		Direction:      direction,
 	})
 	if err != nil {
 		return nil, nil, err

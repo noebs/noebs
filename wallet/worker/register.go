@@ -10,6 +10,7 @@ import (
 type RegisterDeps struct {
 	Store         *walletstore.Store
 	PSPActivities *walletactivity.PSPActivities
+	FXActivities  *walletactivity.FXActivities
 }
 
 func RegisterWallet(w worker.Worker, deps RegisterDeps) {
@@ -47,10 +48,14 @@ func RegisterWallet(w worker.Worker, deps RegisterDeps) {
 	if deps.PSPActivities != nil {
 		w.RegisterActivity(deps.PSPActivities)
 	}
+	if deps.FXActivities != nil {
+		w.RegisterActivity(deps.FXActivities)
+	}
 	w.RegisterWorkflow(walletworkflow.Deposit)
 	w.RegisterWorkflow(walletworkflow.Withdrawal)
 	w.RegisterWorkflow(walletworkflow.P2P)
 	w.RegisterWorkflow(walletworkflow.ManualTransfer)
 	w.RegisterWorkflow(walletworkflow.Reconciliation)
 	w.RegisterWorkflow(walletworkflow.PSPStatusPoller)
+	w.RegisterWorkflow(walletworkflow.FXReferenceSync)
 }

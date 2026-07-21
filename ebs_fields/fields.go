@@ -1021,6 +1021,8 @@ type NoebsConfig struct {
 	WalletHoldExpirySeconds                    int    `json:"wallet_hold_expiry_seconds"`
 	WalletApprovalTimeoutSeconds               int    `json:"wallet_approval_timeout_seconds"`
 	WalletManualTransferApprovalTimeoutSeconds int    `json:"wallet_manual_approval_timeout_seconds"`
+	WalletFXRefreshCron                        string `json:"wallet_fx_refresh_cron"`
+	WalletFXQuoteMaxPerUserObservation         int    `json:"wallet_fx_quote_max_per_user_observation"`
 	WalletPSPPollerCron                        string `json:"wallet_psp_poller_cron"`
 	WalletPSPPollerBatchSize                   int    `json:"wallet_psp_poller_batch_size"`
 	WalletPSPPollerIntervalSeconds             int    `json:"wallet_psp_poller_interval_seconds"`

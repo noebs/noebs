@@ -49,6 +49,36 @@ service WalletPublicService {
       body: "*"
     };
   }
+  rpc ListCurrenciesPublic(ListCurrenciesPublicRequest) returns (ListCurrenciesPublicResponse) {
+    option (google.api.http) = {get: "/wallet/currencies"};
+  }
+  rpc GetCurrencyPublic(GetCurrencyPublicRequest) returns (GetCurrencyPublicResponse) {
+    option (google.api.http) = {get: "/wallet/currencies/{currency_code}"};
+  }
+  rpc ParseMoneyPublic(ParseMoneyPublicRequest) returns (ParseMoneyPublicResponse) {
+    option (google.api.http) = {
+      post: "/wallet/money/parse"
+      body: "*"
+    };
+  }
+  rpc FormatMoneyPublic(FormatMoneyPublicRequest) returns (FormatMoneyPublicResponse) {
+    option (google.api.http) = {
+      post: "/wallet/money/format"
+      body: "*"
+    };
+  }
+  rpc QuoteConversionPublic(QuoteConversionPublicRequest) returns (QuoteConversionPublicResponse) {
+    option (google.api.http) = {
+      post: "/wallet/fx/quotes"
+      body: "*"
+    };
+  }
+  rpc GetConversionQuotePublic(GetConversionQuotePublicRequest) returns (GetConversionQuotePublicResponse) {
+    option (google.api.http) = {get: "/wallet/fx/quotes/{quote_id}"};
+  }
+  rpc ListFXSourcesPublic(ListFXSourcesPublicRequest) returns (ListFXSourcesPublicResponse) {
+    option (google.api.http) = {get: "/wallet/fx/sources"};
+  }
 }
 
 service WalletAdminService {
@@ -101,6 +131,8 @@ message Wallet {
   string kyc_tier = 9;
   string created_at = 10;
   string updated_at = 11;
+  MoneyAmount balance_money = 12;
+  MoneyAmount available_balance_money = 13;
 }
 
 message GetWalletPublicRequest {
@@ -146,6 +178,14 @@ message PaymentMethod {
   string presentation_json = 11;
   bool supports_deposit = 12;
   bool supports_withdrawal = 13;
+  // Exact immutable scale used to interpret min_amount, max_amount, and the
+  // amount filter that selected this method.
+  int64 currency_unit_version_id = 14;
+  // Exact string-backed representations for JavaScript and other clients that
+  // cannot safely represent every int64. Legacy min_amount/max_amount remain
+  // unchanged for backward compatibility.
+  MoneyAmount min_amount_money = 15;
+  MoneyAmount max_amount_money = 16;
 }
 
 message ListPaymentMethodsPublicResponse {
@@ -176,6 +216,8 @@ message WalletLedgerEntry {
   optional string description = 13;
   string metadata_json = 14;
   string created_at = 15;
+  MoneyAmount amount_money = 16;
+  MoneyAmount balance_after_money = 17;
 }
 
 message ListWalletTransactionsPublicResponse {
@@ -309,3 +351,170 @@ message DeactivateWithdrawalDestinationRequest {
 }
 
 message DeactivateWithdrawalDestinationResponse {}
+
+message CurrencyUnit {
+  string currency_code = 1;
+  optional string numeric_code = 2;
+  string name = 3;
+  string kind = 4;
+  bool active = 5;
+  optional uint32 iso_minor_exponent = 6;
+  uint32 display_exponent = 7;
+  uint32 cash_exponent = 8;
+  string cash_rounding_increment = 9;
+  int64 version_id = 10;
+  string valid_from = 11;
+  optional string valid_to = 12;
+  string source = 13;
+  string source_revision = 14;
+  string source_published_on = 15;
+}
+
+message MoneyAmount {
+  // Exact signed operational minor units. This is a decimal string so JSON
+  // clients never lose precision.
+  string minor_units = 1;
+  string currency_code = 2;
+  // Immutable database-backed scale/version used to interpret minor_units.
+  int64 currency_unit_version_id = 3;
+  uint32 minor_exponent = 4;
+  string major_units = 5;
+  string display = 6;
+  string canonical = 7;
+}
+
+message ListCurrenciesPublicRequest {
+  string tenant_id = 1;
+}
+
+message ListCurrenciesPublicResponse {
+  repeated CurrencyUnit currencies = 1;
+}
+
+message GetCurrencyPublicRequest {
+  string tenant_id = 1;
+  string currency_code = 2;
+}
+
+message GetCurrencyPublicResponse {
+  CurrencyUnit currency = 1;
+}
+
+message ParseMoneyPublicRequest {
+  string tenant_id = 1;
+  string currency_code = 2;
+  string major_units = 3;
+  string rounding_mode = 4;
+  // Exact immutable unit definition selected by the client from the currency
+  // catalog. Parsing rejects inactive or not-yet-effective definitions.
+  int64 currency_unit_version_id = 5;
+}
+
+message ParseMoneyPublicResponse {
+  MoneyAmount money = 1;
+}
+
+message FormatMoneyPublicRequest {
+  string tenant_id = 1;
+  string currency_code = 2;
+  string minor_units = 3;
+  string rounding_mode = 4;
+  // Exact immutable unit definition that originally interpreted minor_units.
+  // Historical and inactive definitions remain valid for rendering.
+  int64 currency_unit_version_id = 5;
+}
+
+message FormatMoneyPublicResponse {
+  MoneyAmount money = 1;
+}
+
+message QuoteConversionPublicRequest {
+  string tenant_id = 1;
+  int64 user_id = 2;
+  string source_code = 3;
+  string base_currency = 4;
+  string quote_currency = 5;
+  string input_minor_units = 6;
+  string side = 7;
+  // Quote rounding is a server policy (currently half-even), not caller input.
+  reserved 8;
+  reserved "rounding_mode";
+  // Exact immutable units used for the input and output amounts. A quote never
+  // resolves a "current" unit from currency code alone.
+  int64 base_currency_unit_version_id = 9;
+  int64 quote_currency_unit_version_id = 10;
+  // Required opaque retry key. Reusing a key with the same semantic request
+  // returns the original quote; reusing it for a different request fails.
+  string idempotency_key = 11;
+}
+
+message ConversionQuote {
+  string id = 1;
+  MoneyAmount input = 2;
+  MoneyAmount output = 3;
+  string rounding_mode = 4;
+  string source_code = 5;
+  string source_name = 6;
+  string source_purpose = 7;
+  string source_url = 8;
+  int64 observation_id = 9;
+  string observation_base_currency = 10;
+  string observation_quote_currency = 11;
+  string observation_rate_decimal = 12;
+  string applied_rate_numerator = 13;
+  string applied_rate_denominator = 14;
+  string requested_rate_side = 15;
+  bool inverse = 16;
+  string observation_at = 17;
+  optional string published_at = 18;
+  string retrieved_at = 19;
+  string expires_at = 20;
+  string source_revision = 21;
+  // False for this reference/preview endpoint. It is not a trade commitment.
+  optional bool executable = 22;
+  // Side attached to the source observation. This can differ from the
+  // requested side when an inverse bid/ask observation was selected.
+  string observation_rate_side = 23;
+  // Server-captured instant at which the exact unit versions and observation
+  // were validated and the conversion was calculated.
+  string conversion_at = 24;
+  string idempotency_key = 25;
+}
+
+message QuoteConversionPublicResponse {
+  ConversionQuote quote = 1;
+}
+
+message GetConversionQuotePublicRequest {
+  string tenant_id = 1;
+  int64 user_id = 2;
+  string quote_id = 3;
+}
+
+message GetConversionQuotePublicResponse {
+  ConversionQuote quote = 1;
+}
+
+message FXSourcePair {
+  int64 id = 1;
+  string base_currency = 2;
+  string quote_currency = 3;
+  repeated string sides = 4;
+}
+
+message FXSource {
+  string code = 1;
+  string display_name = 2;
+  string purpose = 3;
+  string source_url = 4;
+  int32 max_age_seconds = 5;
+  repeated FXSourcePair pairs = 6;
+}
+
+message ListFXSourcesPublicRequest {
+  string tenant_id = 1;
+}
+
+message ListFXSourcesPublicResponse {
+  repeated FXSource sources = 1;
+}

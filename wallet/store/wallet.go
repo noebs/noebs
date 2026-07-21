@@ -7,15 +7,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type EnsureWalletParams struct {
-	TenantID  string
-	OwnerType string
-	OwnerID   string
-	UserID    int64
-	Currency  string
-	KYCTier   string
+	TenantID       string
+	OwnerType      string
+	OwnerID        string
+	UserID         int64
+	Currency       string
+	CurrencyUnitID int64
+	KYCTier        string
 }
 
 func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*Wallet, error) {
@@ -32,8 +34,11 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	if params.OwnerID == "" {
 		return nil, ErrMissingOwnerID
 	}
-	if params.Currency == "" {
-		return nil, ErrMissingCurrency
+	if _, err := ValidateCurrencyCode(params.Currency); err != nil {
+		return nil, err
+	}
+	if err := ValidateCurrencyUnitID(params.CurrencyUnitID); err != nil {
+		return nil, err
 	}
 	if params.KYCTier == "" {
 		return nil, ErrMissingKYCTier
@@ -49,17 +54,33 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	if err != nil {
 		return nil, err
 	}
+	unit, err := s.GetCurrencyUnitByID(ctx, params.CurrencyUnitID)
+	if err != nil {
+		return nil, err
+	}
+	if unit.CurrencyCode != params.Currency {
+		return nil, ErrCurrencyMismatch
+	}
+	now := time.Now().UTC()
+	if unit.ValidTo.Valid || !currencyUnitEffectiveAt(unit, now) {
+		return nil, ErrCurrencyUnitTransitionUnsupported
+	}
 	var uid sql.NullInt64
 	if params.OwnerType == OwnerTypeUser {
 		uid = sql.NullInt64{Int64: params.UserID, Valid: true}
 	}
-	now := time.Now().UTC()
 	stmt := s.DB.Rebind(`INSERT INTO wallets(
-		tenant_id, owner_type, owner_id, user_id, currency,
+		tenant_id, owner_type, owner_id, user_id, currency, currency_unit_version_id,
 		kyc_tier, balance, available_balance, status, created_at, updated_at
-	) VALUES(?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)
 	ON CONFLICT DO NOTHING`)
-	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, params.KYCTier, WalletStatusActive, now, now); err != nil {
+	if _, err := db.ExecContext(ctx, stmt, tenantID, params.OwnerType, params.OwnerID, uid, params.Currency, params.CurrencyUnitID, params.KYCTier, WalletStatusActive, now, now); err != nil {
+		var postgresError *pgconn.PgError
+		if errors.As(err, &postgresError) &&
+			postgresError.Code == "23514" &&
+			postgresError.ConstraintName == "wallets_open_currency_unit_required" {
+			return nil, ErrCurrencyUnitTransitionUnsupported
+		}
 		return nil, err
 	}
 	params.TenantID = tenantID
@@ -79,13 +100,16 @@ func (s *Store) EnsureWallet(ctx context.Context, params EnsureWalletParams) (*W
 	return wallet, nil
 }
 
-func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency, kycTier string) (map[string]*Wallet, error) {
+func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency string, currencyUnitID int64, kycTier string) (map[string]*Wallet, error) {
 	tenantID, err := ValidateTenantID(tenantID)
 	if err != nil {
 		return nil, err
 	}
-	if currency == "" {
-		return nil, ErrMissingCurrency
+	if _, err := ValidateCurrencyCode(currency); err != nil {
+		return nil, err
+	}
+	if err := ValidateCurrencyUnitID(currencyUnitID); err != nil {
+		return nil, err
 	}
 	if kycTier == "" {
 		return nil, ErrMissingKYCTier
@@ -93,11 +117,12 @@ func (s *Store) EnsureSystemWallets(ctx context.Context, tenantID, currency, kyc
 	systemWallets := make(map[string]*Wallet, len(SystemWalletCodes()))
 	for _, code := range SystemWalletCodes() {
 		w, err := s.EnsureWallet(ctx, EnsureWalletParams{
-			TenantID:  tenantID,
-			OwnerType: OwnerTypeSystem,
-			OwnerID:   code,
-			Currency:  currency,
-			KYCTier:   kycTier,
+			TenantID:       tenantID,
+			OwnerType:      OwnerTypeSystem,
+			OwnerID:        code,
+			Currency:       currency,
+			CurrencyUnitID: currencyUnitID,
+			KYCTier:        kycTier,
 		})
 		if err != nil {
 			return nil, err
@@ -144,8 +169,8 @@ func (s *Store) GetWalletByOwner(ctx context.Context, tenantID, ownerType, owner
 	if ownerID == "" {
 		return nil, ErrMissingOwnerID
 	}
-	if currency == "" {
-		return nil, ErrMissingCurrency
+	if _, err := ValidateCurrencyCode(currency); err != nil {
+		return nil, err
 	}
 	db, err := s.ensureDB()
 	if err != nil {
@@ -185,6 +210,7 @@ func ValidateEnsureWalletReplay(existing *Wallet, params EnsureWalletParams) err
 		existing.OwnerType != params.OwnerType ||
 		existing.OwnerID != params.OwnerID ||
 		existing.Currency != params.Currency ||
+		existing.CurrencyUnitID != params.CurrencyUnitID ||
 		existing.KYCTier != params.KYCTier {
 		return ErrDuplicateWallet
 	}

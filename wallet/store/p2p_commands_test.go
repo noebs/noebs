@@ -208,14 +208,14 @@ func TestP2PCommandReservationAndRunRecordingAreConcurrent(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
 	fromWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "p2p-source", UserID: 81,
-		Currency: "AED", KYCTier: KYCTierUnverified,
+		Currency: "AED", CurrencyUnitID: testCurrencyUnitID(t, ctx, store, "AED"), KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure source wallet: %v", err)
 	}
 	toWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "p2p-destination", UserID: 82,
-		Currency: "AED", KYCTier: KYCTierUnverified,
+		Currency: "AED", CurrencyUnitID: fromWallet.CurrencyUnitID, KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure destination wallet: %v", err)

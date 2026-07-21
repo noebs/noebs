@@ -30,6 +30,9 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	if transfer.Currency == "" {
 		return nil, ErrMissingCurrency
 	}
+	if err := ValidateCurrencyUnitID(transfer.CurrencyUnitID); err != nil {
+		return nil, err
+	}
 	if transfer.Reason == "" {
 		return nil, ErrMissingReason
 	}
@@ -74,10 +77,10 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 	}
 
 	stmt := db.Rebind(`INSERT INTO manual_transfers(
-		tenant_id, workflow_id, idempotency_key, transfer_type, wallet_id, amount, currency,
+		tenant_id, workflow_id, idempotency_key, transfer_type, wallet_id, amount, currency, currency_unit_version_id,
 		reason, status, requested_by_operator_id, approved_by_operator_id, proof_of_payment, psp_provider, psp_reference,
 		rejection_reason, approval_timeout_seconds, decision_deadline_at, requested_at, approved_at, completed_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + (? * interval '1 second'), clock_timestamp(), ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + (? * interval '1 second'), clock_timestamp(), ?, ?)
 	ON CONFLICT DO NOTHING
 	RETURNING *`)
 	var stored ManualTransfer
@@ -89,6 +92,7 @@ func (s *Store) CreateManualTransfer(ctx context.Context, transfer ManualTransfe
 		transfer.WalletID,
 		transfer.Amount,
 		transfer.Currency,
+		transfer.CurrencyUnitID,
 		transfer.Reason,
 		transfer.Status,
 		transfer.RequestedByOperatorID,
@@ -272,6 +276,7 @@ func ValidateManualTransferCreateReplay(existing *ManualTransfer, requested Manu
 		!nullStringEqual(existing.WalletID, requested.WalletID) ||
 		existing.Amount != requested.Amount ||
 		existing.Currency != requested.Currency ||
+		existing.CurrencyUnitID != requested.CurrencyUnitID ||
 		existing.Reason != requested.Reason ||
 		existing.RequestedByOperatorID != requested.RequestedByOperatorID ||
 		!nullStringEqual(existing.PSPProvider, requested.PSPProvider) ||
@@ -319,6 +324,15 @@ func ValidateManualTransferCreateTarget(wallet *Wallet, requester *OperatorIdent
 		return ErrWalletInactive
 	}
 	if wallet.Currency != transfer.Currency {
+		return ErrCurrencyMismatch
+	}
+	if err := ValidateCurrencyUnitID(transfer.CurrencyUnitID); err != nil {
+		return err
+	}
+	if err := ValidateCurrencyUnitID(wallet.CurrencyUnitID); err != nil {
+		return err
+	}
+	if wallet.CurrencyUnitID != transfer.CurrencyUnitID {
 		return ErrCurrencyMismatch
 	}
 	if transfer.RequestedByOperatorID <= 0 {

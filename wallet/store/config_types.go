@@ -12,6 +12,7 @@ type FeeConfig struct {
 	TenantID            string          `db:"tenant_id"`
 	TransactionType     string          `db:"transaction_type"`
 	Currency            string          `db:"currency"`
+	CurrencyUnitID      int64           `db:"currency_unit_version_id"`
 	TierMin             int64           `db:"tier_min"`
 	TierMax             sql.NullInt64   `db:"tier_max"`
 	PercentageFee       decimal.Decimal `db:"percentage_fee"`
@@ -28,23 +29,26 @@ type FeeConfigFilter struct {
 	TenantID        string
 	TransactionType string
 	Currency        string
+	CurrencyUnitID  int64
 	ActiveOnly      bool
 	Limit           int
 	Offset          int
 }
 
 type ExchangeRate struct {
-	ID              int64               `db:"id"`
-	TenantID        string              `db:"tenant_id"`
-	BaseCurrency    string              `db:"base_currency"`
-	QuoteCurrency   string              `db:"quote_currency"`
-	BuyRate         decimal.Decimal     `db:"buy_rate"`
-	SellRate        decimal.Decimal     `db:"sell_rate"`
-	Spread          decimal.NullDecimal `db:"spread"`
-	SetByOperatorID int64               `db:"set_by_operator_id"`
-	EffectiveFrom   time.Time           `db:"effective_from"`
-	EffectiveTo     sql.NullTime        `db:"effective_to"`
-	CreatedAt       time.Time           `db:"created_at"`
+	ID                  int64               `db:"id"`
+	TenantID            string              `db:"tenant_id"`
+	BaseCurrency        string              `db:"base_currency"`
+	BaseCurrencyUnitID  int64               `db:"base_currency_unit_version_id"`
+	QuoteCurrency       string              `db:"quote_currency"`
+	QuoteCurrencyUnitID int64               `db:"quote_currency_unit_version_id"`
+	BuyRate             decimal.Decimal     `db:"buy_rate"`
+	SellRate            decimal.Decimal     `db:"sell_rate"`
+	Spread              decimal.NullDecimal `db:"spread"`
+	SetByOperatorID     int64               `db:"set_by_operator_id"`
+	EffectiveFrom       time.Time           `db:"effective_from"`
+	EffectiveTo         sql.NullTime        `db:"effective_to"`
+	CreatedAt           time.Time           `db:"created_at"`
 }
 
 type ExchangeRateFilter struct {
@@ -62,6 +66,7 @@ type TransactionLimit struct {
 	KYCTier             string `db:"kyc_tier"`
 	TransactionType     string `db:"transaction_type"`
 	Currency            string `db:"currency"`
+	CurrencyUnitID      int64  `db:"currency_unit_version_id"`
 	DailyLimit          int64  `db:"daily_limit"`
 	MonthlyLimit        int64  `db:"monthly_limit"`
 	PerTransactionLimit int64  `db:"per_transaction_limit"`

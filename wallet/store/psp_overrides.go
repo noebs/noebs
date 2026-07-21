@@ -50,14 +50,36 @@ func (s *Store) resolvePSPConfigFromBase(ctx context.Context, cfg *PSPConfig, sc
 	if cfg == nil {
 		return nil, nil, ErrPSPConfigNotFound
 	}
+	resolved := mergePSPConfigOverride(cfg, nil)
 	override, err := s.GetPSPConfigOverride(ctx, cfg.TenantID, cfg.ProviderCode, scope)
 	if err != nil {
-		if errors.Is(err, ErrPSPConfigOverrideNotFound) {
-			return cfg, nil, nil
+		if !errors.Is(err, ErrPSPConfigOverrideNotFound) {
+			return nil, nil, err
+		}
+		override = nil
+	} else {
+		resolved = mergePSPConfigOverride(cfg, override)
+	}
+
+	// Legacy bounds have no currency-unit identity and are never interpreted.
+	resolved.MinAmount = sql.NullInt64{}
+	resolved.MaxAmount = sql.NullInt64{}
+	resolved.AmountCurrencyUnitID = 0
+	if scope.Currency == "" {
+		return resolved, override, nil
+	}
+	resolved.AmountCurrencyUnitID = scope.CurrencyUnitID
+	policy, err := s.GetActivePSPAmountPolicy(ctx, cfg.TenantID, cfg.ProviderCode, scope)
+	if err != nil {
+		if errors.Is(err, ErrPSPAmountPolicyNotFound) {
+			return resolved, override, nil
 		}
 		return nil, nil, err
 	}
-	return mergePSPConfigOverride(cfg, override), override, nil
+	resolved.MinAmount = policy.MinAmount
+	resolved.MaxAmount = policy.MaxAmount
+	resolved.AmountCurrencyUnitID = policy.CurrencyUnitID
+	return resolved, override, nil
 }
 
 func mergePSPConfigOverride(cfg *PSPConfig, override *PSPConfigOverride) *PSPConfig {
@@ -88,12 +110,6 @@ func mergePSPConfigOverride(cfg *PSPConfig, override *PSPConfigOverride) *PSPCon
 	}
 	if override.SupportedRegions != nil {
 		merged.SupportedRegions = override.SupportedRegions
-	}
-	if override.MinAmount.Valid {
-		merged.MinAmount = override.MinAmount
-	}
-	if override.MaxAmount.Valid {
-		merged.MaxAmount = override.MaxAmount
 	}
 	if len(override.DepositInputSchema) > 0 {
 		merged.DepositInputSchema = override.DepositInputSchema

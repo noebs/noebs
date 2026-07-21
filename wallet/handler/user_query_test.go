@@ -48,6 +48,14 @@ func TestUserQueryParsersApplyBoundaryValidation(t *testing.T) {
 	if !errors.Is(got.amountErr, parsing.ErrInvalidField) {
 		t.Fatalf("amount=-1 error = %v, want %v", got.amountErr, parsing.ErrInvalidField)
 	}
+	got = parseUserQueryForTest(t, "/?limit=501")
+	if !errors.Is(got.limitErr, parsing.ErrInvalidField) {
+		t.Fatalf("limit=501 error = %v, want %v", got.limitErr, parsing.ErrInvalidField)
+	}
+	got = parseUserQueryForTest(t, "/?offset=100001")
+	if !errors.Is(got.offsetErr, parsing.ErrInvalidField) {
+		t.Fatalf("offset=100001 error = %v, want %v", got.offsetErr, parsing.ErrInvalidField)
+	}
 }
 
 func parseUserQueryForTest(t *testing.T, target string) userQueryParseResult {
@@ -66,7 +74,7 @@ func parseUserQueryForTest(t *testing.T, target string) userQueryParseResult {
 	if err != nil {
 		t.Fatalf("app.Test(%q) error = %v", target, err)
 	}
-	defer resp.Body.Close()
+	defer closeWalletResponseBody(t, resp.Body)
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("app.Test(%q) status = %d, want %d", target, resp.StatusCode, fiber.StatusNoContent)
 	}

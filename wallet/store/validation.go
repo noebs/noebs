@@ -21,6 +21,32 @@ func ValidateTenantID(tenantID string) (string, error) {
 	}
 }
 
+// ValidateIdempotencyKey validates the shared public-command key contract.
+// Keys are opaque, exact UTF-8 values; lower layers never trim or synthesize
+// them.
+func ValidateIdempotencyKey(idempotencyKey string) error {
+	return validateBoundedIdentifier(
+		idempotencyKey,
+		256,
+		ErrMissingIdempotencyKey,
+		ErrInvalidIdempotencyKey,
+	)
+}
+
+// ValidateCurrencyUnitID distinguishes an omitted zero value from an invalid
+// negative identifier. Stores and services call this instead of collapsing
+// both cases into a silent fallback or an ambiguous error.
+func ValidateCurrencyUnitID(currencyUnitID int64) error {
+	switch {
+	case currencyUnitID == 0:
+		return ErrMissingCurrencyUnitID
+	case currencyUnitID < 0:
+		return ErrInvalidCurrencyUnitID
+	default:
+		return nil
+	}
+}
+
 func ValidateDoubleEntryParams(params DoubleEntryParams) error {
 	if _, err := ValidateTenantID(params.TenantID); err != nil {
 		return err

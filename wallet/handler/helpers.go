@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -23,6 +24,27 @@ func bindJSON(c *fiber.Ctx, dst interface{}) error {
 		return apperr.ErrEmptyBody
 	}
 	if err := json.Unmarshal(c.Body(), dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	}
+	if err := ebs_fields.ValidateStruct(dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrValidation, err.Error())
+	}
+	return nil
+}
+
+func bindStrictJSON(c *fiber.Ctx, dst interface{}) error {
+	if len(c.Body()) == 0 {
+		return apperr.ErrEmptyBody
+	}
+	decoder := json.NewDecoder(bytes.NewReader(c.Body()))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			err = errors.New("request body contains multiple JSON values")
+		}
 		return apperr.Wrap(err, apperr.ErrBadRequest, err.Error())
 	}
 	if err := ebs_fields.ValidateStruct(dst); err != nil {
@@ -51,14 +73,21 @@ func mapWalletError(err error) error {
 		return nil
 	case errors.Is(err, wallet.ErrMissingStore):
 		return apperr.Wrap(err, apperr.ErrUnavailable, err.Error())
+	case errors.Is(err, walletstore.ErrConversionQuoteLimitExceeded):
+		return apperr.Wrap(err, apperr.ErrRateLimited, err.Error())
 	case errors.Is(err, walletstore.ErrInvalidStatusTransition):
+		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
+	case errors.Is(err, walletstore.ErrCurrencyUnitTransitionUnsupported):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrDuplicateWallet),
 		errors.Is(err, walletstore.ErrDuplicateManualTransfer),
 		errors.Is(err, walletstore.ErrDuplicateManualApproval),
-		errors.Is(err, walletstore.ErrDuplicateAmount):
+		errors.Is(err, walletstore.ErrDuplicateAmount),
+		errors.Is(err, walletstore.ErrConversionQuoteIdempotencyConflict):
 		return apperr.Wrap(err, apperr.ErrConflict, err.Error())
 	case errors.Is(err, walletstore.ErrWalletNotFound),
+		errors.Is(err, walletstore.ErrCurrencyNotFound),
+		errors.Is(err, walletstore.ErrInactiveCurrency),
 		errors.Is(err, walletstore.ErrHoldNotFound),
 		errors.Is(err, walletstore.ErrDestinationNotFound),
 		errors.Is(err, walletstore.ErrFundingSourceNotFound),
@@ -67,6 +96,10 @@ func mapWalletError(err error) error {
 	case errors.Is(err, walletstore.ErrMissingTenantID),
 		errors.Is(err, walletstore.ErrInvalidTenantID),
 		errors.Is(err, walletstore.ErrMissingCurrency),
+		errors.Is(err, walletstore.ErrInvalidCurrency),
+		errors.Is(err, walletstore.ErrMissingCurrencyUnitID),
+		errors.Is(err, walletstore.ErrInvalidCurrencyUnitID),
+		errors.Is(err, walletstore.ErrCurrencyScaleUnavailable),
 		errors.Is(err, walletstore.ErrMissingOwnerType),
 		errors.Is(err, walletstore.ErrInvalidOwnerType),
 		errors.Is(err, walletstore.ErrMissingOwnerID),
@@ -96,8 +129,12 @@ func mapWalletError(err error) error {
 		errors.Is(err, walletstore.ErrInvalidDestinationID),
 		errors.Is(err, walletstore.ErrInvalidHoldID),
 		errors.Is(err, walletstore.ErrInvalidAmount),
+		errors.Is(err, walletstore.ErrInvalidRegion),
 		errors.Is(err, walletstore.ErrInvalidPercentage),
+		errors.Is(err, walletstore.ErrFeePercentageNotRepresentable),
 		errors.Is(err, walletstore.ErrInvalidRate),
+		errors.Is(err, walletstore.ErrLegacyRateNotRepresentable),
+		errors.Is(err, walletstore.ErrSpreadNotRepresentable),
 		errors.Is(err, walletstore.ErrInvalidWalletPair),
 		errors.Is(err, walletstore.ErrMissingRequesterID),
 		errors.Is(err, walletstore.ErrMissingApproverID),

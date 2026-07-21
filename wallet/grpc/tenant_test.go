@@ -3,9 +3,11 @@ package walletgrpc
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/adonese/noebs/internal/tenantcatalog"
 	basestore "github.com/adonese/noebs/store"
+	"github.com/adonese/noebs/wallet"
 	walletstore "github.com/adonese/noebs/wallet/store"
 )
 
@@ -27,4 +29,18 @@ func resolveWalletGRPCTestOperator(t testing.TB, ctx context.Context, db *basest
 		t.Fatalf("resolve wallet gRPC test operator %s: %v", subject, err)
 	}
 	return operator.ID
+}
+
+func ensureUserWalletForTest(t testing.TB, ctx context.Context, service *wallet.Service, tenantID string, userID int64, currency string) (*walletstore.Wallet, error) {
+	t.Helper()
+	unit, err := service.Store.GetCurrencyUnit(ctx, currency, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("resolve %s unit for wallet test: %v", currency, err)
+	}
+	return service.EnsureUserWallet(ctx, wallet.EnsureUserWalletParams{
+		TenantID:       tenantID,
+		UserID:         userID,
+		Currency:       currency,
+		CurrencyUnitID: unit.ID,
+	})
 }

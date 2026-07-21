@@ -52,7 +52,14 @@ func (s *Server) requirePublicWalletRPC(ctx context.Context) error {
 	case walletv1.WalletPublicService_ListFundingSources_FullMethodName,
 		walletv1.WalletPublicService_CreateWithdrawalDestination_FullMethodName,
 		walletv1.WalletPublicService_ListWithdrawalDestinations_FullMethodName,
-		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName:
+		walletv1.WalletPublicService_DeactivateWithdrawalDestination_FullMethodName,
+		walletv1.WalletPublicService_ListCurrenciesPublic_FullMethodName,
+		walletv1.WalletPublicService_GetCurrencyPublic_FullMethodName,
+		walletv1.WalletPublicService_ParseMoneyPublic_FullMethodName,
+		walletv1.WalletPublicService_FormatMoneyPublic_FullMethodName,
+		walletv1.WalletPublicService_QuoteConversionPublic_FullMethodName,
+		walletv1.WalletPublicService_GetConversionQuotePublic_FullMethodName,
+		walletv1.WalletPublicService_ListFXSourcesPublic_FullMethodName:
 		return nil
 	default:
 		return status.Error(codes.PermissionDenied, "wallet method is outside the public service")

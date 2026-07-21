@@ -118,30 +118,44 @@ func seedWalletValidationRules(t *testing.T, ctx context.Context, db *basestore.
 	pspStmt := db.Rebind(`INSERT INTO psp_configs(
 		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name, enabled_currencies,
 		is_active, supports_deposit, supports_withdrawal, method_type, display_name,
-		supported_regions, min_amount, max_amount, deposit_input_schema, presentation_schema,
+		supported_regions, deposit_input_schema, presentation_schema,
 		deposit_response_mapping
-	) VALUES(?, ?, ?, 'https://psp.example', 'Idempotency-Key', ARRAY[?], TRUE, ?, ?, 'redirect', ?, ARRAY['US'], 1, 1000000000, '{}', '{}',
+	) VALUES(?, ?, ?, 'https://psp.example', 'Idempotency-Key', ARRAY[?], TRUE, ?, ?, 'redirect', ?, ARRAY['US'], '{}', '{}',
 		'{"client_reference":["client_reference"],"transaction_id":["transaction_id"],"status":["status"],"amount":["amount"],"currency":["currency"]}')
 	ON CONFLICT (tenant_id, provider_code) DO NOTHING`)
 	if _, err := db.ExecContext(ctx, pspStmt, tenantID, providerCode, "Test PSP", currency, supportsDeposit, supportsWithdrawal, "Test PSP"); err != nil {
 		t.Fatalf("seed psp config: %v", err)
 	}
+	policyStmt := db.Rebind(`INSERT INTO psp_amount_policies(
+		tenant_id, provider_code, currency, currency_unit_version_id,
+		direction, region, min_amount, max_amount
+	)
+	SELECT ?, ?, ?, unit.id, direction.name, '', 1, 1000000000
+	FROM currency_unit_versions unit
+	CROSS JOIN (VALUES ('deposit'), ('withdrawal')) AS direction(name)
+	WHERE unit.currency_code = ? AND unit.valid_to IS NULL
+	ON CONFLICT DO NOTHING`)
+	if _, err := db.ExecContext(ctx, policyStmt, tenantID, providerCode, currency, currency); err != nil {
+		t.Fatalf("seed PSP amount policies: %v", err)
+	}
 
 	for _, txType := range []string{"deposit", "withdrawal"} {
 		feeStmt := db.Rebind(`INSERT INTO fee_configs(
-			tenant_id, transaction_type, currency, tier_min, percentage_fee, flat_fee, min_fee, is_active,
+			tenant_id, transaction_type, currency, currency_unit_version_id,
+			tier_min, percentage_fee, flat_fee, min_fee, is_active,
 			created_by_operator_id
-		) VALUES(?, ?, ?, 0, 0, 0, 0, TRUE, ?)
-		ON CONFLICT (tenant_id, transaction_type, currency, tier_min) DO NOTHING`)
-		if _, err := db.ExecContext(ctx, feeStmt, tenantID, txType, currency, operatorID); err != nil {
+		) VALUES(?, ?, ?, (SELECT id FROM currency_unit_versions WHERE currency_code = ? AND valid_to IS NULL), 0, 0, 0, 0, TRUE, ?)
+		ON CONFLICT (tenant_id, transaction_type, currency, currency_unit_version_id, tier_min) DO NOTHING`)
+		if _, err := db.ExecContext(ctx, feeStmt, tenantID, txType, currency, currency, operatorID); err != nil {
 			t.Fatalf("seed %s fee config: %v", txType, err)
 		}
 
 		limitStmt := db.Rebind(`INSERT INTO transaction_limits(
-			tenant_id, kyc_tier, transaction_type, currency, daily_limit, monthly_limit, per_transaction_limit, is_active
-		) VALUES(?, ?, ?, ?, 1000000000, 1000000000, 1000000000, TRUE)
-		ON CONFLICT (tenant_id, kyc_tier, transaction_type, currency) DO NOTHING`)
-		if _, err := db.ExecContext(ctx, limitStmt, tenantID, walletstore.KYCTierUnverified, txType, currency); err != nil {
+			tenant_id, kyc_tier, transaction_type, currency, currency_unit_version_id,
+			daily_limit, monthly_limit, per_transaction_limit, is_active
+		) VALUES(?, ?, ?, ?, (SELECT id FROM currency_unit_versions WHERE currency_code = ? AND valid_to IS NULL), 1000000000, 1000000000, 1000000000, TRUE)
+		ON CONFLICT (tenant_id, kyc_tier, transaction_type, currency, currency_unit_version_id) DO NOTHING`)
+		if _, err := db.ExecContext(ctx, limitStmt, tenantID, walletstore.KYCTierUnverified, txType, currency, currency); err != nil {
 			t.Fatalf("seed %s transaction limit: %v", txType, err)
 		}
 	}

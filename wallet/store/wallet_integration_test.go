@@ -16,12 +16,13 @@ func TestEnsureWalletRejectsMismatchedReplay(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
 
 	params := EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "user-42",
-		UserID:    42,
-		Currency:  "USD",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "user-42",
+		UserID:         42,
+		Currency:       "USD",
+		CurrencyUnitID: testCurrencyUnitID(t, ctx, store, "USD"),
+		KYCTier:        KYCTierUnverified,
 	}
 	created, err := store.EnsureWallet(ctx, params)
 	if err != nil {
@@ -56,13 +57,15 @@ func TestEnsureWalletRejectsMismatchedReplay(t *testing.T) {
 
 func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
+	usdUnitID := testCurrencyUnitID(t, ctx, store, "USD")
 	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "manual-user",
-		UserID:    101,
-		Currency:  "USD",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "manual-user",
+		UserID:         101,
+		Currency:       "USD",
+		CurrencyUnitID: usdUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure manual transfer wallet: %v", err)
@@ -78,6 +81,7 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 		WalletID:               sql.NullString{String: wallet.ID.String(), Valid: true},
 		Amount:                 100,
 		Currency:               "USD",
+		CurrencyUnitID:         wallet.CurrencyUnitID,
 		Reason:                 "manual adjustment",
 		Status:                 ManualTransferStatusPending,
 		RequestedByOperatorID:  requesterID,
@@ -90,6 +94,19 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 	created, err := store.CreateManualTransfer(ctx, transfer)
 	if err != nil {
 		t.Fatalf("create manual transfer: %v", err)
+	}
+	if _, err := store.DB.ExecContext(ctx, `UPDATE manual_transfers SET amount = amount + 1
+		WHERE tenant_id = $1 AND id = $2`, tenantID, created.ID); err == nil {
+		t.Fatal("direct SQL mutated an immutable manual-transfer amount")
+	}
+	if _, err := store.DB.ExecContext(ctx, `INSERT INTO manual_transfers(
+		tenant_id, workflow_id, idempotency_key, transfer_type, wallet_id,
+		amount, currency, currency_unit_version_id, reason, status,
+		requested_by_operator_id, approval_timeout_seconds, decision_deadline_at
+	) VALUES($1, 'wf-invalid-amount', 'idem-invalid-amount', 'manual_debit', $2,
+		-1, 'USD', $3, 'invalid direct SQL', 'pending', $4, 60, clock_timestamp() + interval '60 seconds')`,
+		tenantID, wallet.ID, wallet.CurrencyUnitID, requesterID); err == nil {
+		t.Fatal("direct SQL persisted a negative manual-transfer amount")
 	}
 	var after time.Time
 	if err := store.DB.GetContext(ctx, &after, "SELECT clock_timestamp()"); err != nil {
@@ -130,12 +147,13 @@ func TestManualTransferAndApprovalReplaysAreExact(t *testing.T) {
 		t.Fatalf("insert foreign tenant: %v", err)
 	}
 	foreignWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  "other-tenant",
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "foreign-manual-user",
-		UserID:    201,
-		Currency:  "USD",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       "other-tenant",
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "foreign-manual-user",
+		UserID:         201,
+		Currency:       "USD",
+		CurrencyUnitID: usdUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure foreign manual transfer wallet: %v", err)

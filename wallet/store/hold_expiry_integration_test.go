@@ -432,14 +432,15 @@ func createHoldTestWallets(t *testing.T, walletStore *Store, tenantID, suffix st
 	ctx := t.Context()
 	source, err := walletStore.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "hold-source-" + suffix,
-		UserID: holdTestUserID.Add(1) + 100, Currency: "AED", KYCTier: KYCTierUnverified,
+		UserID: holdTestUserID.Add(1) + 100, Currency: "AED",
+		CurrencyUnitID: testCurrencyUnitID(t, ctx, walletStore, "AED"), KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure source wallet: %v", err)
 	}
 	receiver, err := walletStore.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeSystem, OwnerID: "hold-receiver-" + suffix,
-		Currency: "AED", KYCTier: KYCTierUnverified,
+		Currency: "AED", CurrencyUnitID: source.CurrencyUnitID, KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure receiver wallet: %v", err)

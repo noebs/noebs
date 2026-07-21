@@ -11,6 +11,7 @@ import (
 
 	"github.com/a-h/templ"
 	walletstore "github.com/adonese/noebs/wallet/store"
+	"github.com/shopspring/decimal"
 )
 
 const walletAdminBoundaryCSRF = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -123,6 +124,56 @@ func TestWalletAdminPagesRenderCanonicalTenantPathsAndCSRF(t *testing.T) {
 			}
 			if strings.Contains(html, "/admin/wallet") || strings.Contains(html, `name="tenant_id"`) {
 				t.Fatalf("rendered page exposed a retired path or caller-selected tenant")
+			}
+		})
+	}
+}
+
+func TestMoneyPolicyPagesRenderCurrencyUnitVersionIDs(t *testing.T) {
+	tests := []struct {
+		name      string
+		component templ.Component
+		want      []string
+	}{
+		{
+			name: "fee",
+			component: FeesPage(FeeConfigView{
+				TenantID: "tenant-a",
+				Configs: []walletstore.FeeConfig{{
+					TransactionType: "deposit",
+					Currency:        "USD",
+					CurrencyUnitID:  918273645,
+				}},
+			}),
+			want: []string{"Currency Unit ID", "918273645"},
+		},
+		{
+			name: "rate",
+			component: RatesPage(RateView{
+				TenantID: "tenant-a",
+				Rates: []walletstore.ExchangeRate{{
+					BaseCurrency:        "USD",
+					BaseCurrencyUnitID:  111222333,
+					QuoteCurrency:       "EUR",
+					QuoteCurrencyUnitID: 444555666,
+					BuyRate:             decimal.NewFromInt(1),
+					SellRate:            decimal.NewFromInt(1),
+				}},
+			}),
+			want: []string{"Unit IDs (Base/Quote)", "111222333/444555666"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var rendered bytes.Buffer
+			if err := tt.component.Render(context.Background(), &rendered); err != nil {
+				t.Fatal(err)
+			}
+			for _, token := range tt.want {
+				if !strings.Contains(rendered.String(), token) {
+					t.Fatalf("rendered policy page missing %q", token)
+				}
 			}
 		})
 	}

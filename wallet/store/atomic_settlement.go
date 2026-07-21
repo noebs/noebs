@@ -269,7 +269,7 @@ func (s *Store) postMultiLegSettlement(
 	if err := tx.GetContext(ctx, &createdAt, `SELECT clock_timestamp()`); err != nil {
 		return nil, err
 	}
-	txID, existing, err := s.insertMultiLegLedgerTransaction(ctx, tx, params, createdAt)
+	txID, existing, err := s.insertMultiLegLedgerTransaction(ctx, tx, params, orderedWallets[0].CurrencyUnitID, createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -349,35 +349,37 @@ func (s *Store) postMultiLegSettlement(
 			return nil, err
 		}
 		debitEntry, err := s.insertEntry(ctx, tx, LedgerEntry{
-			TenantID:      params.TenantID,
-			TransactionID: txID,
-			WalletID:      debitWallet.ID,
-			EntryType:     "debit",
-			Amount:        transfer.Amount,
-			Currency:      params.Currency,
-			BalanceAfter:  debitWallet.Balance,
-			WalletSeq:     debitSequence,
-			Status:        "completed",
-			Description:   sql.NullString{String: transfer.Description, Valid: transfer.Description != ""},
-			Metadata:      RawJSON(transfer.Metadata),
-			CreatedAt:     createdAt,
+			TenantID:       params.TenantID,
+			TransactionID:  txID,
+			WalletID:       debitWallet.ID,
+			EntryType:      "debit",
+			Amount:         transfer.Amount,
+			Currency:       params.Currency,
+			CurrencyUnitID: debitWallet.CurrencyUnitID,
+			BalanceAfter:   debitWallet.Balance,
+			WalletSeq:      debitSequence,
+			Status:         "completed",
+			Description:    sql.NullString{String: transfer.Description, Valid: transfer.Description != ""},
+			Metadata:       RawJSON(transfer.Metadata),
+			CreatedAt:      createdAt,
 		})
 		if err != nil {
 			return nil, err
 		}
 		creditEntry, err := s.insertEntry(ctx, tx, LedgerEntry{
-			TenantID:      params.TenantID,
-			TransactionID: txID,
-			WalletID:      creditWallet.ID,
-			EntryType:     "credit",
-			Amount:        transfer.Amount,
-			Currency:      params.Currency,
-			BalanceAfter:  creditWallet.Balance,
-			WalletSeq:     creditSequence,
-			Status:        "completed",
-			Description:   sql.NullString{String: transfer.Description, Valid: transfer.Description != ""},
-			Metadata:      RawJSON(transfer.Metadata),
-			CreatedAt:     createdAt,
+			TenantID:       params.TenantID,
+			TransactionID:  txID,
+			WalletID:       creditWallet.ID,
+			EntryType:      "credit",
+			Amount:         transfer.Amount,
+			Currency:       params.Currency,
+			CurrencyUnitID: creditWallet.CurrencyUnitID,
+			BalanceAfter:   creditWallet.Balance,
+			WalletSeq:      creditSequence,
+			Status:         "completed",
+			Description:    sql.NullString{String: transfer.Description, Valid: transfer.Description != ""},
+			Metadata:       RawJSON(transfer.Metadata),
+			CreatedAt:      createdAt,
 		})
 		if err != nil {
 			return nil, err
@@ -484,6 +486,7 @@ func validateSettlementWallets(
 ) error {
 	balanceDeltas := make(map[uuid.UUID]int64, len(wallets))
 	availableDeltas := make(map[uuid.UUID]int64, len(wallets))
+	var currencyUnitID int64
 	for _, wallet := range wallets {
 		if wallet.TenantID != params.TenantID {
 			return ErrWalletNotFound
@@ -492,6 +495,14 @@ func validateSettlementWallets(
 			return ErrWalletInactive
 		}
 		if wallet.Currency != params.Currency {
+			return ErrCurrencyMismatch
+		}
+		if err := ValidateCurrencyUnitID(wallet.CurrencyUnitID); err != nil {
+			return err
+		}
+		if currencyUnitID == 0 {
+			currencyUnitID = wallet.CurrencyUnitID
+		} else if wallet.CurrencyUnitID != currencyUnitID {
 			return ErrCurrencyMismatch
 		}
 	}
@@ -1066,11 +1077,13 @@ func (s *Store) insertMultiLegLedgerTransaction(
 	ctx context.Context,
 	tx *sqlx.Tx,
 	params MultiLegSettlementParams,
+	currencyUnitID int64,
 	createdAt time.Time,
 ) (int64, *MultiLegSettlementResult, error) {
 	stmt := s.DB.Rebind(`INSERT INTO ledger_transactions(
-		tenant_id, idempotency_key, currency, reference_type, reference_id, status, metadata, created_at
-	) VALUES(?, ?, ?, ?, ?, 'completed', ?, ?)
+		tenant_id, idempotency_key, currency, currency_unit_version_id,
+		reference_type, reference_id, status, metadata, created_at
+	) VALUES(?, ?, ?, ?, ?, ?, 'completed', ?, ?)
 	ON CONFLICT(tenant_id, idempotency_key) DO NOTHING
 	RETURNING id`)
 	var transactionID int64
@@ -1078,6 +1091,7 @@ func (s *Store) insertMultiLegLedgerTransaction(
 		params.TenantID,
 		params.IdempotencyKey,
 		params.Currency,
+		currencyUnitID,
 		params.ReferenceType,
 		params.ReferenceID,
 		params.Metadata,
@@ -1126,6 +1140,9 @@ func (s *Store) loadAndValidateMultiLegSettlement(
 		credit := entries[index*2+1]
 		if !settlementEntryMatches(debit, transfer.DebitWalletID, "debit", params.Currency, transfer) ||
 			!settlementEntryMatches(credit, transfer.CreditWalletID, "credit", params.Currency, transfer) ||
+			transaction.CurrencyUnitID <= 0 ||
+			debit.CurrencyUnitID != transaction.CurrencyUnitID ||
+			credit.CurrencyUnitID != transaction.CurrencyUnitID ||
 			!debit.CounterID.Valid || debit.CounterID.Int64 != credit.ID ||
 			!credit.CounterID.Valid || credit.CounterID.Int64 != debit.ID {
 			return nil, ErrDuplicateTransaction

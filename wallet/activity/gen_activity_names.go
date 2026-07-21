@@ -54,6 +54,8 @@ var activityNames = []string{
 	"ReleaseLimitUsage",
 	"ConsumeLimitUsage",
 	"ConvertCurrency",
+	"ListEnabledFXSources",
+	"SyncFXSource",
 	"ValidateP2PTransfer",
 	"ValidateDeposit",
 	"ValidateWithdrawal",

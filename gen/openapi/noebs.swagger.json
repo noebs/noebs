@@ -51,6 +51,72 @@
         ]
       }
     },
+    "/wallet/currencies": {
+      "get": {
+        "operationId": "WalletPublicService_ListCurrenciesPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListCurrenciesPublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/currencies/{currencyCode}": {
+      "get": {
+        "operationId": "WalletPublicService_GetCurrencyPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetCurrencyPublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "currencyCode",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
     "/wallet/deposits": {
       "post": {
         "operationId": "WalletPublicService_RequestDeposit",
@@ -154,6 +220,111 @@
         ]
       }
     },
+    "/wallet/fx/quotes": {
+      "post": {
+        "operationId": "WalletPublicService_QuoteConversionPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1QuoteConversionPublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1QuoteConversionPublicRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/fx/quotes/{quoteId}": {
+      "get": {
+        "operationId": "WalletPublicService_GetConversionQuotePublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetConversionQuotePublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "quoteId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/fx/sources": {
+      "get": {
+        "operationId": "WalletPublicService_ListFXSourcesPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFXSourcesPublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
     "/wallet/methods": {
       "get": {
         "operationId": "WalletPublicService_ListPaymentMethodsPublic",
@@ -216,6 +387,70 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/money/format": {
+      "post": {
+        "operationId": "WalletPublicService_FormatMoneyPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FormatMoneyPublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1FormatMoneyPublicRequest"
+            }
+          }
+        ],
+        "tags": [
+          "WalletPublicService"
+        ]
+      }
+    },
+    "/wallet/money/parse": {
+      "post": {
+        "operationId": "WalletPublicService_ParseMoneyPublic",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ParseMoneyPublicResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ParseMoneyPublicRequest"
+            }
           }
         ],
         "tags": [
@@ -462,6 +697,90 @@
       ],
       "default": "ADMIN_WALLET_ACTION_UNSPECIFIED"
     },
+    "v1ConversionQuote": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "$ref": "#/definitions/v1MoneyAmount"
+        },
+        "output": {
+          "$ref": "#/definitions/v1MoneyAmount"
+        },
+        "roundingMode": {
+          "type": "string"
+        },
+        "sourceCode": {
+          "type": "string"
+        },
+        "sourceName": {
+          "type": "string"
+        },
+        "sourcePurpose": {
+          "type": "string"
+        },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "observationId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "observationBaseCurrency": {
+          "type": "string"
+        },
+        "observationQuoteCurrency": {
+          "type": "string"
+        },
+        "observationRateDecimal": {
+          "type": "string"
+        },
+        "appliedRateNumerator": {
+          "type": "string"
+        },
+        "appliedRateDenominator": {
+          "type": "string"
+        },
+        "requestedRateSide": {
+          "type": "string"
+        },
+        "inverse": {
+          "type": "boolean"
+        },
+        "observationAt": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "type": "string"
+        },
+        "retrievedAt": {
+          "type": "string"
+        },
+        "expiresAt": {
+          "type": "string"
+        },
+        "sourceRevision": {
+          "type": "string"
+        },
+        "executable": {
+          "type": "boolean",
+          "description": "False for this reference/preview endpoint. It is not a trade commitment."
+        },
+        "observationRateSide": {
+          "type": "string",
+          "description": "Side attached to the source observation. This can differ from the\nrequested side when an inverse bid/ask observation was selected."
+        },
+        "conversionAt": {
+          "type": "string",
+          "description": "Server-captured instant at which the exact unit versions and observation\nwere validated and the conversion was calculated."
+        },
+        "idempotencyKey": {
+          "type": "string"
+        }
+      }
+    },
     "v1CreateWithdrawalDestinationRequest": {
       "type": "object",
       "properties": {
@@ -488,6 +807,60 @@
         }
       }
     },
+    "v1CurrencyUnit": {
+      "type": "object",
+      "properties": {
+        "currencyCode": {
+          "type": "string"
+        },
+        "numericCode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "isoMinorExponent": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "displayExponent": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "cashExponent": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "cashRoundingIncrement": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "validFrom": {
+          "type": "string"
+        },
+        "validTo": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceRevision": {
+          "type": "string"
+        },
+        "sourcePublishedOn": {
+          "type": "string"
+        }
+      }
+    },
     "v1DeactivateWithdrawalDestinationResponse": {
       "type": "object"
     },
@@ -511,6 +884,85 @@
       "properties": {
         "wallet": {
           "$ref": "#/definitions/v1Wallet"
+        }
+      }
+    },
+    "v1FXSource": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "maxAgeSeconds": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "pairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FXSourcePair"
+          }
+        }
+      }
+    },
+    "v1FXSourcePair": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "int64"
+        },
+        "baseCurrency": {
+          "type": "string"
+        },
+        "quoteCurrency": {
+          "type": "string"
+        },
+        "sides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1FormatMoneyPublicRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "currencyCode": {
+          "type": "string"
+        },
+        "minorUnits": {
+          "type": "string"
+        },
+        "roundingMode": {
+          "type": "string"
+        },
+        "currencyUnitVersionId": {
+          "type": "string",
+          "format": "int64",
+          "description": "Exact immutable unit definition that originally interpreted minor_units.\nHistorical and inactive definitions remain valid for rendering."
+        }
+      }
+    },
+    "v1FormatMoneyPublicResponse": {
+      "type": "object",
+      "properties": {
+        "money": {
+          "$ref": "#/definitions/v1MoneyAmount"
         }
       }
     },
@@ -561,11 +1013,51 @@
         }
       }
     },
+    "v1GetConversionQuotePublicResponse": {
+      "type": "object",
+      "properties": {
+        "quote": {
+          "$ref": "#/definitions/v1ConversionQuote"
+        }
+      }
+    },
+    "v1GetCurrencyPublicResponse": {
+      "type": "object",
+      "properties": {
+        "currency": {
+          "$ref": "#/definitions/v1CurrencyUnit"
+        }
+      }
+    },
     "v1GetWalletPublicResponse": {
       "type": "object",
       "properties": {
         "wallet": {
           "$ref": "#/definitions/v1Wallet"
+        }
+      }
+    },
+    "v1ListCurrenciesPublicResponse": {
+      "type": "object",
+      "properties": {
+        "currencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1CurrencyUnit"
+          }
+        }
+      }
+    },
+    "v1ListFXSourcesPublicResponse": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FXSource"
+          }
         }
       }
     },
@@ -614,6 +1106,66 @@
             "type": "object",
             "$ref": "#/definitions/v1WithdrawalDestination"
           }
+        }
+      }
+    },
+    "v1MoneyAmount": {
+      "type": "object",
+      "properties": {
+        "minorUnits": {
+          "type": "string",
+          "description": "Exact signed operational minor units. This is a decimal string so JSON\nclients never lose precision."
+        },
+        "currencyCode": {
+          "type": "string"
+        },
+        "currencyUnitVersionId": {
+          "type": "string",
+          "format": "int64",
+          "description": "Immutable database-backed scale/version used to interpret minor_units."
+        },
+        "minorExponent": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "majorUnits": {
+          "type": "string"
+        },
+        "display": {
+          "type": "string"
+        },
+        "canonical": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ParseMoneyPublicRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "currencyCode": {
+          "type": "string"
+        },
+        "majorUnits": {
+          "type": "string"
+        },
+        "roundingMode": {
+          "type": "string"
+        },
+        "currencyUnitVersionId": {
+          "type": "string",
+          "format": "int64",
+          "description": "Exact immutable unit definition selected by the client from the currency\ncatalog. Parsing rejects inactive or not-yet-effective definitions."
+        }
+      }
+    },
+    "v1ParseMoneyPublicResponse": {
+      "type": "object",
+      "properties": {
+        "money": {
+          "$ref": "#/definitions/v1MoneyAmount"
         }
       }
     },
@@ -666,6 +1218,66 @@
         },
         "supportsWithdrawal": {
           "type": "boolean"
+        },
+        "currencyUnitVersionId": {
+          "type": "string",
+          "format": "int64",
+          "description": "Exact immutable scale used to interpret min_amount, max_amount, and the\namount filter that selected this method."
+        },
+        "minAmountMoney": {
+          "$ref": "#/definitions/v1MoneyAmount",
+          "description": "Exact string-backed representations for JavaScript and other clients that\ncannot safely represent every int64. Legacy min_amount/max_amount remain\nunchanged for backward compatibility."
+        },
+        "maxAmountMoney": {
+          "$ref": "#/definitions/v1MoneyAmount"
+        }
+      }
+    },
+    "v1QuoteConversionPublicRequest": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "sourceCode": {
+          "type": "string"
+        },
+        "baseCurrency": {
+          "type": "string"
+        },
+        "quoteCurrency": {
+          "type": "string"
+        },
+        "inputMinorUnits": {
+          "type": "string"
+        },
+        "side": {
+          "type": "string"
+        },
+        "baseCurrencyUnitVersionId": {
+          "type": "string",
+          "format": "int64",
+          "description": "Exact immutable units used for the input and output amounts. A quote never\nresolves a \"current\" unit from currency code alone."
+        },
+        "quoteCurrencyUnitVersionId": {
+          "type": "string",
+          "format": "int64"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "Required opaque retry key. Reusing a key with the same semantic request\nreturns the original quote; reusing it for a different request fails."
+        }
+      }
+    },
+    "v1QuoteConversionPublicResponse": {
+      "type": "object",
+      "properties": {
+        "quote": {
+          "$ref": "#/definitions/v1ConversionQuote"
         }
       }
     },
@@ -788,6 +1400,12 @@
         },
         "updatedAt": {
           "type": "string"
+        },
+        "balanceMoney": {
+          "$ref": "#/definitions/v1MoneyAmount"
+        },
+        "availableBalanceMoney": {
+          "$ref": "#/definitions/v1MoneyAmount"
         }
       }
     },
@@ -843,6 +1461,12 @@
         },
         "createdAt": {
           "type": "string"
+        },
+        "amountMoney": {
+          "$ref": "#/definitions/v1MoneyAmount"
+        },
+        "balanceAfterMoney": {
+          "$ref": "#/definitions/v1MoneyAmount"
         }
       }
     },

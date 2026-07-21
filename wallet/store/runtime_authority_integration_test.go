@@ -61,17 +61,18 @@ func TestRuntimeAuthorityReservesImmutableCommands(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = runtimeDB.Close() })
 	runtimeStore := New(runtimeDB)
+	usdUnitID := testCurrencyUnitID(t, ctx, runtimeStore, "USD")
 
 	fromWallet, err := runtimeStore.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "101", UserID: 101,
-		Currency: "USD", KYCTier: KYCTierUnverified,
+		Currency: "USD", CurrencyUnitID: usdUnitID, KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	toWallet, err := runtimeStore.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeUser, OwnerID: "202", UserID: 202,
-		Currency: "USD", KYCTier: KYCTierUnverified,
+		Currency: "USD", CurrencyUnitID: usdUnitID, KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +88,8 @@ func TestRuntimeAuthorityReservesImmutableCommands(t *testing.T) {
 	transfer, err := runtimeStore.CreateManualTransfer(ctx, ManualTransfer{
 		TenantID: tenantID, WorkflowID: "manual-runtime-authority", IdempotencyKey: "manual-runtime-authority",
 		TransferType: ManualTransferTypeCredit, WalletID: sql.NullString{String: fromWallet.ID.String(), Valid: true},
-		Amount: 25, Currency: "USD", Reason: "authority test", Status: ManualTransferStatusPending,
+		Amount: 25, Currency: "USD", CurrencyUnitID: fromWallet.CurrencyUnitID,
+		Reason: "authority test", Status: ManualTransferStatusPending,
 		RequestedByOperatorID: requester.ID, ApprovalTimeoutSeconds: 300,
 	})
 	if err != nil {
@@ -142,8 +144,9 @@ func TestRuntimeAuthorityReservesImmutableCommands(t *testing.T) {
 	deposit := DepositIntent{
 		TenantID: tenantID, IntentReference: "deposit-runtime-authority", ProviderCode: "test",
 		WalletID: fromWallet.ID, OwnerType: fromWallet.OwnerType, OwnerID: fromWallet.OwnerID,
-		Amount: 100, Currency: "USD", IdempotencyKey: "deposit-runtime-authority",
-		WorkflowID: "deposit-runtime-authority", Metadata: RawJSON(`{}`), Region: "",
+		Amount: 100, Currency: "USD", CurrencyUnitID: fromWallet.CurrencyUnitID,
+		IdempotencyKey: "deposit-runtime-authority",
+		WorkflowID:     "deposit-runtime-authority", Metadata: RawJSON(`{}`), Region: "",
 		RawRequest: RawJSON(`{"amount":100,"currency":"USD"}`),
 	}
 	firstDeposit, err := runtimeStore.ReserveDepositIntent(ctx, deposit)

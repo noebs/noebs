@@ -28,6 +28,7 @@ func TestStatusFromPSPTransactionTreatsRawResponseAsAuditOnly(t *testing.T) {
 		PSPTransactionID: sql.NullString{String: "stored-psp-id", Valid: true},
 		Amount:           100,
 		Currency:         "USD",
+		CurrencyUnitID:   101,
 		RawResponse:      walletstore.RawJSON(`{"status":"SUCCESS","amount":2500,"currency":"AED","transaction_id":"provider-psp-id"}`),
 	}
 
@@ -48,6 +49,24 @@ func TestStatusFromPSPTransactionTreatsRawResponseAsAuditOnly(t *testing.T) {
 		"status": "SUCCESS", "amount": float64(2500), "currency": "AED", "transaction_id": "provider-psp-id",
 	}) {
 		t.Fatalf("raw audit payload = %+v", status.RawResponse)
+	}
+}
+
+func TestPSPStatusScopeDirectionRequiresExplicitStoredDirection(t *testing.T) {
+	for _, test := range []struct {
+		stored string
+		want   string
+		err    error
+	}{
+		{stored: "inbound", want: "deposit"},
+		{stored: "outbound", want: "withdrawal"},
+		{stored: "", err: walletstore.ErrMissingDirection},
+		{stored: "sideways", err: walletstore.ErrInvalidDirection},
+	} {
+		got, err := pspStatusScopeDirection(test.stored)
+		if !errors.Is(err, test.err) || got != test.want {
+			t.Errorf("pspStatusScopeDirection(%q) = %q, %v; want %q, %v", test.stored, got, err, test.want, test.err)
+		}
 	}
 }
 
@@ -182,16 +201,18 @@ func TestDepositRejectsInvalidSuccessfulProviderStatusBeforeStoreUpdate(t *testi
 					Direction:        "inbound",
 					Amount:           2500,
 					Currency:         "AED",
+					CurrencyUnitID:   intent.CurrencyUnitID,
 					Status:           "pending",
 					WorkflowID:       sql.NullString{String: intent.WorkflowID, Valid: true},
 					DepositIntentID:  sql.NullInt64{Int64: intent.ID, Valid: true},
 				}, nil)
 			env.OnActivity(string(walletactivity.ActivityValidateDeposit), mock.Anything, mock.Anything).
 				Return(&walletvalidation.DepositValidationResult{
-					WalletID:  walletID,
-					Currency:  "AED",
-					Amount:    2500,
-					NetAmount: 2500,
+					WalletID:       walletID,
+					Currency:       "AED",
+					CurrencyUnitID: intent.CurrencyUnitID,
+					Amount:         2500,
+					NetAmount:      2500,
 				}, nil)
 			env.OnActivity(string(walletactivity.ActivityCreateDeposit), mock.Anything, mock.Anything).
 				Return(&tc.status, nil)
@@ -263,6 +284,7 @@ func depositStatusTestIntent(tenantID, reference string, walletID uuid.UUID, id 
 		OwnerID:         "42",
 		Amount:          2500,
 		Currency:        "AED",
+		CurrencyUnitID:  101,
 		IdempotencyKey:  "request-key",
 		WorkflowID:      "default-test-workflow-id",
 		Metadata:        walletstore.RawJSON(`{}`),
@@ -289,6 +311,7 @@ func TestDepositImmediateTerminalStatusPersistsOnce(t *testing.T) {
 		Direction:        "inbound",
 		Amount:           2500,
 		Currency:         "AED",
+		CurrencyUnitID:   intent.CurrencyUnitID,
 		Status:           walletstore.PSPStatusPending,
 		WorkflowID:       sql.NullString{String: intent.WorkflowID, Valid: true},
 		DepositIntentID:  sql.NullInt64{Int64: intent.ID, Valid: true},
@@ -296,9 +319,10 @@ func TestDepositImmediateTerminalStatusPersistsOnce(t *testing.T) {
 	env.OnActivity(string(walletactivity.ActivityGetDepositIntentByReference), mock.Anything, tenantID, clientReference).Return(intent, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityGetPSPTransactionByReference), mock.Anything, tenantID, clientReference).Return(txn, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityValidateDeposit), mock.Anything, mock.Anything).Return(&walletvalidation.DepositValidationResult{
-		WalletID: walletID,
-		Currency: "AED",
-		Amount:   2500,
+		WalletID:       walletID,
+		Currency:       "AED",
+		CurrencyUnitID: intent.CurrencyUnitID,
+		Amount:         2500,
 	}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityCreateDeposit), mock.Anything, mock.Anything).Return(&walletpsp.DepositResult{
 		ClientReference: clientReference,
@@ -350,7 +374,8 @@ func TestDepositPersistsUnknownDispatchAndAwaitsReconciliation(t *testing.T) {
 	pending := &walletstore.PSPTransaction{
 		ID: 13, TenantID: tenantID, PSPProvider: "pay", IdempotencyKey: intent.IdempotencyKey,
 		ClientReference: clientReference, Direction: "inbound", Amount: intent.Amount, Currency: intent.Currency,
-		Status: walletstore.PSPStatusInitiated, WorkflowID: sql.NullString{String: intent.WorkflowID, Valid: true},
+		CurrencyUnitID: intent.CurrencyUnitID,
+		Status:         walletstore.PSPStatusInitiated, WorkflowID: sql.NullString{String: intent.WorkflowID, Valid: true},
 		DepositIntentID: sql.NullInt64{Int64: intent.ID, Valid: true},
 	}
 	signal := walletstore.PSPWorkflowSignal{
@@ -368,7 +393,7 @@ func TestDepositPersistsUnknownDispatchAndAwaitsReconciliation(t *testing.T) {
 
 	env.OnActivity(string(walletactivity.ActivityGetDepositIntentByReference), mock.Anything, tenantID, clientReference).Return(intent, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityValidateDeposit), mock.Anything, mock.Anything).Return(&walletvalidation.DepositValidationResult{
-		WalletID: walletID, Currency: intent.Currency, Amount: intent.Amount,
+		WalletID: walletID, Currency: intent.Currency, CurrencyUnitID: intent.CurrencyUnitID, Amount: intent.Amount,
 	}, nil).Once()
 	limitUsage := walletstore.LimitUsageParams{
 		TenantID: tenantID, CommandID: "deposit:" + clientReference, WalletID: walletID,
@@ -422,6 +447,7 @@ func TestDepositConsumesPersistedWebhookTerminalWithoutStatusRewrite(t *testing.
 		Direction:       "inbound",
 		Amount:          2500,
 		Currency:        "AED",
+		CurrencyUnitID:  intent.CurrencyUnitID,
 		Status:          walletstore.PSPStatusPending,
 		WorkflowID:      sql.NullString{String: intent.WorkflowID, Valid: true},
 		DepositIntentID: sql.NullInt64{Int64: intent.ID, Valid: true},
@@ -445,9 +471,10 @@ func TestDepositConsumesPersistedWebhookTerminalWithoutStatusRewrite(t *testing.
 	env.OnActivity(string(walletactivity.ActivityGetDepositIntentByReference), mock.Anything, tenantID, clientReference).Return(intent, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityGetPSPTransactionByReference), mock.Anything, tenantID, clientReference).Return(pending, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityValidateDeposit), mock.Anything, mock.Anything).Return(&walletvalidation.DepositValidationResult{
-		WalletID: walletID,
-		Currency: "AED",
-		Amount:   2500,
+		WalletID:       walletID,
+		Currency:       "AED",
+		CurrencyUnitID: intent.CurrencyUnitID,
+		Amount:         2500,
 	}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityCreateDeposit), mock.Anything, mock.Anything).Return(&walletpsp.DepositResult{
 		ClientReference: clientReference,
@@ -498,6 +525,7 @@ func TestDepositAcknowledgesWebhookTerminalThatWinsProviderUpdateRace(t *testing
 		Direction:        "inbound",
 		Amount:           2500,
 		Currency:         "AED",
+		CurrencyUnitID:   intent.CurrencyUnitID,
 		Status:           walletstore.PSPStatusPending,
 		WorkflowID:       sql.NullString{String: intent.WorkflowID, Valid: true},
 		DepositIntentID:  sql.NullInt64{Int64: intent.ID, Valid: true},
@@ -520,9 +548,10 @@ func TestDepositAcknowledgesWebhookTerminalThatWinsProviderUpdateRace(t *testing
 	env.OnActivity(string(walletactivity.ActivityGetDepositIntentByReference), mock.Anything, tenantID, clientReference).Return(intent, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityGetPSPTransactionByReference), mock.Anything, tenantID, clientReference).Return(pending, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityValidateDeposit), mock.Anything, mock.Anything).Return(&walletvalidation.DepositValidationResult{
-		WalletID: walletID,
-		Currency: "AED",
-		Amount:   2500,
+		WalletID:       walletID,
+		Currency:       "AED",
+		CurrencyUnitID: intent.CurrencyUnitID,
+		Amount:         2500,
 	}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityCreateDeposit), mock.Anything, mock.Anything).Return(&walletpsp.DepositResult{
 		ClientReference: clientReference,
@@ -672,6 +701,7 @@ func TestPSPStatusPollerResolvesMissingProviderIDAndQueuesTerminalStatusBeforeDe
 		Direction:       "inbound",
 		Amount:          2500,
 		Currency:        "AED",
+		CurrencyUnitID:  101,
 		Status:          walletstore.PSPStatusHeld,
 		WorkflowID:      sql.NullString{String: "target-workflow", Valid: true},
 	}
@@ -701,7 +731,8 @@ func TestPSPStatusPollerResolvesMissingProviderIDAndQueuesTerminalStatusBeforeDe
 	env.OnActivity(string(walletactivity.ActivityGetPSPTransactionByReference), mock.Anything, txn.TenantID, txn.ClientReference).Return(&txn, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityGetTransactionStatus), mock.Anything, mock.MatchedBy(func(params walletactivity.GetStatusParams) bool {
 		return params.TransactionID == "" && params.IdempotencyKey == txn.IdempotencyKey &&
-			params.ClientReference == txn.ClientReference && params.Amount == txn.Amount && params.Currency == txn.Currency
+			params.ClientReference == txn.ClientReference && params.Amount == txn.Amount &&
+			params.Currency == txn.Currency && params.CurrencyUnitID == txn.CurrencyUnitID
 	})).Return(&providerStatus, nil).Once()
 	stored := txn
 	stored.Status = walletstore.PSPStatusSuccess

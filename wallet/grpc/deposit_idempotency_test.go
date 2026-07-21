@@ -134,7 +134,7 @@ func newDepositIdempotencyTestFixture(t *testing.T, tenantName string) (*Server,
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, tenantName)
-	walletRow, err := server.Service.EnsureUserWallet(ctx, tenantID, 42, "USD")
+	walletRow, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 42, "USD")
 	if err != nil {
 		t.Fatal(err)
 	}

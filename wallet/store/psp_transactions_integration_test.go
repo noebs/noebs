@@ -59,11 +59,12 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	s := New(db)
 	wallet, err := s.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: "tenant", OwnerType: OwnerTypeSystem, OwnerID: "psp-test",
-		Currency: "USD", KYCTier: KYCTierUnverified,
+		Currency: "USD", CurrencyUnitID: testCurrencyUnitID(t, ctx, s, "USD"), KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure PSP transaction wallet: %v", err)
 	}
+	aedUnitID := testCurrencyUnitID(t, ctx, s, "AED")
 	confirmedAt := time.Now().UTC().Truncate(time.Microsecond)
 	txn := PSPTransaction{
 		TenantID:            "tenant",
@@ -77,6 +78,7 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
 		Amount:              100,
 		Currency:            "USD",
+		CurrencyUnitID:      wallet.CurrencyUnitID,
 		Status:              "success",
 		ConfirmedAt:         sql.NullTime{Time: confirmedAt, Valid: true},
 		RetryCount:          7,
@@ -105,15 +107,21 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	}
 
 	amount := PSPTransactionAmount{
-		TenantID:         txn.TenantID,
-		PSPTransactionID: created.ID,
-		AmountKind:       PSPAmountReported,
-		Amount:           100,
-		Currency:         "USD",
-		FxRate:           decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true},
-		FxBaseCurrency:   sql.NullString{String: "USD", Valid: true},
-		FxQuoteCurrency:  sql.NullString{String: "AED", Valid: true},
-		FxSource:         sql.NullString{String: "provider", Valid: true},
+		TenantID:              txn.TenantID,
+		PSPTransactionID:      created.ID,
+		AmountKind:            PSPAmountReported,
+		Amount:                100,
+		Currency:              "USD",
+		CurrencyUnitID:        wallet.CurrencyUnitID,
+		FxRate:                decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true},
+		FxRateNumerator:       decimal.NullDecimal{Decimal: decimal.NewFromInt(15), Valid: true},
+		FxRateDenominator:     decimal.NullDecimal{Decimal: decimal.NewFromInt(4), Valid: true},
+		FxBaseCurrency:        sql.NullString{String: "USD", Valid: true},
+		FxQuoteCurrency:       sql.NullString{String: "AED", Valid: true},
+		FxBaseCurrencyUnitID:  sql.NullInt64{Int64: wallet.CurrencyUnitID, Valid: true},
+		FxQuoteCurrencyUnitID: sql.NullInt64{Int64: aedUnitID, Valid: true},
+		FxSource:              sql.NullString{String: "provider", Valid: true},
+		FxConversionAt:        sql.NullTime{Time: confirmedAt, Valid: true},
 	}
 	storedAmount, err := s.AddPSPTransactionAmount(ctx, amount)
 	if err != nil {
@@ -131,11 +139,26 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	if _, err := s.AddPSPTransactionAmount(ctx, mismatchedAmount); !errors.Is(err, ErrDuplicateAmount) {
 		t.Fatalf("mismatched psp amount replay error = %v, want %v", err, ErrDuplicateAmount)
 	}
+	nonRepresentableRate := amount
+	nonRepresentableRate.AmountKind = PSPAmountSettlement
+	nonRepresentableRate.FxRate.Decimal = decimal.RequireFromString("1.123456789")
+	if _, err := s.AddPSPTransactionAmount(ctx, nonRepresentableRate); !errors.Is(err, ErrPSPFXRateNotRepresentable) {
+		t.Fatalf("non-representable psp FX rate error = %v, want %v", err, ErrPSPFXRateNotRepresentable)
+	}
+	var settlementCount int
+	if err := db.GetContext(ctx, &settlementCount, `SELECT count(*) FROM psp_transaction_amounts
+		WHERE tenant_id = $1 AND psp_transaction_id = $2 AND amount_kind = 'settlement'`, txn.TenantID, created.ID); err != nil {
+		t.Fatalf("count rejected settlement amount: %v", err)
+	}
+	if settlementCount != 0 {
+		t.Fatalf("rejected non-representable rate persisted %d rows, want 0", settlementCount)
+	}
 
 	batch := []PSPTransactionAmountInput{{
-		AmountKind: PSPAmountFee,
-		Amount:     5,
-		Currency:   "USD",
+		AmountKind:     PSPAmountFee,
+		Amount:         5,
+		Currency:       "USD",
+		CurrencyUnitID: wallet.CurrencyUnitID,
 	}}
 	storedBatch, err := s.AddPSPTransactionAmounts(ctx, txn.TenantID, created.ID, batch)
 	if err != nil {
@@ -152,9 +175,10 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		t.Fatalf("replayed amount batch = %+v, want id %d", replayedBatch, storedBatch[0].ID)
 	}
 	mismatchedBatch := []PSPTransactionAmountInput{{
-		AmountKind: PSPAmountFee,
-		Amount:     6,
-		Currency:   "USD",
+		AmountKind:     PSPAmountFee,
+		Amount:         6,
+		Currency:       "USD",
+		CurrencyUnitID: wallet.CurrencyUnitID,
 	}}
 	if _, err := s.AddPSPTransactionAmounts(ctx, txn.TenantID, created.ID, mismatchedBatch); !errors.Is(err, ErrDuplicateAmount) {
 		t.Fatalf("mismatched psp amount batch replay error = %v, want %v", err, ErrDuplicateAmount)
@@ -275,6 +299,7 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
 		Amount:              100,
 		Currency:            "USD",
+		CurrencyUnitID:      wallet.CurrencyUnitID,
 		Status:              PSPStatusPending,
 		WorkflowID:          sql.NullString{String: "outbox-workflow", Valid: true},
 	})
@@ -390,12 +415,12 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO psp_configs(
 		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name, enabled_currencies,
 		is_active, supports_deposit, supports_withdrawal, method_type, display_name,
-		supported_regions, min_amount, max_amount, deposit_input_schema, presentation_schema,
+		supported_regions, deposit_input_schema, presentation_schema,
 		deposit_response_mapping
 	) VALUES(
 		'tenant', 'globalpay', 'Global Pay', 'https://psp.example', 'Idempotency-Key',
 		ARRAY['USD'], TRUE, TRUE, TRUE, 'redirect', 'Global Pay Checkout',
-		ARRAY['US'], 100, 100000, '{"required":["card_last4"]}', '{"kind":"redirect"}',
+		ARRAY['US'], '{"required":["card_last4"]}', '{"kind":"redirect"}',
 		'{"client_reference":["client_reference"],"transaction_id":["transaction_id"],"status":["status"],"amount":["amount"],"currency":["currency"]}'
 	)`); err != nil {
 		t.Fatalf("insert psp config: %v", err)
@@ -403,23 +428,30 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO psp_config_overrides(
 		tenant_id, provider_code, region, currency, direction, is_active,
 		supports_deposit, supports_withdrawal, enabled_currencies, method_type,
-		display_name, supported_regions, min_amount, max_amount, deposit_input_schema,
+		display_name, supported_regions, deposit_input_schema,
 		presentation_schema
 	) VALUES(
 		'tenant', 'globalpay', 'AE', 'AED', 'deposit', TRUE,
 		TRUE, FALSE, ARRAY['AED'], 'qr', 'Global Pay QR',
-		ARRAY['AE'], 500, 50000, '{"required":["bank_account"]}', '{"kind":"qr"}'
+		ARRAY['AE'], '{"required":["bank_account"]}', '{"kind":"qr"}'
 	)`); err != nil {
 		t.Fatalf("insert psp override: %v", err)
 	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO psp_amount_policies(
+		tenant_id, provider_code, currency, currency_unit_version_id,
+		direction, region, min_amount, max_amount
+	) VALUES('tenant', 'globalpay', 'AED', $1, 'deposit', 'AE', 500, 50000)`, aedUnitID); err != nil {
+		t.Fatalf("insert PSP amount policy: %v", err)
+	}
 
 	methods, err := s.ListAvailablePSPMethods(ctx, PSPMethodFilter{
-		TenantID:  "tenant",
-		Direction: "deposit",
-		Currency:  "AED",
-		Region:    "AE",
-		Amount:    500,
-		Limit:     10,
+		TenantID:       "tenant",
+		Direction:      "deposit",
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		Region:         "AE",
+		Amount:         500,
+		Limit:          10,
 	})
 	if err != nil {
 		t.Fatalf("list payment methods: %v", err)
@@ -442,18 +474,282 @@ func TestPSPTransactionPersistenceReplaysAndStatusUpdates(t *testing.T) {
 	}
 
 	methods, err = s.ListAvailablePSPMethods(ctx, PSPMethodFilter{
-		TenantID:  "tenant",
-		Direction: "deposit",
-		Currency:  "AED",
-		Region:    "AE",
-		Amount:    100,
-		Limit:     10,
+		TenantID:       "tenant",
+		Direction:      "deposit",
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		Region:         "AE",
+		Amount:         100,
+		Limit:          10,
 	})
 	if err != nil {
 		t.Fatalf("list payment methods below min: %v", err)
 	}
 	if len(methods) != 0 {
 		t.Fatalf("expected below-min amount to hide method, got %d", len(methods))
+	}
+}
+
+func TestPSPAmountPersistsExactDirectAndInverseObservationRates(t *testing.T) {
+	ctx, walletStore, tenantID := newWalletStoreIntegration(t)
+	if _, err := walletStore.DB.ExecContext(ctx, `INSERT INTO psp_configs(
+		tenant_id, provider_code, provider_name, api_base_url,
+		idempotency_header_name, deposit_response_mapping
+	) VALUES($1, 'noop-exact-fx', 'Exact FX PSP', 'https://psp.invalid', 'Idempotency-Key', '{}')`, tenantID); err != nil {
+		t.Fatalf("seed PSP config: %v", err)
+	}
+
+	usdUnitID := testCurrencyUnitID(t, ctx, walletStore, "USD")
+	aedUnitID := testCurrencyUnitID(t, ctx, walletStore, "AED")
+	wallet, err := walletStore.EnsureWallet(ctx, EnsureWalletParams{
+		TenantID: tenantID, OwnerType: OwnerTypeSystem, OwnerID: "exact-fx",
+		Currency: "USD", CurrencyUnitID: usdUnitID, KYCTier: KYCTierUnverified,
+	})
+	if err != nil {
+		t.Fatalf("ensure wallet: %v", err)
+	}
+
+	var sourceID int64
+	if err := walletStore.DB.GetContext(ctx, &sourceID, `INSERT INTO fx_sources(
+		code, display_name, provider, purpose, source_url, max_age_seconds, is_enabled
+	) VALUES('exact-fx-test', 'Exact FX Test', 'test', 'reference', 'https://rates.invalid', 3600, TRUE)
+	RETURNING id`); err != nil {
+		t.Fatalf("seed FX source: %v", err)
+	}
+	var pairID int64
+	if err := walletStore.DB.GetContext(ctx, &pairID, `INSERT INTO fx_source_pairs(
+		source_id, base_currency_code, quote_currency_code, external_series, is_enabled
+	) VALUES($1, 'USD', 'AED', 'USD/AED', TRUE) RETURNING id`, sourceID); err != nil {
+		t.Fatalf("seed FX pair: %v", err)
+	}
+	if _, err := walletStore.DB.ExecContext(ctx, `INSERT INTO fx_source_pair_sides(source_pair_id, side)
+		VALUES($1, 'mid')`, pairID); err != nil {
+		t.Fatalf("seed FX side: %v", err)
+	}
+
+	conversionAt := time.Now().UTC().Truncate(time.Microsecond)
+	observationAt := conversionAt.Add(-2 * time.Minute)
+	if _, err := walletStore.DB.ExecContext(ctx, `INSERT INTO fx_observations(
+		source_id, source_pair_id, external_series,
+		base_currency_code, quote_currency_code, base_currency_unit_id, quote_currency_unit_id,
+		rate, side, purpose, observation_at, retrieved_at, expires_at,
+		raw_payload_sha256, source_revision
+	) VALUES($1, $2, 'USD/AED', 'USD', 'AED', $3, $4,
+		'1.0000000000000000004'::NUMERIC, 'mid', 'reference', $5, $6, $7,
+		'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'excess-scale')`,
+		sourceID, pairID, usdUnitID, aedUnitID, observationAt,
+		conversionAt.Add(-time.Minute), observationAt.Add(time.Hour)); err == nil {
+		t.Fatal("direct-SQL observation with excess precision was silently rounded")
+	}
+	observation, err := walletStore.CreateFXObservation(ctx, FXObservationInput{
+		SourceID: sourceID, SourcePairID: pairID, ExternalSeries: "USD/AED",
+		BaseCurrencyCode: "USD", QuoteCurrencyCode: "AED",
+		BaseCurrencyUnitID: usdUnitID, QuoteCurrencyUnitID: aedUnitID,
+		Rate: decimal.RequireFromString("3.75"), Side: FXSideMid, Purpose: FXPurposeReference,
+		ObservationAt: observationAt, RetrievedAt: conversionAt.Add(-time.Minute),
+		ExpiresAt:        observationAt.Add(time.Hour),
+		RawPayloadSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		SourceRevision:   "exact-fx-test-v1",
+	})
+	if err != nil {
+		t.Fatalf("create FX observation: %v", err)
+	}
+	// A conversion cannot precede the observation's database visibility even
+	// when its publisher and retrieval timestamps are older.
+	conversionAt = observation.CreatedAt
+
+	txn, err := walletStore.CreatePSPTransaction(ctx, PSPTransaction{
+		TenantID: tenantID, PSPProvider: "noop-exact-fx", IdempotencyKey: "exact-fx-txn",
+		ClientReference: "exact-fx-txn", Direction: "outbound",
+		WalletID:            uuid.NullUUID{UUID: wallet.ID, Valid: true},
+		OwnerType:           sql.NullString{String: wallet.OwnerType, Valid: true},
+		OwnerID:             sql.NullString{String: wallet.OwnerID, Valid: true},
+		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
+		Amount:              100, Currency: "USD", CurrencyUnitID: usdUnitID, Status: "success",
+	})
+	if err != nil {
+		t.Fatalf("create PSP transaction: %v", err)
+	}
+	if _, err := walletStore.DB.ExecContext(ctx, `UPDATE psp_transactions SET amount = amount + 1
+		WHERE tenant_id = $1 AND id = $2`, tenantID, txn.ID); err == nil {
+		t.Fatal("direct SQL mutated an immutable PSP transaction amount")
+	}
+	if _, err := walletStore.DB.ExecContext(ctx, `UPDATE psp_transactions SET fee_amount = 1
+		WHERE tenant_id = $1 AND id = $2`, tenantID, txn.ID); err == nil {
+		t.Fatal("direct SQL mutated an immutable PSP transaction fee")
+	}
+	if _, err := walletStore.DB.ExecContext(ctx, `INSERT INTO psp_transactions(
+		tenant_id, psp_provider, idempotency_key, client_reference, direction,
+		wallet_id, owner_type, owner_id, allow_return_to_source,
+		amount, currency, currency_unit_version_id, status
+	) VALUES($1, 'noop-exact-fx', 'negative-direct-sql', 'negative-direct-sql', 'outbound',
+		$2, $3, $4, TRUE, -1, 'USD', $5, 'initiated')`,
+		tenantID, wallet.ID, wallet.OwnerType, wallet.OwnerID, usdUnitID); err == nil {
+		t.Fatal("direct SQL persisted a negative PSP transaction amount")
+	}
+
+	base := PSPTransactionAmount{
+		TenantID: tenantID, PSPTransactionID: txn.ID,
+		Amount: 100, FxSource: sql.NullString{String: "exact-fx-test", Valid: true},
+		FxObservationID:                  sql.NullInt64{Int64: observation.ID, Valid: true},
+		FxConversionAt:                   sql.NullTime{Time: conversionAt, Valid: true},
+		FxObservationBaseCurrency:        sql.NullString{String: "USD", Valid: true},
+		FxObservationQuoteCurrency:       sql.NullString{String: "AED", Valid: true},
+		FxObservationBaseCurrencyUnitID:  sql.NullInt64{Int64: usdUnitID, Valid: true},
+		FxObservationQuoteCurrencyUnitID: sql.NullInt64{Int64: aedUnitID, Valid: true},
+	}
+	direct := base
+	direct.AmountKind = PSPAmountReported
+	direct.Currency = "USD"
+	direct.CurrencyUnitID = usdUnitID
+	direct.FxRate = decimal.NullDecimal{Decimal: decimal.RequireFromString("3.75000000"), Valid: true}
+	direct.FxRateNumerator = decimal.NullDecimal{Decimal: decimal.NewFromInt(15), Valid: true}
+	direct.FxRateDenominator = decimal.NullDecimal{Decimal: decimal.NewFromInt(4), Valid: true}
+	direct.FxBaseCurrency = sql.NullString{String: "USD", Valid: true}
+	direct.FxQuoteCurrency = sql.NullString{String: "AED", Valid: true}
+	direct.FxBaseCurrencyUnitID = sql.NullInt64{Int64: usdUnitID, Valid: true}
+	direct.FxQuoteCurrencyUnitID = sql.NullInt64{Int64: aedUnitID, Valid: true}
+	lateConversionAt := observation.CreatedAt.Add(-time.Microsecond)
+	lateDirect := direct
+	lateDirect.AmountKind = PSPAmountWalletCredit
+	lateDirect.FxConversionAt = sql.NullTime{Time: lateConversionAt, Valid: true}
+	if _, err := walletStore.AddPSPTransactionAmount(ctx, lateDirect); !errors.Is(err, ErrPSPFXProvenanceMismatch) {
+		t.Fatalf("late-inserted observation Go provenance error = %v, want %v", err, ErrPSPFXProvenanceMismatch)
+	}
+	if _, err := walletStore.DB.ExecContext(ctx, `INSERT INTO psp_transaction_amounts(
+		tenant_id, psp_transaction_id, amount_kind, amount, currency, currency_unit_version_id,
+		fx_rate, fx_rate_numerator, fx_rate_denominator,
+		fx_base_currency, fx_quote_currency,
+		fx_base_currency_unit_version_id, fx_quote_currency_unit_version_id,
+		fx_source, fx_observation_id, fx_conversion_at,
+		fx_observation_base_currency, fx_observation_quote_currency,
+		fx_observation_base_currency_unit_version_id,
+		fx_observation_quote_currency_unit_version_id
+	) VALUES($1, $2, 'wallet_credit', 100, 'USD', $3,
+		3.75000000, 15, 4, 'USD', 'AED', $3, $4,
+		'exact-fx-test', $5, $6, 'USD', 'AED', $3, $4)`,
+		tenantID, txn.ID, usdUnitID, aedUnitID, observation.ID, lateConversionAt,
+	); err == nil {
+		t.Fatal("database accepted PSP FX provenance from an observation inserted after conversion time")
+	}
+	if _, err := walletStore.AddPSPTransactionAmount(ctx, direct); err != nil {
+		t.Fatalf("persist direct exact observation rate: %v", err)
+	}
+
+	inverse := base
+	inverse.AmountKind = PSPAmountSettlement
+	inverse.Currency = "USD"
+	inverse.CurrencyUnitID = usdUnitID
+	inverse.FxRate = decimal.NullDecimal{Decimal: decimal.RequireFromString("0.26666667"), Valid: true}
+	inverse.FxRateNumerator = decimal.NullDecimal{Decimal: decimal.NewFromInt(4), Valid: true}
+	inverse.FxRateDenominator = decimal.NullDecimal{Decimal: decimal.NewFromInt(15), Valid: true}
+	inverse.FxBaseCurrency = sql.NullString{String: "AED", Valid: true}
+	inverse.FxQuoteCurrency = sql.NullString{String: "USD", Valid: true}
+	inverse.FxBaseCurrencyUnitID = sql.NullInt64{Int64: aedUnitID, Valid: true}
+	inverse.FxQuoteCurrencyUnitID = sql.NullInt64{Int64: usdUnitID, Valid: true}
+	if _, err := walletStore.AddPSPTransactionAmount(ctx, inverse); err != nil {
+		t.Fatalf("persist inverse exact observation rate: %v", err)
+	}
+	quote, err := walletStore.CreateMoneyConversionQuote(ctx, MoneyConversionQuoteInput{
+		TenantID: tenantID, RequestedByUserID: 123, IdempotencyKey: "psp-inverse-quote",
+		MaxQuotesPerObservation:       10,
+		ObservationID:                 observation.ID,
+		ObservationBaseCurrencyUnitID: usdUnitID, ObservationQuoteCurrencyUnitID: aedUnitID,
+		ObservationBaseCurrencyCode: "USD", ObservationQuoteCurrencyCode: "AED",
+		ObservationExpiresAt: observation.ExpiresAt,
+		InputCurrencyUnitID:  aedUnitID, OutputCurrencyUnitID: usdUnitID,
+		InputCurrencyCode: "AED", OutputCurrencyCode: "USD",
+		InputMinorUnits: 375, OutputMinorUnits: 100, Inverse: true,
+		RoundingMode: "half_even", ConversionAt: conversionAt, ExpiresAt: observation.ExpiresAt,
+	})
+	if err != nil {
+		t.Fatalf("create inverse audit quote: %v", err)
+	}
+	quotedInverse := inverse
+	quotedInverse.AmountKind = PSPAmountWalletDebit
+	quotedInverse.FxQuoteID = uuid.NullUUID{UUID: quote.ID, Valid: true}
+	if _, err := walletStore.AddPSPTransactionAmount(ctx, quotedInverse); err != nil {
+		t.Fatalf("persist quote-bound inverse exact rate: %v", err)
+	}
+	wrongQuotedAmount := quotedInverse
+	wrongQuotedAmount.AmountKind = PSPAmountWalletCredit
+	wrongQuotedAmount.Amount++
+	if _, err := walletStore.AddPSPTransactionAmount(ctx, wrongQuotedAmount); !errors.Is(err, ErrPSPFXProvenanceMismatch) {
+		t.Fatalf("quote-bound wrong amount error = %v, want %v", err, ErrPSPFXProvenanceMismatch)
+	}
+
+	insertProviderRate := func(insertCtx context.Context, kind PSPAmountKind, rate, numerator, denominator string) error {
+		_, insertErr := walletStore.DB.ExecContext(insertCtx, `INSERT INTO psp_transaction_amounts(
+			tenant_id, psp_transaction_id, amount_kind, amount, currency, currency_unit_version_id,
+			fx_rate, fx_rate_numerator, fx_rate_denominator,
+			fx_base_currency, fx_quote_currency,
+			fx_base_currency_unit_version_id, fx_quote_currency_unit_version_id,
+			fx_source, fx_conversion_at
+		) VALUES($1, $2, $3, 100, 'USD', $4,
+			$5::NUMERIC, $6::NUMERIC, $7::NUMERIC,
+			'USD', 'AED', $4, $8, 'provider-direct', $9)`,
+			tenantID, txn.ID, kind, usdUnitID, rate, numerator, denominator, aedUnitID, conversionAt)
+		return insertErr
+	}
+
+	for _, valid := range []struct {
+		name                         string
+		kind                         PSPAmountKind
+		rate, numerator, denominator string
+	}{
+		{
+			name: "exact half-away tie", kind: PSPAmountFee, rate: "1.23456790",
+			numerator: "246913579", denominator: "200000000",
+		},
+		{
+			name: "near tie does not double round", kind: PSPAmountNet, rate: "0.12345678",
+			numerator:   "12345678499999999999999999999999999999",
+			denominator: "99999999999999999999999999999999999999",
+		},
+		{
+			name: "38 digit arithmetic", kind: PSPAmountOverpayment, rate: "1.00000000",
+			numerator:   "99999999999999999999999999999999999999",
+			denominator: "99999999999999999999999999999999999998",
+		},
+	} {
+		t.Run(valid.name, func(t *testing.T) {
+			if err := insertProviderRate(ctx, valid.kind, valid.rate, valid.numerator, valid.denominator); err != nil {
+				t.Fatalf("insert valid direct-provider exact rate: %v", err)
+			}
+		})
+	}
+
+	for _, invalid := range []struct {
+		name, rate, numerator, denominator string
+	}{
+		{name: "unreduced", rate: "3.75000000", numerator: "30", denominator: "8"},
+		{name: "projection mismatch", rate: "3.74999999", numerator: "15", denominator: "4"},
+		{name: "near tie rounded upward", rate: "0.12345679", numerator: "12345678499999999999999999999999999999", denominator: "99999999999999999999999999999999999999"},
+		{name: "fractional numerator", rate: "1.00000000", numerator: "1.4", denominator: "1"},
+		{name: "zero denominator", rate: "1.00000000", numerator: "1", denominator: "0"},
+		{name: "negative numerator", rate: "1.00000000", numerator: "-1", denominator: "1"},
+		{name: "numerator out of range", rate: "1.00000000", numerator: "100000000000000000000000000000000000000", denominator: "99999999999999999999999999999999999999"},
+		{name: "denominator out of range", rate: "1.00000000", numerator: "99999999999999999999999999999999999999", denominator: "100000000000000000000000000000000000000"},
+		{name: "not finite", rate: "NaN", numerator: "NaN", denominator: "NaN"},
+	} {
+		t.Run("reject "+invalid.name, func(t *testing.T) {
+			insertCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			if err := insertProviderRate(insertCtx, PSPAmountUnderpayment, invalid.rate, invalid.numerator, invalid.denominator); err == nil {
+				t.Fatal("invalid direct-provider exact rate persisted")
+			}
+			if errors.Is(insertCtx.Err(), context.DeadlineExceeded) {
+				t.Fatal("exact-rate validation did not terminate before its statement timeout")
+			}
+		})
+	}
+	var rejectedRows int
+	if err := walletStore.DB.GetContext(ctx, &rejectedRows, `SELECT count(*) FROM psp_transaction_amounts
+		WHERE tenant_id = $1 AND psp_transaction_id = $2 AND amount_kind = 'underpayment'`, tenantID, txn.ID); err != nil {
+		t.Fatalf("count rejected exact rates: %v", err)
+	}
+	if rejectedRows != 0 {
+		t.Fatalf("rejected exact rate rows = %d, want 0", rejectedRows)
 	}
 }
 
@@ -466,7 +762,7 @@ func TestHeldPSPTransactionIsPollable(t *testing.T) {
 	}
 	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
 		TenantID: tenantID, OwnerType: OwnerTypeSystem, OwnerID: "held-polling",
-		Currency: "AED", KYCTier: KYCTierUnverified,
+		Currency: "AED", CurrencyUnitID: testCurrencyUnitID(t, ctx, store, "AED"), KYCTier: KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -474,7 +770,8 @@ func TestHeldPSPTransactionIsPollable(t *testing.T) {
 	transaction, err := store.CreatePSPTransaction(ctx, PSPTransaction{
 		TenantID: tenantID, PSPProvider: "pollable", IdempotencyKey: "held-polling",
 		ClientReference: "held-polling", Direction: "outbound", Amount: 100, Currency: "AED",
-		Status: PSPStatusHeld, PSPTransactionID: sql.NullString{String: "provider-held", Valid: true},
+		CurrencyUnitID: wallet.CurrencyUnitID,
+		Status:         PSPStatusHeld, PSPTransactionID: sql.NullString{String: "provider-held", Valid: true},
 		WalletID:            uuid.NullUUID{UUID: wallet.ID, Valid: true},
 		OwnerType:           sql.NullString{String: wallet.OwnerType, Valid: true},
 		OwnerID:             sql.NullString{String: wallet.OwnerID, Valid: true},
@@ -604,46 +901,56 @@ func TestListAvailablePSPMethodsPaginatesAfterScopedEligibility(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO psp_configs(
 		tenant_id, provider_code, provider_name, api_base_url, idempotency_header_name, enabled_currencies,
 		is_active, supports_deposit, supports_withdrawal, method_type, display_name,
-		supported_regions, min_amount, max_amount, deposit_input_schema, presentation_schema,
+		supported_regions, deposit_input_schema, presentation_schema,
 		deposit_response_mapping
 	) VALUES
 		('tenant', 'alpha', 'Alpha Pay', 'https://alpha.example', 'Idempotency-Key',
 		 ARRAY['USD'], FALSE, FALSE, FALSE, 'redirect', 'Alpha Pay',
-		 ARRAY['US'], 100, 100000, '{"kind":"redirect"}', '{"kind":"redirect"}', '{}'),
+		 ARRAY['US'], '{"kind":"redirect"}', '{"kind":"redirect"}', '{}'),
 		('tenant', 'beta', 'Beta Pay', 'https://beta.example', 'Idempotency-Key',
 		 ARRAY['AED'], TRUE, FALSE, TRUE, 'bank_transfer', 'Beta Pay',
-		 ARRAY['AE'], 100, 100000, '{"kind":"bank"}', '{"kind":"bank"}', '{}'),
+		 ARRAY['AE'], '{"kind":"bank"}', '{"kind":"bank"}', '{}'),
 		('tenant', 'gamma', 'Gamma Pay', 'https://gamma.example', 'Idempotency-Key',
 		 ARRAY['USD'], TRUE, TRUE, FALSE, 'card', 'Gamma Pay',
-		 ARRAY['AE'], 100, 100000, '{"kind":"card"}', '{"kind":"card"}',
+		 ARRAY['AE'], '{"kind":"card"}', '{"kind":"card"}',
 		 '{"client_reference":["client_reference"],"transaction_id":["transaction_id"],"status":["status"],"amount":["amount"],"currency":["currency"]}'),
 		('tenant', 'zeta', 'Zeta Pay', 'https://zeta.example', 'Idempotency-Key',
 		 ARRAY['AED'], TRUE, TRUE, FALSE, 'qr', 'Zeta Pay',
-		 ARRAY['AE'], 100, 100000, '{"kind":"qr"}', '{"kind":"qr"}',
+		 ARRAY['AE'], '{"kind":"qr"}', '{"kind":"qr"}',
 		 '{"client_reference":["client_reference"],"transaction_id":["transaction_id"],"status":["status"],"amount":["amount"],"currency":["currency"]}')`); err != nil {
 		t.Fatalf("insert psp configs: %v", err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO psp_config_overrides(
 		tenant_id, provider_code, region, currency, direction, is_active,
 		supports_deposit, supports_withdrawal, enabled_currencies, method_type,
-		display_name, supported_regions, min_amount, max_amount, deposit_input_schema,
+		display_name, supported_regions, deposit_input_schema,
 		presentation_schema
 	) VALUES(
 		'tenant', 'alpha', 'AE', 'AED', 'deposit', TRUE,
 		TRUE, FALSE, ARRAY['AED'], 'qr', 'Alpha AE QR',
-		ARRAY['AE'], 100, 100000, '{"kind":"qr"}', '{"kind":"qr"}'
+		ARRAY['AE'], '{"kind":"qr"}', '{"kind":"qr"}'
 	)`); err != nil {
 		t.Fatalf("insert psp override: %v", err)
 	}
 
 	s := New(db)
+	aedUnitID := testCurrencyUnitID(t, ctx, s, "AED")
+	if _, err := db.ExecContext(ctx, `INSERT INTO psp_amount_policies(
+		tenant_id, provider_code, currency, currency_unit_version_id,
+		direction, region, min_amount, max_amount
+	) VALUES
+		('tenant', 'alpha', 'AED', $1, 'deposit', 'AE', 100, 100000),
+		('tenant', 'zeta', 'AED', $1, 'deposit', '', 100, 100000)`, aedUnitID); err != nil {
+		t.Fatalf("insert PSP amount policies: %v", err)
+	}
 	methods, err := s.ListAvailablePSPMethods(ctx, PSPMethodFilter{
-		TenantID:  "tenant",
-		Direction: "deposit",
-		Currency:  "AED",
-		Region:    "AE",
-		Amount:    500,
-		Limit:     1,
+		TenantID:       "tenant",
+		Direction:      "deposit",
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		Region:         "AE",
+		Amount:         500,
+		Limit:          1,
 	})
 	if err != nil {
 		t.Fatalf("list first page: %v", err)
@@ -656,13 +963,14 @@ func TestListAvailablePSPMethodsPaginatesAfterScopedEligibility(t *testing.T) {
 	}
 
 	methods, err = s.ListAvailablePSPMethods(ctx, PSPMethodFilter{
-		TenantID:  "tenant",
-		Direction: "deposit",
-		Currency:  "AED",
-		Region:    "AE",
-		Amount:    500,
-		Limit:     1,
-		Offset:    1,
+		TenantID:       "tenant",
+		Direction:      "deposit",
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		Region:         "AE",
+		Amount:         500,
+		Limit:          1,
+		Offset:         1,
 	})
 	if err != nil {
 		t.Fatalf("list second page: %v", err)

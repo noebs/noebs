@@ -36,6 +36,12 @@ func TestPublicQueryRejectsInvalidBoundsAtBoundary(t *testing.T) {
 	if _, _, err := publicLimitOffset(10, 0, 0); status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != walletstore.ErrInvalidLimit.Error() {
 		t.Fatalf("publicLimitOffset(invalid default) error = %v, want %v", err, walletstore.ErrInvalidLimit)
 	}
+	if _, _, err := publicLimitOffset(publicQueryMaxLimit+1, 0, 100); status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != walletstore.ErrInvalidLimit.Error() {
+		t.Fatalf("publicLimitOffset(oversized limit) error = %v, want %v", err, walletstore.ErrInvalidLimit)
+	}
+	if _, _, err := publicLimitOffset(10, publicQueryMaxOffset+1, 100); status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != walletstore.ErrInvalidOffset.Error() {
+		t.Fatalf("publicLimitOffset(oversized offset) error = %v, want %v", err, walletstore.ErrInvalidOffset)
+	}
 	if _, err := publicNonNegativeAmount(-1); status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != walletstore.ErrInvalidAmount.Error() {
 		t.Fatalf("publicNonNegativeAmount(invalid) error = %v, want %v", err, walletstore.ErrInvalidAmount)
 	}

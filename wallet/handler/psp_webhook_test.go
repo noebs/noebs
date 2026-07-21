@@ -101,7 +101,7 @@ func TestMappedPSPWebhookFieldsRequireConfiguredPaths(t *testing.T) {
 		"client_reference":   "payload-ref",
 		"psp_transaction_id": "payload-tx",
 		"status":             "success",
-		"amount":             float64(1250),
+		"amount":             json.Number("1250"),
 		"currency":           "AED",
 		"direction":          "inbound",
 		"message":            "accepted",
@@ -902,14 +902,19 @@ func (f *pspWebhookTestFixture) createPSPTransactionFor(t *testing.T, providerCo
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	currencyUnit, err := f.store.GetCurrencyUnit(ctx, currency, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("resolve %s unit: %v", currency, err)
+	}
 
 	if direction == "inbound" {
 		wallet, err := f.store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
-			TenantID:  f.tenantID,
-			OwnerType: walletstore.OwnerTypeMerchant,
-			OwnerID:   clientReference,
-			Currency:  currency,
-			KYCTier:   walletstore.KYCTierUnverified,
+			TenantID:       f.tenantID,
+			OwnerType:      walletstore.OwnerTypeMerchant,
+			OwnerID:        clientReference,
+			Currency:       currency,
+			CurrencyUnitID: currencyUnit.ID,
+			KYCTier:        walletstore.KYCTierUnverified,
 		})
 		if err != nil {
 			t.Fatalf("create deposit wallet: %v", err)
@@ -926,6 +931,7 @@ func (f *pspWebhookTestFixture) createPSPTransactionFor(t *testing.T, providerCo
 			OwnerID:         clientReference,
 			Amount:          1250,
 			Currency:        currency,
+			CurrencyUnitID:  wallet.CurrencyUnitID,
 			IdempotencyKey:  clientReference + "-idempotency",
 			WorkflowID:      workflowID,
 			Metadata:        walletstore.RawJSON(`{}`),
@@ -939,7 +945,7 @@ func (f *pspWebhookTestFixture) createPSPTransactionFor(t *testing.T, providerCo
 
 	wallet, err := f.store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
 		TenantID: f.tenantID, OwnerType: walletstore.OwnerTypeMerchant, OwnerID: clientReference,
-		Currency: currency, KYCTier: walletstore.KYCTierUnverified,
+		Currency: currency, CurrencyUnitID: currencyUnit.ID, KYCTier: walletstore.KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("create withdrawal wallet: %v", err)
@@ -956,6 +962,7 @@ func (f *pspWebhookTestFixture) createPSPTransactionFor(t *testing.T, providerCo
 		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
 		Amount:              1250,
 		Currency:            currency,
+		CurrencyUnitID:      wallet.CurrencyUnitID,
 		Status:              "pending",
 		WorkflowID:          sql.NullString{String: workflowID, Valid: workflowID != ""},
 	})

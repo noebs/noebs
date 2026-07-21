@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -45,8 +47,14 @@ func (h *PSPWebhookHandler) Handle(c *fiber.Ctx) error {
 	}
 
 	payloadMap := map[string]any{}
-	if err := json.Unmarshal(payload, &payloadMap); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	if err := decoder.Decode(&payloadMap); err != nil {
 		return jsonResponse(c, 0, apperr.Wrap(err, apperr.ErrBadRequest, "invalid webhook payload"))
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return jsonResponse(c, 0, apperr.Wrap(walletpsp.ErrPSPResponseInvalid, apperr.ErrBadRequest, "invalid webhook payload"))
 	}
 
 	tenantID, err := authenticatedTenantID(c)

@@ -245,6 +245,8 @@ type mountedNoebsConfig struct {
 		WalletHoldExpirySeconds                    int               `yaml:"wallet_hold_expiry_seconds"`
 		WalletApprovalTimeoutSeconds               int               `yaml:"wallet_approval_timeout_seconds"`
 		WalletManualTransferApprovalTimeoutSeconds int               `yaml:"wallet_manual_approval_timeout_seconds"`
+		WalletFXRefreshCron                        string            `yaml:"wallet_fx_refresh_cron"`
+		WalletFXQuoteMaxPerUserObservation         int               `yaml:"wallet_fx_quote_max_per_user_observation"`
 		WalletPSPPollerCron                        string            `yaml:"wallet_psp_poller_cron"`
 		WalletPSPPollerBatchSize                   int               `yaml:"wallet_psp_poller_batch_size"`
 		WalletPSPPollerIntervalSeconds             int               `yaml:"wallet_psp_poller_interval_seconds"`
@@ -1100,7 +1102,7 @@ func TestPostDeploySmokeRequiresExactFreshMigrationSets(t *testing.T) {
 		`$ebs_adapter_migrations|0:true,1:true|ebs-adapter`,
 		`$admin_reporting_migrations|0:true,1:true|admin-reporting`,
 		`$notification_chat_migrations|0:true,1:true|notification-chat`,
-		`$wallet_ledger_migrations|0:true,1:true|wallet-ledger`,
+		`$wallet_ledger_migrations|0:true,1:true,2:true|wallet-ledger`,
 		`$workload_auth_migrations|0:true,1:true|workload-auth`,
 		`$gateway_auth_migrations|0:true,1:true|gateway-auth`,
 		`migration set is $actual, want exactly $expected`,
@@ -2629,6 +2631,8 @@ func TestDockerComposeWalletRuntimeConfigMatchesKubernetes(t *testing.T) {
 		{"wallet_hold_expiry_seconds", dockerConfig.Noebs.WalletHoldExpirySeconds, kubernetesConfig.Noebs.WalletHoldExpirySeconds},
 		{"wallet_approval_timeout_seconds", dockerConfig.Noebs.WalletApprovalTimeoutSeconds, kubernetesConfig.Noebs.WalletApprovalTimeoutSeconds},
 		{"wallet_manual_approval_timeout_seconds", dockerConfig.Noebs.WalletManualTransferApprovalTimeoutSeconds, kubernetesConfig.Noebs.WalletManualTransferApprovalTimeoutSeconds},
+		{"wallet_fx_refresh_cron", dockerConfig.Noebs.WalletFXRefreshCron, kubernetesConfig.Noebs.WalletFXRefreshCron},
+		{"wallet_fx_quote_max_per_user_observation", dockerConfig.Noebs.WalletFXQuoteMaxPerUserObservation, kubernetesConfig.Noebs.WalletFXQuoteMaxPerUserObservation},
 		{"wallet_psp_poller_cron", dockerConfig.Noebs.WalletPSPPollerCron, kubernetesConfig.Noebs.WalletPSPPollerCron},
 		{"wallet_psp_poller_batch_size", dockerConfig.Noebs.WalletPSPPollerBatchSize, kubernetesConfig.Noebs.WalletPSPPollerBatchSize},
 		{"wallet_psp_poller_interval_seconds", dockerConfig.Noebs.WalletPSPPollerIntervalSeconds, kubernetesConfig.Noebs.WalletPSPPollerIntervalSeconds},

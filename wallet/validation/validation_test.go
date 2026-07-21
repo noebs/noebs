@@ -3,7 +3,9 @@ package validation
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
+	"time"
 
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/google/uuid"
@@ -134,6 +136,7 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 		ProviderCode:    "coinsbuy",
 		WalletID:        uuid.New(),
 		Currency:        "USD",
+		CurrencyUnitID:  1,
 		Amount:          100,
 	}
 
@@ -150,6 +153,7 @@ func TestValidateWithdrawalRequest(t *testing.T) {
 		{"blank-provider", func(req *WithdrawalValidationRequest) { req.ProviderCode = " \t " }, walletstore.ErrMissingProviderCode},
 		{"missing-currency", func(req *WithdrawalValidationRequest) { req.Currency = "" }, walletstore.ErrMissingCurrency},
 		{"blank-currency", func(req *WithdrawalValidationRequest) { req.Currency = " \t " }, walletstore.ErrMissingCurrency},
+		{"missing-currency-unit", func(req *WithdrawalValidationRequest) { req.CurrencyUnitID = 0 }, walletstore.ErrMissingCurrencyUnitID},
 		{"missing-wallet", func(req *WithdrawalValidationRequest) { req.WalletID = uuid.Nil }, walletstore.ErrMissingWalletID},
 		{"invalid-amount", func(req *WithdrawalValidationRequest) { req.Amount = 0 }, walletstore.ErrInvalidAmount},
 	}
@@ -250,8 +254,9 @@ func TestValidatePSPConfigMatchesTrimmedCurrency(t *testing.T) {
 
 func TestValidatePSPConfigAmountBounds(t *testing.T) {
 	cfg := &walletstore.PSPConfig{
-		MinAmount: sql.NullInt64{Int64: 100, Valid: true},
-		MaxAmount: sql.NullInt64{Int64: 1000, Valid: true},
+		MinAmount:            sql.NullInt64{Int64: 100, Valid: true},
+		MaxAmount:            sql.NullInt64{Int64: 1000, Valid: true},
+		AmountCurrencyUnitID: 101,
 	}
 
 	cases := []struct {
@@ -271,7 +276,7 @@ func TestValidatePSPConfigAmountBounds(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := ValidatePSPConfigAmount(tc.cfg, tc.amount); err != tc.wantErr {
+			if err := ValidatePSPConfigAmount(tc.cfg, 101, tc.amount); err != tc.wantErr {
 				t.Fatalf("ValidatePSPConfigAmount() error = %v, want %v", err, tc.wantErr)
 			}
 		})
@@ -280,15 +285,24 @@ func TestValidatePSPConfigAmountBounds(t *testing.T) {
 
 func TestConvertWithdrawalAmountUsesRateLookup(t *testing.T) {
 	service := &Service{
-		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
 			if tenantID != "tenant" || baseCurrency != "USD" || quoteCurrency != "AED" {
 				t.Fatalf("unexpected rate lookup: tenant=%s base=%s quote=%s", tenantID, baseCurrency, quoteCurrency)
 			}
-			return decimal.RequireFromString("3.67"), nil
+			return testExchangeRate(baseCurrency, quoteCurrency, decimal.RequireFromString("3.67")), nil
 		},
+		CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"USD": 2, "AED": 2}),
 	}
 
-	amount, rate, source, err := service.convertWithdrawalAmount(t.Context(), "tenant", 100, "USD", "AED")
+	amount, rate, source, err := service.convertWithdrawalAmount(
+		t.Context(),
+		"tenant",
+		100,
+		"USD",
+		testCurrencyUnit("USD", 2).ID,
+		"AED",
+		testCurrencyUnit("AED", 2).ID,
+	)
 	if err != nil {
 		t.Fatalf("convert withdrawal amount: %v", err)
 	}
@@ -305,13 +319,15 @@ func TestConvertWithdrawalAmountUsesRateLookup(t *testing.T) {
 
 func TestConvertWithdrawalAmountSameCurrencySkipsRateLookup(t *testing.T) {
 	service := &Service{
-		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
 			t.Fatal("rate lookup should not be called for same-currency withdrawals")
-			return decimal.Zero, nil
+			return nil, nil
 		},
+		CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"AED": 2}),
 	}
 
-	amount, rate, source, err := service.convertWithdrawalAmount(t.Context(), "tenant", 100, "AED", "AED")
+	aedUnitID := testCurrencyUnit("AED", 2).ID
+	amount, rate, source, err := service.convertWithdrawalAmount(t.Context(), "tenant", 100, "AED", aedUnitID, "AED", aedUnitID)
 	if err != nil {
 		t.Fatalf("convert withdrawal amount: %v", err)
 	}
@@ -320,6 +336,23 @@ func TestConvertWithdrawalAmountSameCurrencySkipsRateLookup(t *testing.T) {
 	}
 	if rate.Valid || source != "" {
 		t.Fatalf("expected no fx metadata, got rate=%+v source=%q", rate, source)
+	}
+}
+
+func TestConvertWithdrawalAmountRejectsSameCurrencyDifferentUnits(t *testing.T) {
+	service := &Service{
+		RateLookup: func(context.Context, string, string, int64, string, int64, time.Time) (*walletstore.ExchangeRate, error) {
+			t.Fatal("rate lookup should not run for a same-code unit mismatch")
+			return nil, nil
+		},
+		CurrencyUnitLookup: func(_ context.Context, currencyUnitID int64) (*walletstore.CurrencyUnitVersion, error) {
+			return &walletstore.CurrencyUnitVersion{ID: currencyUnitID, CurrencyCode: "AED"}, nil
+		},
+	}
+
+	_, _, _, err := service.convertWithdrawalAmount(t.Context(), "tenant", 100, "AED", 101, "AED", 202)
+	if !errors.Is(err, walletstore.ErrCurrencyMismatch) {
+		t.Fatalf("convertWithdrawalAmount() error = %v, want %v", err, walletstore.ErrCurrencyMismatch)
 	}
 }
 
@@ -338,11 +371,20 @@ func TestConvertWithdrawalAmountRejectsInvalidFX(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &Service{
-				RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
-					return tt.rate, nil
+				RateLookup: func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
+					return testExchangeRate(baseCurrency, quoteCurrency, tt.rate), nil
 				},
+				CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"USD": 2, "AED": 2}),
 			}
-			_, _, _, err := service.convertWithdrawalAmount(t.Context(), "tenant", tt.amount, "USD", "AED")
+			_, _, _, err := service.convertWithdrawalAmount(
+				t.Context(),
+				"tenant",
+				tt.amount,
+				"USD",
+				testCurrencyUnit("USD", 2).ID,
+				"AED",
+				testCurrencyUnit("AED", 2).ID,
+			)
 			if err != tt.wantErr {
 				t.Fatalf("convertWithdrawalAmount() error = %v, want %v", err, tt.wantErr)
 			}
@@ -350,20 +392,50 @@ func TestConvertWithdrawalAmountRejectsInvalidFX(t *testing.T) {
 	}
 }
 
+func TestConvertWithdrawalAmountRejectsWalletUnitMismatch(t *testing.T) {
+	rate := testExchangeRate("USD", "AED", decimal.RequireFromString("3.67"))
+	service := &Service{
+		RateLookup: func(context.Context, string, string, int64, string, int64, time.Time) (*walletstore.ExchangeRate, error) {
+			return rate, nil
+		},
+		CurrencyUnitLookup: func(context.Context, int64) (*walletstore.CurrencyUnitVersion, error) {
+			t.Fatal("unit lookup should not run after wallet/rate identity mismatch")
+			return nil, nil
+		},
+	}
+
+	_, _, _, err := service.convertWithdrawalAmount(
+		t.Context(),
+		"tenant",
+		100,
+		"USD",
+		rate.BaseCurrencyUnitID,
+		"AED",
+		rate.QuoteCurrencyUnitID+1,
+	)
+	if !errors.Is(err, walletstore.ErrCurrencyMismatch) {
+		t.Fatalf("convertWithdrawalAmount() error = %v, want %v", err, walletstore.ErrCurrencyMismatch)
+	}
+}
+
 func TestResolvePSPDepositAmountsSameCurrency(t *testing.T) {
 	service := &Service{
 		Store: &walletstore.Store{},
-		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
-			return decimal.NewFromInt(2), nil
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
+			return testExchangeRate(baseCurrency, quoteCurrency, decimal.NewFromInt(2)), nil
 		},
+		CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"USD": 2}),
 	}
 	req := PSPAmountResolutionRequest{
-		TenantID:           "tenant",
-		RequestedAmount:    100,
-		RequestedCurrency:  "USD",
-		SettlementAmount:   120,
-		SettlementCurrency: "USD",
-		WalletCurrency:     "USD",
+		TenantID:                 "tenant",
+		RequestedAmount:          100,
+		RequestedCurrency:        "USD",
+		RequestedCurrencyUnitID:  testCurrencyUnit("USD", 2).ID,
+		SettlementAmount:         120,
+		SettlementCurrency:       "USD",
+		SettlementCurrencyUnitID: testCurrencyUnit("USD", 2).ID,
+		WalletCurrency:           "USD",
+		WalletCurrencyUnitID:     testCurrencyUnit("USD", 2).ID,
 	}
 	result, err := service.ResolvePSPDepositAmounts(t.Context(), req)
 	if err != nil {
@@ -377,20 +449,47 @@ func TestResolvePSPDepositAmountsSameCurrency(t *testing.T) {
 	}
 }
 
-func TestResolvePSPDepositAmountsFXRate(t *testing.T) {
+func TestResolvePSPDepositAmountsRejectsSameCurrencyDifferentUnits(t *testing.T) {
 	service := &Service{
 		Store: &walletstore.Store{},
+		CurrencyUnitLookup: func(_ context.Context, currencyUnitID int64) (*walletstore.CurrencyUnitVersion, error) {
+			return &walletstore.CurrencyUnitVersion{ID: currencyUnitID, CurrencyCode: "USD"}, nil
+		},
+	}
+	_, err := service.ResolvePSPDepositAmounts(t.Context(), PSPAmountResolutionRequest{
+		TenantID:                 "tenant",
+		RequestedAmount:          100,
+		RequestedCurrency:        "USD",
+		RequestedCurrencyUnitID:  101,
+		SettlementAmount:         100,
+		SettlementCurrency:       "USD",
+		SettlementCurrencyUnitID: 202,
+		WalletCurrency:           "USD",
+		WalletCurrencyUnitID:     101,
+	})
+	if !errors.Is(err, walletstore.ErrCurrencyMismatch) {
+		t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, walletstore.ErrCurrencyMismatch)
+	}
+}
+
+func TestResolvePSPDepositAmountsFXRate(t *testing.T) {
+	service := &Service{
+		Store:              &walletstore.Store{},
+		CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"EUR": 2, "USD": 2}),
 	}
 	req := PSPAmountResolutionRequest{
-		TenantID:           "tenant",
-		RequestedAmount:    100,
-		RequestedCurrency:  "USD",
-		SettlementAmount:   100,
-		SettlementCurrency: "EUR",
-		WalletCurrency:     "USD",
-		FXRate:             decimal.NullDecimal{Decimal: decimal.RequireFromString("1.2"), Valid: true},
-		FXBaseCurrency:     "EUR",
-		FXQuoteCurrency:    "USD",
+		TenantID:                 "tenant",
+		RequestedAmount:          100,
+		RequestedCurrency:        "USD",
+		RequestedCurrencyUnitID:  testCurrencyUnit("USD", 2).ID,
+		SettlementAmount:         100,
+		SettlementCurrency:       "EUR",
+		SettlementCurrencyUnitID: testCurrencyUnit("EUR", 2).ID,
+		WalletCurrency:           "USD",
+		WalletCurrencyUnitID:     testCurrencyUnit("USD", 2).ID,
+		FXRate:                   decimal.NullDecimal{Decimal: decimal.RequireFromString("1.2"), Valid: true},
+		FXBaseCurrency:           "EUR",
+		FXQuoteCurrency:          "USD",
 	}
 	result, err := service.ResolvePSPDepositAmounts(t.Context(), req)
 	if err != nil {
@@ -407,17 +506,21 @@ func TestResolvePSPDepositAmountsFXRate(t *testing.T) {
 func TestResolvePSPDepositAmountsRateLookup(t *testing.T) {
 	service := &Service{
 		Store: &walletstore.Store{},
-		RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
-			return decimal.RequireFromString("1.5"), nil
+		RateLookup: func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
+			return testExchangeRate(baseCurrency, quoteCurrency, decimal.RequireFromString("1.5")), nil
 		},
+		CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"EUR": 2, "USD": 2}),
 	}
 	req := PSPAmountResolutionRequest{
-		TenantID:           "tenant",
-		RequestedAmount:    100,
-		RequestedCurrency:  "USD",
-		SettlementAmount:   100,
-		SettlementCurrency: "EUR",
-		WalletCurrency:     "USD",
+		TenantID:                 "tenant",
+		RequestedAmount:          100,
+		RequestedCurrency:        "USD",
+		RequestedCurrencyUnitID:  testCurrencyUnit("USD", 2).ID,
+		SettlementAmount:         100,
+		SettlementCurrency:       "EUR",
+		SettlementCurrencyUnitID: testCurrencyUnit("EUR", 2).ID,
+		WalletCurrency:           "USD",
+		WalletCurrencyUnitID:     testCurrencyUnit("USD", 2).ID,
 	}
 	result, err := service.ResolvePSPDepositAmounts(t.Context(), req)
 	if err != nil {
@@ -444,17 +547,23 @@ func TestResolvePSPDepositAmountsRejectsInvalidFX(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := &Service{Store: &walletstore.Store{}}
+			service := &Service{
+				Store:              &walletstore.Store{},
+				CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"EUR": 2, "USD": 2}),
+			}
 			_, err := service.ResolvePSPDepositAmounts(t.Context(), PSPAmountResolutionRequest{
-				TenantID:           "tenant",
-				RequestedAmount:    1,
-				RequestedCurrency:  "EUR",
-				SettlementAmount:   1,
-				SettlementCurrency: "EUR",
-				WalletCurrency:     "USD",
-				FXRate:             decimal.NullDecimal{Decimal: tt.rate, Valid: true},
-				FXBaseCurrency:     "EUR",
-				FXQuoteCurrency:    "USD",
+				TenantID:                 "tenant",
+				RequestedAmount:          1,
+				RequestedCurrency:        "EUR",
+				RequestedCurrencyUnitID:  testCurrencyUnit("EUR", 2).ID,
+				SettlementAmount:         1,
+				SettlementCurrency:       "EUR",
+				SettlementCurrencyUnitID: testCurrencyUnit("EUR", 2).ID,
+				WalletCurrency:           "USD",
+				WalletCurrencyUnitID:     testCurrencyUnit("USD", 2).ID,
+				FXRate:                   decimal.NullDecimal{Decimal: tt.rate, Valid: true},
+				FXBaseCurrency:           "EUR",
+				FXQuoteCurrency:          "USD",
 			})
 			if err != tt.wantErr {
 				t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, tt.wantErr)
@@ -465,12 +574,15 @@ func TestResolvePSPDepositAmountsRejectsInvalidFX(t *testing.T) {
 
 func TestResolvePSPDepositAmountsRejectsBlankCurrenciesBeforeRateLookup(t *testing.T) {
 	base := PSPAmountResolutionRequest{
-		TenantID:           "tenant",
-		RequestedAmount:    100,
-		RequestedCurrency:  "USD",
-		SettlementAmount:   100,
-		SettlementCurrency: "EUR",
-		WalletCurrency:     "USD",
+		TenantID:                 "tenant",
+		RequestedAmount:          100,
+		RequestedCurrency:        "USD",
+		RequestedCurrencyUnitID:  testCurrencyUnit("USD", 2).ID,
+		SettlementAmount:         100,
+		SettlementCurrency:       "EUR",
+		SettlementCurrencyUnitID: testCurrencyUnit("EUR", 2).ID,
+		WalletCurrency:           "USD",
+		WalletCurrencyUnitID:     testCurrencyUnit("USD", 2).ID,
 	}
 	cases := []struct {
 		name    string
@@ -500,9 +612,9 @@ func TestResolvePSPDepositAmountsRejectsBlankCurrenciesBeforeRateLookup(t *testi
 			tt.mutate(&req)
 			service := &Service{
 				Store: &walletstore.Store{},
-				RateLookup: func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error) {
+				RateLookup: func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
 					t.Fatal("rate lookup should not run for missing currencies")
-					return decimal.Zero, nil
+					return nil, nil
 				},
 			}
 
@@ -527,5 +639,21 @@ func TestResolvePSPDepositAmountsRejectsReservedTenant(t *testing.T) {
 	})
 	if err != walletstore.ErrInvalidTenantID {
 		t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, walletstore.ErrInvalidTenantID)
+	}
+}
+
+func TestResolvePSPDepositAmountsRequiresExplicitUnitIDs(t *testing.T) {
+	service := &Service{Store: &walletstore.Store{}}
+
+	_, err := service.ResolvePSPDepositAmounts(t.Context(), PSPAmountResolutionRequest{
+		TenantID:           "tenant",
+		RequestedAmount:    100,
+		RequestedCurrency:  "USD",
+		SettlementAmount:   100,
+		SettlementCurrency: "USD",
+		WalletCurrency:     "USD",
+	})
+	if !errors.Is(err, walletstore.ErrMissingCurrencyUnitID) {
+		t.Fatalf("ResolvePSPDepositAmounts() error = %v, want %v", err, walletstore.ErrMissingCurrencyUnitID)
 	}
 }

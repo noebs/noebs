@@ -3120,7 +3120,7 @@ func FeesPage(data FeeConfigView) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 236, "<div class=\"table-responsive\"><table class=\"table table-striped table-sm\"><thead class=\"thead-dark\"><tr><th>Type</th><th>Currency</th><th>Tier Min</th><th>Tier Max</th><th>Percent</th><th>Flat</th><th>Min</th><th>Max</th><th>Account</th><th>Active</th><th>Created By</th><th>Created</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 236, "<div class=\"table-responsive\"><table class=\"table table-striped table-sm\"><thead class=\"thead-dark\"><tr><th>Type</th><th>Currency</th><th>Currency Unit ID</th><th>Tier Min</th><th>Tier Max</th><th>Percent</th><th>Flat</th><th>Min</th><th>Max</th><th>Account</th><th>Active</th><th>Created By</th><th>Created</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3132,7 +3132,7 @@ func FeesPage(data FeeConfigView) templ.Component {
 					var templ_7745c5c3_Var206 string
 					templ_7745c5c3_Var206, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.TransactionType)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 717, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 718, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var206))
 					if templ_7745c5c3_Err != nil {
@@ -3145,7 +3145,7 @@ func FeesPage(data FeeConfigView) templ.Component {
 					var templ_7745c5c3_Var207 string
 					templ_7745c5c3_Var207, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.Currency)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 718, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 719, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var207))
 					if templ_7745c5c3_Err != nil {
@@ -3156,9 +3156,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var208 string
-					templ_7745c5c3_Var208, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.TierMin)
+					templ_7745c5c3_Var208, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.CurrencyUnitID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 719, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 720, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var208))
 					if templ_7745c5c3_Err != nil {
@@ -3169,9 +3169,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var209 string
-					templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullInt64(cfg.TierMax))
+					templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.TierMin)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 720, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 721, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var209))
 					if templ_7745c5c3_Err != nil {
@@ -3182,9 +3182,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var210 string
-					templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.PercentageFee.String())
+					templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullInt64(cfg.TierMax))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 721, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 722, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var210))
 					if templ_7745c5c3_Err != nil {
@@ -3195,9 +3195,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var211 string
-					templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.FlatFee)
+					templ_7745c5c3_Var211, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.PercentageFee.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 722, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 723, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var211))
 					if templ_7745c5c3_Err != nil {
@@ -3208,9 +3208,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var212 string
-					templ_7745c5c3_Var212, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.MinFee)
+					templ_7745c5c3_Var212, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.FlatFee)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 723, Col: 24}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 724, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var212))
 					if templ_7745c5c3_Err != nil {
@@ -3221,9 +3221,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var213 string
-					templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullInt64(cfg.MaxFee))
+					templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.MinFee)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 724, Col: 41}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 725, Col: 24}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var213))
 					if templ_7745c5c3_Err != nil {
@@ -3234,9 +3234,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var214 string
-					templ_7745c5c3_Var214, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullString(cfg.FeeAccountCode))
+					templ_7745c5c3_Var214, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullInt64(cfg.MaxFee))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 725, Col: 50}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 726, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var214))
 					if templ_7745c5c3_Err != nil {
@@ -3247,9 +3247,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var215 string
-					templ_7745c5c3_Var215, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.IsActive)
+					templ_7745c5c3_Var215, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullString(cfg.FeeAccountCode))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 726, Col: 26}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 727, Col: 50}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var215))
 					if templ_7745c5c3_Err != nil {
@@ -3260,9 +3260,9 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var216 string
-					templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.CreatedByOperatorID)
+					templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.IsActive)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 727, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 728, Col: 26}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var216))
 					if templ_7745c5c3_Err != nil {
@@ -3273,20 +3273,33 @@ func FeesPage(data FeeConfigView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var217 string
-					templ_7745c5c3_Var217, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(cfg.CreatedAt))
+					templ_7745c5c3_Var217, templ_7745c5c3_Err = templ.JoinStringErrs(cfg.CreatedByOperatorID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 728, Col: 39}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 729, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var217))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 249, "</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 249, "</td><td>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var218 string
+					templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(cfg.CreatedAt))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 730, Col: 39}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var218))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 250, "</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 250, "</tbody></table></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 251, "</tbody></table></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -3317,12 +3330,12 @@ func RatesPage(data RateView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var218 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var218 == nil {
-			templ_7745c5c3_Var218 = templ.NopComponent
+		templ_7745c5c3_Var219 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var219 == nil {
+			templ_7745c5c3_Var219 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var219 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var220 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -3334,211 +3347,198 @@ func RatesPage(data RateView) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 251, "<form method=\"post\" class=\"mb-4\"><input type=\"hidden\" name=\"_csrf\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var220 string
-			templ_7745c5c3_Var220, templ_7745c5c3_Err = templ.JoinStringErrs(backofficeCSRF(ctx))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 741, Col: 64}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var220))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 252, "\"><div class=\"form-row\"><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"base_currency\" placeholder=\"Base currency\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 252, "<form method=\"post\" class=\"mb-4\"><input type=\"hidden\" name=\"_csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var221 string
-			templ_7745c5c3_Var221, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.BaseCurrency)
+			templ_7745c5c3_Var221, templ_7745c5c3_Err = templ.JoinStringErrs(backofficeCSRF(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 744, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 743, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var221))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 253, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"quote_currency\" placeholder=\"Quote currency\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 253, "\"><div class=\"form-row\"><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"base_currency\" placeholder=\"Base currency\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var222 string
-			templ_7745c5c3_Var222, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.QuoteCurrency)
+			templ_7745c5c3_Var222, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.BaseCurrency)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 747, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 746, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var222))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 254, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"buy_rate\" placeholder=\"Buy rate\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 254, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"quote_currency\" placeholder=\"Quote currency\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var223 string
-			templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.BuyRate)
+			templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.QuoteCurrency)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 750, Col: 125}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 749, Col: 143}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var223))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 255, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"sell_rate\" placeholder=\"Sell rate\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 255, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"buy_rate\" placeholder=\"Buy rate\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var224 string
-			templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.SellRate)
+			templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.BuyRate)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 753, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 752, Col: 125}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var224))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 256, "\"></div></div><div class=\"form-row mt-2\"><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"spread\" placeholder=\"Spread (optional)\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 256, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"sell_rate\" placeholder=\"Sell rate\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var225 string
-			templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.Spread)
+			templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.SellRate)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 758, Col: 131}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 755, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 257, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"effective_from\" placeholder=\"Effective from (RFC3339)\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 257, "\"></div></div><div class=\"form-row mt-2\"><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"spread\" placeholder=\"Spread (optional)\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var226 string
-			templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.EffectiveFrom)
+			templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.Spread)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 761, Col: 153}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 760, Col: 131}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var226))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 258, "\"></div><div class=\"col\"><button class=\"btn btn-sm btn-primary\" type=\"submit\">Add Rate</button></div></div></form><form method=\"get\" class=\"mb-3\"><div class=\"form-row\"><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"base_currency\" placeholder=\"Base currency\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 258, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"effective_from\" placeholder=\"Effective from (RFC3339)\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var227 string
-			templ_7745c5c3_Var227, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.BaseCurrency)
+			templ_7745c5c3_Var227, templ_7745c5c3_Err = templ.JoinStringErrs(data.Form.EffectiveFrom)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 772, Col: 142}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 763, Col: 153}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var227))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 259, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"quote_currency\" placeholder=\"Quote currency\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 259, "\"></div><div class=\"col\"><button class=\"btn btn-sm btn-primary\" type=\"submit\">Add Rate</button></div></div></form><form method=\"get\" class=\"mb-3\"><div class=\"form-row\"><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"base_currency\" placeholder=\"Base currency\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var228 string
-			templ_7745c5c3_Var228, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.QuoteCurrency)
+			templ_7745c5c3_Var228, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.BaseCurrency)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 775, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 774, Col: 142}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var228))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 260, "\"></div><div class=\"col\"><div class=\"form-check mt-2\"><input class=\"form-check-input\" type=\"checkbox\" name=\"active_only\" id=\"rate-active-only\" checked=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 260, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"text\" name=\"quote_currency\" placeholder=\"Quote currency\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var229 string
-			templ_7745c5c3_Var229, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.ActiveOnly)
+			templ_7745c5c3_Var229, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.QuoteCurrency)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 779, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 777, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var229))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 261, "\"> <label class=\"form-check-label\" for=\"rate-active-only\">Active only</label></div></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"number\" name=\"limit\" placeholder=\"Limit\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 261, "\"></div><div class=\"col\"><div class=\"form-check mt-2\"><input class=\"form-check-input\" type=\"checkbox\" name=\"active_only\" id=\"rate-active-only\" checked=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var230 string
-			templ_7745c5c3_Var230, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.Limit)
+			templ_7745c5c3_Var230, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.ActiveOnly)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 784, Col: 121}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 781, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var230))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 262, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"number\" name=\"offset\" placeholder=\"Offset\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 262, "\"> <label class=\"form-check-label\" for=\"rate-active-only\">Active only</label></div></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"number\" name=\"limit\" placeholder=\"Limit\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var231 string
-			templ_7745c5c3_Var231, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.Offset)
+			templ_7745c5c3_Var231, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.Limit)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 787, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 786, Col: 121}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var231))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 263, "\"></div><div class=\"col\"><button class=\"btn btn-sm btn-primary\" type=\"submit\">Filter</button></div></div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 263, "\"></div><div class=\"col\"><input class=\"form-control form-control-sm\" type=\"number\" name=\"offset\" placeholder=\"Offset\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var232 string
+			templ_7745c5c3_Var232, templ_7745c5c3_Err = templ.JoinStringErrs(data.Filter.Offset)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 789, Col: 124}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var232))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 264, "\"></div><div class=\"col\"><button class=\"btn btn-sm btn-primary\" type=\"submit\">Filter</button></div></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(data.Rates) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 264, "<div class=\"alert alert-secondary\">No exchange rates found.</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 265, "<div class=\"alert alert-secondary\">No exchange rates found.</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 265, "<div class=\"table-responsive\"><table class=\"table table-striped table-sm\"><thead class=\"thead-dark\"><tr><th>Pair</th><th>Buy</th><th>Sell</th><th>Spread</th><th>Set By</th><th>Effective From</th><th>Effective To</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 266, "<div class=\"table-responsive\"><table class=\"table table-striped table-sm\"><thead class=\"thead-dark\"><tr><th>Pair</th><th>Unit IDs (Base/Quote)</th><th>Buy</th><th>Sell</th><th>Spread</th><th>Set By</th><th>Effective From</th><th>Effective To</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, rate := range data.Rates {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 266, "<tr><td>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var232 string
-					templ_7745c5c3_Var232, templ_7745c5c3_Err = templ.JoinStringErrs(rate.BaseCurrency)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 814, Col: 31}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var232))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 267, "/")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 267, "<tr><td>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var233 string
-					templ_7745c5c3_Var233, templ_7745c5c3_Err = templ.JoinStringErrs(rate.QuoteCurrency)
+					templ_7745c5c3_Var233, templ_7745c5c3_Err = templ.JoinStringErrs(rate.BaseCurrency)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 814, Col: 54}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 817, Col: 31}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var233))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 268, "</td><td>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 268, "/")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var234 string
-					templ_7745c5c3_Var234, templ_7745c5c3_Err = templ.JoinStringErrs(rate.BuyRate.String())
+					templ_7745c5c3_Var234, templ_7745c5c3_Err = templ.JoinStringErrs(rate.QuoteCurrency)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 815, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 817, Col: 54}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var234))
 					if templ_7745c5c3_Err != nil {
@@ -3549,22 +3549,22 @@ func RatesPage(data RateView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var235 string
-					templ_7745c5c3_Var235, templ_7745c5c3_Err = templ.JoinStringErrs(rate.SellRate.String())
+					templ_7745c5c3_Var235, templ_7745c5c3_Err = templ.JoinStringErrs(rate.BaseCurrencyUnitID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 816, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 818, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var235))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 270, "</td><td>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 270, "/")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var236 string
-					templ_7745c5c3_Var236, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullDecimal(rate.Spread))
+					templ_7745c5c3_Var236, templ_7745c5c3_Err = templ.JoinStringErrs(rate.QuoteCurrencyUnitID)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 817, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 818, Col: 66}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var236))
 					if templ_7745c5c3_Err != nil {
@@ -3575,9 +3575,9 @@ func RatesPage(data RateView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var237 string
-					templ_7745c5c3_Var237, templ_7745c5c3_Err = templ.JoinStringErrs(rate.SetByOperatorID)
+					templ_7745c5c3_Var237, templ_7745c5c3_Err = templ.JoinStringErrs(rate.BuyRate.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 818, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 819, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var237))
 					if templ_7745c5c3_Err != nil {
@@ -3588,9 +3588,9 @@ func RatesPage(data RateView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var238 string
-					templ_7745c5c3_Var238, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(rate.EffectiveFrom))
+					templ_7745c5c3_Var238, templ_7745c5c3_Err = templ.JoinStringErrs(rate.SellRate.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 819, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 820, Col: 36}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var238))
 					if templ_7745c5c3_Err != nil {
@@ -3601,27 +3601,66 @@ func RatesPage(data RateView) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var239 string
-					templ_7745c5c3_Var239, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullTime(rate.EffectiveTo))
+					templ_7745c5c3_Var239, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullDecimal(rate.Spread))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 820, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 821, Col: 44}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var239))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 274, "</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 274, "</td><td>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var240 string
+					templ_7745c5c3_Var240, templ_7745c5c3_Err = templ.JoinStringErrs(rate.SetByOperatorID)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 822, Col: 34}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var240))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 275, "</td><td>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var241 string
+					templ_7745c5c3_Var241, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(rate.EffectiveFrom))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 823, Col: 44}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var241))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 276, "</td><td>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var242 string
+					templ_7745c5c3_Var242, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullTime(rate.EffectiveTo))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `wallet/handler/admin.templ`, Line: 824, Col: 46}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var242))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 277, "</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 275, "</tbody></table></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 278, "</tbody></table></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = adminLayout("Exchange Rates", data.TenantID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var219), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = adminLayout("Exchange Rates", data.TenantID).Render(templ.WithChildren(ctx, templ_7745c5c3_Var220), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

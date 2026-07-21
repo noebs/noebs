@@ -573,8 +573,13 @@ func insertSettlementTestWallet(
 ) {
 	t.Helper()
 	stmt := db.Rebind(`INSERT INTO wallets(
-		id, tenant_id, owner_type, owner_id, currency, balance, available_balance, status, kyc_tier
-	) VALUES(?, ?, ?, ?, 'AED', ?, ?, 'active', ?)`)
+		id, tenant_id, owner_type, owner_id, currency, currency_unit_version_id,
+		balance, available_balance, status, kyc_tier
+	) VALUES(
+		?, ?, ?, ?, 'AED',
+		(SELECT id FROM currency_unit_versions WHERE currency_code = 'AED' AND valid_to IS NULL),
+		?, ?, 'active', ?
+	)`)
 	if _, err := db.ExecContext(ctx, stmt,
 		walletID,
 		tenantID,
@@ -601,13 +606,16 @@ func insertSettlementTestLimit(
 ) {
 	t.Helper()
 	stmt := db.Rebind(`INSERT INTO transaction_limits(
-		tenant_id, kyc_tier, transaction_type, currency,
+		tenant_id, kyc_tier, transaction_type, currency, currency_unit_version_id,
 		daily_limit, monthly_limit, per_transaction_limit, is_active
-	) VALUES(?, ?, ?, ?, ?, ?, ?, TRUE)`)
+	) VALUES(?, ?, ?, ?,
+		(SELECT id FROM currency_unit_versions WHERE currency_code = ? AND valid_to IS NULL),
+		?, ?, ?, TRUE)`)
 	if _, err := db.ExecContext(ctx, stmt,
 		tenantID,
 		KYCTierUnverified,
 		transactionType,
+		currency,
 		currency,
 		daily,
 		monthly,

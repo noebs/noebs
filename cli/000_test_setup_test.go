@@ -170,6 +170,7 @@ func cliTestConfig(role serviceRole, dbURL string) ebs_fields.NoebsConfig {
 		WalletHoldExpirySeconds:                    3600,
 		WalletApprovalTimeoutSeconds:               3600,
 		WalletManualTransferApprovalTimeoutSeconds: 3600,
+		WalletFXQuoteMaxPerUserObservation:         100,
 	}
 	if identity, ok := testInternalTransport.services[role]; ok {
 		cfg.InternalTransport = identity

@@ -3,7 +3,6 @@ package psp
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 )
@@ -92,14 +91,6 @@ func stringFromPaths(payload map[string]any, paths []string) string {
 		return strings.TrimSpace(typed)
 	case json.Number:
 		return typed.String()
-	case float64:
-		if math.IsNaN(typed) || math.IsInf(typed, 0) {
-			return ""
-		}
-		if math.Trunc(typed) == typed {
-			return strconv.FormatInt(int64(typed), 10)
-		}
-		return strconv.FormatFloat(typed, 'f', -1, 64)
 	case int64:
 		return strconv.FormatInt(typed, 10)
 	case int:
@@ -122,10 +113,27 @@ func int64FromPaths(payload map[string]any, paths []string) (int64, error) {
 		return typed, nil
 	case int:
 		return int64(typed), nil
-	case float64:
-		if math.IsNaN(typed) || math.IsInf(typed, 0) || math.Trunc(typed) != typed {
+	case int32:
+		return int64(typed), nil
+	case int16:
+		return int64(typed), nil
+	case int8:
+		return int64(typed), nil
+	case uint:
+		if uint64(typed) > uint64(^uint64(0)>>1) {
 			return 0, invalidMappedField("amount", path, value)
 		}
+		return int64(typed), nil
+	case uint64:
+		if typed > uint64(^uint64(0)>>1) {
+			return 0, invalidMappedField("amount", path, value)
+		}
+		return int64(typed), nil
+	case uint32:
+		return int64(typed), nil
+	case uint16:
+		return int64(typed), nil
+	case uint8:
 		return int64(typed), nil
 	case json.Number:
 		parsed, err := typed.Int64()
@@ -134,11 +142,10 @@ func int64FromPaths(payload map[string]any, paths []string) (int64, error) {
 		}
 		return parsed, nil
 	case string:
-		trimmed := strings.TrimSpace(typed)
-		if trimmed == "" {
+		if typed == "" || strings.TrimSpace(typed) != typed {
 			return 0, invalidMappedField("amount", path, value)
 		}
-		parsed, err := strconv.ParseInt(trimmed, 10, 64)
+		parsed, err := strconv.ParseInt(typed, 10, 64)
 		if err != nil {
 			return 0, invalidMappedField("amount", path, value)
 		}

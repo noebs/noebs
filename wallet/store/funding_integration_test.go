@@ -52,22 +52,24 @@ func TestFundingSourceTotalsFollowIdempotentLedgerLinks(t *testing.T) {
 
 	store := New(db)
 	userWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "user-1",
-		UserID:    1,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "user-1",
+		UserID:         1,
+		Currency:       "AED",
+		CurrencyUnitID: testCurrencyUnitID(t, ctx, store, "AED"),
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure user wallet: %v", err)
 	}
 	treasuryWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeSystem,
-		OwnerID:   SystemTreasury,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeSystem,
+		OwnerID:        SystemTreasury,
+		Currency:       "AED",
+		CurrencyUnitID: userWallet.CurrencyUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure treasury wallet: %v", err)

@@ -115,7 +115,7 @@ func TestRequestWithdrawalStartsWorkflow(t *testing.T) {
 	svc := wallet.NewService(db, cfg)
 	server := NewServer(svc)
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "Withdrawal Tenant")
-	walletRow, err := svc.EnsureUserWallet(ctx, tenantID, 42, "USD")
+	walletRow, err := ensureUserWalletForTest(t, ctx, svc, tenantID, 42, "USD")
 	if err != nil {
 		t.Fatalf("ensure user wallet: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestRequestWithdrawalRetriesDurableReservationAfterWorkflowStartFailure(t *
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "Withdrawal Retry Tenant")
-	walletRow, err := server.Service.EnsureUserWallet(ctx, tenantID, 42, "USD")
+	walletRow, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 42, "USD")
 	if err != nil {
 		t.Fatalf("ensure wallet: %v", err)
 	}
@@ -454,16 +454,20 @@ func TestSignalWithdrawalApprovalRejectsForeignTenantAndDepositWorkflow(t *testi
 			t.Fatalf("seed %s provider: %v", tenant, err)
 		}
 	}
+	usdUnit, err := server.Service.Store.GetCurrencyUnit(ctx, "USD", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("resolve USD unit: %v", err)
+	}
 	foreignWallet, err := server.Service.Store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
 		TenantID: "a-b", OwnerType: walletstore.OwnerTypeMerchant, OwnerID: "foreign-owner",
-		Currency: "USD", KYCTier: walletstore.KYCTierUnverified,
+		Currency: "USD", CurrencyUnitID: usdUnit.ID, KYCTier: walletstore.KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure foreign wallet: %v", err)
 	}
 	depositNamedWallet, err := server.Service.Store.EnsureWallet(ctx, walletstore.EnsureWalletParams{
 		TenantID: "a", OwnerType: walletstore.OwnerTypeMerchant, OwnerID: "deposit-named-owner",
-		Currency: "USD", KYCTier: walletstore.KYCTierUnverified,
+		Currency: "USD", CurrencyUnitID: usdUnit.ID, KYCTier: walletstore.KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure deposit-named wallet: %v", err)
@@ -481,6 +485,7 @@ func TestSignalWithdrawalApprovalRejectsForeignTenantAndDepositWorkflow(t *testi
 		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
 		Amount:              100,
 		Currency:            "USD",
+		CurrencyUnitID:      foreignWallet.CurrencyUnitID,
 		Status:              walletstore.PSPStatusInitiated,
 		WorkflowID:          sql.NullString{String: foreignWorkflowID, Valid: true},
 		RawRequest:          walletstore.RawJSON(`{}`),
@@ -500,6 +505,7 @@ func TestSignalWithdrawalApprovalRejectsForeignTenantAndDepositWorkflow(t *testi
 		AllowReturnToSource: sql.NullBool{Bool: true, Valid: true},
 		Amount:              100,
 		Currency:            "USD",
+		CurrencyUnitID:      depositNamedWallet.CurrencyUnitID,
 		Status:              walletstore.PSPStatusInitiated,
 		WorkflowID:          sql.NullString{String: depositID, Valid: true},
 		RawRequest:          walletstore.RawJSON(`{}`),

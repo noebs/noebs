@@ -180,6 +180,63 @@ scripts/alpha-post-deploy-smoke.sh \
   'sha256:<64-hex-release-digest>'
 ```
 
+## One-time wallet money schema `001` to `002` cutover
+
+Wallet migration `002_groosh_money.sql` is intentionally not rolling-compatible
+with the preceding wallet schema. Old processes omit the new required unit
+identifiers and use strict row scans that do not accept the added columns; new
+processes require the versioned currency catalog. The ordinary wave-16 migration
+followed by a wave-20 rolling update is therefore unsafe for this one release.
+
+Use a bounded stop-the-world cutover after the reviewed application image and
+separate digest-promotion commit exist:
+
+1. Record the exact old Git revision and image digest, the wallet migration set,
+   money-bearing table counts, and open Deposit, Withdrawal, P2P, ManualTransfer,
+   Reconciliation, and PSPStatusPoller workflow executions. Do not cross the
+   boundary while a money-moving workflow is open.
+2. Use a reviewed foundation plan to disable automated sync for the `noebs`
+   Application. Require that only its `syncPolicy` changes and verify that
+   automated prune and self-heal are absent before touching a Deployment.
+3. Scale `wallet-ledger`, `wallet-worker`, and `psp-webhook` to zero. Wait for
+   all five pods to disappear and require zero `pg_stat_activity` sessions for
+   `wallet_ledger_runtime`, `wallet_ledger_worker`, and
+   `wallet_ledger_webhook`. Recheck the workflow and database baselines. No
+   Deposit, Withdrawal, P2P, or ManualTransfer execution may be open. The
+   expected Reconciliation and PSPStatusPoller cron-backoff executions may
+   remain open, but every current PSPStatusPoller history and pending-activity
+   query must contain zero `GetTransactionStatus` activities before crossing
+   the schema boundary.
+4. While automation remains disabled, set foundation's
+   `noebs_target_revision` to the exact 40-hex digest-promotion commit. Review
+   and apply that plan, then request one explicit Argo CD sync at that revision.
+   Do not issue an unqualified foundation apply during the outage.
+5. Require the wave-16 `noebs-wallet-ledger-migrate` hook to succeed and the
+   wallet migration set to contain applied versions `001` and `002` before accepting the
+   new wave-20 writer pods. Verify their source revision and image ID rather
+   than trusting the tag or desired manifest alone.
+6. The recurring Temporal Cron execution waits until its next scheduled UTC
+   time on first creation. After the new worker is Ready, start one explicit
+   `FXReferenceSync` on task queue `wallet-main` with a distinct immutable ID
+   `wallet-fx-reference-bootstrap-<40-character-promotion-sha>`; never reuse the
+   recurring ID `wallet-fx-reference-sync`. Run it from the existing
+   `temporal-namespace-bootstrap` identity and network boundary by invoking
+   `scripts/alpha-fx-bootstrap.sh <40-character-promotion-sha>` on the trusted
+   host. Require one fresh observation for each enabled ECB pair (EUR/CHF,
+   EUR/GBP, EUR/JPY, and EUR/USD), then exercise a reference quote with an
+   authenticated wallet user.
+7. Run the post-deploy smoke, persist the exact target revision in foundation,
+   and restore automated prune and self-heal through a reviewed saved plan.
+   Finish with both Applications `Synced`/`Healthy` at the promotion revision
+   and an empty unqualified foundation plan.
+
+Before step 4, rollback means restoring the retained old revision and replicas
+while automation is still disabled. After migration `002` succeeds, do not run
+an application-only rollback or a down migration on a database that may have
+accepted version-bound writes. Keep writers stopped and forward-fix with a
+schema-aware immutable image. Restore from a pre-cutover database backup only
+under a separately reviewed data-loss procedure.
+
 ## Rollback boundary
 
 Roll back application content by reverting the digest-pin commit and allowing

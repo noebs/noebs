@@ -192,7 +192,7 @@ func TestResolveProviderRequiresAuditStoreBeforeProviderWork(t *testing.T) {
 		Loader:   &psp.Loader{},
 		Registry: psp.NewRegistry(),
 	}
-	_, _, err := activities.resolveProvider(context.Background(), "tenant-a", "provider", "SDG", "deposit", "")
+	_, _, err := activities.resolveProvider(context.Background(), "tenant-a", "provider", "SDG", 1, "deposit", "")
 	if !errors.Is(err, ErrMissingStore) {
 		t.Fatalf("resolveProvider() error = %v, want %v", err, ErrMissingStore)
 	}
@@ -240,6 +240,10 @@ func TestSendPayoutAuditRetryKeepsOneIdempotentInteraction(t *testing.T) {
 	}
 
 	store := walletstore.New(db)
+	unit, err := store.GetCurrencyUnit(ctx, "AED", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
 	provider := &recordingPayoutProvider{}
 	registry := psp.NewRegistry()
 	if err := registry.Register("pay", func(*psp.Config) (psp.Provider, error) { return provider, nil }); err != nil {
@@ -253,11 +257,50 @@ func TestSendPayoutAuditRetryKeepsOneIdempotentInteraction(t *testing.T) {
 	}
 	activities := NewPSPActivities(loader, registry)
 	params := SendPayoutParams{
-		TenantID: "tenant-a", ProviderCode: "pay",
+		TenantID: "tenant-a", ProviderCode: "pay", CurrencyUnitID: unit.ID,
 		Request: psp.PayoutRequest{
 			IdempotencyKey: "withdrawal-idem", ClientReference: "withdrawal-1",
 			Amount: 100, Currency: "AED", Destination: map[string]any{},
 		},
+	}
+	for _, test := range []struct {
+		name string
+		id   int64
+		want error
+	}{
+		{name: "missing", id: 0, want: walletstore.ErrMissingCurrencyUnitID},
+		{name: "invalid", id: -1, want: walletstore.ErrInvalidCurrencyUnitID},
+	} {
+		t.Run(test.name+" currency unit", func(t *testing.T) {
+			invalid := params
+			invalid.CurrencyUnitID = test.id
+			if _, err := activities.SendPayout(ctx, invalid); !errors.Is(err, test.want) {
+				t.Fatalf("SendPayout() error = %v, want %v", err, test.want)
+			}
+		})
+	}
+	provider.mu.Lock()
+	providerCallsBeforeValidDispatch := len(provider.requests)
+	provider.mu.Unlock()
+	if providerCallsBeforeValidDispatch != 0 {
+		t.Fatalf("invalid unit reached provider %d times", providerCallsBeforeValidDispatch)
+	}
+	if _, err := activities.GetTransactionStatus(ctx, GetStatusParams{
+		TenantID:        "tenant-a",
+		ProviderCode:    "pay",
+		IdempotencyKey:  "status-idem",
+		ClientReference: "withdrawal-1",
+		Amount:          100,
+		Currency:        "AED",
+		CurrencyUnitID:  unit.ID,
+	}); !errors.Is(err, walletstore.ErrMissingDirection) {
+		t.Fatalf("GetTransactionStatus() error = %v, want %v", err, walletstore.ErrMissingDirection)
+	}
+	provider.mu.Lock()
+	providerStatusCalls := len(provider.statusRequests)
+	provider.mu.Unlock()
+	if providerStatusCalls != 0 {
+		t.Fatalf("missing direction reached provider %d times", providerStatusCalls)
 	}
 
 	activities.Store = &walletstore.Store{}
@@ -293,8 +336,9 @@ func TestSendPayoutAuditRetryKeepsOneIdempotentInteraction(t *testing.T) {
 }
 
 type recordingPayoutProvider struct {
-	mu       sync.Mutex
-	requests []psp.PayoutRequest
+	mu             sync.Mutex
+	requests       []psp.PayoutRequest
+	statusRequests []psp.TransactionLookup
 }
 
 func (p *recordingPayoutProvider) CreateDeposit(context.Context, psp.DepositRequest) (*psp.DepositResult, error) {
@@ -311,7 +355,10 @@ func (p *recordingPayoutProvider) SendPayout(_ context.Context, request psp.Payo
 	}, nil
 }
 
-func (p *recordingPayoutProvider) GetTransactionStatus(context.Context, psp.TransactionLookup) (*psp.TxStatus, error) {
+func (p *recordingPayoutProvider) GetTransactionStatus(_ context.Context, request psp.TransactionLookup) (*psp.TxStatus, error) {
+	p.mu.Lock()
+	p.statusRequests = append(p.statusRequests, request)
+	p.mu.Unlock()
 	return nil, psp.ErrPSPPermanent
 }
 

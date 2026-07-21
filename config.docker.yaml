@@ -25,6 +25,8 @@ noebs:
   wallet_hold_expiry_seconds: 3600
   wallet_approval_timeout_seconds: 3600
   wallet_manual_approval_timeout_seconds: 86400
+  wallet_fx_refresh_cron: "30 16 * * 1-5"
+  wallet_fx_quote_max_per_user_observation: 100
   wallet_psp_poller_cron: "*/5 * * * *"
   wallet_psp_poller_batch_size: 100
   wallet_psp_poller_interval_seconds: 300

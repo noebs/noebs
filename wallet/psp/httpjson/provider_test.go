@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/adonese/noebs/wallet/psp"
@@ -355,6 +356,82 @@ func TestDoJSONReturnsInvalidResponseError(t *testing.T) {
 	if !errors.Is(err, psp.ErrPSPResponseInvalid) {
 		t.Fatalf("doJSON() error = %v, want %v", err, psp.ErrPSPResponseInvalid)
 	}
+}
+
+func TestDoJSONPreservesExactMonetaryIntegers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"amounts":{"above_javascript_limit":9007199254740993,"maximum":9223372036854775807,"minimum":-9223372036854775808}}`))
+	}))
+	defer server.Close()
+
+	provider := &Provider{
+		config: &psp.Config{APIBaseURL: server.URL},
+		client: server.Client(),
+	}
+	out := map[string]any{}
+	if err := provider.doJSON(context.Background(), http.MethodGet, "/", nil, "", &out); err != nil {
+		t.Fatalf("doJSON() error = %v", err)
+	}
+
+	tests := []struct {
+		path string
+		want int64
+	}{
+		{path: "amounts.above_javascript_limit", want: 9007199254740993},
+		{path: "amounts.maximum", want: 9223372036854775807},
+		{path: "amounts.minimum", want: -9223372036854775808},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			value, ok := valueAtPathForTest(out, tt.path)
+			if !ok {
+				t.Fatalf("missing decoded value at %q", tt.path)
+			}
+			if _, ok := value.(json.Number); !ok {
+				t.Fatalf("decoded value type = %T, want json.Number", value)
+			}
+			mapped, err := psp.MapResponse(out, psp.ResponseMapping{Amount: []string{tt.path}})
+			if err != nil {
+				t.Fatalf("MapResponse() error = %v", err)
+			}
+			if mapped.Amount != tt.want {
+				t.Fatalf("MapResponse().Amount = %d, want %d", mapped.Amount, tt.want)
+			}
+		})
+	}
+}
+
+func TestDoJSONRejectsMultipleJSONValues(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"amount":1} {"amount":2}`))
+	}))
+	defer server.Close()
+
+	provider := &Provider{
+		config: &psp.Config{APIBaseURL: server.URL},
+		client: server.Client(),
+	}
+	out := map[string]any{}
+	err := provider.doJSON(context.Background(), http.MethodGet, "/", nil, "", &out)
+	if !errors.Is(err, psp.ErrPSPResponseInvalid) {
+		t.Fatalf("doJSON() error = %v, want %v", err, psp.ErrPSPResponseInvalid)
+	}
+}
+
+func valueAtPathForTest(payload map[string]any, path string) (any, bool) {
+	var current any = payload
+	for _, part := range strings.Split(path, ".") {
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = object[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
 }
 
 func TestCreateDepositRejectsInvalidMappedAmount(t *testing.T) {

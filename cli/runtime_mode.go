@@ -392,10 +392,16 @@ func validateWalletRuntimeSettings(cfg ebs_fields.NoebsConfig) error {
 	if cfg.WalletApprovalThreshold < 0 {
 		return fmt.Errorf("%w: wallet_approval_threshold", errInvalidWalletConfig)
 	}
+	if cfg.WalletFXQuoteMaxPerUserObservation <= 0 {
+		return fmt.Errorf("%w: wallet_fx_quote_max_per_user_observation", errInvalidWalletConfig)
+	}
 	return nil
 }
 
 func validateWalletWorkerSchedules(cfg ebs_fields.NoebsConfig) error {
+	if strings.TrimSpace(cfg.WalletFXRefreshCron) == "" {
+		return fmt.Errorf("%w: wallet_fx_refresh_cron", errMissingWalletWorkflowCron)
+	}
 	if strings.TrimSpace(cfg.WalletPSPPollerCron) == "" {
 		return fmt.Errorf("%w: wallet_psp_poller_cron", errMissingWalletWorkflowCron)
 	}

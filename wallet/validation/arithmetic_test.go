@@ -89,6 +89,9 @@ func TestCheckedSubtractInt64Bounds(t *testing.T) {
 }
 
 func TestConvertPositiveAmountBounds(t *testing.T) {
+	service := &Service{
+		CurrencyUnitLookup: testCurrencyUnitLookup(map[string]int16{"USD": 2, "AED": 2}),
+	}
 	tests := []struct {
 		name    string
 		rate    decimal.Decimal
@@ -101,7 +104,15 @@ func TestConvertPositiveAmountBounds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := convertPositiveAmount(math.MaxInt64, tt.rate)
+			got, err := service.convertPositiveAmountByID(
+				t.Context(),
+				math.MaxInt64,
+				tt.rate,
+				"USD",
+				testCurrencyUnit("USD", 2).ID,
+				"AED",
+				testCurrencyUnit("AED", 2).ID,
+			)
 			if err != tt.wantErr {
 				t.Fatalf("convertPositiveAmount() error = %v, want %v", err, tt.wantErr)
 			}

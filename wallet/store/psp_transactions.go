@@ -58,8 +58,17 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 	if txn.Amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
+	if txn.FeeAmount.Valid && txn.FeeAmount.Int64 < 0 {
+		return nil, ErrInvalidAmount
+	}
+	if txn.NetAmount.Valid && txn.NetAmount.Int64 < 0 {
+		return nil, ErrInvalidAmount
+	}
 	if txn.Currency == "" {
 		return nil, ErrMissingCurrency
+	}
+	if err := ValidateCurrencyUnitID(txn.CurrencyUnitID); err != nil {
+		return nil, err
 	}
 	if err := ValidatePSPTransactionStatus(txn.Status); err != nil {
 		return nil, err
@@ -75,6 +84,9 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 	}
 	db, err := s.ensureDB()
 	if err != nil {
+		return nil, err
+	}
+	if err := s.validateCurrencyUnitIdentity(ctx, txn.Currency, txn.CurrencyUnitID); err != nil {
 		return nil, err
 	}
 	if existing, err := s.GetPSPTransactionByReference(ctx, tenantID, txn.ClientReference); err == nil {
@@ -97,11 +109,11 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 	stmt := db.Rebind(`INSERT INTO psp_transactions(
 		tenant_id, psp_provider, psp_transaction_id, idempotency_key, client_reference,
 		direction, wallet_id, owner_type, owner_id, withdrawal_destination_id, allow_return_to_source,
-		amount, fee_amount, net_amount, currency, status, workflow_id,
+		amount, fee_amount, net_amount, currency, currency_unit_version_id, status, workflow_id,
 		response_code, response_message, raw_request, raw_response, approval_timeout_seconds, decision_deadline_at, deposit_intent_id, created_at,
 		confirmed_at, last_polled_at, next_poll_at, reconciled_at, retry_count,
 		lock_token, lock_expires_at, last_error_type, last_error_at
-	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + (? * interval '1 second'), ?, clock_timestamp(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, clock_timestamp() + (? * interval '1 second'), ?, clock_timestamp(), ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	RETURNING *`)
 
 	var stored PSPTransaction
@@ -121,6 +133,7 @@ func (s *Store) CreatePSPTransaction(ctx context.Context, txn PSPTransaction) (*
 		txn.FeeAmount,
 		txn.NetAmount,
 		txn.Currency,
+		txn.CurrencyUnitID,
 		txn.Status,
 		txn.WorkflowID,
 		txn.ResponseCode,
@@ -177,6 +190,7 @@ func pspTransactionCreateReplayMatches(existing PSPTransaction, requested PSPTra
 		nullBoolEqual(existing.AllowReturnToSource, requested.AllowReturnToSource) &&
 		existing.Amount == requested.Amount &&
 		existing.Currency == requested.Currency &&
+		existing.CurrencyUnitID == requested.CurrencyUnitID &&
 		nullInt64Equal(existing.FeeAmount, requested.FeeAmount) &&
 		nullInt64Equal(existing.NetAmount, requested.NetAmount) &&
 		nullInt64Equal(existing.ApprovalTimeoutSeconds, requested.ApprovalTimeoutSeconds) &&

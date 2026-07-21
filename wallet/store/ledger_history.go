@@ -24,6 +24,7 @@ type WalletLedgerEntry struct {
 	EntryType      string         `db:"entry_type"`
 	Amount         int64          `db:"amount"`
 	Currency       string         `db:"currency"`
+	CurrencyUnitID int64          `db:"currency_unit_version_id"`
 	BalanceAfter   int64          `db:"balance_after"`
 	WalletSequence int64          `db:"wallet_sequence"`
 	Status         string         `db:"status"`
@@ -63,6 +64,7 @@ func (s *Store) ListWalletLedgerEntries(ctx context.Context, filter WalletLedger
 			le.entry_type,
 			le.amount,
 			le.currency,
+			le.currency_unit_version_id,
 			le.balance_after,
 			le.wallet_sequence,
 			le.status,

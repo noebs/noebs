@@ -436,7 +436,16 @@ func (p *Provider) doJSON(ctx context.Context, method, path string, payload any,
 		return err
 	}
 	if out != nil && len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, out); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(respBody))
+		decoder.UseNumber()
+		if err := decoder.Decode(out); err != nil {
+			return fmt.Errorf("%w: decode response body: %v", psp.ErrPSPResponseInvalid, err)
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			if err == nil {
+				return fmt.Errorf("%w: decode response body: multiple JSON values", psp.ErrPSPResponseInvalid)
+			}
 			return fmt.Errorf("%w: decode response body: %v", psp.ErrPSPResponseInvalid, err)
 		}
 	}

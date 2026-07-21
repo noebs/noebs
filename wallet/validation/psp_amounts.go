@@ -2,34 +2,44 @@ package validation
 
 import (
 	"context"
+	"time"
 
+	"github.com/adonese/noebs/groosh"
+	walletrates "github.com/adonese/noebs/wallet/rates"
 	walletstore "github.com/adonese/noebs/wallet/store"
 	"github.com/shopspring/decimal"
 )
 
 type PSPAmountResolutionRequest struct {
-	TenantID           string
-	RequestedAmount    int64
-	RequestedCurrency  string
-	SettlementAmount   int64
-	SettlementCurrency string
-	WalletCurrency     string
-	FXRate             decimal.NullDecimal
-	FXBaseCurrency     string
-	FXQuoteCurrency    string
+	TenantID                 string
+	RequestedAmount          int64
+	RequestedCurrency        string
+	RequestedCurrencyUnitID  int64
+	SettlementAmount         int64
+	SettlementCurrency       string
+	SettlementCurrencyUnitID int64
+	WalletCurrency           string
+	WalletCurrencyUnitID     int64
+	FXRate                   decimal.NullDecimal
+	FXBaseCurrency           string
+	FXQuoteCurrency          string
 }
 
 type PSPAmountResolutionResult struct {
-	WalletCreditAmount int64
-	WalletCurrency     string
-	RequestedAmount    int64
-	RequestedCurrency  string
-	SettlementAmount   int64
-	SettlementCurrency string
-	AppliedFXRate      decimal.NullDecimal
-	AppliedFXSource    string
-	VarianceAmount     int64
-	VarianceKind       walletstore.PSPAmountKind
+	WalletCreditAmount       int64
+	WalletCurrency           string
+	WalletCurrencyUnitID     int64
+	RequestedAmount          int64
+	RequestedCurrency        string
+	RequestedCurrencyUnitID  int64
+	SettlementAmount         int64
+	SettlementCurrency       string
+	SettlementCurrencyUnitID int64
+	AppliedFXRate            decimal.NullDecimal
+	AppliedFXSource          string
+	AppliedFXConversionAt    time.Time
+	VarianceAmount           int64
+	VarianceKind             walletstore.PSPAmountKind
 }
 
 func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountResolutionRequest) (*PSPAmountResolutionResult, error) {
@@ -54,13 +64,47 @@ func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountRes
 	if missingRequiredText(req.WalletCurrency) {
 		return nil, ErrMissingWalletCurrency
 	}
+	for _, currencyUnitID := range []int64{
+		req.RequestedCurrencyUnitID,
+		req.SettlementCurrencyUnitID,
+		req.WalletCurrencyUnitID,
+	} {
+		if err := walletstore.ValidateCurrencyUnitID(currencyUnitID); err != nil {
+			return nil, err
+		}
+	}
 
-	walletCredit, appliedRate, source, err := s.convertAmount(ctx, req.TenantID, req.SettlementAmount, req.SettlementCurrency, req.WalletCurrency, req.FXRate, req.FXBaseCurrency, req.FXQuoteCurrency)
+	asOf := time.Now().UTC().Truncate(time.Microsecond)
+	walletCredit, appliedRate, source, err := s.convertAmountAt(
+		ctx,
+		req.TenantID,
+		req.SettlementAmount,
+		req.SettlementCurrency,
+		req.SettlementCurrencyUnitID,
+		req.WalletCurrency,
+		req.WalletCurrencyUnitID,
+		req.FXRate,
+		req.FXBaseCurrency,
+		req.FXQuoteCurrency,
+		asOf,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	requestedInWallet, _, _, err := s.convertAmount(ctx, req.TenantID, req.RequestedAmount, req.RequestedCurrency, req.WalletCurrency, decimal.NullDecimal{}, "", "")
+	requestedInWallet, _, _, err := s.convertAmountAt(
+		ctx,
+		req.TenantID,
+		req.RequestedAmount,
+		req.RequestedCurrency,
+		req.RequestedCurrencyUnitID,
+		req.WalletCurrency,
+		req.WalletCurrencyUnitID,
+		decimal.NullDecimal{},
+		"",
+		"",
+		asOf,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -76,76 +120,119 @@ func (s *Service) ResolvePSPDepositAmounts(ctx context.Context, req PSPAmountRes
 		varianceKind = walletstore.PSPAmountUnderpayment
 	}
 
+	conversionAt := asOf
+	if !appliedRate.Valid {
+		conversionAt = time.Time{}
+	}
 	return &PSPAmountResolutionResult{
-		WalletCreditAmount: walletCredit,
-		WalletCurrency:     req.WalletCurrency,
-		RequestedAmount:    req.RequestedAmount,
-		RequestedCurrency:  req.RequestedCurrency,
-		SettlementAmount:   req.SettlementAmount,
-		SettlementCurrency: req.SettlementCurrency,
-		AppliedFXRate:      appliedRate,
-		AppliedFXSource:    source,
-		VarianceAmount:     variance,
-		VarianceKind:       varianceKind,
+		WalletCreditAmount:       walletCredit,
+		WalletCurrency:           req.WalletCurrency,
+		WalletCurrencyUnitID:     req.WalletCurrencyUnitID,
+		RequestedAmount:          req.RequestedAmount,
+		RequestedCurrency:        req.RequestedCurrency,
+		RequestedCurrencyUnitID:  req.RequestedCurrencyUnitID,
+		SettlementAmount:         req.SettlementAmount,
+		SettlementCurrency:       req.SettlementCurrency,
+		SettlementCurrencyUnitID: req.SettlementCurrencyUnitID,
+		AppliedFXRate:            appliedRate,
+		AppliedFXSource:          source,
+		AppliedFXConversionAt:    conversionAt,
+		VarianceAmount:           variance,
+		VarianceKind:             varianceKind,
 	}, nil
 }
 
-func (s *Service) convertAmount(ctx context.Context, tenantID string, amount int64, fromCurrency, toCurrency string, fxRate decimal.NullDecimal, fxBase, fxQuote string) (int64, decimal.NullDecimal, string, error) {
+func (s *Service) convertAmount(ctx context.Context, tenantID string, amount int64, fromCurrency string, fromCurrencyUnitID int64, toCurrency string, toCurrencyUnitID int64, fxRate decimal.NullDecimal, fxBase, fxQuote string) (int64, decimal.NullDecimal, string, error) {
+	return s.convertAmountAt(ctx, tenantID, amount, fromCurrency, fromCurrencyUnitID, toCurrency, toCurrencyUnitID, fxRate, fxBase, fxQuote, time.Now().UTC())
+}
+
+func (s *Service) convertAmountAt(ctx context.Context, tenantID string, amount int64, fromCurrency string, fromCurrencyUnitID int64, toCurrency string, toCurrencyUnitID int64, fxRate decimal.NullDecimal, fxBase, fxQuote string, asOf time.Time) (int64, decimal.NullDecimal, string, error) {
 	if amount <= 0 {
 		return 0, decimal.NullDecimal{}, "", walletstore.ErrInvalidAmount
 	}
+	if err := walletstore.ValidateCurrencyUnitID(fromCurrencyUnitID); err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
+	if err := walletstore.ValidateCurrencyUnitID(toCurrencyUnitID); err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
 	if fromCurrency == toCurrency {
+		if _, err := s.requireCurrencyUnitIdentity(ctx, fromCurrency, fromCurrencyUnitID); err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
+		if _, err := s.requireCurrencyUnitIdentity(ctx, toCurrency, toCurrencyUnitID); err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
+		if fromCurrencyUnitID != toCurrencyUnitID {
+			return 0, decimal.NullDecimal{}, "", walletstore.ErrCurrencyMismatch
+		}
 		return amount, decimal.NullDecimal{}, "", nil
 	}
 	if fxRate.Valid {
-		if fxBase != "" && fxBase != fromCurrency {
+		if missingRequiredText(fxBase) || missingRequiredText(fxQuote) {
+			return 0, decimal.NullDecimal{}, "", walletstore.ErrMissingFXCurrency
+		}
+		if fxBase != fromCurrency {
 			return 0, decimal.NullDecimal{}, "", ErrFXCurrencyMismatch
 		}
-		if fxQuote != "" && fxQuote != toCurrency {
+		if fxQuote != toCurrency {
 			return 0, decimal.NullDecimal{}, "", ErrFXCurrencyMismatch
 		}
-		converted, err := convertPositiveAmount(amount, fxRate.Decimal)
+		converted, err := s.convertPositiveAmountByID(ctx, amount, fxRate.Decimal, fromCurrency, fromCurrencyUnitID, toCurrency, toCurrencyUnitID)
 		if err != nil {
 			return 0, decimal.NullDecimal{}, "", err
 		}
 		return converted, fxRate, "psp", nil
 	}
 
-	rate, err := s.lookupRate(ctx, tenantID, fromCurrency, toCurrency)
+	rate, err := s.lookupRateAt(ctx, tenantID, fromCurrency, fromCurrencyUnitID, toCurrency, toCurrencyUnitID, asOf)
 	if err != nil {
 		return 0, decimal.NullDecimal{}, "", err
 	}
-	converted, err := convertPositiveAmount(amount, rate)
+	converted, err := s.convertUsingExchangeRate(ctx, amount, fromCurrency, toCurrency, fromCurrencyUnitID, toCurrencyUnitID, rate)
 	if err != nil {
 		return 0, decimal.NullDecimal{}, "", err
 	}
-	return converted, decimal.NullDecimal{Decimal: rate, Valid: true}, "rates", nil
+	return converted, decimal.NullDecimal{Decimal: rate.SellRate, Valid: true}, "rates", nil
 }
 
-func (s *Service) lookupRate(ctx context.Context, tenantID, fromCurrency, toCurrency string) (decimal.Decimal, error) {
+func (s *Service) lookupRateAt(ctx context.Context, tenantID, fromCurrency string, fromCurrencyUnitID int64, toCurrency string, toCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error) {
 	if s.RateLookup != nil {
-		return s.RateLookup(ctx, tenantID, fromCurrency, toCurrency)
+		return s.RateLookup(ctx, tenantID, fromCurrency, fromCurrencyUnitID, toCurrency, toCurrencyUnitID, asOf)
 	}
-	rate, err := s.Store.GetActiveRate(ctx, tenantID, fromCurrency, toCurrency)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	return rate.SellRate, nil
+	return s.Store.GetActiveRateForUnitsAt(ctx, tenantID, fromCurrency, fromCurrencyUnitID, toCurrency, toCurrencyUnitID, asOf)
 }
 
-func convertPositiveAmount(amount int64, rate decimal.Decimal) (int64, error) {
+func (s *Service) convertPositiveAmountByID(ctx context.Context, amount int64, rate decimal.Decimal, fromCurrency string, fromCurrencyUnitID int64, toCurrency string, toCurrencyUnitID int64) (int64, error) {
 	if amount <= 0 {
 		return 0, walletstore.ErrInvalidAmount
 	}
 	if rate.Cmp(decimal.Zero) <= 0 {
 		return 0, walletstore.ErrInvalidRate
 	}
-	converted, err := decimalToInt64(decimal.NewFromInt(amount).Mul(rate).Round(0))
+	baseUnit, err := s.getCurrencyUnit(ctx, fromCurrencyUnitID)
 	if err != nil {
 		return 0, err
 	}
-	if converted <= 0 {
-		return 0, walletstore.ErrInvalidAmount
+	if baseUnit == nil {
+		return 0, walletstore.ErrCurrencyNotFound
 	}
-	return converted, nil
+	if baseUnit != nil && baseUnit.CurrencyCode != fromCurrency {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	quoteUnit, err := s.getCurrencyUnit(ctx, toCurrencyUnitID)
+	if err != nil {
+		return 0, err
+	}
+	if quoteUnit == nil {
+		return 0, walletstore.ErrCurrencyNotFound
+	}
+	if quoteUnit != nil && quoteUnit.CurrencyCode != toCurrency {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	return convertPositiveAmountWithUnits(amount, rate, baseUnit, quoteUnit)
+}
+
+func convertPositiveAmountWithUnits(amount int64, rate decimal.Decimal, baseUnit, quoteUnit *walletstore.CurrencyUnitVersion) (int64, error) {
+	return walletrates.ConvertMinorUnits(amount, rate, baseUnit, quoteUnit, groosh.RoundHalfAwayFromZero)
 }

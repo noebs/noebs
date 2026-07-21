@@ -49,6 +49,8 @@ const (
 	ActivityReleaseLimitUsage                     ActivityName = "ReleaseLimitUsage"
 	ActivityConsumeLimitUsage                     ActivityName = "ConsumeLimitUsage"
 	ActivityConvertCurrency                       ActivityName = "ConvertCurrency"
+	ActivityListEnabledFXSources                  ActivityName = "ListEnabledFXSources"
+	ActivitySyncFXSource                          ActivityName = "SyncFXSource"
 	ActivityValidateP2PTransfer                   ActivityName = "ValidateP2PTransfer"
 	ActivityValidateDeposit                       ActivityName = "ValidateDeposit"
 	ActivityValidateWithdrawal                    ActivityName = "ValidateWithdrawal"

@@ -131,6 +131,7 @@ var (
 	ErrForbidden    = New("forbidden", http.StatusForbidden, "")
 	ErrNotFound     = New("not_found", http.StatusNotFound, "")
 	ErrConflict     = New("conflict", http.StatusConflict, "")
+	ErrRateLimited  = New("rate_limited", http.StatusTooManyRequests, "")
 	ErrInternal     = New("internal_error", http.StatusInternalServerError, "")
 	ErrUnavailable  = New("service_unavailable", http.StatusServiceUnavailable, "")
 	ErrMarshal      = New("marshal_error", http.StatusInternalServerError, "")

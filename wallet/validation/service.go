@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"strings"
+	"time"
 
 	walletfees "github.com/adonese/noebs/wallet/fees"
 	walletstore "github.com/adonese/noebs/wallet/store"
@@ -24,12 +25,13 @@ type P2PValidationRequest struct {
 }
 
 type P2PValidationResult struct {
-	FromWalletID uuid.UUID
-	ToWalletID   uuid.UUID
-	Currency     string
-	Amount       int64
-	Fee          *walletfees.FeeResult
-	TotalDebit   int64
+	FromWalletID   uuid.UUID
+	ToWalletID     uuid.UUID
+	Currency       string
+	CurrencyUnitID int64
+	Amount         int64
+	Fee            *walletfees.FeeResult
+	TotalDebit     int64
 }
 
 type P2PRule func(ctx context.Context, req P2PValidationRequest, fromWallet, toWallet *walletstore.Wallet) error
@@ -50,6 +52,7 @@ type DepositValidationRequest struct {
 type DepositValidationResult struct {
 	WalletID           uuid.UUID
 	Currency           string
+	CurrencyUnitID     int64
 	Amount             int64
 	Fee                *walletfees.FeeResult
 	NetAmount          int64
@@ -64,6 +67,7 @@ type WithdrawalValidationRequest struct {
 	ProviderCode    string
 	WalletID        uuid.UUID
 	Currency        string
+	CurrencyUnitID  int64
 	Amount          int64
 	OwnerType       string
 	OwnerID         string
@@ -71,27 +75,31 @@ type WithdrawalValidationRequest struct {
 }
 
 type WithdrawalValidationResult struct {
-	WalletID          uuid.UUID
-	Currency          string
-	Amount            int64
-	Fee               *walletfees.FeeResult
-	TotalDebit        int64
-	PayoutAmount      int64
-	PayoutCurrency    string
-	WalletDebitAmount int64
-	WalletCurrency    string
-	AppliedFXRate     decimal.NullDecimal
-	AppliedFXSource   string
+	WalletID              uuid.UUID
+	Currency              string
+	Amount                int64
+	Fee                   *walletfees.FeeResult
+	TotalDebit            int64
+	PayoutAmount          int64
+	PayoutCurrency        string
+	PayoutCurrencyUnitID  int64
+	WalletDebitAmount     int64
+	WalletCurrency        string
+	WalletCurrencyUnitID  int64
+	AppliedFXRate         decimal.NullDecimal
+	AppliedFXSource       string
+	AppliedFXConversionAt time.Time
 }
 
 type WithdrawalRule func(ctx context.Context, req WithdrawalValidationRequest, wallet *walletstore.Wallet, cfg *walletstore.PSPConfig) error
 
 type Service struct {
-	Store           *walletstore.Store
-	RateLookup      func(ctx context.Context, tenantID, baseCurrency, quoteCurrency string) (decimal.Decimal, error)
-	P2PRules        []P2PRule
-	DepositRules    []DepositRule
-	WithdrawalRules []WithdrawalRule
+	Store              *walletstore.Store
+	RateLookup         func(ctx context.Context, tenantID, baseCurrency string, baseCurrencyUnitID int64, quoteCurrency string, quoteCurrencyUnitID int64, asOf time.Time) (*walletstore.ExchangeRate, error)
+	CurrencyUnitLookup func(ctx context.Context, currencyUnitID int64) (*walletstore.CurrencyUnitVersion, error)
+	P2PRules           []P2PRule
+	DepositRules       []DepositRule
+	WithdrawalRules    []WithdrawalRule
 }
 
 func ValidateP2PRequest(req P2PValidationRequest) error {
@@ -151,6 +159,9 @@ func ValidateWithdrawalRequest(req WithdrawalValidationRequest) error {
 	if missingRequiredText(req.Currency) {
 		return walletstore.ErrMissingCurrency
 	}
+	if err := walletstore.ValidateCurrencyUnitID(req.CurrencyUnitID); err != nil {
+		return err
+	}
 	if req.WalletID == uuid.Nil {
 		return walletstore.ErrMissingWalletID
 	}
@@ -182,6 +193,15 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 	if fromWallet.Currency != req.Currency || toWallet.Currency != req.Currency {
 		return nil, walletstore.ErrCurrencyMismatch
 	}
+	if err := walletstore.ValidateCurrencyUnitID(fromWallet.CurrencyUnitID); err != nil {
+		return nil, err
+	}
+	if err := walletstore.ValidateCurrencyUnitID(toWallet.CurrencyUnitID); err != nil {
+		return nil, err
+	}
+	if fromWallet.CurrencyUnitID != toWallet.CurrencyUnitID {
+		return nil, walletstore.ErrCurrencyMismatch
+	}
 	if req.FromOwnerType != "" && fromWallet.OwnerType != req.FromOwnerType {
 		return nil, ErrWalletOwnerMismatch
 	}
@@ -196,7 +216,7 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 	}
 
 	feeEngine := walletfees.FeeEngine{Store: s.Store}
-	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, req.Amount)
+	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, fromWallet.CurrencyUnitID, req.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -218,12 +238,13 @@ func (s *Service) ValidateP2P(ctx context.Context, req P2PValidationRequest) (*P
 	}
 
 	return &P2PValidationResult{
-		FromWalletID: req.FromWalletID,
-		ToWalletID:   req.ToWalletID,
-		Currency:     req.Currency,
-		Amount:       req.Amount,
-		Fee:          feeResult,
-		TotalDebit:   totalDebit,
+		FromWalletID:   req.FromWalletID,
+		ToWalletID:     req.ToWalletID,
+		Currency:       req.Currency,
+		CurrencyUnitID: fromWallet.CurrencyUnitID,
+		Amount:         req.Amount,
+		Fee:            feeResult,
+		TotalDebit:     totalDebit,
 	}, nil
 }
 
@@ -244,9 +265,10 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	}
 
 	cfg, _, err := s.Store.ResolvePSPConfig(ctx, req.TenantID, req.ProviderCode, walletstore.PSPConfigScope{
-		Region:    req.Region,
-		Currency:  req.Currency,
-		Direction: "deposit",
+		Region:         req.Region,
+		Currency:       req.Currency,
+		CurrencyUnitID: wallet.CurrencyUnitID,
+		Direction:      "deposit",
 	})
 	if err != nil {
 		return nil, err
@@ -254,12 +276,12 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	if err := ValidatePSPConfig(cfg, req.Currency, "deposit"); err != nil {
 		return nil, err
 	}
-	if err := ValidatePSPConfigAmount(cfg, req.Amount); err != nil {
+	if err := ValidatePSPConfigAmount(cfg, wallet.CurrencyUnitID, req.Amount); err != nil {
 		return nil, err
 	}
 
 	feeEngine := walletfees.FeeEngine{Store: s.Store}
-	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, req.Amount)
+	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, req.Currency, wallet.CurrencyUnitID, req.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -283,6 +305,7 @@ func (s *Service) ValidateDeposit(ctx context.Context, req DepositValidationRequ
 	return &DepositValidationResult{
 		WalletID:           req.WalletID,
 		Currency:           req.Currency,
+		CurrencyUnitID:     wallet.CurrencyUnitID,
 		Amount:             req.Amount,
 		Fee:                feeResult,
 		NetAmount:          netAmount,
@@ -307,9 +330,10 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 	}
 
 	cfg, _, err := s.Store.ResolvePSPConfig(ctx, req.TenantID, req.ProviderCode, walletstore.PSPConfigScope{
-		Region:    req.Region,
-		Currency:  req.Currency,
-		Direction: "withdrawal",
+		Region:         req.Region,
+		Currency:       req.Currency,
+		CurrencyUnitID: req.CurrencyUnitID,
+		Direction:      "withdrawal",
 	})
 	if err != nil {
 		return nil, err
@@ -317,17 +341,27 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 	if err := ValidatePSPConfig(cfg, req.Currency, "withdrawal"); err != nil {
 		return nil, err
 	}
-	if err := ValidatePSPConfigAmount(cfg, req.Amount); err != nil {
+	if err := ValidatePSPConfigAmount(cfg, req.CurrencyUnitID, req.Amount); err != nil {
 		return nil, err
 	}
 
-	walletDebitAmount, appliedRate, appliedSource, err := s.convertWithdrawalAmount(ctx, req.TenantID, req.Amount, req.Currency, wallet.Currency)
+	conversionAt := time.Now().UTC().Truncate(time.Microsecond)
+	walletDebitAmount, appliedRate, appliedSource, err := s.convertWithdrawalAmountAt(
+		ctx,
+		req.TenantID,
+		req.Amount,
+		req.Currency,
+		req.CurrencyUnitID,
+		wallet.Currency,
+		wallet.CurrencyUnitID,
+		conversionAt,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	feeEngine := walletfees.FeeEngine{Store: s.Store}
-	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, wallet.Currency, walletDebitAmount)
+	feeResult, err := feeEngine.Calculate(ctx, req.TenantID, req.TransactionType, wallet.Currency, wallet.CurrencyUnitID, walletDebitAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -348,51 +382,159 @@ func (s *Service) ValidateWithdrawal(ctx context.Context, req WithdrawalValidati
 		}
 	}
 
+	if !appliedRate.Valid {
+		conversionAt = time.Time{}
+	}
 	return &WithdrawalValidationResult{
-		WalletID:          req.WalletID,
-		Currency:          wallet.Currency,
-		Amount:            walletDebitAmount,
-		Fee:               feeResult,
-		TotalDebit:        totalDebit,
-		PayoutAmount:      req.Amount,
-		PayoutCurrency:    req.Currency,
-		WalletDebitAmount: walletDebitAmount,
-		WalletCurrency:    wallet.Currency,
-		AppliedFXRate:     appliedRate,
-		AppliedFXSource:   appliedSource,
+		WalletID:              req.WalletID,
+		Currency:              wallet.Currency,
+		Amount:                walletDebitAmount,
+		Fee:                   feeResult,
+		TotalDebit:            totalDebit,
+		PayoutAmount:          req.Amount,
+		PayoutCurrency:        req.Currency,
+		PayoutCurrencyUnitID:  req.CurrencyUnitID,
+		WalletDebitAmount:     walletDebitAmount,
+		WalletCurrency:        wallet.Currency,
+		WalletCurrencyUnitID:  wallet.CurrencyUnitID,
+		AppliedFXRate:         appliedRate,
+		AppliedFXSource:       appliedSource,
+		AppliedFXConversionAt: conversionAt,
 	}, nil
 }
 
-func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, payoutAmount int64, payoutCurrency, walletCurrency string) (int64, decimal.NullDecimal, string, error) {
+func (s *Service) convertWithdrawalAmount(ctx context.Context, tenantID string, payoutAmount int64, payoutCurrency string, payoutCurrencyUnitID int64, walletCurrency string, walletCurrencyUnitID int64) (int64, decimal.NullDecimal, string, error) {
+	if err := walletstore.ValidateCurrencyUnitID(payoutCurrencyUnitID); err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
+	if err := walletstore.ValidateCurrencyUnitID(walletCurrencyUnitID); err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
+	return s.convertWithdrawalAmountAt(ctx, tenantID, payoutAmount, payoutCurrency, payoutCurrencyUnitID, walletCurrency, walletCurrencyUnitID, time.Now().UTC().Truncate(time.Microsecond))
+}
+
+func (s *Service) convertWithdrawalAmountAt(ctx context.Context, tenantID string, payoutAmount int64, payoutCurrency string, payoutCurrencyUnitID int64, walletCurrency string, walletCurrencyUnitID int64, asOf time.Time) (int64, decimal.NullDecimal, string, error) {
 	if payoutAmount <= 0 {
 		return 0, decimal.NullDecimal{}, "", walletstore.ErrInvalidAmount
 	}
+	if err := walletstore.ValidateCurrencyUnitID(payoutCurrencyUnitID); err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
+	if err := walletstore.ValidateCurrencyUnitID(walletCurrencyUnitID); err != nil {
+		return 0, decimal.NullDecimal{}, "", err
+	}
 	if payoutCurrency == walletCurrency {
+		if _, err := s.requireCurrencyUnitIdentity(ctx, payoutCurrency, payoutCurrencyUnitID); err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
+		if _, err := s.requireCurrencyUnitIdentity(ctx, walletCurrency, walletCurrencyUnitID); err != nil {
+			return 0, decimal.NullDecimal{}, "", err
+		}
+		if payoutCurrencyUnitID != walletCurrencyUnitID {
+			return 0, decimal.NullDecimal{}, "", walletstore.ErrCurrencyMismatch
+		}
 		return payoutAmount, decimal.NullDecimal{}, "", nil
 	}
 	if s.RateLookup != nil {
-		rate, err := s.RateLookup(ctx, tenantID, payoutCurrency, walletCurrency)
+		rate, err := s.RateLookup(ctx, tenantID, payoutCurrency, payoutCurrencyUnitID, walletCurrency, walletCurrencyUnitID, asOf)
 		if err != nil {
 			return 0, decimal.NullDecimal{}, "", err
 		}
-		converted, err := convertPositiveAmount(payoutAmount, rate)
+		converted, err := s.convertUsingExchangeRate(ctx, payoutAmount, payoutCurrency, walletCurrency, payoutCurrencyUnitID, walletCurrencyUnitID, rate)
 		if err != nil {
 			return 0, decimal.NullDecimal{}, "", err
 		}
-		return converted, decimal.NullDecimal{Decimal: rate, Valid: true}, "rates", nil
+		return converted, decimal.NullDecimal{Decimal: rate.SellRate, Valid: true}, "rates", nil
 	}
 	if s.Store == nil {
 		return 0, decimal.NullDecimal{}, "", ErrMissingStore
 	}
-	rate, err := s.Store.GetActiveRate(ctx, tenantID, payoutCurrency, walletCurrency)
+	rate, err := s.Store.GetActiveRateForUnitsAt(
+		ctx,
+		tenantID,
+		payoutCurrency,
+		payoutCurrencyUnitID,
+		walletCurrency,
+		walletCurrencyUnitID,
+		asOf,
+	)
 	if err != nil {
 		return 0, decimal.NullDecimal{}, "", err
 	}
-	converted, err := convertPositiveAmount(payoutAmount, rate.SellRate)
+	converted, err := s.convertUsingExchangeRate(ctx, payoutAmount, payoutCurrency, walletCurrency, payoutCurrencyUnitID, walletCurrencyUnitID, rate)
 	if err != nil {
 		return 0, decimal.NullDecimal{}, "", err
 	}
 	return converted, decimal.NullDecimal{Decimal: rate.SellRate, Valid: true}, "rates", nil
+}
+
+func (s *Service) getCurrencyUnit(ctx context.Context, currencyUnitID int64) (*walletstore.CurrencyUnitVersion, error) {
+	if err := walletstore.ValidateCurrencyUnitID(currencyUnitID); err != nil {
+		return nil, err
+	}
+	if s.CurrencyUnitLookup != nil {
+		return s.CurrencyUnitLookup(ctx, currencyUnitID)
+	}
+	if s.Store == nil {
+		return nil, ErrMissingStore
+	}
+	return s.Store.GetCurrencyUnitByID(ctx, currencyUnitID)
+}
+
+func (s *Service) requireCurrencyUnitIdentity(ctx context.Context, currency string, currencyUnitID int64) (*walletstore.CurrencyUnitVersion, error) {
+	unit, err := s.getCurrencyUnit(ctx, currencyUnitID)
+	if err != nil {
+		return nil, err
+	}
+	if unit == nil {
+		return nil, walletstore.ErrCurrencyNotFound
+	}
+	if unit.ID != currencyUnitID || unit.CurrencyCode != currency {
+		return nil, walletstore.ErrCurrencyMismatch
+	}
+	return unit, nil
+}
+
+func (s *Service) convertUsingExchangeRate(ctx context.Context, amount int64, fromCurrency, toCurrency string, expectedBaseUnitID, expectedQuoteUnitID int64, rate *walletstore.ExchangeRate) (int64, error) {
+	if rate == nil {
+		return 0, walletstore.ErrExchangeRateNotFound
+	}
+	if rate.BaseCurrency != fromCurrency || rate.QuoteCurrency != toCurrency {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	if err := walletstore.ValidateCurrencyUnitID(rate.BaseCurrencyUnitID); err != nil {
+		return 0, err
+	}
+	if err := walletstore.ValidateCurrencyUnitID(rate.QuoteCurrencyUnitID); err != nil {
+		return 0, err
+	}
+	if expectedBaseUnitID > 0 && rate.BaseCurrencyUnitID != expectedBaseUnitID {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	if expectedQuoteUnitID > 0 && rate.QuoteCurrencyUnitID != expectedQuoteUnitID {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	baseUnit, err := s.getCurrencyUnit(ctx, rate.BaseCurrencyUnitID)
+	if err != nil {
+		return 0, err
+	}
+	if baseUnit == nil {
+		return 0, walletstore.ErrCurrencyNotFound
+	}
+	if baseUnit.CurrencyCode != fromCurrency {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	quoteUnit, err := s.getCurrencyUnit(ctx, rate.QuoteCurrencyUnitID)
+	if err != nil {
+		return 0, err
+	}
+	if quoteUnit == nil {
+		return 0, walletstore.ErrCurrencyNotFound
+	}
+	if quoteUnit.CurrencyCode != toCurrency {
+		return 0, walletstore.ErrCurrencyMismatch
+	}
+	return convertPositiveAmountWithUnits(amount, rate.SellRate, baseUnit, quoteUnit)
 }
 
 func validateWallet(wallet *walletstore.Wallet, currency, ownerType, ownerID string) error {
@@ -463,12 +605,23 @@ func ValidatePSPConfigBase(cfg *walletstore.PSPConfig) error {
 	return nil
 }
 
-func ValidatePSPConfigAmount(cfg *walletstore.PSPConfig, amount int64) error {
+func ValidatePSPConfigAmount(cfg *walletstore.PSPConfig, currencyUnitID, amount int64) error {
 	if cfg == nil {
 		return walletstore.ErrPSPConfigNotFound
 	}
 	if amount <= 0 {
 		return walletstore.ErrInvalidAmount
+	}
+	if cfg.MinAmount.Valid || cfg.MaxAmount.Valid {
+		if err := walletstore.ValidateCurrencyUnitID(currencyUnitID); err != nil {
+			return err
+		}
+		if err := walletstore.ValidateCurrencyUnitID(cfg.AmountCurrencyUnitID); err != nil {
+			return err
+		}
+		if cfg.AmountCurrencyUnitID != currencyUnitID {
+			return walletstore.ErrCurrencyMismatch
+		}
 	}
 	if cfg.MinAmount.Valid && amount < cfg.MinAmount.Int64 {
 		return walletstore.ErrInvalidAmount

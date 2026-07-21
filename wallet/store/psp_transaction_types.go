@@ -165,6 +165,7 @@ type PSPTransaction struct {
 	FeeAmount                 sql.NullInt64  `db:"fee_amount"`
 	NetAmount                 sql.NullInt64  `db:"net_amount"`
 	Currency                  string         `db:"currency"`
+	CurrencyUnitID            int64          `db:"currency_unit_version_id"`
 	Status                    string         `db:"status"`
 	WorkflowID                sql.NullString `db:"workflow_id"`
 	ResponseCode              sql.NullString `db:"response_code"`

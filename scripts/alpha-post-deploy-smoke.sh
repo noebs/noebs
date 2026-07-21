@@ -241,7 +241,7 @@ for actual_expected_label in \
     "$ebs_adapter_migrations|0:true,1:true|ebs-adapter" \
     "$admin_reporting_migrations|0:true,1:true|admin-reporting" \
     "$notification_chat_migrations|0:true,1:true|notification-chat" \
-    "$wallet_ledger_migrations|0:true,1:true|wallet-ledger" \
+    "$wallet_ledger_migrations|0:true,1:true,2:true|wallet-ledger" \
     "$workload_auth_migrations|0:true,1:true|workload-auth" \
     "$gateway_auth_migrations|0:true,1:true|gateway-auth"
 do

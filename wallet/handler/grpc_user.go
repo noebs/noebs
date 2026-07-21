@@ -34,6 +34,13 @@ func NewGRPCUserHandler(client walletv1.WalletPublicServiceClient, cfg ebs_field
 
 func RegisterGRPCUserRoutes(router fiber.Router, handler *GRPCUserHandler) {
 	router.Get("/methods", handler.ListPaymentMethods)
+	router.Get("/currencies", handler.ListCurrencies)
+	router.Get("/currencies/:code", handler.GetCurrency)
+	router.Post("/money/parse", handler.ParseMoney)
+	router.Post("/money/format", handler.FormatMoney)
+	router.Post("/fx/quotes", handler.QuoteConversion)
+	router.Get("/fx/quotes/:id", handler.GetConversionQuote)
+	router.Get("/fx/sources", handler.ListFXSources)
 	router.Post("/wallets", handler.EnsureWallet)
 	router.Get("/wallets/:id/transactions", handler.ListWalletTransactions)
 	router.Get("/wallets/:id", handler.GetWallet)
@@ -368,18 +375,20 @@ func walletResponseFromProto(w *walletv1.Wallet) (walletResponse, error) {
 		userID = &parsed
 	}
 	return walletResponse{
-		ID:               w.GetId(),
-		TenantID:         w.GetTenantId(),
-		OwnerType:        w.GetOwnerType(),
-		OwnerID:          w.GetOwnerId(),
-		UserID:           userID,
-		Currency:         w.GetCurrency(),
-		Balance:          w.GetBalance(),
-		AvailableBalance: w.GetAvailableBalance(),
-		Status:           w.GetStatus(),
-		KYCTier:          w.GetKycTier(),
-		CreatedAt:        createdAt,
-		UpdatedAt:        updatedAt,
+		ID:                    w.GetId(),
+		TenantID:              w.GetTenantId(),
+		OwnerType:             w.GetOwnerType(),
+		OwnerID:               w.GetOwnerId(),
+		UserID:                userID,
+		Currency:              w.GetCurrency(),
+		Balance:               w.GetBalance(),
+		AvailableBalance:      w.GetAvailableBalance(),
+		BalanceMoney:          moneyAmountResponseFromProto(w.GetBalanceMoney()),
+		AvailableBalanceMoney: moneyAmountResponseFromProto(w.GetAvailableBalanceMoney()),
+		Status:                w.GetStatus(),
+		KYCTier:               w.GetKycTier(),
+		CreatedAt:             createdAt,
+		UpdatedAt:             updatedAt,
 	}, nil
 }
 
@@ -394,20 +403,27 @@ func paymentMethodResponseFromProto(method *walletv1.PaymentMethod) paymentMetho
 		value := method.GetMaxAmount()
 		maxAmount = &value
 	}
+	var currencyUnitVersionID string
+	if method.GetCurrencyUnitVersionId() > 0 {
+		currencyUnitVersionID = strconv.FormatInt(method.GetCurrencyUnitVersionId(), 10)
+	}
 	return paymentMethodResponse{
-		ProviderCode:     method.GetProviderCode(),
-		ProviderName:     method.GetProviderName(),
-		DisplayName:      method.GetDisplayName(),
-		MethodType:       method.GetMethodType(),
-		Direction:        method.GetDirection(),
-		Currencies:       method.GetCurrencies(),
-		Regions:          method.GetRegions(),
-		MinAmount:        minAmount,
-		MaxAmount:        maxAmount,
-		InputSchema:      rawJSONFromString(method.GetInputSchemaJson()),
-		Presentation:     rawJSONFromString(method.GetPresentationJson()),
-		SupportsDeposit:  method.GetSupportsDeposit(),
-		SupportsWithdraw: method.GetSupportsWithdrawal(),
+		ProviderCode:          method.GetProviderCode(),
+		ProviderName:          method.GetProviderName(),
+		DisplayName:           method.GetDisplayName(),
+		MethodType:            method.GetMethodType(),
+		Direction:             method.GetDirection(),
+		Currencies:            method.GetCurrencies(),
+		Regions:               method.GetRegions(),
+		MinAmount:             minAmount,
+		MaxAmount:             maxAmount,
+		MinAmountMoney:        moneyAmountResponseFromProto(method.GetMinAmountMoney()),
+		MaxAmountMoney:        moneyAmountResponseFromProto(method.GetMaxAmountMoney()),
+		CurrencyUnitVersionID: currencyUnitVersionID,
+		InputSchema:           rawJSONFromString(method.GetInputSchemaJson()),
+		Presentation:          rawJSONFromString(method.GetPresentationJson()),
+		SupportsDeposit:       method.GetSupportsDeposit(),
+		SupportsWithdraw:      method.GetSupportsWithdrawal(),
 	}
 }
 
@@ -427,22 +443,39 @@ func walletTransactionResponseFromProto(entry *walletv1.WalletLedgerEntry) (wall
 		description = &value
 	}
 	return walletTransactionResponse{
-		ID:             entry.GetId(),
-		TenantID:       entry.GetTenantId(),
-		TransactionID:  entry.GetTransactionId(),
-		WalletID:       entry.GetWalletId(),
-		EntryType:      entry.GetEntryType(),
-		Amount:         entry.GetAmount(),
-		Currency:       entry.GetCurrency(),
-		BalanceAfter:   entry.GetBalanceAfter(),
-		WalletSequence: entry.GetWalletSequence(),
-		Status:         entry.GetStatus(),
-		ReferenceType:  entry.GetReferenceType(),
-		ReferenceID:    referenceID,
-		Description:    description,
-		Metadata:       rawJSONFromString(entry.GetMetadataJson()),
-		CreatedAt:      createdAt,
+		ID:                entry.GetId(),
+		TenantID:          entry.GetTenantId(),
+		TransactionID:     entry.GetTransactionId(),
+		WalletID:          entry.GetWalletId(),
+		EntryType:         entry.GetEntryType(),
+		Amount:            entry.GetAmount(),
+		Currency:          entry.GetCurrency(),
+		BalanceAfter:      entry.GetBalanceAfter(),
+		AmountMoney:       moneyAmountResponseFromProto(entry.GetAmountMoney()),
+		BalanceAfterMoney: moneyAmountResponseFromProto(entry.GetBalanceAfterMoney()),
+		WalletSequence:    entry.GetWalletSequence(),
+		Status:            entry.GetStatus(),
+		ReferenceType:     entry.GetReferenceType(),
+		ReferenceID:       referenceID,
+		Description:       description,
+		Metadata:          rawJSONFromString(entry.GetMetadataJson()),
+		CreatedAt:         createdAt,
 	}, nil
+}
+
+func moneyAmountResponseFromProto(amount *walletv1.MoneyAmount) *moneyAmountResponse {
+	if amount == nil {
+		return nil
+	}
+	return &moneyAmountResponse{
+		MinorUnits:            amount.GetMinorUnits(),
+		CurrencyCode:          amount.GetCurrencyCode(),
+		CurrencyUnitVersionID: strconv.FormatInt(amount.GetCurrencyUnitVersionId(), 10),
+		MinorExponent:         amount.GetMinorExponent(),
+		MajorUnits:            amount.GetMajorUnits(),
+		Display:               amount.GetDisplay(),
+		Canonical:             amount.GetCanonical(),
+	}
 }
 
 func rawJSONFromString(raw string) json.RawMessage {
@@ -470,7 +503,11 @@ func mapWalletGRPCError(err error) error {
 		return apperr.Wrap(err, apperr.ErrUnavailable, st.Message())
 	case codes.AlreadyExists:
 		return apperr.Wrap(err, apperr.ErrConflict, st.Message())
+	case codes.ResourceExhausted:
+		return apperr.Wrap(err, apperr.ErrRateLimited, st.Message())
+	case codes.Internal:
+		return apperr.Wrap(err, apperr.ErrInternal, "internal wallet error")
 	default:
-		return apperr.Wrap(err, apperr.ErrInternal, st.Message())
+		return apperr.Wrap(err, apperr.ErrInternal, "internal wallet error")
 	}
 }

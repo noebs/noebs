@@ -52,33 +52,37 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	provisionWalletStoreTestTenant(t, ctx, db, tenantID, "Held Entry Tenant")
 
 	store := New(db)
+	aedUnitID := testCurrencyUnitID(t, ctx, store, "AED")
 	userWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "user-1",
-		UserID:    1,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "user-1",
+		UserID:         1,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure user wallet: %v", err)
 	}
 	treasuryWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeSystem,
-		OwnerID:   SystemTreasury,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeSystem,
+		OwnerID:        SystemTreasury,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure treasury wallet: %v", err)
 	}
 	feesWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeSystem,
-		OwnerID:   SystemFees,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeSystem,
+		OwnerID:        SystemFees,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure fees wallet: %v", err)
@@ -209,22 +213,24 @@ func TestLedgerAccountingForHeldAndSystemDebits(t *testing.T) {
 	assertHold(t, ctx, db, tenantID, hold.ID, HoldStatusCaptured, 0, true)
 
 	clearingWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeSystem,
-		OwnerID:   SystemPSPClearing,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeSystem,
+		OwnerID:        SystemPSPClearing,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure psp clearing wallet: %v", err)
 	}
 	receiverWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "user-2",
-		UserID:    2,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "user-2",
+		UserID:         2,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure receiver wallet: %v", err)
@@ -283,12 +289,13 @@ func TestCreateHoldInsufficientFundsRollsBack(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
 
 	wallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "user-hold-rollback",
-		UserID:    42,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "user-hold-rollback",
+		UserID:         42,
+		Currency:       "AED",
+		CurrencyUnitID: testCurrencyUnitID(t, ctx, store, "AED"),
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure wallet: %v", err)
@@ -322,35 +329,39 @@ func TestCreateHoldInsufficientFundsRollsBack(t *testing.T) {
 
 func TestBalanceMutationsRejectInactiveWallets(t *testing.T) {
 	ctx, store, tenantID := newWalletStoreIntegration(t)
+	aedUnitID := testCurrencyUnitID(t, ctx, store, "AED")
 
 	sourceWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "inactive-source",
-		UserID:    51,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "inactive-source",
+		UserID:         51,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure source wallet: %v", err)
 	}
 	receiverWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeUser,
-		OwnerID:   "inactive-receiver",
-		UserID:    52,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeUser,
+		OwnerID:        "inactive-receiver",
+		UserID:         52,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure receiver wallet: %v", err)
 	}
 	clearingWallet, err := store.EnsureWallet(ctx, EnsureWalletParams{
-		TenantID:  tenantID,
-		OwnerType: OwnerTypeSystem,
-		OwnerID:   SystemPSPClearing,
-		Currency:  "AED",
-		KYCTier:   KYCTierUnverified,
+		TenantID:       tenantID,
+		OwnerType:      OwnerTypeSystem,
+		OwnerID:        SystemPSPClearing,
+		Currency:       "AED",
+		CurrencyUnitID: aedUnitID,
+		KYCTier:        KYCTierUnverified,
 	})
 	if err != nil {
 		t.Fatalf("ensure clearing wallet: %v", err)
@@ -441,6 +452,7 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 	txn := LedgerTransaction{
 		IdempotencyKey: params.IdempotencyKey,
 		Currency:       params.Currency,
+		CurrencyUnitID: 11,
 		ReferenceType:  params.ReferenceType,
 		ReferenceID:    sql.NullString{String: params.ReferenceID, Valid: true},
 		Status:         "completed",
@@ -480,6 +492,12 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 			name: "currency",
 			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
 				params.Currency = "USD"
+			},
+		},
+		{
+			name: "currency-unit",
+			mutate: func(txn *LedgerTransaction, result *DoubleEntryResult, params *DoubleEntryParams) {
+				result.CreditEntry.CurrencyUnitID++
 			},
 		},
 		{
@@ -537,13 +555,14 @@ func TestExistingDoubleEntryMatches(t *testing.T) {
 
 func matchingTestLedgerEntry(walletID uuid.UUID, entryType string, params DoubleEntryParams) *LedgerEntry {
 	return &LedgerEntry{
-		WalletID:    walletID,
-		EntryType:   entryType,
-		Amount:      params.Amount,
-		Currency:    params.Currency,
-		Status:      "completed",
-		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
-		Metadata:    RawJSON(`{"sequence":1,"purpose":"deposit"}`),
+		WalletID:       walletID,
+		EntryType:      entryType,
+		Amount:         params.Amount,
+		Currency:       params.Currency,
+		CurrencyUnitID: 11,
+		Status:         "completed",
+		Description:    sql.NullString{String: params.Description, Valid: params.Description != ""},
+		Metadata:       RawJSON(`{"sequence":1,"purpose":"deposit"}`),
 	}
 }
 

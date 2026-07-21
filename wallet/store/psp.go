@@ -25,6 +25,7 @@ type PSPConfig struct {
 	SupportedRegions       StringArray    `db:"supported_regions"`
 	MinAmount              sql.NullInt64  `db:"min_amount"`
 	MaxAmount              sql.NullInt64  `db:"max_amount"`
+	AmountCurrencyUnitID   int64          `db:"-"`
 	DepositInputSchema     RawJSON        `db:"deposit_input_schema"`
 	WithdrawalInputSchema  RawJSON        `db:"withdrawal_input_schema"`
 	PresentationSchema     RawJSON        `db:"presentation_schema"`
@@ -45,13 +46,14 @@ type PSPConfig struct {
 }
 
 type PSPMethodFilter struct {
-	TenantID  string
-	Direction string
-	Currency  string
-	Region    string
-	Amount    int64
-	Limit     int
-	Offset    int
+	TenantID       string
+	Direction      string
+	Currency       string
+	CurrencyUnitID int64
+	Region         string
+	Amount         int64
+	Limit          int
+	Offset         int
 }
 
 type PSPPaymentMethod struct {
@@ -65,6 +67,7 @@ type PSPPaymentMethod struct {
 	Regions          []string
 	MinAmount        sql.NullInt64
 	MaxAmount        sql.NullInt64
+	CurrencyUnitID   int64
 	InputSchema      RawJSON
 	Presentation     RawJSON
 	SupportsDeposit  bool

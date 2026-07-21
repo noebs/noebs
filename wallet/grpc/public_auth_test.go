@@ -63,11 +63,11 @@ func newWalletServerWithUsers(t *testing.T) (*Server, string, *walletstore.Walle
 
 	provisionWalletGRPCTestTenant(t, context.Background(), db, tenantID, "Public Auth Tenant")
 
-	wallet42, err := service.EnsureUserWallet(context.Background(), tenantID, 42, "USD")
+	wallet42, err := ensureUserWalletForTest(t, context.Background(), service, tenantID, 42, "USD")
 	if err != nil {
 		t.Fatalf("ensure wallet 42: %v", err)
 	}
-	wallet7, err := service.EnsureUserWallet(context.Background(), tenantID, 7, "USD")
+	wallet7, err := ensureUserWalletForTest(t, context.Background(), service, tenantID, 7, "USD")
 	if err != nil {
 		t.Fatalf("ensure wallet 7: %v", err)
 	}
@@ -91,6 +91,11 @@ func TestGetWalletPublicEnforcesGatewayIdentityOwnership(t *testing.T) {
 	if resp.GetWallet().GetId() != wallet42.ID.String() {
 		t.Fatalf("unexpected wallet response: %+v", resp)
 	}
+	if resp.GetWallet().GetBalanceMoney().GetMinorUnits() != "0" ||
+		resp.GetWallet().GetBalanceMoney().GetCurrencyUnitVersionId() != wallet42.CurrencyUnitID ||
+		resp.GetWallet().GetAvailableBalanceMoney().GetCurrencyUnitVersionId() != wallet42.CurrencyUnitID {
+		t.Fatalf("wallet money does not use pinned unit %d: %+v", wallet42.CurrencyUnitID, resp.GetWallet())
+	}
 
 	_, err = server.GetWalletPublic(ctx, &walletv1.GetWalletPublicRequest{
 		TenantId: tenantID,
@@ -98,6 +103,53 @@ func TestGetWalletPublicEnforcesGatewayIdentityOwnership(t *testing.T) {
 	})
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("status.Code(err) = %v, want %v", status.Code(err), codes.NotFound)
+	}
+}
+
+func TestEnsureWalletRejectsDisabledAndNonOperationalCurrencies(t *testing.T) {
+	server, tenantID, _, _ := newWalletServerWithUsers(t)
+	ctx := walletGatewayIdentityContext(99, tenantID)
+
+	if _, err := server.Service.Store.DB.ExecContext(ctx,
+		`UPDATE currencies SET is_active = FALSE WHERE code = 'AED'`,
+	); err != nil {
+		t.Fatalf("disable AED: %v", err)
+	}
+	_, err := server.EnsureWalletPublic(ctx, &walletv1.EnsureWalletPublicRequest{
+		TenantId: tenantID,
+		UserId:   99,
+		Currency: "AED",
+	})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("disabled currency status = %v, want %v: %v", status.Code(err), codes.NotFound, err)
+	}
+
+	if _, err := server.Service.Store.DB.ExecContext(ctx, `
+		INSERT INTO currencies(code, numeric_code, name, kind, is_active)
+		VALUES('ZZZ', NULL, 'No operational scale', 'test', TRUE);
+		INSERT INTO currency_unit_versions(
+			currency_code, iso_minor_exponent, display_exponent, cash_exponent,
+			cash_rounding_increment, valid_from, source, source_revision, source_published_on
+		) VALUES('ZZZ', NULL, 2, 2, 1, '2026-01-01', 'test', 'no-scale', '2026-01-01')`); err != nil {
+		t.Fatalf("insert non-operational currency: %v", err)
+	}
+	_, err = server.EnsureWalletPublic(ctx, &walletv1.EnsureWalletPublicRequest{
+		TenantId: tenantID,
+		UserId:   99,
+		Currency: "ZZZ",
+	})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("non-operational currency status = %v, want %v: %v", status.Code(err), codes.FailedPrecondition, err)
+	}
+
+	var created int
+	if err := server.Service.Store.DB.GetContext(ctx, &created,
+		`SELECT count(*) FROM wallets WHERE tenant_id = $1 AND user_id = 99 AND currency IN ('AED', 'ZZZ')`, tenantID,
+	); err != nil {
+		t.Fatalf("count invalid wallets: %v", err)
+	}
+	if created != 0 {
+		t.Fatalf("invalid wallets created = %d, want 0", created)
 	}
 }
 

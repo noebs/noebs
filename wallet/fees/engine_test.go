@@ -77,3 +77,29 @@ func TestCalculateFeeRejectsOverflow(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateFeeUsesExplicitHalfAwayFromZeroPolicy(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		amount     int64
+		percentage string
+		want       int64
+	}{
+		{name: "positive midpoint rounds up", amount: 1, percentage: "50", want: 1},
+		{name: "below midpoint rounds down", amount: 1, percentage: "49.9999", want: 0},
+		{name: "above midpoint rounds up", amount: 1, percentage: "50.0001", want: 1},
+		{name: "non-midpoint remains nearest", amount: 3, percentage: "50", want: 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := calculateFee(&walletstore.FeeConfig{
+				PercentageFee: decimal.RequireFromString(test.percentage),
+			}, test.amount)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.PercentageFee != test.want || result.TotalFee != test.want {
+				t.Fatalf("calculateFee() = %+v, want percentage and total %d", result, test.want)
+			}
+		})
+	}
+}

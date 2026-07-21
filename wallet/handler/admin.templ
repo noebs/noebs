@@ -699,6 +699,7 @@ templ FeesPage(data FeeConfigView) {
 						<tr>
 							<th>Type</th>
 							<th>Currency</th>
+							<th>Currency Unit ID</th>
 							<th>Tier Min</th>
 							<th>Tier Max</th>
 							<th>Percent</th>
@@ -716,6 +717,7 @@ templ FeesPage(data FeeConfigView) {
 							<tr>
 								<td>{ cfg.TransactionType }</td>
 								<td>{ cfg.Currency }</td>
+								<td>{ cfg.CurrencyUnitID }</td>
 								<td>{ cfg.TierMin }</td>
 								<td>{ formatNullInt64(cfg.TierMax) }</td>
 								<td>{ cfg.PercentageFee.String() }</td>
@@ -800,6 +802,7 @@ templ RatesPage(data RateView) {
 					<thead class="thead-dark">
 						<tr>
 							<th>Pair</th>
+							<th>Unit IDs (Base/Quote)</th>
 							<th>Buy</th>
 							<th>Sell</th>
 							<th>Spread</th>
@@ -812,6 +815,7 @@ templ RatesPage(data RateView) {
 						for _, rate := range data.Rates {
 							<tr>
 								<td>{ rate.BaseCurrency }/{ rate.QuoteCurrency }</td>
+								<td>{ rate.BaseCurrencyUnitID }/{ rate.QuoteCurrencyUnitID }</td>
 								<td>{ rate.BuyRate.String() }</td>
 								<td>{ rate.SellRate.String() }</td>
 								<td>{ formatNullDecimal(rate.Spread) }</td>

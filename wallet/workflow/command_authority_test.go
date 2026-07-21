@@ -77,7 +77,7 @@ func TestP2PWorkflowIgnoresForgedStartFactsAndLoadsReservedCommand(t *testing.T)
 		return request.Amount == payload.Amount && request.Currency == payload.Currency &&
 			request.FromWalletID == fromWalletID && request.ToWalletID == toWalletID &&
 			request.FromOwnerID == payload.FromOwnerID && request.ToOwnerID == payload.ToOwnerID
-	})).Return(&walletvalidation.P2PValidationResult{}, nil).Once()
+	})).Return(&walletvalidation.P2PValidationResult{CurrencyUnitID: 11}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityValidateMultiLegSettlement), mock.Anything, mock.Anything).
 		Return(struct{}{}, nil).Once()
 	var posted walletstore.MultiLegSettlementParams
@@ -130,7 +130,8 @@ func TestManualTransferWorkflowIgnoresForgedStartFactsAndLoadsReservedTransfer(t
 		ID: 71, TenantID: tenantID, WorkflowID: workflowID, IdempotencyKey: idempotencyKey,
 		TransferType: walletstore.ManualTransferTypeCredit,
 		WalletID:     sql.NullString{String: walletID.String(), Valid: true},
-		Amount:       125, Currency: "AED", Reason: "reserved correction", Status: walletstore.ManualTransferStatusPending,
+		Amount:       125, Currency: "AED", CurrencyUnitID: 11,
+		Reason: "reserved correction", Status: walletstore.ManualTransferStatusPending,
 		RequestedByOperatorID: 41, ApprovalTimeoutSeconds: 60, DecisionDeadlineAt: time.Now().UTC().Add(time.Minute),
 	}
 	var suite testsuite.WorkflowTestSuite

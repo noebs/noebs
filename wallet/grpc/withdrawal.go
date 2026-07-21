@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	walletv1 "github.com/adonese/noebs/gen/proto/noebs/wallet/v1"
 	"github.com/adonese/noebs/wallet"
@@ -144,6 +145,10 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.RequestWit
 	}
 	newTransaction := true
 	if existing, err := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference); err == nil {
+		if err := validatePublicCurrencyUnitID(existing.CurrencyUnitID); err != nil {
+			return nil, mapError(err)
+		}
+		requestedTxn.CurrencyUnitID = existing.CurrencyUnitID
 		if err := walletstore.ValidatePSPTransactionCreateReplay(existing, requestedTxn); err != nil {
 			return nil, mapError(err)
 		}
@@ -153,7 +158,12 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.RequestWit
 	}
 
 	if newTransaction {
-		if validationErr := s.validateWithdrawalRequest(ctx, req, walletID); validationErr != nil {
+		currencyUnit, unitErr := s.Service.Store.GetCurrencyUnit(ctx, req.Currency, time.Now().UTC())
+		if unitErr != nil {
+			return nil, mapError(unitErr)
+		}
+		requestedTxn.CurrencyUnitID = currencyUnit.ID
+		if validationErr := s.validateWithdrawalRequest(ctx, req, walletID, requestedTxn.CurrencyUnitID); validationErr != nil {
 			existing, lookupErr := s.Service.Store.GetPSPTransactionByReference(ctx, req.TenantId, req.ClientReference)
 			switch {
 			case lookupErr == nil:
@@ -206,7 +216,7 @@ func (s *Server) RequestWithdrawal(ctx context.Context, req *walletv1.RequestWit
 	}, nil
 }
 
-func (s *Server) validateWithdrawalRequest(ctx context.Context, req *walletv1.RequestWithdrawalRequest, walletID uuid.UUID) error {
+func (s *Server) validateWithdrawalRequest(ctx context.Context, req *walletv1.RequestWithdrawalRequest, walletID uuid.UUID, currencyUnitID int64) error {
 	validator := walletvalidation.Service{Store: s.Service.Store}
 	_, err := validator.ValidateWithdrawal(ctx, walletvalidation.WithdrawalValidationRequest{
 		TenantID:        req.TenantId,
@@ -214,6 +224,7 @@ func (s *Server) validateWithdrawalRequest(ctx context.Context, req *walletv1.Re
 		ProviderCode:    req.ProviderCode,
 		WalletID:        walletID,
 		Currency:        req.Currency,
+		CurrencyUnitID:  currencyUnitID,
 		Amount:          req.Amount,
 		OwnerType:       req.OwnerType,
 		OwnerID:         req.OwnerId,

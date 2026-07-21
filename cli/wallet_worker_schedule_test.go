@@ -12,6 +12,7 @@ import (
 
 func walletScheduleConfig() ebs_fields.NoebsConfig {
 	return ebs_fields.NoebsConfig{
+		WalletFXRefreshCron:               "30 16 * * 1-5",
 		WalletPSPPollerCron:               "*/5 * * * *",
 		WalletPSPPollerBatchSize:          100,
 		WalletPSPPollerIntervalSeconds:    300,
@@ -70,9 +71,17 @@ func TestStartWalletCronWorkflowsDoesNotFallbackToDefaultTenant(t *testing.T) {
 
 func TestStartWalletCronWorkflowsRequiresConfiguredSchedules(t *testing.T) {
 	cfg := walletScheduleConfig()
-	cfg.WalletPSPPollerCron = ""
+	cfg.WalletFXRefreshCron = ""
 
 	err := startWalletCronWorkflows(context.Background(), nil, []string{"test-tenant"}, cfg, walletworker.TaskQueueMain)
+	if !errors.Is(err, errMissingWalletWorkflowCron) {
+		t.Fatalf("FX refresh cron error = %v, want %v", err, errMissingWalletWorkflowCron)
+	}
+
+	cfg = walletScheduleConfig()
+	cfg.WalletPSPPollerCron = ""
+
+	err = startWalletCronWorkflows(context.Background(), nil, []string{"test-tenant"}, cfg, walletworker.TaskQueueMain)
 	if !errors.Is(err, errMissingWalletWorkflowCron) {
 		t.Fatalf("poller cron error = %v, want %v", err, errMissingWalletWorkflowCron)
 	}

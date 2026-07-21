@@ -156,7 +156,8 @@ func TestManualDebitReservationUsesApprovalDeadlineAndExpiresOnTimeout(t *testin
 		ID: transferID, TenantID: tenantID, WorkflowID: "default-test-workflow-id", IdempotencyKey: "manual-timeout",
 		TransferType: walletstore.ManualTransferTypeDebit,
 		WalletID:     sql.NullString{String: "79ca6a75-cc21-4c32-a4a8-45c0c12efef9", Valid: true},
-		Amount:       100, Currency: "AED", Reason: "cash adjustment", RequestedByOperatorID: 11,
+		Amount:       100, Currency: "AED", CurrencyUnitID: 11,
+		Reason: "cash adjustment", RequestedByOperatorID: 11,
 		DecisionDeadlineAt: workflowStartedAt.Add(approvalWindow),
 	}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityRecordAuditEvent), mock.Anything, mock.Anything).Return(nil).Once()

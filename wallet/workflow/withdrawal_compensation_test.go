@@ -14,6 +14,7 @@ import (
 	walletstore "github.com/adonese/noebs/wallet/store"
 	walletvalidation "github.com/adonese/noebs/wallet/validation"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/mock"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
@@ -56,11 +57,15 @@ func TestWithdrawalFXSettlementUsesWalletAccountingUnits(t *testing.T) {
 	})
 	txn.ID = 10
 	txn.Status = walletstore.PSPStatusInitiated
+	conversionAt := time.Date(2026, time.July, 21, 12, 0, 0, 0, time.UTC)
 	validation := walletvalidation.WithdrawalValidationResult{
 		WalletID: walletID, Currency: "AED", Amount: 370,
 		Fee: &walletfees.FeeResult{TotalFee: 30}, TotalDebit: 400,
-		PayoutAmount: 100, PayoutCurrency: "USD",
-		WalletDebitAmount: 370, WalletCurrency: "AED",
+		PayoutAmount: 100, PayoutCurrency: "USD", PayoutCurrencyUnitID: 21,
+		WalletDebitAmount: 370, WalletCurrency: "AED", WalletCurrencyUnitID: 11,
+		AppliedFXRate:         decimal.NullDecimal{Decimal: decimal.RequireFromString("3.7"), Valid: true},
+		AppliedFXSource:       "test-rate",
+		AppliedFXConversionAt: conversionAt,
 	}
 	source := verifiedWithdrawalFundingSource(fundingSourceID, tenantID, walletID)
 	source.Currency = "AED"
@@ -106,7 +111,7 @@ func TestWithdrawalFXSettlementUsesWalletAccountingUnits(t *testing.T) {
 	}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityCommitHold), mock.Anything, tenantID, holdID).Return(nil).Once()
 	env.OnActivity(string(walletactivity.ActivitySendPayout), mock.Anything, mock.MatchedBy(func(params walletactivity.SendPayoutParams) bool {
-		return params.Request.Amount == 100 && params.Request.Currency == "USD"
+		return params.CurrencyUnitID == 21 && params.Request.Amount == 100 && params.Request.Currency == "USD"
 	})).Return(&walletpsp.PayoutResult{
 		ProviderTxID: "provider-fx", Amount: 100, Currency: "USD", Status: walletstore.PSPStatusSuccess,
 	}, nil).Once()
@@ -115,14 +120,23 @@ func TestWithdrawalFXSettlementUsesWalletAccountingUnits(t *testing.T) {
 	stored.PSPTransactionID = sql.NullString{String: "provider-fx", Valid: true}
 	env.OnActivity(string(walletactivity.ActivityUpdatePSPTransactionStatus), mock.Anything, mock.Anything).
 		Return(&stored, nil).Once()
-	env.OnActivity(string(walletactivity.ActivityAddPSPTransactionAmounts), mock.Anything, mock.Anything).
+	env.OnActivity(string(walletactivity.ActivityAddPSPTransactionAmounts), mock.Anything, mock.MatchedBy(func(params walletactivity.AddPSPTransactionAmountsParams) bool {
+		if len(params.Amounts) != 2 {
+			return false
+		}
+		requested, walletDebit := params.Amounts[0], params.Amounts[1]
+		return requested.Currency == "USD" && requested.CurrencyUnitID == 21 &&
+			walletDebit.Currency == "AED" && walletDebit.CurrencyUnitID == 11 &&
+			walletDebit.FxBaseCurrencyUnitID == 21 && walletDebit.FxQuoteCurrencyUnitID == 11 &&
+			walletDebit.FxConversionAt.Equal(conversionAt)
+	})).
 		Return([]walletstore.PSPTransactionAmount{}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityEnsureSystemWallet), mock.Anything, mock.MatchedBy(func(params walletactivity.EnsureSystemWalletParams) bool {
-		return params.Currency == "AED" && params.WalletCode == walletstore.SystemTreasury
-	})).Return(&walletstore.Wallet{ID: treasuryID, TenantID: tenantID, Currency: "AED", OwnerType: walletstore.OwnerTypeSystem}, nil).Once()
+		return params.Currency == "AED" && params.CurrencyUnitID == 11 && params.WalletCode == walletstore.SystemTreasury
+	})).Return(&walletstore.Wallet{ID: treasuryID, TenantID: tenantID, Currency: "AED", CurrencyUnitID: 11, OwnerType: walletstore.OwnerTypeSystem}, nil).Once()
 	env.OnActivity(string(walletactivity.ActivityEnsureSystemWallet), mock.Anything, mock.MatchedBy(func(params walletactivity.EnsureSystemWalletParams) bool {
-		return params.Currency == "AED" && params.WalletCode == walletstore.SystemFees
-	})).Return(&walletstore.Wallet{ID: feesID, TenantID: tenantID, Currency: "AED", OwnerType: walletstore.OwnerTypeSystem}, nil).Once()
+		return params.Currency == "AED" && params.CurrencyUnitID == 11 && params.WalletCode == walletstore.SystemFees
+	})).Return(&walletstore.Wallet{ID: feesID, TenantID: tenantID, Currency: "AED", CurrencyUnitID: 11, OwnerType: walletstore.OwnerTypeSystem}, nil).Once()
 	var captured walletstore.HeldWithdrawalSettlementParams
 	env.OnActivity(string(walletactivity.ActivityValidateHeldWithdrawalSettlement), mock.Anything, mock.MatchedBy(func(params walletstore.HeldWithdrawalSettlementParams) bool {
 		captured = params
@@ -167,14 +181,16 @@ func TestWithdrawalApprovalRejectionReturnsHoldReleaseError(t *testing.T) {
 		Return(txn, nil)
 	env.OnActivity(string(walletactivity.ActivityValidateWithdrawal), mock.Anything, mock.Anything).
 		Return(&walletvalidation.WithdrawalValidationResult{
-			WalletID:          walletID,
-			Currency:          "AED",
-			Amount:            100,
-			TotalDebit:        100,
-			PayoutAmount:      100,
-			PayoutCurrency:    "AED",
-			WalletDebitAmount: 100,
-			WalletCurrency:    "AED",
+			WalletID:             walletID,
+			Currency:             "AED",
+			Amount:               100,
+			TotalDebit:           100,
+			PayoutAmount:         100,
+			PayoutCurrency:       "AED",
+			PayoutCurrencyUnitID: 11,
+			WalletDebitAmount:    100,
+			WalletCurrency:       "AED",
+			WalletCurrencyUnitID: 11,
 		}, nil)
 	env.OnActivity(string(walletactivity.ActivityResolveWithdrawalDestination), mock.Anything, tenantID, int64(55)).
 		Return(&walletstore.WithdrawalDestination{
@@ -254,14 +270,16 @@ func TestWithdrawalReturnToSourceWithoutEligibleSourceFailsWithFundingSourceNotF
 		Return(txn, nil)
 	env.OnActivity(string(walletactivity.ActivityValidateWithdrawal), mock.Anything, mock.Anything).
 		Return(&walletvalidation.WithdrawalValidationResult{
-			WalletID:          walletID,
-			Currency:          "AED",
-			Amount:            100,
-			TotalDebit:        100,
-			PayoutAmount:      100,
-			PayoutCurrency:    "AED",
-			WalletDebitAmount: 100,
-			WalletCurrency:    "AED",
+			WalletID:             walletID,
+			Currency:             "AED",
+			Amount:               100,
+			TotalDebit:           100,
+			PayoutAmount:         100,
+			PayoutCurrency:       "AED",
+			PayoutCurrencyUnitID: 11,
+			WalletDebitAmount:    100,
+			WalletCurrency:       "AED",
+			WalletCurrencyUnitID: 11,
 		}, nil)
 	env.OnActivity(string(walletactivity.ActivityGetReturnToSourceOptions), mock.Anything, tenantID, walletID).
 		Return([]walletstore.FundingSource{}, nil)
@@ -324,7 +342,8 @@ func TestWithdrawalPermanentDispatchRejectionClosesFailedAndReleases(t *testing.
 	env.OnActivity(string(walletactivity.ActivityValidateWithdrawal), mock.Anything, mock.Anything).
 		Return(&walletvalidation.WithdrawalValidationResult{
 			WalletID: walletID, Currency: "AED", Amount: 100, TotalDebit: 100,
-			PayoutAmount: 100, PayoutCurrency: "AED", WalletDebitAmount: 100, WalletCurrency: "AED",
+			PayoutAmount: 100, PayoutCurrency: "AED", PayoutCurrencyUnitID: 11,
+			WalletDebitAmount: 100, WalletCurrency: "AED", WalletCurrencyUnitID: 11,
 		}, nil)
 	env.OnActivity(string(walletactivity.ActivityResolveWithdrawalDestination), mock.Anything, tenantID, int64(55)).
 		Return(&walletstore.WithdrawalDestination{
@@ -424,7 +443,8 @@ func TestWithdrawalUnknownDispatchKeepsReservationsUntilReconciledFailure(t *tes
 	env.OnActivity(string(walletactivity.ActivityValidateWithdrawal), mock.Anything, mock.Anything).
 		Return(&walletvalidation.WithdrawalValidationResult{
 			WalletID: walletID, Currency: "AED", Amount: 100, TotalDebit: 100,
-			PayoutAmount: 100, PayoutCurrency: "AED", WalletDebitAmount: 100, WalletCurrency: "AED",
+			PayoutAmount: 100, PayoutCurrency: "AED", PayoutCurrencyUnitID: 11,
+			WalletDebitAmount: 100, WalletCurrency: "AED", WalletCurrencyUnitID: 11,
 		}, nil)
 	env.OnActivity(string(walletactivity.ActivityResolveWithdrawalDestination), mock.Anything, tenantID, int64(55)).
 		Return(&walletstore.WithdrawalDestination{
@@ -452,6 +472,7 @@ func TestWithdrawalUnknownDispatchKeepsReservationsUntilReconciledFailure(t *tes
 	env.OnActivity(string(walletactivity.ActivityCommitHold), mock.Anything, tenantID, holdID).Return(nil).Once()
 	env.OnActivity(string(walletactivity.ActivitySendPayout), mock.Anything, mock.MatchedBy(func(params walletactivity.SendPayoutParams) bool {
 		return params.TenantID == tenantID &&
+			params.CurrencyUnitID == pspTxn.CurrencyUnitID &&
 			params.Request.ClientReference == clientReference &&
 			params.Request.IdempotencyKey == transportKey
 	})).Return(nil, walletpsp.ErrPSPTemporary).Times(3)
@@ -527,6 +548,10 @@ func withdrawalWorkflowTestTransaction(
 		Metadata:          map[string]any{},
 	}
 	configure(&request)
+	currencyUnitID := int64(11)
+	if request.Currency == "USD" {
+		currencyUnitID = 21
+	}
 	raw, err := walletstore.MarshalWithdrawalRequest(request)
 	if err != nil {
 		t.Fatalf("marshal withdrawal request: %v", err)
@@ -544,6 +569,7 @@ func withdrawalWorkflowTestTransaction(
 		AllowReturnToSource:     sql.NullBool{Bool: request.AllowReturnToSource, Valid: true},
 		Amount:                  request.Amount,
 		Currency:                request.Currency,
+		CurrencyUnitID:          currencyUnitID,
 		WorkflowID:              sql.NullString{String: "default-test-workflow-id", Valid: true},
 		RawRequest:              raw,
 	}

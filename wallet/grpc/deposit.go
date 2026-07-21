@@ -74,6 +74,16 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.RequestDeposi
 	if err := s.authorizeWalletForClaims(ctx, tenantID, walletID, claims); err != nil {
 		return nil, err
 	}
+	walletRow, err := s.Service.Store.GetWallet(ctx, tenantID, walletID)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if err := validatePublicCurrencyUnitID(walletRow.CurrencyUnitID); err != nil {
+		return nil, mapError(err)
+	}
+	if walletRow.Currency != req.Currency {
+		return nil, mapError(walletstore.ErrCurrencyMismatch)
+	}
 
 	metadata := metadataFromStruct(req.Metadata)
 	if metadata == nil {
@@ -110,6 +120,7 @@ func (s *Server) RequestDeposit(ctx context.Context, req *walletv1.RequestDeposi
 		OwnerID:         ownerID,
 		Amount:          req.Amount,
 		Currency:        req.Currency,
+		CurrencyUnitID:  walletRow.CurrencyUnitID,
 		IdempotencyKey:  req.IdempotencyKey,
 		WorkflowID:      depositWorkflowID(tenantID, intentReference),
 		Metadata:        walletstore.RawJSON(metadataJSON),

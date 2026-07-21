@@ -146,11 +146,11 @@ func TestRequestP2PTransferRejectsInsufficientFundsBeforeTemporal(t *testing.T) 
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "P2P Tenant")
-	fromWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 1, "USD")
+	fromWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 1, "USD")
 	if err != nil {
 		t.Fatalf("ensure from wallet: %v", err)
 	}
-	toWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 2, "USD")
+	toWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 2, "USD")
 	if err != nil {
 		t.Fatalf("ensure to wallet: %v", err)
 	}
@@ -189,11 +189,11 @@ func TestRequestP2PTransferStartsWorkflowAfterValidation(t *testing.T) {
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "P2P Tenant")
-	fromWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 1, "USD")
+	fromWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 1, "USD")
 	if err != nil {
 		t.Fatalf("ensure from wallet: %v", err)
 	}
-	toWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 2, "USD")
+	toWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 2, "USD")
 	if err != nil {
 		t.Fatalf("ensure to wallet: %v", err)
 	}
@@ -300,11 +300,11 @@ func TestRequestP2PTransferConcurrentReplaysConvergeOnOneRun(t *testing.T) {
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "P2P Concurrent Tenant")
-	fromWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 1, "USD")
+	fromWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 1, "USD")
 	if err != nil {
 		t.Fatalf("ensure from wallet: %v", err)
 	}
-	toWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 2, "USD")
+	toWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 2, "USD")
 	if err != nil {
 		t.Fatalf("ensure to wallet: %v", err)
 	}
@@ -376,11 +376,11 @@ func TestRequestP2PTransferRepairsRunAfterTemporalAlreadyStarted(t *testing.T) {
 	ctx := context.Background()
 	server, tenantID, db := newWalletPSPTestServer(t, ebs_fields.NoebsConfig{})
 	provisionWalletGRPCTestTenant(t, ctx, db, tenantID, "P2P Repair Tenant")
-	fromWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 1, "USD")
+	fromWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 1, "USD")
 	if err != nil {
 		t.Fatalf("ensure from wallet: %v", err)
 	}
-	toWallet, err := server.Service.EnsureUserWallet(ctx, tenantID, 2, "USD")
+	toWallet, err := ensureUserWalletForTest(t, ctx, server.Service, tenantID, 2, "USD")
 	if err != nil {
 		t.Fatalf("ensure to wallet: %v", err)
 	}
@@ -476,19 +476,21 @@ func seedP2PValidationRules(t *testing.T, ctx context.Context, db *basestore.DB,
 	t.Helper()
 
 	feeStmt := db.Rebind(`INSERT INTO fee_configs(
-		tenant_id, transaction_type, currency, tier_min, percentage_fee, flat_fee, min_fee, is_active,
+		tenant_id, transaction_type, currency, currency_unit_version_id,
+		tier_min, percentage_fee, flat_fee, min_fee, is_active,
 		created_by_operator_id
-	) VALUES(?, 'p2p', ?, 0, 0, 0, 0, TRUE, ?)
-	ON CONFLICT (tenant_id, transaction_type, currency, tier_min) DO NOTHING`)
-	if _, err := db.ExecContext(ctx, feeStmt, tenantID, currency, operatorID); err != nil {
+	) VALUES(?, 'p2p', ?, (SELECT id FROM currency_unit_versions WHERE currency_code = ? AND valid_to IS NULL), 0, 0, 0, 0, TRUE, ?)
+	ON CONFLICT (tenant_id, transaction_type, currency, currency_unit_version_id, tier_min) DO NOTHING`)
+	if _, err := db.ExecContext(ctx, feeStmt, tenantID, currency, currency, operatorID); err != nil {
 		t.Fatalf("seed p2p fee config: %v", err)
 	}
 
 	limitStmt := db.Rebind(`INSERT INTO transaction_limits(
-		tenant_id, kyc_tier, transaction_type, currency, daily_limit, monthly_limit, per_transaction_limit, is_active
-	) VALUES(?, ?, 'p2p', ?, 1000000000, 1000000000, 1000000000, TRUE)
-	ON CONFLICT (tenant_id, kyc_tier, transaction_type, currency) DO NOTHING`)
-	if _, err := db.ExecContext(ctx, limitStmt, tenantID, walletstore.KYCTierUnverified, currency); err != nil {
+		tenant_id, kyc_tier, transaction_type, currency, currency_unit_version_id,
+		daily_limit, monthly_limit, per_transaction_limit, is_active
+	) VALUES(?, ?, 'p2p', ?, (SELECT id FROM currency_unit_versions WHERE currency_code = ? AND valid_to IS NULL), 1000000000, 1000000000, 1000000000, TRUE)
+	ON CONFLICT (tenant_id, kyc_tier, transaction_type, currency, currency_unit_version_id) DO NOTHING`)
+	if _, err := db.ExecContext(ctx, limitStmt, tenantID, walletstore.KYCTierUnverified, currency, currency); err != nil {
 		t.Fatalf("seed p2p transaction limit: %v", err)
 	}
 }

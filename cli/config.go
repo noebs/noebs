@@ -25,6 +25,7 @@ import (
 	"github.com/adonese/noebs/store"
 	"github.com/adonese/noebs/wallet"
 	walletactivity "github.com/adonese/noebs/wallet/activity"
+	walletfx "github.com/adonese/noebs/wallet/fx"
 	wallethandler "github.com/adonese/noebs/wallet/handler"
 	walletpsp "github.com/adonese/noebs/wallet/psp"
 	walletpsphttpjson "github.com/adonese/noebs/wallet/psp/httpjson"
@@ -277,6 +278,9 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 	if taskQueue == "" {
 		return walletworker.ErrMissingTaskQueue
 	}
+	if strings.TrimSpace(cfg.WalletFXRefreshCron) == "" {
+		return fmt.Errorf("%w: wallet_fx_refresh_cron", errMissingWalletWorkflowCron)
+	}
 	if strings.TrimSpace(cfg.WalletPSPPollerCron) == "" {
 		return fmt.Errorf("%w: wallet_psp_poller_cron", errMissingWalletWorkflowCron)
 	}
@@ -293,6 +297,10 @@ func startWalletCronWorkflows(ctx context.Context, temporalClient client.Client,
 	}
 	if temporalClient == nil {
 		return errMissingWalletWorkflowClient
+	}
+	const fxWorkflowID = "wallet-fx-reference-sync"
+	if err := startCronWorkflow(ctx, temporalClient, fxWorkflowID, cfg.WalletFXRefreshCron, taskQueue, walletworkflow.FXReferenceSync); err != nil {
+		return fmt.Errorf("start %s: %w", fxWorkflowID, err)
 	}
 	for _, tenantID := range normalizedTenants {
 		pollerID := fmt.Sprintf("wallet-psp-poller-%s", tenantID)
@@ -812,6 +820,11 @@ func initConfig() {
 			logrusLogger.Fatalf("error in wallet-worker PSP dependencies: %v", errMissingWalletPSPDeps)
 		}
 		pspActivities := walletactivity.NewPSPActivities(walletPSPLoader, walletPSPRegistry)
+		fxProviders, err := walletfx.NewDefaultRegistry(httpclient.Default())
+		if err != nil {
+			logrusLogger.Fatalf("error configuring wallet FX providers: %v", err)
+		}
+		fxActivities := walletactivity.NewFXActivities(walletService.Store, fxProviders)
 		workerOpts, err := buildTemporalOptions(context.Background(), noebsConfig, walletworker.TaskQueueMain, temporalWorkerClientID)
 		if err != nil {
 			logrusLogger.Fatalf("error configuring wallet worker Temporal authority: %v", err)
@@ -820,6 +833,7 @@ func initConfig() {
 			walletworker.RegisterWallet(w, walletworker.RegisterDeps{
 				Store:         walletService.Store,
 				PSPActivities: pspActivities,
+				FXActivities:  fxActivities,
 			})
 		}
 		runner, err := walletworker.NewRunner(context.Background(), workerOpts, register)
