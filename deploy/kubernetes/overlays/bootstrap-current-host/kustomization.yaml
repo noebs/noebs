@@ -12,7 +12,7 @@ resources:
 images:
   - name: ghcr.io/noebs/noebs
     newName: ghcr.io/noebs/noebs
-    digest: sha256:b63099c0122fcdd48ca0ca64fd771cce45e9fcd2ea3117603d44552959148ade
+    digest: sha256:e30ee74b49f91514de71bad3f99578f996ad8327b0ea720f2c441b2d3fe245d4
 
 patches:
   - target:
