@@ -136,6 +136,18 @@ func TestPrepareKubernetesReleaseRejectsInvalidPSPProviderCode(t *testing.T) {
 	}
 }
 
+func TestPrepareKubernetesReleaseRejectsUnsafeEBSEndpoint(t *testing.T) {
+	inputRoot := t.TempDir()
+	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")
+	inputs.Noebs.EBS.ConsumerEndpoint = "http://consumer.input.example"
+	inputsPath := writeKubernetesReleaseInputs(t, inputRoot, inputs)
+
+	err := prepareKubernetesRelease("..", inputsPath, kubernetesReleaseTestAgeKeyPath(inputRoot), filepath.Join(t.TempDir(), "release"), readPlainPreflightSecret, plainKubernetesSecretEncrypt)
+	if !errors.Is(err, errInvalidEBSEndpoint) {
+		t.Fatalf("prepareKubernetesRelease() error = %v, want %v", err, errInvalidEBSEndpoint)
+	}
+}
+
 func TestPrepareKubernetesReleaseValidatesEveryPSPProvider(t *testing.T) {
 	inputRoot := t.TempDir()
 	inputs := newTestKubernetesReleaseInputs(t, "tenant-cutover")

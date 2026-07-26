@@ -341,6 +341,15 @@ func validateEBSRuntimeConfig(role serviceRole, cfg ebs_fields.NoebsConfig) erro
 			return fmt.Errorf("%w: noebs.%s", errMissingEBSConfig, key)
 		}
 	}
+	if err := validateEBSEndpoint("noebs.consumer_endpoint", cfg.ConsumerIP); err != nil {
+		return err
+	}
+	if err := validateEBSEndpoint("noebs.merchant_endpoint", cfg.MerchantIP); err != nil {
+		return err
+	}
+	if err := validateEBSEndpoint("noebs.ipin_endpoint", cfg.IPINIp); err != nil {
+		return err
+	}
 	return nil
 }
 

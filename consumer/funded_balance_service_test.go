@@ -87,6 +87,22 @@ func TestOpaqueBalanceCapabilityDefaultsClosedBeforeOutboundCalls(t *testing.T) 
 	}
 }
 
+func TestOpaqueBalanceEBSEndpointRequiresHTTPS(t *testing.T) {
+	if _, err := opaqueBalanceEBSEndpoint("http://ebs.example/api/"); !errors.Is(err, ErrFundedOperationsUnavailable) {
+		t.Fatalf("plaintext endpoint error = %v, want %v", err, ErrFundedOperationsUnavailable)
+	}
+	if _, err := opaqueBalanceEBSEndpoint(" https://ebs.example/api/ "); !errors.Is(err, ErrFundedOperationsUnavailable) {
+		t.Fatalf("whitespace endpoint error = %v, want %v", err, ErrFundedOperationsUnavailable)
+	}
+	endpoint, err := opaqueBalanceEBSEndpoint("https://ebs.example/api/")
+	if err != nil {
+		t.Fatalf("HTTPS endpoint error = %v", err)
+	}
+	if endpoint != "https://ebs.example/api/"+ebs_fields.ConsumerBalanceEndpoint {
+		t.Fatalf("endpoint = %q", endpoint)
+	}
+}
+
 type countingBalanceTransport struct {
 	calls atomic.Int64
 }

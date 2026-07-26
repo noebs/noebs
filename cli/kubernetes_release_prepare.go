@@ -331,6 +331,15 @@ func (r preparedKubernetesRelease) validate() error {
 			return err
 		}
 	}
+	if err := validateEBSEndpoint("noebs.ebs.consumer_endpoint", r.inputs.Noebs.EBS.ConsumerEndpoint); err != nil {
+		return err
+	}
+	if err := validateEBSEndpoint("noebs.ebs.merchant_endpoint", r.inputs.Noebs.EBS.MerchantEndpoint); err != nil {
+		return err
+	}
+	if err := validateEBSEndpoint("noebs.ebs.ipin_endpoint", r.inputs.Noebs.EBS.IPINEndpoint); err != nil {
+		return err
+	}
 	if _, err := r.ghcrDockerConfigJSON(); err != nil {
 		return err
 	}

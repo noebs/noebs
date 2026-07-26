@@ -100,7 +100,7 @@ func TestOpaqueBalanceHTTPAtMostOnceAndOwnershipContract(t *testing.T) {
 	fixture := newFundedBalanceFixture(t)
 	t.Cleanup(fixture.Server.Close)
 	transport := &fundedBalanceFaultTransport{
-		base:      http.DefaultTransport,
+		base:      fixture.Server.Client().Transport,
 		ebsHost:   mustURLHost(t, fixture.Server.URL),
 		vaultHost: mustURLHost(t, vaultHTTP.URL),
 	}
@@ -314,7 +314,7 @@ func newFundedBalanceFixture(t *testing.T) *fundedBalanceFixture {
 		statuses:  make(map[string]int),
 		malformed: make(map[string]bool),
 	}
-	fixture.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	fixture.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

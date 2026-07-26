@@ -270,9 +270,9 @@ func formatEBSRailTime(now time.Time) string {
 }
 
 func opaqueBalanceEBSEndpoint(baseURL string) (string, error) {
-	endpoint := strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/" + ebs_fields.ConsumerBalanceEndpoint
+	endpoint := strings.TrimRight(baseURL, "/") + "/" + ebs_fields.ConsumerBalanceEndpoint
 	parsed, err := url.Parse(endpoint)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
 		return "", ErrFundedOperationsUnavailable
 	}
 	return parsed.String(), nil
