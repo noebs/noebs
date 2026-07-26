@@ -117,7 +117,7 @@ func Instrumentation() fiber.Handler {
 		err := c.Next()
 		duration := time.Since(start).Seconds()
 
-		status := strconv.Itoa(c.Response().StatusCode())
+		status := strconv.Itoa(effectiveHTTPStatus(c.Response().StatusCode(), err))
 		httpRequestsTotal.WithLabelValues(status, method, routePath).Inc()
 		httpRequestDuration.WithLabelValues(status, method, routePath).Observe(duration)
 		httpRequestSize.WithLabelValues(method, routePath).Observe(float64(len(c.Body())))
