@@ -32,11 +32,7 @@ func New(db *DB, opts ...Option) *Store {
 	for _, opt := range opts {
 		opt(&options)
 	}
-	crypto, err := newDataCrypto(options.DataKey)
-	if err != nil {
-		crypto = nil
-	}
-	return &Store{DB: db, crypto: crypto}
+	return &Store{DB: db, crypto: newDataCrypto(options.DataKey)}
 }
 
 func (s *Store) ensureDB() (*sqlx.DB, error) {

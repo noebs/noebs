@@ -23,21 +23,16 @@ type dataCrypto struct {
 	macKey []byte
 }
 
-func newDataCrypto(key string) (*dataCrypto, error) {
+func newDataCrypto(key string) *dataCrypto {
 	if key == "" {
-		return nil, nil
+		return nil
 	}
 	encKey := sha256.Sum256([]byte("enc:" + key))
 	macKey := sha256.Sum256([]byte("mac:" + key))
-	block, err := aes.NewCipher(encKey[:])
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	return &dataCrypto{gcm: gcm, macKey: macKey[:]}, nil
+	// SHA-256 and AES fix the key and block sizes required by both constructors.
+	block, _ := aes.NewCipher(encKey[:])
+	gcm, _ := cipher.NewGCM(block)
+	return &dataCrypto{gcm: gcm, macKey: macKey[:]}
 }
 
 func (c *dataCrypto) Encrypt(value string) (string, error) {
